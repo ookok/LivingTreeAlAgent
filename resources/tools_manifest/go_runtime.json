@@ -1,0 +1,71 @@
+{
+  "id": "go_runtime",
+  "name": "Go SDK",
+  "desc": "Go 语言运行时 (网络工具、云原生 CLI 依赖)",
+  "version": "1.24.0",
+  "internal": true,
+  "origin": "market",
+  "enabled_by_default": false,
+  "categories": ["runtime", "dependency"],
+  "tags": ["go", "golang", "runtime", "network-tools"],
+  "platforms": {
+    "windows_amd64": {
+      "url": "https://go.dev/dl/go1.24.0.windows-amd64.zip",
+      "bin_name": "bin/go.exe",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "windows_arm64": {
+      "url": "https://go.dev/dl/go1.24.0.windows-arm64.zip",
+      "bin_name": "bin/go.exe",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "darwin_amd64": {
+      "url": "https://go.dev/dl/go1.24.0.darwin-amd64.tar.gz",
+      "bin_name": "bin/go",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "darwin_arm64": {
+      "url": "https://go.dev/dl/go1.24.0.darwin-arm64.tar.gz",
+      "bin_name": "bin/go",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "linux_amd64": {
+      "url": "https://go.dev/dl/go1.24.0.linux-amd64.tar.gz",
+      "bin_name": "bin/go",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "linux_arm64": {
+      "url": "https://go.dev/dl/go1.24.0.linux-arm64.tar.gz",
+      "bin_name": "bin/go",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    }
+  },
+  "runtime_config": {
+    "gopath": "./tools/go_runtime/gopath",
+    "gomodcache": "./cache/go/mod",
+    "goproxy": "https://goproxy.cn,direct"
+  },
+  "install_hints": {
+    "note": "Go SDK 会在解压后自动设置 GOROOT。推荐设置 GOPATH 到项目缓存目录。",
+    "proxy_example": "go env -w GOPROXY=https://goproxy.cn,direct",
+    "version_check": "go version"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "sender": "updates@living-tree.ai",
+  "smtp_host": "smtp.yourdomain.com",
+  "smtp_port": 587,
+  "credentials": {
+    "user": "encrypted_user",
+    "password": "enc:ZWR1c2VyQGxpdmluZy10cmVlLmFp"
+  },
+  "recipients": [
+    "you@example.com",
+    "team@company.com"
+  ],
+  "web_base_url": "https://stats.living-tree.ai/patches",
+  "enabled": false,
+  "retry_times": 3,
+  "retry_interval": 300
+}

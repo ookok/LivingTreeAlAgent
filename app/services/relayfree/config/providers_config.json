@@ -1,0 +1,307 @@
+{
+  "version": "2026.04",
+  "description": "RelayFreeLLM 厂商配置清单 - 清单驱动，动态注册",
+  "providers": {
+    "ollama": {
+      "enabled": true,
+      "base_url": "${OLLAMA_BASE_URL:-http://localhost:11434}/v1",
+      "auth": "none",
+      "priority": 900,
+      "description": "本地 Ollama (最高优先级)",
+      "model_mapping": {
+        "gpt-4": "qwen2.5-coder:latest",
+        "gpt-3.5": "qwen2.5:0.5b"
+      },
+      "capabilities": ["chat", "completion", "embedding"],
+      "extra_body": {}
+    },
+    "deepseek": {
+      "enabled": true,
+      "base_url": "https://api.deepseek.com/v1",
+      "auth": "bearer",
+      "key_env_var": "DEEPSEEK_API_KEY",
+      "priority": 700,
+      "description": "DeepSeek 深度求索",
+      "model_mapping": {
+        "gpt-4": "deepseek-chat",
+        "gpt-4o": "deepseek-chat"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "moonshot": {
+      "enabled": true,
+      "base_url": "https://api.moonshot.cn/v1",
+      "auth": "bearer",
+      "key_env_var": "MOONSHOT_API_KEY",
+      "priority": 650,
+      "description": "月之暗面 Kimi",
+      "model_mapping": {
+        "gpt-4": "moonshot-v1-128k"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "dashscope": {
+      "enabled": true,
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "auth": "bearer",
+      "key_env_var": "DASHSCOPE_API_KEY",
+      "priority": 600,
+      "description": "阿里云通义千问",
+      "model_mapping": {
+        "gpt-4": "qwen-plus",
+        "gpt-3.5": "qwen-turbo"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {
+        "top_p": 0.85
+      }
+    },
+    "zhipu": {
+      "enabled": true,
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "auth": "bearer",
+      "key_env_var": "ZHIPU_API_KEY",
+      "priority": 580,
+      "description": "智谱 AI GLM",
+      "model_mapping": {
+        "gpt-4": "glm-4",
+        "gpt-3.5": "glm-3-turbo"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "siliconflow": {
+      "enabled": true,
+      "base_url": "https://api.siliconflow.cn/v1",
+      "auth": "bearer",
+      "key_env_var": "SILICONFLOW_API_KEY",
+      "priority": 550,
+      "description": "硅基流动",
+      "model_mapping": {
+        "gpt-4": "Qwen/Qwen2-72B-Instruct",
+        "gpt-3.5": "Qwen/Qwen2-7B-Instruct"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "volcengine": {
+      "enabled": true,
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+      "auth": "bearer",
+      "key_env_var": "VOLC_ACCESS_TOKEN",
+      "priority": 520,
+      "description": "火山引擎方舟",
+      "model_mapping": {
+        "gpt-4": "doubao-pro-32k"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "tencent": {
+      "enabled": true,
+      "base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+      "auth": "bearer",
+      "key_env_var": "TENCENT_HUNYUAN_API_KEY",
+      "priority": 500,
+      "description": "腾讯混元",
+      "model_mapping": {
+        "gpt-4": "hunyuan-pro"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "baidu": {
+      "enabled": false,
+      "base_url": "https://qianfan.baidubce.com/v2/app/conversation",
+      "auth": "ak_sk",
+      "key_env_var": "BAIDU_API_KEY",
+      "secret_env_var": "BAIDU_SECRET_KEY",
+      "priority": 480,
+      "description": "百度千帆 (AK/SK鉴权-需特殊处理)",
+      "model_mapping": {
+        "gpt-4": "eb-4"
+      },
+      "capabilities": ["chat"],
+      "extra_body": {},
+      "handler": "baidu_qianfan"
+    },
+    "spark": {
+      "enabled": false,
+      "base_url": "wss://spark-api.xf-yun.com/v3.5/chat",
+      "auth": "spark_ws",
+      "key_env_var": "SPARK_APP_ID",
+      "secret_env_var": "SPARK_API_KEY",
+      "secret2_env_var": "SPARK_API_SECRET",
+      "priority": 460,
+      "description": "讯飞星火 (WebSocket-需特殊处理)",
+      "model_mapping": {
+        "gpt-4": "spark4.0 Ultra"
+      },
+      "capabilities": ["chat"],
+      "extra_body": {},
+      "handler": "spark_websocket"
+    },
+    "minimax": {
+      "enabled": true,
+      "base_url": "https://api.minimax.chat/v1",
+      "auth": "bearer",
+      "key_env_var": "MINIMAX_API_KEY",
+      "priority": 450,
+      "description": "MiniMax 海螺",
+      "model_mapping": {
+        "gpt-4": "abab6.5s-chat"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "groq": {
+      "enabled": true,
+      "base_url": "https://api.groq.com/openai/v1",
+      "auth": "bearer",
+      "key_env_var": "GROQ_API_KEY",
+      "priority": 400,
+      "description": "Groq (超低延迟)",
+      "model_mapping": {
+        "gpt-4": "llama-3.3-70b-versatile",
+        "gpt-3.5": "llama-3.1-8b-instant"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "openrouter": {
+      "enabled": true,
+      "base_url": "https://openrouter.ai/api/v1",
+      "auth": "bearer",
+      "key_env_var": "OPENROUTER_API_KEY",
+      "priority": 380,
+      "description": "OpenRouter (聚合网关)",
+      "model_mapping": {
+        "gpt-4": "anthropic/claude-3.5-sonnet"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "pollinations": {
+      "enabled": true,
+      "base_url": "https://gen.pollinations.ai",
+      "auth": "none",
+      "key_env_var": "POLLINATIONS_API_KEY",
+      "priority": 370,
+      "description": "Pollinations AI (多模态: 图文音视频)",
+      "model_mapping": {
+        "gpt-4": "openai/gpt-4o"
+      },
+      "capabilities": ["chat", "completion", "image_gen", "tts", "transcription", "vision"],
+      "tags": ["multimodal", "image", "free"],
+      "extra_body": {}
+    },
+    "anthropic": {
+      "enabled": true,
+      "base_url": "https://api.anthropic.com/v1",
+      "auth": "x-api-key",
+      "header_field": "x-api-key",
+      "key_env_var": "ANTHROPIC_API_KEY",
+      "priority": 750,
+      "description": "Anthropic Claude",
+      "model_mapping": {
+        "gpt-4": "claude-3-5-sonnet-20241022",
+        "gpt-3.5": "claude-3-haiku-20240307"
+      },
+      "capabilities": ["chat"],
+      "extra_body": {
+        "anthropic_version": "2023-06-01",
+        "max_tokens": 8192
+      }
+    },
+    "openai": {
+      "enabled": true,
+      "base_url": "https://api.openai.com/v1",
+      "auth": "bearer",
+      "key_env_var": "OPENAI_API_KEY",
+      "priority": 600,
+      "description": "OpenAI GPT",
+      "model_mapping": {},
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "gemini": {
+      "enabled": true,
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "auth": "bearer",
+      "key_env_var": "GOOGLE_API_KEY",
+      "priority": 550,
+      "description": "Google Gemini",
+      "model_mapping": {
+        "gpt-4": "gemini-1.5-pro",
+        "gpt-3.5": "gemini-1.5-flash"
+      },
+      "capabilities": ["chat"],
+      "extra_body": {}
+    },
+    "cloudflare": {
+      "enabled": true,
+      "base_url": "https://api.cloudflare.com/client/v4/ai",
+      "auth": "bearer",
+      "key_env_var": "CLOUDFLARE_API_TOKEN",
+      "priority": 300,
+      "description": "Cloudflare Workers AI",
+      "model_mapping": {
+        "gpt-3.5": "@cf/meta/llama-3.1-8b-instruct"
+      },
+      "capabilities": ["chat", "embedding"],
+      "extra_body": {}
+    },
+    "zenmux": {
+      "enabled": true,
+      "base_url": "https://api.zenmux.ai/v1",
+      "auth": "bearer",
+      "key_env_var": "ZENMUX_API_KEY",
+      "priority": 290,
+      "description": "ZenMux 聚合平台",
+      "model_mapping": {
+        "gpt-4": "gpt-4-turbo"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "12ai": {
+      "enabled": true,
+      "base_url": "https://api.12.ai/v1",
+      "auth": "bearer",
+      "key_env_var": "TWELVE_AI_API_KEY",
+      "priority": 280,
+      "description": "12AI 聚合平台",
+      "model_mapping": {
+        "gpt-4": "claude-3-sonnet"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    },
+    "subrouter": {
+      "enabled": true,
+      "base_url": "https://api.subrouter.ai/v1",
+      "auth": "bearer",
+      "key_env_var": "SUBROUTER_API_KEY",
+      "priority": 270,
+      "description": "Subrouter 聚合平台",
+      "model_mapping": {
+        "gpt-4": "claude-3.5-sonnet"
+      },
+      "capabilities": ["chat", "completion"],
+      "extra_body": {}
+    }
+  },
+  "routing_rules": {
+    "default_priority_order": ["ollama", "deepseek", "anthropic", "dashscope", "zhipu", "openai", "gemini"],
+    "intent_routing": {
+      "code": ["ollama", "deepseek", "groq"],
+      "reasoning": ["deepseek", "anthropic", "ollama"],
+      "chinese": ["zhipu", "dashscope", "moonshot", "tencent"],
+      "privacy": ["ollama"],
+      "fast": ["groq", "ollama", "minimax"],
+      "cheap": ["cloudflare", "siliconflow", "volcengine"]
+    }
+  }
+}

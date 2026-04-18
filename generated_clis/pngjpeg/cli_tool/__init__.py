@@ -1,0 +1,2 @@
+"""Auto-generated CLI package"""
+__version__ = "1.0.0"

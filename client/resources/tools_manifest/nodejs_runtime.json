@@ -1,0 +1,72 @@
+{
+  "id": "nodejs_runtime",
+  "name": "Node.js Runtime",
+  "desc": "JavaScript 运行时环境 (Toonflow/前端构建依赖)",
+  "version": "24.12.1",
+  "internal": true,
+  "origin": "market",
+  "enabled_by_default": false,
+  "categories": ["runtime", "dependency"],
+  "tags": ["nodejs", "javascript", "runtime", "toonflow-dependency"],
+  "platforms": {
+    "windows_amd64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-win-x64.zip",
+      "bin_name": "node.exe",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "windows_arm64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-win-arm64.zip",
+      "bin_name": "node.exe",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "darwin_amd64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-darwin-x64.tar.gz",
+      "bin_name": "bin/node",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "darwin_arm64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-darwin-arm64.tar.gz",
+      "bin_name": "bin/node",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "linux_amd64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-linux-x64.tar.xz",
+      "bin_name": "bin/node",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    },
+    "linux_arm64": {
+      "url": "https://nodejs.org/dist/v24.12.1/node-v24.12.1-linux-arm64.tar.xz",
+      "bin_name": "bin/node",
+      "extract": true,
+      "strip_components": 1,
+      "sha256": "",
+      "nested_bin": true
+    }
+  },
+  "install_hints": {
+    "windows": {
+      "note": "Windows 版为 ZIP 包，需手动处理嵌套目录结构"
+    },
+    "darwin": {
+      "note": "macOS 版为 TAR.GZ 包，bin/node 在顶层"
+    },
+    "linux": {
+      "note": "Linux 版为 TAR.XZ 包，支持多线程压缩"
+    }
+  }
+}

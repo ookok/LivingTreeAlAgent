@@ -1,0 +1,148 @@
+# Chinese (Simplified) translations for LivingTreeAI
+# Copyright (C) 2024 LivingTreeAI Team
+# This file is distributed under the same license as the LivingTreeAI package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: LivingTreeAI 2.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-04-17 20:00+0800\n"
+"PO-Revision-Date: 2024-04-17 20:00+0800\n"
+"Last-Translator: LivingTreeAI Team\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: core/i18n.py
+msgid "Success"
+msgstr "操作成功"
+
+msgid "Error"
+msgstr "操作失败"
+
+msgid "Loading"
+msgstr "加载中..."
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Confirm"
+msgstr "确认"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Help"
+msgstr "帮助"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "No"
+msgstr "否"
+
+msgid "OK"
+msgstr "确定"
+
+#: Server messages
+msgid "Server started"
+msgstr "服务器已启动"
+
+msgid "Server stopped"
+msgstr "服务器已停止"
+
+msgid "Client connected"
+msgstr "客户端已连接"
+
+msgid "Client disconnected"
+msgstr "客户端已断开"
+
+msgid "Request timeout"
+msgstr "请求超时"
+
+msgid "Network error"
+msgstr "网络错误"
+
+msgid "Invalid parameters"
+msgstr "参数无效"
+
+#: UI labels
+msgid "Welcome"
+msgstr "欢迎"
+
+msgid "Dashboard"
+msgstr "仪表盘"
+
+msgid "Chat"
+msgstr "聊天"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Profile"
+msgstr "个人资料"
+
+msgid "Logout"
+msgstr "退出登录"
+
+msgid "Login"
+msgstr "登录"
+
+msgid "Register"
+msgstr "注册"
+
+#: Status messages
+msgid "Online"
+msgstr "在线"
+
+msgid "Offline"
+msgstr "离线"
+
+msgid "Connecting"
+msgstr "连接中..."
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Disconnected"
+msgstr "已断开"
+
+msgid "Error occurred"
+msgstr "发生错误"
+
+#: Error messages
+msgid "Operation failed"
+msgstr "操作失败"
+
+msgid "Permission denied"
+msgstr "权限不足"
+
+msgid "Resource not found"
+msgstr "资源未找到"
+
+msgid "Invalid format"
+msgstr "格式无效"
+
+msgid "Missing required field"
+msgstr "缺少必填字段"

@@ -1,0 +1,61 @@
+{
+  "scene_id": "chat",
+  "scene_name": "聊天",
+  "description": "用户正在进行对话",
+
+  "rules": [
+    {
+      "rule_id": "long_wait",
+      "conditions": {
+        "wait_time": ">30"
+      },
+      "priority": 80,
+      "template": {
+        "emoji": "🌿",
+        "title": "等了一会儿了",
+        "content": "网络可能有点慢，要不换个模型试试？或者先做点别的？",
+        "level": "glow"
+      }
+    },
+    {
+      "rule_id": "error_retry",
+      "conditions": {
+        "user_action": "重试"
+      },
+      "priority": 85,
+      "template": {
+        "emoji": "🤗",
+        "title": "别急，慢慢来",
+        "content": "没关系的～网络不稳定常有，再试一次说不定就成了！",
+        "level": "gentle"
+      }
+    },
+    {
+      "rule_id": "long_context",
+      "conditions": {
+        "context_length": ">4000"
+      },
+      "priority": 70,
+      "template": {
+        "emoji": "📚",
+        "title": "上下文有点长",
+        "content": "对话挺长的了，可能会有点慢或者开始重复，换个话题也挺好的～",
+        "level": "glow"
+      }
+    }
+  ],
+
+  "chat_templates": {
+    "intro": "聊天中有什么想问的？",
+    "questions": [
+      "怎么清空对话？",
+      "能记住之前的对话吗？",
+      "怎么切换模型？"
+    ]
+  },
+
+  "hide_messages": {
+    "temp": "好的，我安静待着～",
+    "perma": "好的，聊天页不再打扰你了 🌿"
+  }
+}

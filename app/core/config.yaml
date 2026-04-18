@@ -1,0 +1,26 @@
+hardware:
+  auto_detect: true
+  gpu_memory_threshold: 0.8
+  system_memory_threshold: 0.85
+inference:
+  default_context_size: 4096
+  default_n_threads: 4
+  temperature: 0.7
+log_dir: ./logs
+model_dir: ./models
+monitoring:
+  collect_interval: 5
+  enabled: true
+security:
+  enabled: false
+sources:
+  huggingface:
+    cache_dir: ./models
+    mirror: https://hf-mirror.com
+  modelscope:
+    cache_dir: ./models
+    mirror: https://mirror.modelScope.cn
+system:
+  debug: false
+  name: Hermes Desktop
+  version: 2.0.0

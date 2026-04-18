@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Desktop V2.0 — 生命之树 AI 桌面助手</title>
+    <style>
+        :root {
+            --primary: #1a5f2a;
+            --primary-light: #2e8b3d;
+            --primary-dark: #0d3d18;
+            --bg: #f8faf9;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --text-secondary: #555;
+            --border: #e0e0e0;
+            --accent: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+        .hero { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 50%, var(--primary-dark) 100%); color: white; padding: 60px 20px; text-align: center; position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 L35 25 L55 30 L35 35 L30 55 L25 35 L5 30 L25 25 Z' fill='rgba(255,255,255,0.05)'/%3E%3C/svg%3E"); opacity: 0.5; }
+        .hero-content { position: relative; max-width: 900px; margin: 0 auto; }
+        .hero h1 { font-size: 2.8rem; font-weight: 700; margin-bottom: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .hero .tree-icon { font-size: 4rem; margin-bottom: 20px; }
+        .hero p { font-size: 1.2rem; opacity: 0.95; max-width: 600px; margin: 0 auto 30px; }
+        .hero-badges { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .badge { background: rgba(255,255,255,0.15); padding: 8px 20px; border-radius: 50px; font-size: 0.9rem; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+        .section { margin-bottom: 50px; }
+        .section-title { font-size: 1.8rem; color: var(--primary); margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+        .section-title::before { content: ''; width: 4px; height: 32px; background: var(--primary); border-radius: 2px; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .feature-card { background: var(--card); border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-left: 4px solid var(--primary); transition: transform 0.2s, box-shadow 0.2s; }
+        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        .feature-card h3 { color: var(--primary); margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .feature-card p { color: var(--text-secondary); font-size: 0.9rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .stat-card { background: var(--card); border-radius: 12px; padding: 24px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .stat-card .value { font-size: 2.5rem; font-weight: 700; color: var(--primary); }
+        .stat-card .label { color: var(--text-secondary); margin-top: 8px; font-size: 0.9rem; }
+        .arch-diagram { background: var(--card); border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 900px; margin: 0 auto; display: block; }
+        .download-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px; padding: 40px; color: white; }
+        .download-section h2 { font-size: 1.6rem; margin-bottom: 24px; text-align: center; }
+        .download-buttons { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
+        .download-btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 1rem; transition: all 0.2s; }
+        .download-btn.primary { background: var(--primary-light); color: white; }
+        .download-btn.primary:hover { background: var(--primary); }
+        .download-btn.secondary { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .download-btn.secondary:hover { background: rgba(255,255,255,0.2); }
+        .install-tabs { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
+        .install-tab { padding: 10px 24px; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .install-tab.active { background: white; color: var(--primary); }
+        .install-code { background: #0d0d0d; border-radius: 10px; padding: 20px; font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 0.85rem; overflow-x: auto; white-space: pre; line-height: 1.8; max-height: 300px; overflow-y: auto; }
+        .install-code .comment { color: #6a9955; }
+        .install-code .command { color: #dcdcaa; }
+        .install-code .string { color: #ce9178; }
+        .tech-stack { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+        .tech-badge { background: #f0f0f0; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+        .footer { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 40px; }
+        .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; }
+        .footer-links a { color: var(--primary); text-decoration: none; }
+        .footer-links a:hover { text-decoration: underline; }
+        .admin-link { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 50px; text-decoration: none; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: all 0.2s; }
+        .admin-link:hover { background: var(--primary-light); transform: translateY(-2px); }
+        .api-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+        .api-card { background: #f9f9f9; padding: 16px; border-radius: 8px; }
+        .api-card .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 8px; }
+        .api-card .method.get { background: #e8f5e9; color: #2e7d32; }
+        .api-card .method.post { background: #e3f2fd; color: #1565c0; }
+        .api-card .endpoint { font-family: monospace; font-size: 0.85rem; }
+        .api-card .desc { color: var(--text-secondary); font-size: 0.8rem; margin-top: 8px; }
+        @media (max-width: 768px) { .hero h1 { font-size: 2rem; } .hero p { font-size: 1rem; } .section-title { font-size: 1.4rem; } }
+    </style>
+</head>
+<body>
+    <section class="hero">
+        <div class="hero-content">
+            <div class="tree-icon">🌲</div>
+            <h1>Hermes Desktop V2.0</h1>
+            <p>生命之树 AI 桌面助手 — 基于本地大模型的智能进化平台，支持知识林地、装配园、技能市场，让 AI 成为真正的创作搭档</p>
+            <div class="hero-badges">
+                <span class="badge">🎓 知识管理</span>
+                <span class="badge">🛠️ 技能市场</span>
+                <span class="badge">🌐 中继服务</span>
+                <span class="badge">📦 跨平台</span>
+                <span class="badge">💰 积分经济</span>
+                <span class="badge">🏆 成就系统</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+        <!-- Server Status -->
+        <section class="section">
+            <h2 class="section-title">📊 服务状态</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="value" id="serverStatus">--</div>
+                    <div class="label">服务状态</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="totalClients">0</div>
+                    <div class="label">活跃客户端</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="totalPatches">0</div>
+                    <div class="label">累计补丁</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="serverTime">--</div>
+                    <div class="label">服务器时间</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture -->
+        <section class="section">
+            <h2 class="section-title">🏛️ 系统架构</h2>
+            <div class="arch-diagram">
+                <svg class="arch-svg" viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e8e8e8" stroke-width="0.5"/>
+                        </pattern>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#1a5f2a"/>
+                        </marker>
+                    </defs>
+                    <rect width="900" height="400" fill="url(#grid)"/>
+
+                    <!-- Client Layer -->
+                    <rect x="30" y="30" width="380" height="340" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+                    <text x="220" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="#1d4ed8">🦉 客户端 Client</text>
+
+                    <rect x="50" y="75" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="130" y="98" text-anchor="middle" font-size="11" fill="#1d4ed8">🖥️ PyQt6 界面层</text>
+                    <text x="130" y="115" text-anchor="middle" font-size="9" fill="#666">桌面 UI / 面板管理</text>
+                    <text x="130" y="130" text-anchor="middle" font-size="9" fill="#666">任务进度 / 系统托盘</text>
+
+                    <rect x="230" y="75" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="310" y="98" text-anchor="middle" font-size="11" fill="#1d4ed8">🧠 本地大模型</text>
+                    <text x="310" y="115" text-anchor="middle" font-size="9" fill="#666">Ollama / GPT4All</text>
+                    <text x="310" y="130" text-anchor="middle" font-size="9" fill="#666">ModelScope GGUF</text>
+
+                    <rect x="50" y="160" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="130" y="183" text-anchor="middle" font-size="11" fill="#1d4ed8">🌱 装配园</text>
+                    <text x="130" y="200" text-anchor="middle" font-size="9" fill="#666">知识孵化 / 技能生成</text>
+                    <text x="130" y="215" text-anchor="middle" font-size="9" fill="#666">Skill Market</text>
+
+                    <rect x="230" y="160" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="310" y="183" text-anchor="middle" font-size="11" fill="#1d4ed8">🌲 知识林地</text>
+                    <text x="310" y="200" text-anchor="middle" font-size="9" fill="#666">行业知识库 / Wiki</text>
+                    <text x="310" y="215" text-anchor="middle" font-size="9" fill="#666">LTKG 导入导出</text>
+
+                    <rect x="50" y="245" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="130" y="268" text-anchor="middle" font-size="11" fill="#1d4ed8">💰 积分经济</text>
+                    <text x="130" y="285" text-anchor="middle" font-size="9" fill="#666">积分系统 / VIP</text>
+                    <text x="130" y="300" text-anchor="middle" font-size="9" fill="#666">技能市场 / NFT</text>
+
+                    <rect x="230" y="245" width="160" height="70" rx="8" fill="white" stroke="#3b82f6" stroke-width="1"/>
+                    <text x="310" y="268" text-anchor="middle" font-size="11" fill="#1d4ed8">🏆 成就系统</text>
+                    <text x="310" y="285" text-anchor="middle" font-size="9" fill="#666">全链路成就 / 等级</text>
+                    <text x="310" y="300" text-anchor="middle" font-size="9" fill="#666">挂机收益 / 特权</text>
+
+                    <!-- Arrow -->
+                    <path d="M 420 200 L 460 200" stroke="#1a5f2a" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+
+                    <!-- Relay Server -->
+                    <rect x="490" y="100" width="380" height="200" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+                    <text x="680" y="125" text-anchor="middle" font-size="14" font-weight="600" fill="#d97706">🌐 中继服务器 Relay Server</text>
+
+                    <rect x="510" y="145" width="160" height="60" rx="8" fill="white" stroke="#f59e0b" stroke-width="1"/>
+                    <text x="590" y="168" text-anchor="middle" font-size="11" fill="#d97706">📊 配置同步</text>
+                    <text x="590" y="183" text-anchor="middle" font-size="9" fill="#666">用户配置存储</text>
+                    <text x="590" y="195" text-anchor="middle" font-size="9" fill="#666">跨设备同步</text>
+
+                    <rect x="690" y="145" width="160" height="60" rx="8" fill="white" stroke="#f59e0b" stroke-width="1"/>
+                    <text x="770" y="168" text-anchor="middle" font-size="11" fill="#d97706">⚙️ 参数分发</text>
+                    <text x="770" y="183" text-anchor="middle" font-size="9" fill="#666">超时配置 / 重试</text>
+                    <text x="770" y="195" text-anchor="middle" font-size="9" fill="#666">批处理参数</text>
+
+                    <rect x="510" y="220" width="340" height="60" rx="8" fill="white" stroke="#f59e0b" stroke-width="1"/>
+                    <text x="680" y="243" text-anchor="middle" font-size="11" fill="#d97706">🌐 Web 管理界面</text>
+                    <text x="680" y="260" text-anchor="middle" font-size="9" fill="#666">纯静态 HTML / 无 PyQt 依赖 / 响应式布局</text>
+                    <text x="680" y="272" text-anchor="middle" font-size="9" fill="#666">数据监控 / 配置管理</text>
+
+                    <text x="220" y="380" text-anchor="middle" font-size="11" fill="#666">离线独立运行 | 本地优先 | 无服务器依赖</text>
+                    <text x="680" y="380" text-anchor="middle" font-size="11" fill="#666">可选组件 | 轻量中继 | 支持关机</text>
+                </svg>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="section">
+            <h2 class="section-title">✨ 核心功能</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>🧠 本地大模型</h3>
+                    <p>支持 Ollama、GPT4All、ModelScope 等本地模型，无需联网，数据完全私密。支持 Qwen、LLM-Research 等 GGUF 模型。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🌱 装配园 Assembly Garden</h3>
+                    <p>自动化知识与技能生成管线。从代码库、文档、博客中提取知识，自动生成可执行的 Skill，并沉淀到知识林地。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🌲 知识林地 Knowledge Grove</h3>
+                    <p>行业化知识管理，按电子/硬件/软件等12个行业分类。支持伪域名路由、Wiki渲染、LTKG包导入导出。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📦 技能市场 Skill Market</h3>
+                    <p>基于 SKILL.md Manifest 的技能分发系统。技能即插即用，支持版本管理、依赖解析、自动安装。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>💰 积分经济系统</h3>
+                    <p>动态积分发放与智能消耗构建可持续 P2P 经济体系。VIP 等级、每日赠送、状态通道、预测市场。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🏆 全链路成就系统</h3>
+                    <p>每个行为都有成就，每次成长都有记录。从萌新到传奇的全过程可追溯、可展示、可传承。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎮 挂机等级系统</h3>
+                    <p>让用户的每一秒在线时间都产生价值。10级体系、挂机小游戏、等级特权、排行榜。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🏢 通用资产交易</h3>
+                    <p>从数字到物理的完整社会模式。5种交付方式自动匹配、物流集成、信任网络、微型社会 DAO。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- API Endpoints -->
+        <section class="section">
+            <h2 class="section-title">🔌 API 接口</h2>
+            <div class="api-grid">
+                <div class="api-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint">/api/health</span>
+                    <p class="desc">健康检查，返回服务状态</p>
+                </div>
+                <div class="api-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint">/api/stats/overview</span>
+                    <p class="desc">全局统计概览</p>
+                </div>
+                <div class="api-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint">/api/stats/trends</span>
+                    <p class="desc">进化趋势，按周统计</p>
+                </div>
+                <div class="api-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint">/api/config/sync</span>
+                    <p class="desc">从服务器拉取配置</p>
+                </div>
+                <div class="api-card">
+                    <span class="method post">POST</span>
+                    <span class="endpoint">/api/config/sync</span>
+                    <p class="desc">推送本地配置到服务器</p>
+                </div>
+                <div class="api-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint">/api/relay/params</span>
+                    <p class="desc">获取中继参数</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download -->
+        <section class="section">
+            <h2 class="section-title">📥 下载安装</h2>
+            <div class="download-section">
+                <h2>🚀 一键部署</h2>
+                <div class="download-buttons">
+                    <a href="https://github.com/your-repo/hermes-desktop" class="download-btn primary" target="_blank">
+                        <span>🐙</span> GitHub 源码
+                    </a>
+                    <a href="#install" class="download-btn secondary">
+                        <span>📜</span> 查看安装脚本
+                    </a>
+                </div>
+
+                <div class="tech-stack">
+                    <span class="tech-badge">Python 3.11+</span>
+                    <span class="tech-badge">PyQt6</span>
+                    <span class="tech-badge">FastAPI</span>
+                    <span class="tech-badge">SQLite</span>
+                    <span class="tech-badge">Ollama</span>
+                    <span class="tech-badge">llama-cpp-python</span>
+                </div>
+
+                <div id="install" style="margin-top: 40px;">
+                    <h3 style="text-align: center; margin-bottom: 20px; font-size: 1.2rem;">安装脚本</h3>
+                    <div class="install-tabs">
+                        <button class="install-tab active" onclick="showScript('linux')">🐧 Linux</button>
+                        <button class="install-tab" onclick="showScript('windows')">🪟 Windows</button>
+                    </div>
+                    <div class="install-code" id="installScript">
+<span class="comment"># Linux 一键部署 (Ubuntu/Debian)</span>
+<span class="command">curl -fsSL https://raw.githubusercontent.com/your-repo/hermes-desktop/main/deploy.sh | bash</span>
+
+<span class="comment"># 或下载后执行</span>
+<span class="command">chmod +x deploy.sh</span>
+<span class="command">./deploy.sh install</span>
+
+<span class="comment"># 管理命令</span>
+<span class="command">sudo systemctl start hermes-relay   </span>  <span class="comment"># 启动服务</span>
+<span class="command">sudo systemctl enable hermes-relay  </span>  <span class="comment"># 开机自启</span>
+<span class="command">sudo systemctl status hermes-relay  </span>  <span class="comment"># 查看状态</span>
+
+<span class="comment"># 访问 Web 管理界面</span>
+<span class="string">http://your-server:8766/</span></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="https://github.com/your-repo/hermes-desktop" target="_blank">🐙 GitHub</a>
+            <a href="/web">📊 管理控制台</a>
+            <a href="/api/health">🔧 API 状态</a>
+        </div>
+        <p>Hermes Desktop V2.0 · 生命之树 AI 桌面助手</p>
+        <p style="margin-top: 8px; opacity: 0.7;">基于 PyQt6 + Ollama + FastAPI 构建</p>
+    </footer>
+
+    <a href="/web" class="admin-link">📊 管理控制台 →</a>
+
+    <script>
+        async function loadServerStatus() {
+            try {
+                const resp = await fetch('/api/health');
+                const data = await resp.json();
+                document.getElementById('serverStatus').textContent = data.status === 'healthy' ? '✅ 在线' : '❌ 离线';
+                document.getElementById('serverTime').textContent = new Date(data.timestamp * 1000).toLocaleTimeString();
+            } catch (e) {
+                document.getElementById('serverStatus').textContent = '❌ 离线';
+            }
+            try {
+                const resp = await fetch('/api/stats/overview');
+                const data = await resp.json();
+                document.getElementById('totalClients').textContent = data.total_clients || 0;
+                document.getElementById('totalPatches').textContent = data.total_patches || 0;
+            } catch (e) {}
+        }
+        function showScript(platform) {
+            const tabs = document.querySelectorAll('.install-tab');
+            const code = document.getElementById('installScript');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            if (platform === 'linux') {
+                code.innerHTML = `<span class="comment"># Linux 一键部署 (Ubuntu/Debian)</span>
+<span class="command">curl -fsSL https://raw.githubusercontent.com/your-repo/hermes-desktop/main/deploy.sh | bash</span>
+
+<span class="comment"># 或下载后执行</span>
+<span class="command">chmod +x deploy.sh</span>
+<span class="command">./deploy.sh install</span>
+
+<span class="comment"># 管理命令</span>
+<span class="command">sudo systemctl start hermes-relay   </span>  <span class="comment"># 启动服务</span>
+<span class="command">sudo systemctl enable hermes-relay  </span>  <span class="comment"># 开机自启</span>
+<span class="command">sudo systemctl status hermes-relay  </span>  <span class="comment"># 查看状态</span>
+
+<span class="comment"># 访问 Web 管理界面</span>
+<span class="string">http://your-server:8766/</span>`;
+            } else {
+                code.innerHTML = `<span class="comment"># Windows 一键部署</span>
+<span class="comment"># 1. 克隆或下载项目</span>
+<span class="command">git clone https://github.com/your-repo/hermes-desktop.git</span>
+<span class="command">cd hermes-desktop</span>
+
+<span class="comment"># 2. 运行客户端</span>
+<span class="command">run.bat</span>
+
+<span class="comment"># 3. 安装中继服务 (需要管理员)</span>
+<span class="command">run.bat install</span>
+
+<span class="comment"># 4. 启动中继服务器</span>
+<span class="command">run.bat relay</span>
+
+<span class="comment"># 访问 Web 管理界面</span>
+<span class="string">http://localhost:8766/</span>`;
+            }
+        }
+        loadServerStatus();
+        setInterval(loadServerStatus, 30000);
+    </script>
+</body>
+</html>

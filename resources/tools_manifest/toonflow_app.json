@@ -1,0 +1,106 @@
+{
+  "id": "toonflow_app",
+  "name": "Toonflow 短剧引擎",
+  "desc": "AI 短剧全流程生成: 小说→剧本→分镜→视频 (Node.js + Electron + Vue)",
+  "enabled_by_default": false,
+  "internal": false,
+  "version": "1.0.0",
+  "requires": ["nodejs_runtime"],
+  "platforms": {
+    "windows_amd64": {
+      "repo": "HBAI-Ltd/Toonflow-app",
+      "method": "git_clone_build",
+      "node_version": "24",
+      "nodejs_runtime": "nodejs_runtime",
+      "install_command": "git clone https://github.com/HBAI-Ltd/Toonflow-app.git && cd Toonflow-app && yarn install",
+      "build_cmd": ["..\\..\\tools\\nodejs_runtime\\bin\\node.exe", "yarn", "install"],
+      "start_cmd": ["..\\..\\tools\\nodejs_runtime\\bin\\node.exe", "yarn", "start:api"],
+      "port": 60001,
+      "health_check": "/api/health"
+    },
+    "linux_amd64": {
+      "repo": "HBAI-Ltd/Toonflow-app",
+      "method": "git_clone_build",
+      "node_version": "24",
+      "nodejs_runtime": "nodejs_runtime",
+      "install_command": "git clone https://github.com/HBAI-Ltd/Toonflow-app.git && cd Toonflow-app && yarn install",
+      "build_cmd": ["../../tools/nodejs_runtime/bin/node", "yarn", "install"],
+      "start_cmd": ["../../tools/nodejs_runtime/bin/node", "yarn", "start:api"],
+      "port": 60001,
+      "health_check": "/api/health"
+    }
+  },
+  "dependencies": {
+    "node": ">=24.0.0",
+    "yarn": ">=1.22.0",
+    "git": ">=2.30.0"
+  },
+  "capabilities": {
+    "pipeline": {
+      "description": "AI 短剧全流程生成",
+      "steps": [
+        "novel_import: 小说/剧本导入",
+        "character_extract: AI 角色提取与建模",
+        "script_convert: 剧本转换与分场",
+        "storyboard_gen: AI 分镜生成",
+        "image_gen: 场景与人物图生成 (SD/ComfyUI)",
+        "video_compose: 视频合成 (Sora/豆包/Seedance2)"
+      ]
+    },
+    "formats": {
+      "input": ["txt", "md", "docx", "json"],
+      "output": ["mp4", "webm", "gif", "png_sequence"]
+    },
+    "models": {
+      "llm": "支持 OpenAI/Anthropic/本地 RelayFreeLLM",
+      "image": "支持 Stable Diffusion/ComfyUI/豆包",
+      "video": "支持 Sora/Seedance2/豆包视频模型"
+    }
+  },
+  "config_options": {
+    "api_port": {
+      "type": "int",
+      "default": 60001,
+      "range": [1024, 65535],
+      "desc": "API 服务端口"
+    },
+    "video_model": {
+      "type": "enum",
+      "default": "seedance2",
+      "options": ["seedance2", "kling", "pika", "runway", "sora"],
+      "desc": "视频生成模型"
+    },
+    "image_model": {
+      "type": "enum",
+      "default": "sd15",
+      "options": ["sd15", "sd21", "comfyui", "dalle3"],
+      "desc": "图像生成模型"
+    },
+    "llm_endpoint": {
+      "type": "string",
+      "default": "http://localhost:8080/v1",
+      "desc": "LLM API 端点 (可复用 RelayFreeLLM)"
+    }
+  },
+  "api_endpoints": {
+    "create_project": "POST /api/project",
+    "import_novel": "POST /api/novel",
+    "start_production": "POST /api/project/{id}/start-production",
+    "get_task_status": "GET /api/task/{id}",
+    "download_result": "GET /api/task/{id}/download",
+    "list_projects": "GET /api/projects",
+    "health": "GET /api/health"
+  },
+  "resource_hints": {
+    "min_memory_gb": 16,
+    "gpu_recommended": true,
+    "disk_space_gb": 10,
+    "install_size_gb": 3
+  },
+  "use_cases": [
+    "电商商品故事短片",
+    "网文改编短剧",
+    "品牌营销视频",
+    "教育培训动画"
+  ]
+}

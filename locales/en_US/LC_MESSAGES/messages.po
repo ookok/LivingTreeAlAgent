@@ -1,0 +1,148 @@
+# English translations for LivingTreeAI
+# Copyright (C) 2024 LivingTreeAI Team
+# This file is distributed under the same license as the LivingTreeAI package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: LivingTreeAI 2.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-04-17 20:00+0800\n"
+"PO-Revision-Date: 2024-04-17 20:00+0800\n"
+"Last-Translator: LivingTreeAI Team\n"
+"Language-Team: English\n"
+"Language: en_US\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: core/i18n.py
+msgid "Success"
+msgstr "Success"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Loading"
+msgstr "Loading..."
+
+msgid "Save"
+msgstr "Save"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Confirm"
+msgstr "Confirm"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Help"
+msgstr "Help"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Yes"
+msgstr "Yes"
+
+msgid "No"
+msgstr "No"
+
+msgid "OK"
+msgstr "OK"
+
+#: Server messages
+msgid "Server started"
+msgstr "Server started"
+
+msgid "Server stopped"
+msgstr "Server stopped"
+
+msgid "Client connected"
+msgstr "Client connected"
+
+msgid "Client disconnected"
+msgstr "Client disconnected"
+
+msgid "Request timeout"
+msgstr "Request timeout"
+
+msgid "Network error"
+msgstr "Network error"
+
+msgid "Invalid parameters"
+msgstr "Invalid parameters"
+
+#: UI labels
+msgid "Welcome"
+msgstr "Welcome"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Chat"
+msgstr "Chat"
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Profile"
+msgstr "Profile"
+
+msgid "Logout"
+msgstr "Logout"
+
+msgid "Login"
+msgstr "Login"
+
+msgid "Register"
+msgstr "Register"
+
+#: Status messages
+msgid "Online"
+msgstr "Online"
+
+msgid "Offline"
+msgstr "Offline"
+
+msgid "Connecting"
+msgstr "Connecting..."
+
+msgid "Connected"
+msgstr "Connected"
+
+msgid "Disconnected"
+msgstr "Disconnected"
+
+msgid "Error occurred"
+msgstr "Error occurred"
+
+#: Error messages
+msgid "Operation failed"
+msgstr "Operation failed"
+
+msgid "Permission denied"
+msgstr "Permission denied"
+
+msgid "Resource not found"
+msgstr "Resource not found"
+
+msgid "Invalid format"
+msgstr "Invalid format"
+
+msgid "Missing required field"
+msgstr "Missing required field"

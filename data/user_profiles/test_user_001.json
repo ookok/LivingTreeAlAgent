@@ -1,0 +1,23 @@
+{
+  "user_id": "test_user_001",
+  "name": "测试用户",
+  "created_at": 1776324097.1032217,
+  "last_active": 1776324097.105221,
+  "interaction_count": 1,
+  "preferences": {},
+  "topic_stats": {
+    "电商促销": 1
+  },
+  "agent_stats": {
+    "ecommerce_advisor": 1
+  },
+  "tool_stats": {
+    "relay_llm": 1
+  },
+  "successful_patterns": [],
+  "failed_patterns": [],
+  "learned_facts": {
+    "主营类目": "数码产品",
+    "常用物流": "顺丰"
+  }
+}

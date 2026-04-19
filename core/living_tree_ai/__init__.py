@@ -58,8 +58,6 @@ from .external_brain import (
 
 # 四层通信协议栈
 from .communication import (
-    # 版本
-    "__version__",
     # 发现层
     "NodeDiscovery",
     "DiscoveryResult",
@@ -95,8 +93,6 @@ from .communication import (
 
 # 去中心化智慧网络
 from .wisdom_network import (
-    # 版本
-    "__version__",
     # 搜索网
     "SearchRouter",
     "SearchRequest",
@@ -130,8 +126,6 @@ from .wisdom_network import (
 
 # 三层同步体系
 from .sync_network import (
-    # 版本
-    "__version__",
     # 事件同步
     "GossipSync",
     "SyncEvent",

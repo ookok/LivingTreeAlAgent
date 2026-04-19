@@ -249,17 +249,31 @@ class ChatPanel(QWidget):
 
         # ── 标题栏 ────────────────────────────────────────────────────
         header = QWidget()
-        header.setStyleSheet("background:#1a1a1a; border-bottom:1px solid #252525;")
-        header.setFixedHeight(48)
+        header.setStyleSheet("""
+            background:#0F172A;
+            border-bottom:1px solid #1E293B;
+        """)
+        header.setFixedHeight(56)
         h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(20, 0, 16, 0)
-        self.title_lbl = QLabel("Hermes Agent")
+        h_layout.setContentsMargins(24, 0, 16, 0)
+        self.title_lbl = QLabel("💬 Hermes Assistant")
         self.title_lbl.setObjectName("ChatTitle")
+        self.title_lbl.setStyleSheet("""
+            color: #F1F5F9;
+            font-size: 16px;
+            font-weight: 600;
+        """)
         h_layout.addWidget(self.title_lbl)
         h_layout.addStretch()
         # 当前模型标签
         self.model_lbl = QLabel()
-        self.model_lbl.setStyleSheet("color:#555; font-size:11px;")
+        self.model_lbl.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+            background: #1E293B;
+            padding: 4px 12px;
+            border-radius: 12px;
+        """)
         h_layout.addWidget(self.model_lbl)
         root.addWidget(header)
 
@@ -268,12 +282,31 @@ class ChatPanel(QWidget):
         self.scroll.setObjectName("ChatScrollArea")
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("""
+            QScrollArea {
+                background: #0F172A;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background-color: transparent;
+                width: 8px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #334155;
+                border-radius: 4px;
+                min-height: 40px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #475569;
+            }
+        """)
 
         self.msg_container = QWidget()
         self.msg_container.setObjectName("MessageContainer")
         self.msg_layout = QVBoxLayout(self.msg_container)
-        self.msg_layout.setContentsMargins(20, 16, 20, 16)
-        self.msg_layout.setSpacing(12)
+        self.msg_layout.setContentsMargins(24, 20, 24, 20)
+        self.msg_layout.setSpacing(16)
         self.msg_layout.addStretch()
 
         # 欢迎占位
@@ -282,7 +315,12 @@ class ChatPanel(QWidget):
             "Hermes 可以帮你编写代码、分析文件、搜索网络…"
         )
         self._welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._welcome.setStyleSheet("color:#444; font-size:14px; padding:40px;")
+        self._welcome.setStyleSheet("""
+            color: #64748B;
+            font-size: 15px;
+            padding: 60px 40px;
+            background: transparent;
+        """)
         self._welcome.setWordWrap(True)
         self.msg_layout.addWidget(self._welcome)
         self.msg_layout.addStretch()
@@ -299,32 +337,86 @@ class ChatPanel(QWidget):
         # ── 输入区 ────────────────────────────────────────────────────
         input_area = QWidget()
         input_area.setObjectName("InputArea")
-        input_area.setFixedHeight(110)
+        input_area.setFixedHeight(120)
+        input_area.setStyleSheet("""
+            QWidget#InputArea {
+                background: #1E293B;
+                border-top: 1px solid #334155;
+            }
+        """)
         ia_layout = QVBoxLayout(input_area)
-        ia_layout.setContentsMargins(16, 10, 16, 12)
-        ia_layout.setSpacing(8)
+        ia_layout.setContentsMargins(16, 12, 16, 16)
+        ia_layout.setSpacing(10)
 
         # 文本框 + 按钮
         row = QHBoxLayout()
-        row.setSpacing(8)
+        row.setSpacing(12)
 
         self.input_box = _EnterTextEdit()
         self.input_box.setObjectName("MessageInput")
-        self.input_box.setPlaceholderText("发送消息（Enter 发送，Shift+Enter 换行）")
-        self.input_box.setFixedHeight(60)
+        self.input_box.setPlaceholderText("输入消息... (Enter 发送，Shift+Enter 换行)")
+        self.input_box.setFixedHeight(64)
+        self.input_box.setStyleSheet("""
+            QTextEdit {
+                background: #0F172A;
+                border: 1px solid #334155;
+                border-radius: 12px;
+                padding: 12px 16px;
+                color: #F1F5F9;
+                font-size: 14px;
+            }
+            QTextEdit:focus {
+                border-color: #3B82F6;
+                outline: none;
+            }
+            QTextEdit::placeholder {
+                color: #64748B;
+            }
+        """)
         self.input_box.enter_pressed.connect(self._on_send)
         row.addWidget(self.input_box)
 
         btn_col = QVBoxLayout()
-        btn_col.setSpacing(4)
+        btn_col.setSpacing(8)
         self.send_btn = QPushButton("发送")
         self.send_btn.setObjectName("SendButton")
-        self.send_btn.setFixedWidth(72)
+        self.send_btn.setFixedWidth(80)
+        self.send_btn.setFixedHeight(36)
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #2563EB;
+            }
+            QPushButton:pressed {
+                background-color: #1D4ED8;
+            }
+        """)
         self.send_btn.clicked.connect(self._on_send)
         self.stop_btn = QPushButton("停止")
         self.stop_btn.setObjectName("StopButton")
-        self.stop_btn.setFixedWidth(72)
+        self.stop_btn.setFixedWidth(80)
+        self.stop_btn.setFixedHeight(36)
         self.stop_btn.hide()
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #EF4444;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #DC2626;
+            }
+        """)
         self.stop_btn.clicked.connect(self.stop_requested)
         btn_col.addWidget(self.send_btn)
         btn_col.addWidget(self.stop_btn)

@@ -231,7 +231,7 @@ class DownloadCenter:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
+                    # 不设置 _initialized 标志，让 __init__ 每次都执行
         return cls._instance
 
     def __init__(
@@ -242,10 +242,6 @@ class DownloadCenter:
         timeout: int = 300,
         max_retries: int = 3,
     ):
-        if self._initialized:
-            return
-        self._initialized = True
-
         # 配置
         self.download_dir = Path(download_dir) if download_dir else Path.home() / ".hermes-desktop" / "downloads"
         self.download_dir.mkdir(parents=True, exist_ok=True)
@@ -256,17 +252,24 @@ class DownloadCenter:
         self.max_retries = max_retries
 
         # 任务存储
-        self._tasks: Dict[str, DownloadTask] = {}
-        self._threads: Dict[str, threading.Thread] = {}
-        self._stop_events: Dict[str, threading.Event] = {}
-        self._paused_events: Dict[str, threading.Event] = {}
+        if not hasattr(self, '_tasks'):
+            self._tasks: Dict[str, DownloadTask] = {}
+        if not hasattr(self, '_threads'):
+            self._threads: Dict[str, threading.Thread] = {}
+        if not hasattr(self, '_stop_events'):
+            self._stop_events: Dict[str, threading.Event] = {}
+        if not hasattr(self, '_paused_events'):
+            self._paused_events: Dict[str, threading.Event] = {}
 
         # 并发控制
-        self._semaphore = threading.Semaphore(max_concurrent)
-        self._task_lock = threading.Lock()
+        if not hasattr(self, '_semaphore'):
+            self._semaphore = threading.Semaphore(max_concurrent)
+        if not hasattr(self, '_task_lock'):
+            self._task_lock = threading.Lock()
 
         # 进度回调
-        self._global_progress_callbacks: List[Callable[[DownloadTask], None]] = []
+        if not hasattr(self, '_global_progress_callbacks'):
+            self._global_progress_callbacks: List[Callable[[DownloadTask], None]] = []
 
         logger.info(f"DownloadCenter 初始化完成 | 下载目录: {self.download_dir}")
 

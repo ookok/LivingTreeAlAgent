@@ -25,48 +25,129 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle("Settings / 设置")
-        self.setMinimumSize(800, 600)
-        self.setStyleSheet(
-            "QDialog{background:#1a1a1a;}"
-            "QLabel{color:#ccc;}"
-            "QPushButton{background:#252525;color:#e8e8e8;border:1px solid #333;"
-            "border-radius:5px;padding:7px 16px;}"
-            "QPushButton:hover{background:#303030;}"
-            "QPushButton:pressed{background:#1e1e1e;}"
-            "QPushButton#SaveButton{background:#5a5aff;border-color:#5a5aff;color:white;font-weight:600;}"
-            "QPushButton#SaveButton:hover{background:#4a4aef;}"
-            "QLineEdit, QSpinBox, QComboBox{background:#252525;border:1px solid #333;"
-            "border-radius:5px;padding:6px 10px;color:#e8e8e8;}"
-            "QLineEdit:focus, QSpinBox:focus, QComboBox:focus{border-color:#5a5aff;}"
-            "QComboBox::drop-down{border:none;width:20px;}"
-            "QComboBox QAbstractItemView{background:#252525;border:1px solid #333;"
-            "selection-background-color:#353585;color:#e8e8e8;}"
-            "QGroupBox{color:#888;border:1px solid #2a2a2a;border-radius:6px;"
-            "margin-top:8px;padding-top:12px;font-size:11px;font-weight:600;"
-            "text-transform:uppercase;}"
-            "QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px;color:#666;}"
-        )
+        self.setMinimumSize(900, 650)
+        self.setStyleSheet("""
+            QDialog {
+                background: #0F172A;
+            }
+            QLabel {
+                color: #E2E8F0;
+            }
+            QPushButton {
+                background: #334155;
+                color: #F1F5F9;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #475569;
+            }
+            QPushButton:pressed {
+                background: #1E293B;
+            }
+            QPushButton#SaveButton {
+                background: #3B82F6;
+                color: white;
+                font-weight: 600;
+            }
+            QPushButton#SaveButton:hover {
+                background: #2563EB;
+            }
+            QLineEdit, QSpinBox, QComboBox {
+                background: #1E293B;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 10px 14px;
+                color: #F1F5F9;
+                font-size: 14px;
+            }
+            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
+                border-color: #3B82F6;
+                outline: none;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 24px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #94A3B8;
+                margin-right: 8px;
+            }
+            QComboBox QAbstractItemView {
+                background: #1E293B;
+                border: 1px solid #334155;
+                selection-background-color: #3B82F6;
+                color: #F1F5F9;
+                padding: 8px;
+            }
+            QGroupBox {
+                color: #94A3B8;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 16px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 8px;
+                color: #64748B;
+            }
+        """)
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
         # 标题
-        title = QLabel("Settings / 设置")
-        title.setStyleSheet("font-size:18px;font-weight:700;color:#e8e8e8;padding:8px 0;")
+        title = QLabel("⚙️ Settings / 设置")
+        title.setStyleSheet("""
+            font-size: 22px;
+            font-weight: 700;
+            color: #F1F5F9;
+            padding: 8px 0 16px;
+        """)
         layout.addWidget(title)
 
         # Tab
         tabs = QTabWidget()
-        tabs.setStyleSheet(
-            "QTabWidget::pane{border:1px solid #252525;border-radius:6px;padding:12px;"
-            "background:#151515;}"
-            "QTabBar::tab{background:#1e1e1e;color:#666;padding:8px 20px;"
-            "border:1px solid #252525;border-radius:5px;margin-right:4px;}"
-            "QTabBar::tab:selected{background:#252550;color:#e8e8e8;}"
-            "QTabBar::tab:hover{background:#252525;}"
-        )
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #334155;
+                border-radius: 12px;
+                padding: 20px;
+                background: #1E293B;
+                margin-top: -1px;
+            }
+            QTabBar::tab {
+                background: transparent;
+                color: #94A3B8;
+                padding: 12px 24px;
+                margin-right: 8px;
+                border-bottom: 2px solid transparent;
+                font-size: 14px;
+                font-weight: 500;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+            }
+            QTabBar::tab:selected {
+                color: #3B82F6;
+                border-bottom: 2px solid #3B82F6;
+            }
+            QTabBar::tab:hover {
+                color: #3B82F6;
+                background: rgba(59, 130, 246, 0.1);
+            }
+        """)
 
         # ── Ollama ───────────────────────────────────────────
         ollama_tab = self._build_ollama_tab()
@@ -156,7 +237,14 @@ class SettingsDialog(QDialog):
 
         hint = QLabel("💡 默认模型示例：qwen2.5:7b、llama3.2:3b、mistral:7b\n"
                       "请确保模型名称与 Ollama 中注册的一致（ollama list 查看）")
-        hint.setStyleSheet("color:#555;font-size:11px;padding:8px;")
+        hint.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+            padding: 12px;
+            background: #0F172A;
+            border-radius: 8px;
+            border-left: 3px solid #3B82F6;
+        """)
         lay.addRow(hint)
 
         return w
@@ -164,7 +252,8 @@ class SettingsDialog(QDialog):
     def _build_model_tab(self) -> QWidget:
         w = QWidget()
         lay = QFormLayout(w)
-        lay.setSpacing(12)
+        lay.setSpacing(16)
+        lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         from core.config import get_models_dir
         models_dir = get_models_dir()
@@ -183,7 +272,14 @@ class SettingsDialog(QDialog):
 
         hint = QLabel("💡 GGUF 模型下载后将存储在模型目录。\n"
                       "Ollama 模型存放在 ~/.ollama/models/")
-        hint.setStyleSheet("color:#555;font-size:11px;padding:8px;")
+        hint.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+            padding: 12px;
+            background: #0F172A;
+            border-radius: 8px;
+            border-left: 3px solid #3B82F6;
+        """)
         lay.addRow(hint)
 
         return w

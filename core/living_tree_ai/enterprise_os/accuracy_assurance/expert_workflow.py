@@ -136,7 +136,7 @@ class ReviewTask:
     completed_at: Optional[datetime] = None
 
     # 截止时间
-    due_at: Optional[datetime] None
+    due_at: Optional[datetime] = None
     is_overdue: bool = False
 
     # SLA
@@ -457,7 +457,14 @@ class ExpertReviewWorkflow:
         self._statistics["completed_tasks"] += 1
 
         # 获取审批链
-        chain = self._chains.get(task.task_id.split(":")[1])
+        # 从任务ID中提取链ID: TASK:CHAIN:XXX:LEVEL -> CHAIN:XXX
+        task_parts = task.task_id.split(":")
+        if len(task_parts) >= 3:
+            chain_id = f"{task_parts[1]}:{task_parts[2]}"
+            chain = self._chains.get(chain_id)
+        else:
+            chain = None
+        
         if chain:
             # 如果是拒绝或要求修改，终止审批链
             if decision in ["rejected", "revision"]:

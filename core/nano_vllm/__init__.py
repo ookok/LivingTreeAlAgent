@@ -77,6 +77,14 @@ class NanoVLLMClient:
         Returns:
             是否启动成功
         """
+        # 检查 nanovllm 是否安装
+        try:
+            import nanovllm
+            print(f"[NanoVLLMClient] nanovllm 版本: {nanovllm.__version__}")
+        except ImportError:
+            print("[NanoVLLMClient] nanovllm 未安装，请运行: pip install nanovllm")
+            return False
+
         # 构建命令
         cmd = [
             "python", "-m", "nanovllm",
@@ -95,22 +103,55 @@ class NanoVLLMClient:
         if cuda_visible_devices:
             env["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
 
+        print(f"[NanoVLLMClient] 启动命令: {' '.join(cmd)}")
+
         try:
             self._process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=env
+                env=env,
+                text=True
             )
-            self._is_running = True
 
-            # 等待服务启动
+            # 检查是否启动成功
             import time
-            time.sleep(5)
-
-            return True
+            start_time = time.time()
+            timeout = 30
+            
+            while time.time() - start_time < timeout:
+                # 检查进程是否还在运行
+                if self._process.poll() is not None:
+                    # 进程已经退出，读取错误信息
+                    stdout, stderr = self._process.communicate()
+                    print(f"[NanoVLLMClient] 服务启动失败，退出码: {self._process.returncode}")
+                    print(f"[NanoVLLMClient] 标准输出: {stdout}")
+                    print(f"[NanoVLLMClient] 标准错误: {stderr}")
+                    return False
+                
+                # 尝试读取输出
+                try:
+                    stdout_line = self._process.stdout.readline()
+                    if stdout_line:
+                        print(f"[NanoVLLMClient] 服务输出: {stdout_line.strip()}")
+                        if "Server started" in stdout_line or "Listening on" in stdout_line:
+                            print(f"[NanoVLLMClient] 服务启动成功")
+                            self._is_running = True
+                            return True
+                except Exception:
+                    pass
+                
+                time.sleep(1)
+            
+            # 超时
+            print(f"[NanoVLLMClient] 服务启动超时 ({timeout}秒)")
+            self._process.terminate()
+            self._process.wait()
+            return False
         except Exception as e:
-            print(f"启动 Nano-vLLM 失败: {e}")
+            print(f"[NanoVLLMClient] 启动 Nano-vLLM 失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def stop_server(self):
@@ -209,6 +250,10 @@ class NanoVLLMClient:
         request.update(kwargs)
 
         import urllib.request
+        import urllib.error
+
+        print(f"[NanoVLLMClient] 发送流式请求到: {self.base_url}/generate")
+        print(f"[NanoVLLMClient] 请求参数: {json.dumps(request, ensure_ascii=False)[:200]}...")
 
         req = urllib.request.Request(
             f"{self.base_url}/generate",
@@ -218,13 +263,29 @@ class NanoVLLMClient:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=300) as response:
-                for line in response:
+            print(f"[NanoVLLMClient] 等待响应...")
+            with urllib.request.urlopen(req, timeout=30) as response:
+                print(f"[NanoVLLMClient] 收到响应，状态码: {response.getcode()}")
+                print(f"[NanoVLLMClient] 响应头: {dict(response.getheaders())}")
+                for i, line in enumerate(response):
                     if line:
-                        data = json.loads(line.decode('utf-8'))
-                        if "text" in data:
-                            yield data["text"]
+                        line_str = line.decode('utf-8')
+                        print(f"[NanoVLLMClient] 收到行 {i}: {line_str}")
+                        try:
+                            data = json.loads(line_str)
+                            if "text" in data:
+                                print(f"[NanoVLLMClient] 收到文本: {data['text']}")
+                                yield data["text"]
+                        except json.JSONDecodeError as e:
+                            print(f"[NanoVLLMClient] JSON 解析错误: {e}")
+                            yield f"[JSON Error: {e}]"
+        except urllib.error.URLError as e:
+            print(f"[NanoVLLMClient] URL 错误: {e}")
+            yield f"[URL Error: {e}]"
         except Exception as e:
+            print(f"[NanoVLLMClient] 其他错误: {e}")
+            import traceback
+            traceback.print_exc()
             yield f"[Error: {e}]"
 
     def get_tokenizer(self):

@@ -227,7 +227,7 @@ class SessionDB:
         sid = str(uuid.uuid4())
         now = time.time()
         if not title:
-            title = f"新会话 {time.strftime('%H:%M')}"
+            title = f"新会话 {time.strftime('%H:%M:%S')}"
 
         def _do():
             conn = self._conn()

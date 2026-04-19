@@ -48,8 +48,6 @@ from .models import (
     SessionArchive,
     TaskContext,
     ExecutionRecord,
-    StepOutcome,
-    AgentConfig,
     # 工具函数
     generate_id,
     generate_skill_id,
@@ -87,8 +85,6 @@ __all__ = [
     "SessionArchive",
     "TaskContext",
     "ExecutionRecord",
-    "StepOutcome",
-    "AgentConfig",
     # 工具函数
     "generate_id",
     "generate_skill_id",

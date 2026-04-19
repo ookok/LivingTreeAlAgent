@@ -35,10 +35,30 @@ def run_client():
         except ImportError:
             pass
 
+    from client.src.infrastructure.config import load_config, save_config
     from client.src.presentation.main_window import MainWindow
-    from client.src.infrastructure.config import load_config
 
     cfg = load_config()
+    
+    # 检查是否首次运行
+    config_path = _root / ".config" / "first_run.txt"
+    if not config_path.exists():
+        print("首次运行，显示模型选择对话框...")
+        try:
+            from ui.model_selector_dialog import ModelSelectorDialog
+            dialog = ModelSelectorDialog(cfg)
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                # 标记为已运行
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_text("1")
+                print("模型选择完成，启动主窗口...")
+            else:
+                print("用户取消了模型选择，退出...")
+                return
+        except Exception as e:
+            print(f"显示模型选择对话框时出错: {e}")
+            # 继续启动，使用默认模型
+    
     window = MainWindow(cfg)
     window.show()
 

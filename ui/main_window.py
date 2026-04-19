@@ -233,9 +233,20 @@ class MainWindow(QWidget):
         root.setSpacing(0)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setHandleWidth(1)
+        self.splitter.setContentsMargins(0, 0, 0, 0)
 
         # 左侧：会话面板
         self.session_panel = SessionPanel()
+        self.session_panel.setStyleSheet("""
+            QWidget {
+                background-color: #1E293B;
+                border: none;
+            }
+            QLabel {
+                color: #94A3B8;
+            }
+        """)
         self.session_panel.new_chat_requested.connect(self._new_chat)
         self.session_panel.session_selected.connect(self._load_session)
         self.session_panel.session_deleted.connect(self._delete_session)
@@ -246,6 +257,29 @@ class MainWindow(QWidget):
         self.center_tabs = QTabWidget()
         self.center_tabs.setTabPosition(QTabWidget.TabPosition.North)
         self.center_tabs.setDocumentMode(True)
+        self.center_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: #0F172A;
+            }
+            QTabBar::tab {
+                background-color: transparent;
+                color: #94A3B8;
+                padding: 12px 20px;
+                margin-right: 4px;
+                border-bottom: 2px solid transparent;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QTabBar::tab:selected {
+                color: #3B82F6;
+                border-bottom: 2px solid #3B82F6;
+            }
+            QTabBar::tab:hover {
+                color: #3B82F6;
+                background-color: rgba(59, 130, 246, 0.1);
+            }
+        """)
         
         # 聊天页面
         self.chat_panel = ChatPanel()
@@ -898,10 +932,15 @@ class MainWindow(QWidget):
         # 状态栏
         self.status_bar = QLabel()
         self.status_bar.setObjectName("StatusBar")
-        self.status_bar.setStyleSheet(
-            "background:#0d0d0d;border-top:1px solid #1e1e1e;"
-            "padding:4px 12px;color:#555;font-size:11px;"
-        )
+        self.status_bar.setStyleSheet("""
+            QLabel#StatusBar {
+                background:#0F172A;
+                border-top:1px solid #334155;
+                padding:8px 16px;
+                color:#94A3B8;
+                font-size:12px;
+            }
+        """)
         self._status_text = QLabel("初始化中…")
         self._status_indicator = QLabel("⚫")
         self._brain_status = QLabel("🧠")  # 系统大脑状态

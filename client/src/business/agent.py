@@ -2,28 +2,17 @@
 # HermesAgent - Herms智能体
 # =================================================================
 
-from PyQt6.QtCore import QObject, pyqtSignal
 from typing import Optional, Dict, Any
 
-
-class AgentCallbacks:
-    """智能体回调接口（占位）"""
-    pass
+from core.agent import HermesAgent as CoreHermesAgent
+from core.agent import AgentCallbacks
 
 
-class HermesAgent(QObject):
-    """Hermes智能体（占位）"""
+class HermesAgent(CoreHermesAgent):
+    """Hermes智能体"""
 
-    # 信号
-    message_ready = pyqtSignal(str)
-
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        super().__init__()
-        self.config = config or {}
-
-    def send_message(self, text: str):
-        """发送消息"""
-        pass
+    def __init__(self, config: Optional[Dict[str, Any]] = None, session_id: Optional[str] = None, callbacks: Optional[AgentCallbacks] = None, backend: str = "vllm"):
+        super().__init__(config, session_id, callbacks, backend)
 
 
 __all__ = ['HermesAgent', 'AgentCallbacks']

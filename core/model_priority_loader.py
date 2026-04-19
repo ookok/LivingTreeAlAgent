@@ -20,10 +20,11 @@ logger = logging.getLogger(__name__)
 
 class ModelBackend(Enum):
     """模型后端类型"""
-    VLLM = "vllm"           # 标准 vLLM
-    NANO_VLLM = "nano_vllm" # Nano-vLLM
-    OLLAMA = "ollama"        # Ollama 服务
-    LLAMA_CPP = "llama_cpp"  # llama-cpp-python 直接加载
+    UNSLOTH = "unsloth"           # Unsloth (最高优先级)
+    VLLM = "vllm"                # 标准 vLLM
+    LLAMA_CPP = "llama_cpp"      # llama-cpp-python 直接加载
+    NANO_VLLM = "nano_vllm"      # Nano-vLLM
+    OLLAMA = "ollama"            # Ollama 服务
 
 
 @dataclass
@@ -48,63 +49,88 @@ class LoadResult:
 class LocalModelPriorityLoader:
     """
     本地模型优先级加载器
-    
+
     优先级顺序:
-    1. vLLM - 最高性能，支持张量并行
-    2. Nano-vLLM - 轻量实现，API 兼容 vLLM
-    3. Ollama - 简单易用
-    4. llama-cpp-python - 最广泛支持
+    1. Unsloth - 最高性能，4-bit量化加速 (最高优先级)
+    2. vLLM - 高性能推理，支持张量并行
+    3. llama-cpp-python - 直接加载 GGUF，最广泛支持
+    4. Nano-vLLM - 轻量实现，API 兼容 vLLM
+    5. Ollama - 简单易用 (最低优先级)
     """
-    
+
     def __init__(self, models_dir: str = None):
         self.models_dir = models_dir or self._get_default_models_dir()
         self._current_backend: Optional[ModelBackend] = None
         self._client: Optional[object] = None
         self._available_backends: List[BackendInfo] = []
-    
+
     def _get_default_models_dir(self) -> str:
         """获取默认模型目录"""
         from core.config import get_config_dir
         return str(get_config_dir() / "models")
-    
+
     def check_backend_availability(self) -> List[BackendInfo]:
         """
         检查所有后端的可用性
-        
+
         Returns:
             可用后端列表，按优先级排序
         """
         backends = []
-        
-        # 1. 检查 vLLM
+
+        # 1. 检查 Unsloth (最高优先级)
+        unsloth_info = self._check_unsloth()
+        backends.append(unsloth_info)
+
+        # 2. 检查 vLLM
         vllm_info = self._check_vllm()
         backends.append(vllm_info)
-        
-        # 2. 检查 Nano-vLLM
-        nano_info = self._check_nano_vllm()
-        backends.append(nano_info)
-        
-        # 3. 检查 Ollama
-        ollama_info = self._check_ollama()
-        backends.append(ollama_info)
-        
-        # 4. 检查 llama-cpp
+
+        # 3. 检查 llama-cpp
         llama_info = self._check_llama_cpp()
         backends.append(llama_info)
-        
+
+        # 4. 检查 Nano-vLLM
+        nano_info = self._check_nano_vllm()
+        backends.append(nano_info)
+
+        # 5. 检查 Ollama
+        ollama_info = self._check_ollama()
+        backends.append(ollama_info)
+
         # 按优先级排序
         backends.sort(key=lambda x: x.priority, reverse=True)
-        
+
         self._available_backends = backends
         return backends
-    
+
+    def _check_unsloth(self) -> BackendInfo:
+        """检查 Unsloth 可用性"""
+        info = BackendInfo(
+            backend=ModelBackend.UNSLOTH,
+            name="Unsloth",
+            available=False,
+            priority=110  # 最高优先级
+        )
+
+        try:
+            import unsloth
+            info.available = True
+            info.reason = f"Unsloth {unsloth.__version__ if hasattr(unsloth, '__version__') else 'installed'}"
+        except ImportError:
+            info.reason = "Unsloth 未安装 (pip install unsloth)"
+        except Exception as e:
+            info.reason = f"检查失败: {e}"
+
+        return info
+
     def _check_vllm(self) -> BackendInfo:
         """检查 vLLM 可用性"""
         info = BackendInfo(
             backend=ModelBackend.VLLM,
             name="vLLM",
             available=False,
-            priority=100  # 最高优先级
+            priority=100  # 第二优先级
         )
         
         try:
@@ -124,9 +150,9 @@ class LocalModelPriorityLoader:
             backend=ModelBackend.NANO_VLLM,
             name="Nano-vLLM",
             available=False,
-            priority=90  # 第二优先级
+            priority=70  # 第四优先级
         )
-        
+
         try:
             from core.nano_vllm import NanoVLLMClient
             info.available = True
@@ -135,16 +161,16 @@ class LocalModelPriorityLoader:
             info.reason = "Nano-vLLM 模块未找到"
         except Exception as e:
             info.reason = f"检查失败: {e}"
-        
+
         return info
-    
+
     def _check_ollama(self) -> BackendInfo:
         """检查 Ollama 可用性"""
         info = BackendInfo(
             backend=ModelBackend.OLLAMA,
             name="Ollama",
             available=False,
-            priority=70  # 第三优先级
+            priority=50  # 最低优先级
         )
         
         try:
@@ -173,9 +199,9 @@ class LocalModelPriorityLoader:
             backend=ModelBackend.LLAMA_CPP,
             name="llama-cpp-python",
             available=False,
-            priority=50  # 最低优先级
+            priority=90  # 第三优先级
         )
-        
+
         try:
             from llama_cpp import Llama
             info.available = True
@@ -184,9 +210,9 @@ class LocalModelPriorityLoader:
             info.reason = "llama-cpp-python 未安装"
         except Exception as e:
             info.reason = f"检查失败: {e}"
-        
+
         return info
-    
+
     def get_best_backend(self) -> Optional[BackendInfo]:
         """获取最佳可用后端"""
         if not self._available_backends:
@@ -216,19 +242,23 @@ class LocalModelPriorityLoader:
             LoadResult 对象
         """
         if backend_preference is None:
-            backend_preference = ModelBackend.VLLM
-        
+            backend_preference = ModelBackend.UNSLOTH
+
         # 如果指定后端不可用，自动降级
         backends_to_try = []
-        
-        if backend_preference == ModelBackend.VLLM:
-            backends_to_try = [ModelBackend.VLLM, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA, ModelBackend.LLAMA_CPP]
+
+        if backend_preference == ModelBackend.UNSLOTH:
+            backends_to_try = [ModelBackend.UNSLOTH, ModelBackend.VLLM, ModelBackend.LLAMA_CPP, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA]
+        elif backend_preference == ModelBackend.VLLM:
+            backends_to_try = [ModelBackend.VLLM, ModelBackend.UNSLOTH, ModelBackend.LLAMA_CPP, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA]
+        elif backend_preference == ModelBackend.LLAMA_CPP:
+            backends_to_try = [ModelBackend.LLAMA_CPP, ModelBackend.UNSLOTH, ModelBackend.VLLM, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA]
         elif backend_preference == ModelBackend.NANO_VLLM:
-            backends_to_try = [ModelBackend.NANO_VLLM, ModelBackend.VLLM, ModelBackend.OLLAMA, ModelBackend.LLAMA_CPP]
+            backends_to_try = [ModelBackend.NANO_VLLM, ModelBackend.LLAMA_CPP, ModelBackend.UNSLOTH, ModelBackend.VLLM, ModelBackend.OLLAMA]
         elif backend_preference == ModelBackend.OLLAMA:
-            backends_to_try = [ModelBackend.OLLAMA, ModelBackend.VLLM, ModelBackend.NANO_VLLM, ModelBackend.LLAMA_CPP]
+            backends_to_try = [ModelBackend.OLLAMA, ModelBackend.NANO_VLLM, ModelBackend.LLAMA_CPP, ModelBackend.VLLM, ModelBackend.UNSLOTH]
         else:
-            backends_to_try = [ModelBackend.LLAMA_CPP, ModelBackend.VLLM, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA]
+            backends_to_try = [ModelBackend.UNSLOTH, ModelBackend.VLLM, ModelBackend.LLAMA_CPP, ModelBackend.NANO_VLLM, ModelBackend.OLLAMA]
         
         # 检查可用性并尝试加载
         for backend in backends_to_try:
@@ -250,8 +280,12 @@ class LocalModelPriorityLoader:
     
     def _check_backend(self, backend: ModelBackend) -> BackendInfo:
         """检查指定后端的可用性"""
-        if backend == ModelBackend.VLLM:
+        if backend == ModelBackend.UNSLOTH:
+            return self._check_unsloth()
+        elif backend == ModelBackend.VLLM:
             return self._check_vllm()
+        elif backend == ModelBackend.LLAMA_CPP:
+            return self._check_llama_cpp()
         elif backend == ModelBackend.NANO_VLLM:
             return self._check_nano_vllm()
         elif backend == ModelBackend.OLLAMA:
@@ -261,16 +295,76 @@ class LocalModelPriorityLoader:
     
     def _try_load(self, backend: ModelBackend, model_path: str, **kwargs) -> LoadResult:
         """尝试使用指定后端加载模型"""
-        
-        if backend == ModelBackend.VLLM:
+
+        if backend == ModelBackend.UNSLOTH:
+            return self._load_with_unsloth(model_path, **kwargs)
+        elif backend == ModelBackend.VLLM:
             return self._load_with_vllm(model_path, **kwargs)
+        elif backend == ModelBackend.LLAMA_CPP:
+            return self._load_with_llama_cpp(model_path, **kwargs)
         elif backend == ModelBackend.NANO_VLLM:
             return self._load_with_nano_vllm(model_path, **kwargs)
         elif backend == ModelBackend.OLLAMA:
             return self._load_with_ollama(model_path, **kwargs)
         else:
             return self._load_with_llama_cpp(model_path, **kwargs)
-    
+
+    def _load_with_unsloth(self, model_path: str, **kwargs) -> LoadResult:
+        """使用 Unsloth 加载"""
+        try:
+            from unsloth import FastLanguageModel
+
+            # 获取模型参数
+            max_seq_length = kwargs.get("max_seq_length", 4096)
+            dtype = kwargs.get("dtype", None)
+            load_in_4bit = kwargs.get("load_in_4bit", True)
+
+            # 加载模型
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=model_path,
+                max_seq_length=max_seq_length,
+                dtype=dtype,
+                load_in_4bit=load_in_4bit,
+            )
+
+            # 启用推理模式
+            FastLanguageModel.for_inference(model)
+
+            # 返回包装对象
+            class UnslothModelWrapper:
+                def __init__(self, model, tokenizer):
+                    self.model = model
+                    self.tokenizer = tokenizer
+
+                def chat(self, messages, **kwargs):
+                    # 简单的 chat 接口实现
+                    from .unified_model_client import ChatMessage, StreamChunk
+                    prompt = "\n".join([f"{m.role}: {m.content}" for m in messages])
+                    prompt += "\nassistant:"
+
+                    inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+                    outputs = self.model.generate(**inputs, max_new_tokens=kwargs.get("max_tokens", 256))
+                    text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                    yield StreamChunk(delta=text, done=True)
+
+                def chat_stream(self, messages, config):
+                    # 流式接口
+                    for chunk in self.chat(messages, max_tokens=config.max_tokens):
+                        yield chunk
+
+            return LoadResult(
+                success=True,
+                backend=ModelBackend.UNSLOTH,
+                message="Unsloth 加载成功",
+                client=UnslothModelWrapper(model, tokenizer)
+            )
+        except Exception as e:
+            return LoadResult(
+                success=False,
+                backend=ModelBackend.UNSLOTH,
+                message=f"Unsloth 加载失败: {e}"
+            )
+
     def _load_with_vllm(self, model_path: str, **kwargs) -> LoadResult:
         """使用 vLLM 加载"""
         try:
@@ -318,7 +412,13 @@ class LocalModelPriorityLoader:
                 max_model_len=kwargs.get("max_model_len", 4096),
             )
             
-            client.start_server()
+            # 检查服务是否成功启动
+            if not client.start_server():
+                return LoadResult(
+                    success=False,
+                    backend=ModelBackend.NANO_VLLM,
+                    message="Nano-vLLM 服务启动失败"
+                )
             
             return LoadResult(
                 success=True,
@@ -338,12 +438,47 @@ class LocalModelPriorityLoader:
         try:
             from core.ollama_client import OllamaClient
             from core.config import OllamaConfig
+            import subprocess
+            import os
             
-            model_name = os.path.basename(model_path).replace(".gguf", "")
+            # 使用简单的模型名称
+            model_name = "local-model"
             
             config = OllamaConfig()
             client = OllamaClient(config)
             
+            # 检查模型是否存在于 Ollama
+            models = client.list_models()
+            model_exists = any(m.name == model_name for m in models)
+            
+            if not model_exists:
+                # 如果模型不存在，使用 ollama create 命令创建
+                print(f"[ModelLoader] 在 Ollama 中创建模型: {model_name}")
+                # 创建临时 Modelfile
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                    f.write(f"FROM {model_path}")
+                    modelfile_path = f.name
+                
+                try:
+                    result = subprocess.run(
+                        ["ollama", "create", model_name, "-f", modelfile_path],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode != 0:
+                        return LoadResult(
+                            success=False,
+                            backend=ModelBackend.OLLAMA,
+                            message=f"Ollama 创建模型失败: {result.stderr}"
+                        )
+                finally:
+                    # 清理临时文件
+                    import os
+                    if os.path.exists(modelfile_path):
+                        os.unlink(modelfile_path)
+            
+            # 加载模型
             if not client.is_loaded(model_name):
                 client.load_model(model_name)
             
@@ -398,9 +533,20 @@ class LocalModelPriorityLoader:
         if self._client is None:
             logger.error("No model loaded")
             return None
-        
+
         try:
-            if self._current_backend == ModelBackend.VLLM:
+            if self._current_backend == ModelBackend.UNSLOTH:
+                # Unsloth 使用 transformers
+                inputs = self._client.tokenizer(prompt, return_tensors="pt").to("cuda")
+                outputs = self._client.model.generate(
+                    **inputs,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs
+                )
+                return self._client.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+            elif self._current_backend == ModelBackend.VLLM:
                 from vllm import SamplingParams
                 sampling_params = SamplingParams(
                     temperature=temperature,
@@ -409,7 +555,7 @@ class LocalModelPriorityLoader:
                 )
                 outputs = self._client.generate(prompt, sampling_params)
                 return outputs[0].outputs[0].text
-            
+
             elif self._current_backend == ModelBackend.NANO_VLLM:
                 from core.nano_vllm import SamplingParams
                 sampling_params = SamplingParams(
@@ -419,13 +565,13 @@ class LocalModelPriorityLoader:
                 )
                 result = self._client.generate([prompt], sampling_params)
                 return result[0].text if result else None
-            
+
             elif self._current_backend == ModelBackend.OLLAMA:
                 return self._client.generate(
                     self._client.config.default_model,
                     prompt
                 )
-            
+
             elif self._current_backend == ModelBackend.LLAMA_CPP:
                 output = self._client(
                     prompt,
@@ -434,7 +580,7 @@ class LocalModelPriorityLoader:
                     **kwargs
                 )
                 return output["choices"][0]["text"]
-        
+
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             return None
@@ -451,7 +597,10 @@ class LocalModelPriorityLoader:
         """卸载模型"""
         if self._client:
             try:
-                if self._current_backend == ModelBackend.NANO_VLLM:
+                if self._current_backend == ModelBackend.UNSLOTH:
+                    del self._client.model
+                    del self._client.tokenizer
+                elif self._current_backend == ModelBackend.NANO_VLLM:
                     self._client.stop_server()
                 elif self._current_backend == ModelBackend.OLLAMA:
                     pass
@@ -459,7 +608,7 @@ class LocalModelPriorityLoader:
                     del self._client
             except Exception as e:
                 logger.error(f"Unload error: {e}")
-            
+
             self._client = None
             self._current_backend = None
 

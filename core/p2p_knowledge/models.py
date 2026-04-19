@@ -122,10 +122,10 @@ class PeerNode:
 @dataclass
 class KnowledgeItem:
     """知识库条目"""
-    item_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     user_id: str
     title: str
     content: str
+    item_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     content_type: str = "text"  # text, markdown, code, file
     tags: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
@@ -162,10 +162,10 @@ class KnowledgeItem:
 @dataclass
 class SyncOperation:
     """同步操作"""
-    op_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     item_id: str
     user_id: str
     op_type: str  # create, update, delete
+    op_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     timestamp: float = field(default_factory=time.time)
     version: int = 1
     checksum: Optional[str] = None
@@ -200,9 +200,9 @@ class SyncConflict:
 @dataclass
 class ShareLink:
     """分享链接"""
-    share_code: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     item_id: str
     user_id: str
+    share_code: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     share_type: ShareType = ShareType.LINK
     created_at: float = field(default_factory=time.time)
     expires_at: Optional[float] = None
@@ -232,9 +232,9 @@ class ShareLink:
 @dataclass
 class StorageProvider:
     """存储提供商配置"""
-    provider_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     name: str
     provider_type: str  # baidu, aliyun, local, etc.
+    provider_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     api_endpoint: str = ""
     enabled: bool = True
     total_space: int = 0
@@ -253,11 +253,11 @@ class StorageProvider:
 @dataclass
 class FileChunk:
     """文件分块"""
-    chunk_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     file_id: str
     chunk_index: int
     size: int
     checksum: str
+    chunk_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     provider_id: Optional[str] = None
     storage_path: Optional[str] = None
     created_at: float = field(default_factory=time.time)
@@ -277,9 +277,9 @@ class FileChunk:
 @dataclass
 class RelayServer:
     """中继服务器"""
-    server_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str
     addr: NetworkAddress
+    server_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     region: str = "unknown"
     bandwidth: int = 0  # Mbps
     is_volunteer: bool = False
@@ -316,9 +316,9 @@ class RelayServer:
 @dataclass
 class Message:
     """P2P消息"""
-    msg_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     msg_type: str  # handshake, ping, pong, find_node, nodes, store, find_value, relay
     source_id: str
+    msg_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     target_id: Optional[str] = None
     payload: dict = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)

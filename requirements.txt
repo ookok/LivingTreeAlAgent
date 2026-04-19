@@ -1,7 +1,7 @@
 # Hermes Desktop V2.0 - 顶层依赖
 # 客户端依赖
 PyQt6>=6.6.0
-pyqtdarktheme>=2.1.0
+pyqtdarktheme>=0.1.7
 
 # 模型相关
 ollama>=0.1.0

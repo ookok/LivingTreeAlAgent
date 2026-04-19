@@ -870,3 +870,7 @@ def init_lan_chat_async(user_id: str = None, user_name: str = "Hermes") -> LANCh
     manager = get_lan_chat_manager(user_id, user_name)
     manager.start()
     return manager
+
+
+# 别名
+LANDiscovery = LANDiscoveryService

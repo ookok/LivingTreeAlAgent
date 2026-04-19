@@ -418,8 +418,7 @@ class AIScriptPanel(QWidget):
 
         QMessageBox.information(self, "脚本详情", detail)
 
-    @asyncio.coroutine
-    def _generate_script(self):
+    async     def _generate_script(self):
         """生成脚本"""
         if not self.engine:
             self.status_bar.showMessage("引擎未初始化")

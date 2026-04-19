@@ -6,7 +6,7 @@
 import sqlite3
 import threading
 import queue
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple, List
 from contextlib import contextmanager
 import logging
 

@@ -270,7 +270,7 @@ class DeltaCalculator:
                 'new_size': len(new_data),
             }
             f.write(json.dumps(metadata).encode())
-            f.write(b'\n---DELTA---\n'))
+            f.write(b'\n---DELTA---\n')
             # 写入增量数据
             f.write(compressed)
 

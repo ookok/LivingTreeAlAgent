@@ -426,11 +426,21 @@ class ContentMonitorPanel(QWidget):
         }
 
         for i, word_info in enumerate(words[:50]):
-            self.words_table.setItem(i, 0, QTableWidgetItem(word_info.get("word", "")))
-            self.words_table.setItem(i, 1, QTableWidgetItem(word_info.get("category", "")))
-            level = word_info.get("alert_level", AlertLevel.LOW)
+            # 兼容 dataclass 对象和字典两种形式
+            if hasattr(word_info, 'word'):
+                word_text = word_info.word
+                category = word_info.category
+                level = word_info.alert_level
+                weight = word_info.weight
+            else:
+                word_text = word_info.get("word", "")
+                category = word_info.get("category", "")
+                level = word_info.get("alert_level", AlertLevel.LOW)
+                weight = word_info.get("weight", 1)
+            self.words_table.setItem(i, 0, QTableWidgetItem(word_text))
+            self.words_table.setItem(i, 1, QTableWidgetItem(category))
             self.words_table.setItem(i, 2, QTableWidgetItem(level_names.get(level, "未知")))
-            self.words_table.setItem(i, 3, QTableWidgetItem(str(word_info.get("weight", 1))))
+            self.words_table.setItem(i, 3, QTableWidgetItem(str(weight)))
 
     def _add_sensitive_word(self):
         """添加敏感词"""

@@ -71,6 +71,52 @@ class AgentConfig(BaseModel):
     show_reasoning: bool = False
 
 
+class L0ModelConfig(BaseModel):
+    """L0 快反大脑配置 - SmolLM2 轻量路由"""
+    enabled: bool = True
+    model_name: str = "smollm2-135m"  # SmolLM2-135M-Instruct
+    base_url: str = "http://localhost:11434"
+    route_types: list[str] = Field(default_factory=lambda: ["cache", "local", "search", "heavy", "human"])
+
+
+class L1ModelConfig(BaseModel):
+    """L1 精确缓存层配置"""
+    enabled: bool = True
+    cache_ttl_seconds: int = 300  # 缓存5分钟
+
+
+class L2ModelConfig(BaseModel):
+    """L2 会话缓存层配置"""
+    enabled: bool = True
+    max_context_tokens: int = 8192
+
+
+class L3ModelConfig(BaseModel):
+    """L3 知识库层配置"""
+    enabled: bool = True
+    embedding_model: str = "nomic-embed-text"  # 向量化模型
+    knowledge_base_path: str = ""
+
+
+class L4ModelConfig(BaseModel):
+    """L4 异构执行层配置 - 复杂推理"""
+    enabled: bool = True
+    model_name: str = "qwen2.5:7b"  # 默认用Qwen
+    base_url: str = "http://localhost:11434"
+    max_tokens: int = 8192
+    temperature: float = 0.7
+
+
+class LayeredAIConfig(BaseModel):
+    """四层AI模型配置"""
+    l0: L0ModelConfig = Field(default_factory=L0ModelConfig)
+    l1: L1ModelConfig = Field(default_factory=L1ModelConfig)
+    l2: L2ModelConfig = Field(default_factory=L2ModelConfig)
+    l3: L3ModelConfig = Field(default_factory=L3ModelConfig)
+    l4: L4ModelConfig = Field(default_factory=L4ModelConfig)
+    auto_route: bool = True  # 自动路由到合适层级
+
+
 class AppConfig(BaseModel):
     """完整应用配置"""
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
@@ -79,6 +125,7 @@ class AppConfig(BaseModel):
     writing: WritingConfig = Field(default_factory=WritingConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    layered_ai: LayeredAIConfig = Field(default_factory=LayeredAIConfig)  # 四层AI模型
 
     # 窗口状态
     window_width: int = 1400

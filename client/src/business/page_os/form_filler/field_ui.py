@@ -14,7 +14,7 @@ from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass, field
 
 from .form_parser import FormField, FieldSemanticType
-from .auto_fill_engine import FillSuggestion, FillPriority
+from .auto_fill_engine import FillSuggestion, FillPriority, FillSource
 
 
 class FieldState(Enum):

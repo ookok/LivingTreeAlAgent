@@ -217,12 +217,14 @@ class ChatPanel(QWidget):
     stop_requested()
     approval_responded(task_id: str, approved: bool)
     config_hint_requested(link_path: str) - 用户点击了配置链接
+    switch_to_writing(content: str) - 请求切换到写作模式
     """
 
     send_requested     = pyqtSignal(str)
     stop_requested     = pyqtSignal()
     approval_responded = pyqtSignal(str, bool)
     config_hint_requested = pyqtSignal(str)  # link_path
+    switch_to_writing = pyqtSignal(str)  # content - 请求切换到写作模式
 
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -246,7 +246,7 @@ class UpdateTask:
     to_version: str                           # 目标版本
     stage: UpdateStage = UpdateStage.IDLE     # 当前阶段
     progress: float = 0                       # 进度 (0-1)
-    downloaded_chunks: Set[str] = field(default_factory(set))  # 已下载分片ID
+    downloaded_chunks: Set[str] = field(default_factory=lambda: set())  # 已下载分片ID
     total_chunks: int = 0                     # 总分片数
     speed_bps: float = 0                      # 下载速度 (字节/秒)
     remaining_time: float = 0                 # 剩余时间 (秒)

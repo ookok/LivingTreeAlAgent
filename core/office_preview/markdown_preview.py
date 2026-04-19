@@ -7,7 +7,7 @@ office_preview/markdown_preview.py - Markdown 实时预览引擎
 
 import re
 import html
-from typing import Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple
 from .models import RenderResult
 
 

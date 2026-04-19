@@ -130,7 +130,11 @@ class ContentMonitor:
     def get_stats(self) -> SystemStats:
         self.stats.pending_review = len(self.get_pending_reviews())
         return self.stats
-    
+
+    def get_sensitive_words(self) -> List:
+        """获取所有敏感词列表"""
+        return self.rule_engine.get_sensitive_words()
+
     def export_rules(self) -> List[Dict]:
         return self.rule_engine.export_rules()
     

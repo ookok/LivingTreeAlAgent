@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import venv
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Callable
 from enum import Enum
 
@@ -45,7 +45,7 @@ class InstallationResult:
 
     # 运行时信息
     runtime_version: str = ""
-    dependencies: list[str] = []
+    dependencies: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {

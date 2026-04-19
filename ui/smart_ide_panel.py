@@ -24,8 +24,8 @@ from PyQt6.QtWidgets import (
     QCheckBox, QMessageBox, QSplitter, QFileDialog,
     QInputDialog, QDialog, QPlainTextEdit
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, pyqtSlot, QTimer, QRegExp
-from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QPalette, QPainter, QPen, QSyntaxHighlighter, QTextCharFormat, QRegExpValidator
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, pyqtSlot, QTimer, QRegularExpression
+from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QPalette, QPainter, QPen, QSyntaxHighlighter, QTextCharFormat, QRegularExpressionValidator
 
 import asyncio
 import json
@@ -76,27 +76,27 @@ class SimpleHighlighter(QSyntaxHighlighter):
         keyword_format = QTextCharFormat()
         keyword_format.setForeground(QColor("#569cd6"))
         for word in keywords:
-            self.highlighting_rules.append((QRegExp(f"\\b{word}\\b"), keyword_format))
+            self.highlighting_rules.append((QRegularExpression(f"\\b{word}\\b"), keyword_format))
         
         # 字符串
         string_format = QTextCharFormat()
         string_format.setForeground(QColor("#ce9178"))
-        self.highlighting_rules.append((QRegExp("\".*\""), string_format))
-        self.highlighting_rules.append((QRegExp("'.*'"), string_format))
+        self.highlighting_rules.append((QRegularExpression("\".*\""), string_format))
+        self.highlighting_rules.append((QRegularExpression("'.*'"), string_format))
         
         # 注释
         comment_format = QTextCharFormat()
         comment_format.setForeground(QColor("#6a9955"))
-        self.highlighting_rules.append((QRegExp("#.*"), comment_format))
+        self.highlighting_rules.append((QRegularExpression("#.*"), comment_format))
 
     def highlightBlock(self, text):
         for pattern, fmt in self.highlighting_rules:
-            expression = QRegExp(pattern)
-            index = expression.indexIn(text)
+            expression = QRegularExpression(pattern)
+            index = expression.match(text)
             while index >= 0:
-                length = expression.matchedLength()
+                length = expression.capturedLength()
                 self.setFormat(index, length, fmt)
-                index = expression.indexIn(text, index + length)
+                index = expression.match(text, index + length)
 
 
 # ==================== AI 推荐卡片 ====================

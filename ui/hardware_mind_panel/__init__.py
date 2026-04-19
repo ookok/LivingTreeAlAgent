@@ -1,1443 +1,649 @@
 # -*- coding: utf-8 -*-
 """
-🎨 通用硬件智能集成系统 UI 面板 - Hardware Mind Panel
-=====================================================
+🎛️ 通用硬件智能集成系统 - Hardware Mind Panel
+=============================================
 
-8标签页设计:
-- 🏠 总览: 系统状态、设备仪表盘
-- 🔍 发现: 硬件检测、协议分析
-- 📚 知识库: 手册管理、匹配状态
-- ⚙️ 驱动: 驱动生成、安装状态
-- 🎨 UI生成: 自动生成的界面预览
-- 🧪 测试: 测试套件、验证结果
-- 📊 设备: 统一设备管理、分组控制
-- ⚙️ 设置: 系统配置
+核心理念: "硬件即插件，自动发现、自动学习、自动集成"
+
+功能：
+- 硬件设备检测与识别
+- 设备指纹生成与管理
+- 驱动匹配与下载
+- 生命周期管理
+- 协议解析
 
 Author: Hermes Desktop Team
+Version: 1.0.0
 """
+
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QPushButton, QLabel, QLineEdit, QTextEdit, QListWidget,
+    QListWidgetItem, QComboBox, QTabWidget, QGroupBox,
+    QScrollArea, QFrame, QProgressBar, QTableWidget,
+    QTableWidgetItem, QHeaderView, QStatusBar,
+    QToolButton, QStackedWidget, QFormLayout, QSpinBox,
+    QCheckBox, QMessageBox, QSplitter, QFileDialog,
+    QInputDialog, QDialog, QProgressDialog
+)
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, pyqtSlot, QTimer
+from PyQt6.QtGui import QFont, QIcon, QColor
 
 import asyncio
 import json
-import threading
 import time
+import os
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Optional, Dict, List
+import logging
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
-from PyQt6.QtGui import QFont, QIcon, QAction
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QTabWidget, QTableWidget,
-    QTableWidgetItem, QHeaderView, QScrollArea,
-    QGroupBox, QFrame, QProgressBar, QStatusBar,
-    QMenuBar, QMenu, QToolButton, QComboBox,
-    QLineEdit, QTextEdit, QListWidget, QListWidgetItem,
-    QCardLayout, QStackedWidget, QSplitter,
-    QProgressDialog, QMessageBox, QDialog,
-    QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QTreeWidget, QTreeWidgetItem, QTabBar
-)
-from PyQt6.QtCharts import QChartView, QChart, QPieSeries, QBarSeries, QBarSet, QLineSeries
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings
-
-# 全局样式
-PANEL_STYLE = """
-/* Hardware Mind Panel 主题样式 */
-QWidget {
-    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-    font-size: 13px;
-}
-
-QLabel#title {
-    font-size: 18px;
-    font-weight: bold;
-    color: #2c3e50;
-}
-
-QLabel#subtitle {
-    font-size: 14px;
-    color: #7f8c8d;
-}
-
-QLabel#stat_value {
-    font-size: 28px;
-    font-weight: bold;
-    color: #3498db;
-}
-
-QLabel#stat_label {
-    font-size: 12px;
-    color: #95a5a6;
-}
-
-QPushButton#primary {
-    background-color: #3498db;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-weight: bold;
-}
-
-QPushButton#primary:hover {
-    background-color: #2980b9;
-}
-
-QPushButton#success {
-    background-color: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-}
-
-QPushButton#danger {
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-}
-
-QPushButton#warning {
-    background-color: #f39c12;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-}
-
-QGroupBox {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    margin-top: 12px;
-    padding: 12px;
-    font-weight: bold;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    padding: 0 8px;
-    color: #3498db;
-}
-
-QTableWidget {
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    background: white;
-    alternate-background-color: #f8f9fa;
-}
-
-QTableWidget::item {
-    padding: 8px;
-}
-
-QTableWidget::item:selected {
-    background-color: #3498db;
-    color: white;
-}
-
-QHeaderView::section {
-    background-color: #ecf0f1;
-    padding: 8px;
-    border: none;
-    font-weight: bold;
-}
-
-QTabWidget::pane {
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    background: white;
-}
-
-QTabBar::tab {
-    padding: 10px 20px;
-    margin-right: 4px;
-    background: #ecf0f1;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-}
-
-QTabBar::tab:selected {
-    background: white;
-    border-bottom: 2px solid #3498db;
-}
-
-QTabBar::tab:hover {
-    background: #d5dbdb;
-}
-
-QProgressBar {
-    border: none;
-    border-radius: 4px;
-    background: #ecf0f1;
-    height: 20px;
-    text-align: center;
-}
-
-QProgressBar::chunk {
-    background: #3498db;
-    border-radius: 4px;
-}
-
-QCard {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 16px;
-}
-
-QCard#device_card {
-    border-left: 4px solid #3498db;
-}
-
-QCard#capability_card {
-    border-left: 4px solid #27ae60;
-}
-
-QStatusBar {
-    background: #ecf0f1;
-    border-top: 1px solid #d5dbdb;
-}
-
-QTextEdit#log_viewer {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: "Cascadia Code", "Consolas", monospace;
-    font-size: 12px;
-    border: none;
-}
-
-QListWidget#device_list {
-    border: none;
-    background: transparent;
-}
-
-QListWidget#device_list::item {
-    padding: 12px;
-    margin-bottom: 8px;
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-}
-
-QListWidget#device_list::item:selected {
-    border-left: 4px solid #3498db;
-    background: #ebf5fb;
-}
-"""
+logger = logging.getLogger(__name__)
 
 
 class HardwareMindPanel(QWidget):
-    """硬件智能集成系统主面板"""
+    """
+    通用硬件智能集成系统 - UI面板
+
+    三层架构:
+    - Layer 0: 物理层 (硬件检测、协议嗅探、指纹生成)
+    - Layer 1: 知识层 (本地知识库、云端手册库、AI解析引擎)
+    - Layer 2: 执行层 (驱动生成、配置生成、测试验证、UI生成)
+    """
 
     # 信号定义
     device_discovered = pyqtSignal(dict)
-    driver_ready = pyqtSignal(str, dict)
-    test_completed = pyqtSignal(str, dict)
+    driver_installed = pyqtSignal(str, bool)
+    lifecycle_changed = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        # 引用外部engine (由main_window设置)
-        self.phoenix_engine = None
-
-        # 内部状态
-        self.is_scanning = False
-        self.devices: List[Dict] = []
-        self.selected_device: Optional[Dict] = None
-
-        # 初始化UI
+        self.engine = None
+        self.devices = {}
         self._init_ui()
-
-        # 模拟数据更新定时器
-        self._update_timer = QTimer()
-        self._update_timer.timeout.connect(self._update_dashboard)
-        self._update_timer.start(3000)
+        self._init_connections()
 
     def set_engine(self, engine):
-        """设置硬件引擎"""
-        self.phoenix_engine = engine
+        """设置Hardware Mind引擎"""
+        self.engine = engine
+        if engine:
+            self._update_engine_status(True)
+            self._start_auto_detection()
+        else:
+            self._update_engine_status(False)
 
     def _init_ui(self):
         """初始化UI"""
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setWindowTitle("🎛️ 通用硬件智能集成")
+        self.setMinimumSize(1100, 750)
 
-        # 顶部标题栏
-        header = self._create_header()
-        main_layout.addWidget(header)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
 
-        # 主标签页
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
+        toolbar = self._create_toolbar()
+        main_layout.addWidget(toolbar)
 
-        # 创建8个标签页
-        self.tab_overview = self._create_overview_tab()
-        self.tab_discovery = self._create_discovery_tab()
-        self.tab_knowledge = self._create_knowledge_tab()
-        self.tab_drivers = self._create_drivers_tab()
-        self.tab_ui_gen = self._create_ui_gen_tab()
-        self.tab_testing = self._create_testing_tab()
-        self.tab_devices = self._create_devices_tab()
-        self.tab_settings = self._create_settings_tab()
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setSizes([350, 750])
 
-        self.tabs.addTab(self.tab_overview, "🏠 总览")
-        self.tabs.addTab(self.tab_discovery, "🔍 发现")
-        self.tabs.addTab(self.tab_knowledge, "📚 知识库")
-        self.tabs.addTab(self.tab_drivers, "⚙️ 驱动")
-        self.tabs.addTab(self.tab_ui_gen, "🎨 UI生成")
-        self.tabs.addTab(self.tab_testing, "🧪 测试")
-        self.tabs.addTab(self.tab_devices, "📊 设备")
-        self.tabs.addTab(self.tab_settings, "⚙️ 设置")
+        left_panel = self._create_device_panel()
+        splitter.addWidget(left_panel)
 
-        main_layout.addWidget(self.tabs)
+        right_panel = self._create_detail_panel()
+        splitter.addWidget(right_panel)
 
-        # 状态栏
-        self.status_bar = self._create_status_bar()
+        main_layout.addWidget(splitter)
+
+        self.status_bar = QStatusBar()
+        self.status_bar.showMessage("就绪")
         main_layout.addWidget(self.status_bar)
 
-        self.setLayout(main_layout)
+        self._update_engine_status(False)
 
-    def _create_header(self) -> QWidget:
-        """创建标题栏"""
-        header = QFrame()
-        header.setStyleSheet("background: linear-gradient(135deg, #3498db 0%, #2c3e50 100%); padding: 16px;")
-        header_layout = QHBoxLayout()
+    def _create_toolbar(self) -> QWidget:
+        """创建工具栏"""
+        toolbar = QFrame()
+        toolbar.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
+        layout = QHBoxLayout(toolbar)
+        layout.setContentsMargins(8, 4, 8, 4)
 
-        # 标题
-        title_container = QVBoxLayout()
-        title_label = QLabel("🎛️ 硬件智能集成系统")
-        title_label.setObjectName("title")
-        title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: white;")
+        self.engine_status_label = QLabel("🔴 引擎未连接")
+        layout.addWidget(self.engine_status_label)
 
-        subtitle_label = QLabel("Hardware Mind - 自动发现、自动学习、自动集成")
-        subtitle_label.setStyleSheet("font-size: 13px; color: rgba(255,255,255,0.8);")
+        layout.addStretch()
 
-        title_container.addWidget(title_label)
-        title_container.addWidget(subtitle_label)
-
-        # 控制按钮
-        btn_container = QHBoxLayout()
-
-        self.btn_scan = QPushButton("🔍 开始扫描")
-        self.btn_scan.setObjectName("primary")
-        self.btn_scan.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.2);
-                color: white;
-                border: 1px solid rgba(255,255,255,0.3);
-                border-radius: 4px;
-                padding: 10px 20px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255,255,255,0.3);
-            }
-        """)
-        self.btn_scan.clicked.connect(self._toggle_scan)
-
+        self.btn_scan = QPushButton("🔍 扫描设备")
+        self.btn_scan.setEnabled(False)
         self.btn_refresh = QPushButton("🔄 刷新")
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.2);
-                color: white;
-                border: 1px solid rgba(255,255,255,0.3);
-                border-radius: 4px;
-                padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255,255,255,0.3);
-            }
-        """)
-        self.btn_refresh.clicked.connect(self._refresh_data)
+        self.btn_export = QPushButton("📤 导出")
+        self.btn_settings = QPushButton("⚙️ 设置")
 
-        btn_container.addWidget(self.btn_scan)
-        btn_container.addWidget(self.btn_refresh)
+        layout.addWidget(self.btn_scan)
+        layout.addWidget(self.btn_refresh)
+        layout.addWidget(self.btn_export)
+        layout.addWidget(self.btn_settings)
 
-        header_layout.addLayout(title_container)
-        header_layout.addStretch()
-        header_layout.addLayout(btn_container)
+        return toolbar
 
-        header.setLayout(header_layout)
-        return header
+    def _create_device_panel(self) -> QWidget:
+        """创建设备列表面板"""
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
+        layout = QVBoxLayout(panel)
 
-    def _create_status_bar(self) -> QStatusBar:
-        """创建状态栏"""
-        status_bar = QStatusBar()
+        title = QLabel("📱 已发现设备")
+        title.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
+        layout.addWidget(title)
 
-        self.status_label = QLabel("🟢 系统就绪")
-        status_bar.addWidget(self.status_label)
+        self.device_search = QLineEdit()
+        self.device_search.setPlaceholderText("搜索设备...")
+        self.device_search.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self.device_search)
 
-        status_bar.addPermanentWidget(QLabel(" | "))
+        self.device_list = QListWidget()
+        self.device_list.itemClicked.connect(self._on_device_selected)
+        layout.addWidget(self.device_list, 1)
 
-        self.device_count_label = QLabel("设备: 0")
-        status_bar.addPermanentWidget(self.device_count_label)
+        stats_layout = QHBoxLayout()
+        stats_layout.addWidget(QLabel("总计:"))
+        self.device_count_label = QLabel("0")
+        stats_layout.addWidget(self.device_count_label)
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
 
-        status_bar.addPermanentWidget(QLabel(" | "))
+        filter_group = QGroupBox("设备类型过滤")
+        filter_layout = QVBoxLayout(filter_group)
 
-        self.driver_count_label = QLabel("驱动: 0")
-        status_bar.addPermanentWidget(self.driver_count_label)
+        self.filter_usb = QCheckBox("USB设备")
+        self.filter_usb.setChecked(True)
+        self.filter_usb.toggled.connect(self._on_filter_changed)
+        filter_layout.addWidget(self.filter_usb)
 
-        return status_bar
+        self.filter_bluetooth = QCheckBox("蓝牙设备")
+        self.filter_bluetooth.setChecked(True)
+        self.filter_bluetooth.toggled.connect(self._on_filter_changed)
+        filter_layout.addWidget(self.filter_bluetooth)
+
+        self.filter_wifi = QCheckBox("WiFi设备")
+        self.filter_wifi.setChecked(True)
+        self.filter_wifi.toggled.connect(self._on_filter_changed)
+        filter_layout.addWidget(self.filter_wifi)
+
+        self.filter_serial = QCheckBox("串口设备")
+        self.filter_serial.setChecked(True)
+        self.filter_serial.toggled.connect(self._on_filter_changed)
+        filter_layout.addWidget(self.filter_serial)
+
+        layout.addWidget(filter_group)
+
+        return panel
+
+    def _create_detail_panel(self) -> QWidget:
+        """创建设备详情面板"""
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
+        layout = QVBoxLayout(panel)
+
+        title = QLabel("📋 设备详情")
+        title.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
+        layout.addWidget(title)
+
+        self.detail_tabs = QTabWidget()
+
+        overview_tab = self._create_overview_tab()
+        self.detail_tabs.addTab(overview_tab, "📋 概览")
+
+        fingerprint_tab = self._create_fingerprint_tab()
+        self.detail_tabs.addTab(fingerprint_tab, "🔐 指纹信息")
+
+        driver_tab = self._create_driver_tab()
+        self.detail_tabs.addTab(driver_tab, "💾 驱动管理")
+
+        lifecycle_tab = self._create_lifecycle_tab()
+        self.detail_tabs.addTab(lifecycle_tab, "🔄 生命周期")
+
+        protocol_tab = self._create_protocol_tab()
+        self.detail_tabs.addTab(protocol_tab, "📡 协议分析")
+
+        layout.addWidget(self.detail_tabs, 1)
+
+        return panel
 
     def _create_overview_tab(self) -> QWidget:
-        """创建总览标签页"""
-        tab = QScrollArea()
-        tab.setWidgetResizable(True)
-        container = QWidget()
-        layout = QVBoxLayout()
-        layout.setSpacing(20)
+        """创建概览选项卡"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
 
-        # 统计卡片行
-        stats_row = QHBoxLayout()
+        info_group = QGroupBox("基本信息")
+        info_layout = QGridLayout(info_group)
 
-        self.stat_devices = self._create_stat_card("发现设备", "0", "device_icon", "#3498db")
-        self.stat_manuals = self._create_stat_card("匹配手册", "0", "manual_icon", "#27ae60")
-        self.stat_drivers = self._create_stat_card("生成驱动", "0", "driver_icon", "#f39c12")
-        self.stat_tests = self._create_stat_card("测试通过", "0", "test_icon", "#9b59b6")
+        info_layout.addWidget(QLabel("设备名称:"), 0, 0)
+        self.info_name = QLabel("-")
+        info_layout.addWidget(self.info_name, 0, 1)
 
-        stats_row.addWidget(self.stat_devices)
-        stats_row.addWidget(self.stat_manuals)
-        stats_row.addWidget(self.stat_drivers)
-        stats_row.addWidget(self.stat_tests)
-        layout.addLayout(stats_row)
+        info_layout.addWidget(QLabel("设备类别:"), 0, 2)
+        self.info_category = QLabel("-")
+        info_layout.addWidget(self.info_category, 0, 3)
 
-        # 图表区域
-        charts_row = QHBoxLayout()
+        info_layout.addWidget(QLabel("制造商:"), 1, 0)
+        self.info_manufacturer = QLabel("-")
+        info_layout.addWidget(self.info_manufacturer, 1, 1)
 
-        # 设备类型分布饼图
-        chart_container = self._create_device_category_chart()
-        charts_row.addWidget(chart_container, 1)
+        info_layout.addWidget(QLabel("VID/PID:"), 1, 2)
+        self.info_vidpid = QLabel("-")
+        info_layout.addWidget(self.info_vidpid, 1, 3)
 
-        # 生命周期状态
-        lifecycle_container = self._create_lifecycle_status()
-        charts_row.addWidget(lifecycle_container, 1)
+        info_layout.addWidget(QLabel("序列号:"), 2, 0)
+        self.info_serial = QLabel("-")
+        info_layout.addWidget(self.info_serial, 2, 1, 1, 3)
 
-        layout.addLayout(charts_row)
+        info_layout.addWidget(QLabel("连接状态:"), 3, 0)
+        self.info_connection = QLabel("-")
+        info_layout.addWidget(self.info_connection, 3, 1)
 
-        # 最近设备列表
-        recent_group = QGroupBox("最近发现的设备")
-        recent_layout = QVBoxLayout()
+        info_layout.addWidget(QLabel("最后活动:"), 3, 2)
+        self.info_last_activity = QLabel("-")
+        info_layout.addWidget(self.info_last_activity, 3, 3)
 
-        self.recent_device_list = QListWidget()
-        self.recent_device_list.setObjectName("device_list")
-        self.recent_device_list.itemClicked.connect(self._on_device_selected)
+        layout.addWidget(info_group)
 
-        recent_layout.addWidget(self.recent_device_list)
-        recent_group.setLayout(recent_layout)
-        layout.addWidget(recent_group)
+        lifecycle_group = QGroupBox("生命周期状态")
+        lifecycle_layout = QHBoxLayout(lifecycle_group)
 
-        # 协议分布
-        protocol_group = QGroupBox("协议分布")
-        protocol_layout = QHBoxLayout()
+        self.lifecycle_stage = QLabel("未知")
+        self.lifecycle_stage.setFont(QFont("Microsoft YaHei", 14, QFont.Weight.Bold))
+        lifecycle_layout.addWidget(self.lifecycle_stage)
+        lifecycle_layout.addStretch()
 
-        self.protocol_bars = QChartView()
-        protocol_layout.addWidget(self.protocol_bars)
-        protocol_group.setLayout(protocol_layout)
-        layout.addWidget(protocol_group)
+        layout.addWidget(lifecycle_group)
+
+        capability_group = QGroupBox("设备能力")
+        capability_layout = QVBoxLayout(capability_group)
+        self.capability_list = QListWidget()
+        capability_layout.addWidget(self.capability_list)
+        layout.addWidget(capability_group, 1)
+
+        action_layout = QHBoxLayout()
+        self.btn_connect = QPushButton("🔗 连接")
+        self.btn_disconnect = QPushButton("🔌 断开")
+        self.btn_identify = QPushButton("📍 定位设备")
+        action_layout.addWidget(self.btn_connect)
+        action_layout.addWidget(self.btn_disconnect)
+        action_layout.addWidget(self.btn_identify)
+        layout.addLayout(action_layout)
+
+        return tab
+
+    def _create_fingerprint_tab(self) -> QWidget:
+        """创建指纹信息选项卡"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        fp_group = QGroupBox("硬件指纹")
+        fp_layout = QGridLayout(fp_group)
+
+        fp_layout.addWidget(QLabel("指纹ID:"), 0, 0)
+        self.fp_id = QLabel("-")
+        fp_layout.addWidget(self.fp_id, 0, 1)
+
+        fp_layout.addWidget(QLabel("VID:"), 1, 0)
+        self.fp_vid = QLabel("-")
+        fp_layout.addWidget(self.fp_vid, 1, 1)
+
+        fp_layout.addWidget(QLabel("PID:"), 1, 2)
+        self.fp_pid = QLabel("-")
+        fp_layout.addWidget(self.fp_pid, 1, 3)
+
+        fp_layout.addWidget(QLabel("序列号:"), 2, 0)
+        self.fp_serial = QLabel("-")
+        fp_layout.addWidget(self.fp_serial, 2, 1, 1, 3)
+
+        fp_layout.addWidget(QLabel("协议特征:"), 3, 0)
+        self.fp_protocol = QLabel("-")
+        fp_layout.addWidget(self.fp_protocol, 3, 1, 1, 3)
+
+        fp_layout.addWidget(QLabel("匹配置信度:"), 4, 0)
+        self.fp_confidence = QLabel("-")
+        fp_layout.addWidget(self.fp_confidence, 4, 1)
+
+        fp_layout.addWidget(QLabel("发现时间:"), 4, 2)
+        self.fp_discovered = QLabel("-")
+        fp_layout.addWidget(self.fp_discovered, 4, 3)
+
+        layout.addWidget(fp_group)
+
+        vis_group = QGroupBox("指纹可视化")
+        vis_layout = QVBoxLayout(vis_group)
+        self.fingerprint_display = QTextEdit()
+        self.fingerprint_display.setReadOnly(True)
+        self.fingerprint_display.setFont(QFont("Consolas", 8))
+        self.fingerprint_display.setMaximumHeight(150)
+        vis_layout.addWidget(self.fingerprint_display)
+        layout.addWidget(vis_group)
+
+        action_layout = QHBoxLayout()
+        self.btn_copy_fingerprint = QPushButton("📋 复制指纹")
+        self.btn_regenerate_fp = QPushButton("🔄 重新生成")
+        action_layout.addWidget(self.btn_copy_fingerprint)
+        action_layout.addWidget(self.btn_regenerate_fp)
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
 
         layout.addStretch()
-        container.setLayout(layout)
-        tab.setWidget(container)
-
         return tab
 
-    def _create_stat_card(self, title: str, value: str, icon: str, color: str) -> QFrame:
-        """创建统计卡片"""
-        card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 16px;
-                border-left: 4px solid {color};
-            }}
-        """)
-        layout = QVBoxLayout()
-
-        icon_label = QLabel(f"<span style='font-size: 24px;'>{icon}</span>")
-        value_label = QLabel(value)
-        value_label.setObjectName("stat_value")
-        value_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color};")
-        title_label = QLabel(title)
-        title_label.setObjectName("stat_label")
-        title_label.setStyleSheet("color: #7f8c8d; font-size: 12px;")
-
-        layout.addWidget(icon_label)
-        layout.addWidget(value_label)
-        layout.addWidget(title_label)
-        layout.addStretch()
-
-        card.setLayout(layout)
-        return card
-
-    def _create_device_category_chart(self) -> QFrame:
-        """创建设备类型分布图"""
-        container = QFrame()
-        container.setStyleSheet("QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; }")
-
-        layout = QVBoxLayout()
-        title = QLabel("📊 设备类型分布")
-        title.setStyleSheet("font-weight: bold; font-size: 14px; color: #2c3e50;")
-        layout.addWidget(title)
-
-        # 模拟饼图
-        self.category_chart = QChartView()
-        self.category_chart.setMinimumHeight(200)
-        layout.addWidget(self.category_chart)
-
-        container.setLayout(layout)
-        return container
-
-    def _create_lifecycle_status(self) -> QFrame:
-        """创建生命周期状态"""
-        container = QFrame()
-        container.setStyleSheet("QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; }")
-
-        layout = QVBoxLayout()
-        title = QLabel("🔄 设备生命周期")
-        title.setStyleSheet("font-weight: bold; font-size: 14px; color: #2c3e50;")
-        layout.addWidget(title)
-
-        # 生命周期流程
-        lifecycle_flow = QHBoxLayout()
-
-        stages = ["诞生", "生长", "成熟", "衰退", "死亡", "复活"]
-        colors = ["#3498db", "#2ecc71", "#27ae60", "#f39c12", "#e74c3c", "#9b59b6"]
-
-        for i, (stage, color) in enumerate(zip(stages, colors)):
-            stage_frame = QFrame()
-            stage_frame.setStyleSheet(f"""
-                QFrame {{
-                    background: {color};
-                    border-radius: 4px;
-                    padding: 8px;
-                }}
-            """)
-            stage_layout = QVBoxLayout()
-            stage_label = QLabel(stage)
-            stage_label.setStyleSheet("color: white; font-weight: bold;")
-            count_label = QLabel("0")
-            count_label.setStyleSheet("color: white; font-size: 18px;")
-            stage_layout.addWidget(stage_label)
-            stage_layout.addWidget(count_label)
-            stage_frame.setLayout(stage_layout)
-            lifecycle_flow.addWidget(stage_frame)
-
-            if i < len(stages) - 1:
-                arrow = QLabel("→")
-                arrow.setStyleSheet("color: #bdc3c7; font-size: 18px;")
-                lifecycle_flow.addWidget(arrow)
-
-        layout.addLayout(lifecycle_flow)
-
-        container.setLayout(layout)
-        return container
-
-    def _create_discovery_tab(self) -> QWidget:
-        """创建发现标签页"""
+    def _create_driver_tab(self) -> QWidget:
+        """创建驱动管理选项卡"""
         tab = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(tab)
 
-        # 控制栏
-        control_bar = QHBoxLayout()
+        status_group = QGroupBox("驱动状态")
+        status_layout = QGridLayout(status_group)
 
-        self.btn_start_discovery = QPushButton("🚀 开始发现")
-        self.btn_start_discovery.setObjectName("primary")
-        self.btn_start_discovery.clicked.connect(self._start_discovery)
+        status_layout.addWidget(QLabel("当前状态:"), 0, 0)
+        self.driver_status = QLabel("未知")
+        status_layout.addWidget(self.driver_status, 0, 1)
 
-        self.btn_stop_discovery = QPushButton("🛑 停止")
-        self.btn_stop_discovery.setEnabled(False)
-        self.btn_stop_discovery.clicked.connect(self._stop_discovery)
+        status_layout.addWidget(QLabel("驱动版本:"), 0, 2)
+        self.driver_version = QLabel("-")
+        status_layout.addWidget(self.driver_version, 0, 3)
 
-        self.scan_progress = QProgressBar()
-        self.scan_progress.setRange(0, 100)
+        status_layout.addWidget(QLabel("驱动路径:"), 1, 0)
+        self.driver_path = QLabel("-")
+        status_layout.addWidget(self.driver_path, 1, 1, 1, 3)
 
-        protocol_filter = QComboBox()
-        protocol_filter.addItems(["全部协议", "USB", "蓝牙", "WiFi", "串口"])
+        layout.addWidget(status_group)
 
-        control_bar.addWidget(self.btn_start_discovery)
-        control_bar.addWidget(self.btn_stop_discovery)
-        control_bar.addWidget(self.scan_progress)
-        control_bar.addWidget(protocol_filter)
-        control_bar.addStretch()
+        available_group = QGroupBox("可用驱动")
+        available_layout = QVBoxLayout(available_group)
+        self.driver_list = QListWidget()
+        available_layout.addWidget(self.driver_list)
+        layout.addWidget(available_group, 1)
 
-        layout.addLayout(control_bar)
+        driver_action_layout = QHBoxLayout()
+        self.btn_install_driver = QPushButton("⬇️ 安装驱动")
+        self.btn_update_driver = QPushButton("🔄 更新驱动")
+        self.btn_uninstall_driver = QPushButton("🗑️ 卸载驱动")
+        driver_action_layout.addWidget(self.btn_install_driver)
+        driver_action_layout.addWidget(self.btn_update_driver)
+        driver_action_layout.addWidget(self.btn_uninstall_driver)
+        layout.addLayout(driver_action_layout)
 
-        # 协议检测面板
-        protocols_group = QGroupBox("🔬 多协议检测状态")
-        protocols_layout = QGridLayout()
-
-        self.protocol_status = {}
-        protocols = [
-            ("USB", "🔌"),
-            ("蓝牙", "📡"),
-            ("WiFi", "📶"),
-            ("串口", "🔧"),
-            ("NFC", "📱"),
-            ("I2C", "💾")
-        ]
-
-        for i, (name, icon) in enumerate(protocols):
-            frame = self._create_protocol_card(name, icon)
-            protocols_layout.addWidget(frame, i // 3, i % 3)
-            self.protocol_status[name] = frame
-
-        protocols_group.setLayout(protocols_layout)
-        layout.addWidget(protocols_group)
-
-        # 发现的设备列表
-        devices_group = QGroupBox("📋 发现的设备")
-        devices_layout = QVBoxLayout()
-
-        self.discovery_table = QTableWidget()
-        self.discovery_table.setColumnCount(6)
-        self.discovery_table.setHorizontalHeaderLabels(["设备ID", "名称", "类型", "协议", "VID:PID", "状态"])
-        self.discovery_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.discovery_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.discovery_table.itemClicked.connect(self._on_discovery_table_clicked)
-
-        devices_layout.addWidget(self.discovery_table)
-        devices_group.setLayout(devices_layout)
-        layout.addWidget(devices_group)
-
-        # 设备详情
-        detail_group = QGroupBox("🔎 设备详情")
-        detail_layout = QGridLayout()
-
-        self.detail_text = QTextEdit()
-        self.detail_text.setReadOnly(True)
-        self.detail_text.setMaximumHeight(150)
-        detail_layout.addWidget(self.detail_text, 0, 0, 1, 2)
-
-        detail_group.setLayout(detail_layout)
-        layout.addWidget(detail_group)
-
-        tab.setLayout(layout)
         return tab
 
-    def _create_protocol_card(self, name: str, icon: str) -> QFrame:
-        """创建协议状态卡片"""
-        frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 16px;
-            }
-        """)
-        layout = QVBoxLayout()
-
-        header = QHBoxLayout()
-        icon_label = QLabel(f"<span style='font-size: 24px;'>{icon}</span>")
-        name_label = QLabel(name)
-        name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        header.addWidget(icon_label)
-        header.addWidget(name_label)
-        header.addStretch()
-
-        status_label = QLabel("⬤ 待机")
-        status_label.setObjectName(f"status_{name}")
-        status_label.setStyleSheet("color: #95a5a6;")
-
-        devices_label = QLabel("发现 0 个设备")
-        devices_label.setObjectName(f"count_{name}")
-
-        layout.addLayout(header)
-        layout.addWidget(status_label)
-        layout.addWidget(devices_label)
-
-        frame.setLayout(layout)
-        return frame
-
-    def _create_knowledge_tab(self) -> QWidget:
-        """创建知识库标签页"""
+    def _create_lifecycle_tab(self) -> QWidget:
+        """创建生命周期选项卡"""
         tab = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(tab)
 
-        # 搜索栏
-        search_bar = QHBoxLayout()
+        stage_group = QGroupBox("当前阶段")
+        stage_layout = QVBoxLayout(stage_group)
 
-        search_input = QLineEdit()
-        search_input.setPlaceholderText("🔍 搜索设备手册...")
-        search_input.setStyleSheet("padding: 10px; border-radius: 4px; border: 1px solid #e0e0e0;")
+        self.lifecycle_display = QLabel("未知")
+        self.lifecycle_display.setFont(QFont("Microsoft YaHei", 16, QFont.Weight.Bold))
+        self.lifecycle_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        stage_layout.addWidget(self.lifecycle_display)
 
-        source_filter = QComboBox()
-        source_filter.addItems(["全部来源", "官方", "社区", "AI生成"])
+        self.lifecycle_description = QLabel("设备尚未被识别")
+        self.lifecycle_description.setWordWrap(True)
+        stage_layout.addWidget(self.lifecycle_description)
 
-        search_bar.addWidget(search_input, 1)
-        search_bar.addWidget(source_filter)
-        layout.addLayout(search_bar)
+        layout.addWidget(stage_group)
 
-        # 手册分类
-        manual_types = QHBoxLayout()
+        history_group = QGroupBox("生命周期历史")
+        history_layout = QVBoxLayout(history_group)
+        self.lifecycle_history = QListWidget()
+        history_layout.addWidget(self.lifecycle_history)
+        layout.addWidget(history_group, 1)
 
-        manual_type_buttons = [
-            ("📦 USB设备", 0),
-            ("📡 蓝牙设备", 0),
-            ("🌐 网络设备", 0),
-            ("🔧 串口设备", 0)
-        ]
+        transition_group = QGroupBox("阶段转换")
+        transition_layout = QHBoxLayout(transition_group)
 
-        for name, count in manual_type_buttons:
-            btn = QPushButton(f"{name} ({count})")
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 4px;
-                    padding: 10px 16px;
-                }
-                QPushButton:hover {
-                    border-color: #3498db;
-                }
-            """)
-            manual_types.addWidget(btn)
+        self.btn_transition_prev = QPushButton("⬅️ 上一阶段")
+        self.btn_transition_next = QPushButton("➡️ 下一阶段")
+        transition_layout.addWidget(self.btn_transition_prev)
+        transition_layout.addWidget(self.btn_transition_next)
+        transition_layout.addStretch()
+        layout.addWidget(transition_group)
 
-        manual_types.addStretch()
-        layout.addLayout(manual_types)
-
-        # 手册列表
-        manuals_group = QGroupBox("📚 手册库")
-        manuals_layout = QVBoxLayout()
-
-        self.manual_table = QTableWidget()
-        self.manual_table.setColumnCount(6)
-        self.manual_table.setHorizontalHeaderLabels([
-            "手册ID", "设备名称", "制造商", "来源", "验证状态", "可信度"
-        ])
-        self.manual_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        manuals_layout.addWidget(self.manual_table)
-
-        manuals_group.setLayout(manuals_layout)
-        layout.addWidget(manuals_group)
-
-        # 手册详情预览
-        preview_group = QGroupBox("📖 手册预览")
-        preview_layout = QVBoxLayout()
-
-        self.manual_preview = QTextEdit()
-        self.manual_preview.setReadOnly(True)
-        preview_layout.addWidget(self.manual_preview)
-
-        preview_group.setLayout(preview_layout)
-        layout.addWidget(preview_group)
-
-        tab.setLayout(layout)
         return tab
 
-    def _create_drivers_tab(self) -> QWidget:
-        """创建驱动标签页"""
+    def _create_protocol_tab(self) -> QWidget:
+        """创建协议分析选项卡"""
         tab = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(tab)
 
-        # 工具栏
-        toolbar = QHBoxLayout()
+        proto_group = QGroupBox("协议信息")
+        proto_layout = QGridLayout(proto_group)
 
-        self.btn_generate_all = QPushButton("⚡ 生成所有驱动")
-        self.btn_generate_all.setObjectName("primary")
-        self.btn_generate_all.clicked.connect(self._generate_all_drivers)
+        proto_layout.addWidget(QLabel("协议类型:"), 0, 0)
+        self.proto_type = QLabel("-")
+        proto_layout.addWidget(self.proto_type, 0, 1)
 
-        self.btn_install = QPushButton("📦 安装驱动")
-        self.btn_install.setEnabled(False)
+        proto_layout.addWidget(QLabel("版本:"), 0, 2)
+        self.proto_version = QLabel("-")
+        proto_layout.addWidget(self.proto_version, 0, 3)
 
-        self.btn_update = QPushButton("🔄 更新驱动")
+        proto_layout.addWidget(QLabel("端点:"), 1, 0)
+        self.proto_endpoint = QLabel("-")
+        proto_layout.addWidget(self.proto_endpoint, 1, 1, 1, 3)
 
-        toolbar.addWidget(self.btn_generate_all)
-        toolbar.addWidget(self.btn_install)
-        toolbar.addWidget(self.btn_update)
-        toolbar.addStretch()
+        layout.addWidget(proto_group)
 
-        layout.addLayout(toolbar)
+        detail_group = QGroupBox("协议详情")
+        detail_layout = QVBoxLayout(detail_group)
+        self.protocol_detail = QTextEdit()
+        self.protocol_detail.setReadOnly(True)
+        self.protocol_detail.setFont(QFont("Consolas", 9))
+        detail_layout.addWidget(self.protocol_detail)
+        layout.addWidget(detail_group, 1)
 
-        # 驱动列表
-        drivers_group = QGroupBox("⚙️ 驱动管理")
-        drivers_layout = QVBoxLayout()
+        proto_action_layout = QHBoxLayout()
+        self.btn_capture_proto = QPushButton("📡 捕获通信")
+        self.btn_analyze_proto = QPushButton("🔍 分析协议")
+        proto_action_layout.addWidget(self.btn_capture_proto)
+        proto_action_layout.addWidget(self.btn_analyze_proto)
+        proto_action_layout.addStretch()
+        layout.addLayout(proto_action_layout)
 
-        self.drivers_table = QTableWidget()
-        self.drivers_table.setColumnCount(7)
-        self.drivers_table.setHorizontalHeaderLabels([
-            "驱动ID", "设备", "平台", "版本", "状态", "安装日期", "操作"
-        ])
-        self.drivers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        drivers_layout.addWidget(self.drivers_table)
-
-        drivers_group.setLayout(drivers_layout)
-        layout.addWidget(drivers_group)
-
-        # 代码预览
-        code_group = QGroupBox("💻 生成的驱动代码")
-        code_layout = QVBoxLayout()
-
-        self.driver_code_view = QTextEdit()
-        self.driver_code_view.setObjectName("log_viewer")
-        self.driver_code_view.setReadOnly(True)
-        code_layout.addWidget(self.driver_code_view)
-
-        code_group.setLayout(code_layout)
-        layout.addWidget(code_group)
-
-        tab.setLayout(layout)
         return tab
 
-    def _create_ui_gen_tab(self) -> QWidget:
-        """创建UI生成标签页"""
-        tab = QWidget()
-        layout = QHBoxLayout()
-
-        # 左侧: 设备列表
-        left_panel = QFrame()
-        left_panel.setMaximumWidth(300)
-        left_panel.setStyleSheet("background: #f8f9fa; padding: 8px;")
-        left_layout = QVBoxLayout()
-
-        title = QLabel("📱 可视化设备列表")
-        title.setStyleSheet("font-weight: bold; padding: 8px;")
-        left_layout.addWidget(title)
-
-        self.ui_device_list = QListWidget()
-        self.ui_device_list.itemClicked.connect(self._on_ui_device_selected)
-        left_layout.addWidget(self.ui_device_list)
-
-        left_panel.setLayout(left_layout)
-        layout.addWidget(left_panel)
-
-        # 右侧: 生成的UI预览
-        right_panel = QFrame()
-        right_layout = QVBoxLayout()
-
-        preview_title = QLabel("🎨 自动生成的UI界面")
-        preview_title.setStyleSheet("font-weight: bold; padding: 8px;")
-        right_layout.addWidget(preview_title)
-
-        self.ui_preview = QFrame()
-        self.ui_preview.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 2px dashed #bdc3c7;
-                border-radius: 8px;
-                min-height: 400px;
-            }
-        """)
-        self.ui_preview_layout = QVBoxLayout()
-        self.ui_preview.setLayout(self.ui_preview_layout)
-
-        placeholder = QLabel("👈 从左侧选择一个设备以预览生成的UI")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("color: #95a5a6; font-size: 14px; padding: 100px;")
-        self.ui_preview_layout.addWidget(placeholder)
-
-        right_layout.addWidget(self.ui_preview)
-        right_panel.setLayout(right_layout)
-        layout.addWidget(right_panel, 1)
-
-        tab.setLayout(layout)
-        return tab
-
-    def _create_testing_tab(self) -> QWidget:
-        """创建测试标签页"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-
-        # 控制栏
-        control_bar = QHBoxLayout()
-
-        self.btn_run_all_tests = QPushButton("▶️ 运行所有测试")
-        self.btn_run_all_tests.setObjectName("primary")
-        self.btn_run_all_tests.clicked.connect(self._run_all_tests)
-
-        self.btn_run_selected = QPushButton("✅ 运行选中")
-        self.btn_stop_tests = QPushButton("⏹ 停止")
-        self.btn_stop_tests.setEnabled(False)
-
-        test_filter = QComboBox()
-        test_filter.addItems(["全部类型", "连接测试", "功能测试", "边界测试", "压力测试"])
-
-        control_bar.addWidget(self.btn_run_all_tests)
-        control_bar.addWidget(self.btn_run_selected)
-        control_bar.addWidget(self.btn_stop_tests)
-        control_bar.addWidget(test_filter)
-        control_bar.addStretch()
-
-        layout.addLayout(control_bar)
-
-        # 测试套件
-        splitter = QSplitter()
-
-        # 左侧: 测试列表
-        left_widget = QWidget()
-        left_layout = QVBoxLayout()
-
-        test_list_group = QGroupBox("📋 测试套件")
-        test_list_layout = QVBoxLayout()
-
-        self.test_table = QTableWidget()
-        self.test_table.setColumnCount(4)
-        self.test_table.setHorizontalHeaderLabels(["测试ID", "测试名称", "类型", "状态"])
-        self.test_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        test_list_layout.addWidget(self.test_table)
-
-        test_list_group.setLayout(test_list_layout)
-        left_layout.addWidget(test_list_group)
-        left_widget.setLayout(left_layout)
-
-        # 右侧: 测试详情和结果
-        right_widget = QWidget()
-        right_layout = QVBoxLayout()
-
-        # 测试结果
-        results_group = QGroupBox("📊 测试结果统计")
-        results_layout = QHBoxLayout()
-
-        self.result_passed = QLabel("✅ 通过: 0")
-        self.result_passed.setStyleSheet("color: #27ae60; font-size: 16px; font-weight: bold;")
-        self.result_failed = QLabel("❌ 失败: 0")
-        self.result_failed.setStyleSheet("color: #e74c3c; font-size: 16px; font-weight: bold;")
-        self.result_skipped = QLabel("⏭ 跳过: 0")
-        self.result_skipped.setStyleSheet("color: #95a5a6; font-size: 16px;")
-
-        results_layout.addWidget(self.result_passed)
-        results_layout.addWidget(self.result_failed)
-        results_layout.addWidget(self.result_skipped)
-        results_layout.addStretch()
-
-        results_group.setLayout(results_layout)
-        right_layout.addWidget(results_group)
-
-        # 日志输出
-        log_group = QGroupBox("📝 测试日志")
-        log_layout = QVBoxLayout()
-
-        self.test_log = QTextEdit()
-        self.test_log.setObjectName("log_viewer")
-        self.test_log.setReadOnly(True)
-        self.test_log.setMaximumHeight(200)
-        log_layout.addWidget(self.test_log)
-
-        log_group.setLayout(log_layout)
-        right_layout.addWidget(log_group)
-
-        right_widget.setLayout(right_layout)
-
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-
-        layout.addWidget(splitter)
-
-        tab.setLayout(layout)
-        return tab
-
-    def _create_devices_tab(self) -> QWidget:
-        """创建设备标签页"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-
-        # 工具栏
-        toolbar = QHBoxLayout()
-
-        self.btn_add_group = QPushButton("📁 新建分组")
-        self.btn_export = QPushButton("📤 导出配置")
-        self.btn_import = QPushButton("📥 导入配置")
-        self.btn_backup = QPushButton("💾 备份全部")
-
-        toolbar.addWidget(self.btn_add_group)
-        toolbar.addWidget(self.btn_export)
-        toolbar.addWidget(self.btn_import)
-        toolbar.addWidget(self.btn_backup)
-        toolbar.addStretch()
-
-        layout.addLayout(toolbar)
-
-        # 设备管理表格
-        devices_group = QGroupBox("📦 统一设备管理器")
-        devices_layout = QVBoxLayout()
-
-        self.devices_table = QTableWidget()
-        self.devices_table.setColumnCount(8)
-        self.devices_table.setHorizontalHeaderLabels([
-            "设备ID", "设备名称", "类别", "协议", "生命周期", "驱动状态", "在线状态", "操作"
-        ])
-        self.devices_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        devices_layout.addWidget(self.devices_table)
-
-        devices_group.setLayout(devices_layout)
-        layout.addWidget(devices_group)
-
-        # 分组管理
-        groups_group = QGroupBox("🏷️ 设备分组")
-        groups_layout = QHBoxLayout()
-
-        self.groups_tree = QTreeWidget()
-        self.groups_tree.setHeaderLabels(["分组名称", "设备数"])
-        groups_layout.addWidget(self.groups_tree)
-
-        group_buttons = QVBoxLayout()
-        group_buttons.addWidget(QPushButton("➕ 添加分组"))
-        group_buttons.addWidget(QPushButton("✏️ 编辑"))
-        group_buttons.addWidget(QPushButton("🗑️ 删除"))
-        group_buttons.addStretch()
-
-        groups_layout.addLayout(group_buttons)
-        groups_group.setLayout(groups_layout)
-        layout.addWidget(groups_group)
-
-        tab.setLayout(layout)
-        return tab
-
-    def _create_settings_tab(self) -> QWidget:
-        """创建设置标签页"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-
-        # 基本设置
-        basic_group = QGroupBox("🔧 基本设置")
-        basic_layout = QFormLayout()
-
-        self.setting_auto_scan = QCheckBox("启动时自动扫描")
-        self.setting_auto_scan.setChecked(True)
-        self.setting_scan_interval = QSpinBox()
-        self.setting_scan_interval.setRange(1, 60)
-        self.setting_scan_interval.setValue(10)
-        self.setting_scan_interval.setSuffix(" 秒")
-
-        self.setting_auto_install = QCheckBox("自动安装驱动")
-        self.setting_auto_install.setChecked(True)
-
-        self.setting_auto_ui = QCheckBox("自动生成UI")
-        self.setting_auto_ui.setChecked(True)
-
-        basic_layout.addRow("自动扫描:", self.setting_auto_scan)
-        basic_layout.addRow("扫描间隔:", self.setting_scan_interval)
-        basic_layout.addRow("自动安装:", self.setting_auto_install)
-        basic_layout.addRow("自动UI:", self.setting_auto_ui)
-
-        basic_group.setLayout(basic_layout)
-        layout.addWidget(basic_group)
-
-        # 协议设置
-        protocol_group = QGroupBox("🔌 协议设置")
-        protocol_layout = QFormLayout()
-
-        self.setting_usb_enabled = QCheckBox("启用USB检测")
-        self.setting_usb_enabled.setChecked(True)
-        self.setting_bt_enabled = QCheckBox("启用蓝牙检测")
-        self.setting_bt_enabled.setChecked(True)
-        self.setting_wifi_enabled = QCheckBox("启用WiFi检测")
-        self.setting_wifi_enabled.setChecked(True)
-        self.setting_serial_enabled = QCheckBox("启用串口检测")
-        self.setting_serial_enabled.setChecked(True)
-
-        protocol_layout.addRow("USB:", self.setting_usb_enabled)
-        protocol_layout.addRow("蓝牙:", self.setting_bt_enabled)
-        protocol_layout.addRow("WiFi:", self.setting_wifi_enabled)
-        protocol_layout.addRow("串口:", self.setting_serial_enabled)
-
-        protocol_group.setLayout(protocol_layout)
-        layout.addWidget(protocol_group)
-
-        # 知识库设置
-        knowledge_group = QGroupBox("📚 知识库设置")
-        knowledge_layout = QFormLayout()
-
-        self.setting_cloud_manual = QCheckBox("启用云端手册查询")
-        self.setting_community = QCheckBox("启用社区手册")
-        self.setting_ai_gen = QCheckBox("启用AI手册生成")
-
-        knowledge_layout.addRow("云端手册:", self.setting_cloud_manual)
-        knowledge_layout.addRow("社区贡献:", self.setting_community)
-        knowledge_layout.addRow("AI生成:", self.setting_ai_gen)
-
-        knowledge_group.setLayout(knowledge_layout)
-        layout.addWidget(knowledge_group)
-
-        # 测试设置
-        test_group = QGroupBox("🧪 测试设置")
-        test_layout = QFormLayout()
-
-        self.setting_auto_test = QCheckBox("自动运行测试")
-        self.setting_auto_test.setChecked(True)
-
-        self.setting_test_timeout = QSpinBox()
-        self.setting_test_timeout.setRange(1, 60)
-        self.setting_test_timeout.setValue(30)
-        self.setting_test_timeout.setSuffix(" 秒")
-
-        test_layout.addRow("自动测试:", self.setting_auto_test)
-        test_layout.addRow("超时时间:", self.setting_test_timeout)
-
-        test_group.setLayout(test_layout)
-        layout.addWidget(test_group)
-
-        # 保存按钮
-        save_layout = QHBoxLayout()
-        save_layout.addStretch()
-
-        btn_save = QPushButton("💾 保存设置")
-        btn_save.setObjectName("primary")
-        btn_reset = QPushButton("🔄 恢复默认")
-
-        save_layout.addWidget(btn_reset)
-        save_layout.addWidget(btn_save)
-
-        layout.addLayout(save_layout)
-        layout.addStretch()
-
-        tab.setLayout(layout)
-        return tab
-
-    # ============================================================
-    # 事件处理方法
-    # ============================================================
-
-    def _toggle_scan(self):
-        """切换扫描状态"""
-        if self.is_scanning:
-            self._stop_discovery()
+    def _init_connections(self):
+        """初始化信号连接"""
+        self.btn_scan.clicked.connect(self._on_scan_clicked)
+        self.btn_refresh.clicked.connect(self._on_refresh_clicked)
+        self.btn_export.clicked.connect(self._on_export_clicked)
+        self.btn_connect.clicked.connect(self._on_connect_clicked)
+        self.btn_disconnect.clicked.connect(self._on_disconnect_clicked)
+
+    def _update_engine_status(self, connected: bool):
+        """更新引擎状态"""
+        if connected:
+            self.engine_status_label.setText("🟢 引擎已连接")
+            self.btn_scan.setEnabled(True)
+            self.status_bar.showMessage("引擎就绪 - 准备扫描设备")
         else:
-            self._start_discovery()
+            self.engine_status_label.setText("🔴 引擎未连接")
+            self.btn_scan.setEnabled(False)
+            self.status_bar.showMessage("警告: Hardware Mind引擎未初始化")
 
-    def _start_discovery(self):
-        """开始发现"""
-        self.is_scanning = True
-        self.btn_scan.setText("⏹ 停止扫描")
-        self.btn_start_discovery.setEnabled(False)
-        self.btn_stop_discovery.setEnabled(True)
-        self.status_label.setText("🟡 正在扫描...")
+    def _start_auto_detection(self):
+        """启动自动检测"""
+        if self.engine and hasattr(self.engine, 'start_detection'):
+            self.status_bar.showMessage("正在启动设备检测...")
+        self._simulate_device_discovery()
 
-        # 模拟扫描进度
-        self._scan_progress_value = 0
-        self._scan_timer = QTimer()
-        self._scan_timer.timeout.connect(self._update_scan_progress)
-        self._scan_timer.start(100)
-
-    def _stop_discovery(self):
-        """停止发现"""
-        self.is_scanning = False
-        self.btn_scan.setText("🔍 开始扫描")
-        self.btn_start_discovery.setEnabled(True)
-        self.btn_stop_discovery.setEnabled(False)
-        self.status_label.setText("🟢 扫描已停止")
-
-        if hasattr(self, '_scan_timer'):
-            self._scan_timer.stop()
-
-    def _update_scan_progress(self):
-        """更新扫描进度"""
-        self._scan_progress_value += 1
-        if self._scan_progress_value > 100:
-            self._scan_progress_value = 0
-
-        self.scan_progress.setValue(self._scan_progress_value)
-
-        # 模拟更新协议状态
-        protocols = list(self.protocol_status.keys())
-        active_index = (self._scan_progress_value // 20) % len(protocols)
-
-        for i, name in enumerate(protocols):
-            card = self.protocol_status[name]
-            status_label = card.findChild(QLabel, f"status_{name}")
-            count_label = card.findChild(QLabel, f"count_{name}")
-
-            if i <= active_index:
-                status_label.setText("● 扫描中")
-                status_label.setStyleSheet("color: #f39c12;")
-                count_label.setText(f"发现 {i + 1} 个设备")
-            else:
-                status_label.setText("⬤ 待机")
-                status_label.setStyleSheet("color: #95a5a6;")
-
-        # 模拟发现设备
-        if self._scan_progress_value % 30 == 0:
-            self._add_mock_device()
-
-    def _add_mock_device(self):
-        """添加模拟设备"""
+    def _simulate_device_discovery(self):
+        """模拟设备发现"""
         mock_devices = [
-            {"id": "usb_046d_c52b", "name": "Logitech USB Receiver", "type": "USB HID", "protocol": "USB", "vid_pid": "046D:C52B"},
-            {"id": "usb_0bda_5652", "name": "USB Camera", "type": "Video", "protocol": "USB", "vid_pid": "0BDA:5652"},
-            {"id": "bt_001a7dda", "name": "JBL Flip 5", "type": "Bluetooth Audio", "protocol": "BT", "vid_pid": "N/A"},
-            {"id": "wifi_192168", "name": "Smart Plug", "type": "IoT Device", "protocol": "MQTT", "vid_pid": "N/A"},
-            {"id": "serial_com3", "name": "CP2102 USB-UART", "type": "USB Serial", "protocol": "Serial", "vid_pid": "10C4:EA60"},
+            {
+                'device_id': 'usb_001',
+                'name': 'USB键盘',
+                'category': 'USB_HID',
+                'manufacturer': 'Logitech',
+                'vid': '046D',
+                'pid': 'C52B',
+                'status': 'connected',
+                'lifecycle': 'MATURITY'
+            },
+            {
+                'device_id': 'usb_002',
+                'name': 'USB鼠标',
+                'category': 'USB_HID',
+                'manufacturer': 'Razer',
+                'vid': '1532',
+                'pid': '0045',
+                'status': 'connected',
+                'lifecycle': 'GROWTH'
+            },
+            {
+                'device_id': 'bt_001',
+                'name': '蓝牙耳机',
+                'category': 'BLUETOOTH',
+                'manufacturer': 'Sony',
+                'vid': '0D25',
+                'pid': '3111',
+                'status': 'connected',
+                'lifecycle': 'MATURE'
+            }
         ]
 
-        device = mock_devices[len(self.devices) % len(mock_devices)]
-        self.devices.append(device)
+        for device in mock_devices:
+            self._add_device(device)
 
-        # 更新发现表格
-        row = self.discovery_table.rowCount()
-        self.discovery_table.insertRow(row)
-        self.discovery_table.setItem(row, 0, QTableWidgetItem(device["id"]))
-        self.discovery_table.setItem(row, 1, QTableWidgetItem(device["name"]))
-        self.discovery_table.setItem(row, 2, QTableWidgetItem(device["type"]))
-        self.discovery_table.setItem(row, 3, QTableWidgetItem(device["protocol"]))
-        self.discovery_table.setItem(row, 4, QTableWidgetItem(device["vid_pid"]))
-        self.discovery_table.setItem(row, 5, QTableWidgetItem("已发现"))
+        self.status_bar.showMessage(f"设备扫描完成 - 发现 {len(self.devices)} 个设备")
 
-        # 更新设备计数
-        self.device_count_label.setText(f"设备: {len(self.devices)}")
+    def _add_device(self, device_info: dict):
+        """添加设备到列表"""
+        device_id = device_info.get('device_id')
+        if device_id in self.devices:
+            return
+
+        self.devices[device_id] = device_info
+        self._refresh_device_list()
+
+    def _refresh_device_list(self):
+        """刷新设备列表"""
+        self.device_list.clear()
+        search_text = self.device_search.text().lower()
+
+        for device_id, device in self.devices.items():
+            category = device.get('category', '')
+            if not self._passes_filter(category):
+                continue
+
+            name = device.get('name', '').lower()
+            manufacturer = device.get('manufacturer', '').lower()
+            if search_text and search_text not in name and search_text not in manufacturer:
+                continue
+
+            icon = self._get_category_icon(category)
+            status_icon = "🟢" if device.get('status') == 'connected' else "🔴"
+            item = QListWidgetItem(f"{icon} {device.get('name', 'Unknown')} {status_icon}")
+            item.setData(Qt.ItemDataRole.UserRole, device_id)
+            self.device_list.addItem(item)
+
+        self.device_count_label.setText(str(self.device_list.count()))
+
+    def _get_category_icon(self, category: str) -> str:
+        """获取类别图标"""
+        icons = {
+            'USB_HID': '⌨️',
+            'USB_SERIAL': '🔌',
+            'USB_MASS_STORAGE': '💾',
+            'USB_VIDEO': '📷',
+            'USB_AUDIO': '🔊',
+            'BLUETOOTH': '📶',
+            'WIFI': '📡',
+            'SERIAL': '🔗',
+        }
+        return icons.get(category, '❓')
+
+    def _passes_filter(self, category: str) -> bool:
+        """检查设备是否通过过滤器"""
+        if 'USB' in category:
+            return self.filter_usb.isChecked()
+        elif category == 'BLUETOOTH':
+            return self.filter_bluetooth.isChecked()
+        elif category == 'WIFI':
+            return self.filter_wifi.isChecked()
+        elif category == 'SERIAL':
+            return self.filter_serial.isChecked()
+        return True
 
     def _on_device_selected(self, item: QListWidgetItem):
         """设备列表项被选中"""
-        # 获取设备信息
-        device_info = item.data(Qt.ItemDataRole.UserRole)
-        if device_info:
-            self.selected_device = device_info
-            self.detail_text.setText(json.dumps(device_info, indent=2, ensure_ascii=False))
+        device_id = item.data(Qt.ItemDataRole.UserRole)
+        if device_id and device_id in self.devices:
+            self._display_device_detail(self.devices[device_id])
 
-    def _on_discovery_table_clicked(self, item: QTableWidgetItem):
-        """发现表格被点击"""
-        row = item.row()
-        device_id = self.discovery_table.item(row, 0).text()
-        device_name = self.discovery_table.item(row, 1).text()
-        device_type = self.discovery_table.item(row, 2).text()
-        device_protocol = self.discovery_table.item(row, 3).text()
-        device_vid_pid = self.discovery_table.item(row, 4).text()
+    def _display_device_detail(self, device: dict):
+        """显示设备详情"""
+        self.info_name.setText(device.get('name', '-'))
+        self.info_category.setText(device.get('category', '-'))
+        self.info_manufacturer.setText(device.get('manufacturer', '-'))
+        self.info_vidpid.setText(f"VID:{device.get('vid', '-')} / PID:{device.get('pid', '-')}")
+        self.info_serial.setText(device.get('serial_number', device.get('vid', '-')))
+        self.info_connection.setText(device.get('status', '-'))
+        self.info_last_activity.setText(device.get('last_activity', '-'))
 
-        self.detail_text.setText(f"""设备详情:
-================================
-设备ID: {device_id}
-名称: {device_name}
-类型: {device_type}
-协议: {device_protocol}
-VID:PID: {device_vid_pid}
+        lifecycle = device.get('lifecycle', 'UNKNOWN')
+        self.lifecycle_stage.setText(lifecycle)
+        self.lifecycle_display.setText(lifecycle)
 
-状态: 已连接
-生命周期: 成熟期
-驱动状态: 已安装
-""")
+        self.fp_id.setText(device.get('device_id', '-'))
+        self.fp_vid.setText(device.get('vid', '-'))
+        self.fp_pid.setText(device.get('pid', '-'))
+        self.fp_serial.setText(device.get('serial_number', '-'))
+        self.fp_confidence.setText(f"{device.get('confidence', 0) * 100:.1f}%")
 
-        # 启用安装按钮
-        self.btn_install.setEnabled(True)
+        self.driver_status.setText(device.get('driver_status', '未安装'))
 
-    def _on_ui_device_selected(self, item: QListWidgetItem):
-        """UI设备列表项被选中"""
-        # 清除之前的预览
-        for i in reversed(range(self.ui_preview_layout.count())):
-            widget = self.ui_preview_layout.itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
+    def _on_search_changed(self, text: str):
+        """搜索文本变化"""
+        self._refresh_device_list()
 
-        # 添加占位符（实际会根据设备生成UI组件）
-        placeholder = QLabel("🎨 UI组件预览")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("color: #3498db; font-size: 18px; padding: 20px;")
-        self.ui_preview_layout.addWidget(placeholder)
+    def _on_filter_changed(self):
+        """过滤器变化"""
+        self._refresh_device_list()
 
-        # 添加模拟UI组件
-        components = [
-            ("开关控制", "toggle"),
-            ("亮度调节", "slider"),
-            ("状态显示", "display"),
-            ("操作按钮", "button")
-        ]
+    def _on_scan_clicked(self):
+        """扫描按钮点击"""
+        self.status_bar.showMessage("正在扫描设备...")
+        self._simulate_device_discovery()
 
-        for name, comp_type in components:
-            frame = QFrame()
-            frame.setStyleSheet("""
-                QFrame {
-                    background: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                    padding: 16px;
-                    margin: 8px;
-                }
-            """)
-            layout = QHBoxLayout()
+    def _on_refresh_clicked(self):
+        """刷新按钮点击"""
+        self._refresh_device_list()
+        self.status_bar.showMessage("已刷新设备列表")
 
-            label = QLabel(name)
-            label.setStyleSheet("font-weight: bold;")
+    def _on_export_clicked(self):
+        """导出按钮点击"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "导出设备信息", "", "JSON Files (*.json)"
+        )
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.devices, f, indent=2, ensure_ascii=False)
+                self.status_bar.showMessage(f"已导出到: {file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"导出失败: {str(e)}")
 
-            if comp_type == "toggle":
-                toggle = QPushButton("开")
-                toggle.setStyleSheet("""
-                    QPushButton {
-                        background: #27ae60;
-                        color: white;
-                        border: none;
-                        border-radius: 12px;
-                        padding: 6px 16px;
-                    }
-                """)
-                layout.addWidget(label)
-                layout.addWidget(toggle)
-            elif comp_type == "slider":
-                slider = QSlider()
-                slider.setOrientation(Qt.Orientation.Horizontal)
-                layout.addWidget(label)
-                layout.addWidget(slider, 1)
-            elif comp_type == "display":
-                value = QLabel("数值: 42")
-                value.setStyleSheet("color: #3498db; font-size: 16px;")
-                layout.addWidget(label)
-                layout.addWidget(value)
-            else:
-                btn = QPushButton("执行")
-                btn.setObjectName("primary")
-                layout.addWidget(label)
-                layout.addWidget(btn)
+    def _on_connect_clicked(self):
+        """连接按钮点击"""
+        self.status_bar.showMessage("正在连接设备...")
 
-            frame.setLayout(layout)
-            self.ui_preview_layout.addWidget(frame)
+    def _on_disconnect_clicked(self):
+        """断开按钮点击"""
+        self.status_bar.showMessage("已断开设备连接")
 
-    def _refresh_data(self):
-        """刷新数据"""
-        self.status_label.setText("🟢 正在刷新...")
-        QTimer.singleShot(500, lambda: self.status_label.setText("🟢 系统就绪"))
-        self._update_dashboard()
 
-    def _update_dashboard(self):
-        """更新仪表盘"""
-        # 更新统计数据
-        self.stat_devices.findChild(QLabel, "stat_value").setText(str(len(self.devices)))
-        self.stat_manuals.findChild(QLabel, "stat_value").setText(str(min(len(self.devices), 5)))
-        self.stat_drivers.findChild(QLabel, "stat_value").setText(str(min(len(self.devices), 3)))
-        self.stat_tests.findChild(QLabel, "stat_value").setText("90%")
-
-        # 更新最近设备列表
-        self.recent_device_list.clear()
-        for device in self.devices[-5:]:
-            item = QListWidgetItem(f"📱 {device['name']} ({device['type']})")
-            item.setData(Qt.ItemDataRole.UserRole, device)
-            self.recent_device_list.addItem(item)
-
-        # 更新设备管理表格
-        self._update_devices_table()
-
-        # 更新UI设备列表
-        self.ui_device_list.clear()
-        for device in self.devices:
-            self.ui_device_list.addItem(f"📱 {device['name']}")
-
-    def _update_devices_table(self):
-        """更新设备管理表格"""
-        self.devices_table.setRowCount(0)
-
-        for device in self.devices:
-            row = self.devices_table.rowCount()
-            self.devices_table.insertRow(row)
-
-            lifecycle = ["诞生", "生长", "成熟", "衰退", "死亡", "复活"][row % 6]
-            status = ["待匹配", "已匹配", "已安装", "运行中"][row % 4]
-
-            self.devices_table.setItem(row, 0, QTableWidgetItem(device["id"]))
-            self.devices_table.setItem(row, 1, QTableWidgetItem(device["name"]))
-            self.devices_table.setItem(row, 2, QTableWidgetItem(device["type"]))
-            self.devices_table.setItem(row, 3, QTableWidgetItem(device["protocol"]))
-            self.devices_table.setItem(row, 4, QTableWidgetItem(lifecycle))
-            self.devices_table.setItem(row, 5, QTableWidgetItem(status))
-            self.devices_table.setItem(row, 6, QTableWidgetItem("🟢 在线"))
-
-            btn_view = QPushButton("查看")
-            btn_view.setStyleSheet("""
-                QPushButton {
-                    background: #3498db;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 4px 8px;
-                }
-            """)
-            self.devices_table.setCellWidget(row, 7, btn_view)
-
-    def _generate_all_drivers(self):
-        """生成所有驱动"""
-        self.status_label.setText("🟡 正在生成驱动...")
-
-        # 模拟生成过程
-        self.driver_code_view.clear()
-        sample_code = '''// 自动生成的驱动代码
-// 设备: Logitech USB Receiver
-// 生成时间: {time}
-
-#include <usbhelper.h>
-#include <hidapi.h>
-
-class LogitechReceiverDriver {{
-private:
-    hid_device* handle;
-
-public:
-    int initialize() {{
-        handle = hid_open(0x046D, 0xC52B, NULL);
-        return handle ? 0 : -1;
-    }}
-
-    int send_data(uint8_t* data, size_t len) {{
-        return hid_write(handle, data, len);
-    }}
-
-    int read_data(uint8_t* buf, size_t len) {{
-        return hid_read(handle, buf, len);
-    }}
-}};
-'''.format(time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-        self.driver_code_view.setPlainText(sample_code)
-
-        # 更新驱动表格
-        self.drivers_table.setRowCount(0)
-        for device in self.devices[:3]:
-            row = self.drivers_table.rowCount()
-            self.drivers_table.insertRow(row)
-            self.drivers_table.setItem(row, 0, QTableWidgetItem(f"driver_{device['id']}"))
-            self.drivers_table.setItem(row, 1, QTableWidgetItem(device["name"]))
-            self.drivers_table.setItem(row, 2, QTableWidgetItem("Windows"))
-            self.drivers_table.setItem(row, 3, QTableWidgetItem("1.0.0"))
-            self.drivers_table.setItem(row, 4, QTableWidgetItem("已生成"))
-            self.drivers_table.setItem(row, 5, QTableWidgetItem(datetime.now().strftime("%Y-%m-%d")))
-            self.drivers_table.setItem(row, 6, QTableWidgetItem("查看 | 安装"))
-
-        self.driver_count_label.setText(f"驱动: {min(len(self.devices), 3)}")
-        self.status_label.setText("🟢 驱动生成完成")
-
-    def _run_all_tests(self):
-        """运行所有测试"""
-        self.test_log.clear()
-        self.test_log.append("▶️ 开始运行测试套件...\n")
-
-        # 模拟测试结果
-        test_cases = [
-            ("conn_usb_001", "USB连接测试", "connection"),
-            ("cap_hid_001", "HID输入测试", "capability"),
-            ("cap_video_001", "视频流测试", "capability"),
-            ("bound_baud_001", "波特率边界测试", "boundary"),
-            ("stress_001", "压力测试", "stress"),
-        ]
-
-        self.test_table.setRowCount(0)
-        passed = 0
-        failed = 0
-
-        for test_id, name, test_type in test_cases:
-            row = self.test_table.rowCount()
-            self.test_table.insertRow(row)
-            self.test_table.setItem(row, 0, QTableWidgetItem(test_id))
-            self.test_table.setItem(row, 1, QTableWidgetItem(name))
-            self.test_table.setItem(row, 2, QTableWidgetItem(test_type))
-
-            # 模拟测试结果
-            import random
-            result = "passed" if random.random() > 0.2 else "failed"
-            status_item = QTableWidgetItem("✅ 通过" if result == "passed" else "❌ 失败")
-            status_item.setForeground(Qt.GlobalColor.green if result == "passed" else Qt.GlobalColor.red)
-            self.test_table.setItem(row, 3, status_item)
-
-            if result == "passed":
-                passed += 1
-            else:
-                failed += 1
-
-            self.test_log.append(f"{'✅' if result == 'passed' else '❌'} {name}: {result}")
-
-        self.result_passed.setText(f"✅ 通过: {passed}")
-        self.result_failed.setText(f"❌ 失败: {failed}")
-        self.result_skipped.setText(f"⏭ 跳过: 0")
-
-        self.test_log.append(f"\n📊 测试完成: {passed}/{len(test_cases)} 通过")
+def get_panel_info():
+    """获取面板信息"""
+    return {
+        'name': '🎛️ 硬件智能',
+        'class': HardwareMindPanel,
+        'icon': '🎛️',
+        'description': '通用硬件智能集成系统'
+    }

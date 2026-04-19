@@ -26,10 +26,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLineEdit, QPushButton, QLabel, QComboBox, QTabWidget,
     QTableWidget, QTableWidgetItem, QProgressBar, QGroupBox,
-    QCardWidget, QListWidget, QListWidgetItem, QTextEdit,
+    QListWidget, QListWidgetItem, QTextEdit,
     QSpinBox, QCheckBox, QFrame, QScrollArea, QProgressDialog,
     QMessageBox, QInputDialog, QDialog
 )
+from ui.components import QCardWidget
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
 

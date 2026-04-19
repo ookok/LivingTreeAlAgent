@@ -240,7 +240,7 @@ class SoilStatusRail(QWidget):
         self._slide_animation.setStartValue(0)
         self._slide_animation.setEndValue(48)
         self._slide_animation.start()
-        self.show()
+        QWidget.show(self)
 
     def _animate_hide(self):
         """隐藏动画"""

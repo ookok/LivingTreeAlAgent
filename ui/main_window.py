@@ -4,6 +4,10 @@
 V2.0 新增：MCP管理、Skill市场、任务进度、数字分身、LAN聊天
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
@@ -43,144 +47,144 @@ from ui.p2p_search_proxy_panel import P2PSearchProxyPanel
 from core.wiki_compiler.compiler import get_wiki_compiler
 from core.wiki_compiler.ui.panel import WikiCompilerPanel
 # V2.1: 全源情报中心
-from ui.intelligence.intelligence_panel import IntelligencePanel
+# from ui.intelligence.intelligence_panel import IntelligencePanel
 # V2.2: 去中心化邮箱
-from ui.mailbox.mailbox_panel import MailboxPanel
+# from ui.mailbox.mailbox_panel import MailboxPanel
 # V2.3: P2P连接器 (短ID寻址 + 多通道通信)
-from ui.connector.connector_panel import ConnectorPanel
+# from ui.connector.connector_panel import ConnectorPanel
 # V2.4: 统一聊天 (Element/Discord/Telegram风格)
-from ui.unified_chat.chat_panel import ChatPanel
+# from ui.unified_chat.chat_panel import ChatPanel
 # V2.5: 翻译中心 (离线初翻 + 在线精翻)
-from ui.translation.translation_panel import TranslationPanel
+# from ui.translation.translation_panel import TranslationPanel
 # V2.6: 去中心化论坛 (P2P穿透网络 + 智能写作)
-from ui.forum.forum_panel import ForumPanel
+# from ui.forum.forum_panel import ForumPanel
 # V2.7: 伪域名系统 (去中心化域名 + DNS解析)
-from ui.pseudodomain.domain_panel import DomainPanel
+# from ui.pseudodomain.domain_panel import DomainPanel
 # V2.8: 元宇宙UI (舰桥操作系统 - 时空引力场)
-from ui.metaverse_ui_panel import MetaverseUIPanel
+# from ui.metaverse_ui_panel import MetaverseUIPanel
 
 # 需求头脑风暴 (借鉴 obra/superpowers 设计思路)
-from ui.idea_clarifier_panel import IdeaClarifierPanel
+# from ui.idea_clarifier_panel import IdeaClarifierPanel
 # 政府开放资料查询 (借鉴 gov_openapi_agent 设计思路)
-from ui.gov_data_panel import GovDataPanel
+# from ui.gov_data_panel import GovDataPanel
 # 公司印章生成器 (借鉴 company-stamp 设计思路)
-from ui.stamp_panel import StampPanel
+# from ui.stamp_panel import StampPanel
 # 中继链 - 分布式积分账本 (无币无挖矿类区块链)
-from ui.relay_chain_panel import RelayChainPanel
+# from ui.relay_chain_panel import RelayChainPanel
 # V3.0: 根系同步 (Root Sync - Syncthing 风格去中心化文件同步)
-from ui.root_sync_panel import RootSyncPanel
+# from ui.root_sync_panel import RootSyncPanel
 # V3.1: GitHub Store (桌面代码仓库 - 发现安装 GitHub Release 桌面应用)
-from ui.github_store_panel import GitHubStorePanel
+# from ui.github_store_panel import GitHubStorePanel
 # V3.2: Database Browser (桌面数据库管理 - onetcli 风格多数据库管理)
-from ui.database_browser_panel import DatabaseBrowserPanel
+# from ui.database_browser_panel import DatabaseBrowserPanel
 # V3.3: Preview Panel (Office 文档实时预览与编辑 - AionUi 风格)
-from ui.preview_panel import PreviewPanel
+# from ui.preview_panel import PreviewPanel
 # V2.0: MCP Market 面板
-from ui.mcp_market_panel import MCPMarketPanel
+# from ui.mcp_market_panel import MCPMarketPanel
 # V2.0: Skill Market 面板
-from ui.skill_market_panel import SkillMarketPanel
+# from ui.skill_market_panel import SkillMarketPanel
 # V2.0: Digital Avatar 面板
-from ui.avatar_panel import AvatarPanel
+# from ui.avatar_panel import AvatarPanel
 # 环保模型商店面板 (P2P模型分发 + API Key自动配置)
-from ui.model_store_panel import ModelStorePanel
+# from ui.model_store_panel import ModelStorePanel
 # 🔐 IdentityPanel - 身份驱动的数据主权 UI
-from ui.identity_panel import IdentityPanel
+# from ui.identity_panel import IdentityPanel
 # 📚 私有法规库检索面板 (Chroma/Milvus + all-MiniLM-L6-v2)
-from ui.regulation_search_panel import RegulationSearchPanel
+# from ui.regulation_search_panel import RegulationSearchPanel
 # 🏛️ 社区共建者权益中心 (积分->权益转换 + 税务合规 + 基金透明)
-from ui.community_rights_panel import CommunityRightsPanel
+# from ui.community_rights_panel import CommunityRightsPanel
 # 🤖 AI脚本生成器 (自然语言→可执行脚本 + 沙箱执行 + 脚本市场)
-from ui.ai_script_panel import AIScriptPanel
+# from ui.ai_script_panel import AIScriptPanel
 # 🌐 P2P 去中心化更新系统面板
-from ui.decentralized_update_panel import DecentralizedUpdatePanel
+# from ui.decentralized_update_panel import DecentralizedUpdatePanel
 # V2.0: LAN Chat 面板
-from ui.lan_chat_panel import LANChatPanel
+# from ui.lan_chat_panel import LANChatPanel
 # V2.0: Smart IDE 面板
-from ui.smart_ide_panel import SmartIDEPanel
+# from ui.smart_ide_panel import SmartIDEPanel
 # V2.0: Game Room 面板
-from ui.game_room_panel import GameRoomPanel
+# from ui.game_room_panel import GameRoomPanel
 # 🎮 融合游戏系统 (暗黑地牢 + 狼人杀 + 密室逃脱)
-from ui.dungeon_werewolf_escape_panel import FusionGamePanel
+# from ui.dungeon_werewolf_escape_panel import FusionGamePanel
 # 🎭 虚拟形象与社交广场系统
-from ui.virtual_avatar_social_panel import VirtualAvatarSocialPanel
+# from ui.virtual_avatar_social_panel import VirtualAvatarSocialPanel
 # 🃏 斗地主游戏系统
-from ui.dou_di_zhu_panel import DouDiZhuPanel
+# from ui.dou_di_zhu_panel import DouDiZhuPanel
 # 🌐 P2P网络自举协议
-from ui.p2p_bootstrap_panel import P2PBootstrapPanel
+# from ui.p2p_bootstrap_panel import P2PBootstrapPanel
 # 🌌 通用数字永生系统 - Phoenix Protocol
-from ui.phoenix_protocol_panel import PhoenixProtocolPanel
+# from ui.phoenix_protocol_panel import PhoenixProtocolPanel
 # 🎛️ 通用硬件智能集成系统 - Hardware Mind
-from ui.hardware_mind_panel import HardwareMindPanel
+# from ui.hardware_mind_panel import HardwareMindPanel
 # 🐍 Python智能日志分析系统 - Python Mind
-from ui.python_mind_panel import PythonMindPanel
+# from ui.python_mind_panel import PythonMindPanel
 # 🧹 智能临时文件清理系统 - Smart Cleanup
-from ui.smart_cleanup_panel import SmartCleanupPanel
+# from ui.smart_cleanup_panel import SmartCleanupPanel
 # 🤖 AI驱动式界面自检与优化系统 - UI Self-Check
-from ui.ui_self_check_panel import UISelfCheckPanel
+# from ui.ui_self_check_panel import UISelfCheckPanel
 # 🔐 智能授权与实名认证系统 - Activation License
-from ui.activation_license_panel import ActivationLicensePanel
+# from ui.activation_license_panel import ActivationLicensePanel
 # V2.0: Knowledge Blockchain 面板
-from ui.knowledge_blockchain_panel import KnowledgeBlockchainPanel
+# from ui.knowledge_blockchain_panel import KnowledgeBlockchainPanel
 # L4 执行层监控面板
-from ui.l4_executor_panel import L4ExecutorPanel
+# from ui.l4_executor_panel import L4ExecutorPanel
 # SmolLM2 L0 快反大脑面板
-from ui.smolllm2_panel import SmolLM2Panel
+# from ui.smolllm2_panel import SmolLM2Panel
 # 智能提示系统面板
-from ui.intelligent_hints_panel import IntelligentHintsPanel
+# from ui.intelligent_hints_panel import IntelligentHintsPanel
 # 思维审核与自我进化面板
-from ui.thought_audit_panel import ThoughtAuditPanel
+# from ui.thought_audit_panel import ThoughtAuditPanel
 # 聚合推荐首页面板
-from ui.feed_home_panel import FeedHomePanel
+# from ui.feed_home_panel import FeedHomePanel
 # 认知框架协作者面板
-from ui.cognitive_framework_panel import CognitiveFrameworkPanel
+# from ui.cognitive_framework_panel import CognitiveFrameworkPanel
 # 消息模式面板
-from ui.message_pattern_panel import MessagePatternPanel
+# from ui.message_pattern_panel import MessagePatternPanel
 # 聚合推荐面板
-from ui.aggregator_panel import AggregatorPanel
+# from ui.aggregator_panel import AggregatorPanel
 # 归档工具面板
-from ui.archive_tool_panel import ArchiveToolPanel
+# from ui.archive_tool_panel import ArchiveToolPanel
 # 云盘面板
-from ui.cloud_disk_panel import CloudDiskPanel
+# from ui.cloud_disk_panel import CloudDiskPanel
 # 提佣系统面板
-from ui.commission_panel import CommissionPanel
+# from ui.commission_panel import CommissionPanel
 # 专业审核增强面板
-from ui.creative_review_panel import CreativeReviewPanel
+# from ui.creative_review_panel import CreativeReviewPanel
 # 决策支持面板
-from ui.decision_panel import DecisionSupportPanel
+# from ui.decision_panel import DecisionSupportPanel
 # 增强任务面板
-from ui.enhanced_task_panel import EnhancedTaskPanel
+# from ui.enhanced_task_panel import EnhancedTaskPanel
 # Karpathy规则面板
-from ui.karpathy_panel import KarpathyRulesPanel
+# from ui.karpathy_panel import KarpathyRulesPanel
 # 轻量级UI面板
-from ui.lightweight_ui_panel import LightweightUIPanel
+# from ui.lightweight_ui_panel import LightweightUIPanel
 # Markdown转Doc面板
-from ui.md_to_doc_panel import MarkdownToDocPanel
+# from ui.md_to_doc_panel import MarkdownToDocPanel
 # P2P广播面板
-from ui.p2p_broadcast_panel import P2PBroadcastPanel
+# from ui.p2p_broadcast_panel import P2PBroadcastPanel
 # 用户画像面板
-from ui.profile_panel import ProfilePanel
+# from ui.profile_panel import ProfilePanel
 # 模型提供商面板
-from ui.provider_panel import ProviderPanel
+# from ui.provider_panel import ProviderPanel
 # 智能推荐面板
-from ui.recommendation_panel import RecommendationPanel
+# from ui.recommendation_panel import RecommendationPanel
 # 中继面板
-from ui.relay_panel import RelayPanel
+# from ui.relay_panel import RelayPanel
 # 安全诊断面板
-from ui.security_diagnostic_panel import SecurityDiagnosticPanel
+# from ui.security_diagnostic_panel import SecurityDiagnosticPanel
 # 智能助手面板
-from ui.smart_assistant_panel import SmartAssistantPanel
+# from ui.smart_assistant_panel import SmartAssistantPanel
 # 智能写作面板
-from ui.smart_writing_panel import SmartWritingPanel
+# from ui.smart_writing_panel import SmartWritingPanel
 # 社交电商面板
-from ui.social_commerce_panel import SocialCommercePanel
+# from ui.social_commerce_panel import SocialCommercePanel
 # 状态面板
-from ui.status_panel import StatusPanel
+# from ui.status_panel import StatusPanel
 # Toonflow短剧面板
-from ui.toonflow_panel import ToonflowPanel
+# from ui.toonflow_panel import ToonflowPanel
 # URL智能优化面板
-from ui.url_intelligence_panel import URLIntelligencePanel
+# from ui.url_intelligence_panel import URLIntelligencePanel
 # 写作助手面板
-from ui.writing_assistant_panel import WritingAssistantPanel
+# from ui.writing_assistant_panel import WritingAssistantPanel
 
 
 class MainWindow(QWidget):
@@ -285,32 +289,44 @@ class MainWindow(QWidget):
         self.center_tabs.addTab(self.p2p_search_proxy_tab, "🌐 P2P搜索代理")
 
         # V2.1: 全源情报中心 (搜索+谣言检测+竞品监控+预警+报告)
-        self.intelligence_tab = IntelligencePanel()
-        self.center_tabs.addTab(self.intelligence_tab, "🎯 情报中心")
+        # TODO: from ui.intelligence.intelligence_panel import IntelligencePanel
+        # self.intelligence_tab = IntelligencePanel()
+        # self.center_tabs.addTab(self.intelligence_tab, "🎯 情报中心")
+        self.intelligence_tab = None
 
         # V2.2: 去中心化邮箱 (P2P邮件, 无SMTP)
-        self.mailbox_tab = MailboxPanel()
-        self.center_tabs.addTab(self.mailbox_tab, "📧 去中心化邮箱")
+        # TODO: from ui.mailbox.mailbox_panel import MailboxPanel
+        # self.mailbox_tab = MailboxPanel()
+        # self.center_tabs.addTab(self.mailbox_tab, "📧 去中心化邮箱")
+        self.mailbox_tab = None
 
         # V2.3: P2P连接器 (短ID寻址 + 多通道通信)
-        self.connector_tab = ConnectorPanel()
-        self.center_tabs.addTab(self.connector_tab, "🔗 P2P连接")
+        # TODO: from ui.connector.connector_panel import ConnectorPanel
+        # self.connector_tab = ConnectorPanel()
+        # self.center_tabs.addTab(self.connector_tab, "🔗 P2P连接")
+        self.connector_tab = None
 
         # V2.4: 统一聊天 (Element/Discord/Telegram风格)
-        self.chat_tab = ChatPanel()
-        self.center_tabs.addTab(self.chat_tab, "💬 统一聊天")
+        # 已由顶部 ChatPanel 替代
+        self.chat_tab = None
 
         # V2.5: 翻译中心 (离线初翻 + 在线精翻)
-        self.translation_tab = TranslationPanel()
-        self.center_tabs.addTab(self.translation_tab, "🔄 翻译中心")
+        # TODO: from ui.translation.translation_panel import TranslationPanel
+        # self.translation_tab = TranslationPanel()
+        # self.center_tabs.addTab(self.translation_tab, "🔄 翻译中心")
+        self.translation_tab = None
 
         # V2.6: 去中心化论坛 (P2P穿透网络 + 智能写作)
-        self.forum_tab = ForumPanel()
-        self.center_tabs.addTab(self.forum_tab, "🏛️ 去中心化论坛")
+        # TODO: from ui.forum.forum_panel import ForumPanel
+        # self.forum_tab = ForumPanel()
+        # self.center_tabs.addTab(self.forum_tab, "🏛️ 去中心化论坛")
+        self.forum_tab = None
 
         # V2.7: 伪域名系统 (去中心化域名 + DNS解析)
-        self.domain_tab = DomainPanel()
-        self.center_tabs.addTab(self.domain_tab, "🌐 伪域名")
+        # TODO: from ui.pseudodomain.domain_panel import DomainPanel
+        # self.domain_tab = DomainPanel()
+        # self.center_tabs.addTab(self.domain_tab, "🌐 伪域名")
+        self.domain_tab = None
 
         # V2.0: CLI-Anything 工具工厂
         try:
@@ -351,13 +367,16 @@ class MainWindow(QWidget):
 
         # V2.8: 元宇宙UI (舰桥操作系统 - 时空引力场)
         try:
+            from ui.metaverse_ui_panel import MetaverseUIPanel
             self.metaverse_tab = MetaverseUIPanel()
             self.center_tabs.addTab(self.metaverse_tab, "🚀 舰桥")
         except Exception as e:
+            logger.debug(f"MetaverseUIPanel not available: {e}")
             self.metaverse_tab = None
 
         # 需求头脑风暴 (HARD-GATE: 设计批准前不执行实现)
         try:
+            from ui.idea_clarifier_panel import IdeaClarifierPanel
             self.brainstorm_tab = IdeaClarifierPanel()
             self.brainstorm_tab.design_approved.connect(self._on_design_approved)
             self.center_tabs.addTab(self.brainstorm_tab, "🎯 头脑风暴")
@@ -367,6 +386,7 @@ class MainWindow(QWidget):
 
         # 政府开放资料查询 (借鉴 gov_openapi_agent 设计思路)
         try:
+            from ui.gov_data_panel import GovDataPanel
             self.gov_data_tab = GovDataPanel()
             self.center_tabs.addTab(self.gov_data_tab, "🏛️ 政府资料")
         except Exception as e:
@@ -375,6 +395,7 @@ class MainWindow(QWidget):
 
         # 公司印章生成器 (借鉴 company-stamp 设计思路)
         try:
+            from ui.stamp_panel import StampPanel
             self.stamp_tab = StampPanel()
             self.center_tabs.addTab(self.stamp_tab, "🔐 印章生成")
         except Exception as e:
@@ -383,6 +404,7 @@ class MainWindow(QWidget):
 
         # 中继链 - 分布式积分账本 (无币无挖矿类区块链)
         try:
+            from ui.relay_chain_panel import RelayChainPanel
             self.relay_chain_tab = RelayChainPanel()
             self.center_tabs.addTab(self.relay_chain_tab, "⛓️ 中继链")
         except Exception as e:
@@ -391,6 +413,7 @@ class MainWindow(QWidget):
 
         # 🌐 P2P 去中心化更新系统 (抗审查 + 高可用 + 区块链思想)
         try:
+            from ui.decentralized_update_panel import DecentralizedUpdatePanel
             self.update_tab = DecentralizedUpdatePanel()
             self.center_tabs.addTab(self.update_tab, "🌐 P2P更新")
         except Exception as e:
@@ -493,6 +516,7 @@ class MainWindow(QWidget):
         # 🏛️ 社区共建者权益中心 (积分->权益转换 + 税务合规 + 基金透明)
         # 核心理念：积分永不兑现现金，收益转化为社区发展基金，去金融化
         try:
+            from ui.community_rights_panel import CommunityRightsPanel
             self.community_rights_tab = CommunityRightsPanel()
             self.center_tabs.addTab(self.community_rights_tab, "🏛️ 权益中心")
         except Exception as e:
@@ -501,6 +525,7 @@ class MainWindow(QWidget):
         # 🤖 AI脚本生成器 (自然语言→可执行脚本 + 沙箱执行 + 脚本市场)
         # 核心理念：用户用自然语言描述需求，AI生成可执行脚本
         try:
+            from ui.ai_script_panel import AIScriptPanel
             self.ai_script_tab = AIScriptPanel()
             self.center_tabs.addTab(self.ai_script_tab, "🤖 AI脚本")
         except Exception as e:
@@ -508,6 +533,7 @@ class MainWindow(QWidget):
 
         # V2.0: LAN Chat 面板 (UDP广播发现 + TCP消息传输 + AI自动回复)
         try:
+            from ui.lan_chat_panel import LANChatPanel
             self.lan_chat_tab = LANChatPanel()
             self.center_tabs.addTab(self.lan_chat_tab, "💬 LAN聊天")
         except Exception as e:
@@ -515,6 +541,7 @@ class MainWindow(QWidget):
 
         # V2.0: Smart IDE 面板 (代码编辑器 + AI编程助手 + 调试系统)
         try:
+            from ui.smart_ide_panel import SmartIDEPanel
             self.smart_ide_tab = SmartIDEPanel()
             self.center_tabs.addTab(self.smart_ide_tab, "💻 智能IDE")
         except Exception as e:
@@ -522,6 +549,7 @@ class MainWindow(QWidget):
 
         # V2.0: Game Room 面板 (游戏房间 + 玩家匹配 + 录像截图)
         try:
+            from ui.game_room_panel import GameRoomPanel
             self.game_room_tab = GameRoomPanel()
             self.center_tabs.addTab(self.game_room_tab, "🎮 游戏大厅")
         except Exception as e:

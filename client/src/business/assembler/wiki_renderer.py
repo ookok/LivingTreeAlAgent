@@ -53,7 +53,7 @@ class MarkdownRenderer:
             (r'^- (.*)$', '<li>\1</li>'),
             # 有序列表
             (r'^\d+\. (.*)$', '<li>\1</li>'),
-        }
+        ]
 
     def _render_code_block(self, match) -> str:
         lang = match.group(1) or ""

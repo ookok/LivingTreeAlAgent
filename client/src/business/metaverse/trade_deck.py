@@ -3,13 +3,13 @@
 商品全息投影界面，支持拖拽上架
 """
 
-from PyQt6.QtCore import Qt, QTimer, QPointF, pyqtSignal, QEasingCurve, QPropertyAnimation
+from PyQt6.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSignal, QEasingCurve, QPropertyAnimation
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLabel, QFrame, QPushButton, QScrollArea,
                              QGraphicsView, QGraphicsScene, QGraphicsItem,
-                             QListWidget, QListWidgetItem, QDropEvent)
-from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QLinearGradient, 
-                          QFont, QDragEnterEvent, QPixmap, QImage)
+                             QListWidget, QListWidgetItem)
+from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QLinearGradient,
+                          QFont, QDragEnterEvent, QDropEvent, QPixmap, QImage)
 from PyQt6.QtCore import pyqtProperty
 import math
 import random

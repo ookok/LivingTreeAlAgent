@@ -585,7 +585,7 @@ class FormParser:
         result = " ".join(reversed(text_parts))
         return result[:max_length] if result else ""
 
-    def def _extract_options(self, elem, field_type: FieldType) -> List[Dict[str, str]]:
+    def _extract_options(self, elem, field_type: FieldType) -> List[Dict[str, str]]:
         """提取选项（用于 select/radio/checkbox）"""
         options = []
 

@@ -8,7 +8,7 @@
 🌿 生命之树风格 · 无弹窗组件库 #1
 """
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QSize, QParallelAnimationGroup
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QSize, QParallelAnimationGroup, QEasingCurve
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton,
     QGraphicsOpacityEffect
@@ -119,7 +119,7 @@ class CanopyAlertBand(QWidget):
         """设置动画"""
         self._height_animation = QPropertyAnimation(self, b"maximumHeight")
         self._height_animation.setDuration(300)
-        self._height_animation.setEasingCurve(QPropertyAnimation.EasingCurve.Type.OutCubic)
+        self._height_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         self._opacity_effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._opacity_effect)

@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QGroupBox,
     QFormLayout, QScrollArea, QFrame, QDialog, QListWidget,
     QListWidgetItem, QProgressBar, QSpinBox, QDoubleSpinBox,
-    QCheckBox, QSlider, QBadge
+    QCheckBox, QSlider
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
@@ -154,7 +154,8 @@ class LocalMarketPanel(QWidget):
 
         # 我的商品表格
         self.my_products_table = QTableWidget()
-        self.my_products_table.setColumns([
+        self.my_products_table.setColumnCount(7)
+        self.my_products_table.setHorizontalHeaderLabels([
             "商品ID", "标题", "价格", "分类", "状态", "浏览", "操作"
         ])
         layout.addWidget(self.my_products_table)
@@ -182,7 +183,8 @@ class LocalMarketPanel(QWidget):
 
         # 交易列表
         self.trades_table = QTableWidget()
-        self.trades_table.setColumns([
+        self.trades_table.setColumnCount(7)
+        self.trades_table.setHorizontalHeaderLabels([
             "交易ID", "商品", "对方", "金额", "状态", "时间", "操作"
         ])
         self.trades_table.itemClicked.connect(self._on_trade_clicked)
@@ -232,7 +234,8 @@ class LocalMarketPanel(QWidget):
         layout.addWidget(history_label)
 
         self.rep_history_table = QTableWidget()
-        self.rep_history_table.setColumns(["时间", "事件", "变化", "原因"])
+        self.rep_history_table.setColumnCount(4)
+        self.rep_history_table.setHorizontalHeaderLabels(["时间", "事件", "变化", "原因"])
         layout.addWidget(self.rep_history_table)
 
         return tab

@@ -20,8 +20,17 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QAction, QIcon, QTextCursor, QPalette, QColor, QFont
 )
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
+
+# WebEngine 可选导入
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
+    HAS_WEBENGINE = True
+except ImportError:
+    HAS_WEBENGINE = False
+    QWebEngineView = None
+    QWebEngineSettings = None
+    QWebEnginePage = None
 
 from core.office_preview import (
     PreviewSystem, get_preview_system,
@@ -186,14 +195,20 @@ height:100vh;margin:0;}p{color:#666;font-family:sans-serif;}</style>
 </head><body><p>📝 在左侧编辑器中输入 Markdown...</p></body></html>'''
 
 
-class FilePreviewView(QWebEngineView):
+class FilePreviewView(QWebEngineView if HAS_WEBENGINE else QWidget):
     """文件预览视图 - 支持 HTML/PDF/Office/图片"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
-        self._setup()
+        if HAS_WEBENGINE:
+            super().__init__(parent)
+            self._setup()
+        else:
+            super().__init__(parent)
+            self.setStyleSheet("background:#1e1e1e;")
 
     def _setup(self):
+        if not HAS_WEBENGINE:
+            return
         settings = self.settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)

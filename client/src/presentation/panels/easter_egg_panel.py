@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QPainter, QPixmap, QIcon
-from PyQt6.QtSvg import QSvgWidget
+from PyQt6.QtSvgWidgets import QSvgWidget
 
 import random
 

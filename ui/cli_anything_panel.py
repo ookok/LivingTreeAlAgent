@@ -256,7 +256,8 @@ class CLIAutoGenPanel(QWidget):
 
         # 注册工具表格
         self.registry_table = QTableWidget()
-        self.registry_table.setColumns(["ID", "名称", "描述", "版本", "来源", "状态"])
+        self.registry_table.setColumnCount(6)
+        self.registry_table.setHorizontalHeaderLabels(["ID", "名称", "描述", "版本", "来源", "状态"])
         self.registry_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.registry_table)
 

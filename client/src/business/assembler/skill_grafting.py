@@ -171,7 +171,7 @@ class CodeAnalyzer:
     def _extract_module_name(self, code: str) -> str:
         """提取模块名"""
         if "__name__" in code:
-            match = re.search(r["']__main__["']", code)
+            match = re.search(r"['\"]__main__['\"]", code)
             if match:
                 return "main"
         return "module"

@@ -11,8 +11,9 @@
 
 import re
 from enum import Enum
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime
+from dataclasses import dataclass, field
 
 
 class FormatType(Enum):

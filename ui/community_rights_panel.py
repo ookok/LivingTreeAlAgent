@@ -339,8 +339,7 @@ class CommunityRightsPanel(QWidget):
         except Exception as e:
             self.status_bar.setText(f"初始化失败: {str(e)}")
 
-    @ asyncio.coroutine
-    def _refresh_data(self):
+    async def _refresh_data(self):
         """刷新数据"""
         if not self.manager:
             return

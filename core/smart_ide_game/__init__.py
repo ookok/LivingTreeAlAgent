@@ -397,7 +397,7 @@ def create_smart_ide_game_system(storage_path: str = None) -> SmartIDEGameSystem
 
 def create_game_config(
     name: str,
-    game_type: GameType = GameType.SINGLE_PLAYER,
+    game_type: GameType = GameType.CUSTOM,
     max_players: int = 1
 ) -> GameConfig:
     """创建游戏配置"""

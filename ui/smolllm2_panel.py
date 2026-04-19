@@ -7,7 +7,7 @@ PyQt6 面板用于：
 - 查看路由统计
 - 测试意图分类
 - 管理 L0-L4 集成
-- 模型下载状态
+- 模型下载状态（支持断点续传、进度显示）
 
 Author: Hermes Desktop Team
 """
@@ -235,6 +235,19 @@ class SmolLM2Panel(QWidget):
         self.model_status.setStyleSheet("padding: 8px; background: #f5f5f5; border-radius: 4px;")
         layout.addWidget(self.model_status)
 
+        # 进度条
+        self.download_progress = QProgressBar()
+        self.download_progress.setRange(0, 100)
+        self.download_progress.setValue(0)
+        self.download_progress.setVisible(False)
+        layout.addWidget(self.download_progress)
+
+        # 下载地址显示
+        self.download_url_label = QLabel("")
+        self.download_url_label.setStyleSheet("color: #666; font-size: 11px; padding: 4px;")
+        self.download_url_label.setWordWrap(True)
+        layout.addWidget(self.download_url_label)
+
         layout.addStretch()
         return widget
 
@@ -364,13 +377,146 @@ class SmolLM2Panel(QWidget):
             self.stats_table.setItem(i, 1, QTableWidgetItem(value))
 
     def _on_download(self):
-        """下载模型"""
+        """下载模型（URL路由 + 统一下载中心）"""
         self.download_btn.setEnabled(False)
-        self.model_status.setText("状态: 正在连接 HuggingFace...")
+        self.download_progress.setVisible(True)
+        self.download_progress.setValue(0)
+        self.model_status.setText("状态: 正在分析最优下载路径...")
 
-        # 这里会调用下载器
-        self.model_status.setText("状态: 下载功能需要配置 HF_TOKEN")
-        self.download_btn.setEnabled(True)
+        import threading
+
+        def download_with_url_routing():
+            try:
+                from core.unified_downloader import get_download_center, SourceType
+                from core.url_intelligence import optimize_url
+
+                center = get_download_center()
+                manifest = SMOLLLM2_MANIFEST
+                repo_id = manifest["platforms"]["any"]["repo_id"]
+                filename = manifest["platforms"]["any"]["filename"]
+
+                # 原始 HuggingFace URL
+                original_url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+
+                # ═══════════════════════════════════════════════════════
+                # URL路由：自动选择最优镜像（hf-mirror.com 国内镜像）
+                # 优先使用 optimized_url，只有它和原始URL相同时才认为无更优
+                # ═══════════════════════════════════════════════════════
+                def update_routing_status(text):
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(0, lambda: self.model_status.setText(text))
+
+                update_routing_status("状态: 路由检测中...")
+                opt_result = optimize_url(original_url)
+
+                # 优先使用优化后的URL（已路由到镜像）
+                final_url = opt_result.optimized_url
+                if final_url != original_url:
+                    # 有更优镜像
+                    mirror = opt_result.recommended_mirror
+                    if mirror:
+                        mirror_name = mirror.name
+                        latency = mirror.latency_ms
+                        routing_info = f"✅ 路由成功: {mirror_name} (延迟{latency:.0f}ms)"
+                    else:
+                        mirror_name = "镜像"
+                        routing_info = f"✅ 使用镜像加速"
+                    display_url = f"📥 [{mirror_name}] {final_url}"
+                else:
+                    # 没有更优镜像，检查是否有可用的替代镜像
+                    accessible = [m for m in opt_result.all_mirrors_tested
+                                  if m.status.value in ('accessible', 'slow')]
+                    if accessible:
+                        best = accessible[0]
+                        final_url = best.url
+                        routing_info = f"⚡ 备用镜像: {best.name} ({best.latency_ms:.0f}ms)"
+                        display_url = f"📥 [{best.name}] {final_url}"
+                    else:
+                        final_url = original_url
+                        routing_info = "⚠️ 所有镜像均不可用，使用原始链接"
+                        display_url = f"📥 [原始HF] {original_url}"
+
+                def update_routing_display():
+                    self.download_url_label.setText(display_url)
+                    if opt_result.suggestions:
+                        for s in opt_result.suggestions[:2]:
+                            self.download_url_label.setText(display_url + f"\n💡 {s}")
+                    self.model_status.setText(routing_info)
+
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, update_routing_display)
+
+                # 创建下载任务（使用优化后的URL）
+                task = center.create_task(
+                    url=final_url,
+                    save_path=center.download_dir / filename,
+                    source=SourceType.HUGGINGFACE,
+                    source_info=repo_id,
+                    filename=filename,
+                    progress_callback=self._on_download_progress,
+                    done_callback=self._on_download_done,
+                )
+
+                # 显示连接状态
+                def update_connecting():
+                    self.model_status.setText(f"状态: 正在连接... ({final_url[:50]}...)")
+
+                QTimer.singleShot(0, update_connecting)
+
+                # 启动下载
+                center.start(task.id)
+
+            except Exception as e:
+                def on_error():
+                    self.model_status.setText(f"❌ 路由失败: {str(e)}")
+                    self.download_btn.setEnabled(True)
+                    self.download_progress.setValue(0)
+
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, on_error)
+
+        # 后台执行 URL 路由 + 下载
+        t = threading.Thread(target=download_with_url_routing, daemon=True)
+        t.start()
+
+    def _on_download_progress(self, task):
+        """下载进度回调"""
+        def update_ui():
+            self.download_progress.setValue(int(task.progress))
+            status_parts = [
+                f"下载中: {task.size_str}",
+                f"速度: {task.speed_str}",
+                f"剩余: {task.eta_str}",
+            ]
+            if task.connection_status_text:
+                status_parts.insert(0, f"[{task.connection_status_text}]")
+            self.model_status.setText(" | ".join(status_parts))
+
+            # 更新连接信息
+            if task.response_code:
+                info = task.connection_info
+                if info:
+                    self.download_url_label.setText(f"📥 {task.url}\n🔗 {info}")
+            elif task.connection_error:
+                self.download_url_label.setText(f"❌ 连接错误: {task.connection_error}")
+
+        # 在UI线程更新
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, update_ui)
+
+    def _on_download_done(self, task):
+        """下载完成回调"""
+        def update_ui():
+            self.download_btn.setEnabled(True)
+            if task.status.value == "completed":
+                self.model_status.setText(f"✅ 下载完成: {task.save_path}")
+                self.download_progress.setValue(100)
+            else:
+                self.model_status.setText(f"❌ 下载失败: {task.error or '未知错误'}")
+                self.download_progress.setValue(0)
+
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, update_ui)
 
     def _save_settings(self):
         """保存设置"""

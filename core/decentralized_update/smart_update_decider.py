@@ -38,7 +38,7 @@ from enum import Enum
 class UpdateStrategy(Enum):
     """更新策略"""
     MIRROR_FIRST = "mirror_first"           # 镜像优先 (中国大陆)
-    BACKGROUND_SILENT =background_silent" # 工作时段静默
+    BACKGROUND_SILENT = "background_silent"  # 工作时段静默
     NOTIFY_AND_APPLY = "notify_and_apply" # 立即提示并应用
     SMART_DELAYED = "smart_delayed"        # 智能延迟
     SMALL_FILE_ONLY = "small_file_only"    # 仅小文件 (移动网络)

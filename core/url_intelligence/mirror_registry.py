@@ -115,11 +115,12 @@ class MirrorRegistry:
             is_official=True,
         ))
         
-        # HuggingFace镜像规则
+        # HuggingFace镜像规则 - 完整文件URL（/resolve/main/{filename}）
+        # 注意：使用位置占位符 {0},{1},{2} 因为 apply_rule 支持 positional 替换
         self.register_rule(MirrorRule(
             name="HuggingFace 镜像站",
-            pattern=r"https?://huggingface\.co/([^/\s]+)/([^/\s]+)",
-            replace_pattern="https://hf-mirror.com/{owner}/{repo}",
+            pattern=r"https?://huggingface\.co/([^/\s]+)/([^/\s]+)/resolve/main/([^/\s]+)",
+            replace_pattern="https://hf-mirror.com/{0}/{1}/resolve/main/{2}",
             mirror_type=MirrorType.CONTENT_MIRROR,
             sync_frequency="每日",
             location="中国",

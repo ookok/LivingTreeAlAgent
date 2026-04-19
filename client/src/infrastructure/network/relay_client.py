@@ -549,8 +549,15 @@ def create_relay_client(
         return SyncRelayClient(server_url, client_name=client_name, client_type=client_type, **kwargs)
 
 
+# 默认 RelayClient 别名
+if PYQT6_AVAILABLE:
+    RelayClient = PyQt6RelayClient
+else:
+    RelayClient = SyncRelayClient
+
 # 导出
 __all__ = [
     'RelayServer', 'RelayClientBase', 'AsyncRelayClient', 'SyncRelayClient',
-    'PyQt6RelayClient', 'create_relay_client', 'ClientType', 'ConnectionState', 'Message'
+    'PyQt6RelayClient', 'create_relay_client', 'ClientType', 'ConnectionState', 'Message',
+    'RelayClient'
 ]

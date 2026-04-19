@@ -24,6 +24,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any, Callable
+from enum import Enum
 
 from .models import (
     NodeInfo, ChunkInfo, UpdateTask, UpdateStage,

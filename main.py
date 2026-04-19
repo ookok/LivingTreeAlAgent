@@ -19,7 +19,7 @@ sys.path.insert(0, str(_root))
 
 def run_client():
     """启动桌面客户端"""
-    print("🚀 启动 LivingTreeAI 客户端...")
+    print(">> 启动 LivingTreeAI 客户端...")
     print("   生命之树正在苏醒，根系伸向远方...")
 
     from PyQt6.QtWidgets import QApplication

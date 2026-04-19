@@ -11,6 +11,10 @@ V2.0 新增：MCP管理、Skill市场、任务进度、数字分身、LAN聊天
 - 晨露提示卡 (DewdropHintCard): 上下文提示
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
@@ -22,7 +26,7 @@ from PyQt6.QtGui import QKeyEvent, QAction, QIcon
 # 基础设施层导入（工程化路径）
 from client.src.infrastructure.config.config import AppConfig, load_config, save_config
 from client.src.infrastructure.model.ollama_client import OllamaClient
-from client.src.infrastructure.database.connection import SessionDB
+from core.session_db import SessionDB
 from client.src.infrastructure.network.relay_client import RelayClient
 from client.src.infrastructure.network.lan_discovery import LANDiscovery
 
@@ -30,6 +34,7 @@ from client.src.infrastructure.network.lan_discovery import LANDiscovery
 from client.src.business.assembler.assembler_panel import AssemblerPanel
 from client.src.business.metaverse.metaverse_panel import MetaversePanel
 from client.src.business.home.home_panel import HomePanel
+from client.src.business.task import get_task_progress_manager
 
 # 表现层组件
 from client.src.presentation.theme import DARK_QSS
@@ -40,6 +45,7 @@ from client.src.presentation.components import (
     SoilStatusRail,
     DewdropHintCard,
 )
+from client.src.presentation.panels.layered_ai_config_panel import LayeredAIConfigPanel
 
 
 class MainWindow(QWidget):
@@ -72,19 +78,27 @@ class MainWindow(QWidget):
         # 🌿 生命之树 UI 管理器
         self._ltui: LivingTreeUI = None
 
+        # ── 最小化启动：只做UI构建，立刻显示 ───────────────────
         self._build_ui()
         self._init_living_tree_ui()
-        self._init_agent()
-        self._init_system_brain()
-        self._init_smart_config()
-        self._init_task_progress()
-        self._init_search()
-        self._init_sessions()
-        self._init_auth()
-        self._setup_menu()
 
+        # 显示窗口（让用户立刻看到界面）
         self.setWindowTitle("Hermes Desktop v2.0 🌿")
         self.resize(config.window_width, config.window_height)
+        self.show()
+
+        # ── 延迟后台初始化 ────────────────────────────────────
+        # 使用 QTimer.singleShot(0, ...) 让窗口先渲染，后台加载
+        from PyQt6.QtCore import QTimer
+
+        # 阶段1: 立刻后台执行（窗口渲染后立即）
+        QTimer.singleShot(0, self._deferred_init_stage1)
+
+        # 阶段2: 1秒后执行（可选模块）
+        QTimer.singleShot(1000, self._deferred_init_stage2)
+
+        # 阶段3: 3秒后执行（重量级模块）
+        QTimer.singleShot(3000, self._deferred_init_stage3)
 
     # ── UI ─────────────────────────────────────────────────────
 
@@ -454,6 +468,88 @@ class MainWindow(QWidget):
         """更新智能配置状态"""
         self._show_toast("智能配置已就绪", "success")
 
+    # ══════════════════════════════════════════════════════════════════════
+    # 延迟初始化方法（分阶段后台执行，不阻塞UI）
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _deferred_init_stage1(self):
+        """
+        阶段1：核心功能（立刻执行，窗口渲染后立即）
+        - Agent/Ollama连接检测
+        - 会话加载
+        - 状态栏初始化
+        """
+        import threading
+
+        # Ollama连接检测（后台线程）
+        def check_ollama():
+            try:
+                self.ollama_client = OllamaClient(self.config.ollama)
+                online = self.ollama_client.ping()
+                if online:
+                    v = self.ollama_client.version()
+                    m = self.config.ollama.default_model or "未选模型"
+                    info = f"Ollama {v} — {m}"
+                    QTimer.singleShot(0, lambda: self._ltui.status.show_info(info))
+                else:
+                    QTimer.singleShot(0, lambda: self._ltui.status.show_info("⚠ Ollama 未运行"))
+            except Exception as e:
+                logger.warning(f"Ollama初始化跳过: {e}")
+
+        t = threading.Thread(target=check_ollama, daemon=True)
+        t.start()
+
+        # 会话加载（同步但很快，放到后台避免阻塞）
+        try:
+            db = SessionDB()
+            sessions = db.list_sessions(limit=50)
+            QTimer.singleShot(0, lambda: self._load_sessions_ui(sessions))
+        except Exception as e:
+            logger.warning(f"会话加载失败: {e}")
+
+    def _load_sessions_ui(self, sessions):
+        """在UI线程加载会话列表"""
+        for s in sessions:
+            self.session_panel.add_session(s.id, s.title)
+
+    def _deferred_init_stage2(self):
+        """
+        阶段2：重要功能（1秒后执行）
+        - 搜索工具初始化
+        - 任务进度管理器
+        """
+        try:
+            self._init_search()
+        except Exception as e:
+            logger.warning(f"搜索初始化失败: {e}")
+
+        try:
+            self._init_task_progress()
+        except Exception as e:
+            logger.warning(f"任务进度初始化失败: {e}")
+
+    def _deferred_init_stage3(self):
+        """
+        阶段3：重量级功能（3秒后执行）
+        - 系统大脑
+        - 智能配置
+        - 认证
+        """
+        try:
+            self._init_system_brain()
+        except Exception as e:
+            logger.warning(f"系统大脑初始化失败: {e}")
+
+        try:
+            self._init_smart_config()
+        except Exception as e:
+            logger.warning(f"智能配置初始化失败: {e}")
+
+        try:
+            self._init_auth()
+        except Exception as e:
+            logger.warning(f"认证初始化失败: {e}")
+
     # ── 任务进度 ─────────────────────────────────────────────────
 
     def _init_task_progress(self):
@@ -511,6 +607,22 @@ class MainWindow(QWidget):
         db = SessionDB()
         for s in db.list_sessions(limit=50):
             self.session_panel.add_session(s.id, s.title)
+
+    # ── 用户认证 ─────────────────────────────────────────────────
+
+    def _init_auth(self):
+        """初始化认证系统（V2.0 简化版：跳过登录流程）"""
+        # V2.0 简化：不需要登录，直接可用
+        # 如果后续需要认证功能，在此添加 LoginDialog 相关逻辑
+        pass
+
+    def _on_user_login(self, user_id: str):
+        """用户登录回调"""
+        self._show_toast(f"用户已登录", "success")
+
+    def _on_user_logout(self):
+        """用户登出回调"""
+        self._show_toast("已退出登录", "info")
 
     def _new_chat(self):
         self.chat_panel.clear_messages()
@@ -663,7 +775,26 @@ class MainWindow(QWidget):
         for i in range(self.center_tabs.count()):
             if self.center_tabs.tabText(i) == "⚙️ 设置":
                 return i
-        return -1
+
+        # 创建设置标签页
+        from PyQt6.QtWidgets import QScrollArea
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # 四层AI配置面板
+        self.layered_ai_config_panel = LayeredAIConfigPanel(self.config)
+        self.layered_ai_config_panel.config_changed.connect(self._on_layered_ai_config_changed)
+
+        scroll.setWidget(self.layered_ai_config_panel)
+
+        idx = self.center_tabs.addTab(scroll, "⚙️ 设置")
+        return idx
+
+    def _on_layered_ai_config_changed(self, config: dict):
+        """四层AI配置变更回调"""
+        self._show_toast("四层AI模型配置已更新", "success")
 
     # ── 模型切换 ─────────────────────────────────────────────────
 

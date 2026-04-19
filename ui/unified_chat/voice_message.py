@@ -20,7 +20,7 @@ from typing import Optional, Callable
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
     QLabel, QSlider, QMenu, QFileDialog, QMessageBox,
-    QGraphicsView, QGraphicsScene, QGraphicsRectItem
+    QGraphicsView, QGraphicsScene, QGraphicsRectItem, QFrame
 )
 from PyQt6.QtCore import (
     Qt, QSize, QTimer, QUrl, QFileInfo,
@@ -28,9 +28,15 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QAction
 from PyQt6.QtMultimedia import (
-    QMediaPlayer, QAudioOutput, QAudioRecorder,
+    QMediaPlayer, QAudioOutput,
     QMediaDevices
 )
+
+# QAudioRecorder 可能不可用
+try:
+    from PyQt6.QtMultimedia import QAudioRecorder
+except ImportError:
+    QAudioRecorder = None
 
 # 全局音频设备检查
 _has_audio_input = False

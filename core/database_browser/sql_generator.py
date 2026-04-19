@@ -232,7 +232,8 @@ class SQLGenerator:
         if db_type == DatabaseType.MYSQL:
             return f"INSERT INTO `{table}` ({columns}) VALUES ({placeholders});"
         else:
-            return f'INSERT INTO "{table}" ({columns}) VALUES ({", ".join(["'" + v.replace("'", "''") + "'" for v in values])});'
+            values_sql = ", ".join(["'" + v.replace("'", "''") + "'" for v in values])
+            return f'INSERT INTO "{table}" ({columns}) VALUES ({values_sql});'
 
     def generate_update(
         self,

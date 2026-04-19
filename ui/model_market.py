@@ -185,17 +185,30 @@ class ModelMarketPanel(QWidget):
         self.dl_list.insertItem(0, dl_item)
 
     def _on_progress(self, task: DownloadTask):
+        """进度回调（可能在后台线程触发，必须用 QTimer 转到主线程）"""
         self._active_tasks[task.id] = task
-        for i in range(self.dl_list.count()):
-            it = self.dl_list.item(i)
-            if it.data(Qt.ItemDataRole.UserRole) == task.id:
-                if task.status == "completed":
-                    it.setText(f"✅ {task.file_name} — 完成！")
-                elif task.status == "error":
-                    it.setText(f"❌ {task.file_name} — {task.error[:40]}")
-                else:
-                    it.setText(f"⬇️ {task.file_name} — {task.progress_str}")
-                break
+
+        # 捕获关键数据，避免后台线程访问 UI 对象
+        task_id = task.id
+        file_name = task.file_name
+        status = task.status
+        error = task.error
+        progress_str = task.progress_str
+
+        def update_ui():
+            for i in range(self.dl_list.count()):
+                it = self.dl_list.item(i)
+                if it.data(Qt.ItemDataRole.UserRole) == task_id:
+                    if status == "completed":
+                        it.setText(f"✅ {file_name} — 完成！")
+                    elif status == "error":
+                        it.setText(f"❌ {file_name} — {error[:40] if error else '未知错误'}")
+                    else:
+                        it.setText(f"⬇️ {file_name} — {progress_str}")
+                    break
+
+        # 确保 UI 更新在主线程执行
+        QTimer.singleShot(0, update_ui)
 
     @staticmethod
     def _fmt_size(size: int) -> str:

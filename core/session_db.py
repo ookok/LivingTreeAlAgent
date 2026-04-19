@@ -27,6 +27,17 @@ class SessionInfo:
     message_count: int = 0
     tool_call_count: int = 0
     end_reason: str | None = None
+    parent_session_id: str | None = None
+    system_prompt: str = ''
+    source: str = 'desktop'
+    # v5 迁移
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    # v6 迁移
+    model_config: str = '{}'
+    billing_provider: str = ''
+    billing_base_url: str = ''
 
 
 @dataclass
@@ -82,6 +93,16 @@ class SessionDB:
             self._local.conn.execute("PRAGMA synchronous=NORMAL")
             self._local.conn.execute("PRAGMA foreign_keys=ON")
         return self._local.conn
+
+    def _add_column_if_not_exists(self, conn: sqlite3.Connection, table: str, column: str, col_type: str):
+        """安全地添加列（如果不存在）"""
+        try:
+            cursor = conn.execute(f"PRAGMA table_info({table})")
+            existing_columns = [row[1] for row in cursor.fetchall()]
+            if column not in existing_columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+        except Exception:
+            pass
 
     def _init_db(self):
         """初始化数据库"""
@@ -147,29 +168,25 @@ class SessionDB:
         """)
 
     def _migrate_v2(self, conn: sqlite3.Connection):
-        conn.execute("ALTER TABLE messages ADD COLUMN finish_reason TEXT")
+        self._add_column_if_not_exists(conn, "messages", "finish_reason", "TEXT")
 
     def _migrate_v3(self, conn: sqlite3.Connection):
-        conn.execute("ALTER TABLE sessions ADD COLUMN title TEXT")
+        self._add_column_if_not_exists(conn, "sessions", "title", "TEXT")
 
     def _migrate_v4(self, conn: sqlite3.Connection):
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title ON sessions(title)")
 
     def _migrate_v5(self, conn: sqlite3.Connection):
-        conn.executescript("""
-            ALTER TABLE sessions ADD COLUMN input_tokens INTEGER DEFAULT 0;
-            ALTER TABLE sessions ADD COLUMN output_tokens INTEGER DEFAULT 0;
-            ALTER TABLE sessions ADD COLUMN estimated_cost_usd REAL DEFAULT 0;
-        """)
+        self._add_column_if_not_exists(conn, "sessions", "input_tokens", "INTEGER DEFAULT 0")
+        self._add_column_if_not_exists(conn, "sessions", "output_tokens", "INTEGER DEFAULT 0")
+        self._add_column_if_not_exists(conn, "sessions", "estimated_cost_usd", "REAL DEFAULT 0")
 
     def _migrate_v6(self, conn: sqlite3.Connection):
-        conn.executescript("""
-            ALTER TABLE messages ADD COLUMN reasoning TEXT DEFAULT '';
-            ALTER TABLE messages ADD COLUMN reasoning_details TEXT DEFAULT '';
-            ALTER TABLE sessions ADD COLUMN model_config TEXT DEFAULT '{}';
-            ALTER TABLE sessions ADD COLUMN billing_provider TEXT DEFAULT '';
-            ALTER TABLE sessions ADD COLUMN billing_base_url TEXT DEFAULT '';
-        """)
+        self._add_column_if_not_exists(conn, "messages", "reasoning", "TEXT DEFAULT ''")
+        self._add_column_if_not_exists(conn, "messages", "reasoning_details", "TEXT DEFAULT ''")
+        self._add_column_if_not_exists(conn, "sessions", "model_config", "TEXT DEFAULT '{}'")
+        self._add_column_if_not_exists(conn, "sessions", "billing_provider", "TEXT DEFAULT ''")
+        self._add_column_if_not_exists(conn, "sessions", "billing_base_url", "TEXT DEFAULT ''")
         # FTS5 虚拟表
         conn.executescript("""
             CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(

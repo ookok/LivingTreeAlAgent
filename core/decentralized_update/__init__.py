@@ -67,7 +67,7 @@ __version__ = "1.0.0"
 from .models import (
     # 枚举
     NodeState, UpdateStage, MessageType, ReputationLevel,
-    UpdateStrategy, SignatureType, VerificationStatus, ChunkState,
+    UpdateStrategy, SignatureType,
     # 数据类
     VersionInfo, NodeInfo, ChunkInfo, UpdateManifest,
     EndorsementSignature, UpdateTask, PropagationRecord,

@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Any, Callable
+from typing import Dict, List, Optional, Set, Any, Callable, Tuple
 from enum import Enum
 
 from .models import (

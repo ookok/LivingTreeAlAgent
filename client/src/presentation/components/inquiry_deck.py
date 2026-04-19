@@ -8,7 +8,7 @@
 🌿 生命之树风格 · 无弹窗组件库 #2
 """
 
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtSignal, QRect
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtSignal, QRect, QEasingCurve
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QRadioButton, QButtonGroup,
@@ -180,7 +180,7 @@ class RootInquiryDeck(QWidget):
         """设置滑入动画"""
         self._slide_animation = QPropertyAnimation(self, b"geometry")
         self._slide_animation.setDuration(250)
-        self._slide_animation.setEasingCurve(QPropertyAnimation.EasingCurve.Type.OutCubic)
+        self._slide_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def _clear_options(self):
         """清除选项"""

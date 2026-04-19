@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QPainter, QLinearGradient, QGradient
+from typing import Dict, List
 
 try:
     from ...business.input_memory import (

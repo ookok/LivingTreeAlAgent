@@ -143,6 +143,7 @@ class PersonaMemory:
         self._conn.execute(
             "INSERT INTO milestones (milestone_type, title, description, timestamp, dao_type, metadata) VALUES (?, ?, ?, ?, ?, ?)",
             (milestone_type, title, description, time.time(), dao_type, json.dumps(metadata or {}))
+        )
         self._conn.commit()
 
     def add_growth_log(self, dao_type: str, action_type: str, amount: float, note: str = ""):

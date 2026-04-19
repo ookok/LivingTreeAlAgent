@@ -28,6 +28,7 @@ class RuleEngine:
         self.trie_root = TrieNode()
         self.regex_cache: Dict[str, re.Pattern] = {}
         self.match_stats: Dict[str, int] = defaultdict(int)
+        self._sensitive_words_list: List[SensitiveWord] = []  # 敏感词列表
         self._init_builtin_words()
         self._build_ac_automaton()
     
@@ -46,7 +47,7 @@ class RuleEngine:
         for word, category, level in builtin_words:
             self.add_sensitive_word(word, category, level)
     
-    def add_sensitive_word(self, word: str, category: str = "default", 
+    def add_sensitive_word(self, word: str, category: str = "default",
                           alert_level: AlertLevel = AlertLevel.LOW):
         """添加敏感词到Trie树"""
         node = self.trie_root
@@ -56,6 +57,15 @@ class RuleEngine:
             node = node.children[char]
         node.is_end = True
         node.word = SensitiveWord(word=word, category=category, alert_level=alert_level)
+        # 同时添加到列表
+        if word not in [w.word for w in self._sensitive_words_list]:
+            self._sensitive_words_list.append(
+                SensitiveWord(word=word, category=category, alert_level=alert_level)
+            )
+
+    def get_sensitive_words(self) -> List[SensitiveWord]:
+        """获取所有敏感词列表"""
+        return list(self._sensitive_words_list)
     
     def _build_ac_automaton(self):
         """构建AC自动机(用于高效多模式匹配)"""

@@ -11,7 +11,7 @@
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QSize, pyqtSignal, QRect
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton,
-    QGraphicsOpacityEffect, QApplication
+    QGraphicsOpacityEffect, QApplication, QFrame
 )
 from PyQt6.QtGui import QColor, QPainter, QBrush, QPen
 

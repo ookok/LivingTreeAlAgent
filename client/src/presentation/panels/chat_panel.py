@@ -199,6 +199,7 @@ class ChatPanel(QWidget):
     send_requested     = pyqtSignal(str)
     stop_requested     = pyqtSignal()
     approval_responded = pyqtSignal(str, bool)
+    switch_to_writing  = pyqtSignal(str)  # 切换到写作模式
 
     def __init__(self, parent=None):
         super().__init__(parent)

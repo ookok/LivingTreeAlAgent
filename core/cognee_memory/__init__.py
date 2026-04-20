@@ -1,9 +1,14 @@
 """
-Cognee 记忆适配器
-Cognify Your AI: 6行代码实现记忆增强
+Cognee Memory 记忆系统
+
+完整的知识引擎实现：
+- 向量嵌入（sentence-transformers）
+- 多模态数据摄入
+- RAG 管道
+- 知识图谱
+- 记忆 API（remember/recall/forget/improve）
 
 借鉴 https://github.com/topoteretes/cognee
-实现 remember/recall/forget/improve API
 """
 
 import json
@@ -15,6 +20,36 @@ from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+import asyncio
+
+# 导入子模块
+from .embedding import (
+    EmbeddingEngine,
+    EmbeddingConfig,
+    VectorStore,
+    SemanticSearch,
+    get_embedding_engine,
+    get_semantic_search,
+)
+
+from .multimodal_ingestion import (
+    MultimodalIngester,
+    IngestionConfig,
+    DataItem,
+    ChunkProcessor,
+    get_multimodal_ingester,
+)
+
+from .rag_pipeline import (
+    RAGPipeline,
+    RAGConfig,
+    RAGContext,
+    KnowledgeGraph,
+    RetrievalStrategy,
+    RetrievalResult,
+    CogneeRAGAdapter,
+    get_cognee_rag,
+)
 
 
 class MemoryType(Enum):
@@ -33,7 +68,7 @@ class MemoryItem:
     session_id: str = ""
     entities: List[str] = field(default_factory=list)
     relations: List[Dict[str, str]] = field(default_factory=list)
-    embedding: str = ""  # 简化：用内容hash代替向量
+    embedding: str = ""  # 向量哈希
     quality_score: float = 1.0
     access_count: int = 0
     last_access: float = 0
@@ -55,7 +90,6 @@ class CogneeDatabase:
         conn = sqlite3.connect(str(self.db_path))
         try:
             conn.executescript("""
-                -- 记忆表
                 CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY,
                     content TEXT NOT NULL,
@@ -71,7 +105,6 @@ class CogneeDatabase:
                     metadata TEXT DEFAULT '{}'
                 );
 
-                -- 实体表
                 CREATE TABLE IF NOT EXISTS entities (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -82,7 +115,6 @@ class CogneeDatabase:
                     created_at REAL DEFAULT 0
                 );
 
-                -- 关系表
                 CREATE TABLE IF NOT EXISTS relations (
                     id TEXT PRIMARY KEY,
                     source_id TEXT NOT NULL,
@@ -93,7 +125,6 @@ class CogneeDatabase:
                     created_at REAL DEFAULT 0
                 );
 
-                -- 反馈表
                 CREATE TABLE IF NOT EXISTS feedback (
                     id TEXT PRIMARY KEY,
                     memory_id TEXT NOT NULL,
@@ -103,7 +134,6 @@ class CogneeDatabase:
                     created_at REAL DEFAULT 0
                 );
 
-                -- 索引
                 CREATE INDEX IF NOT EXISTS idx_memory_type ON memories(memory_type);
                 CREATE INDEX IF NOT EXISTS idx_memory_session ON memories(session_id);
                 CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name);
@@ -117,8 +147,6 @@ class CogneeDatabase:
         """生成唯一ID"""
         raw = "|".join(str(p) for p in parts)
         return hashlib.md5(raw.encode()).hexdigest()[:16]
-
-    # === 记忆操作 ===
 
     def save_memory(self, memory: MemoryItem) -> str:
         """保存记忆"""
@@ -218,18 +246,6 @@ class CogneeDatabase:
             finally:
                 conn.close()
 
-    def delete_by_session(self, session_id: str):
-        """删除会话记忆"""
-        with self._lock:
-            conn = sqlite3.connect(str(self.db_path))
-            try:
-                conn.execute("DELETE FROM memories WHERE session_id = ?", (session_id,))
-                conn.commit()
-            finally:
-                conn.close()
-
-    # === 实体操作 ===
-
     def save_entity(self, name: str, entity_type: str = "", description: str = "") -> str:
         """保存实体"""
         entity_id = self._generate_id(name, entity_type)
@@ -252,7 +268,6 @@ class CogneeDatabase:
         with self._lock:
             conn = sqlite3.connect(str(self.db_path))
             try:
-                # 获取现有memory_ids
                 row = conn.execute(
                     "SELECT memory_ids FROM entities WHERE id = ?", (entity_id,)
                 ).fetchone()
@@ -269,8 +284,6 @@ class CogneeDatabase:
             finally:
                 conn.close()
 
-    # === 反馈操作 ===
-
     def add_feedback(self, memory_id: str, feedback_type: str, score_delta: float):
         """添加反馈"""
         feedback_id = self._generate_id(memory_id, feedback_type, str(time.time()))
@@ -282,7 +295,6 @@ class CogneeDatabase:
                     VALUES (?, ?, ?, ?, ?)
                 """, (feedback_id, memory_id, feedback_type, score_delta, time.time()))
 
-                # 更新记忆质量
                 conn.execute("""
                     UPDATE memories
                     SET quality_score = MAX(0.0, MIN(1.0, quality_score + ?))
@@ -291,8 +303,6 @@ class CogneeDatabase:
                 conn.commit()
             finally:
                 conn.close()
-
-    # === 辅助方法 ===
 
     def _row_to_memory(self, row: tuple) -> MemoryItem:
         return MemoryItem(
@@ -320,9 +330,6 @@ class CogneeDatabase:
                     "permanent_memories": conn.execute(
                         "SELECT COUNT(*) FROM memories WHERE memory_type = 'permanent'"
                     ).fetchone()[0],
-                    "session_memories": conn.execute(
-                        "SELECT COUNT(*) FROM memories WHERE memory_type = 'session'"
-                    ).fetchone()[0],
                     "entities": conn.execute(
                         "SELECT COUNT(*) FROM entities").fetchone()[0],
                     "relations": conn.execute(
@@ -336,17 +343,13 @@ class CogneeMemoryAdapter:
     """
     Cognee 记忆适配器
 
-    6行代码实现记忆增强：
-    await cognee.remember("事实")
-    await cognee.recall("查询")
-    await cognee.forget(dataset="...")
-    await cognee.improve(feedback)
-
-    功能：
-    - remember: 存储到知识图谱
-    - recall: 查询记忆（自动路由）
-    - forget: 删除数据
-    - improve: 持续改进
+    完整 API：
+    await cognee.remember("事实")           # 存储到知识图谱
+    await cognee.recall("查询")             # 查询记忆
+    await cognee.forget(dataset="...")      # 删除数据
+    await cognee.improve(feedback)          # 持续改进
+    await cognee.add_knowledge(data)         # 添加知识（RAG）
+    await cognee.query(question)            # RAG 查询
     """
 
     def __init__(self, db_path: str | Path = None):
@@ -358,25 +361,22 @@ class CogneeMemoryAdapter:
         self.db = CogneeDatabase(db_path)
         self._default_session = "default"
         self._extractors = []
-
-        # 默认提取器：简单关键词
         self._add_default_extractors()
+
+        # RAG 组件
+        self.rag = get_cognee_rag()
 
     def _add_default_extractors(self):
         """添加默认提取器"""
         import re
 
         def extract_entities(text: str) -> List[str]:
-            """简单实体提取"""
-            # 提取引号内容
             entities = re.findall(r'"([^"]+)"', text)
-            # 提取技术术语
             tech_terms = re.findall(r'\b[A-Z][a-zA-Z]+\b', text)
             entities.extend(tech_terms)
             return list(set(entities))
 
         def extract_relations(text: str) -> List[Dict[str, str]]:
-            """简单关系提取"""
             relations = []
             patterns = [
                 (r'(\w+)是(\w+)', '是'),
@@ -402,12 +402,7 @@ class CogneeMemoryAdapter:
         memory_type: MemoryType = MemoryType.PERMANENT,
         metadata: Dict[str, Any] = None
     ) -> str:
-        """
-        存储到知识图谱
-
-        等同于 cognee.remember()
-        """
-        # 提取实体和关系
+        """存储到知识图谱"""
         entities = []
         relations = []
         for extractor in self._extractors:
@@ -418,24 +413,24 @@ class CogneeMemoryAdapter:
                 elif isinstance(result[0], dict):
                     relations.extend(result)
 
-        # 创建记忆
         memory = MemoryItem(
             content=content,
             memory_type=memory_type,
             session_id=session_id or self._default_session,
-            entities=list(set(entities)),  # 去重
+            entities=list(set(entities)),
             relations=relations,
             embedding=hashlib.md5(content.encode()).hexdigest()[:32],
             metadata=metadata or {}
         )
 
-        # 保存
         memory_id = self.db.save_memory(memory)
 
-        # 关联实体
         for entity_name in memory.entities:
             self.db.save_entity(entity_name)
             self.db.link_memory_to_entity(memory_id, entity_name)
+
+        # 同时添加到 RAG
+        asyncio.create_task(self.rag.add_knowledge(content, "text"))
 
         return memory_id
 
@@ -446,13 +441,7 @@ class CogneeMemoryAdapter:
         memory_type: MemoryType = None,
         limit: int = 5
     ) -> List[Dict[str, Any]]:
-        """
-        查询记忆（自动路由）
-
-        等同于 cognee.recall()
-        混合搜索：内容匹配 + 实体关联
-        """
-        # 搜索记忆
+        """查询记忆（混合搜索）"""
         memories = self.db.search_memories(
             query=query,
             memory_type=memory_type,
@@ -460,7 +449,6 @@ class CogneeMemoryAdapter:
             limit=limit
         )
 
-        # 更新访问统计并返回
         results = []
         for memory in memories:
             self.db.increment_access(memory.id)
@@ -473,22 +461,29 @@ class CogneeMemoryAdapter:
                 "relevance": self._calculate_relevance(query, memory)
             })
 
-        # 按相关性排序
         results.sort(key=lambda x: x["relevance"] * x["quality"], reverse=True)
 
+        # 同时从 RAG 检索
+        asyncio.create_task(self._rag_recall(query, limit))
+
         return results
+
+    async def _rag_recall(self, query: str, limit: int):
+        """RAG 检索"""
+        try:
+            await self.rag.query(query)
+        except:
+            pass
 
     def _calculate_relevance(self, query: str, memory: MemoryItem) -> float:
         """计算相关性"""
         query_lower = query.lower()
         content_lower = memory.content.lower()
 
-        # 词匹配
         query_words = set(query_lower.split())
         content_words = set(content_lower.split())
         word_match = len(query_words & content_words) / max(len(query_words), 1)
 
-        # 实体匹配
         entity_match = 0
         for entity in memory.entities:
             if entity.lower() in query_lower:
@@ -498,28 +493,36 @@ class CogneeMemoryAdapter:
         return 0.6 * word_match + 0.4 * entity_match
 
     def forget(self, memory_id: str = None, session_id: str = None):
-        """
-        删除数据
-
-        等同于 cognee.forget()
-        """
+        """删除数据"""
         if memory_id:
             self.db.delete_memory(memory_id)
         elif session_id:
             self.db.delete_by_session(session_id)
 
     def improve(self, memory_id: str, is_helpful: bool, note: str = ""):
-        """
-        持续改进
-
-        等同于 cognee.improve()
-        """
+        """持续改进"""
         score_delta = 0.1 if is_helpful else -0.1
         self.db.add_feedback(
             memory_id=memory_id,
             feedback_type="helpfulness",
             score_delta=score_delta
         )
+
+    async def add_knowledge(
+        self,
+        data: str,
+        data_type: str = "text"
+    ) -> bool:
+        """添加知识（RAG）"""
+        return await self.rag.add_knowledge(data, data_type)
+
+    async def query(
+        self,
+        question: str,
+        use_rag: bool = True
+    ) -> Dict[str, Any]:
+        """RAG 查询"""
+        return await self.rag.query(question, use_rag)
 
     def get_session_context(self, session_id: str = None, limit: int = 10) -> List[str]:
         """获取会话上下文"""
@@ -533,15 +536,20 @@ class CogneeMemoryAdapter:
 
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
-        return self.db.get_stats()
+        db_stats = self.db.get_stats()
+        rag_stats = self.rag.get_stats()
+        return {
+            **db_stats,
+            "rag": rag_stats
+        }
 
 
-# 单例
+# 全局实例
 _cognee_adapter: Optional[CogneeMemoryAdapter] = None
 
 
 def get_cognee_memory() -> CogneeMemoryAdapter:
-    """获取 Cognee 记忆适配器单例"""
+    """获取 Cognee 记忆适配器"""
     global _cognee_adapter
     if _cognee_adapter is None:
         _cognee_adapter = CogneeMemoryAdapter()
@@ -567,3 +575,54 @@ async def forget(memory_id: str = None, session_id: str = None):
 async def improve(memory_id: str, is_helpful: bool, note: str = ""):
     """improve API"""
     get_cognee_memory().improve(memory_id, is_helpful, note)
+
+
+async def add_knowledge(data: str, data_type: str = "text") -> bool:
+    """添加知识"""
+    return await get_cognee_memory().add_knowledge(data, data_type)
+
+
+async def query(question: str, use_rag: bool = True) -> Dict[str, Any]:
+    """RAG 查询"""
+    return await get_cognee_memory().query(question, use_rag)
+
+
+__all__ = [
+    # 子模块
+    "EmbeddingEngine",
+    "EmbeddingConfig",
+    "VectorStore",
+    "SemanticSearch",
+    "get_embedding_engine",
+    "get_semantic_search",
+
+    "MultimodalIngester",
+    "IngestionConfig",
+    "DataItem",
+    "ChunkProcessor",
+    "get_multimodal_ingester",
+
+    "RAGPipeline",
+    "RAGConfig",
+    "RAGContext",
+    "KnowledgeGraph",
+    "RetrievalStrategy",
+    "RetrievalResult",
+    "CogneeRAGAdapter",
+    "get_cognee_rag",
+
+    # 核心
+    "CogneeDatabase",
+    "CogneeMemoryAdapter",
+    "MemoryItem",
+    "MemoryType",
+    "get_cognee_memory",
+
+    # API
+    "remember",
+    "recall",
+    "forget",
+    "improve",
+    "add_knowledge",
+    "query",
+]

@@ -20,6 +20,7 @@ from typing import Any, Callable, Optional
 # 导入相关模块
 from ..internal_mail import MailManager
 from ..standalone import get_runtime, StandaloneRuntime
+from .browser_use_adapter import create_browser_use_adapter
 
 
 class ProtocolType(Enum):
@@ -164,6 +165,9 @@ class BrowserGateway:
 
         # 爬虫调度器
         self._crawler_dispatcher = None
+        
+        # browser-use 适配器
+        self._browser_use_adapter = create_browser_use_adapter(runtime=runtime)
 
         # 初始化内置协议
         self._init_builtin_protocols()
@@ -203,6 +207,14 @@ class BrowserGateway:
 
         # 获取运行时信息
         self.rpc.register_handler("getRuntimeInfo", self._rpc_get_runtime_info)
+        
+        # browser-use 相关方法
+        self.rpc.register_handler("browserUseExecute", self._rpc_browser_use_execute)
+        self.rpc.register_handler("browserUseNavigate", self._rpc_browser_use_navigate)
+        self.rpc.register_handler("browserUseExtractContent", self._rpc_browser_use_extract_content)
+        self.rpc.register_handler("browserUseFillForm", self._rpc_browser_use_fill_form)
+        self.rpc.register_handler("browserUseSearch", self._rpc_browser_use_search)
+        self.rpc.register_handler("browserUseScreenshot", self._rpc_browser_use_screenshot)
 
     # ========== 内置 RPC 方法 ==========
 
@@ -253,6 +265,38 @@ class BrowserGateway:
         if self.runtime:
             return self.runtime.get_runtime_info()
         return {"mode": "offline"}
+    
+    # ========== browser-use 相关 RPC 方法 ==========
+    
+    async def _rpc_browser_use_execute(self, task: str) -> dict[str, Any]:
+        """执行浏览器任务"""
+        result = await self._browser_use_adapter.execute_task(task)
+        return result
+    
+    async def _rpc_browser_use_navigate(self, url: str) -> dict[str, Any]:
+        """导航到指定 URL"""
+        result = await self._browser_use_adapter.navigate(url)
+        return result
+    
+    async def _rpc_browser_use_extract_content(self, url: str, selector: str = None) -> dict[str, Any]:
+        """提取页面内容"""
+        result = await self._browser_use_adapter.extract_content(url, selector)
+        return result
+    
+    async def _rpc_browser_use_fill_form(self, url: str, form_data: dict) -> dict[str, Any]:
+        """填写表单"""
+        result = await self._browser_use_adapter.fill_form(url, form_data)
+        return result
+    
+    async def _rpc_browser_use_search(self, query: str, engine: str = "google") -> dict[str, Any]:
+        """搜索内容"""
+        result = await self._browser_use_adapter.search(query, engine)
+        return result
+    
+    async def _rpc_browser_use_screenshot(self, url: str, path: str = "screenshot.png") -> dict[str, Any]:
+        """截图页面"""
+        result = await self._browser_use_adapter.screenshot(url, path)
+        return result
 
     # ========== 协议处理 ==========
 
@@ -425,8 +469,41 @@ class BrowserGateway:
         }},
 
         // 发布到内部论坛
-        publishToForum: function(title, content, tags) {{
-            return rpc("publishToForum", {{title, content, tags}});
+        publishToForum: function(title, content, tags) {
+            return rpc("publishToForum", {title, content, tags});
+        },
+
+        // browser-use 相关方法
+        browserUse: {
+            // 执行浏览器任务
+            execute: function(task) {
+                return rpc("browserUseExecute", {task});
+            },
+            
+            // 导航到指定 URL
+            navigate: function(url) {
+                return rpc("browserUseNavigate", {url});
+            },
+            
+            // 提取页面内容
+            extractContent: function(url, selector) {
+                return rpc("browserUseExtractContent", {url, selector});
+            },
+            
+            // 填写表单
+            fillForm: function(url, formData) {
+                return rpc("browserUseFillForm", {url, formData});
+            },
+            
+            // 搜索内容
+            search: function(query, engine) {
+                return rpc("browserUseSearch", {query, engine});
+            },
+            
+            // 截图页面
+            screenshot: function(url, path) {
+                return rpc("browserUseScreenshot", {url, path});
+            }
         }}
     }};
 

@@ -18,6 +18,9 @@ import time
 import psutil
 import platform
 from enum import Enum
+
+from .openharness_integration import OpenHarnessEngine, ToolSystem, SkillSystem, PluginSystem, PermissionSystem, MemorySystem
+from ..p2p_cdn import create_p2p_cdn, CDNNode, NodeCapability
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime
@@ -140,6 +143,13 @@ class Task:
             "completed_at": self.completed_at,
         }
 
+    def __lt__(self, other):
+        """实现比较方法，用于优先级队列"""
+        if self.priority != other.priority:
+            return self.priority < other.priority
+        # 当优先级相同时，按创建时间排序
+        return self.created_at < other.created_at
+
 
 class LivingTreeNode:
     """
@@ -188,14 +198,43 @@ class LivingTreeNode:
         # 知识库
         self.knowledge_base: Dict[str, Any] = {}
 
+        # OpenHarness 集成
+        self.openharness_engine = OpenHarnessEngine()
+        self.tool_system = ToolSystem()
+        self.skill_system = SkillSystem()
+        self.plugin_system = PluginSystem()
+        self.permission_system = PermissionSystem()
+        self.memory_system = MemorySystem()
+        
+        # 注册 OpenHarness 工具到引擎
+        for tool_info in self.tool_system.get_all_tools():
+            tool_name = tool_info["name"]
+            tool = self.tool_system.get_tool(tool_name)
+            if tool:
+                self.openharness_engine.register_tool(
+                    name=tool_name,
+                    func=tool.func,
+                    description=tool.description
+                )
+
         # 会话状态
         self.start_time: Optional[float] = None
+        
+        # P2P CDN 集成
+        self.cdn = None
 
     async def start(self):
         """启动节点"""
         self.status = NodeStatus.BOOTING
         self.start_time = time.time()
         self.info.status = NodeStatus.BOOTING
+
+        # 启动 P2P CDN
+        try:
+            self.cdn = await create_p2p_cdn(self.node_id)
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 启动成功")
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 启动失败: {e}")
 
         # 启动心跳
         asyncio.create_task(self._heartbeat_loop())
@@ -216,6 +255,15 @@ class LivingTreeNode:
         """停止节点"""
         self.status = NodeStatus.OFFLINE
         self.info.status = NodeStatus.OFFLINE
+        
+        # 停止 P2P CDN
+        if self.cdn:
+            try:
+                await self.cdn.stop()
+                print(f"[LivingTreeNode:{self.node_id}] P2P CDN 已停止")
+            except Exception as e:
+                print(f"[LivingTreeNode:{self.node_id}] P2P CDN 停止失败: {e}")
+        
         self.save_state()
         print(f"[LivingTreeNode:{self.node_id}] 节点已停止")
 
@@ -294,13 +342,45 @@ class LivingTreeNode:
 
     async def _do_inference(self, task: Task) -> Any:
         """执行推理任务"""
-        # 模拟推理过程
+        # 使用 OpenHarness 引擎处理推理任务
+        input_data = task.input_data
+        prompt = input_data.get("prompt", "")
+        
+        # 定义简单的模型模拟函数
+        async def mock_model(context):
+            """模拟模型响应"""
+            await asyncio.sleep(0.5)
+            if "tool_call" in str(context):
+                return {
+                    "tool_call": {
+                        "name": "read_file",
+                        "args": {
+                            "file_path": "test.txt"
+                        }
+                    }
+                }
+            return f"基于输入: {context['prompt']} 的推理结果"
+        
+        # 执行 Agent Loop
+        result = await self.openharness_engine.run_agent(
+            prompt=prompt,
+            model=mock_model,
+            max_steps=5
+        )
+        
+        # 模拟进度更新
         for i in range(10):
             await asyncio.sleep(0.1)
             task.progress = (i + 1) / 10
             if task.callback:
                 task.callback(task.progress, f"推理中... {int(task.progress*100)}%")
-        return {"answer": "模拟推理结果", "confidence": 0.95}
+        
+        return {
+            "answer": result["response"],
+            "steps": result["steps"],
+            "events": len(result["events"]),
+            "confidence": 0.95
+        }
 
     async def _do_training(self, task: Task) -> Any:
         """执行训练任务"""
@@ -324,6 +404,279 @@ class LivingTreeNode:
             await asyncio.sleep(0.1)
             task.progress = (i + 1) / 5
         return {"coordinated": True, "subtasks": 3}
+    
+    async def execute_tool(self, tool_name: str, **kwargs) -> Any:
+        """执行工具"""
+        # 检查权限
+        try:
+            # 执行权限检查钩子
+            self.permission_system.execute_hook("tool_execution", tool_name=tool_name, args=kwargs)
+            
+            # 执行工具
+            result = await self.tool_system.execute_tool(tool_name, **kwargs)
+            
+            # 执行工具执行后钩子
+            self.permission_system.execute_hook("tool_execution", tool_name=tool_name, result=result)
+            
+            return result
+        except Exception as e:
+            print(f"[ToolExecution] 工具执行失败 {tool_name}: {e}")
+            raise
+    
+    def get_available_tools(self) -> List[Dict[str, Any]]:
+        """获取可用工具"""
+        return self.tool_system.get_all_tools()
+    
+    def load_skill(self, skill_name: str) -> Any:
+        """加载技能"""
+        # 执行技能加载前钩子
+        self.permission_system.execute_hook("skill_loading", skill_name=skill_name)
+        
+        # 加载技能
+        skill = self.skill_system.load_skill(skill_name)
+        
+        # 将技能知识集成到知识库
+        if skill:
+            # 提取技能知识
+            skill_knowledge = {
+                "name": skill.name,
+                "description": skill.description,
+                "knowledge": skill.knowledge,
+                "version": skill.version
+            }
+            
+            # 存储到知识库
+            self.knowledge_base[skill.name] = skill_knowledge
+            
+            # 添加到内存系统
+            self.memory_system.add_memory(
+                content=skill_knowledge,
+                tags=["skill", skill.name, skill.knowledge.get("domain", "")],
+                metadata={"type": "skill", "version": skill.version}
+            )
+        
+        return skill
+    
+    def get_available_skills(self) -> List[Dict[str, Any]]:
+        """获取可用技能"""
+        return self.skill_system.get_all_skills()
+    
+    def get_skill_by_tool(self, tool_name: str) -> List[str]:
+        """根据工具获取使用该工具的技能"""
+        return self.skill_system.get_skill_by_tool(tool_name)
+    
+    def load_plugin(self, plugin_name: str) -> Any:
+        """加载插件"""
+        plugin = self.plugin_system.load_plugin(plugin_name)
+        return plugin
+    
+    def execute_plugin(self, plugin_name: str, **kwargs) -> Any:
+        """执行插件"""
+        return self.plugin_system.execute_plugin(plugin_name, **kwargs)
+    
+    def get_available_plugins(self) -> List[Dict[str, Any]]:
+        """获取可用插件"""
+        return self.plugin_system.get_all_plugins()
+    
+    def check_permission(self, permission_name: str) -> bool:
+        """检查权限"""
+        return self.permission_system.check_permission(permission_name)
+    
+    def grant_permission(self, permission_name: str):
+        """授予权限"""
+        self.permission_system.grant_permission(permission_name)
+    
+    def revoke_permission(self, permission_name: str):
+        """撤销权限"""
+        self.permission_system.revoke_permission(permission_name)
+    
+    def execute_hook(self, event: str, **kwargs) -> List[Any]:
+        """执行钩子"""
+        return self.permission_system.execute_hook(event, **kwargs)
+    
+    def get_all_permissions(self) -> List[Dict[str, Any]]:
+        """获取所有权限"""
+        return self.permission_system.get_all_permissions()
+    
+    def get_all_hooks(self) -> List[Dict[str, Any]]:
+        """获取所有钩子"""
+        return self.permission_system.get_all_hooks()
+    
+    def add_memory(self, content: Any, tags: List[str] = None, metadata: Dict[str, Any] = None) -> str:
+        """添加内存项"""
+        return self.memory_system.add_memory(content, tags, metadata)
+    
+    def get_memory(self, item_id: str) -> Any:
+        """获取内存项"""
+        return self.memory_system.get_memory(item_id)
+    
+    def search_memory(self, query: str, tags: List[str] = None) -> List[Any]:
+        """搜索内存项"""
+        return self.memory_system.search_memory(query, tags)
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """获取内存统计信息"""
+        return self.memory_system.get_memory_stats()
+    
+    # P2P CDN 相关方法
+    async def store_cdn_data(self, data: Dict[str, Any], data_type: str = "json") -> Optional[str]:
+        """存储数据到 P2P CDN
+        
+        Args:
+            data: 要存储的结构化数据
+            data_type: 数据类型
+            
+        Returns:
+            数据 ID，如果存储失败则返回 None
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return None
+        
+        try:
+            data_id = await self.cdn.store_data(data, data_type)
+            print(f"[LivingTreeNode:{self.node_id}] 数据存储到 CDN 成功，数据 ID: {data_id}")
+            return data_id
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] 数据存储到 CDN 失败: {e}")
+            return None
+    
+    async def get_cdn_data(self, data_id: str) -> Optional[Dict[str, Any]]:
+        """从 P2P CDN 获取数据
+        
+        Args:
+            data_id: 数据 ID
+            
+        Returns:
+            获取的数据，如果获取失败则返回 None
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return None
+        
+        try:
+            data = await self.cdn.get_data(data_id)
+            if data:
+                print(f"[LivingTreeNode:{self.node_id}] 从 CDN 获取数据成功")
+            else:
+                print(f"[LivingTreeNode:{self.node_id}] 从 CDN 获取数据失败: 数据不存在")
+            return data
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] 从 CDN 获取数据失败: {e}")
+            return None
+    
+    async def update_cdn_data(self, data_id: str, data: Dict[str, Any]) -> bool:
+        """更新 P2P CDN 中的数据
+        
+        Args:
+            data_id: 数据 ID
+            data: 更新后的数据
+            
+        Returns:
+            是否更新成功
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return False
+        
+        try:
+            result = await self.cdn.update_data(data_id, data)
+            if result:
+                print(f"[LivingTreeNode:{self.node_id}] CDN 数据更新成功")
+            else:
+                print(f"[LivingTreeNode:{self.node_id}] CDN 数据更新失败: 数据不存在")
+            return result
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] CDN 数据更新失败: {e}")
+            return False
+    
+    async def delete_cdn_data(self, data_id: str) -> bool:
+        """从 P2P CDN 删除数据
+        
+        Args:
+            data_id: 数据 ID
+            
+        Returns:
+            是否删除成功
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return False
+        
+        try:
+            result = await self.cdn.delete_data(data_id)
+            if result:
+                print(f"[LivingTreeNode:{self.node_id}] CDN 数据删除成功")
+            else:
+                print(f"[LivingTreeNode:{self.node_id}] CDN 数据删除失败: 数据不存在")
+            return result
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] CDN 数据删除失败: {e}")
+            return False
+    
+    def add_cdn_node(self, node_id: str, storage_available: int, bandwidth: int, uptime: int, reliability: float):
+        """添加 CDN 节点
+        
+        Args:
+            node_id: 节点 ID
+            storage_available: 可用存储空间（字节）
+            bandwidth: 带宽（Mbps）
+            uptime: 在线时间（秒）
+            reliability: 可靠性（0-1）
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return
+        
+        try:
+            node = CDNNode(
+                node_id=node_id,
+                capability=NodeCapability(
+                    storage_available=storage_available,
+                    bandwidth=bandwidth,
+                    uptime=uptime,
+                    reliability=reliability
+                ),
+                last_seen=time.time()
+            )
+            self.cdn.add_node(node)
+            print(f"[LivingTreeNode:{self.node_id}] 添加 CDN 节点成功: {node_id}")
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] 添加 CDN 节点失败: {e}")
+    
+    def remove_cdn_node(self, node_id: str):
+        """移除 CDN 节点
+        
+        Args:
+            node_id: 节点 ID
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return
+        
+        try:
+            self.cdn.remove_node(node_id)
+            print(f"[LivingTreeNode:{self.node_id}] 移除 CDN 节点成功: {node_id}")
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] 移除 CDN 节点失败: {e}")
+    
+    def get_cdn_stats(self) -> Optional[Dict[str, Any]]:
+        """获取 CDN 统计信息
+        
+        Returns:
+            CDN 统计信息，如果 CDN 未初始化则返回 None
+        """
+        if not self.cdn:
+            print(f"[LivingTreeNode:{self.node_id}] P2P CDN 未初始化")
+            return None
+        
+        try:
+            stats = self.cdn.get_stats()
+            print(f"[LivingTreeNode:{self.node_id}] 获取 CDN 统计信息成功")
+            return stats
+        except Exception as e:
+            print(f"[LivingTreeNode:{self.node_id}] 获取 CDN 统计信息失败: {e}")
+            return None
 
     def submit_task(
         self,

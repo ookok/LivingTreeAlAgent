@@ -37,6 +37,14 @@ from .models import (
 )
 from .database import EvolutionDatabase
 from .atom_tools import UnifiedToolHandler, ToolResult, get_tool_schemas
+from core.amphiloop import (
+    AmphiLoopEngine,
+    CheckpointManager,
+    BidirectionalScheduler,
+    DynamicTerminator,
+    IncrementalLearning,
+    get_amphiloop_engine,
+)
 
 
 @dataclass
@@ -57,6 +65,11 @@ class AgentConfig:
     auto_consolidate: bool = True  # 自动固化
     consolidation_min_successes: int = 2  # 最少成功次数才固化
     verbose: bool = True
+    # AmphiLoop 配置
+    enable_amphiloop: bool = True  # 启用 AmphiLoop
+    checkpoint_interval: int = 5   # 检查点间隔
+    rollback_on_failure: bool = True  # 失败时回滚
+    dynamic_termination: bool = True  # 动态终止
 
 
 class SkillEvolutionAgent:
@@ -96,6 +109,13 @@ class SkillEvolutionAgent:
         self._turn = 0
         self._lock = threading.Lock()
 
+        # AmphiLoop 引擎
+        self.amphiloop = get_amphiloop_engine()
+        self._checkpoint_manager = self.amphiloop.checkpoint_manager
+        self._bidirectional_scheduler = self.amphiloop.bidirectional_scheduler
+        self._dynamic_terminator = self.amphiloop.dynamic_terminator
+        self._incremental_learning = self.amphiloop.incremental_learning
+
     def execute_task(
         self,
         task_description: str,
@@ -128,6 +148,9 @@ class SkillEvolutionAgent:
             )
             self._current_task.start_time = time.time()
             self.db.create_task_context(self._current_task)
+
+            # 设置 AmphiLoop 任务 ID
+            self.amphiloop.current_task_id = task_id
 
             # 回调
             if self.on_task_start:
@@ -253,14 +276,30 @@ class SkillEvolutionAgent:
         return StepOutcome(data={"skill_executed": skill.name}, skill_consumed=True)
 
     def _run_autonomous_loop(self):
-        """自主摸索循环（没有可用技能时）"""
+        """自主摸索循环（没有可用技能时）- 集成 AmphiLoop"""
         self._turn = 0
         tool_schemas = get_tool_schemas()
+        success_count = 0
+        total_count = 0
 
         while self._turn < self.config.max_turns:
             self._turn += 1
+            phase = f"turn_{self._turn}"
+
             if self.config.verbose:
                 print(f"[Agent] Turn {self._turn}...")
+
+            # AmphiLoop: 创建检查点
+            if self.config.enable_amphiloop:
+                if self._checkpoint_manager.should_create_checkpoint(self._turn):
+                    self._checkpoint_manager.create_checkpoint(
+                        task_id=self._current_task.task_id,
+                        turn=self._turn,
+                        phase=phase,
+                        state={"turn": self._turn},
+                        messages=self._messages.copy(),
+                        execution_records=self._current_task.execution_records
+                    )
 
             # 每 10 轮重置工具描述，避免上下文膨胀
             if self._turn % 10 == 0 and hasattr(self.llm, 'last_tools'):
@@ -299,6 +338,7 @@ class SkillEvolutionAgent:
                 )
                 self.db.add_execution_record(record)
                 self._current_task.execution_records.append(record)
+                total_count += 1
 
                 # 执行工具
                 result = self.tool_handler.dispatch(tool_name, args)
@@ -315,11 +355,43 @@ class SkillEvolutionAgent:
                     "content": tool_result_content
                 })
 
+                # AmphiLoop: 记录反馈和检查终止
+                if self.config.enable_amphiloop:
+                    score = 1.0 if result.success else 0.0
+                    feedback = self._bidirectional_scheduler.record_feedback(
+                        turn=self._turn,
+                        success=result.success,
+                        score=score,
+                        message=f"Tool {tool_name}: {'success' if result.success else 'failed'}"
+                    )
+
+                    # 检查是否应该终止
+                    if self.config.dynamic_termination and total_count > 0:
+                        should_terminate, reason = self._dynamic_terminator.should_terminate(
+                            turn=self._turn,
+                            success_count=success_count,
+                            total_count=total_count,
+                            current_score=score,
+                            feedback_trend=self._bidirectional_scheduler.get_feedback_trend()
+                        )
+                        if should_terminate:
+                            if self.config.verbose:
+                                print(f"[Agent] 动态终止: {reason}")
+                            break
+
                 # 检查是否成功
-                if not result.success and result.error:
+                if result.success:
+                    success_count += 1
+                elif not result.success and result.error:
                     # 工具执行失败，记录但继续
                     if self.config.verbose:
                         print(f"[Agent] Tool error: {result.error}")
+
+                    # AmphiLoop: 失败时尝试回滚
+                    if self.config.enable_amphiloop and self.config.rollback_on_failure:
+                        checkpoint = self.amphiloop.handle_failure(f"Tool {tool_name} failed: {result.error}")
+                        if checkpoint and self.config.verbose:
+                            print(f"[Agent] 回滚到检查点: {checkpoint.checkpoint_id}")
 
     def _parse_tool_calls(self, response) -> List[Dict[str, Any]]:
         """解析 LLM 响应中的工具调用"""
@@ -364,6 +436,13 @@ class SkillEvolutionAgent:
             "end_time": self._current_task.end_time,
             "duration": self._current_task.duration,
         })
+
+        # AmphiLoop: 增量学习
+        if self.config.enable_amphiloop:
+            self.amphiloop.distill_and_optimize(
+                self._current_task.task_id,
+                self._current_task.execution_records
+            )
 
         # 归档到 L4
         self._archive_session()

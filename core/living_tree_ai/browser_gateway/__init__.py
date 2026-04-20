@@ -47,6 +47,19 @@ from .crawler_dispatcher import (
     CrawlTask,
     create_crawler_dispatcher,
 )
+from .browser_use_adapter import create_browser_use_adapter
+from .extensions import (
+    get_extension_manager,
+    get_plugin_system,
+    get_user_script_manager,
+    ExtensionAPI
+)
+from .config import (
+    get_config_manager,
+    ConfigOption,
+    ConfigType,
+    ConfigValidator
+)
 
 __all__ = [
     # 核心网关
@@ -74,4 +87,16 @@ __all__ = [
     "CrawlerDispatcher",
     "CrawlTask",
     "create_crawler_dispatcher",
+    # 浏览器适配器
+    "create_browser_use_adapter",
+    # 扩展系统
+    "get_extension_manager",
+    "get_plugin_system",
+    "get_user_script_manager",
+    "ExtensionAPI",
+    # 配置管理
+    "get_config_manager",
+    "ConfigOption",
+    "ConfigType",
+    "ConfigValidator",
 ]

@@ -947,6 +947,12 @@ def get_workflow_engine() -> WorkflowEngine:
     return _workflow_engine
 
 
+# 导入节点类型
+from .nodes.browser_use_node import (
+    BrowserUseNode,
+    create_browser_use_node,
+)
+
 # 导入通知服务
 from .notification_service import (
     NotificationTemplateManager,
@@ -969,6 +975,9 @@ __all__ = [
     "WorkflowEngine", "WorkflowDesigner", "WorkflowStore",
     "BUILTIN_WORKFLOWS",
     "get_workflow_store", "get_workflow_engine",
+
+    # 节点类型
+    "BrowserUseNode", "create_browser_use_node",
 
     # 通知服务
     "NotificationTemplateManager", "NotificationTemplate",

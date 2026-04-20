@@ -1596,21 +1596,81 @@ class CreditAccountManager:
 
         if result["success"]:
             account.balance -= amount
-            account.total_consumed += amount
+            tx.status = "confirmed"
 
         self.transactions.append(tx)
 
         return {
             **result,
-            "new_balance": account.balance
+            "transaction": tx.to_dict()
         }
 
-    def get_account_summary(self, owner_id: str) -> dict:
-        """获取账户摘要"""
-        account = None
-        for acc in self.accounts.values():
-            if acc.owner_id == owner_id:
-                account = acc
+
+# ============================================================ 积分经济系统（新增）
+# ============================================================
+
+from .system import (
+    TransactionType, AchievementType, BadgeType,
+    Transaction, Achievement, Badge, UserCredit,
+    CreditEconomySystem, get_credit_system,
+    add_credit, deduct_credit, transfer_credit,
+    get_user_credit, get_user_stats
+)
+
+
+# 全局实例
+_credit_account_manager = None
+_credit_account_manager_lock = asyncio.Lock()
+
+
+async def get_credit_account_manager() -> CreditAccountManager:
+    """获取积分账户管理器"""
+    global _credit_account_manager
+    if _credit_account_manager is None:
+        async with _credit_account_manager_lock:
+            if _credit_account_manager is None:
+                _credit_account_manager = CreditAccountManager()
+    return _credit_account_manager
+
+
+__all__ = [
+    # 核心类
+    "CreditAccount",
+    "CreditTransaction",
+    "CreditPolicy",
+    "StateChannel",
+    "SkillListing",
+    "IdeaNFT",
+    "RevenueToken",
+    "PredictionMarket",
+    "PredictionShare",
+    "DynamicCreditIssuance",
+    "SmartCreditConsumption",
+    "LayeredConsensus",
+    "CreditStateChannel",
+    "ProbabilisticFinality",
+    "DecentralizedSkillMarket",
+    "IdeaNFTMarketplace",
+    "SkillRevenueTokens",
+    "CreditPredictionMarket",
+    "CreditAccountManager",
+    "get_credit_account_manager",
+    # 新增系统
+    "TransactionType",
+    "AchievementType",
+    "BadgeType",
+    "Transaction",
+    "Achievement",
+    "Badge",
+    "UserCredit",
+    "CreditEconomySystem",
+    "get_credit_system",
+    "add_credit",
+    "deduct_credit",
+    "transfer_credit",
+    "get_user_credit",
+    "get_user_stats"
+]
                 break
 
         if not account:

@@ -1,49 +1,77 @@
 """
-Karpathy Skills - 工程师行为准则模块
-源于 Andrej Karpathy 的工程师素养准则，注入到 Hermes Agent 的系统级约束
+Andrej Karpathy Skills 集成
+
+基于 github.com/forrestchang/andrej-karpathy-skills
+提供 Karpathy 编程最佳实践的技能系统
 """
 
-from .rules import (
-    KARPATHY_RULES_TEXT,
-    AmbiguitySignal,
-    AmbiguityDetector,
-    get_detector,
+from .karpathy_engine import (
+    KarpathyEngine,
+    KarpathyConfig,
+    get_karpathy_engine,
 )
-from .prompt_builder import (
-    AgentPromptBuilder,
-    AgentType,
-    build_karpathy_agent_prompt,
-    get_builder,
-    get_code_architect_prompt,
-    get_debug_specialist_prompt,
-    get_code_generator_prompt,
-    get_refactor_prompt,
+
+from .skill_configs import (
+    CodeReviewSkill,
+    TestGeneratorSkill,
+    RefactorAdvisorSkill,
+    DocWriterSkill,
+    PerformanceOptimizerSkill,
+    KarpathySkillRegistry,
+    get_karpathy_registry,
 )
-from .interaction import (
-    AmbiguityResolver,
-    AmbiguityDialog,
-    ResolverContext,
-    get_resolver_context,
+
+from .integration import (
+    KarpathyIntegration,
+    get_karpathy_integration,
+    integrate_karpathy_skills,
+)
+
+from .workflow import (
+    KarpathyWorkflow,
+    KarpathyTask,
+    get_karpathy_workflow,
+)
+
+from .models import (
+    KarpathySkill,
+    SkillConfig,
+    ReviewResult,
+    TestResult,
+    RefactorSuggestion,
+    DocResult,
 )
 
 __all__ = [
-    # Rules
-    "KARPATHY_RULES_TEXT",
-    "AmbiguitySignal",
-    "AmbiguityDetector",
-    "get_detector",
-    # Prompt Builder
-    "AgentPromptBuilder",
-    "AgentType",
-    "build_karpathy_agent_prompt",
-    "get_builder",
-    "get_code_architect_prompt",
-    "get_debug_specialist_prompt",
-    "get_code_generator_prompt",
-    "get_refactor_prompt",
-    # Interaction
-    "AmbiguityResolver",
-    "AmbiguityDialog",
-    "ResolverContext",
-    "get_resolver_context",
+    # 核心引擎
+    "KarpathyEngine",
+    "KarpathyConfig",
+    "get_karpathy_engine",
+    
+    # 技能配置
+    "CodeReviewSkill",
+    "TestGeneratorSkill",
+    "RefactorAdvisorSkill",
+    "DocWriterSkill",
+    "PerformanceOptimizerSkill",
+    "KarpathySkillRegistry",
+    "get_karpathy_registry",
+    
+    # 集成
+    "KarpathyIntegration",
+    "get_karpathy_integration",
+    "integrate_karpathy_skills",
+    
+    # 工作流
+    "KarpathyWorkflow",
+    "KarpathyTask",
+    "get_karpathy_workflow",
+    
+    # 模型
+    "KarpathySkill",
+    "SkillConfig",
+    "ReviewResult",
+    "TestResult",
+    "RefactorSuggestion",
+    "DocResult",
 ]

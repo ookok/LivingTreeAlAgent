@@ -1,0 +1,21 @@
+# Hermes Desktop V2.0 - 顶层依赖
+# 客户端依赖
+PyQt6>=6.6.0
+pyqtdarktheme>=0.1.7
+
+# 模型相关
+ollama>=0.1.0
+llama-cpp-python>=0.2.0
+modelscope>=1.11.0
+
+# 服务端依赖
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.0.0
+apscheduler>=3.10.0
+
+# 工具库
+requests>=2.31.0
+aiohttp>=3.9.0
+pillow>=10.2.0
+numpy>=1.26.0

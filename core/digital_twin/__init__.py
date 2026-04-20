@@ -8,6 +8,7 @@
 1. 实时环境影响动态仿真 - 污染扩散模型
 2. 基于图谱的智能工艺优化 - 参数对比与优化建议
 3. 虚拟试错与What-If分析 - 工艺改造可行性评估
+4. 用户数字分身管理 - 支持出租和参与活动
 
 Author: Hermes Desktop Team
 """
@@ -22,6 +23,38 @@ from datetime import datetime, timedelta
 from enum import Enum
 import threading
 import random
+
+from .user_twin import (
+    TwinStatus, TwinSkillLevel, ActivityType, RentalStatus,
+    UserTwin, Activity, RentalRequest,
+    UserTwinManager, get_user_twin_manager,
+    create_user_twin, get_user_twins
+)
+
+
+# 用户数字分身相关导出
+__all__ = [
+    # 枚举
+    "TwinStatus",
+    "TwinSkillLevel",
+    "ActivityType",
+    "RentalStatus",
+    # 数据类
+    "UserTwin",
+    "Activity",
+    "RentalRequest",
+    # 管理器
+    "UserTwinManager",
+    "get_user_twin_manager",
+    # 工具函数
+    "create_user_twin",
+    "get_user_twins",
+    # 工艺数字孪生体
+    "ProcessDigitalTwin",
+    "DigitalTwinFactory",
+    "get_twin_factory",
+    "create_digital_twin"
+]
 
 logger = logging.getLogger(__name__)
 

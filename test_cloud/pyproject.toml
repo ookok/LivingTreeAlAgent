@@ -1,0 +1,54 @@
+[project]
+name = "living-tree-ai"
+version = "2.0.0"
+description = "LivingTreeAI - 生命之树 AI 桌面应用"
+authors = [
+    {name = "LivingTreeAI Team"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+client = [
+    "PyQt6>=6.6.0",
+    "pyqtdarktheme>=2.1.0",
+    "ollama>=0.1.0",
+    "llama-cpp-python>=0.2.0",
+    "modelscope>=1.11.0",
+]
+server = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.0.0",
+    "apscheduler>=3.10.0",
+]
+app = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.26.0",
+]
+all = [
+    "PyQt6>=6.6.0",
+    "pyqtdarktheme>=2.1.0",
+    "ollama>=0.1.0",
+    "llama-cpp-python>=0.2.0",
+    "modelscope>=1.11.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.0.0",
+    "apscheduler>=3.10.0",
+]
+
+# i18n support
+i18n = [
+    "Babel>=2.13.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["client", "server", "packages"]

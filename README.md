@@ -1,8 +1,8 @@
-# 🌳 Hermes Desktop V2.0
+# LivingTree AI Agent
 
 > *「根系装配园开放，每一位开发者都是嫁接者，将创新的枝条接入生命之树。」*
 
-一个基于 PyQt6 的桌面 AI 编程助手，集成了 GPT4All、NousHermes 和千问（Qwen）系列模型，支持本地 GGUF 模型加载与 MCP 协议扩展。
+一个基于 PyQt6 的智能代理开发平台，集成本次会话实现的所有高级功能。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -10,260 +10,299 @@
 
 ---
 
-## ✨ 核心功能
+## 核心功能
+
+### 🤖 智能代理架构
 
 | 模块 | 说明 |
 |------|------|
-| 🔌 **MCP Server 管理器** | 一键部署和管理 MCP 协议服务器 |
-| 🛠️ **Skill Market** | 技能市场，支持第三方扩展 |
-| 🎭 **Digital Avatar** | 数字Avatar实时对话 |
-| 💬 **LAN Chat** | 内网 P2P 加密通讯 |
-| 💻 **Smart IDE** | AI 增强编程 + GitHub 项目集成 |
-| 🎮 **Game Room** | 休闲游戏中心 |
-| ⛓️ **Knowledge Blockchain** | 去中心化知识链 |
-| 🔐 **Admin License System** | 管理员授权与序列号管理 |
-| 💰 **Credit Economy System** | 积分经济生态 |
-| 🏘️ **Universal Asset Ecosystem** | 通用资产交易生态 |
-| 🎮 **Idle Grade System** | 挂机积分与等级系统 |
-| 🏆 **Achievement System** | 全链路成就系统 |
+| **分层代理架构** | LLM Agent、SequentialAgent、ParallelAgent、LoopAgent 分层设计 |
+| **角色管理系统** | agency-agents 风格，支持角色能力矩阵和协作工作流 |
+| **共享工作空间** | OpenSpace 风格，多 Agent 共享上下文和消息总线 |
+| **技能进化系统** | 技能固化、合并、分裂、遗忘完整生命周期管理 |
+
+### 🎭 虚拟会议系统
+
+| 模块 | 说明 |
+|------|------|
+| **虚拟会议** | 支持评审会、法庭、课堂等多种场景 |
+| **数字分身** | 语音克隆、数字分身参加会议 |
+| **实时字幕** | 流式 Whisper 实时语音识别 |
+| **同声传译** | 多语言实时翻译 |
+| **会议纪要** | LLM 自动生成会议纪要 |
+| **虚拟形象** | Avatar 可视化会议 |
+
+### 🔧 语音与音频
+
+| 模块 | 说明 |
+|------|------|
+| **语音合成** | edge-tts、MOSS-TTS 声音克隆 |
+| **噪声抑制** | WebRTC 风格噪声抑制 |
+| **实时对话** | WebSocket 流式语音对话 |
+| **会议录音** | 会议内容录音转录 |
+
+### 🧬 AmphiLoop 引擎
+
+| 模块 | 说明 |
+|------|------|
+| **双向调度** | 感知→推理→执行→反馈→调整完整闭环 |
+| **检查点系统** | 执行状态快照与回滚 |
+| **容错回滚** | 失败时自动回退到稳定状态 |
+| **增量学习** | 从经验中持续优化 |
+
+### ⚡ Entraly 优化
+
+| 模块 | 说明 |
+|------|------|
+| **PRISM 优化器** | 4维评估体系（更新频率、使用频率、语义相似度、香农熵） |
+| **0/1 背包选择** | 动态规划算法压缩上下文到最小 token 容量 |
+| **实时仪表盘** | 本地监控 token 消耗和成本节省 |
+
+### 🎯 Hermes Agent 技能系统
+
+| 模块 | 说明 |
+|------|------|
+| **技能商店** | 技能浏览、下载、管理 |
+| **技能制作** | 自定义技能创建向导 |
+| **技能上传** | 上传到 Hermes Agent 或 agent-skills.io |
+| **会议集成** | 在会议中使用技能 |
+
+### 📝 提示词管理
+
+| 模块 | 说明 |
+|------|------|
+| **版本管理** | 提示词版本控制与回滚 |
+| **审计日志** | 完整的变更追踪 |
+| **GEP 进化** | 基因表达式编程优化提示词 |
 
 ---
 
-## 🚀 快速开始
+## 技术架构
+
+```
+LivingTreeAlAgent/
+├── core/                          # 核心业务模块
+│   ├── living_tree_ai/            # 主体架构
+│   │   ├── agency_integration/     # Agency 集成
+│   │   │   ├── role_manager.py          # 角色管理
+│   │   │   ├── shared_workspace.py      # 共享工作空间
+│   │   │   └── a2ui_components.py       # A2UI 组件
+│   │   ├── voice/                 # 语音系统
+│   │   │   ├── virtual_conference.py    # 虚拟会议
+│   │   │   ├── digital_twin.py          # 数字分身
+│   │   │   ├── voice_clone_transcribe.py
+│   │   │   ├── streaming_whisper.py      # 流式识别
+│   │   │   ├── conference_translation.py # 同声传译
+│   │   │   └── meeting_summary.py        # 会议纪要
+│   │   └── skills/                # 技能系统
+│   │       ├── skill_manager.py           # 技能管理
+│   │       └── skill_conference_integration.py
+│   ├── amphiloop/                 # AmphiLoop 引擎
+│   │   └── amphiloop_engine.py          # 双向循环调度
+│   ├── skill_evolution/            # 技能进化
+│   │   ├── agent_loop.py                # Agent 循环
+│   │   └── models.py                    # 进化模型
+│   ├── optimization/               # Entraly 优化
+│   │   ├── prism_optimizer.py            # PRISM 优化器
+│   │   ├── knapsack_selector.py          # 0/1 背包选择
+│   │   └── realtime_dashboard.py          # 实时仪表盘
+│   └── evolution/                  # 进化系统
+│       ├── gep_integration.py            # GEP 集成
+│       └── prompt_versioning.py         # 提示词版本
+├── ui/                            # PyQt6 UI
+│   └── workflow_panel/             # 工作流面板
+└── server/                        # 服务端
+```
+
+---
+
+## 快速开始
 
 ### 环境要求
 
-- Windows 10+ / macOS 10.14+ / Ubuntu 18.04+
 - Python 3.11+
-- Git
-- 至少 8GB RAM (推荐 16GB+)
+- PyQt6
+- Windows 10+ / macOS / Ubuntu
 
-### 安装步骤
-
-```bash
-# 1. 克隆项目
-git clone https://github.com/ookok/LivingTreeAlAgent.git
-cd hermes-desktop
-
-# 2. 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-venv\Scripts\activate     # Windows
-
-# 3. 安装依赖
-pip install -r requirements.txt
-
-# 4. 安装 PyQt6
-pip install PyQt6
-```
-
-### 启动方式
+### 安装依赖
 
 ```bash
-# 启动桌面客户端 (默认)
-python main.py client
+pip install PyQt6 numpy websockets
 
-# 启动中继服务器
-python main.py relay
-
-# 启动追踪服务器
-python main.py tracker
-
-# 启动所有服务
-python main.py all
+# 可选依赖
+pip install openai-whisper edge-tts
 ```
 
----
-
-## 📁 项目结构
-
-```
-hermes-desktop/
-├── client/                    # 桌面客户端
-│   └── src/
-│       ├── presentation/      # UI层
-│       ├── business/          # 业务逻辑层
-│       └── infrastructure/    # 基础设施层
-├── server/                    # 服务端
-│   ├── relay_server/          # 中继服务器 (FastAPI)
-│   └── tracker/               # 追踪服务器
-├── core/                      # 核心业务模块
-│   ├── fusion_rag/            # 多源融合检索
-│   ├── intelligence_center/   # 全源情报中心
-│   ├── credit_economy/       # 积分经济系统
-│   ├── idle_grade_system/    # 挂机等级系统
-│   ├── achievement_system/    # 全链路成就系统
-│   └── admin_license_system/ # 管理员授权系统
-├── ui/                        # PyQt6 UI 面板
-├── docs/                      # 文档
-└── main.py                    # 统一入口
-```
-
----
-
-## 🤖 本地模型支持
-
-优先使用 **vLLM** 引擎加载本地模型，支持：
-
-| 引擎 | 优先级 | 特点 |
-|------|--------|------|
-| **vLLM** | ⭐⭐⭐ | 高性能，张量并行 |
-| **Nano-vLLM** | ⭐⭐ | 轻量级实现 |
-| **Ollama** | ⭐ | 简单易用 |
-| **llama-cpp-python** | - | 最广泛支持 |
-
-### 模型加载配置
+### 启动虚拟会议
 
 ```python
-from core.model_priority_loader import get_priority_loader
+from core.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem, ReviewMeetingScenario
 
-loader = get_priority_loader()
-result = loader.load_model(
-    model_path="models/your-model.gguf",
-    backend_preference="vllm"
+# 创建评审会
+conference = ReviewMeetingScenario.create_review_meeting(llm_handler=your_llm)
+conference.start()
+
+# 添加参与者
+conference.add_participant(
+    name="张专家",
+    role=conference.roles["expert"],
+    is_ai_controlled=True,
+    llm_handler=your_llm
 )
 ```
 
----
-
-## 🎮 Smart IDE GitHub 集成
-
-智能 IDE 支持直接从 GitHub 下载、编辑和推送项目：
-
-```bash
-# 克隆仓库
-⬇️ git clone https://github.com/user/repo.git
-
-# 拉取更新
-🔄 git pull
-
-# 推送更改
-⬆️ git add . && git commit -m "更新" && git push
-```
-
----
-
-## 📊 会话统计
-
-Hermes Agent 实时追踪会话指标：
-
-| 指标 | 说明 |
-|------|------|
-| 🔧 工具调用 | 工具被调用的总次数 |
-| 💬 过程消息 | 对话过程中的消息数量 |
-| 🎯 调用技能 | 技能（Skill）被调用的次数 |
-| 🔗 访问URL | 访问过的 URL 数量 |
-| 📊 Token消耗 | prompt + completion tokens |
-| ⏱️ 耗时 | 会话总耗时 |
-
----
-
-## 🛠️ 开发指南
-
-### 创建新模块
+### 使用 AmphiLoop
 
 ```python
-# core/example_module/__init__.py
-from .example import ExampleClass
+from core.amphiloop import get_amphiloop_engine
 
-__all__ = ["ExampleClass"]
+engine = get_amphiloop_engine()
+engine.current_task_id = "task_001"
+
+# 创建检查点
+checkpoint = engine.checkpoint_manager.create_checkpoint(
+    task_id="task_001",
+    turn=5,
+    phase="execute",
+    state={"data": "..."},
+    messages=[],
+    execution_records=[]
+)
+
+# 处理失败
+rollback_checkpoint = engine.handle_failure("Tool execution failed")
 ```
 
-```python
-# core/example_module/example.py
-class ExampleClass:
-    def __init__(self):
-        self.name = "Example Module"
-
-    def process(self, data):
-        return f"Processed: {data}"
-```
-
-### UI 面板模板
+### 使用 Entraly 优化
 
 ```python
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt6.QtCore import pyqtSignal
+from core.optimization import get_entroly_optimizer
 
-class ExamplePanel(QWidget):
-    """示例面板"""
+optimizer = get_entroly_optimizer()
+optimizer.start_session()
 
-    data_changed = pyqtSignal(dict)
+# 优化上下文
+fragments = [
+    ("def foo(): pass", "test.py", 10),
+    ("class Bar: pass", "test.py", 20),
+]
+result = optimizer.optimize_context("函数用法", fragments)
+print(f"Token 减少: {result.token_reduction_percent:.1f}%")
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel("示例面板"))
-        self.setLayout(layout)
-```
-
-### API 开发
-
-```python
-from fastapi import APIRouter
-
-router = APIRouter(prefix="/api/example", tags=["example"])
-
-@router.post("/process")
-async def process_example(request: ExampleRequest):
-    return {"success": True, "result": "Processed"}
+# 获取仪表盘
+dashboard_data = optimizer.get_dashboard_data()
 ```
 
 ---
 
-## 📖 文档
+## 核心模块详解
 
-- [📚 开发手册](./docs/开发手册.md)
-- [👤 用户手册](./docs/用户手册.md)
-- [🏗️ 架构文档](./docs/ARCHITECTURE.md)
-- [🔧 项目结构](./docs/PROJECT_STRUCTURE.md)
+### 共享工作空间 (OpenSpace)
 
----
+```python
+from core.living_tree_ai.agency_integration.shared_workspace import SharedWorkspace
 
-## 🧪 测试
+workspace = SharedWorkspace()
+workspace.register_agent("agent_1", "Agent One", role="developer")
 
-```bash
-# 运行测试
-python -m pytest tests/
+# 设置共享上下文
+workspace.set_context("project_status", "in_progress", owner_id="agent_1")
 
-# 带覆盖率
-python -m pytest tests/ --cov=core --cov-report=html
+# 发送消息
+await workspace.send_message(
+    sender_id="agent_1",
+    sender_name="Agent One",
+    msg_type="update",
+    content="任务完成"
+)
+```
+
+### 角色能力矩阵
+
+```python
+from core.living_tree_ai.agency_integration.role_manager import get_role_manager
+
+manager = get_role_manager()
+
+# 获取技能雷达图
+radar = manager.get_skill_radar_data("Full Stack Engineer")
+# {'labels': ['Python', 'JavaScript'], 'values': [3, 3], 'overall_score': 3.0}
+
+# 自动分配角色
+assignments = manager.auto_assign_roles(
+    task_description="开发一个 Web 应用",
+    available_agents=[("agent_1", "张三"), ("agent_2", "李四")]
+)
+```
+
+### 数字分身
+
+```python
+from core.living_tree_ai.voice.digital_twin import get_twin_manager
+
+twin_manager = get_twin_manager()
+
+# 录音克隆
+twin_manager.clone_from_recording(
+    reference_audio_path="my_voice.wav",
+    twin_name="我的分身"
+)
+
+# 使用分身
+twin = twin_manager.create_twin_session("my_twin")
+response = await twin_manager.twin_speak(twin.twin_id, "你好，我是数字分身")
+```
+
+### PRISM 优化器
+
+```python
+from core.optimization.prism_optimizer import PRISMOptimizer, ShannonEntropyCalculator
+
+# 计算香农熵
+entropy = ShannonEntropyCalculator.calculate_entropy("def foo(): pass")
+print(f"香农熵: {entropy:.4f}")
+
+# 过滤噪音
+optimizer = PRISMOptimizer()
+filtered = optimizer.filter_noise(query="函数用法", top_k=5)
 ```
 
 ---
 
-## 📝 提交规范
+## 贡献指南
+
+### 提交规范
 
 ```
-<type>(<scope>): <subject>
-
 feat(core): 添加新功能
 fix(ui): 修复界面bug
 docs: 更新文档
 refactor: 重构代码
-test: 添加测试
+perf(optimization): 性能优化
 ```
 
 ---
 
-## 📜 License
+## 更新日志
 
-MIT License - see [LICENSE](LICENSE) for details.
+### 2026-04-20
 
----
-
-## 🙏 致谢
-
-- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) - Agent 架构参考
-- [PyQt6](https://pypi.org/project/PyQt6/) - UI 框架
-- [vLLM](https://github.com/vllm-project/vllm) - 高性能推理引擎
-- [ModelScope](https://modelscope.cn/) - 魔搭社区模型支持
+- 新增 AmphiLoop 引擎（双向循环调度、容错回滚、增量学习）
+- 新增 Entraly 优化（PRISM 优化器、0/1 背包、实时仪表盘）
+- 新增 Hermes Agent 技能系统
+- 新增数字分身功能
+- 新增共享工作空间
+- 新增角色能力矩阵
 
 ---
 
-*Hermes Desktop - 让 AI 成为你的编程伙伴* 🌟
+## 致谢
 
-*最后更新: 2026-04-19*
+- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) - Hermes Agent 架构参考
+- [OpenSpace HKUDS](https://github.com/) - 多 Agent 协作空间理念
+- [Entroly](https:///) - PRISM 优化算法灵感
+- [AmphiLoop](https:///) - 双向循环调度理念
+
+---
+
+*LivingTree AI Agent - 让智能体自我进化* 🌟

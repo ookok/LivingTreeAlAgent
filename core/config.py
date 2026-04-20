@@ -166,6 +166,44 @@ def save_config(cfg: AppConfig) -> None:
     path.write_text(json.dumps(cfg.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def get_hermes_home() -> Path:
+    """获取 Hermes 主目录（用于存储 .env 等文件）"""
+    return _get_config_dir()
+
+
+def get_env_value(key: str, default: str = "") -> str:
+    """
+    从 .env 文件获取环境变量值
+    
+    Args:
+        key: 环境变量名
+        default: 默认值
+    
+    Returns:
+        str: 环境变量值或默认值
+    """
+    # 先从当前环境变量获取
+    value = os.environ.get(key)
+    if value:
+        return value
+    
+    # 从 .env 文件获取
+    env_file = get_hermes_home() / ".env"
+    if env_file.exists():
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        if k.strip() == key:
+                            return v.strip()
+        except Exception:
+            pass
+    
+    return default
+
+
 def get_models_dir() -> Path:
     return _get_models_dir(load_config())
 

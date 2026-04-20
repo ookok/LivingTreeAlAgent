@@ -1,11 +1,12 @@
 """
-聊天面板 — 中央主区域
+系统大脑 — 中央主区域
 
 负责：
   · 流式渲染 Markdown 消息（用 QTextBrowser + HTML 近似）
   · 工具调用状态块
   · 审批卡片
   · 消息输入框 + 发送/停止按钮
+  · 系统初始化、错误、状态和会话消息显示
 """
 
 import json
@@ -185,9 +186,9 @@ class MessageBubble(QLabel):
         return text
 
 
-# ── 聊天面板主体 ──────────────────────────────────────────────────────
+# ── 系统大脑主体 ──────────────────────────────────────────────────────
 
-class ChatPanel(QWidget):
+class SystemBrainPanel(QWidget):
     """
     信号
     ----
@@ -203,9 +204,10 @@ class ChatPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("ChatPanel")
+        self.setObjectName("SystemBrainPanel")
         self._current_assistant_bubble: MessageBubble | None = None
         self._active_tool_blocks: dict[str, ToolBlock] = {}  # tool_name -> block
+        self._system_notification = None  # 存储当前系统通知
         self._build_ui()
 
     def _build_ui(self):
@@ -370,13 +372,97 @@ class ChatPanel(QWidget):
         self._active_tool_blocks.clear()
 
     def add_error_message(self, text: str):
+        """在聊天区域显示错误消息（替换欢迎消息位置）"""
+        # 隐藏欢迎消息
+        self._hide_welcome()
+        
+        # 创建错误消息标签
         lbl = QLabel(f"⚠️  {text}")
         lbl.setWordWrap(True)
         lbl.setStyleSheet(
             "color:#ef4444; background:#2a0000; border:1px solid #7f1d1d;"
-            "border-radius:6px; padding:10px 14px;"
+            "border-radius:6px; padding:20px; margin:20px;"
         )
-        self.msg_layout.insertWidget(self.msg_layout.count() - 1, lbl)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 插入到消息布局中（替换欢迎消息的位置）
+        self.msg_layout.insertWidget(0, lbl)
+        self._scroll_to_bottom()
+
+    def add_info_message(self, title: str, text: str, auto_hide_ms: int = 5000):
+        """在聊天区域显示信息消息（替换欢迎消息位置）"""
+        # 隐藏欢迎消息
+        self._hide_welcome()
+        
+        # 如果是系统通知，先删除之前的系统通知
+        if title == "系统通知":
+            if self._system_notification:
+                self._system_notification.deleteLater()
+                self._system_notification = None
+        
+        # 创建信息消息标签
+        lbl = QLabel(f"{title}\n\n{text}")
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(
+            "color:#3b82f6; background:#0f172a; border:1px solid #1e40af;"
+            "border-radius:6px; padding:20px; margin:20px;"
+        )
+        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        # 插入到消息布局中（替换欢迎消息的位置）
+        self.msg_layout.insertWidget(0, lbl)
+        self._scroll_to_bottom()
+        
+        # 存储系统通知引用
+        if title == "系统通知":
+            self._system_notification = lbl
+        
+        # 自动隐藏
+        if auto_hide_ms > 0:
+            # 保存标签引用，避免在标签被删除后尝试再次删除
+            def safe_delete(label):
+                if label and not label.isHidden():
+                    label.deleteLater()
+            QTimer.singleShot(auto_hide_ms, lambda: safe_delete(lbl))
+
+    def add_action_buttons(self, actions):
+        """在聊天区域添加操作按钮"""
+        # 创建按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(20, 0, 20, 20)
+        button_layout.setSpacing(10)
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 添加按钮
+        for text, callback in actions:
+            button = QPushButton(text)
+            button.setStyleSheet(
+                "QPushButton {"
+                "    background-color: #3b82f6;"
+                "    color: white;"
+                "    border: none;"
+                "    border-radius: 6px;"
+                "    padding: 10px 20px;"
+                "    font-size: 14px;"
+                "    font-weight: bold;"
+                "}"
+                "QPushButton:hover {"
+                "    background-color: #2563eb;"
+                "}"
+                "QPushButton:pressed {"
+                "    background-color: #1d4ed8;"
+                "}"
+            )
+            button.clicked.connect(callback)
+            button_layout.addWidget(button)
+        
+        # 创建按钮容器
+        button_container = QWidget()
+        button_container.setLayout(button_layout)
+        
+        # 插入到消息布局中
+        self.msg_layout.insertWidget(1, button_container)
+        self._scroll_to_bottom()
         self._scroll_to_bottom()
 
     # ------------------------------------------------------------------
@@ -386,6 +472,11 @@ class ChatPanel(QWidget):
     def _on_send(self):
         text = self.input_box.toPlainText().strip()
         if not text:
+            return
+        # 输入验证
+        if len(text) > 1000:
+            # 显示错误提示
+            self.add_error_message("输入内容过长，请限制在1000字符以内")
             return
         self.input_box.clear()
         self.send_requested.emit(text)

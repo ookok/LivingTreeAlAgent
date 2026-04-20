@@ -40,8 +40,8 @@ def setup_app() -> QApplication:
     app.setOrganizationName("HermesAI")
 
     # 高 DPI 支持
-    app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
-    app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    # app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
+    # app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
 
     # 默认字体
     font = QFont("Segoe UI", 9)
@@ -121,18 +121,8 @@ def main():
     # 应用主题
     app.setStyleSheet(DARK_QSS)
 
-    # 检查首次运行
-    try:
-        from core.first_run_config import get_first_run_config
-        first_run_mgr = get_first_run_config()
-
-        if first_run_mgr.is_first_run() or not first_run_mgr.is_wizard_completed():
-            should_continue, _ = run_wizard(app)
-
-            if not should_continue:
-                sys.exit(0)
-    except Exception:
-        pass
+    # 不再自动弹出首次使用向导
+    # 直接加载配置并启动主窗口
 
     # 加载配置
     cfg = load_config()

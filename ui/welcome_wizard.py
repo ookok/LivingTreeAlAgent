@@ -332,10 +332,18 @@ class WelcomeWizard(QDialog):
         self._ollama_url.setPlaceholderText("http://localhost:11434")
         url_layout.addRow("服务地址:", self._ollama_url)
         
-        self._ollama_model = QLineEdit(
-            self.config_values.get("ollama", {}).get("default_model", "")
-        )
-        self._ollama_model.setPlaceholderText("例如: qwen2.5:7b, llama3.2:3b, mistral:7b")
+        # 默认模型 - 改为下拉框
+        self._ollama_model = QComboBox()
+        self._ollama_model.addItem("", "")  # 空选项
+        self._ollama_model.setMinimumWidth(300)
+        # 尝试加载 ollama 模型列表
+        self._load_ollama_models()
+        # 设置当前值
+        current_model = self.config_values.get("ollama", {}).get("default_model", "")
+        if current_model:
+            index = self._ollama_model.findData(current_model)
+            if index >= 0:
+                self._ollama_model.setCurrentIndex(index)
         url_layout.addRow("默认模型:", self._ollama_model)
         
         self._ollama_ctx = QSpinBox()
@@ -730,7 +738,7 @@ class WelcomeWizard(QDialog):
         if step_id == ConfigStep.OLLAMA:
             self.config_values["ollama"] = {
                 "base_url": self._ollama_url.text().strip() or "http://localhost:11434",
-                "default_model": self._ollama_model.text().strip(),
+                "default_model": self._ollama_model.currentData() or "",
                 "num_ctx": self._ollama_ctx.value(),
                 "keep_alive": self._ollama_keep.text().strip() or "5m"
             }
@@ -885,6 +893,8 @@ class WelcomeWizard(QDialog):
                     QTimer.singleShot(0, lambda: self._test_result.setStyleSheet(
                         "font-size: 12px; color: #22c55e; padding: 8px;"
                     ))
+                    # 重新加载模型列表
+                    QTimer.singleShot(0, self._load_ollama_models)
                 else:
                     QTimer.singleShot(0, lambda: self._test_result.setText(
                         f"⚠️ 连接异常: HTTP {resp.status_code}"
@@ -903,6 +913,40 @@ class WelcomeWizard(QDialog):
         
         threading.Thread(target=test, daemon=True).start()
     
+    def _load_ollama_models(self):
+        """加载 Ollama 模型列表"""
+        url = self._ollama_url.text().strip() or "http://localhost:11434"
+        
+        import threading
+        
+        def load():
+            try:
+                import requests
+                resp = requests.get(f"{url}/api/tags", timeout=3)
+                if resp.status_code == 200:
+                    models = resp.json().get("models", [])
+                    # 清空现有选项（保留空选项）
+                    current_text = self._ollama_model.currentText()
+                    current_data = self._ollama_model.currentData()
+                    
+                    QTimer.singleShot(0, lambda: self._ollama_model.clear())
+                    QTimer.singleShot(0, lambda: self._ollama_model.addItem("", ""))
+                    
+                    for model in models:
+                        name = model.get("name", "")
+                        if name:
+                            # 显示模型名称
+                            QTimer.singleShot(0, lambda n=name: self._ollama_model.addItem(n, n))
+                    
+                    # 恢复之前的选择
+                    if current_data:
+                        QTimer.singleShot(0, lambda: self._select_model(current_data))
+            except Exception as e:
+                # 连接失败，保持现有选项
+                print(f"[Ollama] 加载模型列表失败: {e}")
+        
+        threading.Thread(target=load, daemon=True).start()
+    
     def _select_model(self, model_id: str):
         """选择模型"""
         for mid, btn in self._model_buttons.items():
@@ -910,14 +954,28 @@ class WelcomeWizard(QDialog):
                 btn.setChecked(False)
         
         self._custom_model.clear()
-        self._ollama_model.setText(model_id)
+        # 设置下拉框选中项
+        index = self._ollama_model.findData(model_id)
+        if index >= 0:
+            self._ollama_model.setCurrentIndex(index)
+        else:
+            # 如果模型不在列表中，添加到下拉框
+            self._ollama_model.addItem(model_id, model_id)
+            self._ollama_model.setCurrentIndex(self._ollama_model.count() - 1)
     
     def _on_custom_model_changed(self, text: str):
         """自定义模型变化"""
         if text:
             for btn in self._model_buttons.values():
                 btn.setChecked(False)
-            self._ollama_model.setText(text)
+            # 设置下拉框选中项
+            index = self._ollama_model.findData(text)
+            if index >= 0:
+                self._ollama_model.setCurrentIndex(index)
+            else:
+                # 如果模型不在列表中，添加到下拉框
+                self._ollama_model.addItem(text, text)
+                self._ollama_model.setCurrentIndex(self._ollama_model.count() - 1)
     
     def _select_theme(self, theme: str):
         """选择主题"""

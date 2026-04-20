@@ -26,7 +26,7 @@ from core.auth_system import get_auth_system
 from core.smart_config import get_smart_config
 from ui.task_progress import get_task_progress_manager
 from core.search_tool import AISearchTool
-from ui.a2ui import A2UIManager, A2UIPanel, UILoaderManager, FallbackManager, ProgressManager, ConfigQuickEditManager
+from ui.a2ui import A2UIManager, A2UIPanel, UILoader, FallbackManager, ProgressManager, ConfigQuickEdit
 
 from ui.session_panel import SessionPanel
 from ui.chat_panel import ChatPanel
@@ -212,40 +212,54 @@ class MainWindow(QWidget):
 
         # A2UI 相关
         self._a2ui_manager = A2UIManager()
-        self._ui_loader_manager = UILoaderManager()
+        self._ui_loader_manager = UILoader()
         self._fallback_manager = FallbackManager()
         self._progress_manager = ProgressManager()
-        self._config_quick_edit_manager = ConfigQuickEditManager()
+        self._config_quick_edit_manager = ConfigQuickEdit()
 
-        self._build_ui()
-        self._init_agent()
-        self._init_system_brain()
-        self._init_smart_config()
-        self._init_task_progress()
-        self._init_search()
-        self._init_sessions()
-        self._init_auth()
-        self._init_config_sync()
-        self._init_a2ui()
-        self._setup_menu()
+        # 延迟初始化标志
+        self._ui_initialized = False
 
+        # 快速构建基础UI
+        self._build_core_ui()
+        
+        # 设置窗口属性
         self.setWindowTitle("Hermes Desktop v2.0")
         self.resize(config.window_width, config.window_height)
+        
+        # 显示加载界面
+        self._show_loading_screen()
+        
+        # 异步初始化其他组件
+        import threading
+        threading.Thread(target=self._async_init, daemon=True).start()
 
     # ── UI ─────────────────────────────────────────────────────
 
-    def _build_ui(self):
+    def _build_core_ui(self):
+        """构建核心UI（快速显示）"""
         self.setMinimumSize(900, 600)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # 加载屏幕
+        self.loading_stack = QStackedWidget()
+        root.addWidget(self.loading_stack)
+
+        # 主界面
+        self.main_widget = QWidget()
+        self.main_layout = QHBoxLayout(self.main_widget)
+        self.loading_stack.addWidget(self.main_widget)
+
+        # 构建主界面布局
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setHandleWidth(1)
         self.splitter.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.addWidget(self.splitter)
 
-        # 左侧：会话面板
+        # 左侧：会话面板（快速加载）
         self.session_panel = SessionPanel()
         self.session_panel.setStyleSheet("""
             QWidget {
@@ -262,7 +276,7 @@ class MainWindow(QWidget):
         self.session_panel.settings_requested.connect(self._show_settings)
         self.splitter.addWidget(self.session_panel)
 
-        # 中央：Tab 切换
+        # 中央：Tab 切换（只加载核心标签）
         self.center_tabs = QTabWidget()
         self.center_tabs.setTabPosition(QTabWidget.TabPosition.North)
         self.center_tabs.setDocumentMode(True)
@@ -290,7 +304,7 @@ class MainWindow(QWidget):
             }
         """)
         
-        # 聊天页面
+        # 聊天页面（核心）
         self.chat_panel = ChatPanel()
         self.chat_panel.send_requested.connect(self._on_send_message)
         self.chat_panel.stop_requested.connect(self._on_stop)
@@ -298,631 +312,18 @@ class MainWindow(QWidget):
         self.chat_panel.config_hint_requested.connect(self._show_settings)
         self.center_tabs.addTab(self.chat_panel, "💬 聊天")
         
-        # 写作助手页面
+        # 写作助手页面（核心）
         self.writing_tab = WritingTab(self, self._agent)
         self.writing_tab.status_changed.connect(self._on_status_changed)
         self.center_tabs.addTab(self.writing_tab, "✍️ 写作助手")
 
-        # V2.0: 研究搜索页面
+        # 研究搜索页面（核心）
         self.research_tab = ResearchPanel()
         self.center_tabs.addTab(self.research_tab, "🔍 研究助手")
 
-        # V2.0: 内容监控页面
-        self.content_monitor_tab = ContentMonitorPanel()
-        self.center_tabs.addTab(self.content_monitor_tab, "🛡️ 内容监控")
-
-        # V2.0: 文档审核与生命周期管理页面
-        self.doc_lifecycle_tab = DocLifecyclePanel()
-        self.center_tabs.addTab(self.doc_lifecycle_tab, "📋 文档审核")
-
-        # V2.0: 定时任务管理页面
-        self.schedule_tab = SchedulePanel()
-        self.center_tabs.addTab(self.schedule_tab, "⏰ 定时任务")
-
-        # V2.0: Wiki 编译器页面 (LLM Wiki 架构)
-        self.wiki_compiler_tab = WikiCompilerPanel(get_wiki_compiler())
-        self.center_tabs.addTab(self.wiki_compiler_tab, "🧠 Wiki知识库")
-
-        # V2.0: 角色智库 - Persona Skill 面板
-        self.persona_skill_tab = PersonaSkillPanel()
-        self.center_tabs.addTab(self.persona_skill_tab, "🧙 角色智库")
-
-        # V2.0: P2P 搜索代理网络
-        self.p2p_search_proxy_tab = P2PSearchProxyPanel()
-        self.center_tabs.addTab(self.p2p_search_proxy_tab, "🌐 P2P搜索代理")
-
-        # V2.1: 全源情报中心 (搜索+谣言检测+竞品监控+预警+报告)
-        # TODO: from ui.intelligence.intelligence_panel import IntelligencePanel
-        # self.intelligence_tab = IntelligencePanel()
-        # self.center_tabs.addTab(self.intelligence_tab, "🎯 情报中心")
-        self.intelligence_tab = None
-
-        # V2.2: 去中心化邮箱 (P2P邮件, 无SMTP)
-        # TODO: from ui.mailbox.mailbox_panel import MailboxPanel
-        # self.mailbox_tab = MailboxPanel()
-        # self.center_tabs.addTab(self.mailbox_tab, "📧 去中心化邮箱")
-        self.mailbox_tab = None
-
-        # V2.3: P2P连接器 (短ID寻址 + 多通道通信)
-        # TODO: from ui.connector.connector_panel import ConnectorPanel
-        # self.connector_tab = ConnectorPanel()
-        # self.center_tabs.addTab(self.connector_tab, "🔗 P2P连接")
-        self.connector_tab = None
-
-        # V2.4: 统一聊天 (Element/Discord/Telegram风格)
-        # 已由顶部 ChatPanel 替代
-        self.chat_tab = None
-
-        # V2.5: 翻译中心 (离线初翻 + 在线精翻)
-        # TODO: from ui.translation.translation_panel import TranslationPanel
-        # self.translation_tab = TranslationPanel()
-        # self.center_tabs.addTab(self.translation_tab, "🔄 翻译中心")
-        self.translation_tab = None
-
-        # V2.6: 去中心化论坛 (P2P穿透网络 + 智能写作)
-        # TODO: from ui.forum.forum_panel import ForumPanel
-        # self.forum_tab = ForumPanel()
-        # self.center_tabs.addTab(self.forum_tab, "🏛️ 去中心化论坛")
-        self.forum_tab = None
-
-        # V2.7: 伪域名系统 (去中心化域名 + DNS解析)
-        # TODO: from ui.pseudodomain.domain_panel import DomainPanel
-        # self.domain_tab = DomainPanel()
-        # self.center_tabs.addTab(self.domain_tab, "🌐 伪域名")
-        self.domain_tab = None
-
-        # V2.0: CLI-Anything 工具工厂
-        try:
-            from ui.cli_anything_panel import CLIAutoGenPanel
-            self.cli_anything_tab = CLIAutoGenPanel()
-            self.center_tabs.addTab(self.cli_anything_tab, "⚡ 工具工厂")
-        except ImportError:
-            self.cli_anything_tab = None
-
-        # V2.0: WebRTC 视频通话与直播
-        try:
-            from ui.webrtc_panel import WebRTCPanel
-            self.webrtc_tab = WebRTCPanel()
-            self.center_tabs.addTab(self.webrtc_tab, "📞 视频通话")
-        except ImportError as e:
-            self.webrtc_tab = None
-
-        # V2.0: 视频播放器 (LibVLC - Screenbox 同款引擎)
-        try:
-            from ui.video_player_panel import VideoPlayerPanel
-            self.video_player_tab = VideoPlayerPanel()
-            self.center_tabs.addTab(self.video_player_tab, "🎬 视频播放")
-        except ImportError as e:
-            self.video_player_tab = None
-
-        # V2.0: P2P 去中心化电商 (DeCommerce)
-        try:
-            from ui.decommerce_panel import DeCommercePanel
-            self.decommerce_tab = DeCommercePanel()
-            self.center_tabs.addTab(self.decommerce_tab, "🛍️ DeCommerce")
-        except ImportError as e:
-            self.decommerce_tab = None
-
-        # V2.0: 去中心化本地商品交易市场
-        from core.local_market.ui.panel import LocalMarketPanel
-        self.local_market_tab = LocalMarketPanel()
-        self.center_tabs.addTab(self.local_market_tab, "🛒 本地市场")
-
-        # V2.8: 元宇宙UI (舰桥操作系统 - 时空引力场)
-        try:
-            from ui.metaverse_ui_panel import MetaverseUIPanel
-            self.metaverse_tab = MetaverseUIPanel()
-            self.center_tabs.addTab(self.metaverse_tab, "🚀 舰桥")
-        except Exception as e:
-            logger.debug(f"MetaverseUIPanel not available: {e}")
-            self.metaverse_tab = None
-
-        # 需求头脑风暴 (HARD-GATE: 设计批准前不执行实现)
-        try:
-            from ui.idea_clarifier_panel import IdeaClarifierPanel
-            self.brainstorm_tab = IdeaClarifierPanel()
-            self.brainstorm_tab.design_approved.connect(self._on_design_approved)
-            self.center_tabs.addTab(self.brainstorm_tab, "🎯 头脑风暴")
-        except Exception as e:
-            logger.error(f"Failed to load IdeaClarifierPanel: {e}")
-            self.brainstorm_tab = None
-
-        # 政府开放资料查询 (借鉴 gov_openapi_agent 设计思路)
-        try:
-            from ui.gov_data_panel import GovDataPanel
-            self.gov_data_tab = GovDataPanel()
-            self.center_tabs.addTab(self.gov_data_tab, "🏛️ 政府资料")
-        except Exception as e:
-            logger.error(f"Failed to load GovDataPanel: {e}")
-            self.gov_data_tab = None
-
-        # 公司印章生成器 (借鉴 company-stamp 设计思路)
-        try:
-            from ui.stamp_panel import StampPanel
-            self.stamp_tab = StampPanel()
-            self.center_tabs.addTab(self.stamp_tab, "🔐 印章生成")
-        except Exception as e:
-            logger.error(f"Failed to load StampPanel: {e}")
-            self.stamp_tab = None
-
-        # 中继链 - 分布式积分账本 (无币无挖矿类区块链)
-        try:
-            from ui.relay_chain_panel import RelayChainPanel
-            self.relay_chain_tab = RelayChainPanel()
-            self.center_tabs.addTab(self.relay_chain_tab, "⛓️ 中继链")
-        except Exception as e:
-            logger.error(f"Failed to load RelayChainPanel: {e}")
-            self.relay_chain_tab = None
-
-        # 🌐 P2P 去中心化更新系统 (抗审查 + 高可用 + 区块链思想)
-        try:
-            from ui.decentralized_update_panel import DecentralizedUpdatePanel
-            self.update_tab = DecentralizedUpdatePanel()
-            self.center_tabs.addTab(self.update_tab, "🌐 P2P更新")
-        except Exception as e:
-            logger.error(f"Failed to load DecentralizedUpdatePanel: {e}")
-            self.update_tab = None
-
-        # V2.9: 根系装配园 (Root Assembly Garden)
-        try:
-            from ui.assembler_panel import RootAssemblyGardenPanel
-            self.assembler_tab = RootAssemblyGardenPanel()
-            self.center_tabs.addTab(self.assembler_tab, "🌱 嫁接园")
-        except Exception as e:
-            self.assembler_tab = None
-
-        # V2.1: AI算力仪表盘 (硬件检测与模型匹配)
-        try:
-            from ui.hardware_detector_panel import HardwareDetectorPanel
-            self.hardware_detector_tab = HardwareDetectorPanel()
-            self.center_tabs.addTab(self.hardware_detector_tab, "🖥️ 算力仪表盘")
-        except ImportError as e:
-            self.hardware_detector_tab = None
-
-        # V2.0: PageIndex 智能文档索引 (LLM Wiki 架构)
-        from core.page_index.ui.panel import PageIndexPanel
-        self.page_index_tab = PageIndexPanel()
-        self.center_tabs.addTab(self.page_index_tab, "📑 文档索引")
-
-        # V3.0: 根系同步 (Root Sync - Syncthing 风格去中心化文件同步)
-        try:
-            self.root_sync_tab = RootSyncPanel()
-            self.center_tabs.addTab(self.root_sync_tab, "🌳 根系同步")
-        except Exception as e:
-            self.root_sync_tab = None
-
-        # V3.1: GitHub Store (桌面代码仓库)
-        try:
-            self.github_store_tab = GitHubStorePanel()
-            self.center_tabs.addTab(self.github_store_tab, "🛍️ GitHub商店")
-        except Exception as e:
-            self.github_store_tab = None
-
-        # V3.2: Database Browser (桌面数据库管理)
-        try:
-            self.database_browser_tab = DatabaseBrowserPanel()
-            self.center_tabs.addTab(self.database_browser_tab, "🗄️ 数据库")
-        except Exception as e:
-            self.database_browser_tab = None
-
-        # V3.3: Preview Panel (Office 文档实时预览与编辑)
-        try:
-            self.preview_tab = PreviewPanel()
-            self.center_tabs.addTab(self.preview_tab, "📄 预览")
-        except Exception as e:
-            self.preview_tab = None
-
-        # V2.0: MCP Market 面板 (MCP订阅/发布架构 + MCP市场浏览)
-        try:
-            self.mcp_market_tab = MCPMarketPanel()
-            self.center_tabs.addTab(self.mcp_market_tab, "🔌 MCP市场")
-        except Exception as e:
-            self.mcp_market_tab = None
-
-        # V2.0: Skill Market 面板 (SKILL.md manifest格式 + Skill安装/卸载/更新)
-        try:
-            self.skill_market_tab = SkillMarketPanel()
-            self.center_tabs.addTab(self.skill_market_tab, "🛠️ Skill市场")
-        except Exception as e:
-            self.skill_market_tab = None
-
-        # V2.0: Digital Avatar 面板 (三层分身模型 + 成长系统 + 主动交互)
-        try:
-            self.avatar_tab = AvatarPanel()
-            self.center_tabs.addTab(self.avatar_tab, "🎭 数字分身")
-        except Exception as e:
-            self.avatar_tab = None
-
-        # 🏭 环保模型商店 (P2P模型分发 + 中继链网络 + API Key自动配置)
-        try:
-            self.model_store_tab = ModelStorePanel()
-            self.center_tabs.addTab(self.model_store_tab, "🏭 模型商店")
-        except Exception as e:
-            self.model_store_tab = None
-
-        # 🔐 IdentityPanel - 身份驱动的数据主权 UI
-        # (身份管理/设备列表/同步状态/云端备份/私有服务器配置)
-        try:
-            self.identity_tab = IdentityPanel()
-            self.center_tabs.addTab(self.identity_tab, "🔐 身份中心")
-        except Exception as e:
-            self.identity_tab = None
-
-        # 📚 私有法规库检索面板 (Chroma/Milvus + all-MiniLM-L6-v2)
-        # 支持法规语义检索、混合检索、元数据过滤
-        try:
-            self.regulation_tab = RegulationSearchPanel()
-            self.center_tabs.addTab(self.regulation_tab, "📚 法规库")
-        except Exception as e:
-            self.regulation_tab = None
-
-        # 🏛️ 社区共建者权益中心 (积分->权益转换 + 税务合规 + 基金透明)
-        # 核心理念：积分永不兑现现金，收益转化为社区发展基金，去金融化
-        try:
-            from ui.community_rights_panel import CommunityRightsPanel
-            self.community_rights_tab = CommunityRightsPanel()
-            self.center_tabs.addTab(self.community_rights_tab, "🏛️ 权益中心")
-        except Exception as e:
-            self.community_rights_tab = None
-
-        # 🤖 AI脚本生成器 (自然语言→可执行脚本 + 沙箱执行 + 脚本市场)
-        # 核心理念：用户用自然语言描述需求，AI生成可执行脚本
-        try:
-            from ui.ai_script_panel import AIScriptPanel
-            self.ai_script_tab = AIScriptPanel()
-            self.center_tabs.addTab(self.ai_script_tab, "🤖 AI脚本")
-        except Exception as e:
-            self.ai_script_tab = None
-
-        # V2.0: LAN Chat 面板 (UDP广播发现 + TCP消息传输 + AI自动回复)
-        try:
-            from ui.lan_chat_panel import LANChatPanel
-            self.lan_chat_tab = LANChatPanel()
-            self.center_tabs.addTab(self.lan_chat_tab, "💬 LAN聊天")
-        except Exception as e:
-            self.lan_chat_tab = None
-
-        # V2.0: Smart IDE 面板 (代码编辑器 + AI编程助手 + 调试系统)
-        try:
-            from ui.smart_ide_panel import SmartIDEPanel
-            self.smart_ide_tab = SmartIDEPanel()
-            self.center_tabs.addTab(self.smart_ide_tab, "💻 智能IDE")
-        except Exception as e:
-            self.smart_ide_tab = None
-
-        # V2.0: Game Room 面板 (游戏房间 + 玩家匹配 + 录像截图)
-        try:
-            from ui.game_room_panel import GameRoomPanel
-            self.game_room_tab = GameRoomPanel()
-            self.center_tabs.addTab(self.game_room_tab, "🎮 游戏大厅")
-        except Exception as e:
-            self.game_room_tab = None
-
-        # V2.0: Knowledge Blockchain 面板 (知识区块链 + 共识引擎 + 代币经济)
-        try:
-            self.knowledge_blockchain_tab = KnowledgeBlockchainPanel()
-            self.center_tabs.addTab(self.knowledge_blockchain_tab, "⛓️ 知识链")
-        except Exception as e:
-            self.knowledge_blockchain_tab = None
-
-        # 🎮 融合游戏系统 (暗黑地牢 + 狼人杀 + 密室逃脱)
-        try:
-            from core.dungeon_werewolf_escape import FusionGameEngine
-            self.fusion_game_engine = FusionGameEngine()
-            self.fusion_game_tab = FusionGamePanel()
-            self.fusion_game_tab.set_game_engine(self.fusion_game_engine)
-            self.center_tabs.addTab(self.fusion_game_tab, "🎯 融合游戏")
-        except Exception as e:
-            self.fusion_game_tab = None
-            self.fusion_game_engine = None
-
-        # 🎭 虚拟形象与社交广场系统
-        try:
-            from core.virtual_avatar_social import VirtualAvatarSocialEngine
-            self.avatar_social_engine = VirtualAvatarSocialEngine()
-            self.avatar_social_tab = VirtualAvatarSocialPanel()
-            self.avatar_social_tab.set_avatar_engine(self.avatar_social_engine)
-            self.center_tabs.addTab(self.avatar_social_tab, "🎭 形象广场")
-        except Exception as e:
-            self.avatar_social_tab = None
-            self.avatar_social_engine = None
-
-        # 🃏 斗地主游戏系统
-        try:
-            from core.dou_di_zhu import DouDiZhuEngine
-            self.dou_dizhu_engine = DouDiZhuEngine()
-            self.dou_dizhu_tab = DouDiZhuPanel()
-            self.dou_dizhu_tab.set_engine(self.dou_dizhu_engine)
-            self.center_tabs.addTab(self.dou_dizhu_tab, "🃏 斗地主")
-        except Exception as e:
-            self.dou_dizhu_tab = None
-            self.dou_dizhu_engine = None
-
-        # 🌐 P2P网络自举协议 (感染式网络)
-        try:
-            from core.p2p_network_bootstrap import P2PNetworkBootstrapEngine
-            self.p2p_bootstrap_engine = P2PNetworkBootstrapEngine(
-                node_id=f"node_{uuid.uuid4().hex[:8]}",
-                node_url=f"ws://localhost:8888/node"
-            )
-            self.p2p_bootstrap_tab = P2PBootstrapPanel()
-            self.p2p_bootstrap_tab.set_engine(self.p2p_bootstrap_engine)
-            self.center_tabs.addTab(self.p2p_bootstrap_tab, "🌐 P2P网络")
-        except Exception as e:
-            self.p2p_bootstrap_tab = None
-            self.p2p_bootstrap_engine = None
-
-        # 🌌 通用数字永生系统 - Phoenix Protocol
-        # 核心理念："网络可死，基因永生；载体可灭，灵魂不灭"
-        try:
-            from core.phoenix_protocol import PhoenixProtocolEngine
-            self.phoenix_engine = PhoenixProtocolEngine({
-                "node_id": f"phoenix_{uuid.uuid4().hex[:8]}"
-            })
-            self.phoenix_tab = PhoenixProtocolPanel()
-            self.phoenix_tab.phoenix_engine = self.phoenix_engine
-            self.center_tabs.addTab(self.phoenix_tab, "🌌 数字永生")
-        except Exception as e:
-            self.phoenix_tab = None
-            self.phoenix_engine = None
-
-        # 🎛️ 通用硬件智能集成系统 - Hardware Mind
-        # 核心理念："硬件即插件，自动发现、自动学习、自动集成"
-        try:
-            from core.hardware_mind import HardwareMindEngine
-            self.hardware_mind_engine = HardwareMindEngine({
-                "node_id": f"hardwaremind_{uuid.uuid4().hex[:8]}"
-            })
-            self.hardware_mind_tab = HardwareMindPanel()
-            self.hardware_mind_tab.set_engine(self.hardware_mind_engine)
-            self.center_tabs.addTab(self.hardware_mind_tab, "🎛️ 硬件智能")
-        except Exception as e:
-            self.hardware_mind_tab = None
-            self.hardware_mind_engine = None
-
-        # 🐍 Python智能日志分析系统 - Python Mind
-        # 核心理念："从错误中学习，从日志中洞察，自动诊断，智能修复"
-        try:
-            from core.python_mind import PythonMindEngine
-            self.python_mind_engine = PythonMindEngine({
-                "node_id": f"pythonmind_{uuid.uuid4().hex[:8]}"
-            })
-            self.python_mind_tab = PythonMindPanel()
-            self.python_mind_tab.set_engine(self.python_mind_engine)
-            self.center_tabs.addTab(self.python_mind_tab, "🐍 Python日志")
-        except Exception as e:
-            self.python_mind_tab = None
-            self.python_mind_engine = None
-
-        # 🧹 智能临时文件清理系统 - Smart Cleanup
-        # 核心理念："不是简单的删除，而是智能的资产管理"
-        try:
-            self.smart_cleanup_tab = SmartCleanupPanel()
-            self.center_tabs.addTab(self.smart_cleanup_tab, "🧹 智能清理")
-        except Exception as e:
-            self.smart_cleanup_tab = None
-
-        # L4 执行层监控 (RelayFreeLLM 网关监控)
-        try:
-            self.l4_executor_tab = L4ExecutorPanel()
-            self.center_tabs.addTab(self.l4_executor_tab, "⚡ L4执行层")
-        except Exception as e:
-            self.l4_executor_tab = None
-
-        # SmolLM2 L0 快反大脑 (意图路由 <1s 响应)
-        try:
-            self.smolllm2_tab = SmolLM2Panel()
-            self.center_tabs.addTab(self.smolllm2_tab, "🧠 SmolLM2")
-        except Exception as e:
-            self.smolllm2_tab = None
-
-        # 智能提示系统 (全局交互版)
-        try:
-            self.intelligent_hints_tab = IntelligentHintsPanel()
-            self.center_tabs.addTab(self.intelligent_hints_tab, "💡 智能提示")
-        except Exception as e:
-            self.intelligent_hints_tab = None
-
-        # 思维审核与自我进化
-        try:
-            self.thought_audit_tab = ThoughtAuditPanel()
-            self.center_tabs.addTab(self.thought_audit_tab, "🔬 思维审核")
-        except Exception as e:
-            self.thought_audit_tab = None
-
-        # 聚合推荐首页
-        try:
-            self.feed_home_tab = FeedHomePanel()
-            self.center_tabs.addTab(self.feed_home_tab, "🏠 推荐首页")
-        except Exception as e:
-            self.feed_home_tab = None
-
-        # 认知框架协作者
-        try:
-            self.cognitive_framework_tab = CognitiveFrameworkPanel()
-            self.center_tabs.addTab(self.cognitive_framework_tab, "🧩 认知框架")
-        except Exception as e:
-            self.cognitive_framework_tab = None
-
-        # 消息模式与提示词系统
-        try:
-            self.message_pattern_tab = MessagePatternPanel()
-            self.center_tabs.addTab(self.message_pattern_tab, "📝 消息模式")
-        except Exception as e:
-            self.message_pattern_tab = None
-
-        # 聚合推荐面板
-        try:
-            self.aggregator_tab = AggregatorPanel()
-            self.center_tabs.addTab(self.aggregator_tab, "📰 聚合推荐")
-        except Exception as e:
-            self.aggregator_tab = None
-
-        # 归档工具面板
-        try:
-            self.archive_tool_tab = ArchiveToolPanel()
-            self.center_tabs.addTab(self.archive_tool_tab, "📦 归档工具")
-        except Exception as e:
-            self.archive_tool_tab = None
-
-        # 云盘面板
-        try:
-            self.cloud_disk_tab = CloudDiskPanel()
-            self.center_tabs.addTab(self.cloud_disk_tab, "☁️ 云盘")
-        except Exception as e:
-            self.cloud_disk_tab = None
-
-        # 提佣系统面板
-        try:
-            self.commission_tab = CommissionPanel()
-            self.center_tabs.addTab(self.commission_tab, "💰 提佣")
-        except Exception as e:
-            self.commission_tab = None
-
-        # 专业审核增强面板
-        try:
-            self.creative_review_tab = CreativeReviewPanel()
-            self.center_tabs.addTab(self.creative_review_tab, "✅ 专业审核")
-        except Exception as e:
-            self.creative_review_tab = None
-
-        # 决策支持面板
-        try:
-            self.decision_tab = DecisionSupportPanel()
-            self.center_tabs.addTab(self.decision_tab, "🎯 决策支持")
-        except Exception as e:
-            self.decision_tab = None
-
-        # 增强任务面板
-        try:
-            self.enhanced_task_tab = EnhancedTaskPanel()
-            self.center_tabs.addTab(self.enhanced_task_tab, "🚀 增强任务")
-        except Exception as e:
-            self.enhanced_task_tab = None
-
-        # Karpathy规则面板
-        try:
-            self.karpathy_tab = KarpathyRulesPanel()
-            self.center_tabs.addTab(self.karpathy_tab, "📚 Karpathy")
-        except Exception as e:
-            self.karpathy_tab = None
-
-        # 轻量级UI面板
-        try:
-            self.lightweight_ui_tab = LightweightUIPanel()
-            self.center_tabs.addTab(self.lightweight_ui_tab, "🪶 轻量UI")
-        except Exception as e:
-            self.lightweight_ui_tab = None
-
-        # Markdown转Doc面板
-        try:
-            self.md_to_doc_tab = MarkdownToDocPanel()
-            self.center_tabs.addTab(self.md_to_doc_tab, "📄 MD转Word")
-        except Exception as e:
-            self.md_to_doc_tab = None
-
-        # P2P广播面板
-        try:
-            self.p2p_broadcast_tab = P2PBroadcastPanel()
-            self.center_tabs.addTab(self.p2p_broadcast_tab, "📡 P2P广播")
-        except Exception as e:
-            self.p2p_broadcast_tab = None
-
-        # 用户画像面板
-        try:
-            self.profile_tab = ProfilePanel()
-            self.center_tabs.addTab(self.profile_tab, "👤 用户画像")
-        except Exception as e:
-            self.profile_tab = None
-
-        # 模型提供商面板
-        try:
-            self.provider_tab = ProviderPanel()
-            self.center_tabs.addTab(self.provider_tab, "🔧 提供商")
-        except Exception as e:
-            self.provider_tab = None
-
-        # 智能推荐面板
-        try:
-            self.recommendation_tab = RecommendationPanel()
-            self.center_tabs.addTab(self.recommendation_tab, "🎬 智能推荐")
-        except Exception as e:
-            self.recommendation_tab = None
-
-        # 中继面板
-        try:
-            self.relay_tab = RelayPanel()
-            self.center_tabs.addTab(self.relay_tab, "🔄 中继")
-        except Exception as e:
-            self.relay_tab = None
-
-        # 安全诊断面板
-        try:
-            self.security_diagnostic_tab = SecurityDiagnosticPanel()
-            self.center_tabs.addTab(self.security_diagnostic_tab, "🛡️ 安全诊断")
-        except Exception as e:
-            self.security_diagnostic_tab = None
-
-        # 智能助手面板
-        try:
-            self.smart_assistant_tab = SmartAssistantPanel()
-            self.center_tabs.addTab(self.smart_assistant_tab, "🤖 智能助手")
-        except Exception as e:
-            self.smart_assistant_tab = None
-
-        # 智能写作面板
-        try:
-            self.smart_writing_tab = SmartWritingPanel()
-            self.center_tabs.addTab(self.smart_writing_tab, "✍️ 智能写作")
-        except Exception as e:
-            self.smart_writing_tab = None
-
-        # 社交电商面板
-        try:
-            self.social_commerce_tab = SocialCommercePanel()
-            self.center_tabs.addTab(self.social_commerce_tab, "🛒 社交电商")
-        except Exception as e:
-            self.social_commerce_tab = None
-
-        # 状态面板
-        try:
-            self.status_tab = StatusPanel()
-            self.center_tabs.addTab(self.status_tab, "📊 状态")
-        except Exception as e:
-            self.status_tab = None
-
-        # Toonflow短剧面板
-        try:
-            self.toonflow_tab = ToonflowPanel()
-            self.center_tabs.addTab(self.toonflow_tab, "🎭 短剧")
-        except Exception as e:
-            self.toonflow_tab = None
-
-        # URL智能优化面板
-        try:
-            self.url_intelligence_tab = URLIntelligencePanel()
-            self.center_tabs.addTab(self.url_intelligence_tab, "🔗 URL优化")
-        except Exception as e:
-            self.url_intelligence_tab = None
-
-        # 写作助手面板
-        try:
-            self.writing_assistant_tab = WritingAssistantPanel()
-            self.center_tabs.addTab(self.writing_assistant_tab, "📝 写作助手")
-        except Exception as e:
-            self.writing_assistant_tab = None
-
-        # 🔐 智能授权与实名认证系统 - Activation License
-        # 核心理念："授权码 = 付款凭证 = 使用权限"
-        try:
-            self.activation_license_tab = ActivationLicensePanel()
-            self.center_tabs.addTab(self.activation_license_tab, "🔐 授权中心")
-        except Exception as e:
-            self.activation_license_tab = None
-
         self.splitter.addWidget(self.center_tabs)
 
-        # 右侧：工作区 + 模型池
+        # 右侧：工作区 + 模型池（快速加载）
         self.right_stack = QStackedWidget()
         self.workspace_panel = WorkspacePanel()
         self.right_stack.addWidget(self.workspace_panel)
@@ -935,8 +336,6 @@ class MainWindow(QWidget):
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setStretchFactor(2, 0)
         self.splitter.setSizes([self.config.left_panel_width, 800, self.config.right_panel_width])
-
-        root.addWidget(self.splitter)
 
         # 状态栏
         self.status_bar = QLabel()
@@ -969,11 +368,173 @@ class MainWindow(QWidget):
         status_layout.addWidget(self._status_indicator)
         status_layout.addWidget(self._toast_toggle)
         self.status_bar.setLayout(status_layout)
-        root.addWidget(self.status_bar)
+        self.main_layout.addWidget(self.status_bar)
 
         # 默认
         self.center_tabs.setCurrentIndex(0)
         self.right_stack.setCurrentIndex(0)
+
+    def _show_loading_screen(self):
+        """显示加载屏幕"""
+        from PyQt6.QtWidgets import QVBoxLayout, QLabel
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont
+
+        loading_widget = QWidget()
+        loading_layout = QVBoxLayout(loading_widget)
+        loading_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        title = QLabel("生命之树正在苏醒...")
+        title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        title.setStyleSheet("color: #3B82F6;")
+        loading_layout.addWidget(title)
+
+        subtitle = QLabel("根系正在伸向远方，连接智慧网络...")
+        subtitle.setFont(QFont("Arial", 12))
+        subtitle.setStyleSheet("color: #94A3B8;")
+        loading_layout.addWidget(subtitle)
+
+        self.loading_stack.addWidget(loading_widget)
+        self.loading_stack.setCurrentWidget(loading_widget)
+
+    def _async_init(self):
+        """异步初始化组件"""
+        import time
+        start_time = time.time()
+
+        try:
+            # 显示主界面
+            QTimer.singleShot(200, lambda: self.loading_stack.setCurrentWidget(self.main_widget))
+
+            # 显示初始化进度
+            init_steps = [
+                "初始化Hermes Agent",
+                "加载系统大脑",
+                "初始化智能配置",
+                "加载任务进度管理器",
+                "初始化搜索工具",
+                "加载会话数据",
+                "初始化认证系统",
+                "同步配置",
+                "加载A2UI组件",
+                "设置菜单栏"
+            ]
+            
+            QTimer.singleShot(300, lambda: self.chat_panel.show_initialization_progress(init_steps))
+
+            # 初始化核心组件
+            self._init_agent()
+            self._init_system_brain()
+            self._init_smart_config()
+            self._init_task_progress()
+            self._init_search()
+            self._init_sessions()
+            self._init_auth()
+            self._init_config_sync()
+            self._init_a2ui()
+            self._setup_menu()
+
+            # 延迟加载其他标签页
+            QTimer.singleShot(1000, self._load_additional_tabs)
+
+            # 更新状态
+            QTimer.singleShot(500, lambda: self._status_text.setText("就绪"))
+            QTimer.singleShot(500, lambda: self._status_indicator.setText("🟢"))
+
+        except Exception as e:
+            logger.error(f"异步初始化失败: {e}")
+            QTimer.singleShot(0, lambda: self.loading_stack.setCurrentWidget(self.main_widget))
+            QTimer.singleShot(0, lambda: self._status_text.setText(f"初始化异常: {str(e)}"))
+            QTimer.singleShot(0, lambda: self._status_indicator.setText("🔴"))
+
+        logger.info(f"初始化完成，耗时: {time.time() - start_time:.2f}秒")
+
+    def _load_additional_tabs(self):
+        """延迟加载其他标签页"""
+        try:
+            # V2.0: 内容监控页面
+            self.content_monitor_tab = ContentMonitorPanel()
+            self.center_tabs.addTab(self.content_monitor_tab, "🛡️ 内容监控")
+
+            # V2.0: 文档审核与生命周期管理页面
+            self.doc_lifecycle_tab = DocLifecyclePanel()
+            self.center_tabs.addTab(self.doc_lifecycle_tab, "📋 文档审核")
+
+            # V2.0: 定时任务管理页面
+            self.schedule_tab = SchedulePanel()
+            self.center_tabs.addTab(self.schedule_tab, "⏰ 定时任务")
+
+            # V2.0: Wiki 编译器页面 (LLM Wiki 架构)
+            self.wiki_compiler_tab = WikiCompilerPanel(get_wiki_compiler())
+            self.center_tabs.addTab(self.wiki_compiler_tab, "🧠 Wiki知识库")
+
+            # V2.0: 角色智库 - Persona Skill 面板
+            self.persona_skill_tab = PersonaSkillPanel()
+            self.center_tabs.addTab(self.persona_skill_tab, "🧙 角色智库")
+
+            # V2.0: P2P 搜索代理网络
+            self.p2p_search_proxy_tab = P2PSearchProxyPanel()
+            self.center_tabs.addTab(self.p2p_search_proxy_tab, "🌐 P2P搜索代理")
+
+            # V2.0: 去中心化本地商品交易市场
+            from core.local_market.ui.panel import LocalMarketPanel
+            self.local_market_tab = LocalMarketPanel()
+            self.center_tabs.addTab(self.local_market_tab, "🛒 本地市场")
+
+            # V2.0: PageIndex 智能文档索引 (LLM Wiki 架构)
+            from core.page_index.ui.panel import PageIndexPanel
+            self.page_index_tab = PageIndexPanel()
+            self.center_tabs.addTab(self.page_index_tab, "📑 文档索引")
+
+            # 其他面板（按需加载）
+            self._load_optional_tabs()
+
+        except Exception as e:
+            logger.error(f"加载标签页失败: {e}")
+
+    def _load_optional_tabs(self):
+        """加载可选标签页"""
+        optional_tabs = [
+            # V2.0: CLI-Anything 工具工厂
+            ("cli_anything_tab", "ui.cli_anything_panel", "CLIAutoGenPanel", "⚡ 工具工厂"),
+            # V2.0: WebRTC 视频通话与直播
+            ("webrtc_tab", "ui.webrtc_panel", "WebRTCPanel", "📞 视频通话"),
+            # V2.0: 视频播放器
+            ("video_player_tab", "ui.video_player_panel", "VideoPlayerPanel", "🎬 视频播放"),
+            # V2.0: P2P 去中心化电商
+            ("decommerce_tab", "ui.decommerce_panel", "DeCommercePanel", "🛍️ DeCommerce"),
+            # V2.8: 元宇宙UI
+            ("metaverse_tab", "ui.metaverse_ui_panel", "MetaverseUIPanel", "🚀 舰桥"),
+            # 需求头脑风暴
+            ("brainstorm_tab", "ui.idea_clarifier_panel", "IdeaClarifierPanel", "🎯 头脑风暴"),
+            # 政府开放资料查询
+            ("gov_data_tab", "ui.gov_data_panel", "GovDataPanel", "🏛️ 政府资料"),
+            # 公司印章生成器
+            ("stamp_tab", "ui.stamp_panel", "StampPanel", "🔐 印章生成"),
+            # 中继链
+            ("relay_chain_tab", "ui.relay_chain_panel", "RelayChainPanel", "⛓️ 中继链"),
+            # P2P 去中心化更新系统
+            ("update_tab", "ui.decentralized_update_panel", "DecentralizedUpdatePanel", "🌐 P2P更新"),
+            # V2.9: 根系装配园
+            ("assembler_tab", "ui.assembler_panel", "RootAssemblyGardenPanel", "🌱 嫁接园"),
+            # V2.1: AI算力仪表盘
+            ("hardware_detector_tab", "ui.hardware_detector_panel", "HardwareDetectorPanel", "🖥️ 算力仪表盘"),
+        ]
+
+        for attr_name, module_name, class_name, tab_title in optional_tabs:
+            try:
+                module = __import__(module_name, fromlist=[class_name])
+                panel_class = getattr(module, class_name)
+                panel = panel_class()
+                setattr(self, attr_name, panel)
+                self.center_tabs.addTab(panel, tab_title)
+            except Exception as e:
+                logger.debug(f"跳过 {tab_title}: {e}")
+                setattr(self, attr_name, None)
+
+    def _build_ui(self):
+        """兼容旧代码的构建方法"""
+        self._build_core_ui()
 
     def _setup_menu(self):
         """设置菜单栏"""

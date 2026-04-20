@@ -9,7 +9,62 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
     QScrollArea, QProgressBar, QLineEdit,
 )
-from models.model_pool import ModelPool, PooledModel
+import psutil
+
+
+class PooledModel:
+    """模型池中的模型"""
+    def __init__(self, name, loaded=False):
+        self.name = name
+        self.loaded = loaded
+
+
+class ModelPool:
+    """模型池"""
+    def __init__(self):
+        self.models = []
+        self._load_models()
+    
+    def _load_models(self):
+        """加载模型列表"""
+        # 模拟模型列表
+        self.models = [
+            PooledModel("qwen2.5:0.5b", False),
+            PooledModel("qwen2.5:1.5b", False),
+            PooledModel("qwen2.5:3b", False),
+            PooledModel("llama3.2:1b", False),
+            PooledModel("llama3.2:3b", False),
+        ]
+    
+    def refresh(self):
+        """刷新模型列表"""
+        self._load_models()
+        return self.models
+    
+    def load(self, name):
+        """加载模型"""
+        for model in self.models:
+            if model.name == name:
+                model.loaded = True
+                break
+    
+    def unload(self, name):
+        """卸载模型"""
+        for model in self.models:
+            if model.name == name:
+                model.loaded = False
+                break
+    
+    def get_memory_usage(self):
+        """获取内存使用情况"""
+        mem = psutil.virtual_memory()
+        loaded_count = sum(1 for m in self.models if m.loaded)
+        return {
+            'used_gb': mem.used / (1024**3),
+            'total_gb': mem.total / (1024**3),
+            'percent': mem.percent,
+            'loaded_models_count': loaded_count
+        }
 
 
 class ModelPoolPanel(QWidget):

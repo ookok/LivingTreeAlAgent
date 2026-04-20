@@ -26,39 +26,32 @@ def run_client():
 
     app = QApplication(sys.argv)
 
-    # 加载主题
-    theme_path = _root / "client" / "src" / "presentation" / "theme.py"
-    if theme_path.exists():
-        try:
+    # 加载主题（默认浅色，支持配置）
+    try:
+        # 检查配置文件中的主题设置
+        config_theme = "light"  # 默认浅色主题
+        config_path = _root / ".config" / "theme.txt"
+        if config_path.exists():
+            config_theme = config_path.read_text().strip()
+        
+        if config_theme == "dark":
             from ui.theme import DARK_QSS
             app.setStyleSheet(DARK_QSS)
-        except ImportError:
-            pass
+            print("已应用深色主题")
+        else:
+            from ui.theme_light import LIGHT_QSS
+            app.setStyleSheet(LIGHT_QSS)
+            print("已应用浅色主题")
+    except ImportError as e:
+        print(f"加载主题失败: {e}")
 
     from client.src.infrastructure.config import load_config, save_config
     from client.src.presentation.main_window import MainWindow
 
     cfg = load_config()
     
-    # 检查是否首次运行
-    config_path = _root / ".config" / "first_run.txt"
-    if not config_path.exists():
-        print("首次运行，显示模型选择对话框...")
-        try:
-            from ui.model_selector_dialog import ModelSelectorDialog
-            dialog = ModelSelectorDialog(cfg)
-            if dialog.exec() == dialog.DialogCode.Accepted:
-                # 标记为已运行
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                config_path.write_text("1")
-                print("模型选择完成，启动主窗口...")
-            else:
-                print("用户取消了模型选择，退出...")
-                return
-        except Exception as e:
-            print(f"显示模型选择对话框时出错: {e}")
-            # 继续启动，使用默认模型
-    
+    # 直接启动主窗口，模型部署检查在主窗口中进行
+    print("启动主窗口...")
     window = MainWindow(cfg)
     window.show()
 

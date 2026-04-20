@@ -31,7 +31,7 @@ class A2UIConfig:
         self.fallback_delay = 2  # 降级延迟（秒）
 
 
-class A2UIPanel(QWidget, ABC):
+class A2UIPanel(QWidget):
     """
     A2UI 面板基类
     所有 A2UI 面板都应该继承自此类
@@ -86,7 +86,6 @@ class A2UIPanel(QWidget, ABC):
         # 默认显示加载界面
         self._stack.setCurrentWidget(self._loading_widget)
     
-    @abstractmethod
     async def load(self) -> bool:
         """
         加载面板
@@ -94,9 +93,8 @@ class A2UIPanel(QWidget, ABC):
         Returns:
             bool: 是否加载成功
         """
-        pass
+        raise NotImplementedError("子类必须实现load方法")
     
-    @abstractmethod
     async def fallback(self, reason: str) -> bool:
         """
         降级处理
@@ -107,7 +105,7 @@ class A2UIPanel(QWidget, ABC):
         Returns:
             bool: 是否降级成功
         """
-        pass
+        raise NotImplementedError("子类必须实现fallback方法")
     
     def update_progress(self, progress: int):
         """

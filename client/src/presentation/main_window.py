@@ -1,805 +1,449 @@
 """
-主窗口 — 三栏布局 + 底部状态栏 + 无弹窗 UI
-=========================================
-集成：聊天、写作助手Tab、用户认证、配置导入导出
-V2.0 新增：MCP管理、Skill市场、任务进度、数字分身、LAN聊天
-
-🌿 生命之树无弹窗设计:
-- 林冠警报带 (CanopyAlertBand): 顶部全局提醒
-- 根系询问台 (RootInquiryDeck): 右侧边栏确认
-- 沃土状态栏 (SoilStatusRail): 底部进度/状态
-- 晨露提示卡 (DewdropHintCard): 上下文提示
+主窗口 — 全新仪表盘主界面
+=========================
+采用现代卡片式设计，集成所有功能模块
 """
 
 import logging
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
-    QLabel, QStackedWidget, QTabWidget,
-    QPushButton, QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
+    QLabel, QScrollArea, QFrame, QGridLayout, QPushButton,
+    QGraphicsDropShadowEffect, QMessageBox, QTabWidget
 )
-from PyQt6.QtGui import QKeyEvent, QAction, QIcon
+from PyQt6.QtGui import QFont, QColor
 
-# 基础设施层导入（工程化路径）
-from client.src.infrastructure.config.config import AppConfig, load_config, save_config
-from client.src.infrastructure.model.ollama_client import OllamaClient
-from core.session_db import SessionDB
-from client.src.infrastructure.network.relay_client import RelayClient
-from client.src.infrastructure.network.lan_discovery import LANDiscovery
 
-# 业务层导入
-from client.src.business.assembler.assembler_panel import AssemblerPanel
-from client.src.business.metaverse.metaverse_panel import MetaversePanel
-from client.src.business.home.home_panel import HomePanel
-from client.src.business.task import get_task_progress_manager
+class MainCard(QFrame):
+    """主功能卡片"""
+    
+    def __init__(self, icon: str, title: str, description: str, color: str, parent=None):
+        super().__init__(parent)
+        self._init_ui(icon, title, description, color)
+    
+    def _init_ui(self, icon: str, title: str, description: str, color: str):
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(160)
+        
+        self.setStyleSheet(f"""
+            MainCard {{
+                background-color: {color};
+                border-radius: 20px;
+                border: 2px solid transparent;
+            }}
+            MainCard:hover {{
+                border: 2px solid #3b82f6;
+                background-color: #ffffff;
+            }}
+        """)
+        
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(10)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(20)
+        
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 48px;")
+        layout.addWidget(icon_label)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(8)
+        
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Microsoft YaHei", 16, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #1f2937;")
+        text_layout.addWidget(title_label)
+        
+        desc_label = QLabel(description)
+        desc_label.setFont(QFont("Microsoft YaHei", 11))
+        desc_label.setStyleSheet("color: #6b7280;")
+        desc_label.setWordWrap(True)
+        text_layout.addWidget(desc_label)
+        
+        layout.addLayout(text_layout)
+        layout.addStretch()
 
-# 表现层组件
-from client.src.presentation.theme import DARK_QSS
-from client.src.presentation.components import (
-    LivingTreeUI,
-    CanopyAlertBand,
-    RootInquiryDeck,
-    SoilStatusRail,
-    DewdropHintCard,
-)
-from client.src.presentation.panels.layered_ai_config_panel import LayeredAIConfigPanel
+
+class QuickStatCard(QFrame):
+    """快捷统计卡片"""
+    
+    def __init__(self, icon: str, label: str, value: str, color: str, parent=None):
+        super().__init__(parent)
+        self._init_ui(icon, label, value, color)
+    
+    def _init_ui(self, icon: str, label: str, value: str, color: str):
+        self.setFixedHeight(100)
+        
+        self.setStyleSheet(f"""
+            QuickStatCard {{
+                background-color: {color};
+                border-radius: 16px;
+                border: 1px solid #e5e7eb;
+            }}
+        """)
+        
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(6)
+        shadow.setColor(QColor(0, 0, 0, 10))
+        shadow.setOffset(0, 2)
+        self.setGraphicsEffect(shadow)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(16)
+        
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 32px;")
+        layout.addWidget(icon_label)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(4)
+        
+        value_label = QLabel(value)
+        value_label.setFont(QFont("Microsoft YaHei", 20, QFont.Weight.Bold))
+        value_label.setStyleSheet("color: #1f2937;")
+        text_layout.addWidget(value_label)
+        
+        label_label = QLabel(label)
+        label_label.setFont(QFont("Microsoft YaHei", 10))
+        label_label.setStyleSheet("color: #6b7280;")
+        text_layout.addWidget(label_label)
+        
+        layout.addLayout(text_layout)
+        layout.addStretch()
+
+
+class SectionTitle(QLabel):
+    """区块标题"""
+    
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setFont(QFont("Microsoft YaHei", 16, QFont.Weight.Bold))
+        self.setStyleSheet("color: #1f2937; margin-top: 24px; margin-bottom: 16px;")
+
+
+class WelcomeBanner(QFrame):
+    """欢迎横幅"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._init_ui()
+    
+    def _init_ui(self):
+        self.setStyleSheet("""
+            WelcomeBanner {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3b82f6, stop:0.5 #8b5cf6, stop:1 #ec4899);
+                border-radius: 24px;
+            }
+        """)
+        
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(QColor(59, 130, 246, 80))
+        shadow.setOffset(0, 8)
+        self.setGraphicsEffect(shadow)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(32, 28, 32, 28)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(8)
+        
+        greeting = QLabel(" 欢迎回来！")
+        greeting.setFont(QFont("Microsoft YaHei", 22, QFont.Weight.Bold))
+        greeting.setStyleSheet("color: #ffffff;")
+        text_layout.addWidget(greeting)
+        
+        subtitle = QLabel("Hermes Desktop - 您的 AI 智能工作台")
+        subtitle.setFont(QFont("Microsoft YaHei", 13))
+        subtitle.setStyleSheet("color: #e0e7ff;")
+        text_layout.addWidget(subtitle)
+        
+        desc = QLabel("集成对话、写作、研究、装配等多功能于一体")
+        desc.setFont(QFont("Microsoft YaHei", 11))
+        desc.setStyleSheet("color: #c7d2fe;")
+        text_layout.addWidget(desc)
+        
+        layout.addLayout(text_layout)
+        layout.addStretch()
+        
+        icon_label = QLabel("🤖")
+        icon_label.setStyleSheet("font-size: 80px;")
+        layout.addWidget(icon_label)
 
 
 class MainWindow(QWidget):
-    """
-    主窗口
-
-    布局：左侧会话面板 + 中央聊天/写作切换 + 右侧工作区/模型池
-    顶部：林冠警报带（全局提醒）
-    右侧：根系询问台（确认询问）
-    底部：沃土状态栏（进度/状态）
-
-    V2.0 新增：MCP管理、Skill市场、任务进度、数字分身、LAN聊天
-    """
-
-    switch_to_writing = pyqtSignal(str)  # 传入生成内容
-
-    def __init__(self, config: AppConfig):
+    """主窗口 - 全新仪表盘设计"""
+    
+    switch_to_writing = pyqtSignal(str)
+    
+    def __init__(self, config):
         super().__init__()
         self.config = config
-        self.current_session_id: str | None = None
+        self.current_session_id = None
         self._agent = None
-        self._streaming = False
-
-        # V2.0 功能模块
-        self._smart_config = None
-        self._task_progress_manager = None
-        self._search_tool = None
-        self._research_panel = None
-
-        # 🌿 生命之树 UI 管理器
-        self._ltui: LivingTreeUI = None
-
-        # ── 最小化启动：只做UI构建，立刻显示 ───────────────────
+        
         self._build_ui()
-        self._init_living_tree_ui()
-
-        # 显示窗口（让用户立刻看到界面）
-        self.setWindowTitle("Hermes Desktop v2.0 🌿")
-        self.resize(config.window_width, config.window_height)
-        self.show()
-
-        # ── 延迟后台初始化 ────────────────────────────────────
-        # 使用 QTimer.singleShot(0, ...) 让窗口先渲染，后台加载
-        from PyQt6.QtCore import QTimer
-
-        # 阶段1: 立刻后台执行（窗口渲染后立即）
-        QTimer.singleShot(0, self._deferred_init_stage1)
-
-        # 阶段2: 1秒后执行（可选模块）
-        QTimer.singleShot(1000, self._deferred_init_stage2)
-
-        # 阶段3: 3秒后执行（重量级模块）
-        QTimer.singleShot(3000, self._deferred_init_stage3)
-
-    # ── UI ─────────────────────────────────────────────────────
-
+        
+        self.setWindowTitle("Hermes Desktop v2.0")
+        self.resize(1200, 800)
+    
     def _build_ui(self):
-        self.setMinimumSize(900, 600)
-
-        # 主布局（垂直：内容 + 状态栏）
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        # 林冠警报带将在这里插入（在root布局的index 0）
-
-        # 水平布局（主内容区）
-        content_layout = QHBoxLayout()
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.splitter = splitter
-
-        # 左侧：会话面板
-        self.session_panel = self._create_session_panel()
-        splitter.addWidget(self.session_panel)
-
-        # 中央：Tab 切换
-        self.center_tabs = QTabWidget()
-        self.center_tabs.setTabPosition(QTabWidget.TabPosition.North)
-        self.center_tabs.setDocumentMode(True)
-
-        # 聊天页面
-        self.chat_panel = self._create_chat_panel()
-        self.chat_panel.send_requested.connect(self._on_send_message)
-        self.chat_panel.stop_requested.connect(self._on_stop)
-        self.chat_panel.switch_to_writing.connect(self._enter_writing_mode)
-        self.center_tabs.addTab(self.chat_panel, "💬 聊天")
-
-        # 写作助手页面
-        self.writing_tab = self._create_writing_tab()
-        self.writing_tab.status_changed.connect(self._on_status_changed)
-        self.center_tabs.addTab(self.writing_tab, "✍️ 写作助手")
-
-        # V2.0: 研究搜索页面
-        self.research_tab = self._create_research_panel()
-        self.center_tabs.addTab(self.research_tab, "🔍 研究助手")
-
-        # V2.0: 首页聚合
-        self.home_tab = HomePanel()
-        self.center_tabs.addTab(self.home_tab, "🏠 首页")
-
-        # V2.0: 嫁接园（装配园）
-        self.assembler_tab = AssemblerPanel()
-        self.center_tabs.addTab(self.assembler_tab, "🌱 嫁接园")
-
-        # V2.8: 元宇宙UI (舰桥)
-        self.metaverse_tab = MetaversePanel()
-        self.center_tabs.addTab(self.metaverse_tab, "🚀 舰桥")
-
-        splitter.addWidget(self.center_tabs)
-
-        # 右侧：工作区
-        self.right_stack = QStackedWidget()
-        self.workspace_panel = self._create_workspace_panel()
-        self.right_stack.addWidget(self.workspace_panel)
-
-        # 模型池面板
-        self.model_pool_panel = self._create_model_pool_panel()
-        self.model_pool_panel.model_selected.connect(self._switch_model)
-        self.right_stack.addWidget(self.model_pool_panel)
-
-        splitter.addWidget(self.right_stack)
-
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 0)
-        splitter.setSizes([self.config.left_panel_width, 800, self.config.right_panel_width])
-
-        content_layout.addWidget(splitter)
-        root.addLayout(content_layout)
-
-        # 沃土状态栏将在这里添加（在root布局的末尾）
-
-        # 默认
-        self.center_tabs.setCurrentIndex(0)
-        self.right_stack.setCurrentIndex(0)
-
-        # 应用主题
-        self.setStyleSheet(DARK_QSS)
-
-    def _create_session_panel(self):
-        """创建会话面板（子类可覆盖）"""
-        from client.src.presentation.widgets.session_panel import SessionPanel
-        panel = SessionPanel()
-        panel.new_chat_requested.connect(self._new_chat)
-        panel.session_selected.connect(self._load_session)
-        panel.session_deleted.connect(self._delete_session)
-        panel.settings_requested.connect(self._show_settings)
-        return panel
-
-    def _create_chat_panel(self):
-        """创建聊天面板"""
-        from client.src.presentation.panels.chat_panel import ChatPanel
-        return ChatPanel()
-
-    def _create_writing_tab(self):
-        """创建写作标签页"""
-        from client.src.presentation.panels.writing_tab import WritingTab
-        return WritingTab(self, self._agent)
-
-    def _create_research_panel(self):
-        """创建研究面板"""
-        from client.src.presentation.panels.research_panel import ResearchPanel
-        panel = ResearchPanel()
-        self._research_panel = panel
-        return panel
-
-    def _create_workspace_panel(self):
-        """创建工作区面板"""
-        from client.src.presentation.widgets.workspace_panel import WorkspacePanel
-        return WorkspacePanel()
-
-    def _create_model_pool_panel(self):
-        """创建模型池面板"""
-        from client.src.presentation.panels.model_pool_panel import ModelPoolPanel
-        return ModelPoolPanel(self)
-
-    def _init_living_tree_ui(self):
-        """初始化生命之树 UI 组件"""
-        self._ltui = LivingTreeUI(self)
-
-        # 林冠警报带信号
-        self._ltui.alert.action_clicked.connect(self._on_alert_action)
-        self._ltui.alert.dismissed.connect(self._on_alert_dismiss)
-
-        # 根系询问台信号
-        self._ltui.inquiry.confirmed.connect(self._on_inquiry_confirmed)
-        self._ltui.inquiry.cancelled.connect(self._on_inquiry_cancelled)
-
-        # 沃土状态栏信号
-        self._ltui.status.cancelled.connect(self._on_status_cancelled)
-
-    # ── 🌿 林冠警报带 (Canopy Alert Band) ─────────────────────────
-
-    def show_alert(
-        self,
-        message: str,
-        level: str = "info",
-        actions: list = None,
-        auto_hide_ms: int = 0
-    ):
-        """
-        显示全局提醒（林冠警报带）
-
-        Args:
-            message: 提醒消息
-            level: info/warning/error/success
-            actions: [(文本, 回调), ...]
-            auto_hide_ms: 自动隐藏时间
-        """
-        self._ltui.alert.show_alert(message, level, actions, auto_hide_ms)
-
-    def _on_alert_action(self, action_id: str):
-        """警报动作被点击"""
-        pass  # 子类可覆盖
-
-    def _on_alert_dismiss(self):
-        """警报被关闭"""
-        pass  # 子类可覆盖
-
-    # ── 🌿 根系询问台 (Root Inquiry Deck) ───────────────────────
-
-    def ask(
-        self,
-        title: str = "根系询问",
-        description: str = "请确认您的选择：",
-        options: list = None,
-        on_confirm=None,
-        on_cancel=None
-    ):
-        """
-        显示询问（根系询问台）
-
-        Args:
-            title: 标题
-            description: 描述
-            options: [(id, 文本, 回调), ...]
-            on_confirm: 确认回调 (choice_id)
-            on_cancel: 取消回调
-        """
-        self._ltui.inquiry.ask(title, description, options=options, on_confirm=on_confirm, on_cancel=on_cancel)
-
-    def ask_conflict_resolve(self, tool_new: str, tool_old: str, options: list, on_confirm=None):
-        """显示冲突解决询问"""
-        self._ltui.inquiry.ask_conflict_resolve(tool_new, tool_old, options, on_confirm)
-
-    def ask_delete(self, item_name: str, on_confirm=None):
-        """显示删除确认"""
-        self._ltui.ask_delete(item_name, on_confirm)
-
-    def ask_risk(self, action: str, risk_level: str = "medium", on_confirm=None):
-        """显示风险确认"""
-        self._ltui.ask_risk(action, risk_level, on_confirm)
-
-    def _on_inquiry_confirmed(self, choice_id: str, choice_text: str):
-        """询问确认"""
-        pass  # 子类可覆盖
-
-    def _on_inquiry_cancelled(self):
-        """询问取消"""
-        pass  # 子类可覆盖
-
-    # ── 🌿 沃土状态栏 (Soil Status Rail) ─────────────────────────
-
-    def show_progress(self, message: str, progress: int = -1):
-        """显示进度状态"""
-        self._ltui.status.show_progress(message, progress)
-
-    def update_progress(self, progress: int, message: str = None):
-        """更新进度"""
-        self._ltui.status.update_progress(progress, message)
-
-    def show_success_status(self, message: str, auto_hide_ms: int = 3000):
-        """显示成功状态"""
-        self._ltui.status.show_success(message, auto_hide_ms)
-
-    def show_error_status(self, message: str, auto_hide_ms: int = 5000):
-        """显示错误状态"""
-        self._ltui.status.show_error(message, auto_hide_ms)
-
-    def show_info_status(self, message: str, auto_hide_ms: int = 3000):
-        """显示信息状态"""
-        self._ltui.status.show_info(message, auto_hide_ms)
-
-    def clear_status(self):
-        """清除状态栏"""
-        self._ltui.status.clear()
-
-    def _on_status_cancelled(self):
-        """状态栏取消"""
-        pass  # 子类可覆盖
-
-    # ── 🌿 晨露提示卡 (Dewdrop Hint Card) ─────────────────────────
-
-    def show_hint_below(self, target: QWidget, message: str, level: str = "info"):
-        """在控件下方显示提示"""
-        DewdropHintCard.show_below(target, message, level)
-
-    def show_hint_right(self, target: QWidget, message: str, level: str = "info"):
-        """在控件右侧显示提示"""
-        DewdropHintCard.show_right_of(target, message, level)
-
-    def dismiss_all_hints(self):
-        """关闭所有提示卡"""
-        DewdropHintCard.dismiss_all()
-
-    # ── 便捷方法（替换 QMessageBox）────────────────────────────────
-
-    def show_info(self, message: str, title: str = "提示"):
-        """显示信息提示（替换 QMessageBox.information）"""
-        self.show_alert(f"💡 {title}: {message}", level="info", auto_hide_ms=3000)
-
-    def show_warning(self, message: str, title: str = "警告", actions: list = None):
-        """显示警告提示（替换 QMessageBox.warning）"""
-        if actions is None:
-            actions = [("知道了", None)]
-        self.show_alert(f"⚠️ {title}: {message}", level="warning", actions=actions)
-
-    def show_error(self, message: str, title: str = "错误", actions: list = None):
-        """显示错误提示（替换 QMessageBox.critical）"""
-        if actions is None:
-            actions = [("关闭", None)]
-        self.show_alert(f"❌ {title}: {message}", level="error", actions=actions, auto_hide_ms=5000)
-
-    def confirm(self, message: str, on_confirm, on_cancel=None, title: str = "确认"):
-        """显示确认对话框（替换 QMessageBox.question）"""
-        self.ask(
-            title=title,
-            description=message,
-            options=[
-                ("confirm", "确认", on_confirm),
-                ("cancel", "取消", on_cancel)
-            ]
-        )
-
-    def confirm_delete(self, item_name: str, on_confirm):
-        """显示删除确认（替换 QMessageBox 关于删除的确认）"""
-        self.ask_delete(item_name, on_confirm)
-
-    # ── 菜单 ─────────────────────────────────────────────────────
-
-    def _setup_menu(self):
-        """设置菜单栏"""
-        pass
-
-    # ── Toast 通知 ───────────────────────────────────────────────
-
-    def _toggle_toast(self, checked: bool):
-        """切换通知"""
-        # 通知现在由沃土状态栏处理
-        pass
-
-    def _show_toast(self, message: str, toast_type: str = "info"):
-        """显示通知"""
-        level_map = {
-            "success": "success",
-            "warning": "warning",
-            "error": "error",
-            "info": "info"
-        }
-        self.show_alert(message, level=level_map.get(toast_type, "info"), auto_hide_ms=3000)
-
-    # ── 系统大脑 ─────────────────────────────────────────────────
-
-    def _init_system_brain(self):
-        """初始化系统大脑"""
-        def on_status(msg: str, progress: float):
-            self.statusBar().showMessage(f"系统大脑: {msg}")
-            if progress >= 0:
-                self._ltui.status.show_progress(msg, int(progress * 100))
-
-        try:
-            from client.src.infrastructure.model.system_brain import get_system_brain, SystemBrainConfig
-
-            config = SystemBrainConfig(
-                model_name="qwen2.5:0.5b",
-                api_base=self.config.ollama.base_url
-            )
-            self.system_brain = get_system_brain(config, status_callback=on_status)
-
-            import threading
-            def init():
-                ready = self.system_brain.check_and_prepare()
-                QTimer.singleShot(0, lambda: self._update_brain_status(ready))
-
-            threading.Thread(target=init, daemon=True).start()
-        except Exception as e:
-            self._show_toast(f"系统大脑初始化失败: {e}", "warning")
-
-    def _update_brain_status(self, ready: bool):
-        """更新系统大脑状态"""
-        if ready:
-            self._show_toast("系统大脑已就绪", "success")
-        else:
-            self._show_toast("系统大脑未就绪，请确保Ollama正在运行", "warning")
-
-    # ── 智能配置 ─────────────────────────────────────────────────
-
-    def _init_smart_config(self):
-        """初始化智能配置系统"""
-        try:
-            self._smart_config = get_smart_config(
-                use_brain=True,
-                brain=self.system_brain if hasattr(self, 'system_brain') else None
-            )
-
-            import threading
-            def init():
-                env = self._smart_config.detect_environment()
-                suggestions = self._smart_config.analyze_and_suggest()
-                QTimer.singleShot(0, lambda: self._update_smart_config_status(env, suggestions))
-
-            threading.Thread(target=init, daemon=True).start()
-        except Exception as e:
-            self._show_toast(f"智能配置初始化失败: {e}", "warning")
-
-    def _update_smart_config_status(self, env, suggestions):
-        """更新智能配置状态"""
-        self._show_toast("智能配置已就绪", "success")
-
-    # ══════════════════════════════════════════════════════════════════════
-    # 延迟初始化方法（分阶段后台执行，不阻塞UI）
-    # ══════════════════════════════════════════════════════════════════════
-
-    def _deferred_init_stage1(self):
-        """
-        阶段1：核心功能（立刻执行，窗口渲染后立即）
-        - Agent/Ollama连接检测
-        - 会话加载
-        - 状态栏初始化
-        """
-        import threading
-
-        # Ollama连接检测（后台线程）
-        def check_ollama():
-            try:
-                self.ollama_client = OllamaClient(self.config.ollama)
-                online = self.ollama_client.ping()
-                if online:
-                    v = self.ollama_client.version()
-                    m = self.config.ollama.default_model or "未选模型"
-                    info = f"Ollama {v} — {m}"
-                    QTimer.singleShot(0, lambda: self._ltui.status.show_info(info))
-                else:
-                    QTimer.singleShot(0, lambda: self._ltui.status.show_info("⚠ Ollama 未运行"))
-            except Exception as e:
-                logger.warning(f"Ollama初始化跳过: {e}")
-
-        t = threading.Thread(target=check_ollama, daemon=True)
-        t.start()
-
-        # 会话加载（同步但很快，放到后台避免阻塞）
-        try:
-            db = SessionDB()
-            sessions = db.list_sessions(limit=50)
-            QTimer.singleShot(0, lambda: self._load_sessions_ui(sessions))
-        except Exception as e:
-            logger.warning(f"会话加载失败: {e}")
-
-    def _load_sessions_ui(self, sessions):
-        """在UI线程加载会话列表"""
-        for s in sessions:
-            self.session_panel.add_session(s.id, s.title)
-
-    def _deferred_init_stage2(self):
-        """
-        阶段2：重要功能（1秒后执行）
-        - 搜索工具初始化
-        - 任务进度管理器
-        """
-        try:
-            self._init_search()
-        except Exception as e:
-            logger.warning(f"搜索初始化失败: {e}")
-
-        try:
-            self._init_task_progress()
-        except Exception as e:
-            logger.warning(f"任务进度初始化失败: {e}")
-
-    def _deferred_init_stage3(self):
-        """
-        阶段3：重量级功能（3秒后执行）
-        - 系统大脑
-        - 智能配置
-        - 认证
-        """
-        try:
-            self._init_system_brain()
-        except Exception as e:
-            logger.warning(f"系统大脑初始化失败: {e}")
-
-        try:
-            self._init_smart_config()
-        except Exception as e:
-            logger.warning(f"智能配置初始化失败: {e}")
-
-        try:
-            self._init_auth()
-        except Exception as e:
-            logger.warning(f"认证初始化失败: {e}")
-
-    # ── 任务进度 ─────────────────────────────────────────────────
-
-    def _init_task_progress(self):
-        """初始化任务进度管理器"""
-        self._task_progress_manager = get_task_progress_manager(self)
-
-    # ── AI 搜索 ─────────────────────────────────────────────────
-
-    def _init_search(self):
-        """初始化 AI 搜索工具"""
-        from client.src.infrastructure.network.search_tool import AISearchTool
-
-        serper_key = ""
-        brave_key = ""
-
-        self._search_tool = AISearchTool(
-            serper_key=serper_key,
-            brave_key=brave_key,
-            cache_ttl=60,
-        )
-
-        if hasattr(self, 'research_tab'):
-            self.research_tab.set_search_tool(self._search_tool)
-
-        if self.ollama_client and self.ollama_client.ping():
-            self._search_tool.set_llm_client(
-                self.ollama_client,
-                model=self.config.ollama.default_model or "qwen2.5:7b"
-            )
-
-    # ── Agent ─────────────────────────────────────────────────
-
-    def _init_agent(self):
-        self.ollama_client = OllamaClient(self.config.ollama)
-        self._update_status()
-        QTimer.singleShot(3000, self._update_status)
-
-    def _update_status(self):
-        online = self.ollama_client.ping()
-        if online:
-            v = self.ollama_client.version()
-            m = self.config.ollama.default_model or "未选模型"
-            status_text = f"Ollama {v} — {m}"
-            indicator = "🟢"
-        else:
-            status_text = "⚠ Ollama 未运行 — 请启动 ollama serve"
-            indicator = "🔴"
-
-        # 更新沃土状态栏
-        self._ltui.status.show_info(status_text)
-
-    # ── 会话 ─────────────────────────────────────────────────
-
-    def _init_sessions(self):
-        db = SessionDB()
-        for s in db.list_sessions(limit=50):
-            self.session_panel.add_session(s.id, s.title)
-
-    # ── 用户认证 ─────────────────────────────────────────────────
-
-    def _init_auth(self):
-        """初始化认证系统（V2.0 简化版：跳过登录流程）"""
-        # V2.0 简化：不需要登录，直接可用
-        # 如果后续需要认证功能，在此添加 LoginDialog 相关逻辑
-        pass
-
-    def _on_user_login(self, user_id: str):
-        """用户登录回调"""
-        self._show_toast(f"用户已登录", "success")
-
-    def _on_user_logout(self):
-        """用户登出回调"""
-        self._show_toast("已退出登录", "info")
-
-    def _new_chat(self):
-        self.chat_panel.clear_messages()
-        db = SessionDB()
-        sid = db.create_session()
-        self.current_session_id = sid
-        self.session_panel.add_session(sid, "新会话", select=True)
-        self._recreate_agent()
-
-    def _load_session(self, session_id: str):
-        if self._streaming:
-            # 替换 QMessageBox.warning
-            self.show_warning("请等待", "请等待当前响应结束后再切换会话")
-            return
-        self.current_session_id = session_id
-        db = SessionDB()
-        s = db.get_session(session_id)
-        if s:
-            self.chat_panel.set_title(s.title)
-            self._load_session_messages(session_id)
-
-    def _load_session_messages(self, session_id: str):
-        db = SessionDB()
-        msgs = db.get_messages(session_id)
-        self.chat_panel.clear_messages()
-        for m in msgs:
-            if m.role == "user":
-                self.chat_panel.add_user_message(m.content)
-            elif m.role == "assistant":
-                self.chat_panel.begin_assistant_message()
-                self.chat_panel.append_token(m.content)
-
-    def _delete_session(self, session_id: str):
-        db = SessionDB()
-        db.delete_session(session_id)
-        self.session_panel.remove_session(session_id)
-        if self.current_session_id == session_id:
-            self._new_chat()
-
-    def _recreate_agent(self):
-        from client.src.business.agent import HermesAgent, AgentCallbacks
-
-        if self._agent:
-            self._agent.close()
-        cbs = AgentCallbacks(
-            stream_delta=self._on_stream_delta,
-            thinking=self._on_thinking,
-            tool_start=self._on_tool_start,
-            tool_result=self._on_tool_result,
-        )
-        self._agent = HermesAgent(
-            config=self.config,
-            session_id=self.current_session_id,
-            callbacks=cbs,
-        )
-
-        if hasattr(self, 'writing_tab'):
-            self.writing_tab.set_agent(self._agent)
-
-    # ── 消息 ─────────────────────────────────────────────────
-
-    def _on_send_message(self, text: str):
-        if not self.current_session_id:
-            self._new_chat()
-
-        if not self._agent:
-            self._recreate_agent()
-
-        if not self.ollama_client.ping():
-            self.chat_panel.add_error_message(
-                "Ollama 未运行！请在终端运行: ollama serve\n"
-                "或到设置中检查 Ollama 连接地址"
-            )
-            return
-
-        self._streaming = True
-        self.chat_panel.set_running(True)
-        self.chat_panel.add_user_message(text)
-
-        self._ltui.status.show_progress("AI 思考中...", -1)
-
-        import threading
-
-        def run():
-            try:
-                self.chat_panel.begin_assistant_message()
-                for chunk in self._agent.send_message(text):
-                    if chunk.error:
-                        QTimer.singleShot(0, lambda: self.chat_panel.add_error_message(f"错误: {chunk.error}"))
-                        break
-            except Exception as e:
-                QTimer.singleShot(0, lambda: self.chat_panel.add_error_message(f"异常: {str(e)}"))
-            finally:
-                QTimer.singleShot(0, lambda: self.chat_panel.set_running(False))
-                QTimer.singleShot(0, lambda: self._ltui.status.clear())
-                self._streaming = False
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _on_stop(self):
-        if self._agent:
-            self._agent.interrupt()
-        self._streaming = False
-        self.chat_panel.set_running(False)
-        self._ltui.status.clear()
-
-    # ── 回调 ─────────────────────────────────────────────────
-
-    def _on_stream_delta(self, delta: str):
-        QTimer.singleShot(0, lambda: self.chat_panel.append_token(delta))
-
-    def _on_thinking(self, delta: str):
-        pass
-
-    def _on_tool_start(self, name: str, args_str: str):
-        QTimer.singleShot(0, lambda: self.chat_panel.add_tool_block(name, args_str))
-
-    def _on_tool_result(self, name: str, result: str, success: bool):
-        QTimer.singleShot(0, lambda: self.chat_panel.finish_tool_block(name, result, success))
-
-    # ── 状态变化 ─────────────────────────────────────────────────
-
-    def _on_status_changed(self, msg: str):
-        """写作 Tab 状态变化"""
-        self._ltui.status.show_info(msg)
-
-    # ── 写作模式切换 ─────────────────────────────────────────────
-
-    def _enter_writing_mode(self, content: str = ""):
-        """进入写作模式"""
-        self.center_tabs.setCurrentIndex(1)
-        if content and hasattr(self, 'writing_tab'):
-            self.writing_tab._editor.setPlainText(content)
-
-    def _enter_chat_mode(self):
-        """返回聊天模式"""
-        self.center_tabs.setCurrentIndex(0)
-
-    # ── 设置对话框 ────────────────────────────────────────────────
-
-    def _show_settings(self):
-        """显示设置对话框（替换为面板）"""
-        # 切换到设置标签页，而不是弹窗
-        settings_tab_index = self._find_or_create_settings_tab()
-        if settings_tab_index >= 0:
-            self.center_tabs.setCurrentIndex(settings_tab_index)
-
-    def _find_or_create_settings_tab(self) -> int:
-        """查找或创建设置标签页"""
-        for i in range(self.center_tabs.count()):
-            if self.center_tabs.tabText(i) == "⚙️ 设置":
-                return i
-
-        # 创建设置标签页
-        from PyQt6.QtWidgets import QScrollArea
-
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # 顶部导航栏
+        nav_bar = self._create_nav_bar()
+        main_layout.addWidget(nav_bar)
+        
+        # 内容区域
+        content_area = QWidget()
+        content_layout = QVBoxLayout(content_area)
+        content_layout.setContentsMargins(24, 24, 24, 24)
+        content_layout.setSpacing(24)
+        
+        # 欢迎横幅
+        welcome = WelcomeBanner()
+        content_layout.addWidget(welcome)
+        
+        # 快捷统计
+        self._build_stats_section(content_layout)
+        
+        # 核心功能模块
+        self._build_modules_section(content_layout)
+        
+        # 工具与设置
+        self._build_tools_section(content_layout)
+        
+        # 滚动区域
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        # 四层AI配置面板
-        self.layered_ai_config_panel = LayeredAIConfigPanel(self.config)
-        self.layered_ai_config_panel.config_changed.connect(self._on_layered_ai_config_changed)
-
-        scroll.setWidget(self.layered_ai_config_panel)
-
-        idx = self.center_tabs.addTab(scroll, "⚙️ 设置")
-        return idx
-
-    def _on_layered_ai_config_changed(self, config: dict):
-        """四层AI配置变更回调"""
-        self._show_toast("四层AI模型配置已更新", "success")
-
-    # ── 模型切换 ─────────────────────────────────────────────────
-
-    def _switch_model(self, model_name: str):
-        """切换模型"""
-        self.config.ollama.default_model = model_name
-        self._update_status()
-        self._show_toast(f"已切换到模型: {model_name}", "success")
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: #f8fafc;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #f1f5f9;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #cbd5e1;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #94a3b8;
+            }
+        """)
+        scroll.setWidget(content_area)
+        main_layout.addWidget(scroll)
+    
+    def _create_nav_bar(self):
+        """创建顶部导航栏"""
+        nav = QFrame()
+        nav.setFixedHeight(64)
+        nav.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border-bottom: 1px solid #e5e7eb;
+            }
+        """)
+        
+        layout = QHBoxLayout(nav)
+        layout.setContentsMargins(24, 0, 24, 0)
+        
+        # Logo
+        logo = QLabel("🌿 Hermes")
+        logo.setFont(QFont("Microsoft YaHei", 18, QFont.Weight.Bold))
+        logo.setStyleSheet("color: #1f2937;")
+        layout.addWidget(logo)
+        
+        layout.addStretch()
+        
+        # 导航按钮
+        nav_buttons = [
+            ("🏠 首页", "home"),
+            ("💬 对话", "chat"),
+            ("📝 写作", "write"),
+            ("🔍 研究", "research"),
+            ("⚗️ 装配", "assemble"),
+        ]
+        
+        for text, action_id in nav_buttons:
+            btn = QPushButton(text)
+            btn.setFont(QFont("Microsoft YaHei", 11))
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #6b7280;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                }
+                QPushButton:hover {
+                    background-color: #f3f4f6;
+                    color: #1f2937;
+                }
+            """)
+            layout.addWidget(btn)
+        
+        layout.addStretch()
+        
+        # 设置按钮
+        settings_btn = QPushButton("⚙️ 设置")
+        settings_btn.setFont(QFont("Microsoft YaHei", 11))
+        settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: #ffffff;
+                border: none;
+                padding: 8px 20px;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        layout.addWidget(settings_btn)
+        
+        return nav
+    
+    def _build_stats_section(self, parent_layout):
+        """构建统计区域"""
+        title = SectionTitle("📊 系统概览")
+        parent_layout.addWidget(title)
+        
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        
+        stats = [
+            ("🤖", "Agent 状态", "未初始化", "#fef3c7"),
+            ("🧠", "可用模型", "0 个", "#eff6ff"),
+            ("💬", "会话数量", "0", "#f0fdf4"),
+            ("⚡", "系统性能", "良好", "#fce7f3"),
+        ]
+        
+        row, col = 0, 0
+        for icon, label, value, color in stats:
+            card = QuickStatCard(icon, label, value, color)
+            grid.addWidget(card, row, col)
+            col += 1
+            if col >= 4:
+                col = 0
+                row += 1
+        
+        parent_layout.addLayout(grid)
+    
+    def _build_modules_section(self, parent_layout):
+        """构建核心功能模块"""
+        title = SectionTitle("🚀 核心功能")
+        parent_layout.addWidget(title)
+        
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        
+        modules = [
+            ("🧠", "系统大脑", "AI 对话交互中心，支持多轮对话、工具调用、思考链展示", "#eff6ff"),
+            ("✍️", "写作助手", "文档创作与编辑，支持智能续写、改写、摘要生成", "#fef3c7"),
+            ("🔍", "研究助手", "深度搜索与分析，支持网络搜索、数据分析、报告生成", "#f0fdf4"),
+            ("⚗️", "嫁接园", "工具装配平台，集成 MCP 协议，支持自定义工具链", "#fce7f3"),
+            ("🚀", "舰桥", "元宇宙工作台，可视化操作界面，支持多任务管理", "#e0f2fe"),
+            ("📁", "文件管理", "文件浏览、上传、下载，支持多种格式预览", "#ede9fe"),
+        ]
+        
+        row, col = 0, 0
+        for icon, mod_title, desc, color in modules:
+            card = MainCard(icon, mod_title, desc, color)
+            grid.addWidget(card, row, col)
+            col += 1
+            if col >= 2:
+                col = 0
+                row += 1
+        
+        parent_layout.addLayout(grid)
+    
+    def _build_tools_section(self, parent_layout):
+        """构建工具与设置区域"""
+        title = SectionTitle("🛠️ 工具与设置")
+        parent_layout.addWidget(title)
+        
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        
+        tools = [
+            ("⚙️", "系统设置", "配置模型、API、主题等", "#f3f4f6"),
+            ("📦", "模型管理", "下载、切换、管理模型", "#f3f4f6"),
+            ("🔧", "工具市场", "浏览、安装扩展工具", "#f3f4f6"),
+            ("📊", "数据统计", "使用统计、性能分析", "#f3f4f6"),
+        ]
+        
+        row, col = 0, 0
+        for icon, tool_title, desc, color in tools:
+            card = QFrame()
+            card.setFixedHeight(90)
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {color};
+                    border-radius: 16px;
+                    border: 1px solid #e5e7eb;
+                    padding: 16px;
+                }}
+                QFrame:hover {{
+                    border: 2px solid #3b82f6;
+                    background-color: #ffffff;
+                }}
+            """)
+            
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(6)
+            shadow.setColor(QColor(0, 0, 0, 10))
+            shadow.setOffset(0, 2)
+            card.setGraphicsEffect(shadow)
+            
+            layout = QHBoxLayout(card)
+            layout.setContentsMargins(20, 16, 20, 16)
+            layout.setSpacing(16)
+            
+            icon_label = QLabel(icon)
+            icon_label.setStyleSheet("font-size: 36px;")
+            layout.addWidget(icon_label)
+            
+            text_layout = QVBoxLayout()
+            text_layout.setSpacing(4)
+            
+            t_label = QLabel(tool_title)
+            t_label.setFont(QFont("Microsoft YaHei", 13, QFont.Weight.Bold))
+            t_label.setStyleSheet("color: #1f2937;")
+            text_layout.addWidget(t_label)
+            
+            d_label = QLabel(desc)
+            d_label.setFont(QFont("Microsoft YaHei", 10))
+            d_label.setStyleSheet("color: #6b7280;")
+            text_layout.addWidget(d_label)
+            
+            layout.addLayout(text_layout)
+            layout.addStretch()
+            
+            grid.addWidget(card, row, col)
+            col += 1
+            if col >= 4:
+                col = 0
+                row += 1
+        
+        parent_layout.addLayout(grid)

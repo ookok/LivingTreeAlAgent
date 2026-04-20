@@ -344,8 +344,8 @@ class ThemeSystem(QObject):
         )
         self.register_theme(light_theme)
 
-        # 设置默认主题
-        self._current_theme_id = "dark"
+        # 设置默认主题为浅色
+        self._current_theme_id = "light"
 
     def set_app(self, app: QApplication) -> None:
         """设置QApplication实例"""

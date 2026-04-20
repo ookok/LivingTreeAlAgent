@@ -35,8 +35,7 @@ class LayeredAIConfigPanel(QWidget):
     # 推荐模型列表
     RECOMMENDED_MODELS = {
         "l0": [
-            {"name": "smollm2-135m-instruct", "display": "SmolLM2 135M (推荐)", "size": "~80MB", "desc": "轻量快速"},
-            {"name": "qwen2.5:0.5b", "display": "Qwen 2.5 0.5B", "size": "~390MB", "desc": "中文支持好"},
+            {"name": "qwen2.5:0.5b", "display": "Qwen 2.5 0.5B (推荐)", "size": "~390MB", "desc": "中文支持好，有GGUF版本"},
         ],
         "l4": [
             {"name": "qwen2.5:7b", "display": "Qwen 2.5 7B (推荐)", "size": "~4.4GB", "desc": "均衡之选"},
@@ -302,6 +301,12 @@ class LayeredAIConfigPanel(QWidget):
         self.l0_progress = QProgressBar()
         self.l0_progress.setVisible(False)
         form.addRow("下载进度:", self.l0_progress)
+        
+        # 暂停/继续按钮
+        self.l0_pause_btn = QPushButton("⏸ 暂停")
+        self.l0_pause_btn.setVisible(False)
+        self.l0_pause_btn.clicked.connect(lambda: self._toggle_download("l0"))
+        form.addRow("", self.l0_pause_btn)
 
         desc = QLabel(
             "L0 负责意图分类与轻量任务路由，响应时间 <1s\n"
@@ -423,12 +428,18 @@ class LayeredAIConfigPanel(QWidget):
         self.l3_progress = QProgressBar()
         self.l3_progress.setVisible(False)
         form.addRow("下载进度:", self.l3_progress)
+        
+        # 暂停/继续按钮
+        self.l3_pause_btn = QPushButton("⏸ 暂停")
+        self.l3_pause_btn.setVisible(False)
+        self.l3_pause_btn.clicked.connect(lambda: self._toggle_download("l3_embed"))
+        form.addRow("", self.l3_pause_btn)
 
         self.l3_path = QLineEdit()
         self.l3_path.setPlaceholderText("D:/mhzyapp/knowledge")
         form.addRow("知识库路径:", self.l3_path)
 
-        browse_btn = QPushButton("📁 浏览...")
+        browse_btn = QPushButton("🔄 切换知识库")
         browse_btn.clicked.connect(self._browse_knowledge_path)
         form.addRow("", browse_btn)
 
@@ -539,6 +550,12 @@ class LayeredAIConfigPanel(QWidget):
         self.l4_progress = QProgressBar()
         self.l4_progress.setVisible(False)
         form.addRow("下载进度:", self.l4_progress)
+        
+        # 暂停/继续按钮
+        self.l4_pause_btn = QPushButton("⏸ 暂停")
+        self.l4_pause_btn.setVisible(False)
+        self.l4_pause_btn.clicked.connect(lambda: self._toggle_download("l4"))
+        form.addRow("", self.l4_pause_btn)
 
         desc = QLabel(
             "L4 处理复杂推理、深度分析任务\n"
@@ -606,8 +623,74 @@ class LayeredAIConfigPanel(QWidget):
         if path:
             self.l3_path.setText(path)
 
+    def _toggle_download(self, layer: str):
+        """切换下载状态（暂停/继续）"""
+        if not hasattr(self, '_download_tasks') or layer not in self._download_tasks:
+            return
+        
+        task_info = self._download_tasks[layer]
+        pause_btn = getattr(self, f"{layer}_pause_btn", None)
+        
+        if not pause_btn:
+            return
+        
+        # 对于向量化模型（使用Ollama拉取），不支持暂停/继续
+        if task_info['model_name'] in ["nomic-embed-text", "mxbai-embed-large"]:
+            QMessageBox.information(
+                self, "提示",
+                "向量化模型使用Ollama拉取，暂不支持暂停/继续功能。"
+            )
+            return
+        
+        # 对于GGUF模型，使用系统下载中心的暂停/继续功能
+        download_center = task_info.get('download_center')
+        if not download_center:
+            return
+        
+        # 切换暂停/继续状态
+        if task_info.get('paused', False):
+            # 继续下载
+            try:
+                # 获取所有任务
+                tasks = download_center.list_tasks()
+                for task in tasks:
+                    if task.status in ["paused"]:
+                        download_center.resume(task.id)
+                        task_info['paused'] = False
+                        pause_btn.setText("⏸ 暂停")
+                        QMessageBox.information(
+                            self, "下载继续",
+                            f"模型 {task_info['model_name']} 下载已继续。"
+                        )
+                        break
+            except Exception as e:
+                QMessageBox.error(
+                    self, "操作失败",
+                    f"继续下载失败：{str(e)}"
+                )
+        else:
+            # 暂停下载
+            try:
+                # 获取所有任务
+                tasks = download_center.list_tasks()
+                for task in tasks:
+                    if task.status in ["downloading"]:
+                        download_center.pause(task.id)
+                        task_info['paused'] = True
+                        pause_btn.setText("▶ 继续")
+                        QMessageBox.information(
+                            self, "下载暂停",
+                            f"模型 {task_info['model_name']} 下载已暂停。"
+                        )
+                        break
+            except Exception as e:
+                QMessageBox.error(
+                    self, "操作失败",
+                    f"暂停下载失败：{str(e)}"
+                )
+
     def _download_model(self, layer: str, model_name: str):
-        """下载模型"""
+        """下载模型 - 使用系统统一下载中心"""
         if not model_name:
             QMessageBox.warning(self, "未指定模型", "请输入或选择要下载的模型名称")
             return
@@ -620,6 +703,7 @@ class LayeredAIConfigPanel(QWidget):
         # 获取对应的进度条和按钮
         progress = getattr(self, f"{layer}_progress", None)
         download_btn = getattr(self, f"{layer}_download_btn", None)
+        pause_btn = getattr(self, f"{layer}_pause_btn", None)
 
         if progress:
             progress.setVisible(True)
@@ -628,45 +712,99 @@ class LayeredAIConfigPanel(QWidget):
         if download_btn:
             download_btn.setEnabled(False)
             download_btn.setText("下载中...")
+        if pause_btn:
+            pause_btn.setVisible(True)
+            pause_btn.setText("⏸ 暂停")
+        
+        # 存储下载任务信息
+        self._download_tasks = getattr(self, '_download_tasks', {})
+        self._download_tasks[layer] = {
+            'model_name': model_name,
+            'task_id': None,
+            'paused': False
+        }
 
         def do_download():
-            import sys
             try:
-                # 使用 ollama pull 下载
-                process = subprocess.Popen(
-                    ["ollama", "pull", model_name],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1
-                )
+                # 使用系统统一下载中心
+                from core.unified_downloader import get_download_center
+                from core.unified_downloader import DownloadStatus, SourceType
+                
+                # 根据模型类型选择下载链接
+                model_downloads = {
+                    "nomic-embed-text": {
+                        "huggingface": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/main/model.onnx",
+                        "name": "Nomic Embed Text"
+                    },
+                    "mxbai-embed-large": {
+                        "huggingface": "https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/main/model.onnx",
+                        "name": "MXBAI Embed Large"
+                    }
+                }
+                
+                # 为向量化模型使用 Ollama 拉取
+                # 对于其他模型，使用系统下载中心
+                if model_name in ["nomic-embed-text", "mxbai-embed-large"]:
+                    # 使用 ollama pull 下载向量化模型
+                    process = subprocess.Popen(
+                        ["ollama", "pull", model_name],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
 
-                for line in process.stdout:
-                    line = line.strip()
-                    if line:
-                        print(f"[OLLAMA] {line}", flush=True)
-                    # 解析进度 - ollama 输出格式: "Downloading... 45.5%"
-                    if "%" in line or "Downloading" in line or "verifying" in line:
-                        try:
-                            # 尝试提取百分比
-                            parts = line.split()
-                            for p in parts:
-                                if "%" in p:
-                                    pct_str = p.replace("%", "")
-                                    pct = int(float(pct_str))
-                                    if progress:
-                                        def update_progress(val):
-                                            progress.setValue(val)
-                                            progress.setFormat(f"{val}%")
-                                        # 使用信号方式更新进度
-                                        progress.valueChanged.emit(pct)
-                                        QTimer.singleShot(0, lambda v=val: update_progress(v))
+                    for line in process.stdout:
+                        line = line.strip()
+                        if line:
+                            print(f"[OLLAMA] {line}", flush=True)
+                        # 解析进度
+                        if "%" in line or "Downloading" in line or "verifying" in line:
+                            try:
+                                parts = line.split()
+                                for p in parts:
+                                    if "%" in p:
+                                        pct_str = p.replace("%", "")
+                                        pct = int(float(pct_str))
+                                        if progress:
+                                            def update_progress(val):
+                                                progress.setValue(val)
+                                                progress.setFormat(f"{val}%")
+                                            QTimer.singleShot(0, lambda v=pct: update_progress(v))
                                     break
-                        except (ValueError, AttributeError) as e:
-                            print(f"[PROGRESS PARSE ERROR] {e}", flush=True)
-                            pass
+                            except Exception as e:
+                                print(f"[PROGRESS PARSE ERROR] {e}", flush=True)
+                                pass
 
-                process.wait()
+                    process.wait()
+                    
+                    if process.returncode == 0:
+                        success = True
+                    else:
+                        success = False
+                else:
+                    # 使用系统下载中心下载 GGUF 模型
+                    from core.model_manager import ModelManager
+                    from core.config import AppConfig
+                    from core.unified_downloader import get_download_center
+                    
+                    config = AppConfig()
+                    model_manager = ModelManager(config)
+                    download_center = get_download_center()
+                    
+                    # 存储下载中心实例
+                    self._download_tasks[layer]['download_center'] = download_center
+                    
+                    def progress_callback(current, total, status):
+                        if progress:
+                            if total > 0:
+                                pct = int((current / total) * 100)
+                                def update_progress(val):
+                                    progress.setValue(val)
+                                    progress.setFormat(f"{val}% - {status}")
+                                QTimer.singleShot(0, lambda v=pct: update_progress(v))
+                    
+                    success = model_manager.download_model(model_name, progress_callback)
 
                 # 下载完成
                 def on_complete():
@@ -676,16 +814,27 @@ class LayeredAIConfigPanel(QWidget):
                     if download_btn:
                         download_btn.setEnabled(True)
                         download_btn.setText("⏬ 下载模型")
+                    if pause_btn:
+                        pause_btn.setVisible(False)
 
                     # 更新状态
                     self._check_model_status(layer, model_name)
                     self._check_ollama_service()
 
-                    layer_num = layer.replace("l3_embed", "3_embed").replace("l", "")
-                    QMessageBox.information(
-                        self, "下载完成",
-                        f"模型 {model_name} 下载成功！"
-                    )
+                    if success:
+                        QMessageBox.information(
+                            self, "下载完成",
+                            f"模型 {model_name} 下载成功！"
+                        )
+                    else:
+                        QMessageBox.error(
+                            self, "下载失败",
+                            f"模型 {model_name} 下载失败，请检查网络连接或Ollama服务状态。"
+                        )
+                    
+                    # 清理任务信息
+                    if hasattr(self, '_download_tasks') and layer in self._download_tasks:
+                        del self._download_tasks[layer]
 
                 QTimer.singleShot(0, on_complete)
 
@@ -716,7 +865,14 @@ class LayeredAIConfigPanel(QWidget):
                         download_btn.setText("⏬ 下载模型")
                     import traceback
                     traceback.print_exc()
-                    QMessageBox.critical(self, "下载失败", str(e))
+                    QMessageBox.critical(
+                        self, "下载失败",
+                        f"下载过程中出现错误：{str(e)}\n\n"
+                        "请检查：\n"
+                        "1. 网络连接是否正常\n"
+                        "2. Ollama 服务是否运行\n"
+                        "3. 磁盘空间是否充足"
+                    )
                 QTimer.singleShot(0, on_error)
 
         threading.Thread(target=do_download, daemon=True).start()

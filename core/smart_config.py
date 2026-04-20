@@ -173,8 +173,8 @@ class EnvironmentDetector:
             try:
                 import wmi
                 c = wmi.WMI()
-                for os in c.Win32_OperatingSystem():
-                    env.os_version = os.Caption
+                for os_obj in c.Win32_OperatingSystem():
+                    env.os_version = os_obj.Caption
             except ImportError:
                 env.os_version = platform.version()
         elif env.os_type == "linux":

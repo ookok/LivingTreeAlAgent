@@ -14,11 +14,14 @@ from PyQt6.QtGui import QFont
 class ModelDownloadProgress(QDialog):
     """模型下载进度显示组件"""
     download_cancelled = pyqtSignal()
+    download_paused = pyqtSignal()
+    download_resumed = pyqtSignal()
     
     def __init__(self, model_name, parent=None):
         super().__init__(parent)
         self.model_name = model_name
         self.is_cancelled = False
+        self.is_paused = False
         self.init_ui()
     
     def init_ui(self):
@@ -54,9 +57,12 @@ class ModelDownloadProgress(QDialog):
         # 按钮
         button_layout = QHBoxLayout()
         
+        self.pause_button = QPushButton("⏸ 暂停")
+        self.pause_button.clicked.connect(self.on_pause_resume)
+        button_layout.addWidget(self.pause_button)
+        
         self.cancel_button = QPushButton("取消")
         self.cancel_button.clicked.connect(self.on_cancel)
-        button_layout.addStretch()
         button_layout.addWidget(self.cancel_button)
         
         layout.addLayout(button_layout)
@@ -65,13 +71,30 @@ class ModelDownloadProgress(QDialog):
         """更新进度
         
         Args:
-            current: 当前进度
-            total: 总进度
+            current: 当前进度（可以是字节数或百分比）
+            total: 总进度（可以是字节数或100）
             status: 状态信息
         """
-        self.progress_bar.setValue(current)
-        self.progress_bar.setMaximum(total)
-        self.status_label.setText(status)
+        try:
+            # 处理不同类型的进度回调
+            if isinstance(current, int) and isinstance(total, int):
+                if total > 0:
+                    if total == 100:
+                        # 百分比进度: (pct, 100, status)
+                        pct = min(100, current)
+                    else:
+                        # 字节进度: (current_bytes, total_bytes, status)
+                        pct = min(100, int((current / total) * 100))
+                    self.progress_bar.setValue(pct)
+                    self.progress_bar.setMaximum(100)
+                else:
+                    self.progress_bar.setValue(0)
+                    self.progress_bar.setMaximum(100)
+            self.status_label.setText(status)
+        except Exception as e:
+            # 防止进度更新失败导致崩溃
+            print(f"[ModelDownloadProgress] 进度更新错误: {e}")
+            self.status_label.setText(f"错误: {str(e)}")
     
     def on_cancel(self):
         """取消下载"""
@@ -79,6 +102,21 @@ class ModelDownloadProgress(QDialog):
         self.download_cancelled.emit()
         self.close()
     
+    def on_pause_resume(self):
+        """暂停/继续下载"""
+        if self.is_paused:
+            # 继续下载
+            self.is_paused = False
+            self.pause_button.setText("⏸ 暂停")
+            self.status_label.setText("继续下载...")
+            self.download_resumed.emit()
+        else:
+            # 暂停下载
+            self.is_paused = True
+            self.pause_button.setText("▶ 继续")
+            self.status_label.setText("下载已暂停")
+            self.download_paused.emit()
+
     def closeEvent(self, event):
         """关闭事件"""
         if not self.is_cancelled:

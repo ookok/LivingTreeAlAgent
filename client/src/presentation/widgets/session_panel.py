@@ -22,7 +22,6 @@ class SessionPanel(QWidget):
     settings_requested()
     """
 
-    new_chat_requested = pyqtSignal()
     session_selected   = pyqtSignal(str)
     session_deleted    = pyqtSignal(str)
     settings_requested = pyqtSignal()
@@ -43,19 +42,6 @@ class SessionPanel(QWidget):
         title = QLabel("⬡  Hermes")
         title.setStyleSheet("font-size: 16px; font-weight: 700; color: #e8e8e8; padding: 4px 4px 8px;")
         layout.addWidget(title)
-
-        # 新建对话
-        self.new_btn = QPushButton("＋  新建对话")
-        self.new_btn.setObjectName("NewChatButton")
-        self.new_btn.clicked.connect(self.new_chat_requested)
-        layout.addWidget(self.new_btn)
-
-        # 搜索框
-        self.search = QLineEdit()
-        self.search.setObjectName("SessionSearch")
-        self.search.setPlaceholderText("搜索会话…")
-        self.search.textChanged.connect(self._filter_sessions)
-        layout.addWidget(self.search)
 
         # 会话列表
         self.list_widget = QListWidget()

@@ -589,7 +589,12 @@ class DownloadCenter:
             if task.resume_offset > 0:
                 headers["Range"] = f"bytes={task.resume_offset}-"
 
-            with httpx.Client(timeout=self.timeout) as client:
+            # 创建客户端，添加 SSL 证书验证跳过选项
+            client = httpx.Client(
+                timeout=self.timeout,
+                verify=False  # 跳过 SSL 证书验证，解决 HuggingFace 连接问题
+            )
+            with client:
                 # ═══════════════════════════════════════════════════════════
                 # 阶段1：建立连接，获取响应头
                 # ═══════════════════════════════════════════════════════════
@@ -693,6 +698,21 @@ class DownloadCenter:
                 task.progress = 100.0
                 task.speed = 0
 
+                # 检查文件大小
+                if task.save_path.exists():
+                    file_size = task.save_path.stat().st_size
+                    if file_size == 0:
+                        task.status = DownloadStatus.FAILED
+                        task.error = "下载的文件为空"
+                        logger.error(f"下载文件为空: {task.filename}")
+                        return
+                    # 检查是否达到预期大小（如果有）
+                    if task.total_size > 0 and file_size < task.total_size * 0.9:  # 至少90%的大小
+                        task.status = DownloadStatus.FAILED
+                        task.error = f"文件大小不完整: 下载 {file_size} 字节，预期 {task.total_size} 字节"
+                        logger.error(f"文件大小不完整: {task.filename}")
+                        return
+
                 # SHA256 校验
                 if task.expected_hash:
                     task.actual_hash = self._sha256(task.save_path)
@@ -715,12 +735,34 @@ class DownloadCenter:
                 logger.info(f"下载完成: {task.filename}")
 
         except httpx.HTTPStatusError as e:
-            task.status = DownloadStatus.FAILED
-            task.error = f"HTTP错误: {e.response.status_code} {e.response.reason_phrase}"
-            task.connection_status = ConnectionStatus.ERROR
-            task.connection_error = f"{e.response.status_code} {e.response.reason_phrase}"
-            logger.error(f"下载失败: {task.filename} - {task.error}")
-            self._notify_progress(task)
+            if e.response.status_code == 416:  # 416 Requested Range Not Satisfiable
+                # 重新开始下载
+                logger.info(f"收到416错误，重新开始下载: {task.filename}")
+                task.resume_offset = 0
+                task.downloaded_size = 0
+                task.progress = 0
+                # 删除部分下载的文件
+                if task.save_path.exists():
+                    try:
+                        task.save_path.unlink()
+                    except Exception:
+                        pass
+                # 删除缓存文件
+                if task.cache_file and task.cache_file.exists():
+                    try:
+                        task.cache_file.unlink()
+                    except Exception:
+                        pass
+                # 重新开始下载
+                self._do_download(task_id)
+                return
+            else:
+                task.status = DownloadStatus.FAILED
+                task.error = f"HTTP错误: {e.response.status_code} {e.response.reason_phrase}"
+                task.connection_status = ConnectionStatus.ERROR
+                task.connection_error = f"{e.response.status_code} {e.response.reason_phrase}"
+                logger.error(f"下载失败: {task.filename} - {task.error}")
+                self._notify_progress(task)
 
         except httpx.ConnectError as e:
             task.status = DownloadStatus.FAILED

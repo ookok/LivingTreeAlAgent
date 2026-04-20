@@ -102,11 +102,18 @@ class OllamaClient:
     def list_models(self) -> list[OllamaModel]:
         """列出 Ollama 已注册的模型"""
         try:
-            with self._client() as c:
-                r = c.get("/api/tags")
+            # 使用更短的超时时间，避免阻塞
+            client = httpx.Client(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(3.0, connect=2.0),  # 减少超时时间
+                headers={"Content-Type": "application/json"},
+            )
+            with client:
+                r = client.get("/api/tags")
                 r.raise_for_status()
                 return [OllamaModel(**m) for m in r.json().get("models", [])]
-        except Exception:
+        except Exception as e:
+            # 快速失败，避免长时间阻塞
             return []
 
     def get_model_info(self, name: str) -> ModelInfo:

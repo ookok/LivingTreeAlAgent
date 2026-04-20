@@ -31,7 +31,6 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 from .canopy_alert import CanopyAlertBand
-from .inquiry_deck import RootInquiryDeck
 from .status_rail import SoilStatusRail
 from .dewdrop_hint import DewdropHintCard
 
@@ -57,9 +56,11 @@ class LivingTreeUI:
         self._alert_band = CanopyAlertBand(parent)
         parent.layout().insertWidget(0, self._alert_band)
 
-        # 2. 根系询问台 - 右侧边栏
-        self._inquiry_deck = RootInquiryDeck(parent)
-        parent.layout().addWidget(self._inquiry_deck)
+        # 2. 根系询问台 - 已移除
+        # self._inquiry_deck = RootInquiryDeck(parent)
+        # parent.layout().addWidget(self._inquiry_deck)
+        # # 默认隐藏根系询问台
+        # self._inquiry_deck.hide()
 
         # 3. 沃土状态栏 - 底部（替换原有状态栏）
         self._status_rail = SoilStatusRail(parent)
@@ -70,10 +71,10 @@ class LivingTreeUI:
         """林冠警报带"""
         return self._alert_band
 
-    @property
-    def inquiry(self) -> RootInquiryDeck:
-        """根系询问台"""
-        return self._inquiry_deck
+    # @property
+    # def inquiry(self) -> RootInquiryDeck:
+    #     """根系询问台"""
+    #     return self._inquiry_deck
 
     @property
     def status(self) -> SoilStatusRail:
@@ -97,52 +98,52 @@ class LivingTreeUI:
         """显示错误（便捷方法）"""
         self._alert_band.show_alert(message, "error", actions=actions, auto_hide_ms=5000)
 
-    def ask_confirm(
-        self,
-        title: str,
-        message: str,
-        confirm_text: str = "确认",
-        cancel_text: str = "取消",
-        on_confirm=None,
-        on_cancel=None,
-        risk_level: str = "low"
-    ):
-        """
-        显示确认询问（便捷方法）
+    # def ask_confirm(
+    #     self,
+    #     title: str,
+    #     message: str,
+    #     confirm_text: str = "确认",
+    #     cancel_text: str = "取消",
+    #     on_confirm=None,
+    #     on_cancel=None,
+    #     risk_level: str = "low"
+    # ):
+    #     """
+    #     显示确认询问（便捷方法）
 
-        Args:
-            title: 标题
-            message: 消息
-            confirm_text: 确认按钮文本
-            cancel_text: 取消按钮文本
-            on_confirm: 确认回调
-            on_cancel: 取消回调
-            risk_level: 风险等级 low/medium/high
-        """
-        icons = {"low": "💡", "medium": "⚠️", "high": "🚨"}
-        self._inquiry_deck.ask(
-            title=f"{icons.get(risk_level, '💡')} {title}",
-            description=message,
-            icon=icons.get(risk_level, "💡"),
-            options=[
-                ("confirm", confirm_text, on_confirm),
-                ("cancel", cancel_text, on_cancel or (lambda: None))
-            ]
-        )
+    #     Args:
+    #         title: 标题
+    #         message: 消息
+    #         confirm_text: 确认按钮文本
+    #         cancel_text: 取消按钮文本
+    #         on_confirm: 确认回调
+    #         on_cancel: 取消回调
+    #         risk_level: 风险等级 low/medium/high
+    #     """
+    #     icons = {"low": "💡", "medium": "⚠️", "high": "🚨"}
+    #     self._inquiry_deck.ask(
+    #         title=f"{icons.get(risk_level, '💡')} {title}",
+    #         description=message,
+    #         icon=icons.get(risk_level, "💡"),
+    #         options=[
+    #             ("confirm", confirm_text, on_confirm),
+    #             ("cancel", cancel_text, on_cancel or (lambda: None))
+    #         ]
+    #     )
 
-    def ask_delete(self, item_name: str, on_confirm=None):
-        """显示删除确认（便捷方法）"""
-        self.ask_confirm(
-            title="确认删除",
-            message=f"确定要删除「{item_name}」吗？此操作不可撤销。",
-            confirm_text="确认删除",
-            on_confirm=on_confirm,
-            risk_level="high"
-        )
+    # def ask_delete(self, item_name: str, on_confirm=None):
+    #     """显示删除确认（便捷方法）"""
+    #     self.ask_confirm(
+    #         title="确认删除",
+    #         message=f"确定要删除「{item_name}」吗？此操作不可撤销。",
+    #         confirm_text="确认删除",
+    #         on_confirm=on_confirm,
+    #         risk_level="high"
+    #     )
 
-    def ask_risk(self, action: str, risk_level: str = "medium", on_confirm=None):
-        """显示风险确认"""
-        self._inquiry_deck.ask_risk_confirm(action, risk_level, on_confirm)
+    # def ask_risk(self, action: str, risk_level: str = "medium", on_confirm=None):
+    #     """显示风险确认"""
+    #     self._inquiry_deck.ask_risk_confirm(action, risk_level, on_confirm)
 
     def set_busy(self, message: str = "处理中..."):
         """设置忙状态"""
@@ -163,5 +164,5 @@ class LivingTreeUI:
         """清理所有组件"""
         DewdropHintCard.dismiss_all()
         self._status_rail.clear()
-        self._inquiry_deck.hide_deck()
+        # self._inquiry_deck.hide_deck()
         self._alert_band.hide_alert()

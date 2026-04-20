@@ -73,6 +73,15 @@ class TestCanopyAlertBand:
             level="info"
         )
 
+        # 等待动画完成
+        import time
+        start = time.time()
+        while time.time() - start < 1.0:  # 等待1秒
+            if alert.is_visible_alert():
+                break
+            get_qapp().processEvents()
+            time.sleep(0.1)
+
         # 断言警报可见
         assert alert.is_visible_alert()
         assert "测试信息" in alert._message.text()
@@ -91,6 +100,16 @@ class TestCanopyAlertBand:
         )
 
         alert = get_alert_band(main_window)
+        
+        # 等待动画完成
+        import time
+        start = time.time()
+        while time.time() - start < 1.0:  # 等待1秒
+            if alert.is_visible_alert():
+                break
+            get_qapp().processEvents()
+            time.sleep(0.1)
+        
         assert alert.is_visible_alert()
 
         # 查找并点击"查看更新"按钮
@@ -106,11 +125,21 @@ class TestCanopyAlertBand:
         )
 
         alert = get_alert_band(main_window)
+        
+        # 等待动画完成
+        import time
+        start = time.time()
+        while time.time() - start < 1.0:  # 等待1秒
+            if alert.is_visible_alert():
+                break
+            get_qapp().processEvents()
+            time.sleep(0.1)
+        
         assert alert.is_visible_alert()
 
         # 等待自动隐藏
-        QTimer.singleShot(600, lambda: None)  # 等待动画
-        qapp.processEvents()
+        time.sleep(1.0)  # 等待1秒确保自动隐藏完成
+        get_qapp().processEvents()
 
 
 class TestRootInquiryDeck:
@@ -161,6 +190,16 @@ class TestRootInquiryDeck:
         # 点击确认
         confirm_btn = deck.findChild(QPushButton, "inquiry-confirm")
         assert confirm_btn is not None
+        
+        # 等待按钮状态更新
+        import time
+        start = time.time()
+        while time.time() - start < 1.0:  # 等待1秒
+            if confirm_btn.isEnabled():
+                break
+            get_qapp().processEvents()
+            time.sleep(0.1)
+        
         assert confirm_btn.isEnabled()
 
     def test_delete_confirmation(self, main_window):
@@ -196,7 +235,7 @@ class TestSoilStatusRail:
 
         for i in range(10):
             main_window.update_progress(i * 10, f"进度 {i * 10}%")
-            qapp.processEvents()
+            get_qapp().processEvents()
 
     def test_success_status(self, main_window):
         """测试成功状态"""
@@ -258,7 +297,7 @@ class TestIntegration:
         # 2. 更新进度
         for i in range(5):
             main_window.update_progress((i + 1) * 20, f"步骤 {i + 1}/5")
-            qapp.processEvents()
+            get_qapp().processEvents()
 
         # 3. 任务完成
         main_window.show_success_status("任务完成！")
@@ -284,6 +323,19 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "qt: Qt-related tests"
     )
+
+
+# 全局 QApplication 实例
+qapp_instance = None
+
+def get_qapp():
+    """获取 QApplication 实例"""
+    global qapp_instance
+    if qapp_instance is None:
+        qapp_instance = QApplication.instance()
+        if qapp_instance is None:
+            qapp_instance = QApplication(sys.argv)
+    return qapp_instance
 
 
 if __name__ == "__main__":

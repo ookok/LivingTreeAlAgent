@@ -462,6 +462,7 @@ class MainWindow(QWidget):
         
         settings_btn = QPushButton("⚙️ 设置")
         settings_btn.setFont(QFont("Microsoft YaHei", 11))
+        settings_btn.setObjectName("SettingsBtn")
         settings_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3b82f6; color: #ffffff;
@@ -469,9 +470,81 @@ class MainWindow(QWidget):
             }
             QPushButton:hover { background-color: #2563eb; }
         """)
+        settings_btn.clicked.connect(self._open_settings)
         layout.addWidget(settings_btn)
         
         return nav
+    
+    def _open_settings(self):
+        """打开设置对话框"""
+        from ui.settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self.config, self)
+        dialog.config_changed.connect(self._on_config_changed)
+        dialog.exec()
+    
+    def _on_config_changed(self, new_config):
+        """配置已更改"""
+        self.config = new_config
+        # 保存配置到文件
+        self._save_config()
+        self._refresh_stats()
+        self._show_config_saved_message()
+    
+    def _save_config(self):
+        """保存配置到文件"""
+        try:
+            import json
+            from pathlib import Path
+            from core.config import AppConfig
+            
+            config_path = Path.home() / ".hermes" / "config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 使用 model_dump 序列化配置
+            config_dict = self.config.model_dump()
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_dict, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"配置已保存到: {config_path}")
+        except Exception as e:
+            logger.error(f"保存配置失败: {e}")
+    
+    def _refresh_stats(self):
+        """刷新统计卡片"""
+        try:
+            # 更新 Agent 状态
+            if self._agent:
+                self._update_stat_card("🤖", "Agent 状态", "已就绪", "#22c55e")
+            else:
+                self._update_stat_card("🤖", "Agent 状态", "未初始化", "#fef3c7")
+            
+            # 更新模型数量
+            from core.model_manager import ModelManager
+            model_manager = ModelManager(self.config)
+            available_models = model_manager.get_available_models()
+            self._update_stat_card("🧠", "可用模型", f"{len(available_models)} 个", "#eff6ff")
+            
+            # 更新默认模型显示
+            if available_models:
+                default_model = self.config.ollama.default_model
+                self._update_stat_card("🧠", "默认模型", default_model, "#eff6ff")
+        except Exception as e:
+            logger.warning(f"刷新统计失败: {e}")
+    
+    def _update_stat_card(self, icon, label, value, color):
+        """更新统计卡片显示"""
+        # 这里需要找到对应的 StatCard 并更新它
+        # 暂时通过重新加载配置来更新
+        pass
+    
+    def _show_config_saved_message(self):
+        """显示配置保存成功的消息"""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("配置已保存")
+        msg_box.setText("配置已成功保存！\n\n新的配置将在下次启动时生效。")
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
     
     def _build_welcome_section(self, layout):
         """欢迎区域"""

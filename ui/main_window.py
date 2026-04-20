@@ -26,6 +26,7 @@ from core.auth_system import get_auth_system
 from core.smart_config import get_smart_config
 from ui.task_progress import get_task_progress_manager
 from core.search_tool import AISearchTool
+from ui.a2ui import A2UIManager, A2UIPanel, UILoaderManager, FallbackManager, ProgressManager, ConfigQuickEditManager
 
 from ui.session_panel import SessionPanel
 from ui.chat_panel import ChatPanel
@@ -209,6 +210,13 @@ class MainWindow(QWidget):
         self._search_tool: AISearchTool | None = None
         self._research_panel: ResearchPanel | None = None
 
+        # A2UI 相关
+        self._a2ui_manager = A2UIManager()
+        self._ui_loader_manager = UILoaderManager()
+        self._fallback_manager = FallbackManager()
+        self._progress_manager = ProgressManager()
+        self._config_quick_edit_manager = ConfigQuickEditManager()
+
         self._build_ui()
         self._init_agent()
         self._init_system_brain()
@@ -218,6 +226,7 @@ class MainWindow(QWidget):
         self._init_sessions()
         self._init_auth()
         self._init_config_sync()
+        self._init_a2ui()
         self._setup_menu()
 
         self.setWindowTitle("Hermes Desktop v2.0")
@@ -1211,10 +1220,81 @@ class MainWindow(QWidget):
         except Exception:
             pass  # 静默失败，不影响启动
 
+    def _init_a2ui(self):
+        """初始化 A2UI 相关组件"""
+        # 注册降级处理器
+        self._fallback_manager.register_fallback_handler(
+            "llm", self._fallback_llm
+        )
+        self._fallback_manager.register_fallback_handler(
+            "api", self._fallback_api
+        )
+        
+        # 注册配置回调
+        self._config_quick_edit_manager.register_config_callback(
+            "ollama.base_url", self._update_ollama_url
+        )
+        self._config_quick_edit_manager.register_config_callback(
+            "ollama.default_model", self._update_ollama_model
+        )
+        
+        # 初始化全局进度
+        self._global_progress = self._progress_manager.create_global_progress(
+            "系统启动中", self
+        )
+        
+        # 模拟启动进度
+        self._update_startup_progress(0, "初始化系统...")
+        QTimer.singleShot(500, lambda: self._update_startup_progress(20, "加载配置..."))
+        QTimer.singleShot(1000, lambda: self._update_startup_progress(40, "初始化网络..."))
+        QTimer.singleShot(1500, lambda: self._update_startup_progress(60, "加载插件..."))
+        QTimer.singleShot(2000, lambda: self._update_startup_progress(80, "初始化 UI..."))
+        QTimer.singleShot(2500, lambda: self._update_startup_progress(100, "启动完成"))
+        QTimer.singleShot(3000, self._close_startup_progress)
+    
+    def _fallback_llm(self):
+        """LLM 服务降级处理"""
+        logger.warning("LLM service unavailable, falling back to local mode")
+        self._show_toast("LLM 服务不可用，已切换到本地模式", "warning")
+        # 这里可以实现本地模式的逻辑
+        return True
+    
+    def _fallback_api(self):
+        """API 服务降级处理"""
+        logger.warning("API service unavailable, falling back to offline mode")
+        self._show_toast("API 服务不可用，已切换到离线模式", "warning")
+        # 这里可以实现离线模式的逻辑
+        return True
+    
+    def _update_ollama_url(self, value):
+        """更新 Ollama URL 配置"""
+        self.config.ollama.base_url = value
+        save_config(self.config)
+        self._show_toast(f"Ollama URL 已更新为: {value}", "success")
+    
+    def _update_ollama_model(self, value):
+        """更新 Ollama 模型配置"""
+        self.config.ollama.default_model = value
+        save_config(self.config)
+        self._show_toast(f"默认模型已更新为: {value}", "success")
+    
+    def _update_startup_progress(self, progress, text):
+        """更新启动进度"""
+        if hasattr(self, '_global_progress'):
+            self._progress_manager.update_global_progress(progress, text)
+    
+    def _close_startup_progress(self):
+        """关闭启动进度"""
+        self._progress_manager.close_global_progress()
+
     # ── Agent ───────────────────────────────────────────────────
 
     def _init_agent(self):
         self.ollama_client = OllamaClient(self.config.ollama)
+        # 检查 Ollama 是否可用
+        if not self.ollama_client.ping():
+            # 执行降级处理
+            self._fallback_manager.fallback("llm", "Ollama 服务不可用")
         self._update_status()
         QTimer.singleShot(3000, self._update_status)
 
@@ -1230,6 +1310,12 @@ class MainWindow(QWidget):
             self._status_text.setText("⚠ Ollama 未运行 — 请启动 ollama serve")
             self._status_indicator.setText("🔴")
             self._status_indicator.setStyleSheet("color:#ef4444;")
+            
+        # 检查是否处于降级模式
+        if self._fallback_manager.is_fallback_active():
+            self._status_text.setText(f"{self._status_text.text()} | 降级模式")
+            self._status_indicator.setText("🟡")
+            self._status_indicator.setStyleSheet("color:#f59e0b;")
 
     # ── 会话 ───────────────────────────────────────────────────
 

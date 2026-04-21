@@ -29,6 +29,25 @@ MAX_LOG_FILES = 5
 # 单个日志文件最大大小 (10MB)
 MAX_LOG_SIZE = 10 * 1024 * 1024
 
+# 日志配置
+LOG_CONFIG = {
+    'enabled': True,
+    'levels': {
+        'debug': True,
+        'info': True,
+        'warning': True,
+        'error': True,
+        'critical': True
+    },
+    'handlers': {
+        'console': True,
+        'file': True,
+        'ui': True,
+        'network': True,
+        'debug': True
+    }
+}
+
 
 class ColoredFormatter(logging.Formatter):
     """彩色日志格式化器"""
@@ -48,13 +67,21 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_error_logger():
+def setup_error_logger(config=None):
     """
     配置错误日志系统
+    
+    Args:
+        config: 日志配置字典，覆盖默认配置
     
     Returns:
         logging.Logger: 配置好的日志记录器
     """
+    # 使用传入的配置或默认配置
+    current_config = LOG_CONFIG.copy()
+    if config:
+        current_config.update(config)
+    
     # 创建主日志记录器
     logger = logging.getLogger("hermes")
     logger.setLevel(logging.DEBUG)
@@ -62,91 +89,102 @@ def setup_error_logger():
     # 清除已有的处理器
     logger.handlers.clear()
     
+    # 如果日志系统被禁用，返回一个空的日志记录器
+    if not current_config['enabled']:
+        null_handler = logging.NullHandler()
+        logger.addHandler(null_handler)
+        return logger
+    
     # 日志格式
     detailed_format = logging.Formatter(
         '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    simple_format = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(message)s',
-        datefmt='%H:%M:%S'
-    )
+    simple_format_str = '%(asctime)s | %(levelname)-8s | %(message)s'
+    simple_format = logging.Formatter(simple_format_str, datefmt='%H:%M:%S')
     
     # ── 控制台输出 ──────────────────────────────────────
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(ColoredFormatter(simple_format))
-    logger.addHandler(console_handler)
+    if current_config['handlers'].get('console', True):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(ColoredFormatter(simple_format_str, datefmt='%H:%M:%S'))
+        logger.addHandler(console_handler)
     
     # ── 主日志文件 (所有级别) ───────────────────────────
-    main_handler = RotatingFileHandler(
-        LOG_FILE_MAIN,
-        maxBytes=MAX_LOG_SIZE,
-        backupCount=MAX_LOG_FILES,
-        encoding='utf-8'
-    )
-    main_handler.setLevel(logging.DEBUG)
-    main_handler.setFormatter(detailed_format)
-    logger.addHandler(main_handler)
+    if current_config['handlers'].get('file', True):
+        main_handler = RotatingFileHandler(
+            LOG_FILE_MAIN,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=MAX_LOG_FILES,
+            encoding='utf-8'
+        )
+        main_handler.setLevel(logging.DEBUG)
+        main_handler.setFormatter(detailed_format)
+        logger.addHandler(main_handler)
     
     # ── 错误日志文件 (仅 ERROR 和 CRITICAL) ─────────────
-    error_handler = RotatingFileHandler(
-        LOG_FILE_ERROR,
-        maxBytes=MAX_LOG_SIZE,
-        backupCount=MAX_LOG_FILES,
-        encoding='utf-8'
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(detailed_format)
-    logger.addHandler(error_handler)
+    if current_config['handlers'].get('file', True) and current_config['levels'].get('error', True):
+        error_handler = RotatingFileHandler(
+            LOG_FILE_ERROR,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=MAX_LOG_FILES,
+            encoding='utf-8'
+        )
+        error_handler.setLevel(logging.ERROR)
+        error_handler.setFormatter(detailed_format)
+        logger.addHandler(error_handler)
     
     # ── 警告日志文件 (WARNING 及以上) ───────────────────
-    warning_handler = RotatingFileHandler(
-        LOG_FILE_WARNING,
-        maxBytes=MAX_LOG_SIZE,
-        backupCount=MAX_LOG_FILES,
-        encoding='utf-8'
-    )
-    warning_handler.setLevel(logging.WARNING)
-    warning_handler.setFormatter(detailed_format)
-    logger.addHandler(warning_handler)
+    if current_config['handlers'].get('file', True) and current_config['levels'].get('warning', True):
+        warning_handler = RotatingFileHandler(
+            LOG_FILE_WARNING,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=MAX_LOG_FILES,
+            encoding='utf-8'
+        )
+        warning_handler.setLevel(logging.WARNING)
+        warning_handler.setFormatter(detailed_format)
+        logger.addHandler(warning_handler)
     
     # ── UI 日志文件 ─────────────────────────────────────
-    ui_handler = RotatingFileHandler(
-        LOG_FILE_UI,
-        maxBytes=MAX_LOG_SIZE,
-        backupCount=MAX_LOG_FILES,
-        encoding='utf-8'
-    )
-    ui_handler.setLevel(logging.DEBUG)
-    ui_handler.setFormatter(detailed_format)
-    ui_handler.addFilter(lambda record: 'ui' in record.name.lower() or 'presentation' in record.name.lower())
-    logger.addHandler(ui_handler)
+    if current_config['handlers'].get('ui', True):
+        ui_handler = RotatingFileHandler(
+            LOG_FILE_UI,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=MAX_LOG_FILES,
+            encoding='utf-8'
+        )
+        ui_handler.setLevel(logging.DEBUG)
+        ui_handler.setFormatter(detailed_format)
+        ui_handler.addFilter(lambda record: 'ui' in record.name.lower() or 'presentation' in record.name.lower())
+        logger.addHandler(ui_handler)
     
     # ── 网络日志文件 ────────────────────────────────────
-    network_handler = RotatingFileHandler(
-        LOG_FILE_NETWORK,
-        maxBytes=MAX_LOG_SIZE,
-        backupCount=MAX_LOG_FILES,
-        encoding='utf-8'
-    )
-    network_handler.setLevel(logging.DEBUG)
-    network_handler.setFormatter(detailed_format)
-    network_handler.addFilter(lambda record: any(kw in record.name.lower() for kw in ['network', 'http', 'ollama', 'api']))
-    logger.addHandler(network_handler)
+    if current_config['handlers'].get('network', True):
+        network_handler = RotatingFileHandler(
+            LOG_FILE_NETWORK,
+            maxBytes=MAX_LOG_SIZE,
+            backupCount=MAX_LOG_FILES,
+            encoding='utf-8'
+        )
+        network_handler.setLevel(logging.DEBUG)
+        network_handler.setFormatter(detailed_format)
+        network_handler.addFilter(lambda record: any(kw in record.name.lower() for kw in ['network', 'http', 'ollama', 'api']))
+        logger.addHandler(network_handler)
     
     # ── 每日轮转的调试日志 ──────────────────────────────
-    debug_handler = TimedRotatingFileHandler(
-        LOG_FILE_DEBUG,
-        when='midnight',
-        interval=1,
-        backupCount=7,
-        encoding='utf-8'
-    )
-    debug_handler.setLevel(logging.DEBUG)
-    debug_handler.setFormatter(detailed_format)
-    logger.addHandler(debug_handler)
+    if current_config['handlers'].get('debug', True) and current_config['levels'].get('debug', True):
+        debug_handler = TimedRotatingFileHandler(
+            LOG_FILE_DEBUG,
+            when='midnight',
+            interval=1,
+            backupCount=7,
+            encoding='utf-8'
+        )
+        debug_handler.setLevel(logging.DEBUG)
+        debug_handler.setFormatter(detailed_format)
+        logger.addHandler(debug_handler)
     
     return logger
 
@@ -270,4 +308,5 @@ __all__ = [
     'LOG_FILE_DEBUG',
     'LOG_FILE_UI',
     'LOG_FILE_NETWORK',
+    'LOG_CONFIG',
 ]

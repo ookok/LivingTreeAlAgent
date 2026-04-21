@@ -5,10 +5,17 @@
 集成所有系统功能模块：AI核心、网络协作、经济系统、工具设置等
 """
 
-import logging
+import sys
+from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# 添加项目根目录到路径
+_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(_root))
+
+from core.error_logger import setup_error_logger, get_logger
+
+# 设置日志系统
+logger = get_logger("client.main_window")
 
 from PyQt6 import QtCore
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize

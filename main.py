@@ -22,6 +22,12 @@ def run_client():
     print(">> 启动 LivingTreeAI 客户端...")
     print("   生命之树正在苏醒，根系伸向远方...")
 
+    # 初始化日志系统
+    from core.error_logger import setup_error_logger, log_startup
+    logger = setup_error_logger()
+    log_startup(logger)
+    logger.info("正在启动客户端...")
+
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)

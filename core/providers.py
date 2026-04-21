@@ -386,6 +386,9 @@ def get_provider(name: str) -> Optional[ProviderDef]:
 
 def get_api_key(provider_id: str) -> Optional[str]:
     """获取提供商的 API Key"""
+    import os
+    from core.config import get_hermes_home
+    
     provider = get_provider(provider_id)
     if not provider:
         return None
@@ -395,6 +398,24 @@ def get_api_key(provider_id: str) -> Optional[str]:
         key = os.environ.get(env_var)
         if key:
             return key
+    
+    # 从 .env 文件中读取
+    hermes_home = get_hermes_home()
+    env_file = hermes_home / ".env"
+    
+    if env_file.exists():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip()
+                        if k in provider.api_key_env_vars:
+                            return v
+        except Exception as e:
+            logger.error(f"读取 .env 文件失败: {e}")
     
     return None
 

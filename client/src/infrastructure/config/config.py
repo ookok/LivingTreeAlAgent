@@ -1,211 +1,115 @@
 """
-核心配置管理
-参考 hermes-agent 的 config.yaml 设计
+配置管理模块
 """
 
 import os
 import json
-import yaml
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from pydantic import BaseModel, Field
 
 
-# ── 配置模型 ─────────────────────────────────────────────────────────
-
-class OllamaConfig(BaseModel):
-    """Ollama 服务配置"""
-    base_url: str = "http://localhost:11434"
-    default_model: str = ""           # 默认模型名（如 qwen2.5:7b）
-    num_ctx: int = 8192               # 上下文窗口大小（自动从 /api/show 获取）
-    num_gpu: int = 0                  # GPU layers（0 = 全 CPU）
-    keep_alive: str = "5m"            # 模型保持加载时间
-
-
-class ModelPathConfig(BaseModel):
-    """模型路径配置"""
-    models_dir: str = ""              # 模型存储目录（默认为软件目录/models）
-    ollama_home: str = ""              # Ollama 模型目录（~/.ollama）
-    auto_import: bool = True          # 自动导入 GGUF 到 Ollama
-
-
-class ModelMarketConfig(BaseModel):
-    """模型市场配置"""
-    sources: list[str] = Field(default_factory=lambda: ["modelscope", "huggingface"])
-    default_source: str = "modelscope"
-    # ModelScope
-    modelscope_token: str = ""
-    modelscope_cache_dir: str = ""
-    # HuggingFace
-    hf_token: str = ""
-    hf_cache_dir: str = ""
-    # 下载
-    max_concurrent_downloads: int = 2
-    download_timeout: int = 3600
-
-
-class WritingConfig(BaseModel):
-    """写作配置"""
-    default_project_dir: str = ""
-    auto_save_interval: int = 30      # 秒
-    enable_file_watch: bool = True
-
-
-class SearchConfig(BaseModel):
-    """搜索配置"""
-    serper_key: str = ""              # Serper API Key（可选）
-    brave_key: str = ""                # Brave Search API Key（可选）
-    cache_ttl_minutes: int = 60       # 缓存有效期（分钟）
-    cn_sites: list[str] = Field(default_factory=lambda: [
-        "zhihu.com", "juejin.cn", "weixin.qq.com", "bilibili.com"
-    ])  # 中文优质站点
-
-
-class AgentConfig(BaseModel):
-    """Agent 行为配置"""
-    max_iterations: int = 90
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    enabled_toolsets: list[str] = Field(default_factory=lambda: ["file", "writing", "project", "ollama"])
-    streaming: bool = True
-    show_reasoning: bool = False
-
-
-class L0ModelConfig(BaseModel):
-    """L0 快反大脑配置 - SmolLM2 轻量路由"""
-    enabled: bool = True
-    model_name: str = "smollm2-135m"  # SmolLM2-135M-Instruct
-    base_url: str = "http://localhost:11434"
-    route_types: list[str] = Field(default_factory=lambda: ["cache", "local", "search", "heavy", "human"])
-
-
-class L1ModelConfig(BaseModel):
-    """L1 精确缓存层配置"""
-    enabled: bool = True
-    cache_ttl_seconds: int = 300  # 缓存5分钟
-
-
-class L2ModelConfig(BaseModel):
-    """L2 会话缓存层配置"""
-    enabled: bool = True
-    max_context_tokens: int = 8192
-
-
-class L3ModelConfig(BaseModel):
-    """L3 知识库层配置"""
-    enabled: bool = True
-    embedding_model: str = "nomic-embed-text"  # 向量化模型
-    knowledge_base_path: str = ""
-
-
-class L4ModelConfig(BaseModel):
-    """L4 异构执行层配置 - 复杂推理"""
-    enabled: bool = True
-    model_name: str = "qwen2.5:7b"  # 默认用Qwen
-    base_url: str = "http://localhost:11434"
-    max_tokens: int = 8192
-    temperature: float = 0.7
-
-
-class LayeredAIConfig(BaseModel):
-    """四层AI模型配置"""
-    l0: L0ModelConfig = Field(default_factory=L0ModelConfig)
-    l1: L1ModelConfig = Field(default_factory=L1ModelConfig)
-    l2: L2ModelConfig = Field(default_factory=L2ModelConfig)
-    l3: L3ModelConfig = Field(default_factory=L3ModelConfig)
-    l4: L4ModelConfig = Field(default_factory=L4ModelConfig)
-    auto_route: bool = True  # 自动路由到合适层级
-
-
-class AppConfig(BaseModel):
-    """完整应用配置"""
-    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
-    model_path: ModelPathConfig = Field(default_factory=ModelPathConfig)
-    model_market: ModelMarketConfig = Field(default_factory=ModelMarketConfig)
-    writing: WritingConfig = Field(default_factory=WritingConfig)
-    search: SearchConfig = Field(default_factory=SearchConfig)
-    agent: AgentConfig = Field(default_factory=AgentConfig)
-    layered_ai: LayeredAIConfig = Field(default_factory=LayeredAIConfig)  # 四层AI模型
-
-    # 窗口状态
-    window_width: int = 1400
-    window_height: int = 900
-    left_panel_width: int = 240
+@dataclass
+class AppConfig:
+    """应用配置"""
+    window_width: int = 1200
+    window_height: int = 800
+    left_panel_width: int = 250
     right_panel_width: int = 300
+    theme: str = "light"  # light or dark
+    language: str = "zh"
+    ollama: Dict[str, Any] = None
+    api_keys: Dict[str, str] = None
+    
+    def __post_init__(self):
+        if self.ollama is None:
+            self.ollama = {
+                "base_url": "http://localhost:11434",
+                "default_model": "qwen2.5:0.5b",
+                "timeout": 30
+            }
+        if self.api_keys is None:
+            self.api_keys = {}
 
-    # 外观
-    theme: str = "dark"
-
-
-# ── 路径 & 加载 ──────────────────────────────────────────────────────
-
-def _get_config_dir() -> Path:
-    """配置目录（优先用户目录，兜底软件目录）"""
-    user_cfg = Path.home() / ".hermes-desktop"
-    if os.access(str(Path.home()), os.W_OK):
-        user_cfg.mkdir(parents=True, exist_ok=True)
-        return user_cfg
-    # 兜底：软件目录
-    sw_dir = Path(__file__).parent
-    cfg_dir = sw_dir / ".config"
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    return cfg_dir
-
-
-def _get_config_path() -> Path:
-    return _get_config_dir() / "config.json"
-
-
-def _get_models_dir(cfg: AppConfig) -> Path:
-    """获取模型存储目录"""
-    if cfg.model_path.models_dir:
-        p = Path(cfg.model_path.models_dir)
-    else:
-        p = Path(__file__).parent / "models"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _get_projects_dir(cfg: AppConfig) -> Path:
-    """获取项目文档目录"""
-    if cfg.writing.default_project_dir:
-        p = Path(cfg.writing.default_project_dir)
-    else:
-        p = Path.home() / "Documents" / "HermesProjects"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-# ── 公开 API ────────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = AppConfig()
 
 
-def load_config() -> AppConfig:
-    """从文件加载配置（不存在则返回默认）"""
-    path = _get_config_path()
-    if not path.exists():
-        return DEFAULT_CONFIG
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return AppConfig(**data)
-    except Exception:
-        return DEFAULT_CONFIG
-
-
-def save_config(cfg: AppConfig) -> None:
-    """保存配置到文件"""
-    path = _get_config_path()
-    path.write_text(json.dumps(cfg.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
+def get_config_dir() -> Path:
+    """
+    获取配置目录
+    
+    Returns:
+        Path: 配置目录路径
+    """
+    config_dir = Path.home() / ".livingtree" / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
 
 
 def get_models_dir() -> Path:
-    return _get_models_dir(load_config())
+    """
+    获取模型目录
+    
+    Returns:
+        Path: 模型目录路径
+    """
+    models_dir = Path.home() / ".livingtree" / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    return models_dir
 
 
 def get_projects_dir() -> Path:
-    return _get_projects_dir(load_config())
+    """
+    获取项目目录
+    
+    Returns:
+        Path: 项目目录路径
+    """
+    projects_dir = Path.home() / ".livingtree" / "projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    return projects_dir
 
 
-def get_config_dir() -> Path:
-    return _get_config_dir()
+def load_config() -> AppConfig:
+    """
+    加载配置
+    
+    Returns:
+        AppConfig: 应用配置
+    """
+    config_path = get_config_dir() / "config.json"
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return AppConfig(**data)
+        except Exception:
+            pass
+    return DEFAULT_CONFIG
+
+
+def save_config(config: AppConfig):
+    """
+    保存配置
+    
+    Args:
+        config: 应用配置
+    """
+    config_path = get_config_dir() / "config.json"
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "window_width": config.window_width,
+                "window_height": config.window_height,
+                "left_panel_width": config.left_panel_width,
+                "right_panel_width": config.right_panel_width,
+                "theme": config.theme,
+                "language": config.language,
+                "ollama": config.ollama,
+                "api_keys": config.api_keys
+            },
+            f,
+            ensure_ascii=False,
+            indent=2
+        )

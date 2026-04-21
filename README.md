@@ -147,79 +147,60 @@
 
 ## 技术架构
 
+> 🌳 2026-04-21 工程化拆分完成，项目从单体结构重构为三层架构
+
 ```
 LivingTreeAlAgent/
-├── core/                          # 核心业务模块
-│   ├── living_tree_ai/            # 主体架构
-│   │   ├── agency_integration/     # Agency 集成
-│   │   │   ├── role_manager.py          # 角色管理
-│   │   │   ├── shared_workspace.py      # 共享工作空间
-│   │   │   └── a2ui_components.py       # A2UI 组件
-│   │   ├── voice/                 # 语音系统
-│   │   │   ├── virtual_conference.py    # 虚拟会议
-│   │   │   ├── digital_twin.py          # 数字分身
-│   │   │   ├── voice_clone_transcribe.py
-│   │   │   ├── streaming_whisper.py      # 流式识别
-│   │   │   ├── conference_translation.py # 同声传译
-│   │   │   └── meeting_summary.py        # 会议纪要
-│   │   ├── skills/                # 技能系统
-│   │   │   ├── skill_manager.py           # 技能管理
-│   │   │   └── skill_conference_integration.py
-│   │   └── browser_gateway/       # AI 增强浏览器
-│   │       ├── extensions/               # 扩展系统
-│   │       │   ├── extension_manager.py    # 扩展管理器
-│   │       │   ├── plugin_system.py       # 插件系统
-│   │       │   ├── user_scripts.py        # 用户脚本系统
-│   │       │   └── api.py                 # 扩展 API
-│   │       ├── config/                   # 配置管理
-│   │       │   ├── config_manager.py      # 配置管理器
-│   │       │   ├── config_types.py        # 配置类型
-│   │       │   └── config_validator.py    # 配置验证器
-│   │       ├── browser_use_adapter.py     # 浏览器适配器
-│   │       └── browser_pool.py            # 浏览器池
-│   ├── amphiloop/                 # AmphiLoop 引擎
-│   │   └── amphiloop_engine.py          # 双向循环调度
-│   ├── skill_evolution/            # 技能进化
-│   │   ├── agent_loop.py                # Agent 循环
-│   │   └── models.py                    # 进化模型
-│   ├── optimization/               # Entraly 优化
-│   │   ├── prism_optimizer.py            # PRISM 优化器
-│   │   ├── knapsack_selector.py          # 0/1 背包选择
-│   │   └── realtime_dashboard.py          # 实时仪表盘
-│   ├── evolution/                  # 进化系统
-│   │   ├── gep_integration.py            # GEP 集成
-│   │   └── prompt_versioning.py         # 提示词版本
-│   ├── enterprise/                 # 企业级功能
-│   │   ├── node_manager.py              # 企业节点管理
-│   │   ├── storage.py                   # 企业存储系统
-│   │   ├── file_preview.py              # 文件预览
-│   │   ├── permission.py                # 权限管理
-│   │   ├── sync.py                      # 同步功能
-│   │   ├── version_control.py           # 版本控制
-│   │   ├── local_file_manager.py        # 本地文件管理
-│   │   └── task_scheduler.py            # 任务调度系统
-│   ├── digital_twin/               # 数字分身系统
-│   │   └── user_twin.py                 # 用户数字分身
-│   ├── credit_economy/             # 积分经济系统
-│   │   └── system.py                    # 积分经济系统
-│   ├── decommerce/                 # 电商系统
-│   │   ├── models.py                    # 电商模型
-│   │   ├── buyer_client.py             # 买家客户端
-│   │   ├── seller_node.py              # 卖家节点
-│   │   └── crdt_order.py               # 订单管理
-│   └── p2p_cdn/                    # P2P CDN 系统
-│       ├── storage.py                   # 存储管理
-│       ├── cache_manager.py             # 缓存管理
-│       └── router.py                    # 路由管理
-├── ui/                            # PyQt6 UI
-│   ├── workflow_panel/             # 工作流面板
-│   ├── enterprise_panel/           # 企业功能面板
-│   ├── digital_twin_panel/         # 数字分身面板
-│   └── browser_panel/              # 浏览器面板
-└── server/                        # 服务端
-    ├── relay_server/               # 中继服务器
-    └── shared/                     # 共享组件
+├── 📁 client/                    # 🖥️ 桌面客户端（重构后）
+│   ├── src/
+│   │   ├── main.py               # 客户端入口
+│   │   ├── presentation/          # 🎨 表现层 (UI)
+│   │   │   ├── panels/           # 功能面板（173+ 文件）
+│   │   │   ├── components/       # 可复用组件
+│   │   │   └── widgets/          # 独立小部件
+│   │   ├── business/              # 📋 业务逻辑层（1354+ 文件）
+│   │   │   ├── fusion_rag/       # 多源融合检索
+│   │   │   ├── intelligence/     # 全源情报中心
+│   │   │   ├── credit_economy/   # 积分经济系统
+│   │   │   ├── enterprise/       # 企业级功能
+│   │   │   ├── living_tree_ai/   # 生命之树 AI
+│   │   │   └── ...               # 其他 15+ 核心模块
+│   │   ├── infrastructure/       # ⚙️ 基础设施层
+│   │   │   ├── config/           # 配置管理
+│   │   │   ├── database/         # 数据库（v1-v14 迁移）
+│   │   │   ├── model/            # 模型管理
+│   │   │   └── network/          # 网络通信
+│   │   └── shared/               # 🔧 共享工具
+│   ├── resources/                # 📦 资源文件
+│   ├── tests/                    # 🧪 测试
+│   └── requirements-client.txt  # 客户端依赖
+├── 📁 server/                    # 🌐 服务端
+│   ├── relay_server/             # 中继服务器（FastAPI）
+│   └── tracker/                  # 追踪服务器
+├── 📁 app/                       # 🏢 企业应用（独立）
+├── 📁 packages/                  # 📚 公共包
+│   ├── shared/                   # 共享代码
+│   └── living_tree_naming/       # 生命之树命名法典
+├── 📁 docs/                      # 📖 文档
+├── 📁 models/                    # 🤖 模型文件
+├── 📁 data/                      # 💾 数据存储
+├── main.py                       # 🚀 统一入口
+├── run.bat                       # 🪟 Windows 启动
+├── requirements.txt              # 📦 依赖
+└── pyproject.toml                # 项目配置
 ```
+
+### 重构前后对比
+
+| 维度 | 重构前 | 重构后 |
+|--:|--:|--|
+| **核心模块** | `core/`（根目录） | `client/src/business/` |
+| **UI 模块** | `ui/`（根目录） | `client/src/presentation/` |
+| **数据库** | `database/`（根目录） | `client/src/infrastructure/database/` |
+| **服务端** | 分散（2 处） | `server/` 集中管理 |
+| **共享代码** | 无 | `packages/` |
+| **依赖管理** | 单一 requirements.txt | 分离依赖 |
+| **入口文件** | 多个 | 统一 `main.py` |
 
 ---
 
@@ -234,10 +215,46 @@ LivingTreeAlAgent/
 ### 安装依赖
 
 ```bash
-pip install PyQt6 numpy websockets
+# 客户端依赖
+pip install -e ./client
 
-# 可选依赖
-pip install openai-whisper edge-tts browser-use
+# 服务端依赖
+pip install -e ./server/relay_server
+
+# 企业应用依赖
+pip install -e ./app
+```
+
+### 启动应用
+
+```bash
+# 启动桌面客户端（默认）
+python main.py client
+# 或双击 run.bat
+
+# 启动中继服务器
+python main.py relay
+
+# 启动追踪服务器
+python main.py tracker
+
+# 启动企业应用
+python main.py app
+
+# 启动所有服务
+python main.py all
+```
+
+### 使用示例（重构后 import 路径）
+
+> ⚠️ 2026-04-21 工程化拆分后，import 路径已更新
+
+```python
+# 旧路径（已废弃）
+from core.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
+
+# 新路径（当前使用）
+from client.src.business.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
 ```
 
 ### 启动虚拟会议

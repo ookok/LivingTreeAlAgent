@@ -172,7 +172,7 @@ CANOPY_VISTA_NAMING: Dict[str, str] = {
     "dashboard": "瞭望台 (Lookout Deck)",
 
     # 组件
-    "system_brain_panel": "树心对话 (Heartwood Dialogue)",
+    "chat_panel": "年轮对话 (Ring Dialogue)",
     "chat_message": "年轮波纹 (Ring Ripple)",
 
     "settings": "根系调节 (Root Tuner)",

@@ -1,0 +1,67 @@
+{
+  "id": "python_runtime",
+  "name": "Python Runtime (uv)",
+  "desc": "Python 运行时环境 + uv 包管理器 (AI 工具链依赖)",
+  "version": "3.12.8",
+  "internal": true,
+  "origin": "market",
+  "enabled_by_default": false,
+  "categories": ["runtime", "dependency"],
+  "tags": ["python", "uv", "runtime", "ai-tools"],
+  "platforms": {
+    "windows_amd64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-windows-x86_64.exe",
+      "bin_name": "uv.exe",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    },
+    "windows_arm64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-windows-arm64.exe",
+      "bin_name": "uv.exe",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    },
+    "darwin_amd64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-macos-x86_64",
+      "bin_name": "uv",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    },
+    "darwin_arm64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-macos-arm64",
+      "bin_name": "uv",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    },
+    "linux_amd64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-linux-x86_64",
+      "bin_name": "uv",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    },
+    "linux_arm64": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.6.9/uv-linux-arm64",
+      "bin_name": "uv",
+      "extract": false,
+      "sha256": "",
+      "installer_type": "standalone"
+    }
+  },
+  "runtime_config": {
+    "python_version": "3.12",
+    "package_manager": "uv",
+    "virtual_env_style": "uv",
+    "cache_dir": "./cache/uv",
+    "projects_dir": "./projects"
+  },
+  "install_hints": {
+    "note": "uv 是独立可执行文件，无需安装。首次使用时 uv 会自动下载指定版本的 Python。",
+    "python_install_example": "uv python install 3.12",
+    "project_example": "uv init --python 3.12 myproject"
+  }
+}

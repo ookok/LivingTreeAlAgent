@@ -1,34 +1,37 @@
 #!/bin/bash
-# Hermes Desktop V2.0 - Linux/Mac 启动脚本
+# LivingTree AI Agent - Linux/Mac Startup Script
+# Usage:
+#   ./scripts/run_client.sh              - Start client (default)
+#   ./scripts/run_client.sh client       - Start desktop client
+#   ./scripts/run_client.sh relay        - Start relay server
+#   ./scripts/run_client.sh tracker      - Start tracker server
+#   ./scripts/run_client.sh all          - Start all services
 
-echo "╔══════════════════════════════════════════════╗"
-echo "║   Hermes Desktop V2.0                       ║"
-echo "║   生命主干 - The Trunk                      ║"
-echo "╚══════════════════════════════════════════════╝"
-echo ""
+COMMAND="${1:-client}"
 
-MODE=${1:-client}
-
-case $MODE in
+case "$COMMAND" in
     client)
-        echo "🚀 启动桌面客户端..."
-        python main.py client
+        echo "🌳 Starting LivingTree AI Agent Client..."
+        python3 main.py client
         ;;
     relay)
-        echo "🌐 启动中继服务器..."
-        python -m uvicorn server.relay_server.main:app --host 0.0.0.0 --port 8766
+        echo "🔄 Starting Relay Server..."
+        python3 main.py relay
         ;;
     tracker)
-        echo "📊 启动追踪服务器..."
-        python server/tracker/tracker_server.py
+        echo "📊 Starting Tracker Server..."
+        python3 main.py tracker
         ;;
     all)
-        echo "🚀 启动所有服务..."
-        python -m uvicorn server.relay_server.main:app --host 0.0.0.0 --port 8766 &
-        python server/tracker/tracker_server.py &
-        python main.py client
+        echo "🌳 Starting All Services..."
+        python3 main.py relay &
+        sleep 2
+        python3 main.py tracker &
+        sleep 2
+        python3 main.py client
         ;;
     *)
-        echo "用法: ./run.sh [client|relay|tracker|all]"
+        echo "Usage: $0 [client|relay|tracker|all]"
+        exit 1
         ;;
 esac

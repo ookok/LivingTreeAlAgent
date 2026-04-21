@@ -1,11 +1,7 @@
-# Hermes Relay Server - 精简依赖
-# =================================================================
-# 设计原则：最小依赖，只保留核心功能
-# =================================================================
+# LivingTree AI Agent - Server Requirements
 
 fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
+uvicorn>=0.27.0
 pydantic>=2.0.0
-
-# 可选：定时任务（如果需要邮件等功能再启用）
-# apscheduler>=3.10.0
+apscheduler>=3.10.0
+httpx>=0.27.0

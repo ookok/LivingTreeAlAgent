@@ -1,0 +1,7 @@
+# LivingTree AI Agent - App Requirements
+
+pyyaml>=6.0
+psutil>=6.0
+GPUtil>=1.4
+watchdog>=4.0.0
+markitdown>=0.1.0

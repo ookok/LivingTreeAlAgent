@@ -50,11 +50,11 @@ class BadgeType(Enum):
 @dataclass
 class Transaction:
     """交易记录"""
-    transaction_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     amount: int
     transaction_type: str
     description: str
+    transaction_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     related_id: str = ""  # 相关ID（如活动ID、出租ID等）
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
@@ -79,11 +79,11 @@ class Transaction:
 @dataclass
 class Achievement:
     """成就"""
-    achievement_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     achievement_type: str
     name: str
     description: str
+    achievement_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     progress: float = 0.0  # 进度 (0-1)
     completed: bool = False
     completed_at: Optional[str] = None
@@ -112,11 +112,11 @@ class Achievement:
 @dataclass
 class Badge:
     """徽章"""
-    badge_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     badge_type: str
     name: str
     description: str
+    badge_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     level: int = 1
     acquired_at: str = field(default_factory=lambda: datetime.now().isoformat())
 

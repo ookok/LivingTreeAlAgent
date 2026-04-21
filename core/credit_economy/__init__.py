@@ -1671,26 +1671,6 @@ __all__ = [
     "get_user_credit",
     "get_user_stats"
 ]
-                break
-
-        if not account:
-            return {"error": "账户不存在"}
-
-        recent_txs = [
-            tx.to_dict() for tx in self.transactions[-10:]
-            if tx.from_account == account.id or tx.to_account == account.id
-        ]
-
-        return {
-            "account": account.to_dict(),
-            "recent_transactions": recent_txs,
-            "stats": {
-                "total_issued": account.total_issued,
-                "total_consumed": account.total_consumed,
-                "net_change": account.total_issued - account.total_consumed
-            }
-        }
-
 
 # ============================================================
 # 全局实例

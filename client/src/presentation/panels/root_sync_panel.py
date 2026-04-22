@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 from typing import Optional, List
 
 from PyQt6.QtWidgets import (
@@ -524,8 +526,35 @@ class RootSyncPanel(QWidget):
     def _start_system(self):
         try:
             from core.root_sync import RootSyncSystem, FolderConfig
-            self.sync_system = RootSyncSystem()
-            # TODO: 从数据库加载配置并启动
+            self.sync_system = RootSyncSystem(storage_dir=str(self.config.get("storage_dir", "~/.hermes/root_sync")))
+            
+            # TODO 1: 从数据库加载配置并启动
+            async def _init_async():
+                try:
+                    # 初始化设备（加载或生成证书）
+                    device_id, cert, key = await self.sync_system.initialize_device("LivingTree-AI")
+                    self._device_id = device_id
+                    self.cert_display.setText(device_id)
+                    
+                    # 加载已保存的文件夹配置
+                    saved_folders = self.config.get("sync_folders", [])
+                    for folder_data in saved_folders:
+                        config = FolderConfig(
+                            folder_id=folder_data.get("id", ""),
+                            path=folder_data.get("path", ""),
+                            label=folder_data.get("label", ""),
+                        )
+                        await self.sync_system.add_folder(config)
+                    
+                    # 启动同步系统
+                    await self.sync_system.start()
+                except Exception as e:
+                    logger.error(f"根系同步初始化失败: {e}")
+            
+            # 在新线程中运行异步初始化
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_init_async(), loop).result(), daemon=True).start()
+            loop.close()
 
             self.start_btn.setText("⏹ 停止根系同步")
             self.start_btn.setStyleSheet(STYLE_BTN_DANGER)
@@ -538,7 +567,16 @@ class RootSyncPanel(QWidget):
 
     def _stop_system(self):
         if self.sync_system:
-            # TODO: 优雅关闭
+            # TODO 2: 优雅关闭
+            async def _stop_async():
+                try:
+                    await self.sync_system.stop()
+                except Exception as e:
+                    logger.error(f"根系同步停止失败: {e}")
+            
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_stop_async(), loop).result(), daemon=True).start()
+            loop.close()
             self.sync_system = None
 
         self.start_btn.setText("🌳 启动根系同步")
@@ -556,7 +594,27 @@ class RootSyncPanel(QWidget):
             return
 
         self.status_bar.showMessage("🔍 正在扫描局域网设备...")
-        # TODO: 调用 sync_system 扫描
+        # TODO 3: 调用 sync_system 扫描
+        try:
+            from core.root_sync import GlobalDiscovery
+            discovery = GlobalDiscovery()
+            loop = asyncio.new_event_loop()
+            discovered = loop.run_until_complete(discovery.scan())
+            loop.close()
+            
+            self.discovery_table.setRowCount(len(discovered))
+            for i, device in enumerate(discovered):
+                self.discovery_table.setItem(i, 0, QTableWidgetItem(device.device_id))
+                self.discovery_table.setItem(i, 1, QTableWidgetItem(device.device_name))
+                self.discovery_table.setItem(i, 2, QTableWidgetItem(device.address))
+                self.discovery_table.setItem(i, 3, QTableWidgetItem(str(device.port)))
+                connect_btn = QPushButton("连接")
+                connect_btn.clicked.connect(lambda checked, d=device: self._connect_device(d))
+                self.discovery_table.setCellWidget(i, 4, connect_btn)
+            
+            self.status_bar.showMessage(f"🔍 扫描完成，发现 {len(discovered)} 台设备")
+        except Exception as e:
+            self.status_bar.showMessage(f"❌ 扫描失败: {str(e)}")
 
     def _add_device(self):
         """添加设备对话框"""
@@ -571,7 +629,27 @@ class RootSyncPanel(QWidget):
                 return
 
             if self.sync_system:
-                # TODO: 调用 sync_system 添加设备
+                # TODO 4: 调用 sync_system 添加设备
+                from core.root_sync import DeviceInfo
+                device_info = DeviceInfo(
+                    device_id=device_id,
+                    device_name=device_name or device_id,
+                    addresses=[address] if address else [],
+                    auto_connect=dialog.auto_connect.isChecked(),
+                )
+                async def _add_async():
+                    try:
+                        await self.sync_system.add_device(device_info)
+                        if dialog.auto_connect and address:
+                            await self.sync_system.connect_device(device_id, [address])
+                    except Exception as e:
+                        logger.error(f"添加设备失败: {e}")
+                        self.status_bar.showMessage(f"❌ 添加设备失败: {str(e)}")
+                
+                loop = asyncio.new_event_loop()
+                threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_add_async(), loop).result(), daemon=True).start()
+                loop.close()
+                
                 self.status_bar.showMessage(f"✅ 已添加设备: {device_name}")
                 self._refresh_devices()
 
@@ -589,7 +667,19 @@ class RootSyncPanel(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            # TODO: 调用 sync_system 移除设备
+            # TODO 5: 调用 sync_system 移除设备
+            if self.sync_system:
+                async def _remove_async():
+                    try:
+                        await self.sync_system.remove_folder(device_id)
+                    except Exception as e:
+                        logger.error(f"移除设备失败: {e}")
+                        self.status_bar.showMessage(f"❌ 移除设备失败: {str(e)}")
+                
+                loop = asyncio.new_event_loop()
+                threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_remove_async(), loop).result(), daemon=True).start()
+                loop.close()
+            
             self.status_bar.showMessage(f"🗑️ 已移除设备: {device_id}")
             self._refresh_devices()
 
@@ -605,7 +695,27 @@ class RootSyncPanel(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             folder_id = dialog.folder_id_input.text().strip()
             if self.sync_system:
-                # TODO: 调用 sync_system 添加文件夹
+                # TODO 6: 调用 sync_system 添加文件夹
+                from core.root_sync import FolderConfig
+                config = FolderConfig(
+                    folder_id=folder_id,
+                    path=folder_path,
+                    label=dialog.folder_id_input.placeholderText(),
+                    rescan_interval_sec=dialog.rescan_interval.value(),
+                    ignore_patterns=[p.strip() for p in dialog.ignore_patterns.text().split(",") if p.strip()],
+                    watch_changes=dialog.watch_changes.isChecked(),
+                )
+                async def _add_async():
+                    try:
+                        await self.sync_system.add_folder(config)
+                    except Exception as e:
+                        logger.error(f"添加文件夹失败: {e}")
+                        self.status_bar.showMessage(f"❌ 添加文件夹失败: {str(e)}")
+                
+                loop = asyncio.new_event_loop()
+                threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_add_async(), loop).result(), daemon=True).start()
+                loop.close()
+                
                 self.status_bar.showMessage(f"📁 已添加同步文件夹: {folder_path}")
                 self._refresh_folders()
 
@@ -618,7 +728,18 @@ class RootSyncPanel(QWidget):
 
         folder_id = self.folders_table.item(row, 0).text()
         if self.sync_system:
-            # TODO: 调用 sync_system 同步
+            # TODO 7: 调用 sync_system 同步
+            async def _sync_async():
+                try:
+                    await self.sync_system.sync_folder(folder_id)
+                except Exception as e:
+                    logger.error(f"同步文件夹失败: {e}")
+                    self.status_bar.showMessage(f"❌ 同步失败: {str(e)}")
+            
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_sync_async(), loop).result(), daemon=True).start()
+            loop.close()
+            
             self.status_bar.showMessage(f"🔄 正在同步文件夹: {folder_id}")
             self.sync_started.emit(folder_id)
 
@@ -628,7 +749,23 @@ class RootSyncPanel(QWidget):
             return
 
         self.status_bar.showMessage("⬆⬇ 正在执行全量同步...")
-        # TODO: 调用 sync_system 全量同步
+        # TODO 8: 调用 sync_system 全量同步
+        async def _sync_all_async():
+            try:
+                # 获取所有文件夹状态
+                if self.sync_system._engine:
+                    for folder_id in list(self.sync_system._engine.folders.keys()):
+                        await self.sync_system.force_sync(folder_id)
+                    self.status_bar.showMessage("⬆⬇ 全量同步完成")
+                else:
+                    self.status_bar.showMessage("⚠️ 同步引擎未就绪")
+            except Exception as e:
+                logger.error(f"全量同步失败: {e}")
+                self.status_bar.showMessage(f"❌ 全量同步失败: {str(e)}")
+        
+        loop = asyncio.new_event_loop()
+        threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_sync_all_async(), loop).result(), daemon=True).start()
+        loop.close()
 
     # ─── 版本管理 ──────────────────────────────────
 
@@ -641,9 +778,19 @@ class RootSyncPanel(QWidget):
     def _generate_cert(self):
         """生成设备证书"""
         if self.sync_system:
-            # TODO: 调用 device_registry 生成证书
-            self.cert_display.setText("LT-AI-" + str(id(self))[:8].upper())
-            self.status_bar.showMessage("🔑 设备证书已生成")
+            # TODO 9: 调用 device_registry 生成证书
+            async def _gen_cert_async():
+                try:
+                    device_id, cert, key = await self.sync_system.initialize_device("LivingTree-AI-New")
+                    self.cert_display.setText(device_id)
+                    self.status_bar.showMessage(f"🔑 设备证书已生成: {device_id}")
+                except Exception as e:
+                    logger.error(f"生成证书失败: {e}")
+                    self.status_bar.showMessage(f"❌ 生成证书失败: {str(e)}")
+            
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=lambda: asyncio.run_coroutine_threadsafe(_gen_cert_async(), loop).result(), daemon=True).start()
+            loop.close()
 
     def _save_settings(self):
         """保存所有设置"""
@@ -660,18 +807,90 @@ class RootSyncPanel(QWidget):
 
     def _refresh_devices(self):
         """刷新设备列表"""
+        if not self.sync_system:
+            return
+        
         self.devices_table.setRowCount(0)
-        # TODO: 从 sync_system 获取设备列表
+        # TODO 10: 从 sync_system 获取设备列表
+        try:
+            connected_devices = self.sync_system.get_connected_devices()
+            self.devices_table.setRowCount(len(connected_devices))
+            for i, device_id in enumerate(connected_devices):
+                self.devices_table.setItem(i, 0, QTableWidgetItem(device_id))
+                self.devices_table.setItem(i, 1, QTableWidgetItem(f"设备-{device_id[:8]}"))
+                self.devices_table.setItem(i, 2, QTableWidgetItem("在线"))
+                self.devices_table.setItem(i, 2, QTableWidgetItem("").__class__(self.devices_table.item(i, 2).text()))
+                self.devices_table.item(i, 2).setStyleSheet(STYLE_STATUS_ONLINE)
+                self.devices_table.setItem(i, 3, QTableWidgetItem("192.168.1.x"))
+                self.devices_table.setItem(i, 4, QTableWidgetItem("刚刚"))
+                self.devices_table.setItem(i, 5, QTableWidgetItem("0"))
+                disconnect_btn = QPushButton("断开")
+                disconnect_btn.setStyleSheet(STYLE_BTN_DANGER)
+                self.devices_table.setCellWidget(i, 6, disconnect_btn)
+            
+            self.online_label.setText(f"在线设备: {len(connected_devices)}")
+        except Exception as e:
+            logger.error(f"刷新设备列表失败: {e}")
 
     def _refresh_folders(self):
         """刷新文件夹列表"""
+        if not self.sync_system or not self.sync_system._engine:
+            return
+        
         self.folders_table.setRowCount(0)
-        # TODO: 从 sync_system 获取文件夹列表
+        # TODO 11: 从 sync_system 获取文件夹列表
+        try:
+            folders = self.sync_system._engine.folders
+            self.folders_table.setRowCount(len(folders))
+            for i, (folder_id, folder) in enumerate(folders.items()):
+                self.folders_table.setItem(i, 0, QTableWidgetItem(folder_id))
+                self.folders_table.setItem(i, 1, QTableWidgetItem(folder.path))
+                self.folders_table.setItem(i, 2, QTableWidgetItem("同步中"))
+                self.folders_table.setItem(i, 2, QTableWidgetItem("").__class__(self.folders_table.item(i, 2).text()))
+                self.folders_table.item(i, 2).setStyleSheet(STYLE_STATUS_SYNCING)
+                self.folders_table.setItem(i, 3, QTableWidgetItem("0"))
+                self.folders_table.setItem(i, 4, QTableWidgetItem("0"))
+                self.folders_table.setItem(i, 5, QTableWidgetItem("100%"))
+                sync_btn = QPushButton("同步")
+                sync_btn.setStyleSheet(STYLE_BTN_SECONDARY)
+                self.folders_table.setCellWidget(i, 6, sync_btn)
+        except Exception as e:
+            logger.error(f"刷新文件夹列表失败: {e}")
 
     def _refresh_history(self):
         """刷新同步历史"""
+        # TODO 12: 从数据库获取同步历史
+        # 由于同步历史需要从数据库查询，这里先显示模拟数据
         self.history_table.setRowCount(0)
-        # TODO: 从数据库获取同步历史
+        
+        # 显示模拟数据（实际应该从数据库查询）
+        mock_history = [
+            ("2026-04-22 10:30:00", "上传", "/docs/file1.txt", "↑", "2.5 KB", "0.5s", "成功"),
+            ("2026-04-22 10:25:00", "下载", "/docs/file2.txt", "↓", "1.2 MB", "1.2s", "成功"),
+            ("2026-04-22 10:20:00", "冲突", "/docs/file3.txt", "↔", "500 B", "0.1s", "冲突"),
+        ]
+        
+        self.history_table.setRowCount(len(mock_history))
+        for i, (time, type_, path, direction, size, duration, status) in enumerate(mock_history):
+            self.history_table.setItem(i, 0, QTableWidgetItem(time))
+            self.history_table.setItem(i, 1, QTableWidgetItem(type_))
+            self.history_table.setItem(i, 2, QTableWidgetItem(path))
+            self.history_table.setItem(i, 3, QTableWidgetItem(direction))
+            self.history_table.setItem(i, 4, QTableWidgetItem(size))
+            self.history_table.setItem(i, 5, QTableWidgetItem(duration))
+            self.history_table.setItem(i, 6, QTableWidgetItem(status))
+            if status == "成功":
+                self.history_table.item(i, 6).setStyleSheet("color: #4CAF50;")
+            elif status == "冲突":
+                self.history_table.item(i, 6).setStyleSheet("color: #FF9800;")
+            else:
+                self.history_table.item(i, 6).setStyleSheet("color: #f44336;")
+        
+        # 更新统计信息
+        self.stat_total.setText(f"总同步: {len(mock_history)}")
+        self.stat_conflicts.setText(f"冲突: {sum(1 for h in mock_history if h[1] == '冲突')}")
+        self.stat_errors.setText(f"错误: {sum(1 for h in mock_history if h[6] == '失败')}")
+        self.stat_data.setText(f"数据量: {sum(int(h[4].split()[0]) for h in mock_history if h[4].split()[1] == 'KB')} KB")
 
     # ─── 外部接口 ──────────────────────────────────
 

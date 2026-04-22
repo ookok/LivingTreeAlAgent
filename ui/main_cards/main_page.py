@@ -12,7 +12,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QStackedWidget,
     QLineEdit, QFrame, QGridLayout,
+    QMessageBox, QDialog,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ui.main_cards.main_card import (
     MODULES_CONFIG,
@@ -245,13 +249,51 @@ class MainPage(QWidget):
 
     def _show_locked_dialog(self, module_id: str):
         """显示锁定模块的提示对话框"""
-        print(f"[MainPage] Module '{module_id}' is locked")
-        # TODO: 实现 QMessageBox 或自定义 Dialog
+        config = MODULES_CONFIG.get(module_id, {})
+        module_name = config.get("name", module_id)
+        QMessageBox.information(
+            self,
+            "模块未激活",
+            f"模块 '{module_name}' 尚未激活。\n\n"
+            f"请先完成以下配置:\n"
+            "1. 部署 AI 模型\n"
+            "2. 初始化 Agent\n"
+            "3. 在设置中启用该模块",
+            QMessageBox.StandardButton.Ok,
+        )
 
     def _show_settings(self):
         """显示设置面板"""
-        print("[MainPage] Opening settings...")
-        # TODO: 实现设置面板
+        try:
+            from core.config import AppConfig
+            from ui.settings_dialog import SettingsDialog
+            
+            # 创建默认配置（如果不存在）
+            config = AppConfig()
+            
+            # 创建并显示设置对话框
+            dialog = SettingsDialog(config, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                # 配置已保存
+                QMessageBox.information(
+                    self,
+                    "设置已保存",
+                    "配置已成功保存，部分设置需要重启应用后生效。",
+                )
+        except ImportError as e:
+            logger.error(f"设置对话框导入失败: {e}")
+            QMessageBox.warning(
+                self,
+                "错误",
+                f"无法打开设置对话框:\n{e}",
+            )
+        except Exception as e:
+            logger.error(f"设置对话框异常: {e}")
+            QMessageBox.critical(
+                self,
+                "错误",
+                f"打开设置时发生错误:\n{str(e)}",
+            )
 
     def _filter_cards(self, text: str):
         """搜索过滤卡片"""

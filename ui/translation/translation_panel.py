@@ -693,7 +693,11 @@ class TranslationPanel(QWidget):
         """缓存大小改变"""
         config = SmartTranslateConfig()
         config.cache_max_size = value
-        # TODO: 应用配置
+        # 应用配置到翻译中心
+        if hasattr(self, 'translation_hub') and self.translation_hub:
+            self.translation_hub.set_config(config)
+            self.translation_hub.enable_cache(config.cache_enabled)
+        self._show_toast(f"缓存大小已调整为: {value} MB", "info")
 
 
 # ============ 入口函数 ============

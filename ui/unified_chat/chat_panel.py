@@ -28,6 +28,7 @@ Element/Discord/Telegram 风格的三栏自适应布局:
 
 import asyncio
 import os
+import re
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Callable
@@ -1494,9 +1495,26 @@ class ChatPanel(QWidget):
         self.message_input.clear()
 
     def _on_input_changed(self):
-        """输入框内容变化 (检测链接)"""
+        """输入框内容变化 (检测链接并显示预览)"""
         text = self.message_input.toPlainText()
-        # TODO: 实时检测链接并显示预览
+        
+        # 检测 URL
+        url_pattern = r'https?://[^\s<>\"\')\]]+'
+        urls = re.findall(url_pattern, text)
+        
+        if urls and not hasattr(self, 'link_preview_widget') or self.link_preview_widget is None:
+            # 创建链接预览组件
+            if not hasattr(self, 'link_preview_widget'):
+                self.link_preview_widget = LinkPreviewWidget()
+                self.link_preview_widget.setVisible(False)
+            
+            # 获取第一个 URL 的预览
+            url = urls[0]
+            asyncio.create_task(self._fetch_link_preview(url))
+        elif not urls:
+            # 隐藏预览
+            if hasattr(self, 'link_preview_widget') and self.link_preview_widget:
+                self.link_preview_widget.setVisible(False)
 
     def _on_attach_clicked(self):
         """点击附件按钮"""
@@ -1560,9 +1578,85 @@ class ChatPanel(QWidget):
         """转写语音为文字"""
         message = self.chat_hub.session_manager.get_message(msg_id)
         if message and message.meta and message.meta.path:
-            # TODO: 调用语音识别API
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(self, "转文字", "语音转文字功能开发中...")
+            audio_path = message.meta.path
+            if not Path(audio_path).exists():
+                QMessageBox.warning(self, "提示", "语音文件不存在")
+                return
+            
+            # 显示转写中状态
+            QMessageBox.information(self, "转文字", "正在转写语音...")
+            
+            # 异步调用语音识别 API
+            asyncio.create_task(self._transcribe_audio(msg_id, audio_path))
+    
+    async def _transcribe_audio(self, msg_id: str, audio_path: str):
+        """异步转写音频文件"""
+        try:
+            # 尝试使用 Ollama whisper 模型
+            from core.config import get_hermes_home
+            import subprocess
+            import json
+            
+            # 读取音频文件
+            with open(audio_path, 'rb') as f:
+                audio_data = f.read()
+            
+            # 尝试调用 Ollama whisper
+            try:
+                import requests
+                ollama_url = "http://localhost:11434"
+                
+                # 检查 whisper 模型是否已安装
+                response = requests.get(f"{ollama_url}/api/tags", timeout=5)
+                if response.status_code == 200:
+                    models = response.json().get('models', [])
+                    whisper_installed = any('whisper' in m.get('name', '').lower() for m in models)
+                    
+                    if whisper_installed:
+                        # 调用 whisper 转写
+                        resp = requests.post(
+                            f"{ollama_url}/api/transcribe",
+                            json={
+                                'model': 'whisper',
+                                'prompt': '',
+                                'stream': False,
+                            },
+                            files={'audio': audio_data},
+                            timeout=60
+                        )
+                        
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            text = result.get('text', '').strip()
+                            if text:
+                                # 将转写结果添加到消息
+                                self.chat_hub.session_manager.add_message(
+                                    self.current_session_id,
+                                    text,
+                                    msg_type=MessageType.TEXT,
+                                    meta={'transcribed_from': msg_id}
+                                )
+                                QMessageBox.information(
+                                    self, 
+                                    "转文字成功", 
+                                    f"转写结果:\n{text[:200]}{'...' if len(text) > 200 else ''}"
+                                )
+                                return
+            except Exception as e:
+                logger.warning(f"Ollama whisper 转写失败: {e}")
+            
+            # 降级：提示用户安装 whisper 模型
+            QMessageBox.information(
+                self, 
+                "提示", 
+                "语音转文字功能需要安装 Ollama whisper 模型。\n\n"
+                "请在终端运行:\nollama pull whisper\n\n"
+                "然后重试。"
+            )
+            
+        except Exception as e:
+            logger.error(f"语音转写失败: {e}")
+            QMessageBox.critical(self, "错误", f"转写失败:\n{str(e)}")
 
     def _on_voice_resend(self, msg_id: str):
         """重发语音消息"""

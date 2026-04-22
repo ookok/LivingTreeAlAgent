@@ -436,9 +436,52 @@ class GatewayStatusWidget(QWidget):
     
     def _on_start(self):
         """启动 Gateway"""
-        # TODO: 实现启动逻辑
-        self.refresh()
-        self.gateway_started.emit()
+        try:
+            import subprocess
+            import sys
+            import os
+            
+            # 获取 gateway 脚本路径
+            gateway_script = Path(__file__).parent.parent / "core" / "gateway" / "main.py"
+            if not gateway_script.exists():
+                # 尝试其他可能路径
+                gateway_script = Path(__file__).parent.parent.parent / "core" / "gateway" / "main.py"
+            
+            if not gateway_script.exists():
+                QMessageBox.warning(
+                    self, 
+                    "提示", 
+                    "未找到 Gateway 启动脚本:\n" + str(gateway_script)
+                )
+                return
+            
+            # 获取 Hermes 主目录
+            hermes_home = get_hermes_home()
+            hermes_home.mkdir(parents=True, exist_ok=True)
+            
+            # 启动 gateway 进程
+            process = subprocess.Popen(
+                [sys.executable, str(gateway_script)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(gateway_script.parent),
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
+            )
+            
+            # 保存 PID
+            pid_file = hermes_home / "gateway.pid"
+            pid_file.write_text(json.dumps({"pid": process.pid, "started_at": datetime.now().isoformat()}))
+            
+            # 更新 UI
+            self.refresh()
+            self.gateway_started.emit()
+            QMessageBox.information(self, "成功", f"Gateway 已启动 (PID: {process.pid})")
+            
+        except FileNotFoundError as e:
+            QMessageBox.critical(self, "错误", f"Gateway 启动失败:\n{str(e)}")
+        except Exception as e:
+            logger.error(f"Gateway 启动失败: {e}")
+            QMessageBox.critical(self, "错误", f"Gateway 启动失败:\n{str(e)}")
     
     def _on_stop(self):
         """停止 Gateway"""

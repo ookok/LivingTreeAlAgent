@@ -525,7 +525,44 @@ class RootSyncPanel(QWidget):
         try:
             from core.root_sync import RootSyncSystem, FolderConfig
             self.sync_system = RootSyncSystem()
-            # TODO: 从数据库加载配置并启动
+            
+            # 从配置文件加载设备列表
+            try:
+                from core.config import get_hermes_home
+                config_file = get_hermes_home() / "root_sync_devices.json"
+                if config_file.exists():
+                    import json
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        devices_config = json.load(f)
+                        for dev in devices_config.get('devices', []):
+                            self.sync_system.add_device(
+                                device_id=dev['device_id'],
+                                device_name=dev.get('device_name', ''),
+                                address=dev.get('address', ''),
+                                auto_connect=dev.get('auto_connect', True)
+                            )
+            except Exception as e:
+                logger.warning(f"加载设备配置失败: {e}")
+            
+            # 从配置文件加载同步文件夹
+            try:
+                from core.config import get_hermes_home
+                config_file = get_hermes_home() / "root_sync_folders.json"
+                if config_file.exists():
+                    import json
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        folders_config = json.load(f)
+                        for fld in folders_config.get('folders', []):
+                            self.sync_system.add_folder(
+                                folder_id=fld['folder_id'],
+                                folder_path=fld['folder_path'],
+                                sync_mode=fld.get('sync_mode', 'bidirectional')
+                            )
+            except Exception as e:
+                logger.warning(f"加载文件夹配置失败: {e}")
+            
+            # 启动同步系统
+            self.sync_system.start()
 
             self.start_btn.setText("⏹ 停止根系同步")
             self.start_btn.setStyleSheet(STYLE_BTN_DANGER)
@@ -537,9 +574,35 @@ class RootSyncPanel(QWidget):
             QMessageBox.critical(self, "启动失败", f"根系同步系统启动失败:\n{str(e)}")
 
     def _stop_system(self):
+        """停止同步系统"""
         if self.sync_system:
-            # TODO: 优雅关闭
-            self.sync_system = None
+            # 保存当前配置
+            try:
+                from core.config import get_hermes_home
+                import json
+                
+                # 保存设备配置
+                devices = self.sync_system.get_devices()
+                config_file = get_hermes_home() / "root_sync_devices.json"
+                config_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump({'devices': devices}, f, ensure_ascii=False, indent=2)
+                
+                # 保存文件夹配置
+                folders = self.sync_system.get_folders()
+                config_file = get_hermes_home() / "root_sync_folders.json"
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump({'folders': folders}, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"保存配置失败: {e}")
+            
+            # 优雅关闭
+            try:
+                self.sync_system.stop()
+            except Exception as e:
+                logger.error(f"停止同步系统失败: {e}")
+            finally:
+                self.sync_system = None
 
         self.start_btn.setText("🌳 启动根系同步")
         self.start_btn.setStyleSheet(STYLE_BTN_PRIMARY)
@@ -556,7 +619,14 @@ class RootSyncPanel(QWidget):
             return
 
         self.status_bar.showMessage("🔍 正在扫描局域网设备...")
-        # TODO: 调用 sync_system 扫描
+        # 调用 sync_system 扫描
+        try:
+            devices = self.sync_system.scan_devices()
+            self.status_bar.showMessage(f"✅ 扫描完成，发现 {len(devices)} 台设备")
+            self._refresh_devices()
+        except Exception as e:
+            logger.error(f"扫描设备失败: {e}")
+            self.status_bar.showMessage(f"❌ 扫描失败: {str(e)}")
 
     def _add_device(self):
         """添加设备对话框"""
@@ -571,9 +641,18 @@ class RootSyncPanel(QWidget):
                 return
 
             if self.sync_system:
-                # TODO: 调用 sync_system 添加设备
-                self.status_bar.showMessage(f"✅ 已添加设备: {device_name}")
-                self._refresh_devices()
+                try:
+                    self.sync_system.add_device(
+                        device_id=device_id,
+                        device_name=device_name,
+                        address=address,
+                        auto_connect=dialog.auto_connect.isChecked()
+                    )
+                    self.status_bar.showMessage(f"✅ 已添加设备: {device_name}")
+                    self._refresh_devices()
+                except Exception as e:
+                    logger.error(f"添加设备失败: {e}")
+                    QMessageBox.critical(self, "错误", f"添加设备失败:\n{str(e)}")
 
     def _remove_device(self):
         """移除选中设备"""
@@ -589,9 +668,14 @@ class RootSyncPanel(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            # TODO: 调用 sync_system 移除设备
-            self.status_bar.showMessage(f"🗑️ 已移除设备: {device_id}")
-            self._refresh_devices()
+            if self.sync_system:
+                try:
+                    self.sync_system.remove_device(device_id)
+                    self.status_bar.showMessage(f"🗑️ 已移除设备: {device_id}")
+                    self._refresh_devices()
+                except Exception as e:
+                    logger.error(f"移除设备失败: {e}")
+                    QMessageBox.critical(self, "错误", f"移除设备失败:\n{str(e)}")
 
     # ─── 文件夹同步 ──────────────────────────────────
 
@@ -605,9 +689,17 @@ class RootSyncPanel(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             folder_id = dialog.folder_id_input.text().strip()
             if self.sync_system:
-                # TODO: 调用 sync_system 添加文件夹
-                self.status_bar.showMessage(f"📁 已添加同步文件夹: {folder_path}")
-                self._refresh_folders()
+                try:
+                    self.sync_system.add_folder(
+                        folder_id=folder_id,
+                        folder_path=folder_path,
+                        sync_mode=dialog.sync_mode_combo.currentText()
+                    )
+                    self.status_bar.showMessage(f"📁 已添加同步文件夹: {folder_path}")
+                    self._refresh_folders()
+                except Exception as e:
+                    logger.error(f"添加文件夹失败: {e}")
+                    QMessageBox.critical(self, "错误", f"添加文件夹失败:\n{str(e)}")
 
     def _sync_selected_folder(self):
         """同步选中文件夹"""
@@ -618,9 +710,13 @@ class RootSyncPanel(QWidget):
 
         folder_id = self.folders_table.item(row, 0).text()
         if self.sync_system:
-            # TODO: 调用 sync_system 同步
-            self.status_bar.showMessage(f"🔄 正在同步文件夹: {folder_id}")
-            self.sync_started.emit(folder_id)
+            try:
+                self.sync_system.sync_folder(folder_id)
+                self.status_bar.showMessage(f"🔄 正在同步文件夹: {folder_id}")
+                self.sync_started.emit(folder_id)
+            except Exception as e:
+                logger.error(f"同步文件夹失败: {e}")
+                QMessageBox.critical(self, "错误", f"同步文件夹失败:\n{str(e)}")
 
     def _sync_all(self):
         """全量同步所有文件夹"""
@@ -628,7 +724,12 @@ class RootSyncPanel(QWidget):
             return
 
         self.status_bar.showMessage("⬆⬇ 正在执行全量同步...")
-        # TODO: 调用 sync_system 全量同步
+        try:
+            self.sync_system.sync_all()
+            self.status_bar.showMessage("✅ 全量同步完成")
+        except Exception as e:
+            logger.error(f"全量同步失败: {e}")
+            self.status_bar.showMessage(f"❌ 全量同步失败: {str(e)}")
 
     # ─── 版本管理 ──────────────────────────────────
 
@@ -641,13 +742,38 @@ class RootSyncPanel(QWidget):
     def _generate_cert(self):
         """生成设备证书"""
         if self.sync_system:
-            # TODO: 调用 device_registry 生成证书
-            self.cert_display.setText("LT-AI-" + str(id(self))[:8].upper())
-            self.status_bar.showMessage("🔑 设备证书已生成")
+            try:
+                cert = self.sync_system.generate_cert()
+                self.cert_display.setText(cert)
+                self.status_bar.showMessage("🔑 设备证书已生成")
+            except Exception as e:
+                logger.error(f"生成证书失败: {e}")
+                self.cert_display.setText(f"生成失败: {str(e)}")
+                QMessageBox.critical(self, "错误", f"生成证书失败:\n{str(e)}")
 
     def _save_settings(self):
         """保存所有设置"""
-        self.status_bar.showMessage("💾 所有设置已保存")
+        try:
+            from core.config import get_hermes_home
+            import json
+            
+            settings = {
+                'sync_interval': self.sync_interval_spin.value(),
+                'max_bandwidth': self.bandwidth_limit_spin.value(),
+                'auto_start': self.auto_start_checkbox.isChecked(),
+                'cert': self.cert_display.text(),
+            }
+            
+            config_file = get_hermes_home() / "root_sync_settings.json"
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+            
+            self.status_bar.showMessage("💾 所有设置已保存")
+            QMessageBox.information(self, "成功", "设置已保存")
+        except Exception as e:
+            logger.error(f"保存设置失败: {e}")
+            QMessageBox.critical(self, "错误", f"保存设置失败:\n{str(e)}")
 
     # ─── 刷新 ──────────────────────────────────
 
@@ -661,17 +787,51 @@ class RootSyncPanel(QWidget):
     def _refresh_devices(self):
         """刷新设备列表"""
         self.devices_table.setRowCount(0)
-        # TODO: 从 sync_system 获取设备列表
+        if not self.sync_system:
+            return
+        
+        try:
+            devices = self.sync_system.get_devices()
+            for i, dev in enumerate(devices):
+                self.devices_table.setItem(i, 0, QTableWidgetItem(dev.get('device_id', '')))
+                self.devices_table.setItem(i, 1, QTableWidgetItem(dev.get('device_name', '')))
+                self.devices_table.setItem(i, 2, QTableWidgetItem(dev.get('address', '')))
+                status = dev.get('status', 'unknown')
+                self.devices_table.setItem(i, 3, QTableWidgetItem('在线' if status == 'online' else '离线'))
+        except Exception as e:
+            logger.error(f"刷新设备列表失败: {e}")
 
     def _refresh_folders(self):
         """刷新文件夹列表"""
         self.folders_table.setRowCount(0)
-        # TODO: 从 sync_system 获取文件夹列表
+        if not self.sync_system:
+            return
+        
+        try:
+            folders = self.sync_system.get_folders()
+            for i, fld in enumerate(folders):
+                self.folders_table.setItem(i, 0, QTableWidgetItem(fld.get('folder_id', '')))
+                self.folders_table.setItem(i, 1, QTableWidgetItem(fld.get('folder_path', '')))
+                self.folders_table.setItem(i, 2, QTableWidgetItem(fld.get('sync_mode', '')))
+                self.folders_table.setItem(i, 3, QTableWidgetItem(fld.get('status', '')))
+        except Exception as e:
+            logger.error(f"刷新文件夹列表失败: {e}")
 
     def _refresh_history(self):
         """刷新同步历史"""
         self.history_table.setRowCount(0)
-        # TODO: 从数据库获取同步历史
+        if not self.sync_system:
+            return
+        
+        try:
+            history = self.sync_system.get_sync_history(limit=50)
+            for i, item in enumerate(history):
+                self.history_table.setItem(i, 0, QTableWidgetItem(item.get('timestamp', '')))
+                self.history_table.setItem(i, 1, QTableWidgetItem(item.get('folder_id', '')))
+                self.history_table.setItem(i, 2, QTableWidgetItem(item.get('status', '')))
+                self.history_table.setItem(i, 3, QTableWidgetItem(str(item.get('files_synced', 0))))
+        except Exception as e:
+            logger.error(f"刷新同步历史失败: {e}")
 
     # ─── 外部接口 ──────────────────────────────────
 

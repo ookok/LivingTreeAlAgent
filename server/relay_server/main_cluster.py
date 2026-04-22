@@ -199,7 +199,25 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
     client_id = websocket.query_params.get("client_id", "anonymous")
     token = websocket.query_params.get("token", "")
 
-    # TODO: 验证 token
+    # 验证 token
+    if token:
+        try:
+            from server.relay_server.api.v1.user_auth import verify_token
+            user_info = verify_token(token)
+            if not user_info:
+                await websocket.close(code=4001, reason="Token 无效或已过期")
+                return
+            # 将用户信息附加到连接中
+            websocket.client_id = user_info.get("user_id", client_id)
+            websocket.user_info = user_info
+        except Exception as e:
+            logger.warning(f"Token 验证失败: {e}")
+            await websocket.close(code=4001, reason="Token 验证失败")
+            return
+    else:
+        # 无 token 时作为匿名连接
+        websocket.client_id = client_id
+        websocket.user_info = {"anonymous": True}
 
     await websocket.accept()
 
@@ -210,8 +228,8 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
         return
 
     # 连接客户端
-    await node.connect_client(client_id, channel, websocket)
-    logger.info(f"WebSocket: {client_id} joined {channel}")
+    await node.connect_client(websocket.client_id, channel, websocket)
+    logger.info(f"WebSocket: {websocket.client_id} joined {channel}")
 
     try:
         while True:
@@ -221,18 +239,18 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
 
             if msg_type == "message":
                 # 广播消息
-                await node.relay_message(channel, client_id, data.get("content", ""))
-                logger.debug(f"WebSocket: {client_id} sent to {channel}")
+                await node.relay_message(channel, websocket.client_id, data.get("content", ""))
+                logger.debug(f"WebSocket: {websocket.client_id} sent to {channel}")
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
-        await node.disconnect_client(client_id, channel)
-        logger.info(f"WebSocket: {client_id} left {channel}")
+        await node.disconnect_client(websocket.client_id, channel)
+        logger.info(f"WebSocket: {websocket.client_id} left {channel}")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        await node.disconnect_client(client_id, channel)
+        await node.disconnect_client(websocket.client_id, channel)
 
 
 # ============================================================

@@ -428,9 +428,29 @@ class SerialNotificationService:
         request: SerialRequestRecord
     ) -> bool:
         """通过 WebSocket 发送通知"""
-        # TODO: 实现 WebSocket 推送
-        # 这里需要连接到 AdminOnlineManager 的 WebSocket 连接
-        return False  # 暂时返回 False，走短信流程
+        try:
+            # 尝试连接到 AdminOnlineManager 的 WebSocket 连接
+            from server.relay_server.cluster.admin_online_manager import get_admin_online_manager
+            
+            admin_online_mgr = get_admin_online_manager()
+            if admin_online_mgr and hasattr(admin_online_mgr, 'get_websocket'):
+                ws = admin_online_mgr.get_websocket(admin["admin_id"])
+                if ws and not ws.closed:
+                    notification_data = {
+                        "type": "serial_request",
+                        "admin_id": admin["admin_id"],
+                        "title": title,
+                        "content": content,
+                        "request_id": request.request_id,
+                        "timestamp": int(time.time()),
+                    }
+                    await ws.send_json(notification_data)
+                    return True
+        except Exception as e:
+            logger.warning(f"WebSocket 通知发送失败: {e}")
+        
+        # 降级：返回 False，走短信流程
+        return False
 
     async def _send_sms_notification(
         self,

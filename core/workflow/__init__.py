@@ -512,8 +512,32 @@ class WorkflowEngine:
             if edge.source_id == current_node_id:
                 # 检查边条件
                 if edge.condition:
-                    # TODO: 评估条件表达式
-                    pass
+                    # 评估条件表达式
+                    condition = edge.condition
+                    # 支持的条件类型：
+                    # 1. 简单动作匹配: action == "approve"
+                    # 2. 变量比较: status == "completed"
+                    # 3. 布尔表达式: status == "completed" and priority == "high"
+                    
+                    # 构建评估上下文
+                    eval_context = {
+                        "action": action,
+                        "current_node": current_node_id,
+                        "workflow": workflow,
+                        "True": True,
+                        "False": False,
+                        "None": None,
+                    }
+                    
+                    try:
+                        # 使用 eval 评估条件表达式
+                        result = eval(condition, {"__builtins__": {}}, eval_context)
+                        if result:
+                            return edge.target_id
+                    except Exception as e:
+                        logger.warning(f"条件表达式评估失败: {condition}, 错误: {e}")
+                        # 条件评估失败时，默认不匹配
+                        continue
                 else:
                     return edge.target_id
         return None

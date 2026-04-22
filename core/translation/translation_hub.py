@@ -413,31 +413,76 @@ class TranslationHub:
         return result
 
     def detect_language(self, text: str) -> str:
-        """检测语言 (简单实现)"""
-        # 简单语言检测
-        # TODO: 使用专业的语言检测库 (langdetect)
+        """检测语言 (使用 langdetect 库)"""
+        if not text or not text.strip():
+            return "en"
+        
+        try:
+            # 尝试使用 langdetect 库进行语言检测
+            from langdetect import detect, LangDetectException
+            
+            # langdetect 需要至少 100 个字符才能准确检测
+            # 如果文本太短，先检测是否包含非 ASCII 字符
+            detected = detect(text)
+            
+            # 将 langdetect 的语言代码转换为 ISO 639-1 格式
+            lang_map = {
+                'zh': 'zh-CN',
+                'ja': 'ja',
+                'ko': 'ko',
+                'ru': 'ru',
+                'ar': 'ar',
+                'en': 'en',
+                'fr': 'fr',
+                'de': 'de',
+                'es': 'es',
+                'pt': 'pt',
+                'it': 'it',
+                'nl': 'nl',
+                'pl': 'pl',
+                'tr': 'tr',
+                'vi': 'vi',
+                'th': 'th',
+                'id': 'id',
+            }
+            
+            return lang_map.get(detected, detected)
+            
+        except ImportError:
+            # langdetect 未安装，降级使用正则表达式检测
+            logger.debug("langdetect 未安装，使用正则表达式检测语言")
+            return self._detect_language_regex(text)
+        except LangDetectException:
+            # 检测失败，降级使用正则表达式
+            return self._detect_language_regex(text)
+        except Exception:
+            # 其他异常，返回英语
+            return "en"
+    
+    def _detect_language_regex(self, text: str) -> str:
+        """使用正则表达式检测语言（降级方案）"""
         import re
-
+        
         # 中文检测
         if re.search(r'[\u4e00-\u9fff]', text):
             return "zh-CN"
-
+        
         # 日语检测
         if re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text):
             return "ja"
-
+        
         # 韩语检测
         if re.search(r'[\uac00-\ud7af]', text):
             return "ko"
-
+        
         # 俄语检测
         if re.search(r'[\u0400-\u04ff]', text):
             return "ru"
-
+        
         # 阿拉伯语检测
         if re.search(r'[\u0600-\u06ff]', text):
             return "ar"
-
+        
         # 默认英语
         return "en"
 

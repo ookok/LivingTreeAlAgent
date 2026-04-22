@@ -9,6 +9,7 @@
 
 import json
 import copy
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set
 from enum import Enum
@@ -73,7 +74,7 @@ class ClipboardEnhancer:
                 key="clipboard",
                 value=data,
                 format=format,
-                timestamp=0,  # TODO: 使用时间戳
+                timestamp=time.time(),
                 metadata=metadata or {},
             )
 

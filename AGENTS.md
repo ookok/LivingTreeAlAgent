@@ -1,83 +1,156 @@
-# LivingTree AI Agent - Knowledge Base
+# CODEBUDDY.md This file provides guidance for WorkBuddy when working with code in this repository.
 
-**Generated:** 2026-04-22
-**Commit:** ef41a3e
-**Project:** 基于 PyQt6 的智能代理开发平台, Python 3.11+, 3402 files
+> 2026-04-22 | Python 3.11+ | PyQt6 | ~3400 files
 
 ## OVERVIEW
 
-跨模块 AI Agent 桌面应用 (Hermes)。集成分层 Agent 架构、虚拟会议、数字分身、积分经济、P2P 存储、电商系统。2026-04-21 完成三层架构重构 (Presentation/Business/Infrastructure)。
+Desktop AI agent platform (Hermes) — PyQt6 GUI, layered architecture. Two parallel codebases: new `client/src/` (3-layer migration) and legacy `core/` + `ui/`. Both still actively used during migration.
+
+Core capabilities: multi-agent system, P2P storage, digital twins, credit economy, e-commerce, browser automation, virtual conference, AmphiLoop bidirectional scheduling, PRISM context optimization.
+
+## ARCHITECTURE (Big Picture)
+
+### Dual Codebase Strategy
+The project is in active migration from a legacy monolithic structure to a clean 3-layer architecture:
+
+- **New codebase** (`client/src/`): Clean separation into `business/` (logic), `infrastructure/` (DB/config/network), `presentation/` (UI), and `shared/` (utilities). This is where all new code belongs.
+- **Legacy codebase** (`core/` + `ui/`): ~300+ modules in a flat structure, still actively used and referenced. Do not delete — both import paths coexist during migration.
+
+### Key Architectural Patterns
+- **Big `__init__.py` monoliths**: Some legacy modules (e.g., `personal_mode`, `universal_asset_ecosystem`) use `__init__.py` as entry point (99k+ lines). Read sub-files instead.
+- **Legacy `core/__init__.py` exports**: `HermesAgent`, `OllamaClient`, `SessionDB`, `MemoryManager`, `ToolRegistry` — still actively imported by existing code.
+- **Import paths**: Both `from core.xxx` and `from client.src.business.xxx` work. Prefer new path for new code.
+
+### Module Categories (Legacy `core/` — ~243 dirs)
+Key modules include: `amphiloop/` (scheduling), `optimization/` (PRISM), `enterprise/` (P2P storage & task scheduling), `digital_twin/` (digital avatars), `credit_economy/` (points system), `decommerce/` (e-commerce), `living_tree_ai/` (300 files — voice, browser, meeting), `fusion_rag/` (multi-source retrieval), `knowledge_graph/`, `plugin_framework/`, `hermes_agent/`, `p2p_*` (P2P networking), `personal_mode/`, `ecc_*` (agent instincts/skills), `evolving_community/`, `intelligent_hints/`, `office_automation/`
+
+### Module Categories (New `client/src/business/` — ~340 files)
+Mirrors legacy structure — all legacy modules have been ported here. New code goes here.
+
+### Server Layer
+- `server/relay_server/` — FastAPI relay (api/, cluster/, database/)
+- `server/tracker_server.py` — P2P node tracker
+
+### Other Key Areas
+- `app/` — Standalone enterprise application
+- `packages/` — Shared libraries (`living_tree_naming/`, `shared/`)
+- `mobile/` — PWA/mobile support (main.py, screens, adaptive_layout, pwa_integration)
+- `config/` — Configuration files
 
 ## STRUCTURE
 
 ```
 root/
-├── client/src/             # 重构后主代码 (1562 files)
-│   ├── main.py             # 统一入口
-│   ├── business/           # 业务逻辑 (151 子模块, ~1350 files)
-│   ├── infrastructure/     # 基础设施层 (config/database/network)
-│   └── presentation/       # UI 层 (presentation/)
-├── core/                   # 旧核心模块 (1354 files, 逐步迁移中)
-├── ui/                     # 旧 UI 模块 (173 files, mirrors presentation/)
-├── server/                 # FastAPI relay + tracker 服务端 (57 files)
-├── app/                    # 独立企业应用
-├── packages/               # 共享包 (living_tree_naming 法典)
-├── scripts/                # 启动/部署脚本
-└── main.py                 # 根入口: python main.py [client|relay|tracker|app|all]
+├── client/src/              # ✅ New code (3-layer migration target)
+│   ├── main.py              # PyQt6 entry → HomePage
+│   ├── business/            # Business logic (~340 files, mirrors core/)
+│   ├── infrastructure/      # DB (v1-v14), config, network, model, storage
+│   ├── presentation/        # UI (panels/ 186 files, components/, widgets/)
+│   └── shared/              # Shared utilities
+├── core/                    # ⚠️ Legacy (~243 dirs, still actively used)
+│   ├── living_tree_ai/      # 300 files — voice, browser, meeting, etc.
+│   ├── amphiloop/           # Bidirectional scheduling engine
+│   ├── optimization/        # PRISM optimizer, Shannon entropy
+│   ├── enterprise/          # P2P storage & task scheduling (11 files)
+│   ├── digital_twin/        # Digital avatar system
+│   ├── credit_economy/      # Points/credits system
+│   ├── decommerce/          # E-commerce (22 files)
+│   ├── fusion_rag/          # Multi-source retrieval (28 files)
+│   ├── knowledge_graph/     # Knowledge graph (16 files)
+│   ├── plugin_framework/    # Plugin system (16 files)
+│   ├── hermes_agent/        # Agent framework
+│   ├── p2p_*/               # P2P networking modules
+│   ├── ecc_*/               # Agent instincts/skills
+│   ├── evolving_community/  # Community system (15 files)
+│   ├── personal_mode/       # Personal mode (99k+ line __init__.py)
+│   └── ...                  # ~200 more modules
+├── server/                  # Server layer
+│   ├── relay_server/        # FastAPI relay (api/, cluster/, database/)
+│   └── tracker_server.py   # P2P tracker
+├── app/                     # Standalone enterprise app
+├── mobile/                  # PWA/mobile (7 files)
+├── packages/                # Shared libs (living_tree_naming/, shared/)
+├── config/                  # Config files
+├── main.py                  # CLI: client|relay|tracker|app|all
+├── run.bat                  # Windows quick start (default: client)
+├── pyproject.toml           # setuptools build, livingtree CLI
+├── pytest.ini               # markers: unit, integration, slow, ui
+└── tests/                   # Real tests (1 file: test_provider.py)
 ```
 
-## WHERE TO LOOK
+## RUN COMMANDS
 
-| Task | Location |
-|------|----------|
-| UI 功能面板 | `client/src/presentation/panels/` (90+ panels) |
-| 业务逻辑模块 | `client/src/business/` → 按功能域划分 |
-| 底层基础设施 | `client/src/infrastructure/{config,database,network}/` |
-| 旧代码 (仍可能在使用) | `core/` + `ui/` (逐步迁移) |
-| 服务端 API | `server/relay_server/` |
-| 迁移追踪 | `README.md` 重构前/后对比表 |
-| 模型管理 | `core/model_hub/`, `core/model_store/` |
-| 技能系统 | `packages/` + `client/src/business/skill_evolution/` |
+### Launch
+```powershell
+python main.py client           # desktop client (default)
+python main.py relay            # relay server
+python main.py tracker          # P2P tracker
+python main.py app              # enterprise app
+python main.py all              # relay + tracker + client
+python -m livingtree client     # via CLI entry point
+```
 
-## CONVENTIONS
-
-- 新代码写 `client/src/business/`, 旧代码保留在 `core/`
-- UI 面板继承 `client/src/presentation/` 中的基础类
-- Import: `from client.src.business.{domain}.{module}` (重构后)
-- `core/__init__.py` 仍导出旧路径: `HermesAgent`, `OllamaClient`, `SessionDB`, `MemoryManager`, `ToolRegistry`
-- 每个业务模块通常有 `__init__.py` 做入口 + 多个实现文件
-- 大型模块使用 `__init__.py` 聚合导出 (99k+ 行的 `personal_mode`, `universal_asset_ecosystem` 等)
-
-## ANTI-PATTERNS
-
-- ❌ 不要在 `core/` 中新增模块, 统一用 `client/src/business/`
-- ❌ 旧 import 路径 (`from core.xxx`) 逐步被新路径替换中, 两系统并存
-- ❌ 不要大文件 (>60k 行) 硬读, 模块内部用子文件拆分
-- ❌ `core/` 中的大 `__init__.py` (99k/74k/70k 行) 是单文件上帝对象, 需渐进重构
-
-## COMMANDS
-
-```bash
-# 启动
-python main.py client           # 桌面客户端
-python main.py relay            # 中继服务器
-python main.py tracker          # 追踪服务器
-python main.py all              # 全部启动
-python run.bat                  # Windows 快速启动
-
-# 安装
+### Install (editable, order matters)
+```powershell
 pip install -e ./client
 pip install -e ./server/relay_server
 pip install -e ./app
-
-# 项目配置
-pyproject.toml                  # 项目级配置 (setuptools, livingtree CLI)
-pytest.ini                      # 测试配置
 ```
 
-## NOTES
+### Test
+```powershell
+pytest                              # all tests
+pytest tests/test_provider.py       # single test file
+pytest -m unit                      # unit tests only
+pytest -m integration               # integration tests only
+pytest -m slow --timeout 120        # slow tests
+pytest -m ui                        # UI tests
+pytest -v                           # verbose output
+pytest --tb=short                   # short traceback (default)
+```
 
-- `client/src/business/` 有 151 个业务子模块 (living_tree_ai, credit_economy, virtual_avatar_social, smart_deploy 等)
-- `client/src/presentation/panels/` 下有 90+ UI 面板, 多数在 `legacy ui/` 也有副本
-- 代码库有大量单文件 >25k 行的模块 (上帝对象模式)
-- 根目录有大量未使用的 `test_*.py` 文件 (约 80 个), 实际测试在 `tests/` 和 `test_cloud/`
+### CLI
+```powershell
+# livingtree CLI (installed via pyproject.toml)
+livingtree --help
+```
+
+## CONVENTIONS
+
+- **New code**: `client/src/business/` (never `core/`), `client/src/presentation/` (never `ui/`)
+- **Import**: `from client.src.business.{domain}.{module}` (new) — `from core.xxx` still works but deprecated
+- **Windows**: Use `;` not `&&` for command chaining
+- **No lint/typecheck/formatter**: Manual quality control only
+- **Database migrations**: `client/src/infrastructure/database/` (v1-v14)
+- **Config**: `config/` directory
+- **Tests**: `tests/` directory (only 1 real test file — root `test_*.py` files are stale)
+- **Big `__init__.py`**: Avoid — read sub-files instead. Some legacy modules use it as monolith entry.
+
+## QUICK LOOKUP
+
+| Task | Go here |
+|------|--|
+| New business logic | `client/src/business/` |
+| New UI panel | `client/src/presentation/panels/` |
+| UI components | `client/src/presentation/components/` or `widgets/` |
+| DB migrations | `client/src/infrastructure/database/` (v1-v14) |
+| Legacy business | `core/` (~243 modules) |
+| Model store | `core/model_hub/`, `core/model_store/` |
+| Server API | `server/relay_server/` |
+| Config | `config/` |
+| Mobile/PWA | `mobile/` |
+| P2P networking | `core/p2p_*` or `client/src/business/p2p_*` |
+| Agent framework | `core/hermes_agent/` or `client/src/business/hermes_agent/` |
+| Skill system | `core/hermes_agent/` or `client/src/business/hermes_agent/` |
+| Knowledge graph | `core/knowledge_graph/` or `client/src/business/knowledge_graph/` |
+
+## ANTI-PATTERNS
+
+- ❌ Don't write to `core/` or `ui/` — both are legacy. Use `client/src/`
+- ❌ Don't open huge `__init__.py` (99k+ lines) — read sub-files instead
+- ❌ Root `test_*.py` (~80 stale files) — real tests in `tests/` (1 file)
+- ❌ Install in wrong order: client → relay_server → app
+- ❌ Both import paths coexist (`from core.xxx` still works) — don't assume old imports are dead
+- ❌ No CI/CD — no `&&` on Windows, use PowerShell `;`
+- ❌ Don't assume legacy modules are dead — they're still actively imported
+- ❌ Don't open `core/__init__.py` — it exports key symbols still in use

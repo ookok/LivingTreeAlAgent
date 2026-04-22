@@ -183,12 +183,65 @@ class MainPage(QWidget):
         if card:
             card.setStatus(MainCardStatus.ACTIVE)
 
-        # TODO: 动态加载对应 Panel
-        # 例如: from ui.knowledge_base_panel import KnowledgeBasePanel
-        #       panel = KnowledgeBasePanel()
-        #       self.content_stack.addWidget(panel)
-        #       self.content_stack.setCurrentWidget(panel)
-        print(f"[MainPage] Opening module: {module_id}")
+        # 动态加载对应 Panel
+        if module_id not in self._panels:
+            self._create_module_panel(module_id)
+
+        panel = self._panels.get(module_id)
+        if panel:
+            self.content_stack.addWidget(panel)
+            self.content_stack.setCurrentWidget(panel)
+
+    def _create_module_panel(self, module_id: str):
+        """创建模块面板"""
+        if module_id == "deep_search":
+            # 深度搜索面板
+            try:
+                from ui.deep_search_panel import DeepSearchPanel
+                panel = DeepSearchPanel()
+                self._panels[module_id] = panel
+                logger.info(f"[MainPage] 深度搜索面板已加载")
+            except ImportError as e:
+                logger.error(f"[MainPage] 深度搜索面板导入失败: {e}")
+                QMessageBox.warning(self, "错误", f"深度搜索面板加载失败: {e}")
+        elif module_id == "knowledge_base":
+            # 知识库面板 (预留)
+            logger.info(f"[MainPage] 知识库面板开发中...")
+        elif module_id == "expert_training":
+            # 专家训练面板 (预留)
+            logger.info(f"[MainPage] 专家训练面板开发中...")
+        elif module_id == "smart_ide":
+            # 智能IDE面板 (预留)
+            logger.info(f"[MainPage] 智能IDE面板开发中...")
+        elif module_id == "distributed_im":
+            # 分布式IM面板 (预留)
+            logger.info(f"[MainPage] 分布式IM面板开发中...")
+        elif module_id == "project_generation":
+            # 项目生成面板 (预留)
+            logger.info(f"[MainPage] 项目生成面板开发中...")
+        elif module_id == "enterprise_mgmt":
+            # 企业管理面板 (预留)
+            logger.info(f"[MainPage] 企业管理面板开发中...")
+        elif module_id == "game_world":
+            # 游戏世界面板 (预留)
+            logger.info(f"[MainPage] 游戏世界面板开发中...")
+        elif module_id == "digital_avatar":
+            # 数字分身面板 (预留)
+            logger.info(f"[MainPage] 数字分身面板开发中...")
+        elif module_id == "virtual_cloud":
+            # 虚拟云盘面板 (预留)
+            logger.info(f"[MainPage] 虚拟云盘面板开发中...")
+        elif module_id == "mall":
+            # 下一代商城面板 (预留)
+            logger.info(f"[MainPage] 下一代商城面板开发中...")
+        elif module_id == "email":
+            # 邮箱面板 (预留)
+            logger.info(f"[MainPage] 邮箱面板开发中...")
+        elif module_id == "internal_platform":
+            # 内部平台面板 (预留)
+            logger.info(f"[MainPage] 内部平台面板开发中...")
+        else:
+            logger.warning(f"[MainPage] 未知模块: {module_id}")
 
     def _show_locked_dialog(self, module_id: str):
         """显示锁定模块的提示对话框"""

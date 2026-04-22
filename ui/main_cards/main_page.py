@@ -260,6 +260,16 @@ class MainPage(QWidget):
         elif module_id == "internal_platform":
             # 内部平台面板 (预留)
             logger.info(f"[MainPage] 内部平台面板开发中...")
+        elif module_id == "smart_writing":
+            # AI 智能写作平台
+            try:
+                from ui.ai_writing_platform import AIWritingPanel
+                panel = AIWritingPanel()
+                self._panels[module_id] = panel
+                logger.info(f"[MainPage] 智能写作面板已加载")
+            except ImportError as e:
+                logger.error(f"[MainPage] 智能写作面板导入失败: {e}")
+                QMessageBox.warning(self, "错误", f"智能写作面板加载失败: {e}")
         else:
             logger.warning(f"[MainPage] 未知模块: {module_id}")
 

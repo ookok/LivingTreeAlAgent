@@ -111,6 +111,13 @@ MODULES_CONFIG = {
         "desc": "企业门户/应用分发/权限中心",
         "status": "normal"
     },
+    "smart_writing": {
+        "icon": "✍️",
+        "name": "智能写作",
+        "color": "#10B981",      # 翠绿
+        "desc": "AI辅助创作/多文体支持/自动化生成",
+        "status": "active"
+    },
 }
 
 

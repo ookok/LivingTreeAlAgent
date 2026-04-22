@@ -209,8 +209,16 @@ class MainPage(QWidget):
                 logger.error(f"[MainPage] 深度搜索面板导入失败: {e}")
                 QMessageBox.warning(self, "错误", f"深度搜索面板加载失败: {e}")
         elif module_id == "knowledge_base":
-            # 知识库面板 (预留)
-            logger.info(f"[MainPage] 知识库面板开发中...")
+            # 知识库面板
+            try:
+                from ui.knowledge_base_panel import KnowledgeBasePanel
+                panel = KnowledgeBasePanel()
+                panel.init_ai_modules()
+                self._panels[module_id] = panel
+                logger.info(f"[MainPage] 知识库面板已加载")
+            except ImportError as e:
+                logger.error(f"[MainPage] 知识库面板导入失败: {e}")
+                QMessageBox.warning(self, "错误", f"知识库面板加载失败: {e}")
         elif module_id == "expert_training":
             # 专家训练面板 (预留)
             logger.info(f"[MainPage] 专家训练面板开发中...")

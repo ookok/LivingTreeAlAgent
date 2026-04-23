@@ -272,7 +272,7 @@ class KnowledgeBaseLayer:
                 bm25_score = cand.get("bm25_score", 0)
                 
                 # 归一化
-                max_vector = max(c["vector_score"] for c in candidates.values()) if candidates else 1
+                max_vector = max(c.get("vector_score", 0) for c in candidates.values()) if candidates else 1
                 max_bm25 = max(c.get("bm25_score", 0) for c in candidates.values()) if candidates else 1
                 
                 norm_vector = vector_score / max_vector if max_vector > 0 else 0
@@ -303,6 +303,161 @@ class KnowledgeBaseLayer:
                     "score": r["score"],
                     "vector_score": r["vector_score"],
                     "bm25_score": r["bm25_score"]
+                })
+            
+            if formatted:
+                self.hit_count += 1
+            
+            return formatted
+    
+    def search_optimized(
+        self,
+        query: str,
+        top_k: int = 5,
+        doc_type: Optional[str] = None,
+        alpha: float = 0.6,
+        initial_candidates: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        两阶段优化搜索：倒排索引快速过滤 + 向量重排
+        
+        性能优化（真正利用倒排索引）：
+        - 阶段1: 用 bm25_index 倒排索引获取匹配的 chunk_ids（O(Q) 而不是 O(Q*N)）
+        - 阶段2: 只对候选做向量计算
+        
+        Args:
+            query: 查询文本
+            top_k: 返回数量
+            doc_type: 文档类型过滤
+            alpha: 向量权重
+            initial_candidates: 第一阶段保留的候选数量
+            
+        Returns:
+            搜索结果列表
+        """
+        import time as time_module
+        
+        with self.lock:
+            self.search_count += 1
+            
+            if not self.chunks:
+                return []
+            
+            phase1_start = time_module.time()
+            
+            # ========== 阶段1: 倒排索引快速过滤 + BM25评分 ==========
+            query_words = self._tokenize(query)
+            
+            # 用倒排索引收集匹配的 chunks
+            matched_chunks: Dict[int, Dict] = {}  # chunk_idx -> {match_count, tf_dict}
+            
+            # 统计文档频率（用倒排索引）
+            doc_freq: Dict[str, int] = {}
+            for word in query_words:
+                if word in self.bm25_index:
+                    doc_freq[word] = len(self.bm25_index[word])
+            
+            # 对每个匹配的 chunk 计算词频
+            for word in query_words:
+                if word not in self.bm25_index:
+                    continue
+                for chunk_idx in self.bm25_index[word]:
+                    if doc_type and self.chunks[chunk_idx]["type"] != doc_type:
+                        continue
+                    if chunk_idx not in matched_chunks:
+                        matched_chunks[chunk_idx] = {"match_count": 0, "tf": defaultdict(int)}
+                    matched_chunks[chunk_idx]["match_count"] += 1
+                    matched_chunks[chunk_idx]["tf"][word] += 1
+            
+            # 计算 BM25 分数
+            total_chunks = len(self.chunks)
+            avg_len = sum(len(c["content"]) for c in self.chunks) / max(total_chunks, 1)
+            k1, b = 1.5, 0.75
+            
+            bm25_scores = []
+            for chunk_idx, data in matched_chunks.items():
+                chunk = self.chunks[chunk_idx]
+                chunk_len = len(chunk["content"])
+                
+                score = 0.0
+                for word, tf in data["tf"].items():
+                    # IDF
+                    df = doc_freq.get(word, 1)
+                    idf = max(0.1, (total_chunks - df + 0.5) / (df + 0.5))
+                    # BM25 term
+                    term_score = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (chunk_len / avg_len)))
+                    score += term_score
+                
+                bm25_scores.append((chunk_idx, score))
+            
+            # 按 BM25 分数排序
+            bm25_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # 取前 initial_candidates 个
+            candidate_indices = [idx for idx, _ in bm25_scores[:initial_candidates]]
+            
+            # 保存原始 BM25 分数用于归一化
+            bm25_dict = {idx: score for idx, score in bm25_scores[:initial_candidates]}
+            
+            phase1_time = (time_module.time() - phase1_start) * 1000
+            
+            if not candidate_indices:
+                return []
+            
+            # 归一化 BM25 分数
+            max_bm25 = bm25_scores[0][1] if bm25_scores else 1
+            
+            # ========== 阶段2: 向量计算（只对候选） ==========
+            phase2_start = time_module.time()
+            
+            query_vec = self._generate_simple_embedding(query)
+            
+            candidates: Dict[int, Dict] = {}
+            max_vector = 0
+            
+            for idx in candidate_indices:
+                chunk = self.chunks[idx]
+                vector_score = self._compute_vector_similarity(query_vec, self.vector_index[idx])
+                bm25_norm = bm25_dict.get(idx, 0) / max_bm25 if max_bm25 > 0 else 0
+                
+                candidates[idx] = {
+                    "chunk": chunk,
+                    "vector_score": vector_score,
+                    "bm25_score": bm25_norm
+                }
+                max_vector = max(max_vector, vector_score)
+            
+            # 归一化向量分数
+            if max_vector > 0:
+                for i in candidates:
+                    candidates[i]["vector_score"] = candidates[i]["vector_score"] / max_vector
+            
+            phase2_time = (time_module.time() - phase2_start) * 1000
+            
+            # ========== 阶段3: 融合排序 ==========
+            for i, cand in candidates.items():
+                fused_score = alpha * cand.get("vector_score", 0) + (1 - alpha) * cand.get("bm25_score", 0)
+                cand["score"] = fused_score
+            
+            results = sorted(
+                candidates.values(),
+                key=lambda x: x["score"],
+                reverse=True
+            )[:top_k]
+            
+            # 格式化输出
+            formatted = []
+            for r in results:
+                formatted.append({
+                    "id": r["chunk"]["id"],
+                    "doc_id": r["chunk"]["doc_id"],
+                    "title": r["chunk"]["title"],
+                    "content": r["chunk"]["content"],
+                    "type": r["chunk"]["type"],
+                    "score": r["score"],
+                    "vector_score": r.get("vector_score", 0),
+                    "bm25_score": r.get("bm25_score", 0),
+                    "_perf": {"phase1_ms": phase1_time, "phase2_ms": phase2_time}
                 })
             
             if formatted:

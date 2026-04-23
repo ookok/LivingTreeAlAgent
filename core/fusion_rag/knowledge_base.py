@@ -56,8 +56,65 @@ class KnowledgeBaseLayer:
         self.search_count = 0
         self.hit_count = 0
         self.lock = threading.Lock()
-        
-        print(f"[KnowledgeBase] 初始化完成，嵌入模型: {embedding_model}")
+
+        # ── 嵌入引擎（优先 Ollama 真实向量，降级为 hash） ──────────
+        self._embedding_cache: Dict[str, List[float]] = {}
+        self._ollama_client = None
+        self._embedding_dim = 896  # qwen2.5:1.5b 输出维度
+        self._embedding_model_name = "qwen2.5:1.5b"  # 备用嵌入模型（当 nomic-embed-text 不可用时）
+        self._init_embedding_engine()
+
+    def _init_embedding_engine(self):
+        """初始化嵌入引擎：优先 Ollama 嵌入模型（nomic-embed-text → qwen2.5:1.5b）"""
+        try:
+            import requests
+            r = requests.get("http://localhost:11434/api/tags", timeout=3)
+            if r.status_code != 200:
+                raise RuntimeError("Ollama not responding")
+
+            # ── 尝试 nomic-embed-text（最优） ────────────────────
+            test_resp = requests.post(
+                "http://localhost:11434/api/embeddings",
+                json={"model": "nomic-embed-text", "prompt": "test"},
+                timeout=10
+            )
+            if test_resp.status_code == 200:
+                data = test_resp.json()
+                emb = data.get("embedding", [])
+                if emb:
+                    self._ollama_client = "requests"
+                    self._embedding_model_name = "nomic-embed-text"
+                    self._embedding_dim = len(emb)
+                    print(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=nomic-embed-text, dim={self._embedding_dim})")
+                    return
+
+            # ── 尝试 qwen2.5:1.5b（备用，本地 LLM 可用） ─────────
+            test_resp2 = requests.post(
+                "http://localhost:11434/api/embeddings",
+                json={"model": "qwen2.5:1.5b", "prompt": "test"},
+                timeout=15
+            )
+            if test_resp2.status_code == 200:
+                data2 = test_resp2.json()
+                emb2 = data2.get("embedding", [])
+                if emb2:
+                    self._ollama_client = "requests"
+                    self._embedding_model_name = "qwen2.5:1.5b"
+                    self._embedding_dim = len(emb2)
+                    print(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=qwen2.5:1.5b, dim={self._embedding_dim})")
+                    return
+
+            raise RuntimeError("No embedding model available")
+
+        except Exception as e:
+            self._ollama_client = None
+            print(f"[KnowledgeBase] Ollama 嵌入不可用: {e}，降级为 hash 嵌入")
+
+
+
+
+        print(f"[KnowledgeBase] 初始化完成，嵌入模型: {self.embedding_model}")
+
     
     def _tokenize(self, text: str) -> List[str]:
         """简单分词"""
@@ -107,35 +164,81 @@ class KnowledgeBaseLayer:
         return score
     
     def _compute_vector_similarity(self, vec1: List[float], vec2: List[float]) -> float:
-        """计算向量余弦相似度"""
-        if not vec1 or not vec2 or len(vec1) != len(vec2):
+        """计算向量余弦相似度（支持不同维度向量）"""
+        if not vec1 or not vec2:
             return 0.0
-        
-        dot = sum(a * b for a, b in zip(vec1, vec2))
-        norm1 = sum(a * a for a in vec1) ** 0.5
-        norm2 = sum(b * b for b in vec2) ** 0.5
-        
+
+        # 维度不同：用 hash 向量截断或补零
+        dim = max(len(vec1), len(vec2))
+        v1 = vec1 + [0.0] * (dim - len(vec1))
+        v2 = vec2 + [0.0] * (dim - len(vec2))
+
+        dot = sum(a * b for a, b in zip(v1, v2))
+        norm1 = sum(a * a for a in v1) ** 0.5
+        norm2 = sum(b * b for b in v2) ** 0.5
+
         if norm1 == 0 or norm2 == 0:
             return 0.0
-        
+
         return dot / (norm1 * norm2)
+
     
     def _generate_simple_embedding(self, text: str) -> List[float]:
-        """生成简化的文本嵌入 (用于演示)"""
-        # 简化: 使用词袋哈希
+        """生成文本嵌入（优先 Ollama 真实向量，降级为词袋 hash）"""
+        if not text.strip():
+            return [0.0] * 128
+
+        # ── 优先：Ollama 真实嵌入 ──────────────────────────────
+        if self._ollama_client and text.strip():
+            cache_key = hashlib.md5(text.encode()).hexdigest()
+            if cache_key in self._embedding_cache:
+                return self._embedding_cache[cache_key]
+
+            try:
+                embedding = None
+                if self._ollama_client == "requests":
+                    # 方式1: requests 直接调用 /api/embeddings
+                    import requests
+                    resp = requests.post(
+                        "http://localhost:11434/api/embeddings",
+                        json={"model": self._embedding_model_name, "prompt": text[:2048]},
+                        timeout=15
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        embedding = data.get("embedding", [])
+                else:
+                    # 方式2: ollama.Client API
+                    response = self._ollama_client.embeddings(
+                        model="nomic-embed-text",
+                        prompt=text[:2048]
+                    )
+                    embedding = response.get("embedding", [])
+
+                if embedding and len(embedding) > 0:
+                    # 缓存（限制大小防止内存溢出）
+                    if len(self._embedding_cache) < 5000:
+                        self._embedding_cache[cache_key] = embedding
+                    return embedding
+            except Exception:
+                pass  # 降级到 hash 方式
+
+        # ── 降级：词袋 hash 嵌入 ──────────────────────────────
         words = self._tokenize(text)
         vec = [0.0] * 128
-        
+
         for word in words:
             word_hash = hash(word) % 128
             vec[word_hash] += 1.0
-        
+
         # L2 归一化
         norm = sum(v * v for v in vec) ** 0.5
         if norm > 0:
             vec = [v / norm for v in vec]
-        
+
         return vec
+
+
     
     def _create_chunks(self, doc: Dict) -> List[Dict]:
         """创建文档分块"""
@@ -147,12 +250,23 @@ class KnowledgeBaseLayer:
         chunk_id_prefix = hashlib.md5(doc["id"].encode()).hexdigest()[:8]
         
         while start < len(content):
-            end = start + self.chunk_size
+            end = min(start + self.chunk_size, len(content))
             chunk_text = content[start:end]
             
-            if len(chunk_text.strip()) < 20:  # 太小跳过
-                start = end
-                continue
+            if len(chunk_text.strip()) < 10:  # 太短：结束（允许尾部小chunk）
+                if start == 0:
+                    # 整篇文档都很短，整体作为一个chunk
+                    chunk_id = f"{chunk_id_prefix}_0"
+                    chunks.append({
+                        "id": chunk_id,
+                        "doc_id": doc["id"],
+                        "content": content,
+                        "title": doc.get("title", ""),
+                        "type": doc.get("type", "unknown"),
+                        "metadata": doc.get("metadata", {}),
+                        "position": 0
+                    })
+                break
             
             chunk_id = f"{chunk_id_prefix}_{len(chunks)}"
             

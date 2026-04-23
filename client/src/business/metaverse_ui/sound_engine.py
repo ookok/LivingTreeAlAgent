@@ -184,51 +184,98 @@ class SoundEngine(QObject):
         """
         if not self._enabled or self._muted:
             return
-        
-        if not self._speaker:
-            return
-        
+
+        # 尝试直接朗读
+        if self._speaker:
+            try:
+                if hasattr(self._speaker, "Rate"):
+                    self._speaker.Rate = max(-10, min(10, rate))
+                self._speaker.Speak(text, 1)
+                self._speaker.WaitUntilDone(-1)
+                self.voice_finished.emit()
+                return
+            except Exception:
+                pass
+
+        # 回退到 winsound（需要先有 WAV 文件）
         try:
-            # 设置语速
-            if hasattr(self._speaker, 'Rate'):
-                self._speaker.Rate = max(-10, min(10, rate))
-            
-            # 朗读
-            self._speaker.Speak(text)
-            self.voice_finished.emit()
+            import winsound, tempfile, os, hashlib
+            txt_hash = hashlib.md5(text.encode("utf-8")).hexdigest()[:8]
+            wav_path = os.path.join(tempfile.gettempdir(), f"lt_tts_{txt_hash}.wav")
+            if os.path.exists(wav_path):
+                winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+                self.voice_finished.emit()
         except Exception:
             pass
     
     def play_voice_cn(self, text: str):
         """
-        播放中文语音
-        使用Windows SAPI中文语音
+        播放中文语音 - Windows SAPI
+        策略：直接 Speak（实时播放）失败则用 WAV 文件落地 + winsound 播放
         """
         if not self._enabled or self._muted:
             return
-        
-        if not self._speaker:
-            return
-        
+
+        # 方案 A：直接实时朗读（失败则走方案 B）
+        if self._speaker:
+            try:
+                speaker = win32com.client.Dispatch("SAPI.SpVoice")
+                # 查找中文语音
+                for voice in speaker.GetVoices():
+                    desc = voice.GetDescription()
+                    if "Chinese" in desc or "Huihui" in desc:
+                        speaker.Voice = voice
+                        break
+                speaker.Speak(text, 1)  # 1 = SVSFAsync
+                # 等待朗读完成
+                speaker.WaitUntilDone(-1)
+                self.voice_finished.emit()
+                return
+            except Exception as e:
+                print(f"[SoundEngine] 直接朗读失败: {e}，尝试 WAV 文件方案")
+
+        # 方案 B：生成 WAV 文件 + winsound 播放（最可靠）
         try:
-            # 创建语音合成器
+            import tempfile, os as _os
+
             speaker = win32com.client.Dispatch("SAPI.SpVoice")
-            
-            # 尝试查找中文语音
-            voices = speaker.GetVoices()
-            cn_voice = None
-            for voice in voices:
-                if 'Chinese' in voice.GetDescription() or '中文' in voice.GetDescription():
-                    cn_voice = voice
+            file_stream = win32com.client.Dispatch("SAPI.SpFileStream")
+            audio_format = win32com.client.Dispatch("SAPI.SpAudioFormat")
+
+            # 16kHz 16bit 单声道（中文语音优化）
+            audio_format.Type = 11  # SAFT16kHz16BitMono
+            file_stream.Format = audio_format
+
+            # 生成临时文件
+            temp_dir = tempfile.gettempdir()
+            # 用文本 hash 确保不同内容不同文件
+            import hashlib
+            txt_hash = hashlib.md5(text.encode("utf-8")).hexdigest()[:8]
+            wav_path = _os.path.join(temp_dir, f"lt_tts_{txt_hash}.wav")
+
+            file_stream.Open(wav_path, 3)  # SSFMCreateForWrite
+            speaker.AudioOutputStream = file_stream
+
+            # 选中中文语音
+            for voice in speaker.GetVoices():
+                desc = voice.GetDescription()
+                if "Chinese" in desc or "Huihui" in desc:
+                    speaker.Voice = voice
                     break
-            
-            if cn_voice:
-                speaker.Voice = cn_voice
-            
+
             speaker.Speak(text)
+            file_stream.Close()
+            speaker.AudioOutputStream = None
+
+            # winsound 播放（最可靠，不依赖 COM 线程模型）
+            import winsound
+            winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+
             self.voice_finished.emit()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[SoundEngine] WAV 方案也失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     def mute(self):
         """静音"""

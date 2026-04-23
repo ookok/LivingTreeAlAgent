@@ -606,7 +606,7 @@ class HermesAgent:
 
         # 1. 核心指令
         parts.append(
-            "你是 Hermes，一款由 AI 驱动的桌面助手，运行在本地 Windows 环境中。"
+            "你是生命之树AI（LivingTreeAl），一款由 AI 驱动的桌面助手，运行在本地 Windows 环境中。"
             "你可以通过各种工具来帮助用户完成任务。"
         )
 
@@ -792,7 +792,7 @@ class HermesAgent:
         prompt_parts = []
         
         # 系统提示
-        prompt_parts.append("你是 Hermes，一款由 AI 驱动的桌面助手，运行在本地 Windows 环境中。")
+        prompt_parts.append("你是生命之树AI（LivingTreeAl），一款由 AI 驱动的桌面助手，运行在本地 Windows 环境中。")
         
         # 知识库结果
         if kb_results:

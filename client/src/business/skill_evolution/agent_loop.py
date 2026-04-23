@@ -37,6 +37,20 @@ from .models import (
 )
 from .database import EvolutionDatabase
 from .atom_tools import UnifiedToolHandler, ToolResult, get_tool_schemas
+from .a_evolve_integration import integrate_a_evolve, AEvolveConfig
+from ..experiment_loop import (
+    ExperimentManager,
+    ExperimentDrivenEvolution,
+    create_experiment_driven_evolution,
+    create_experiment_dashboard,
+)
+from ..deer_flow import (
+    MiddlewarePipeline,
+    PipelineBuilder,
+    SubAgentExecutor,
+    SubAgentType,
+    TaskTool,
+)
 from core.amphiloop import (
     AmphiLoopEngine,
     CheckpointManager,
@@ -70,6 +84,16 @@ class AgentConfig:
     checkpoint_interval: int = 5   # 检查点间隔
     rollback_on_failure: bool = True  # 失败时回滚
     dynamic_termination: bool = True  # 动态终止
+    # A-EVOLVE 配置
+    enable_a_evolve: bool = True  # 启用 A-EVOLVE
+    a_evolve_interval: int = 3600  # A-EVOLVE 进化间隔（秒）
+    # 实验循环配置
+    enable_experiment_loop: bool = True  # 启用实验循环
+    experiment_iterations: int = 10  # 实验迭代次数
+    experiment_timeout: int = 300  # 实验超时时间（秒）
+    # DeerFlow 配置
+    enable_deer_flow: bool = True  # 启用 DeerFlow 中间件管道
+    max_concurrent_subagents: int = 3  # 最大并发子智能体数
 
 
 class SkillEvolutionAgent:
@@ -115,6 +139,47 @@ class SkillEvolutionAgent:
         self._bidirectional_scheduler = self.amphiloop.bidirectional_scheduler
         self._dynamic_terminator = self.amphiloop.dynamic_terminator
         self._incremental_learning = self.amphiloop.incremental_learning
+
+        # A-EVOLVE 集成
+        self.a_evolve_config = AEvolveConfig(
+            enabled=config.enable_a_evolve,
+            evolution_interval=config.a_evolve_interval,
+            verbose=config.verbose
+        )
+        self.a_evolve_integrator = integrate_a_evolve(database, self.a_evolve_config)
+
+        # 实验循环集成
+        self.enable_experiment_loop = config.enable_experiment_loop
+        self.experiment_iterations = config.experiment_iterations
+        self.experiment_timeout = config.experiment_timeout
+        
+        self.experiment_manager = ExperimentManager(database)
+        self.experiment_driven_evolution = create_experiment_driven_evolution(
+            database=database,
+            evolution_engine=self.engine,
+            a_evolve_integrator=self.a_evolve_integrator
+        )
+        self.experiment_dashboard = create_experiment_dashboard(self.experiment_manager)
+
+        # DeerFlow 集成
+        self.enable_deer_flow = config.enable_deer_flow
+        self.max_concurrent_subagents = config.max_concurrent_subagents
+        
+        # 初始化中间件管道
+        if self.enable_deer_flow:
+            self.middleware_pipeline = self._build_middleware_pipeline()
+        else:
+            self.middleware_pipeline = None
+        
+        # 初始化子智能体执行器
+        if self.enable_deer_flow:
+            self.subagent_executor = SubAgentExecutor(
+                max_concurrent=self.max_concurrent_subagents
+            )
+            self.task_tool = TaskTool(self.subagent_executor)
+        else:
+            self.subagent_executor = None
+            self.task_tool = None
 
     def execute_task(
         self,
@@ -620,6 +685,31 @@ class SkillEvolutionAgent:
         if self.on_skill_created:
             self.on_skill_created(skill)
 
+        # A-EVOLVE: 新技能创建后触发进化
+        if self.a_evolve_config.enabled:
+            feedback = {
+                "new_skill": True,
+                "task_description": self._current_task.description,
+                "success": True,
+                "duration": self._current_task.duration,
+            }
+            self.a_evolve_integrator.evolve_skill(skill.skill_id, feedback)
+
+        # 实验循环: 新技能创建后进行性能优化
+        if self.enable_experiment_loop:
+            try:
+                # 对新技能进行性能优化实验
+                summary = self.experiment_driven_evolution.optimize_skill(
+                    skill_id=skill.skill_id,
+                    optimization_target="performance"
+                )
+                if self.config.verbose:
+                    print(f"[Agent] 技能优化完成: {skill.name}")
+                    print(f"[Agent] 优化结果: 改进率 {summary.improvement:.2f}")
+            except Exception as e:
+                if self.config.verbose:
+                    print(f"[Agent] 实验优化失败: {e}")
+
     def _generate_skill_name(self) -> str:
         """生成技能名称"""
         desc = self._current_task.description
@@ -701,6 +791,52 @@ class SimpleLLMClient:
         except Exception as e:
             print(f"[Error] Ollama chat failed: {e}")
             return self._mock_response(messages)
+
+    def _build_middleware_pipeline(self) -> "MiddlewarePipeline":
+        """
+        构建 DeerFlow 风格的中间件管道
+        
+        Returns:
+            MiddlewarePipeline: 配置好的中间件管道
+        """
+        from ..deer_flow import PipelineBuilder
+        
+        builder = PipelineBuilder()
+        pipeline = (
+            builder
+            .add_thread_data()       # 1. 线程数据管理
+            .add_guardrail()         # 5. 安全鉴权
+            .add_tool_error_handling() # 8. 工具错误处理
+            .add_summarization()     # 6. 上下文缩减
+            .add_todo_list()         # 7. 任务列表
+            .add_subagent_limit(self.max_concurrent_subagents)  # 10. 子智能体限制
+            .add_memory()            # 9. 记忆提取
+            .add_clarification()     # 11. 澄清拦截
+            .build()
+        )
+        
+        return pipeline
+
+    def _process_with_middleware(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        使用中间件管道处理状态
+        
+        Args:
+            state: 输入状态
+            
+        Returns:
+            Dict[str, Any]: 处理后的状态
+        """
+        if not self.middleware_pipeline:
+            return state
+        
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self.middleware_pipeline.process(state))
+        finally:
+            loop.close()
 
     def _build_tool_prompt(self, tools: List[Dict]) -> str:
         """构建工具提示"""

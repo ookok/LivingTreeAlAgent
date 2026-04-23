@@ -71,6 +71,44 @@ from .agent_loop import (
     create_agent,
 )
 
+# A-EVOLVE 集成
+from .evolution_strategy import (
+    EvolutionStrategyType,
+    EvolutionGoal,
+    EvolutionStrategy,
+    TargetedEvolutionStrategy,
+    ScalingEvolutionStrategy,
+    OpenEndedEvolutionStrategy,
+    EvolutionStrategyManager,
+    EvolutionMonitor,
+)
+
+from .a_evolve_integration import (
+    AEvolveConfig,
+    AEvolveIntegrator,
+    integrate_a_evolve,
+    get_a_evolve_integrator,
+    evolve_skill_with_feedback,
+    get_skill_health,
+)
+
+# 实验循环集成
+from ..experiment_loop import (
+    OptimizationGoal,
+    MetricType,
+    ExperimentResult,
+    ExperimentSummary,
+    ExperimentLoop,
+    CodeOptimizationExperiment,
+    SystemResourceExperiment,
+    CustomExperiment,
+    ExperimentManager,
+    ExperimentDrivenEvolution,
+    ExperimentDashboard,
+    create_experiment_driven_evolution,
+    create_experiment_dashboard,
+)
+
 __all__ = [
     # 枚举
     "MemoryLayer",
@@ -104,6 +142,35 @@ __all__ = [
     "SkillEvolutionAgent",
     "SimpleLLMClient",
     "create_agent",
+    # A-EVOLVE 集成
+    "EvolutionStrategyType",
+    "EvolutionGoal",
+    "EvolutionStrategy",
+    "TargetedEvolutionStrategy",
+    "ScalingEvolutionStrategy",
+    "OpenEndedEvolutionStrategy",
+    "EvolutionStrategyManager",
+    "EvolutionMonitor",
+    "AEvolveConfig",
+    "AEvolveIntegrator",
+    "integrate_a_evolve",
+    "get_a_evolve_integrator",
+    "evolve_skill_with_feedback",
+    "get_skill_health",
+    # 实验循环集成
+    "OptimizationGoal",
+    "MetricType",
+    "ExperimentResult",
+    "ExperimentSummary",
+    "ExperimentLoop",
+    "CodeOptimizationExperiment",
+    "SystemResourceExperiment",
+    "CustomExperiment",
+    "ExperimentManager",
+    "ExperimentDrivenEvolution",
+    "ExperimentDashboard",
+    "create_experiment_driven_evolution",
+    "create_experiment_dashboard",
 ]
 
 # 默认数据库路径

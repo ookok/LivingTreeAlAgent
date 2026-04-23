@@ -102,17 +102,27 @@ class OllamaClient:
     def list_models(self) -> list[OllamaModel]:
         """列出 Ollama 已注册的模型"""
         try:
-            # 使用更短的超时时间，避免阻塞
+            # 使用正常的超时时间
             client = httpx.Client(
                 base_url=self.base_url,
-                timeout=httpx.Timeout(3.0, connect=2.0),  # 减少超时时间
+                timeout=httpx.Timeout(10.0, connect=5.0),  # 增加超时时间
                 headers={"Content-Type": "application/json"},
             )
             with client:
                 r = client.get("/api/tags")
                 r.raise_for_status()
-                return [OllamaModel(**m) for m in r.json().get("models", [])]
+                models = []
+                for m in r.json().get("models", []):
+                    # 过滤掉OllamaModel不支持的字段
+                    filtered_data = {
+                        k: v for k, v in m.items() 
+                        if k in ["name", "size", "digest", "modified_at", "details"]
+                    }
+                    models.append(OllamaModel(**filtered_data))
+                return models
         except Exception as e:
+            # 打印错误信息
+            print(f"[OllamaClient] list_models 错误: {e}")
             # 快速失败，避免长时间阻塞
             return []
 

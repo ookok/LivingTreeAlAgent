@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, AsyncIterator, Callable
 from datetime import datetime
 from enum import Enum
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,64 @@ class L4RelayExecutor:
                     http_client=httpx.AsyncClient(timeout=120)
                 )
             except ImportError:
-                self._direct_client = "httpx_fallback"
+                # 使用 httpx 直接调用 Ollama API
+                class HttpxOllamaClient:
+                    def __init__(self, base_url):
+                        self.base_url = base_url
+                        self.http_client = httpx.AsyncClient(timeout=120)
+                    
+                    async def chat_completions_create(self, model, messages, stream=False, **kwargs):
+                        # 使用Ollama正确的API路径
+                        # 构建Ollama格式的请求
+                        last_message = messages[-1] if messages else {"role": "user", "content": ""}
+                        prompt = last_message["content"]
+                        
+                        response = await self.http_client.post(
+                            f"{self.base_url}/api/generate",
+                            json={
+                                "model": model,
+                                "prompt": prompt,
+                                "stream": stream,
+                                **kwargs
+                            }
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        
+                        # 转换为OpenAI格式的响应
+                        return {
+                            "id": f"ollama-{result.get('model', 'unknown')}-{result.get('created_at', '')}",
+                            "object": "chat.completion",
+                            "created": int(result.get('created_at', '0').split('.')[0]),
+                            "model": result.get('model', 'unknown'),
+                            "choices": [{
+                                "index": 0,
+                                "message": {
+                                    "role": "assistant",
+                                    "content": result.get('response', '')
+                                },
+                                "finish_reason": "stop"
+                            }],
+                            "usage": {
+                                "prompt_tokens": len(prompt),
+                                "completion_tokens": len(result.get('response', '')),
+                                "total_tokens": len(prompt) + len(result.get('response', ''))
+                            }
+                        }
+                    
+                    @property
+                    def chat(self):
+                        return self
+                    
+                    @property
+                    def completions(self):
+                        return self
+                    
+                    async def create(self, model, messages, stream=False, **kwargs):
+                        return await self.chat_completions_create(model, messages, stream, **kwargs)
+                
+                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                self._direct_client = HttpxOllamaClient(ollama_url)
             except Exception as e:
                 logger.error(f"[L4Executor] Direct 客户端初始化失败: {e}")
                 self._direct_client = None
@@ -291,13 +349,13 @@ class L4RelayExecutor:
     def _resolve_local_model(self, model: str) -> str:
         """解析本地模型（零配置裸跑时）"""
         if model == "auto":
-            # 默认使用 qwen2.5-coder（如果可用）
-            return os.getenv("OLLAMA_DEFAULT_MODEL", "qwen2.5-coder:latest")
+            # 默认使用 qwen3.5:2b（如果可用）
+            return os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3.5:2b")
         # 模型别名映射
         alias_map = {
-            "gpt-4": "qwen2.5-coder:latest",
-            "gpt-3.5": "qwen2.5:latest",
-            "claude": "llama3:latest",
+            "gpt-4": "qwen3.6:27b",
+            "gpt-3.5": "qwen3.5:4b",
+            "claude": "qwen3.5:2b",
         }
         return alias_map.get(model, model)
 

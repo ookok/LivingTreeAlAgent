@@ -1,580 +1,804 @@
 """
-任务分解与链式思考系统
-Task Decomposer for Small Models
+任务分解系统 - Task Decomposition System
 
-通过结构化拆解任务并串联子任务，引导小模型逐步推理，
-从而提升精准回答能力。
+将复杂任务自动分解为可执行的子任务，支持：
+- 智能任务分析
+- 子任务依赖管理
+- 并行/串行执行策略
+- 进度追踪
 """
 
+from __future__ import annotations
+
 import json
-import re
+import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Callable, Iterator
-from typing import List, Dict, Any
+from typing import Any, Callable, Iterator, List, Optional, Dict
+from threading import Event
+import asyncio
+
+# ── 枚举定义 ────────────────────────────────────────────────────────────────
 
 
-class StepStatus(Enum):
-    """子步骤状态"""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
+class TaskStatus(Enum):
+    """子任务状态"""
+    PENDING = "pending"      # 待执行
+    RUNNING = "running"      # 执行中
+    COMPLETED = "completed"   # 已完成
+    FAILED = "failed"        # 失败
+    SKIPPED = "skipped"      # 跳过
+
+
+class TaskPriority(Enum):
+    """任务优先级"""
+    LOW = 1
+    NORMAL = 2
+    HIGH = 3
+    CRITICAL = 4
+
+
+class ExecutionStrategy(Enum):
+    """执行策略"""
+    SEQUENTIAL = "sequential"   # 串行执行
+    PARALLEL = "parallel"         # 并行执行
+    DAG = "dag"                   # 依赖图执行
+
+
+# ── 数据模型 ────────────────────────────────────────────────────────────────
 
 
 @dataclass
-class TaskStep:
-    """任务步骤"""
-    step_id: str
+class SubTask:
+    """
+    子任务数据模型
+
+    Attributes:
+        task_id: 唯一标识
+        title: 任务标题
+        description: 详细描述
+        status: 执行状态
+        priority: 优先级
+        depends_on: 依赖的其他任务 ID
+        result: 执行结果
+        error: 错误信息
+        created_at: 创建时间
+        started_at: 开始时间
+        completed_at: 完成时间
+        progress: 进度百分比 (0-100)
+    """
     title: str
-    description: str
-    instruction: str
-    input_data: Any = None
-    output_data: Any = None
-    status: StepStatus = StepStatus.PENDING
-    error: Optional[str] = None
-    confidence: float = 0.0
+    description: str = ""
+    task_id: str = field(default_factory=lambda: f"subtask_{uuid.uuid4().hex[:8]}")
+    status: TaskStatus = TaskStatus.PENDING
+    priority: TaskPriority = TaskPriority.NORMAL
     depends_on: List[str] = field(default_factory=list)
-    
+    result: Optional[Any] = None
+    error: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
+    started_at: Optional[float] = None
+    completed_at: Optional[float] = None
+    progress: int = 0
+
+    @property
+    def duration(self) -> Optional[float]:
+        """计算执行耗时（秒）"""
+        if self.started_at and self.completed_at:
+            return self.completed_at - self.started_at
+        return None
+
     def to_dict(self) -> dict:
+        """转换为字典"""
         return {
-            "step_id": self.step_id,
+            "task_id": self.task_id,
             "title": self.title,
             "description": self.description,
             "status": self.status.value,
-            "confidence": self.confidence,
+            "priority": self.priority.value,
+            "depends_on": self.depends_on,
+            "progress": self.progress,
+            "duration": self.duration,
             "error": self.error,
-            "has_output": self.output_data is not None
+            "result_preview": str(self.result)[:200] if self.result else None,
         }
 
 
 @dataclass
-class DecomposedTask:
-    """分解后的任务"""
-    task_id: str
-    original_question: str
-    steps: List[TaskStep]
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+class TaskDecomposition:
+    """
+    任务分解结果
+
+    Attributes:
+        original_task: 原始任务描述
+        subtasks: 子任务列表
+        strategy: 执行策略
+        estimated_steps: 预估步骤数
+        estimated_complexity: 预估复杂度 (1-10)
+        created_at: 分解时间
+    """
+    original_task: str
+    subtasks: List[SubTask] = field(default_factory=list)
+    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL
+    estimated_steps: int = 0
+    estimated_complexity: int = 1
+    created_at: float = field(default_factory=time.time)
+
     @property
-    def total_steps(self) -> int:
-        return len(self.steps)
-    
+    def total_tasks(self) -> int:
+        return len(self.subtasks)
+
     @property
-    def completed_steps(self) -> int:
-        return sum(1 for s in self.steps if s.status == StepStatus.COMPLETED)
-    
+    def completed_tasks(self) -> int:
+        return sum(1 for t in self.subtasks if t.status == TaskStatus.COMPLETED)
+
     @property
-    def progress(self) -> float:
-        if self.total_steps == 0:
-            return 0.0
-        return self.completed_steps / self.total_steps
-    
-    def get_step(self, step_id: str) -> Optional[TaskStep]:
-        for step in self.steps:
-            if step.step_id == step_id:
-                return step
-        return None
-    
-    def can_execute_step(self, step_id: str) -> bool:
-        """检查步骤是否可执行（依赖已满足）"""
-        step = self.get_step(step_id)
-        if not step:
-            return False
-        if step.status != StepStatus.PENDING:
-            return False
-        for dep_id in step.depends_on:
-            dep = self.get_step(dep_id)
-            if not dep or dep.status != StepStatus.COMPLETED:
-                return False
-        return True
-    
-    def get_next_executable_step(self) -> Optional[TaskStep]:
-        """获取下一个可执行的步骤"""
-        for step in self.steps:
-            if self.can_execute_step(step.step_id):
-                return step
-        return None
+    def progress_percent(self) -> float:
+        """计算总体进度"""
+        if not self.subtasks:
+            return 0
+        return sum(t.progress for t in self.subtasks) / len(self.subtasks)
+
+    def to_dict(self) -> dict:
+        """转换为字典"""
+        return {
+            "original_task": self.original_task,
+            "subtasks": [t.to_dict() for t in self.subtasks],
+            "strategy": self.strategy.value,
+            "estimated_steps": self.estimated_steps,
+            "estimated_complexity": self.estimated_complexity,
+            "progress_percent": self.progress_percent,
+            "completed_tasks": self.completed_tasks,
+            "total_tasks": self.total_tasks,
+        }
+
+
+# ── 回调定义 ────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class TaskDecompositionCallbacks:
+    """
+    任务分解回调接口
+
+    用于与 UI 层交互，显示分解过程和执行进度
+    """
+    on_decomposition_start: Optional[Callable[[str], None]] = None
+    """开始分解时的回调，参数为原始任务"""
+
+    on_decomposition_complete: Optional[Callable[[TaskDecomposition], None]] = None
+    """分解完成时的回调，参数为分解结果"""
+
+    on_subtask_start: Optional[Callable[[SubTask], None]] = None
+    """子任务开始执行"""
+
+    on_subtask_progress: Optional[Callable[[SubTask, int], None]] = None
+    """子任务进度更新 (task, progress_percent)"""
+
+    on_subtask_complete: Optional[Callable[[SubTask], None]] = None
+    """子任务完成"""
+
+    on_subtask_error: Optional[Callable[[SubTask, str], None]] = None
+    """子任务出错"""
+
+    on_all_complete: Optional[Callable[[TaskDecomposition], None]] = None
+    """所有任务完成"""
+
+
+# ── 任务分解器 ──────────────────────────────────────────────────────────────
 
 
 class TaskDecomposer:
     """
     任务分解器
-    
-    将复杂问题拆解为有序、可执行的子步骤，
-    适用于参数有限的小模型。
-    """
-    
-    # 内置分解模板
-    DECOMPOSITION_TEMPLATES = {
-        "analysis": {
-            "name": "分析类任务",
-            "max_steps": 4,
-            "steps": [
-                {
-                    "id": "context",
-                    "title": "理解背景",
-                    "desc": "提取问题中的关键信息和背景条件",
-                    "prompt": "请分析以下问题的背景信息，提取关键要素：\n{question}\n\n用简洁的要点列出：1. 主要问题 2. 约束条件 3. 相关因素"
-                },
-                {
-                    "id": "data_collection",
-                    "title": "收集数据",
-                    "desc": "整理问题相关的数据和事实",
-                    "prompt": "基于上述分析，列出解决问题所需的数据点：\n{context}\n\n列出3-5个关键数据点，说明每个数据点的来源或计算方式"
-                },
-                {
-                    "id": "analysis",
-                    "title": "深入分析",
-                    "desc": "基于数据进行分析推理",
-                    "prompt": "根据收集的数据进行分析：\n{data}\n\n使用因果链条或对比分析的方式，给出核心发现（不超过3点）"
-                },
-                {
-                    "id": "conclusion",
-                    "title": "得出结论",
-                    "desc": "综合分析给出最终答案",
-                    "prompt": "综合以上分析，给出结论和建议：\n{analysis}\n\n结论应直接回应原问题：{original_question}"
-                }
-            ]
-        },
-        "design": {
-            "name": "设计类任务",
-            "max_steps": 5,
-            "steps": [
-                {
-                    "id": "requirement",
-                    "title": "明确需求",
-                    "desc": "理解用户需求和约束条件",
-                    "prompt": "分析设计需求：\n{question}\n\n列出：1. 核心目标 2. 功能需求 3. 非功能需求（性能/安全/易用性）"
-                },
-                {
-                    "id": "research",
-                    "title": "方案调研",
-                    "desc": "调研可行方案和技术选型",
-                    "prompt": "针对需求：\n{requirements}\n\n列出2-3种可行方案，简述各方案的技术特点、优缺点"
-                },
-                {
-                    "id": "architecture",
-                    "title": "架构设计",
-                    "desc": "设计整体架构",
-                    "prompt": "基于需求和方案：\n{requirements}\n{research}\n\n用结构化方式描述架构，包括模块划分和数据流"
-                },
-                {
-                    "id": "detail",
-                    "title": "详细设计",
-                    "desc": "关键模块的详细设计",
-                    "prompt": "针对关键模块：\n{architecture}\n\n给出具体的实现细节，包括接口定义和关键逻辑"
-                },
-                {
-                    "id": "implementation",
-                    "title": "实施计划",
-                    "desc": "制定实施步骤和时间线",
-                    "prompt": "基于设计：\n{detail}\n\n列出实施步骤（不超过5步）和每步的预期产出"
-                }
-            ]
-        },
-        "writing": {
-            "name": "写作类任务",
-            "max_steps": 4,
-            "steps": [
-                {
-                    "id": "outline",
-                    "title": "确定大纲",
-                    "desc": "分析主题并确定文章结构",
-                    "prompt": "为以下主题确定文章大纲：\n{question}\n\n列出：1. 文章类型 2. 核心论点 3. 章节结构（3-5章）"
-                },
-                {
-                    "id": "research",
-                    "title": "收集素材",
-                    "desc": "整理相关资料和数据",
-                    "prompt": "基于大纲：\n{outline}\n\n列出需要引用的关键资料、数据或案例（3-5个）"
-                },
-                {
-                    "id": "drafting",
-                    "title": "撰写正文",
-                    "desc": "按照大纲撰写各章节",
-                    "prompt": "基于大纲和素材：\n{outline}\n{materials}\n\n撰写完整的文章内容，使用规范的学术/正式语言"
-                },
-                {
-                    "id": "polish",
-                    "title": "润色完善",
-                    "desc": "检查逻辑、语法、格式",
-                    "prompt": "检查并润色以下文章：\n{content}\n\n优化：1. 逻辑连贯性 2. 语言表达 3. 格式规范"
-                }
-            ]
-        },
-        "decision": {
-            "name": "决策类任务",
-            "max_steps": 5,
-            "steps": [
-                {
-                    "id": "problem",
-                    "title": "界定问题",
-                    "desc": "明确决策要解决的问题",
-                    "prompt": "界定决策问题：\n{question}\n\n明确：1. 决策目标 2. 决策范围 3. 成功标准"
-                },
-                {
-                    "id": "options",
-                    "title": "列出选项",
-                    "desc": "生成可能的解决方案",
-                    "prompt": "针对问题：\n{problem}\n\n列出3-4个可行的解决方案选项"
-                },
-                {
-                    "id": "criteria",
-                    "title": "确定标准",
-                    "desc": "确定评估标准和权重",
-                    "prompt": "基于问题：\n{problem}\n\n确定评估选项的标准（如成本、风险、收益、可执行性），并说明权重"
-                },
-                {
-                    "id": "evaluate",
-                    "title": "评估选项",
-                    "desc": "按标准评估各选项",
-                    "prompt": "使用以下标准评估选项：\n{criteria}\n\n对每个选项按标准打分（1-10分），并说明理由"
-                },
-                {
-                    "id": "recommend",
-                    "title": "给出建议",
-                    "desc": "基于评估给出推荐",
-                    "prompt": "基于评估结果：\n{evaluation}\n\n给出推荐方案及理由，说明风险和注意事项"
-                }
-            ]
-        },
-        "general": {
-            "name": "通用任务",
-            "max_steps": 3,
-            "steps": [
-                {
-                    "id": "understand",
-                    "title": "理解问题",
-                    "desc": "分析问题的核心要点",
-                    "prompt": "分析以下问题：\n{question}\n\n用一句话概括核心问题，并列出2-3个相关要点"
-                },
-                {
-                    "id": "reason",
-                    "title": "推理分析",
-                    "desc": "逐步推理得出解答",
-                    "prompt": "基于对问题的理解：\n{understanding}\n\n进行逐步推理，每步说明理由，最终得出答案"
-                },
-                {
-                    "id": "verify",
-                    "title": "验证结果",
-                    "desc": "检查答案是否完整准确",
-                    "prompt": "验证以下回答：\n{answer}\n\n检查：1. 是否完整回答了问题 2. 是否有遗漏 3. 是否有错误"
-                }
-            ]
-        }
-    }
-    
-    def __init__(self):
-        """初始化分解器"""
-        self.templates = self.DECOMPOSITION_TEMPLATES
-    
-    def detect_task_type(self, question: str) -> str:
-        """
-        自动检测任务类型
-        
-        Args:
-            question: 用户问题
-            
-        Returns:
-            任务类型: analysis / design / writing / decision / general
-        """
-        question_lower = question.lower()
-        
-        # 分析类关键词
-        analysis_keywords = ["分析", "评估", "比较", "对比", "预测", "研究", "检查"]
-        if any(k in question_lower for k in analysis_keywords):
-            return "analysis"
-        
-        # 设计类关键词
-        design_keywords = ["设计", "方案", "架构", "构建", "规划", "策划"]
-        if any(k in question_lower for k in design_keywords):
-            return "design"
-        
-        # 写作类关键词
-        writing_keywords = ["写", "创作", "文章", "报告", "论文", "总结", "说明"]
-        if any(k in question_lower for k in writing_keywords):
-            return "writing"
-        
-        # 决策类关键词
-        decision_keywords = ["选择", "决策", "建议", "推荐", "哪个好", "怎么办"]
-        if any(k in question_lower for k in decision_keywords):
-            return "decision"
-        
-        return "general"
-    
-    def decompose(
-        self, 
-        question: str, 
-        task_type: str = None,
-        max_steps: int = 5,
-        custom_steps: List[Dict] = None
-    ) -> DecomposedTask:
-        """
-        分解任务
-        
-        Args:
-            question: 用户问题
-            task_type: 任务类型（自动检测如果为None）
-            max_steps: 最大步骤数（超过会合并）
-            custom_steps: 自定义步骤列表
-            
-        Returns:
-            DecomposedTask: 分解后的任务
-        """
-        import uuid
-        
-        # 自动检测任务类型
-        if task_type is None:
-            task_type = self.detect_task_type(question)
-        
-        # 生成任务ID
-        task_id = f"task_{uuid.uuid4().hex[:8]}"
-        
-        # 获取模板
-        if custom_steps:
-            steps_config = custom_steps
-        else:
-            template = self.templates.get(task_type, self.templates["general"])
-            steps_config = template["steps"][:max_steps]
-        
-        # 构建步骤
-        steps = []
-        prev_step_id = None
-        
-        for i, config in enumerate(steps_config):
-            step_id = config.get("id", f"step_{i+1}")
-            
-            # 构建指令（替换变量）
-            instruction = self._build_instruction(config.get("prompt", ""), question)
-            
-            step = TaskStep(
-                step_id=step_id,
-                title=config["title"],
-                description=config.get("desc", ""),
-                instruction=instruction,
-                depends_on=[prev_step_id] if prev_step_id else []
-            )
-            steps.append(step)
-            prev_step_id = step_id
-        
-        return DecomposedTask(
-            task_id=task_id,
-            original_question=question,
-            steps=steps,
-            metadata={"task_type": task_type}
-        )
-    
-    def _build_instruction(self, template: str, question: str) -> str:
-        """构建带变量的指令"""
-        instruction = template.replace("{question}", question)
-        
-        # 保留占位符，让执行时替换
-        # {context}, {data}, {analysis} 等将在执行时动态替换
-        return instruction
 
+    使用 LLM 分析任务并分解为可执行的子任务
+    """
 
-class ChainOfThoughtExecutor:
-    """
-    链式思考执行器
-    
-    按照依赖顺序执行分解后的任务步骤，
-    传递上下文，实现链式推理。
-    """
-    
+    # 分解提示模板
+    DECOMPOSE_PROMPT = """你是一个任务分解专家。请将以下复杂任务分解为多个可执行的子任务。
+
+原始任务: {task}
+
+请分析这个任务并按以下 JSON 格式输出分解结果：
+{{
+    "strategy": "sequential" | "parallel" | "dag",
+    "estimated_complexity": 1-10,
+    "subtasks": [
+        {{
+            "title": "子任务标题（简短）",
+            "description": "子任务详细描述",
+            "priority": 1-4,
+            "depends_on": ["task_id1", "task_id2"]  // 依赖的任务 ID，可为空
+        }}
+    ]
+}}
+
+分解原则：
+1. 每个子任务应该是独立的、可执行的
+2. 子任务之间如果有依赖关系，用 depends_on 表示
+3. 可以并行的任务用 "parallel" 策略
+4. 有先后顺序的用 "sequential" 策略
+5. 复杂的依赖关系用 "dag" 策略
+
+请直接输出 JSON，不要有其他内容。"""
+
     def __init__(
         self,
-        llm_callable: Callable[[str], str] = None,
-        progress_callback: Callable[[TaskStep, int, int], None] = None
+        llm_client: Any = None,
+        min_task_length: int = 20,
+        max_subtasks: int = 10,
+    ):
+        """
+        初始化任务分解器
+
+        Args:
+            llm_client: LLM 客户端（可选，用于智能分解）
+            min_task_length: 触发分解的最小任务长度
+            max_subtasks: 最大子任务数量
+        """
+        self.llm_client = llm_client
+        self.min_task_length = min_task_length
+        self.max_subtasks = max_subtasks
+
+        # 简单任务的快速分解规则
+        self._quick_patterns = [
+            (r"创建.*文件", [("创建文件", "生成指定的文件内容")]),
+            (r"修改.*文件", [("分析文件", "读取并分析目标文件"), ("修改内容", "按要求修改文件")]),
+            (r"搜索.*代码", [("搜索代码", "在代码库中搜索相关内容")]),
+            (r"写.*测试", [("编写测试", "编写单元测试或集成测试"), ("运行测试", "执行测试验证功能")]),
+        ]
+
+    def should_decompose(self, task: str) -> bool:
+        """
+        判断任务是否需要分解
+
+        Args:
+            task: 任务描述
+
+        Returns:
+            True 如果需要分解
+        """
+        # 检查是否包含复杂动词（暗示多步骤）
+        # 这些动词优先级高，即使任务较短也需要分解
+        high_priority_verbs = [
+            "实现", "开发", "构建", "设计", "架构", "搭建",
+            "重构", "迁移", "集成", "部署",
+        ]
+
+        # 如果包含高优先级动词，直接分解
+        if any(verb in task for verb in high_priority_verbs):
+            return True
+
+        # 太短的任务不需要分解
+        if len(task) < self.min_task_length:
+            return False
+
+        # 检查是否包含其他复杂动词
+        complex_verbs = [
+            "重构", "优化", "迁移", "集成", "部署",
+            "分析", "调研", "研究", "比较", "评估",
+            "修复", "调试", "排查", "解决",
+            "配置", "安装", "设置",
+        ]
+
+        return any(verb in task for verb in complex_verbs)
+
+    def decompose(self, task: str) -> TaskDecomposition:
+        """
+        分解任务
+
+        Args:
+            task: 原始任务描述
+
+        Returns:
+            TaskDecomposition: 分解结果
+        """
+        print(f"[TaskDecomposer] 分解任务: {task[:50]}...")
+
+        # 尝试 LLM 智能分解
+        if self.llm_client:
+            try:
+                return self._decompose_with_llm(task)
+            except Exception as e:
+                print(f"[TaskDecomposer] LLM 分解失败: {e}")
+
+        # 回退到规则分解
+        return self._decompose_with_rules(task)
+
+    def decompose_stream(
+        self,
+        task: str,
+        callbacks: TaskDecompositionCallbacks = None,
+    ) -> Iterator[TaskDecomposition]:
+        """
+        流式分解任务，逐步返回进度
+
+        Args:
+            task: 原始任务描述
+            callbacks: 回调接口
+
+        Yields:
+            TaskDecomposition: 分解过程中的状态
+        """
+        if callbacks and callbacks.on_decomposition_start:
+            callbacks.on_decomposition_start(task)
+
+        # 模拟分解过程（实际可集成 LLM 流式输出）
+        decomposition = self.decompose(task)
+
+        if callbacks and callbacks.on_decomposition_complete:
+            callbacks.on_decomposition_complete(decomposition)
+
+        yield decomposition
+
+    def _decompose_with_llm(self, task: str) -> TaskDecomposition:
+        """使用 LLM 分解任务"""
+        prompt = self.DECOMPOSE_PROMPT.format(task=task)
+
+        response = self.llm_client.chat([{"role": "user", "content": prompt}])
+
+        # 解析 JSON
+        try:
+            # 提取 JSON
+            text = response if isinstance(response, str) else response.get("content", "")
+            json_str = self._extract_json(text)
+            data = json.loads(json_str)
+
+            # 构建子任务
+            subtasks = []
+            for i, item in enumerate(data.get("subtasks", [])):
+                task_id = f"step_{i + 1}"
+                subtask = SubTask(
+                    task_id=task_id,
+                    title=item["title"],
+                    description=item.get("description", ""),
+                    priority=TaskPriority(item.get("priority", 2)),
+                    depends_on=item.get("depends_on", []),
+                )
+                subtasks.append(subtask)
+
+            strategy = ExecutionStrategy(data.get("strategy", "sequential"))
+            complexity = data.get("estimated_complexity", 1)
+
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"[TaskDecomposer] 解析 LLM 输出失败: {e}")
+            return self._decompose_with_rules(task)
+
+        return TaskDecomposition(
+            original_task=task,
+            subtasks=subtasks[:self.max_subtasks],
+            strategy=strategy,
+            estimated_steps=len(subtasks),
+            estimated_complexity=complexity,
+        )
+
+    def _decompose_with_rules(self, task: str) -> TaskDecomposition:
+        """使用规则快速分解简单任务"""
+        subtasks = []
+
+        # 简单模式匹配
+        for pattern, steps in self._quick_patterns:
+            import re
+            if re.search(pattern, task):
+                for i, (title, desc) in enumerate(steps):
+                    subtasks.append(SubTask(
+                        task_id=f"step_{i + 1}",
+                        title=title,
+                        description=desc,
+                    ))
+                break
+
+        # 如果没有匹配到模式，创建默认步骤
+        if not subtasks:
+            # 通用分解
+            steps = [
+                ("理解需求", "分析并理解任务的具体需求"),
+                ("制定计划", "规划实现步骤和方法"),
+                ("执行任务", "按照计划执行具体操作"),
+                ("验证结果", "检查和验证执行结果"),
+            ]
+            for i, (title, desc) in enumerate(steps):
+                subtasks.append(SubTask(
+                    task_id=f"step_{i + 1}",
+                    title=title,
+                    description=desc,
+                ))
+
+        return TaskDecomposition(
+            original_task=task,
+            subtasks=subtasks,
+            strategy=ExecutionStrategy.SEQUENTIAL,
+            estimated_steps=len(subtasks),
+            estimated_complexity=min(len(subtasks), 10),
+        )
+
+    def _extract_json(self, text: str) -> str:
+        """从文本中提取 JSON"""
+        import re
+
+        # 尝试提取 ```json ... ```
+        match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+        if match:
+            return match.group(1)
+
+        # 尝试直接解析
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            return match.group(0)
+
+        return text
+
+
+# ── 子任务执行器 ─────────────────────────────────────────────────────────────
+
+
+class SubTaskExecutor:
+    """
+    子任务执行器
+
+    负责执行分解后的子任务，支持：
+    - 串行执行
+    - 并行执行
+    - 依赖图执行
+    - 进度追踪
+    """
+
+    def __init__(
+        self,
+        task_handler: Callable[[SubTask], Any] = None,
+        callbacks: TaskDecompositionCallbacks = None,
     ):
         """
         初始化执行器
-        
+
         Args:
-            llm_callable: LLM调用函数，签名为 (prompt: str) -> str
-            progress_callback: 进度回调，签名为 (step: TaskStep, current: int, total: int) -> None
+            task_handler: 任务处理函数，接收 SubTask，返回结果
+            callbacks: 回调接口
         """
-        self.llm_callable = llm_callable or self._default_llm_call
-        self.progress_callback = progress_callback
-    
-    def execute(self, task: DecomposedTask) -> DecomposedTask:
+        self.task_handler = task_handler or self._default_handler
+        self.callbacks = callbacks or TaskDecompositionCallbacks()
+
+        # 执行状态
+        self._interrupt_event = Event()
+        self._running_tasks: Dict[str, SubTask] = {}
+
+    def execute(
+        self,
+        decomposition: TaskDecomposition,
+        task_handler: Callable[[SubTask], Any] = None,
+    ) -> TaskDecomposition:
         """
-        执行分解后的任务
-        
+        执行任务分解结果
+
         Args:
-            task: 分解后的任务
-            
+            decomposition: 分解结果
+            task_handler: 可选的覆盖处理函数
+
         Returns:
-            完成任务（带输出数据）
+            TaskDecomposition: 更新后的分解结果
         """
-        # 按顺序执行步骤
-        for i, step in enumerate(task.steps):
-            # 检查依赖
-            if not task.can_execute_step(step.step_id):
-                step.status = StepStatus.SKIPPED
+        handler = task_handler or self.task_handler
+        strategy = decomposition.strategy
+
+        print(f"[SubTaskExecutor] 开始执行，策略: {strategy.value}")
+
+        if strategy == ExecutionStrategy.PARALLEL:
+            self._execute_parallel(decomposition, handler)
+        elif strategy == ExecutionStrategy.DAG:
+            self._execute_dag(decomposition, handler)
+        else:
+            self._execute_sequential(decomposition, handler)
+
+        # 触发完成回调
+        if self.callbacks.on_all_complete:
+            self.callbacks.on_all_complete(decomposition)
+
+        return decomposition
+
+    def execute_stream(
+        self,
+        decomposition: TaskDecomposition,
+        task_handler: Callable[[SubTask], Any] = None,
+    ) -> Iterator[TaskDecomposition]:
+        """
+        流式执行，逐步返回进度
+
+        Yields:
+            TaskDecomposition: 每个子任务完成后的状态
+        """
+        handler = task_handler or self.task_handler
+        strategy = decomposition.strategy
+
+        print(f"[SubTaskExecutor] 开始流式执行，策略: {strategy.value}")
+
+        if strategy == ExecutionStrategy.PARALLEL:
+            iterator = self._execute_parallel_stream(decomposition, handler)
+        elif strategy == ExecutionStrategy.DAG:
+            iterator = self._execute_dag_stream(decomposition, handler)
+        else:
+            iterator = self._execute_sequential_stream(decomposition, handler)
+
+        for state in iterator:
+            yield state
+
+    def interrupt(self):
+        """中断执行"""
+        self._interrupt_event.set()
+        print("[SubTaskExecutor] 收到中断信号")
+
+    def _execute_sequential(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ):
+        """串行执行"""
+        for subtask in decomposition.subtasks:
+            if self._interrupt_event.is_set():
+                subtask.status = TaskStatus.SKIPPED
                 continue
-            
-            # 执行步骤
-            step.status = StepStatus.RUNNING
-            
-            try:
-                # 构建完整指令（注入前置步骤输出）
-                full_instruction = self._inject_context(task, step)
-                
-                # 调用LLM
-                output = self.llm_callable(full_instruction)
-                
-                step.output_data = output
-                step.status = StepStatus.COMPLETED
-                step.confidence = 0.8  # 简化的置信度
-                
-            except Exception as e:
-                step.status = StepStatus.FAILED
-                step.error = str(e)
-            
-            # 回调
-            if self.progress_callback:
-                self.progress_callback(step, i + 1, task.total_steps)
-        
-        return task
-    
-    def execute_async(
-        self, 
-        task: DecomposedTask,
-        callback: Callable[[DecomposedTask], None] = None
-    ) -> None:
-        """
-        异步执行任务（用于非阻塞UI）
-        
-        Args:
-            task: 分解后的任务
-            callback: 完成回调
-        """
-        import threading
-        
-        def run():
-            result = self.execute(task)
-            if callback:
-                callback(result)
-        
-        thread = threading.Thread(target=run, daemon=True)
-        thread.start()
-    
-    def _inject_context(self, task: DecomposedTask, step: TaskStep) -> str:
-        """注入前置步骤的输出作为上下文"""
-        instruction = step.instruction
-        
-        # 收集前置步骤的输出
-        for dep_id in step.depends_on:
-            dep = task.get_step(dep_id)
-            if dep and dep.output_data:
-                # 根据依赖步骤ID注入对应变量
-                if dep_id == "context":
-                    instruction = instruction.replace("{context}", dep.output_data)
-                elif dep_id == "data" or dep_id == "data_collection":
-                    instruction = instruction.replace("{data}", dep.output_data)
-                elif dep_id == "materials":
-                    instruction = instruction.replace("{materials}", dep.output_data)
-                elif dep_id == "requirements":
-                    instruction = instruction.replace("{requirements}", dep.output_data)
-                elif dep_id == "research":
-                    instruction = instruction.replace("{research}", dep.output_data)
-                elif dep_id == "architecture":
-                    instruction = instruction.replace("{architecture}", dep.output_data)
-                elif dep_id == "outline":
-                    instruction = instruction.replace("{outline}", dep.output_data)
-                elif dep_id == "analysis":
-                    instruction = instruction.replace("{analysis}", dep.output_data)
-                elif dep_id == "evaluation":
-                    instruction = instruction.replace("{evaluation}", dep.output_data)
-                elif dep_id == "understanding":
-                    instruction = instruction.replace("{understanding}", dep.output_data)
-                elif dep_id == "content":
-                    instruction = instruction.replace("{content}", dep.output_data)
-                elif dep_id == "answer":
-                    instruction = instruction.replace("{answer}", dep.output_data)
-                elif dep_id == "problem":
-                    instruction = instruction.replace("{problem}", dep.output_data)
-                elif dep_id == "options":
-                    instruction = instruction.replace("{options}", dep.output_data)
-                elif dep_id == "criteria":
-                    instruction = instruction.replace("{criteria}", dep.output_data)
-                elif dep_id == "detail" or dep_id == "detail_design":
-                    instruction = instruction.replace("{detail}", dep.output_data)
-        
-        # 保留原问题
-        instruction = instruction.replace("{original_question}", task.original_question)
-        
-        return instruction
-    
-    def _default_llm_call(self, prompt: str) -> str:
-        """默认的LLM调用（用于测试）"""
-        return f"[模拟响应]: {prompt[:100]}..."
+
+            self._execute_single(subtask, handler)
+
+    def _execute_sequential_stream(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ) -> Iterator[TaskDecomposition]:
+        """串行执行（流式）"""
+        for subtask in decomposition.subtasks:
+            if self._interrupt_event.is_set():
+                subtask.status = TaskStatus.SKIPPED
+                yield decomposition
+                continue
+
+            self._execute_single(subtask, handler)
+            yield decomposition
+
+    def _execute_parallel(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ):
+        """并行执行"""
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(self._execute_single, subtask, handler): subtask
+                for subtask in decomposition.subtasks
+            }
+
+            for future in concurrent.futures.as_completed(futures):
+                if self._interrupt_event.is_set():
+                    break
+
+    def _execute_parallel_stream(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ) -> Iterator[TaskDecomposition]:
+        """并行执行（流式，返回当前状态）"""
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(self._execute_single, subtask, handler): subtask
+                for subtask in decomposition.subtasks
+            }
+
+            # 定期返回当前状态
+            while futures:
+                done = []
+                for future in list(futures.keys()):
+                    if future.done():
+                        done.append(future)
+
+                for future in done:
+                    del futures[future]
+
+                yield decomposition
+
+                if not futures:
+                    break
+
+                time.sleep(0.1)
+
+    def _execute_dag(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ):
+        """依赖图执行"""
+        task_map = {t.task_id: t for t in decomposition.subtasks}
+        completed = set()
+
+        while len(completed) < len(decomposition.subtasks):
+            if self._interrupt_event.is_set():
+                break
+
+            made_progress = False
+
+            for subtask in decomposition.subtasks:
+                if subtask.task_id in completed:
+                    continue
+
+                # 检查依赖是否满足
+                deps_satisfied = all(
+                    task_map.get(dep_id) and
+                    task_map[dep_id].status == TaskStatus.COMPLETED
+                    for dep_id in subtask.depends_on
+                )
+
+                if deps_satisfied:
+                    self._execute_single(subtask, handler)
+                    completed.add(subtask.task_id)
+                    made_progress = True
+
+            if not made_progress:
+                # 死锁检测
+                remaining = [t.task_id for t in decomposition.subtasks
+                             if t.task_id not in completed]
+                print(f"[SubTaskExecutor] 警告: 可能的死锁，剩余任务: {remaining}")
+                break
+
+    def _execute_dag_stream(
+        self,
+        decomposition: TaskDecomposition,
+        handler: Callable[[SubTask], Any],
+    ) -> Iterator[TaskDecomposition]:
+        """依赖图执行（流式）"""
+        task_map = {t.task_id: t for t in decomposition.subtasks}
+        completed = set()
+
+        while len(completed) < len(decomposition.subtasks):
+            if self._interrupt_event.is_set():
+                yield decomposition
+                break
+
+            made_progress = False
+
+            for subtask in decomposition.subtasks:
+                if subtask.task_id in completed:
+                    continue
+
+                deps_satisfied = all(
+                    task_map.get(dep_id) and
+                    task_map[dep_id].status == TaskStatus.COMPLETED
+                    for dep_id in subtask.depends_on
+                )
+
+                if deps_satisfied:
+                    self._execute_single(subtask, handler)
+                    completed.add(subtask.task_id)
+                    made_progress = True
+                    yield decomposition
+
+            if not made_progress:
+                break
+
+    def _execute_single(
+        self,
+        subtask: SubTask,
+        handler: Callable[[SubTask], Any],
+    ):
+        """执行单个子任务"""
+        print(f"[SubTaskExecutor] 执行子任务: {subtask.title}")
+
+        # 更新状态
+        subtask.status = TaskStatus.RUNNING
+        subtask.started_at = time.time()
+        subtask.progress = 0
+
+        # 触发开始回调
+        if self.callbacks.on_subtask_start:
+            self.callbacks.on_subtask_start(subtask)
+
+        # 执行任务（支持带进度的执行）
+        try:
+            result = handler(subtask)
+
+            # 更新状态
+            subtask.result = result
+            subtask.status = TaskStatus.COMPLETED
+            subtask.progress = 100
+            subtask.completed_at = time.time()
+
+            # 触发完成回调
+            if self.callbacks.on_subtask_complete:
+                self.callbacks.on_subtask_complete(subtask)
+
+            print(f"[SubTaskExecutor] 子任务完成: {subtask.title} (耗时: {subtask.duration:.2f}s)")
+
+        except Exception as e:
+            subtask.error = str(e)
+            subtask.status = TaskStatus.FAILED
+            subtask.completed_at = time.time()
+
+            # 触发错误回调
+            if self.callbacks.on_subtask_error:
+                self.callbacks.on_subtask_error(subtask, str(e))
+
+            print(f"[SubTaskExecutor] 子任务失败: {subtask.title} - {e}")
+
+    def _default_handler(self, subtask: SubTask) -> Any:
+        """默认任务处理器"""
+        # 模拟执行
+        for i in range(1, 11):
+            if self._interrupt_event.is_set():
+                break
+            time.sleep(0.1)
+            subtask.progress = i * 10
+
+            # 触发进度回调
+            if self.callbacks.on_subtask_progress:
+                self.callbacks.on_subtask_progress(subtask, i * 10)
+
+        return f"Completed: {subtask.title}"
 
 
-def format_task_result(task: DecomposedTask) -> str:
+# ── 便捷函数 ────────────────────────────────────────────────────────────────
+
+
+def decompose_task(
+    task: str,
+    llm_client: Any = None,
+) -> TaskDecomposition:
     """
-    格式化任务结果为可读文本
-    
+    便捷函数：分解任务
+
     Args:
-        task: 完成任务
-        
+        task: 任务描述
+        llm_client: 可选的 LLM 客户端
+
     Returns:
-        格式化后的结果文本
+        TaskDecomposition: 分解结果
     """
-    lines = []
-    lines.append(f"# 任务完成报告\n")
-    lines.append(f"**原始问题**: {task.original_question}\n")
-    lines.append(f"**任务类型**: {task.metadata.get('task_type', 'general')}\n")
-    lines.append(f"**进度**: {task.completed_steps}/{task.total_steps} 步骤完成\n")
-    lines.append(f"\n---\n\n")
-    
-    for step in task.steps:
-        lines.append(f"## {step.step_id}. {step.title}\n")
-        lines.append(f"**状态**: {step.status.value}")
-        
-        if step.description:
-            lines.append(f" | *{step.description}*")
-        lines.append("\n")
-        
-        if step.output_data:
-            lines.append(f"{step.output_data}\n")
-        elif step.error:
-            lines.append(f"❌ 错误: {step.error}\n")
-        
-        lines.append("\n")
-    
-    return "".join(lines)
+    decomposer = TaskDecomposer(llm_client=llm_client)
+    return decomposer.decompose(task)
 
 
-def get_chain_of_thought_prompt(question: str) -> str:
-    """
-    获取链式思考提示词
-    
-    用于直接发送给不支持结构化分解的小模型。
-    
-    Args:
-        question: 用户问题
-        
-    Returns:
-        链式思考提示词
-    """
-    return f"""请采用链式思考方式，逐步分析和回答以下问题。
+# ── 测试 ─────────────────────────────────────────────────────────────────────
 
-**问题**: {question}
 
-**思考步骤**:
-1. 首先理解问题的核心要点
-2. 然后进行逐步推理，每步说明理由
-3. 最后给出完整答案
+if __name__ == "__main__":
+    # 测试任务分解
+    decomposer = TaskDecomposer()
 
-请在回答中明确标注你的思考过程：
-- 第一步：...
-- 第二步：...
-- 第三步：...
+    test_tasks = [
+        "帮我写一个 Python 函数来计算斐波那契数列",
+        "实现一个用户认证系统，包括注册、登录、权限管理",
+        "优化数据库查询性能",
+    ]
 
-最后：
-- 结论：...
-- 置信度：（你对答案的确信程度：高/中/低）
-"""
+    print("=" * 60)
+    print("任务分解测试")
+    print("=" * 60)
+
+    for task in test_tasks:
+        print(f"\n[Original Task] {task}")
+        print(f"[Should Decompose] {decomposer.should_decompose(task)}")
+
+        decomposition = decomposer.decompose(task)
+        print(f"[Strategy] {decomposition.strategy.value}")
+        print(f"[Complexity] {decomposition.estimated_complexity}")
+        print(f"[Subtasks] {len(decomposition.subtasks)}")
+
+        for i, subtask in enumerate(decomposition.subtasks, 1):
+            print(f"  {i}. [{subtask.priority.name}] {subtask.title}")
+            if subtask.depends_on:
+                print(f"     依赖: {subtask.depends_on}")
+
+        print()
+
+    # 测试执行
+    print("=" * 60)
+    print("任务执行测试")
+    print("=" * 60)
+
+    executor = SubTaskExecutor()
+    test_decomp = decomposer.decompose("实现一个简单的计算器")
+
+    for state in executor.execute_stream(test_decomp):
+        print(f"[Progress] {state.progress_percent:.0f}% - "
+              f"{state.completed_tasks}/{state.total_tasks}")

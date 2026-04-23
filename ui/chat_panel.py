@@ -8,6 +8,7 @@
   · 消息输入框 + 发送/停止按钮
   · 配置缺失检测与提示
   · 主动需求澄清引导 (ConversationalClarifier)
+  · 智能任务分解显示 (TaskDecomposePanel)
 """
 
 import json
@@ -17,6 +18,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QTextEdit, QFrame, QSizePolicy,
+    QToolButton, QSplitter, QScrollBar,
 )
 from PyQt6.QtGui import QKeyEvent, QTextCursor
 
@@ -239,6 +241,10 @@ class ChatPanel(QWidget):
         self._clarify_card: Optional['ClarificationCard'] = None
         self._pending_clarify = False
 
+        # 任务分解系统 (2026-04-25)
+        self._task_decompose_manager = None
+        self._task_decompose_visible = False
+
         self._build_ui()
         self._init_clarifier()
 
@@ -332,6 +338,17 @@ class ChatPanel(QWidget):
 
         self.scroll.setWidget(self.msg_container)
         root.addWidget(self.scroll, 1)
+
+        # ── 任务分解面板 (2026-04-25) ──────────────────────────────────
+        self.task_decompose_widget = None
+        try:
+            from ui.task_decompose_panel import TaskDecomposePanel
+            self.task_decompose_panel = TaskDecomposePanel()
+            self.task_decompose_panel.hide()
+            root.addWidget(self.task_decompose_panel)
+        except ImportError:
+            self.task_decompose_panel = None
+            print("[ChatPanel] 警告: task_decompose_panel 未安装")
 
         # ── 配置提示横幅 ──────────────────────────────────────────────
         self._config_banner, self._config_manager = _create_config_hint_banner(self)
@@ -853,6 +870,124 @@ class ChatPanel(QWidget):
         """
         if self._config_manager:
             self._config_manager.check_and_show(result_text)
+
+    # ------------------------------------------------------------------
+    # 任务分解功能 (2026-04-25)
+    # ------------------------------------------------------------------
+
+    def show_task_decompose(self, task: str, nodes: list, strategy=None):
+        """
+        显示任务分解面板
+
+        Args:
+            task: 原始任务描述
+            nodes: 任务节点列表
+            strategy: 执行策略
+        """
+        if not self.task_decompose_panel:
+            return
+
+        try:
+            from core.task_execution_engine import ExecutionStrategy
+            strategy = strategy or ExecutionStrategy.SEQUENTIAL
+        except ImportError:
+            strategy = "sequential"
+
+        self.task_decompose_panel.set_task(task, nodes)
+        self.task_decompose_panel.set_strategy(strategy) if hasattr(self.task_decompose_panel, 'set_strategy') else None
+        self.task_decompose_panel.show()
+
+        # 初始化管理器
+        if self.task_decompose_panel:
+            from ui.task_decompose_panel import TaskDecomposeManager
+            self._task_decompose_manager = TaskDecomposeManager(
+                self.task_decompose_panel
+            )
+            self._task_decompose_manager.start_task(task, nodes, strategy)
+
+        self._task_decompose_visible = True
+        self._scroll_to_bottom()
+
+    def update_task_progress(self, node_id: str, state: str = None):
+        """
+        更新任务分解进度
+
+        Args:
+            node_id: 节点ID
+            state: 新状态（可选）
+        """
+        if self.task_decompose_panel:
+            self.task_decompose_panel.update_node(node_id)
+
+    def hide_task_decompose(self):
+        """隐藏任务分解面板"""
+        if self.task_decompose_panel:
+            self.task_decompose_panel.hide()
+        self._task_decompose_visible = False
+
+    def is_task_decompose_visible(self) -> bool:
+        """是否显示任务分解面板"""
+        return self._task_decompose_visible
+
+    def add_task_progress_message(self, text: str, progress: float = None):
+        """
+        添加带进度显示的消息
+
+        Args:
+            text: 消息文本
+            progress: 进度百分比（0-100）
+        """
+        self._hide_welcome()
+
+        # 创建进度消息容器
+        msg_widget = QFrame()
+        msg_widget.setStyleSheet("""
+            QFrame {
+                background: #1E293B;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 10px 14px;
+                margin: 4px 0;
+            }
+        """)
+
+        layout = QVBoxLayout(msg_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # 消息文本
+        msg_lbl = QLabel(text)
+        msg_lbl.setStyleSheet("color: #E2E8F0; font-size: 13px;")
+        msg_lbl.setWordWrap(True)
+        layout.addWidget(msg_lbl)
+
+        # 进度条（如果提供了进度）
+        if progress is not None:
+            progress_bar = QProgressBar()
+            progress_bar.setValue(int(progress))
+            progress_bar.setFixedHeight(4)
+            progress_bar.setTextVisible(False)
+            progress_bar.setStyleSheet("""
+                QProgressBar {
+                    background-color: #0F172A;
+                    border: none;
+                    border-radius: 2px;
+                }
+                QProgressBar::chunk {
+                    background-color: #3B82F6;
+                    border-radius: 2px;
+                }
+            """)
+            layout.addWidget(progress_bar)
+
+        row = QHBoxLayout()
+        row.addWidget(msg_widget)
+        row.addStretch()
+
+        self.msg_layout.insertLayout(self.msg_layout.count() - 1, row)
+        self._scroll_to_bottom()
+
+        return msg_widget
 
     # ------------------------------------------------------------------
     # 内部

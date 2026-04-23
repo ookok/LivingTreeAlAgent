@@ -41,6 +41,28 @@ from core.knowledge_graph import KnowledgeGraph
 from core.search.tier_router import TierRouter
 from core.linkmind_router import LinkMindRouter, RouteRequest, ModelCapability
 from core.discourse_rag import DiscourseAwareRAG
+from core.agent_progress import (
+    AgentProgress, 
+    ProgressPhase, 
+    ProgressEmitter,
+    get_progress_tracker
+)
+from core.model_capabilities import (
+    ModelCapabilityDetector,
+    MultimodalMessageFilter,
+    get_capability_detector,
+    ThinkingCapability,
+    MultimodalCapability,
+    ModelCapabilities,
+)
+from core.task_decomposer import (
+    TaskDecomposer,
+    SubTaskExecutor,
+    TaskDecompositionCallbacks,
+    TaskDecomposition,
+    SubTask,
+    TaskStatus,
+)
 
 
 # ── 懒加载情绪感知模块（避免循环导入）──────────────────────────────
@@ -524,6 +546,11 @@ class AgentCallbacks:
     tool_result: Optional[Callable[[str, str, bool], None]] = None  # 工具结果
     approval_needed: Optional[Callable[[str, str, str], bool]] = None  # 审批
     stats_update: Optional[Callable[['SessionStats'], None]] = None  # 统计更新回调
+    # 进度回调 (2026-04-25 新增)
+    progress: Optional[Callable[['AgentProgress'], None]] = None  # 进度更新
+    # 任务分解回调 (2026-04-25 新增)
+    task_decomposition: Optional[Callable[['TaskDecomposition'], None]] = None  # 分解完成
+    task_progress: Optional[Callable[['TaskDecomposition'], None]] = None  # 子任务进度
 
 
 # ── Hermes Agent ───────────────────────────────────────────────────
@@ -614,6 +641,17 @@ class HermesAgent:
         self._max_iterations = config.agent.max_iterations
         self._interrupt_event = threading.Event()
         
+        # ── 模型能力检测器 ─────────────────────────────────────────
+        self._capability_detector = get_capability_detector(
+            ollama_base_url=config.ollama.base_url
+        )
+        self._multimodal_filter = MultimodalMessageFilter(self._capability_detector)
+
+        # ── 任务分解系统 ────────────────────────────────────────────
+        self._decomposer = TaskDecomposer(llm_client=None)
+        self._task_executor = SubTaskExecutor()
+        self._current_decomposition: Optional[TaskDecomposition] = None
+
         # 延迟初始化模型客户端
         def init_model():
             try:
@@ -1109,6 +1147,10 @@ class HermesAgent:
         - search: L4模型 + KB + 深度搜索 → 知识性回答
         - emotion_aware: 情绪感知优先，影响回复风格
         """
+        # ── 进度发射器 ────────────────────────────────────────────
+        progress_emitter = ProgressEmitter(self.callbacks.progress)
+        progress_emitter.start()
+        
         # 追加用户消息
         self.session_db.append_message(self.session_id, "user", text)
 
@@ -1128,6 +1170,7 @@ class HermesAgent:
             emotion_vec = None
 
         # ── 意图分类：决定管道策略（L0分类器）─────────────────────
+        progress_emitter.emit_phase(ProgressPhase.INTENT_CLASSIFY, "分析用户意图...")
         if self._l0_classifier:
             intent_result = self._l0_classifier.classify(text)
             query_type = intent_result["type"]
@@ -1156,13 +1199,76 @@ class HermesAgent:
         kb_results: List[Dict[str, Any]] = []
         deep_results: List[Dict[str, Any]] = []
 
+        # ── 任务分解：检测是否需要分解为子任务 ────────────────────
+        should_decompose = (
+            query_type == "task" and
+            self._decomposer and
+            self._decomposer.should_decompose(text)
+        )
+
+        if should_decompose:
+            progress_emitter.emit_phase(ProgressPhase.THINKING, "分析任务结构...")
+
+            # 分解任务
+            decomposition = self._decomposer.decompose(text)
+            self._current_decomposition = decomposition
+
+            print(f"[HermesAgent] 任务分解: {decomposition.total_tasks} 个子任务 "
+                  f"(策略: {decomposition.strategy.value})")
+
+            # 触发 UI 回调 - 分解完成
+            if self.callbacks.task_decomposition:
+                self.callbacks.task_decomposition(decomposition)
+
+            # 发送分解摘要
+            summary = f"[任务分解] {decomposition.total_tasks} 个步骤：\n"
+            for i, subtask in enumerate(decomposition.subtasks, 1):
+                summary += f"{i}. {subtask.title}\n"
+            yield StreamChunk(delta=summary)
+
+            # 执行子任务
+            progress_emitter.emit_phase(ProgressPhase.EXECUTING, "执行子任务...")
+
+            def task_handler(subtask: SubTask) -> Any:
+                """子任务处理器"""
+                # 构建子任务提示
+                subtask_prompt = f"请{text}，具体执行：{subtask.description}"
+                subtask_results = []
+
+                # 对每个子任务执行搜索
+                try:
+                    results = self._search_knowledge_base(subtask_prompt)
+                    subtask_results.extend(results)
+                except Exception as e:
+                    print(f"[HermesAgent] 子任务搜索出错: {e}")
+
+                # 返回结果
+                return {
+                    "subtask_id": subtask.task_id,
+                    "results": subtask_results,
+                    "prompt": subtask_prompt,
+                }
+
+            # 流式执行子任务
+            for state in self._task_executor.execute_stream(decomposition, task_handler):
+                # 触发 UI 回调 - 子任务进度
+                if self.callbacks.task_progress:
+                    self.callbacks.task_progress(state)
+
+                # 输出当前进度
+                progress_text = f"\n[进度 {state.progress_percent:.0f}%] "
+                progress_text += f"{state.completed_tasks}/{state.total_tasks} 完成"
+                yield StreamChunk(delta=progress_text)
+
         if query_type == "dialogue":
             # 对话类：跳过 KB/深度搜索，直接用 L0 轻量模型
             model_name = self.get_l0_model()
             print(f"[HermesAgent] 对话类 → 跳过搜索，使用 L0 模型: {model_name}")
+            progress_emitter.emit_phase(ProgressPhase.LLM_GENERATING, "生成回复...")
         else:
             # 任务/搜索类：完整管道
             # 1. 知识库搜索
+            progress_emitter.emit_phase(ProgressPhase.KNOWLEDGE_SEARCH, "搜索知识库...")
             print("[HermesAgent] 执行知识库搜索...")
             try:
                 kb_results = self._search_knowledge_base(text)
@@ -1172,6 +1278,7 @@ class HermesAgent:
 
             # 2. 深度搜索（仅搜索类）
             if query_type == "search":
+                progress_emitter.emit_phase(ProgressPhase.DEEP_SEARCH, "执行深度搜索...")
                 print("[HermesAgent] 执行深度搜索...")
                 try:
                     deep_results = asyncio.run(self._deep_search(text))
@@ -1180,9 +1287,12 @@ class HermesAgent:
                     print(f"[HermesAgent] 深度搜索失败: {e}")
 
             # 3. 模型路由
+            progress_emitter.emit_phase(ProgressPhase.MODEL_ROUTE, "选择最优模型...")
             print("[HermesAgent] 执行模型路由...")
             model_name = self._route_model(text)
             print(f"[HermesAgent] 选择模型: {model_name}")
+            
+            progress_emitter.emit_phase(ProgressPhase.LLM_GENERATING, "正在生成回复...")
 
         # 4. 构建增强的提示
         enhanced_prompt = self._build_enhanced_prompt(text, kb_results, deep_results)
@@ -1199,12 +1309,15 @@ class HermesAgent:
             messages = self._build_messages(enhanced_prompt)
             reasoning_content = ""
 
-            # 推理回调
+            # 推理回调 - 根据模型能力决定是否启用
             def reasoning_cb(delta: str):
                 nonlocal reasoning_content
                 reasoning_content += delta
+                # 原有回调
                 if self.callbacks.thinking:
                     self.callbacks.thinking(delta)
+                # 进度回调（thinking 实时输出）
+                progress_emitter.emit_thinking(delta)
 
             # 流式调用 LLM
             content_buffer = ""
@@ -1215,8 +1328,20 @@ class HermesAgent:
                 # TODO: llama-cpp 暂时不支持 tools，暂不传递
                 if self.backend == "ollama":
                     llm_kwargs["tools"] = self._tool_schema
-            if reasoning_cb:
-                llm_kwargs["reasoning_callback"] = reasoning_cb
+            
+            # 根据模型能力决定是否传递 thinking 回调
+            can_think = getattr(self, '_current_model_caps', None)
+            if can_think and can_think.can_stream_think():
+                # 模型支持流式 thinking，启用回调
+                if reasoning_cb:
+                    llm_kwargs["reasoning_callback"] = reasoning_cb
+                print(f"[HermesAgent] 启用流式 thinking 输出")
+            else:
+                # 模型不支持 thinking，不传递回调
+                if "reasoning_callback" in llm_kwargs:
+                    del llm_kwargs["reasoning_callback"]
+                if can_think:
+                    print(f"[HermesAgent] 模型不支持流式 thinking，跳过")
 
             # ── 统一调用 _llm_chat（它处理 Ollama/本地模型/HTTP） ──
             for chunk in self._llm_chat(messages, **llm_kwargs):
@@ -1227,6 +1352,8 @@ class HermesAgent:
                     yield chunk
                     if self.callbacks.stream_delta:
                         self.callbacks.stream_delta(chunk.delta)
+                    # 进度回调（流式输出）
+                    progress_emitter.emit_stream(chunk.delta)
 
                 # 工具调用
                 if chunk.tool_calls:
@@ -1254,6 +1381,8 @@ class HermesAgent:
                             self.session_id, "assistant", assistant_text,
                             reasoning=reasoning_content
                         )
+                    # 进度完成
+                    progress_emitter.complete("回答已生成")
                     yield StreamChunk(done=True)
                     return
 
@@ -1445,7 +1574,7 @@ class HermesAgent:
             return []
 
     async def _deep_search(self, query: str) -> List[Dict[str, Any]]:
-        """深度搜索"""
+        """深度搜索（带降级、纠错和知识库自动存储机制）"""
         try:
             results = await self.tier_router.search(query, num_results=5)
             search_results = []
@@ -1457,9 +1586,156 @@ class HermesAgent:
                     "url": result.url,
                     "source": result.source
                 })
+            
+            # 如果没有结果，尝试纠错后重试
+            if not search_results:
+                print("[HermesAgent] 深度搜索无结果，尝试纠错重试...")
+                corrected_query = self._fix_typo(query)
+                if corrected_query and corrected_query != query:
+                    print(f"[HermesAgent] 纠错后的查询: {corrected_query}")
+                    results = await self.tier_router.search(corrected_query, num_results=5)
+                    for result in results:
+                        search_results.append({
+                            "content": f"[纠错] {result.title} " + result.content[:100],
+                            "score": result.score,
+                            "type": "deep_search",
+                            "url": result.url,
+                            "source": result.source
+                        })
+            
+            # 如果仍然没有结果，降级到 web_search
+            if not search_results:
+                print("[HermesAgent] 深度搜索失败，降级到 web_search...")
+                web_results = self._web_search_fallback(query)
+                if web_results:
+                    print(f"[HermesAgent] web_search 降级成功，找到 {len(web_results)} 条结果")
+                    search_results = web_results
+                    
+                    # 自动将 web_search 结果存入知识库（供下次搜索命中）
+                    self._store_search_results_to_kb(query, web_results)
+            
+            # 如果有搜索结果，也存入知识库
+            elif search_results and not any('web_search_fallback' in str(r) for r in search_results):
+                self._store_search_results_to_kb(query, search_results)
+            
             return search_results
         except Exception as e:
             print(f"[HermesAgent] 深度搜索出错: {e}")
+            # 出错时也尝试 web_search 降级
+            print("[HermesAgent] 异常降级到 web_search...")
+            web_results = self._web_search_fallback(query)
+            if web_results:
+                self._store_search_results_to_kb(query, web_results)
+            return web_results
+    
+    def _store_search_results_to_kb(self, query: str, results: List[Dict[str, Any]]) -> None:
+        """将搜索结果存入知识库"""
+        try:
+            if not results:
+                return
+            
+            # 提取关键信息存入知识库
+            for result in results[:3]:  # 最多存3条
+                content = result.get('content', '')
+                url = result.get('url', '')
+                source = result.get('source', '')
+                
+                if content and len(content) > 20:
+                    # 存入知识库
+                    self.knowledge_base.add_knowledge(
+                        content=content,
+                        source=f"搜索:{source}",
+                        query=query,
+                        url=url
+                    )
+                    print(f"[HermesAgent] 已存入知识库: {content[:50]}...")
+        except Exception as e:
+            print(f"[HermesAgent] 存入知识库失败: {e}")
+    
+    def _fix_typo(self, query: str) -> Optional[str]:
+        """
+        简单的错别字纠错（基于常见错误模式）
+        
+        返回纠错后的查询，如果无需纠错则返回 None
+        """
+        # 常见错别字映射（根据用户反馈：吉奥环鹏 → 吉奥环朋）
+        typo_fixes = {
+            "鹏": "朋",
+            "朋": "鹏",
+            "地": "的",
+            "的": "地",
+            "在": "再",
+            "再": "在",
+            "做": "作",
+            "作": "做",
+        }
+        
+        # 检查查询中是否包含常见错别字
+        for wrong, correct in typo_fixes.items():
+            if wrong in query:
+                # 只对中文词汇进行纠错
+                fixed = query.replace(wrong, correct, 1)  # 只替换第一个
+                return fixed
+        
+        return None
+    
+    def _web_search_fallback(self, query: str) -> List[Dict[str, Any]]:
+        """
+        web_search 降级搜索
+        
+        当 TierRouter 搜索失败时，使用 web_search 作为降级方案
+        """
+        try:
+            # 导入 web_search 工具
+            import urllib.request
+            import urllib.parse
+            import json
+            import re
+            
+            # 使用 DuckDuckGo HTML 搜索（无需 API Key）
+            encoded_query = urllib.parse.quote(query)
+            url = f"https://duckduckgo.com/html/?q={encoded_query}"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+            
+            # 解析搜索结果
+            results = []
+            
+            # DuckDuckGo HTML 结果解析
+            pattern = r'<a class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>'
+            matches = re.findall(pattern, html)
+            
+            # 摘要解析
+            snippet_pattern = r'<a class="result__snippet"[^>]*>([^<]+)</a>'
+            snippets = re.findall(snippet_pattern, html)
+            
+            for i, (url, title) in enumerate(matches[:5]):
+                # 清理 HTML 实体
+                title = re.sub(r'<[^>]+>', '', title)
+                title = re.sub(r'&[^;]+;', '', title)
+                
+                snippet = snippets[i] if i < len(snippets) else ""
+                snippet = re.sub(r'<[^>]+>', '', snippet)
+                snippet = re.sub(r'&[^;]+;', '', snippet)
+                
+                results.append({
+                    "content": f"{title}: {snippet[:150]}",
+                    "score": 0.8 - i * 0.1,
+                    "type": "web_search_fallback",
+                    "url": url,
+                    "source": "duckduckgo"
+                })
+            
+            return results
+            
+        except Exception as e:
+            print(f"[HermesAgent] web_search 降级失败: {e}")
             return []
 
     def _route_model(self, query: str) -> str:
@@ -1472,11 +1748,26 @@ class HermesAgent:
             )
             result = self.model_router.route(request)
             if result.success and result.model:
-                return result.model.name
-            return self._get_current_model_name()
+                model_name = result.model.name
+            else:
+                model_name = self._get_current_model_name()
+            
+            # ── 检测模型能力 ─────────────────────────────────────────
+            if hasattr(self, '_capability_detector'):
+                caps = self._capability_detector.detect(model_name)
+                print(f"[HermesAgent] 模型能力: {caps.get_capability_summary()}")
+                
+                # 存储当前模型能力（用于流式输出决策）
+                self._current_model_caps = caps
+            else:
+                self._current_model_caps = None
+            
+            return model_name
         except Exception as e:
             print(f"[HermesAgent] 模型路由出错: {e}")
-            return self._get_current_model_name()
+            model_name = self._get_current_model_name()
+            self._current_model_caps = None
+            return model_name
 
     def _build_enhanced_prompt(self, query: str, kb_results: List[Dict], deep_results: List[Dict]) -> str:
         """构建增强的提示"""
@@ -1515,3 +1806,113 @@ class HermesAgent:
         prompt_parts.append("\n请基于以上信息，提供详细、准确的回答。")
 
         return "\n".join(prompt_parts)
+
+    # ── 模型能力检测 ─────────────────────────────────────────────────
+
+    def get_model_capabilities(self, model_name: str = None) -> "ModelCapabilities":
+        """
+        获取模型能力信息
+
+        Args:
+            model_name: 模型名称，默认使用当前模型
+
+        Returns:
+            ModelCapabilities: 模型能力描述
+        """
+        if model_name is None:
+            model_name = self._get_current_model_name()
+
+        if hasattr(self, '_capability_detector'):
+            return self._capability_detector.detect(model_name)
+        return None
+
+    def check_multimodal_support(self, content_type: str) -> bool:
+        """
+        检查当前模型是否支持特定多模态内容
+
+        Args:
+            content_type: 内容类型（"image", "audio", "video"）
+
+        Returns:
+            True 如果支持
+        """
+        model_name = self._get_current_model_name()
+        caps = self.get_model_capabilities(model_name)
+
+        if caps is None:
+            return False
+
+        return self._capability_detector.can_process_multimodal(model_name, content_type)
+
+    def filter_multimodal_message(
+        self, messages: List[dict]
+    ) -> tuple[List[dict], List[str]]:
+        """
+        过滤消息中不支持的多模态内容
+
+        Args:
+            messages: 消息列表
+
+        Returns:
+            (过滤后的消息, 被过滤的内容描述列表)
+        """
+        model_name = self._get_current_model_name()
+        return self._multimodal_filter.filter_messages(model_name, messages)
+
+    # ── 任务分解接口 ─────────────────────────────────────────────────
+
+    def should_decompose_task(self, task: str) -> bool:
+        """
+        判断任务是否需要分解
+
+        Args:
+            task: 任务描述
+
+        Returns:
+            True 如果需要分解
+        """
+        return self._decomposer.should_decompose(task)
+
+    def decompose_task(self, task: str) -> TaskDecomposition:
+        """
+        手动分解任务
+
+        Args:
+            task: 任务描述
+
+        Returns:
+            TaskDecomposition: 分解结果
+        """
+        return self._decomposer.decompose(task)
+
+    def get_current_decomposition(self) -> Optional[TaskDecomposition]:
+        """
+        获取当前任务的分解结果
+
+        Returns:
+            当前分解结果，如果未分解则返回 None
+        """
+        return self._current_decomposition
+
+    def interrupt_task(self):
+        """中断当前任务执行"""
+        self._interrupt_event.set()
+        self._task_executor.interrupt()
+
+    def execute_decomposition(
+        self,
+        decomposition: TaskDecomposition,
+        task_handler: Callable[[SubTask], Any] = None,
+    ) -> Iterator[TaskDecomposition]:
+        """
+        执行任务分解（手动模式）
+
+        Args:
+            decomposition: 分解结果
+            task_handler: 自定义任务处理器
+
+        Yields:
+            TaskDecomposition: 每个步骤完成后的状态
+        """
+        for state in self._task_executor.execute_stream(decomposition, task_handler):
+            yield state

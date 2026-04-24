@@ -1,11 +1,34 @@
-"""协同创作系统 - 统一调度器"""
+# -*- coding: utf-8 -*-
+"""
+实时协作模块 - Real-time Collaboration Module
+=============================================
 
-from .collab import (
-    CollaborationSystem, Workspace, Document, Version, Comment, Activity,
-    User, Permission, ActivityType, CursorManager,
-    create_collaboration_system
-)
+功能：
+1. 团队工作空间
+2. 实时多人编辑
+3. 任务分配与追踪
+4. 评论与反馈
+5. 通知系统
 
+Author: Hermes Desktop Team
+"""
 
-def create_collab_system() -> CollaborationSystem:
-    return CollaborationSystem()
+from .workspace import Workspace, WorkspaceMember, WorkspaceRole
+from .presence import PresenceManager, UserPresence
+from .comments import Comment, CommentThread
+from .notifications import Notification, NotificationManager
+from .tasks import TeamTask, TaskAssignment
+
+__all__ = [
+    'Workspace',
+    'WorkspaceMember',
+    'WorkspaceRole',
+    'PresenceManager',
+    'UserPresence',
+    'Comment',
+    'CommentThread',
+    'Notification',
+    'NotificationManager',
+    'TeamTask',
+    'TaskAssignment',
+]

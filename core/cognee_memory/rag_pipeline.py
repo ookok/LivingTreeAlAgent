@@ -304,6 +304,9 @@ class RAGPipeline:
     def _extract_entities(self, text: str) -> List[Dict[str, str]]:
         """提取实体（简单实现）"""
         import re
+from core.logger import get_logger
+logger = get_logger('cognee_memory.rag_pipeline')
+
 
         entities = []
 
@@ -445,7 +448,7 @@ class CogneeRAGAdapter:
 
     def _initialize(self):
         """初始化"""
-        print("[CogneeRAGAdapter] 初始化完成")
+        logger.info("[CogneeRAGAdapter] 初始化完成")
 
     async def add_knowledge(
         self,
@@ -466,7 +469,7 @@ class CogneeRAGAdapter:
             await self.pipeline.ingest_data(data, data_type)
             return True
         except Exception as e:
-            print(f"[CogneeRAGAdapter] 添加知识失败: {e}")
+            logger.info(f"[CogneeRAGAdapter] 添加知识失败: {e}")
             return False
 
     async def query(

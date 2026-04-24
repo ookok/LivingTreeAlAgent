@@ -20,6 +20,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
 import json
+from core.logger import get_logger
+logger = get_logger('relay_chain.node_manager')
+
 
 
 class NodeType(Enum):
@@ -367,7 +370,7 @@ class NodeManager:
             try:
                 self._send_heartbeat()
             except Exception as e:
-                print(f"Heartbeat failed: {e}")
+                logger.info(f"Heartbeat failed: {e}")
 
             time.sleep(30)  # 30秒心跳
 

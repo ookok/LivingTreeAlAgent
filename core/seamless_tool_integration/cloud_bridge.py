@@ -276,7 +276,7 @@ class CloudBridge:
 
     # 检测本地能力
     local_cap = bridge.detect_local_capability()
-    print(f"本地评分: {local_cap['capability_score']}")
+    logger.info(f"本地评分: {local_cap['capability_score']}")
 
     # 设置云端配置
     bridge.configure(api_key="your-key", endpoint="https://api.example.com")
@@ -291,7 +291,7 @@ class CloudBridge:
     # 查询进度
     while not task.is_finished:
         task = bridge.get_task_status(task.task_id)
-        print(f"进度: {task.progress}%")
+        logger.info(f"进度: {task.progress}%")
         time.sleep(10)
     ```
     """
@@ -449,6 +449,9 @@ class CloudBridge:
 
         # 在后台模拟执行
         import threading
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.cloud_bridge')
+
 
         def simulate_execution():
             time.sleep(5)  # 模拟执行5秒
@@ -611,8 +614,8 @@ def quick_plan(tool_type: str, project_data: Any, mode: str = "auto") -> Dict:
     使用示例：
     ```python
     plan = quick_plan("aermod", project_data, mode="auto")
-    print(f"推荐方案: {plan['recommendation']}")
-    print(f"执行方式: {plan['execution_mode']}")
+    logger.info(f"推荐方案: {plan['recommendation']}")
+    logger.info(f"执行方式: {plan['execution_mode']}")
     ```
     """
     planner = CloudExecutionPlanner()
@@ -635,7 +638,7 @@ def submit_cloud_task(
         "南京项目",
         {"input.inp": open("aermod.inp", "rb").read()}
     )
-    print(f"任务ID: {task.task_id}")
+    logger.info(f"任务ID: {task.task_id}")
     ```
     """
     bridge = CloudBridge()

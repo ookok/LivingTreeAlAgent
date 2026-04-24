@@ -175,7 +175,7 @@ logging_dir: {self.config.output_dir}/logs
             "llamafactory-cli", "train", config_path
         ]
 
-        print(f"执行命令: {' '.join(cmd)}")
+        logger.info(f"执行命令: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
 
     def train_with_unsloth(self, train_data: str):
@@ -185,6 +185,9 @@ logging_dir: {self.config.output_dir}/logs
 from unsloth import FastLanguageModel
 import torch
 from datasets import load_dataset
+from core.logger import get_logger
+logger = get_logger('expert_distillation.fine_tune_expert')
+
 
 # 加载模型
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -216,8 +219,8 @@ model.train()
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script)
 
-        print(f"Unsloth 训练脚本已生成: {script_path}")
-        print("请运行: python " + str(script_path))
+        logger.info(f"Unsloth 训练脚本已生成: {script_path}")
+        logger.info("请运行: python " + str(script_path))
 
     def export_model(self, output_path: str, format: str = "gguf"):
         """导出模型"""
@@ -228,7 +231,7 @@ model.train()
                 "--gguf", output_path
             ]
             subprocess.run(cmd, check=True)
-        print(f"模型已导出到: {output_path}")
+        logger.info(f"模型已导出到: {output_path}")
 
 
 def main():
@@ -261,15 +264,15 @@ def main():
     tuner = FineTuner(config)
 
     # 准备数据
-    print(f"准备训练数据: {args.data}")
+    logger.info(f"准备训练数据: {args.data}")
     train_data = tuner.prepare_data(args.data, f"{config.output_dir}/data")
 
     # 训练
     if config.use_unsloth:
-        print("使用 Unsloth 训练...")
+        logger.info("使用 Unsloth 训练...")
         tuner.train_with_unsloth(train_data)
     else:
-        print("使用 LLaMA-Factory 训练...")
+        logger.info("使用 LLaMA-Factory 训练...")
         llm_config = tuner.generate_llama_factory_config(
             f"{config.output_dir}/data/train.jsonl",
             f"{config.output_dir}/data/val.jsonl"
@@ -278,13 +281,13 @@ def main():
         try:
             tuner.train_with_llama_factory(llm_config)
         except FileNotFoundError:
-            print("警告: 未找到 llamafactory-cli")
-            print("请先安装: pip install llamafactory")
-            print("或使用 --use-unsloth 选项")
+            logger.info("警告: 未找到 llamafactory-cli")
+            logger.info("请先安装: pip install llamafactory")
+            logger.info("或使用 --use-unsloth 选项")
 
     # 导出
-    print("训练完成！")
-    print(f"输出目录: {config.output_dir}")
+    logger.info("训练完成！")
+    logger.info(f"输出目录: {config.output_dir}")
 
 
 if __name__ == "__main__":

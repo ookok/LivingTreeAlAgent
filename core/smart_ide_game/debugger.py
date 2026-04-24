@@ -189,7 +189,7 @@ class PythonDebugger(DebuggerBackend):
             return True
 
         except Exception as e:
-            print(f"Failed to start debugger: {e}")
+            logger.info(f"Failed to start debugger: {e}")
             return False
 
     async def stop(self) -> bool:
@@ -353,7 +353,7 @@ class JavaScriptDebugger(DebuggerBackend):
             return True
 
         except Exception as e:
-            print(f"Failed to start JS debugger: {e}")
+            logger.info(f"Failed to start JS debugger: {e}")
             return False
 
     async def stop(self) -> bool:
@@ -577,7 +577,7 @@ class DebuggerManager:
                 try:
                     listener(debug_event)
                 except Exception as e:
-                    print(f"Event listener error: {e}")
+                    logger.info(f"Event listener error: {e}")
 
     def get_debugger_state(self) -> Dict[str, Any]:
         """获取调试器状态"""
@@ -787,6 +787,9 @@ class DebugSession:
 def create_debug_session() -> DebugSession:
     """创建调试会话"""
     import uuid
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.debugger')
+
     session_id = str(uuid.uuid4())[:8]
     return DebugSession(session_id)
 

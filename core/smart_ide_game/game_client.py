@@ -14,6 +14,9 @@ from datetime import datetime
 from enum import Enum
 import struct
 import zlib
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.game_client')
+
 
 
 class GameState(Enum):
@@ -149,7 +152,7 @@ class ResourceLoader:
                             hash=item.get("hash"),
                         )
             except Exception as e:
-                print(f"Failed to load cache index: {e}")
+                logger.info(f"Failed to load cache index: {e}")
 
     def _save_cache_index(self):
         """保存缓存索引"""
@@ -216,7 +219,7 @@ class ResourceLoader:
                     return data
 
         except Exception as e:
-            print(f"Failed to load resource {resource.id}: {e}")
+            logger.info(f"Failed to load resource {resource.id}: {e}")
 
         return None
 
@@ -412,7 +415,7 @@ class InputManager:
             try:
                 callback(input_name, pressed)
             except Exception as e:
-                print(f"Input callback error: {e}")
+                logger.info(f"Input callback error: {e}")
 
 
 class NetworkSync:

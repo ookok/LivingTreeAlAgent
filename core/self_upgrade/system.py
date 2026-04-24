@@ -11,6 +11,9 @@ from .safety_pipeline import SafetyPipeline, get_safety_pipeline
 from .knowledge_base import KnowledgeBase, get_knowledge_base
 from .human_reviewer import HumanReviewer, get_human_reviewer
 from .evolution_scheduler import EvolutionScheduler, get_evolution_scheduler
+from core.logger import get_logger
+logger = get_logger('self_upgrade.system')
+
 
 
 class SelfUpgradeSystem:
@@ -95,13 +98,13 @@ class SelfUpgradeSystem:
         """启用系统"""
         self._enabled = True
         self.scheduler.start()
-        print("[SelfUpgradeSystem] Enabled")
+        logger.info("[SelfUpgradeSystem] Enabled")
 
     def disable(self):
         """禁用系统"""
         self._enabled = False
         self.scheduler.stop()
-        print("[SelfUpgradeSystem] Disabled")
+        logger.info("[SelfUpgradeSystem] Disabled")
 
     # --------------------------------------------------------
     # 辩论相关

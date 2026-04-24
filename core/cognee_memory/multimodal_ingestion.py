@@ -289,7 +289,7 @@ class MultimodalIngester:
                 item = await self.ingest_file(str(file_path))
                 items.append(item)
             except Exception as e:
-                print(f"[MultimodalIngester] 摄入失败 {file_path}: {e}")
+                logger.info(f"[MultimodalIngester] 摄入失败 {file_path}: {e}")
 
         return items
 
@@ -346,6 +346,9 @@ class MultimodalIngester:
     def _generate_id(self, *parts: str) -> str:
         """生成 ID"""
         import hashlib
+from core.logger import get_logger
+logger = get_logger('cognee_memory.multimodal_ingestion')
+
         raw = "|".join(str(p) for p in parts)
         return hashlib.md5(raw.encode()).hexdigest()[:16]
 

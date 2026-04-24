@@ -38,7 +38,7 @@ try:
     PYQT_AVAILABLE = True
 except ImportError:
     PYQT_AVAILABLE = False
-    print("PyQt6 not available, editor UI will not be functional")
+    logger.info("PyQt6 not available, editor UI will not be functional")
 
 import re
 from .editor_core import SmartEditor, EditorMode, EditorConfig
@@ -46,6 +46,9 @@ from .ai_operations import AIOperationType, AIOperationResult, sync_get_ai_opera
 from .context_engine import ContextEngine, get_context_engine, ContextType
 from .completion_engine import CompletionEngine, CompletionItem, CompletionKind, get_completion_engine
 from .theme_layout import ThemeSystem, LayoutManager, ThemeType, LayoutType, get_theme_system, get_layout_manager
+from core.logger import get_logger
+logger = get_logger('smart_editor.editor_window')
+
 
 
 class SyntaxHighlighterRules:

@@ -20,6 +20,9 @@ from .models import (
 from .downloader import HuggingFaceDownloader, find_smallest_gguf
 from .ollama_runner import OllamaRunner, OllamaRunnerManager
 from .router import L0Router
+from core.logger import get_logger
+logger = get_logger('smolllm2.__init__')
+
 
 
 __all__ = [
@@ -58,7 +61,7 @@ async def quick_route(prompt: str) -> RouteDecision:
 
     用法：
     >>> decision = await quick_route("帮我查下这个产品的库存")
-    >>> print(decision.route)  # -> RouteType.LOCAL
+    >>> logger.info(decision.route)  # -> RouteType.LOCAL
     """
     router = get_l0_router()
     return await router.route(prompt)

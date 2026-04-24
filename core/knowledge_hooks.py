@@ -331,6 +331,9 @@ def patch_hermes_agent():
     """
     try:
         from core import agent as agent_module
+from core.logger import get_logger
+logger = get_logger('knowledge_hooks')
+
 
         # 检查是否已经打过补丁
         if hasattr(agent_module.HermesAgent, "_knowledge_hooks_patched"):
@@ -399,20 +402,20 @@ def patch_hermes_agent():
 
 def test_hooks():
     """测试钩子"""
-    print("=" * 60)
-    print("测试知识库钩子")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试知识库钩子")
+    logger.info("=" * 60)
 
     manager = get_hook_manager()
-    print(f"钩子管理器状态: 已初始化")
+    logger.info(f"钩子管理器状态: 已初始化")
 
     # 测试查询钩子
-    print("\n1. 测试查询钩子")
+    logger.info("\n1. 测试查询钩子")
     manager.on_query_received("什么是Python")
-    print("   查询已记录")
+    logger.info("   查询已记录")
 
     # 测试搜索完成钩子
-    print("\n2. 测试搜索完成钩子")
+    logger.info("\n2. 测试搜索完成钩子")
     manager.on_deep_search_complete(
         query="Python教程",
         results=[
@@ -420,18 +423,18 @@ def test_hooks():
             {"title": "Python教程", "url": "https://example.com", "snippet": "Python基础教程"},
         ]
     )
-    print("   搜索结果已摄入")
+    logger.info("   搜索结果已摄入")
 
     # 测试响应生成钩子
-    print("\n3. 测试响应生成钩子")
+    logger.info("\n3. 测试响应生成钩子")
     manager.on_response_generated(
         query="Python是什么",
         response="Python是一种高级编程语言..."
     )
-    print("   响应已处理")
+    logger.info("   响应已处理")
 
-    print("\n" + "=" * 60)
-    print("钩子测试完成!")
+    logger.info("\n" + "=" * 60)
+    logger.info("钩子测试完成!")
 
 
 if __name__ == "__main__":

@@ -115,7 +115,7 @@ class StateManager:
                 data = json.loads(self.state_file.read_text(encoding='utf-8'))
                 self._state = self._dict_to_state(data)
             except Exception as e:
-                print(f"[StateManager] Failed to load state: {e}")
+                logger.info(f"[StateManager] Failed to load state: {e}")
                 self._state = None
 
     def _save_state(self):
@@ -476,6 +476,9 @@ class StateManager:
             Assumption: 创建的假设
         """
         import uuid
+from core.logger import get_logger
+logger = get_logger('gsd_integration.state_manager')
+
         assumption = Assumption(
             assumption_id=str(uuid.uuid4())[:8],
             description=description
@@ -639,7 +642,7 @@ class StateManager:
             try:
                 observer(event, *args)
             except Exception as e:
-                print(f"[StateManager] Observer error: {e}")
+                logger.info(f"[StateManager] Observer error: {e}")
 
 
 _global_state_manager: Optional[StateManager] = None

@@ -35,6 +35,9 @@ from .tier3_engines import (
     DuckDuckGoEngine, WikipediaEngine, OpenLibraryEngine,
 )
 from .tier4_engines import (
+from core.logger import get_logger
+logger = get_logger('search.tier_router')
+
     LocalCacheEngine, KnowledgeBaseEngine, SemanticsCacheEngine,
 )
 
@@ -305,7 +308,7 @@ class TierRouter:
                         results_collected += len(results)
                         
             except asyncio.TimeoutError:
-                print(f"[TierRouter] Tier {tier.value} timeout")
+                logger.info(f"[TierRouter] Tier {tier.value} timeout")
                 continue
         
         return all_results[:num_results]
@@ -330,7 +333,7 @@ class TierRouter:
             return results
             
         except Exception as e:
-            print(f"[TierRouter] Engine {api_name} failed: {e}")
+            logger.info(f"[TierRouter] Engine {api_name} failed: {e}")
             self._update_health(api_name, success=False)
             return []
     

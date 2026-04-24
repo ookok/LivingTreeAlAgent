@@ -11,6 +11,9 @@ from typing import List, Optional, Dict, Any
 import httpx
 
 from .models import SearchResult, TierLevel, APIConfig
+from core.logger import get_logger
+logger = get_logger('search.tier2_engines')
+
 
 
 class BaseVerticalEngine:
@@ -94,7 +97,7 @@ class ZhihuEngine(BaseVerticalEngine):
                         ))
                 
         except Exception as e:
-            print(f"[ZhihuEngine] Search failed: {e}")
+            logger.info(f"[ZhihuEngine] Search failed: {e}")
         
         return results
 
@@ -157,7 +160,7 @@ class DoubanEngine(BaseVerticalEngine):
                     ))
                 
         except Exception as e:
-            print(f"[DoubanEngine] Book search failed: {e}")
+            logger.info(f"[DoubanEngine] Book search failed: {e}")
         
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -188,7 +191,7 @@ class DoubanEngine(BaseVerticalEngine):
                     ))
                 
         except Exception as e:
-            print(f"[DoubanEngine] Movie search failed: {e}")
+            logger.info(f"[DoubanEngine] Movie search failed: {e}")
         
         return results[:num_results]
 
@@ -266,7 +269,7 @@ class GaodeEngine(BaseVerticalEngine):
                         ))
                 
         except Exception as e:
-            print(f"[GaodeEngine] Search failed: {e}")
+            logger.info(f"[GaodeEngine] Search failed: {e}")
         
         return results
 
@@ -352,7 +355,7 @@ class HefengEngine(BaseVerticalEngine):
                         ))
                 
         except Exception as e:
-            print(f"[HefengEngine] Search failed: {e}")
+            logger.info(f"[HefengEngine] Search failed: {e}")
         
         return results
 
@@ -428,7 +431,7 @@ class GithubEngine(BaseVerticalEngine):
                     ))
                 
         except Exception as e:
-            print(f"[GithubEngine] Search failed: {e}")
+            logger.info(f"[GithubEngine] Search failed: {e}")
         
         return results
 

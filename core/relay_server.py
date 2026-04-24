@@ -37,10 +37,13 @@ try:
     import websockets
     from websockets.server import WebSocketServerProtocol, serve
     from websockets.exceptions import ConnectionClosed, WebSocketException
+from core.logger import get_logger
+logger = get_logger('relay_server')
+
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
-    print("Warning: websockets library not found. Install with: pip install websockets")
+    logger.info("Warning: websockets library not found. Install with: pip install websockets")
 
 # Logging configuration
 logging.basicConfig(

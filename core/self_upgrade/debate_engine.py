@@ -181,7 +181,7 @@ class DebateEngine:
                 result = await self._call_local_model(full_prompt)
                 return self._parse_arguments(result, role)
             except Exception as e:
-                print(f"[DebateEngine] Local model failed: {e}, falling back to template")
+                logger.info(f"[DebateEngine] Local model failed: {e}, falling back to template")
 
         # 回退到内置模板
         return self._generate_fallback_arguments(role, topic, n)
@@ -191,6 +191,9 @@ class DebateEngine:
         # 复用 system_brain 的本地模型
         try:
             from core.system_brain import get_system_brain
+from core.logger import get_logger
+logger = get_logger('self_upgrade.debate_engine')
+
             brain = get_system_brain()
             result = await brain.generate(prompt, max_tokens=500)
             return result

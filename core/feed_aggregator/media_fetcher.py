@@ -93,7 +93,7 @@ class MediaFetcher:
             items = await self._enhance_media(items)
             return items
         except Exception as e:
-            print(f"[MediaFetcher] Fetch {source.value} failed: {e}")
+            logger.info(f"[MediaFetcher] Fetch {source.value} failed: {e}")
             return []
 
     async def _gather_with_limit(self, tasks, limit: int = 10):
@@ -258,13 +258,16 @@ class MediaFetcher:
                             ))
                         return items
         except Exception as e:
-            print(f"[MediaFetcher] Reddit fetch failed: {e}")
+            logger.info(f"[MediaFetcher] Reddit fetch failed: {e}")
         return []
 
     async def _fetch_github(self, max_items: int) -> List[FeedItem]:
         """抓取 GitHub Trending"""
         try:
             import aiohttp
+from core.logger import get_logger
+logger = get_logger('feed_aggregator.media_fetcher')
+
             async with aiohttp.ClientSession() as session:
                 url = "https://api.github.com/search/repositories?q=stars:>1000+pushed:>2024-01-01&sort=stars&per_page=50"
                 async with session.get(url, headers={"User-Agent": "LivingTreeAI/1.0"}) as resp:
@@ -288,7 +291,7 @@ class MediaFetcher:
                             ))
                         return items
         except Exception as e:
-            print(f"[MediaFetcher] GitHub fetch failed: {e}")
+            logger.info(f"[MediaFetcher] GitHub fetch failed: {e}")
         return []
 
     async def _fetch_news(self, max_items: int) -> List[FeedItem]:
@@ -331,7 +334,7 @@ class MediaFetcher:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump([self._item_to_dict(i) for i in items], f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[MediaFetcher] Cache save failed: {e}")
+            logger.info(f"[MediaFetcher] Cache save failed: {e}")
 
     def _item_to_dict(self, item: FeedItem) -> Dict:
         return {

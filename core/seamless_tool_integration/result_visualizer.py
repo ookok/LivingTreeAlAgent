@@ -380,6 +380,9 @@ class MaxValueVisualizer(BaseVisualizer):
 
         # 添加图例
         from matplotlib.patches import Patch
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.result_visualizer')
+
         legend_elements = [
             Patch(facecolor='#4CAF50', label='达标'),
             Patch(facecolor='#F44336', label='超标')
@@ -456,7 +459,7 @@ class ResultVisualizer:
                 dpi=dpi
             )
         except Exception as e:
-            print(f"等值线图保存失败: {e}")
+            logger.info(f"等值线图保存失败: {e}")
 
         # 统计图
         try:
@@ -464,7 +467,7 @@ class ResultVisualizer:
             fig = stats_viz.create_figure()
             fig.savefig(os.path.join(output_dir, "statistics.png"), dpi=dpi, bbox_inches='tight')
         except Exception as e:
-            print(f"统计图保存失败: {e}")
+            logger.info(f"统计图保存失败: {e}")
 
         # 最大值图
         try:
@@ -472,14 +475,14 @@ class ResultVisualizer:
             fig = max_viz.create_figure()
             fig.savefig(os.path.join(output_dir, "max_values.png"), dpi=dpi, bbox_inches='tight')
         except Exception as e:
-            print(f"最大值图保存失败: {e}")
+            logger.info(f"最大值图保存失败: {e}")
 
         # CSV数据
         try:
             table_viz = DataTableVisualizer(self.result)
             table_viz.export_csv(os.path.join(output_dir, "concentration_data.csv"))
         except Exception as e:
-            print(f"CSV导出失败: {e}")
+            logger.info(f"CSV导出失败: {e}")
 
         # JSON报告
         try:
@@ -487,7 +490,7 @@ class ResultVisualizer:
             with open(report_path, 'w', encoding='utf-8') as f:
                 json.dump(self.result.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"JSON报告保存失败: {e}")
+            logger.info(f"JSON报告保存失败: {e}")
 
     def get_summary_html(self) -> str:
         """

@@ -16,6 +16,9 @@ import logging
 from typing import Dict, Any, Optional, Set, List, Callable
 from dataclasses import dataclass, field
 from threading import RLock
+from core.logger import get_logger
+logger = get_logger('relay_chain.event_ext.p2p_network.network.routing')
+
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ class RoutingTable:
     # 查找路由
     route = routing.find_route("node-005")
     if route:
-        print(f"到 node-005 的下一跳: {route.next_hop}")
+        logger.info(f"到 node-005 的下一跳: {route.next_hop}")
 
     # 获取所有可达节点
     nodes = routing.get_reachable_nodes()

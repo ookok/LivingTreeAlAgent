@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 import hashlib
+from core.logger import get_logger
+logger = get_logger('hermes_agent.__init__')
+
 
 
 class PreferenceType(Enum):
@@ -131,7 +134,7 @@ class UserProfileManager:
                 )
                 self.profiles[profile.user_id] = profile
             except Exception as e:
-                print(f"[HermesAgent] Failed to load profile {f}: {e}")
+                logger.info(f"[HermesAgent] Failed to load profile {f}: {e}")
 
     def _save_profile(self, user_id: str):
         """保存用户画像"""
@@ -350,7 +353,7 @@ class UserProfileManager:
         profile.learned_facts[key] = value
         self._save_profile(user_id)
 
-        print(f"[HermesAgent] Learned fact: {key} = {value}")
+        logger.info(f"[HermesAgent] Learned fact: {key} = {value}")
 
     def get_context_for_llm(self, user_id: str, max_history: int = 10) -> str:
         """为 LLM 生成用户上下文"""

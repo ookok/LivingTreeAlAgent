@@ -105,7 +105,7 @@ class ModelDeployer:
     # 检查AERMOD是否就绪
     if not deployer.is_tool_ready("aermod"):
         # 部署
-        deployer.deploy("aermod", progress_callback=lambda p: print(f"进度: {p.percent}%"))
+        deployer.deploy("aermod", progress_callback=lambda p: logger.info(f"进度: {p.percent}%"))
     ```
     """
 
@@ -485,6 +485,9 @@ class ModelDeployer:
         # 检查Docker
         if tool.tool_type == ToolType.DOCKER:
             import subprocess
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.model_deployer')
+
             try:
                 result = subprocess.run(
                     ['docker', '--version'],
@@ -522,7 +525,7 @@ def quick_deploy(tool_id: str, progress_callback: Optional[Callable[[DeploymentP
     使用示例：
     ```python
     if quick_deploy("aermod"):
-        print("AERMOD 已就绪！")
+        logger.info("AERMOD 已就绪！")
     ```
     """
     deployer = ModelDeployer()

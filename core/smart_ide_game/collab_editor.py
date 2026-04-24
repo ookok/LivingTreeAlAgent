@@ -12,6 +12,9 @@ from datetime import datetime
 from enum import Enum
 import random
 import string
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.collab_editor')
+
 
 
 class OperationType(Enum):
@@ -643,7 +646,7 @@ class CollabEditor:
                 try:
                     callback(event, data)
                 except Exception as e:
-                    print(f"Event handler error: {e}")
+                    logger.info(f"Event handler error: {e}")
 
     def get_editor_stats(self) -> Dict[str, Any]:
         """获取编辑器统计"""

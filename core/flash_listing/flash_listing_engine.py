@@ -29,6 +29,9 @@ from .listing_generator import ListingGenerator
 from .product_link import ProductLinkGenerator, ProductLink
 from .inline_purchase import InlinePurchaseManager
 from .fulfillment import FulfillmentManager
+from core.logger import get_logger
+logger = get_logger('flash_listing.flash_listing_engine')
+
 
 logger = logging.getLogger(__name__)
 
@@ -430,15 +433,15 @@ async def example_usage():
         session.session_id,
         ["/path/to/product.jpg"]
     )
-    print(f"识别到: {features[0].category}")
+    logger.info(f"识别到: {features[0].category}")
 
     # 2. 生成商品资料
     listing = await engine.generate_listing(
         session.session_id,
         user_hints={"condition": "new", "highlight": "工厂直供"}
     )
-    print(f"生成标题: {listing.title}")
-    print(f"生成描述:\n{listing.description}")
+    logger.info(f"生成标题: {listing.title}")
+    logger.info(f"生成描述:\n{listing.description}")
 
     # 3. 用户确认并补充价格
     await engine.update_listing(
@@ -452,8 +455,8 @@ async def example_usage():
 
     # 4. 发布
     product_link = await engine.publish(session.session_id)
-    print(f"商品链接: {product_link.full_link}")
-    print(f"展示文案: {product_link.display_text}")
+    logger.info(f"商品链接: {product_link.full_link}")
+    logger.info(f"展示文案: {product_link.display_text}")
 
     # 5. 生成可点击卡片
     card = engine.link_generator.generate_markdown_card(
@@ -461,7 +464,7 @@ async def example_usage():
         title=listing.title,
         price=299.0,
     )
-    print(f"商品卡片:\n{card}")
+    logger.info(f"商品卡片:\n{card}")
 
 
 if __name__ == "__main__":

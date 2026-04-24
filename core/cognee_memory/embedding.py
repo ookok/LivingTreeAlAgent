@@ -118,11 +118,14 @@ class EmbeddingEngine:
         """加载模型"""
         try:
             from sentence_transformers import SentenceTransformer
+from core.logger import get_logger
+logger = get_logger('cognee_memory.embedding')
+
             self.model = SentenceTransformer(self.config.model_name)
             self.config.dimension = self.model.get_sentence_embedding_dimension()
-            print(f"[EmbeddingEngine] 加载模型: {self.config.model_name}, 维度: {self.config.dimension}")
+            logger.info(f"[EmbeddingEngine] 加载模型: {self.config.model_name}, 维度: {self.config.dimension}")
         except ImportError:
-            print("[EmbeddingEngine] sentence-transformers 未安装，使用模拟嵌入")
+            logger.info("[EmbeddingEngine] sentence-transformers 未安装，使用模拟嵌入")
             self.model = None
 
     def encode(self, texts: List[str]) -> np.ndarray:

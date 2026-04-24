@@ -13,8 +13,8 @@ pool = ConnectionPool(node_id="node-001")
 
 # 设置消息处理
 pool.on_message = lambda from_node, data: handle(data)
-pool.on_connected = lambda node_id: print(f"Connected to {node_id}")
-pool.on_disconnected = lambda node_id: print(f"Disconnected from {node_id}")
+pool.on_connected = lambda node_id: logger.info(f"Connected to {node_id}")
+pool.on_disconnected = lambda node_id: logger.info(f"Disconnected from {node_id}")
 
 # 连接到节点
 pool.connect("192.168.1.10", 8080, node_id="node-002")
@@ -37,6 +37,9 @@ from typing import Dict, Any, Optional, Callable, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Thread, RLock
+from core.logger import get_logger
+logger = get_logger('relay_chain.event_ext.p2p_network.network.connection')
+
 
 logger = logging.getLogger(__name__)
 

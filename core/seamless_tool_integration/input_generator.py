@@ -457,6 +457,9 @@ REGRID    CARTESIAN  GRID1  {grid.x_count}  {grid.y_count}
         """生成批处理脚本"""
         # 使用默认安装路径
         from .model_deployer import ModelDeployer
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.input_generator')
+
         exe_path = os.path.join(
             ModelDeployer.DEFAULT_TOOLS_DIR,
             "aermod",
@@ -598,7 +601,7 @@ def quick_generate(tool_type: str, project_data: ProjectData, output_dir: str) -
     使用示例：
     ```python
     files = quick_generate("aermod", project_data, "/tmp/aermod")
-    print(f"生成文件: {list(files.keys())}")
+    logger.info(f"生成文件: {list(files.keys())}")
     ```
     """
     generator = InputGenerator.create(tool_type, project_data)

@@ -18,6 +18,9 @@ from enum import Enum
 from datetime import datetime
 from pathlib import Path
 import struct
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.result_parser')
+
 
 
 class Pollutant(Enum):
@@ -391,7 +394,7 @@ class ResultParser:
     ```python
     parser = ResultParser.create("aermod")
     result = parser.parse("/path/to/output.out")
-    print(f"最大浓度: {result.max_concentration}")
+    logger.info(f"最大浓度: {result.max_concentration}")
     ```
     """
 
@@ -524,7 +527,7 @@ def parse_result(file_path: str, tool_type: Optional[str] = None) -> PredictionR
     使用示例：
     ```python
     result = parse_result("/path/to/aermod.out", "aermod")
-    print(f"最大浓度: {result.max_concentration}")
+    logger.info(f"最大浓度: {result.max_concentration}")
     ```
     """
     return ResultParser.parse_auto(file_path, tool_type)

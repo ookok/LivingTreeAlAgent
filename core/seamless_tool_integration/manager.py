@@ -49,7 +49,7 @@ class SeamlessIntegrationManager:
     result = manager.run_prediction(
         project_data=project,
         tool_type="aermod",
-        progress_callback=lambda step: print(f"{step.name}: {step.progress}%")
+        progress_callback=lambda step: logger.info(f"{step.name}: {step.progress}%")
     )
 
     # 获取可视化
@@ -466,6 +466,9 @@ class SeamlessIntegrationManager:
             执行方案
         """
         from .cloud_bridge import CloudExecutionPlanner
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.manager')
+
 
         planner = CloudExecutionPlanner()
         return planner.plan(tool_type, project_data, mode)

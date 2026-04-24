@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 from .models import FeedItem, InterestProfile, FeedConfig
+from core.logger import get_logger
+logger = get_logger('feed_aggregator.interest_engine')
+
 
 
 class InterestEngine:
@@ -254,7 +257,7 @@ class InterestEngine:
             )
             return profile
         except Exception as e:
-            print(f"[InterestEngine] Load profile failed: {e}")
+            logger.info(f"[InterestEngine] Load profile failed: {e}")
             return InterestProfile()
 
     def _save_profile(self):
@@ -273,7 +276,7 @@ class InterestEngine:
             with open(self.profile_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[InterestEngine] Save profile failed: {e}")
+            logger.info(f"[InterestEngine] Save profile failed: {e}")
 
     # ============================================================
     # 统计

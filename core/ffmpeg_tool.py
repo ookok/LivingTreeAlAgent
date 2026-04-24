@@ -164,6 +164,9 @@ class FFmpegTool:
     def _find_ffprobe(self) -> str:
         """自动查找 ffprobe 路径"""
         import shutil
+from core.logger import get_logger
+logger = get_logger('ffmpeg_tool')
+
 
         # 1. 项目本地 bin
         local_bin = Path(__file__).parent.parent / "bin" / "tools" / "ffprobe"
@@ -272,7 +275,7 @@ class FFmpegTool:
             return streams
 
         except Exception as e:
-            print(f"Probe error: {e}")
+            logger.info(f"Probe error: {e}")
             return []
 
     def exec_sync(

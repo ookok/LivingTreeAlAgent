@@ -23,6 +23,9 @@ from enum import Enum
 import traceback
 
 import httpx
+from core.logger import get_logger
+logger = get_logger('search_tool')
+
 
 # ── 搜索意图类型 ────────────────────────────────────────────────────────────
 
@@ -680,7 +683,7 @@ class DuckDuckGoEngine(SearchEngine):
                 return results[:num_results]
                 
         except Exception as e:
-            print(f"[DuckDuckGo] Search failed: {e}")
+            logger.info(f"[DuckDuckGo] Search failed: {e}")
             return []
 
 # ── Serper API 引擎（高质量 Google 结果）────────────────────────────────────
@@ -740,7 +743,7 @@ class SerperEngine(SearchEngine):
                 return results
                 
         except Exception as e:
-            print(f"[Serper] Search failed: {e}")
+            logger.info(f"[Serper] Search failed: {e}")
             return []
 
 # ── Brave Search 引擎 ───────────────────────────────────────────────────────
@@ -794,7 +797,7 @@ class BraveEngine(SearchEngine):
                 return results
                 
         except Exception as e:
-            print(f"[Brave] Search failed: {e}")
+            logger.info(f"[Brave] Search failed: {e}")
             return []
 
 # ── 中文聚合搜索 ─────────────────────────────────────────────────────────────
@@ -844,7 +847,7 @@ class CnAggregateEngine(SearchEngine):
                 return results[:num_results]
                 
         except Exception as e:
-            print(f"[CnAggregate] Search failed: {e}")
+            logger.info(f"[CnAggregate] Search failed: {e}")
             return []
 
 # ── 查询优化器 ───────────────────────────────────────────────────────────────
@@ -1013,7 +1016,7 @@ class AISearchTool:
                     if isinstance(results, list):
                         all_results.extend(results)
             except Exception as e:
-                print(f"[AISearch] Multi-query failed: {e}")
+                logger.info(f"[AISearch] Multi-query failed: {e}")
         else:
             # 单查询
             optimized_query = QueryOptimizer.optimize(query, intent)
@@ -1030,7 +1033,7 @@ class AISearchTool:
                         all_results.extend(results)
                         break
                 except Exception as e:
-                    print(f"[AISearch] Engine {engine.name} failed: {e}")
+                    logger.info(f"[AISearch] Engine {engine.name} failed: {e}")
                     continue
         
         # 检测可下载文件
@@ -1193,7 +1196,7 @@ class AISearchTool:
                         response.verification.warnings.extend(verification.warnings)
             
         except Exception as e:
-            print(f"[AISearch] Summary failed: {e}")
+            logger.info(f"[AISearch] Summary failed: {e}")
             response.summary = "⚠️ AI 总结生成失败"
         
         return response
@@ -1272,7 +1275,7 @@ class AISearchTool:
                 return content[:5000]  # 限制长度
                 
         except Exception as e:
-            print(f"[AISearch] Fetch raw content failed: {e}")
+            logger.info(f"[AISearch] Fetch raw content failed: {e}")
             return ""
     
     def clear_cache(self) -> None:

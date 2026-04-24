@@ -17,6 +17,9 @@ import json
 from pathlib import Path
 
 from .models import APIHealth, APIStatus, TierLevel
+from core.logger import get_logger
+logger = get_logger('search.api_monitor')
+
 
 
 @dataclass
@@ -361,7 +364,7 @@ class APIMonitor:
                 json.dump(report, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"[APIMonitor] Export failed: {e}")
+            logger.info(f"[APIMonitor] Export failed: {e}")
             return False
     
     async def start_monitoring(self):
@@ -391,7 +394,7 @@ class APIMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[APIMonitor] Monitor error: {e}")
+                logger.info(f"[APIMonitor] Monitor error: {e}")
     
     async def _check_health(self):
         """健康检查"""
@@ -406,7 +409,7 @@ class APIMonitor:
                         # 尝试恢复
                         health.consecutive_failures = 0
                         self._evaluate_status(api_name)
-                        print(f"[APIMonitor] Attempting recovery for {api_name}")
+                        logger.info(f"[APIMonitor] Attempting recovery for {api_name}")
 
 
 __all__ = ["APIMonitor", "APIMetrics", "MonitorConfig"]

@@ -194,9 +194,9 @@ class SentenceTransformersEmbedding(EmbeddingModel):
                     device=self.config.device
                 )
                 self._dimension = self._model.get_sentence_embedding_dimension()
-                print(f"[Embedding] 模型加载成功: {self.config.model_name}, 维度: {self._dimension}")
+                logger.info(f"[Embedding] 模型加载成功: {self.config.model_name}, 维度: {self._dimension}")
             except ImportError:
-                print("[Embedding] sentence-transformers 未安装，尝试使用替代方案...")
+                logger.info("[Embedding] sentence-transformers 未安装，尝试使用替代方案...")
                 raise
 
     def encode(self, texts: Union[str, List[str]], **kwargs) -> List[List[float]]:
@@ -403,7 +403,7 @@ class ChromaVectorDB(VectorDBInterface):
                     path=self.config.chroma_persist_directory
                 )
             except ImportError:
-                print("[ChromaDB] chromadb 未安装，执行: pip install chromadb")
+                logger.info("[ChromaDB] chromadb 未安装，执行: pip install chromadb")
                 raise
 
         return self._client
@@ -413,7 +413,7 @@ class ChromaVectorDB(VectorDBInterface):
             self._get_client()
             return True
         except Exception as e:
-            print(f"[ChromaDB] 连接失败: {e}")
+            logger.info(f"[ChromaDB] 连接失败: {e}")
             return False
 
     def disconnect(self) -> None:
@@ -429,7 +429,7 @@ class ChromaVectorDB(VectorDBInterface):
             )
             return True
         except Exception as e:
-            print(f"[ChromaDB] 创建集合失败: {e}")
+            logger.info(f"[ChromaDB] 创建集合失败: {e}")
             return False
 
     def delete_collection(self, name: str) -> bool:
@@ -438,7 +438,7 @@ class ChromaVectorDB(VectorDBInterface):
             client.delete_collection(name)
             return True
         except Exception as e:
-            print(f"[ChromaDB] 删除集合失败: {e}")
+            logger.info(f"[ChromaDB] 删除集合失败: {e}")
             return False
 
     def insert(self, ids: List[str], embeddings: List[List[float]],
@@ -455,7 +455,7 @@ class ChromaVectorDB(VectorDBInterface):
             )
             return True
         except Exception as e:
-            print(f"[ChromaDB] 插入失败: {e}")
+            logger.info(f"[ChromaDB] 插入失败: {e}")
             return False
 
     def search(self, query_vector: List[float], top_k: int = 10,
@@ -473,7 +473,7 @@ class ChromaVectorDB(VectorDBInterface):
 
             return self._format_results(results)
         except Exception as e:
-            print(f"[ChromaDB] 检索失败: {e}")
+            logger.info(f"[ChromaDB] 检索失败: {e}")
             return []
 
     def search_by_text(self, text: str, top_k: int = 10,
@@ -489,7 +489,7 @@ class ChromaVectorDB(VectorDBInterface):
             self._collection.delete(ids=ids)
             return True
         except Exception as e:
-            print(f"[ChromaDB] 删除失败: {e}")
+            logger.info(f"[ChromaDB] 删除失败: {e}")
             return False
 
     def get_collection_info(self, name: str) -> Dict:
@@ -502,7 +502,7 @@ class ChromaVectorDB(VectorDBInterface):
                 "metadata": collection.metadata
             }
         except Exception as e:
-            print(f"[ChromaDB] 获取集合信息失败: {e}")
+            logger.info(f"[ChromaDB] 获取集合信息失败: {e}")
             return {}
 
     def _format_results(self, results: Dict) -> List[Dict]:
@@ -567,10 +567,10 @@ class MilvusVectorDB(VectorDBInterface):
                 )
                 self._client = True  # 标记已连接
             except ImportError:
-                print("[Milvus] pymilvus 未安装，执行: pip install pymilvus")
+                logger.info("[Milvus] pymilvus 未安装，执行: pip install pymilvus")
                 raise
             except Exception as e:
-                print(f"[Milvus] 连接失败: {e}")
+                logger.info(f"[Milvus] 连接失败: {e}")
                 raise
 
         return self._client
@@ -580,7 +580,7 @@ class MilvusVectorDB(VectorDBInterface):
             self._get_client()
             return True
         except Exception as e:
-            print(f"[Milvus] 连接失败: {e}")
+            logger.info(f"[Milvus] 连接失败: {e}")
             return False
 
     def disconnect(self) -> None:
@@ -633,7 +633,7 @@ class MilvusVectorDB(VectorDBInterface):
             return True
 
         except Exception as e:
-            print(f"[Milvus] 创建集合失败: {e}")
+            logger.info(f"[Milvus] 创建集合失败: {e}")
             return False
 
     def delete_collection(self, name: str) -> bool:
@@ -642,7 +642,7 @@ class MilvusVectorDB(VectorDBInterface):
             utility.drop_collection(name)
             return True
         except Exception as e:
-            print(f"[Milvus] 删除集合失败: {e}")
+            logger.info(f"[Milvus] 删除集合失败: {e}")
             return False
 
     def insert(self, ids: List[str], embeddings: List[List[float]],
@@ -669,7 +669,7 @@ class MilvusVectorDB(VectorDBInterface):
             return True
 
         except Exception as e:
-            print(f"[Milvus] 插入失败: {e}")
+            logger.info(f"[Milvus] 插入失败: {e}")
             return False
 
     def search(self, query_vector: List[float], top_k: int = 10,
@@ -709,7 +709,7 @@ class MilvusVectorDB(VectorDBInterface):
             return formatted
 
         except Exception as e:
-            print(f"[Milvus] 检索失败: {e}")
+            logger.info(f"[Milvus] 检索失败: {e}")
             return []
 
     def search_by_text(self, text: str, top_k: int = 10,
@@ -725,12 +725,15 @@ class MilvusVectorDB(VectorDBInterface):
             # Milvus 删除接口
             return True
         except Exception as e:
-            print(f"[Milvus] 删除失败: {e}")
+            logger.info(f"[Milvus] 删除失败: {e}")
             return False
 
     def get_collection_info(self, name: str) -> Dict:
         try:
             from pymilvus import utility, Collection
+from core.logger import get_logger
+logger = get_logger('regulation_vector_db')
+
 
             if not utility.has_collection(name):
                 return {}
@@ -743,7 +746,7 @@ class MilvusVectorDB(VectorDBInterface):
             }
 
         except Exception as e:
-            print(f"[Milvus] 获取集合信息失败: {e}")
+            logger.info(f"[Milvus] 获取集合信息失败: {e}")
             return {}
 
 
@@ -886,11 +889,11 @@ class PrivateRegulationDB:
             dimension
         )
 
-        print(f"[RegulationDB] 初始化完成")
-        print(f"  - 数据库类型: {self.db_config.db_type.value}")
-        print(f"  - 嵌入模型: {self.embedding_model.get_model_name()}")
-        print(f"  - 向量维度: {dimension}")
-        print(f"  - 持久化目录: {self.persist_directory}")
+        logger.info(f"[RegulationDB] 初始化完成")
+        logger.info(f"  - 数据库类型: {self.db_config.db_type.value}")
+        logger.info(f"  - 嵌入模型: {self.embedding_model.get_model_name()}")
+        logger.info(f"  - 向量维度: {dimension}")
+        logger.info(f"  - 持久化目录: {self.persist_directory}")
 
         return True
 
@@ -1119,7 +1122,7 @@ class PrivateRegulationDB:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"[RegulationDB] 导出失败: {e}")
+            logger.info(f"[RegulationDB] 导出失败: {e}")
             return False
 
     def import_metadata(self, filepath: str) -> bool:
@@ -1134,7 +1137,7 @@ class PrivateRegulationDB:
 
             return True
         except Exception as e:
-            print(f"[RegulationDB] 导入失败: {e}")
+            logger.info(f"[RegulationDB] 导入失败: {e}")
             return False
 
 
@@ -1207,8 +1210,8 @@ def example_usage():
     """使用示例"""
 
     # 1. 创建法规库（使用 Chroma + all-MiniLM-L6-v2）
-    print("=" * 60)
-    print("创建私有法规库...")
+    logger.info("=" * 60)
+    logger.info("创建私有法规库...")
     db = create_regulation_db(
         db_type="chroma",
         embedding_model="all-MiniLM-L6-v2",
@@ -1216,7 +1219,7 @@ def example_usage():
     )
 
     # 2. 添加示例法规
-    print("\n添加法规...")
+    logger.info("\n添加法规...")
     sample_laws = [
         RegulationLaw(
             law_id="law_001",
@@ -1252,10 +1255,10 @@ def example_usage():
 
     for law in sample_laws:
         db.add_law(law)
-        print(f"  添加: {law.title}")
+        logger.info(f"  添加: {law.title}")
 
     # 3. 执行检索
-    print("\n执行检索...")
+    logger.info("\n执行检索...")
     queries = [
         "公司股东权益保护",
         "劳动者合同权益",
@@ -1263,21 +1266,21 @@ def example_usage():
     ]
 
     for query in queries:
-        print(f"\n查询: '{query}'")
+        logger.info(f"\n查询: '{query}'")
         results = db.search(query, top_k=3)
         for result in results:
-            print(f"  [{result.rank}] {result.law.title} (得分: {result.score:.4f})")
-            print(f"      高亮: {result.highlight[:80]}...")
+            logger.info(f"  [{result.rank}] {result.law.title} (得分: {result.score:.4f})")
+            logger.info(f"      高亮: {result.highlight[:80]}...")
 
     # 4. 统计信息
-    print("\n统计信息:")
+    logger.info("\n统计信息:")
     stats = db.get_statistics()
     for key, value in stats.items():
-        print(f"  {key}: {value}")
+        logger.info(f"  {key}: {value}")
 
     # 5. 断开连接
     db.disconnect()
-    print("\n完成!")
+    logger.info("\n完成!")
 
 
 if __name__ == "__main__":

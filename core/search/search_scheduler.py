@@ -16,6 +16,9 @@ from .tier_router import TierRouter
 from .result_fusion import ResultFusion
 from .api_monitor import APIMonitor, MonitorConfig
 from .tier4_engines import LocalCacheEngine
+from core.logger import get_logger
+logger = get_logger('search.search_scheduler')
+
 
 
 class SearchScheduler:
@@ -113,7 +116,7 @@ class SearchScheduler:
                     await self._save_to_cache(query, router_results)
             
         except Exception as e:
-            print(f"[SearchScheduler] Search failed: {e}")
+            logger.info(f"[SearchScheduler] Search failed: {e}")
         
         # 3. 融合结果
         fusion_result = self.fusion.fuse(
@@ -190,7 +193,7 @@ class SearchScheduler:
                     
                     return fusion_result
             except Exception as e:
-                print(f"[SearchScheduler] Load cache failed: {e}")
+                logger.info(f"[SearchScheduler] Load cache failed: {e}")
         
         return None
     

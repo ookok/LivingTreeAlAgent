@@ -17,6 +17,9 @@ from dataclasses import dataclass
 
 try:
     from huggingface_hub import hf_hub_download, list_files_info
+from core.logger import get_logger
+logger = get_logger('smolllm2.downloader')
+
     HAS_HUGGINGFACE_HUB = True
 except ImportError:
     HAS_HUGGINGFACE_HUB = False
@@ -159,7 +162,7 @@ class HuggingFaceDownloader:
         else:
             file_info = self.find_best_gguf(repo_id, prefer_quant)
             if not file_info:
-                print(f"未找到 GGUF 文件: {repo_id}")
+                logger.info(f"未找到 GGUF 文件: {repo_id}")
                 return None
 
         # 本地路径
@@ -167,12 +170,12 @@ class HuggingFaceDownloader:
 
         # 检查是否已存在
         if local_path.exists() and not force:
-            print(f"文件已存在: {local_path}")
+            logger.info(f"文件已存在: {local_path}")
             return local_path
 
         # 下载
         try:
-            print(f"正在下载: {repo_id}/{file_info.filename}")
+            logger.info(f"正在下载: {repo_id}/{file_info.filename}")
             downloaded = hf_hub_download(
                 repo_id=repo_id,
                 filename=file_info.filename,
@@ -181,7 +184,7 @@ class HuggingFaceDownloader:
             )
             return Path(downloaded)
         except Exception as e:
-            print(f"下载失败: {e}")
+            logger.info(f"下载失败: {e}")
             return None
 
     def get_model_info(self, repo_id: str) -> Dict:
@@ -205,7 +208,7 @@ def find_smallest_gguf(repo_id: str) -> Optional[str]:
 
     用法：
     >>> url = find_smallest_gguf("second-state/SmolLM2-135M-Instruct-GGUF")
-    >>> print(url)
+    >>> logger.info(url)
     'https://huggingface.co/second-state/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf'
     """
     if not HAS_HUGGINGFACE_HUB:
@@ -225,7 +228,7 @@ def download_smolllm2(
 
     用法：
     >>> path = download_smolllm2()
-    >>> print(path)
+    >>> logger.info(path)
     PosixPath('/root/.hermes-desktop/models/smollm2-135m-instruct-q4_k_m.gguf')
     """
     downloader = HuggingFaceDownloader(cache_dir=cache_dir)

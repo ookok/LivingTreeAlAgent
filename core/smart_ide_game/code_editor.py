@@ -9,6 +9,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 import hashlib
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.code_editor')
+
 
 
 class TokenType(Enum):
@@ -645,7 +648,7 @@ class CompletionEngine:
         """初始化内置补全项"""
         # Python 内置
         self.builtins["python"] = [
-            CompletionItem(label="print", kind="function", detail="print(*objects, sep=' ', end='\\n')"),
+            CompletionItem(label="print", kind="function", detail="logger.info(*objects, sep=' ', end='\\n')"),
             CompletionItem(label="len", kind="function", detail="len(s) -> int"),
             CompletionItem(label="range", kind="function", detail="range(stop) / range(start, stop[, step])"),
             CompletionItem(label="str", kind="class", detail="str(object='') -> str"),

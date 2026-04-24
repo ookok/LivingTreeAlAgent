@@ -258,7 +258,7 @@ class HardwareDetector:
             ]
 
             for dev_info in mock_usb_devices:
-                fingerprint = self._generate_fingerprint(
+                fingerprint = self._generate_fingerlogger.info(
                     dev_info["vid"],
                     dev_info["pid"],
                     dev_info["serial"],
@@ -315,7 +315,7 @@ class HardwareDetector:
             ]
 
             for dev_info in mock_bt_devices:
-                fingerprint = self._generate_bluetooth_fingerprint(
+                fingerprint = self._generate_bluetooth_fingerlogger.info(
                     dev_info["address"],
                     dev_info["name"],
                     dev_info["device_class"]
@@ -351,7 +351,7 @@ class HardwareDetector:
             ]
 
             for dev_info in mock_wifi_devices:
-                fingerprint = self._generate_network_fingerprint(
+                fingerprint = self._generate_network_fingerlogger.info(
                     dev_info["ip"],
                     dev_info["name"],
                     dev_info["protocol"]
@@ -386,7 +386,7 @@ class HardwareDetector:
             ]
 
             for dev_info in mock_serial_devices:
-                fingerprint = self._generate_fingerprint(
+                fingerprint = self._generate_fingerlogger.info(
                     dev_info["vid"],
                     dev_info["pid"],
                     dev_info["port"],
@@ -413,7 +413,7 @@ class HardwareDetector:
         except Exception as e:
             logger.error(f"[HardwareMind] 串口扫描失败: {e}")
 
-    def _generate_fingerprint(self, vid: str, pid: str, serial: str,
+    def _generate_fingerlogger.info(self, vid: str, pid: str, serial: str,
                                manufacturer: str, product: str,
                                protocol: ProtocolType) -> HardwareFingerprint:
         """生成USB硬件指纹"""
@@ -436,7 +436,7 @@ class HardwareDetector:
         fingerprint_input = f"{vid}:{pid}:{serial}:{manufacturer}"
         fingerprint_id = hashlib.sha256(fingerprint_input.encode()).hexdigest()[:16]
 
-        return HardwareFingerprint(
+        return HardwareFingerlogger.info(
             fingerprint_id=fingerprint_id,
             vid=vid,
             pid=pid,
@@ -452,7 +452,7 @@ class HardwareDetector:
             confidence=1.0
         )
 
-    def _generate_bluetooth_fingerprint(self, address: str, name: str,
+    def _generate_bluetooth_fingerlogger.info(self, address: str, name: str,
                                         device_class: str) -> HardwareFingerprint:
         """生成蓝牙硬件指纹"""
         fingerprint_id = hashlib.sha256(address.encode()).hexdigest()[:16]
@@ -463,7 +463,7 @@ class HardwareDetector:
         if "Wearable" in device_class:
             capability_bits |= 0x10  # 可穿戴
 
-        return HardwareFingerprint(
+        return HardwareFingerlogger.info(
             fingerprint_id=fingerprint_id,
             serial_number=address,
             manufacturer="Bluetooth SIG",
@@ -478,12 +478,12 @@ class HardwareDetector:
             confidence=0.9
         )
 
-    def _generate_network_fingerprint(self, ip: str, name: str,
+    def _generate_network_fingerlogger.info(self, ip: str, name: str,
                                         protocol: str) -> HardwareFingerprint:
         """生成网络设备指纹"""
         fingerprint_id = hashlib.sha256(ip.encode()).hexdigest()[:16]
 
-        return HardwareFingerprint(
+        return HardwareFingerlogger.info(
             fingerprint_id=fingerprint_id,
             serial_number=ip,
             manufacturer="Network Device",
@@ -1426,6 +1426,9 @@ class AutoTestEngine:
 
             # 模拟结果 (90%通过率)
             import random
+from core.logger import get_logger
+logger = get_logger('hardware_mind.__init__')
+
             passed = random.random() > 0.1
 
             result = {

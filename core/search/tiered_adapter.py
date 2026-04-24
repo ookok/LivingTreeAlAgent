@@ -12,6 +12,9 @@ from datetime import datetime
 # 尝试导入分层搜索模块
 try:
     from core.search import (
+from core.logger import get_logger
+logger = get_logger('search.tiered_adapter')
+
         SearchScheduler,
         TierRouter,
         TierLevel,
@@ -36,7 +39,7 @@ class TieredSearchAdapter:
     async def initialize(self):
         """初始化分层搜索调度器"""
         if not TIERED_SEARCH_AVAILABLE:
-            print("[TieredSearchAdapter] 分层搜索模块不可用")
+            logger.info("[TieredSearchAdapter] 分层搜索模块不可用")
             return
         
         if self._initialized:
@@ -45,9 +48,9 @@ class TieredSearchAdapter:
         try:
             self.scheduler = SearchScheduler()
             self._initialized = True
-            print("[TieredSearchAdapter] 分层搜索已初始化")
+            logger.info("[TieredSearchAdapter] 分层搜索已初始化")
         except Exception as e:
-            print(f"[TieredSearchAdapter] 初始化失败: {e}")
+            logger.info(f"[TieredSearchAdapter] 初始化失败: {e}")
     
     async def search(
         self, 
@@ -124,7 +127,7 @@ class TieredSearchAdapter:
             }
             
         except Exception as e:
-            print(f"[TieredSearchAdapter] 搜索失败: {e}")
+            logger.info(f"[TieredSearchAdapter] 搜索失败: {e}")
             return None
     
     async def batch_search(

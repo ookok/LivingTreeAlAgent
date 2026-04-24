@@ -68,7 +68,7 @@ class ReflectiveAgentLoop:
 
     # 执行任务
     result = await loop.execute_with_reflection("帮我搜索AI的最新进展")
-    print(result.final_result)
+    logger.info(result.final_result)
     ```
     """
 
@@ -108,7 +108,7 @@ class ReflectiveAgentLoop:
         """
         self._executors[action] = handler
         if self.config.verbose:
-            print(f"[ReflectiveLoop] Registered executor: {action}")
+            logger.info(f"[ReflectiveLoop] Registered executor: {action}")
 
     def register_planner(self, planner: PlannerFunc):
         """注册规划器"""
@@ -147,7 +147,7 @@ class ReflectiveAgentLoop:
             result.attempt_number = attempt
 
             if self.config.verbose:
-                print(f"\n[ReflectiveLoop] Attempt {attempt}/{self.config.max_attempts}")
+                logger.info(f"\n[ReflectiveLoop] Attempt {attempt}/{self.config.max_attempts}")
 
             try:
                 # ==================== 阶段1：规划 ====================
@@ -175,7 +175,7 @@ class ReflectiveAgentLoop:
                 self.stats["total_reflections"] += 1
 
                 if self.config.verbose:
-                    print(f"[ReflectiveLoop] Reflection: success={reflection.success}")
+                    logger.info(f"[ReflectiveLoop] Reflection: success={reflection.success}")
 
                 # 检查是否成功
                 if reflection.success:
@@ -193,7 +193,7 @@ class ReflectiveAgentLoop:
                 self.stats["total_improvements"] += len(improvement_plan.improvements)
 
                 if self.config.verbose:
-                    print(f"[ReflectiveLoop] Generated {len(improvement_plan.improvements)} improvements")
+                    logger.info(f"[ReflectiveLoop] Generated {len(improvement_plan.improvements)} improvements")
 
                 # 应用改进到计划
                 current_plan = self._improvement_generator.apply_improvements(
@@ -224,7 +224,7 @@ class ReflectiveAgentLoop:
                 result.add_error(error)
 
                 if self.config.verbose:
-                    print(f"[ReflectiveLoop] Error during attempt {attempt}: {e}")
+                    logger.info(f"[ReflectiveLoop] Error during attempt {attempt}: {e}")
 
         # ==================== 最终结果 ====================
         if result.status == ExecutionStatus.RUNNING:
@@ -302,6 +302,9 @@ class ReflectiveAgentLoop:
 
         # 创建指标对象
         from .execution_result import ExecutionMetrics
+from core.logger import get_logger
+logger = get_logger('reflective_agent.reflective_loop')
+
         metrics = ExecutionMetrics()
 
         for step in plan.steps:

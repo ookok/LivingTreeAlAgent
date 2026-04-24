@@ -273,7 +273,7 @@ class FeedSafetyFilter:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(items))
         except Exception as e:
-            print(f"[FeedSafetyFilter] Save list failed: {e}")
+            logger.info(f"[FeedSafetyFilter] Save list failed: {e}")
 
     def _load_review_queue(self) -> List[Dict]:
         path = self.data_dir / "review_queue.json"
@@ -290,10 +290,13 @@ class FeedSafetyFilter:
         path = self.data_dir / "review_queue.json"
         try:
             import json
+from core.logger import get_logger
+logger = get_logger('feed_aggregator.safety_filter')
+
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._review_queue, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[FeedSafetyFilter] Save queue failed: {e}")
+            logger.info(f"[FeedSafetyFilter] Save queue failed: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         """获取统计"""

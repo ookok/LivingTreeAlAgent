@@ -10,6 +10,9 @@ from datetime import datetime
 
 from .template_library import ExpertTemplateLibrary
 from .router import ExpertRouter, RoutingDecision, QueryDomain
+from core.logger import get_logger
+logger = get_logger('expert_distillation.l4_caller')
+
 
 
 @dataclass
@@ -47,8 +50,8 @@ class L4EnhancedCaller:
         )
 
         result = caller.call("分析贵州茅台的估值")
-        print(result.response)
-        print(f"专家提示: {result.expert_hint}")
+        logger.info(result.response)
+        logger.info(f"专家提示: {result.expert_hint}")
     """
 
     def __init__(

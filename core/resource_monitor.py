@@ -169,13 +169,16 @@ class ResourceMonitor:
         try:
             import GPUtil
             self._gpu_available = True
-            print("✓ GPU 监控已启用")
+            logger.info("✓ GPU 监控已启用")
         except ImportError:
             try:
                 import pynvml
+from core.logger import get_logger
+logger = get_logger('resource_monitor')
+
                 pynvml.nvmlInit()
                 self._gpu_available = True
-                print("✓ NVIDIA GPU 监控已启用")
+                logger.info("✓ NVIDIA GPU 监控已启用")
             except (ImportError, Exception):
                 self._gpu_available = False
 
@@ -186,14 +189,14 @@ class ResourceMonitor:
         self._running = True
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        print(f"✓ 资源监控已启动 (interval={self.interval}s)")
+        logger.info(f"✓ 资源监控已启动 (interval={self.interval}s)")
 
     def stop(self):
         """停止监控"""
         self._running = False
         if self._thread:
             self._thread.join(timeout=10)
-        print("✓ 资源监控已停止")
+        logger.info("✓ 资源监控已停止")
 
     def _monitor_loop(self):
         """监控循环"""
@@ -222,7 +225,7 @@ class ResourceMonitor:
                 time.sleep(self.interval)
 
             except Exception as e:
-                print(f"⚠️ 监控采样失败: {e}")
+                logger.info(f"⚠️ 监控采样失败: {e}")
                 time.sleep(self.interval)
 
     def _take_snapshot(
@@ -353,14 +356,14 @@ class ResourceMonitor:
             try:
                 callback(alert)
             except Exception as e:
-                print(f"⚠️ 告警回调失败: {e}")
+                logger.info(f"⚠️ 告警回调失败: {e}")
 
     def _notify_load_change(self, load: LoadLevel):
         for callback in self._load_callbacks:
             try:
                 callback(load)
             except Exception as e:
-                print(f"⚠️ 负载回调失败: {e}")
+                logger.info(f"⚠️ 负载回调失败: {e}")
 
     def get_current_snapshot(self) -> Optional[ResourceSnapshot]:
         with self._lock:

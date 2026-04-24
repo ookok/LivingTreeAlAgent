@@ -52,14 +52,14 @@ class EvolutionScheduler:
         self._running = True
         self._thread = threading.Thread(target=self._idle_loop, daemon=True)
         self._thread.start()
-        print("[EvolutionScheduler] Started")
+        logger.info("[EvolutionScheduler] Started")
 
     def stop(self):
         """停止调度器"""
         self._running = False
         if self._thread:
             self._thread.join(timeout=2)
-        print("[EvolutionScheduler] Stopped")
+        logger.info("[EvolutionScheduler] Stopped")
 
     def _idle_loop(self):
         """空闲检测循环"""
@@ -69,7 +69,7 @@ class EvolutionScheduler:
                     self._trigger_idle_evolution()
                 time.sleep(self._idle_check_interval)
             except Exception as e:
-                print(f"[EvolutionScheduler] Idle loop error: {e}")
+                logger.info(f"[EvolutionScheduler] Idle loop error: {e}")
 
     def _is_idle(self) -> bool:
         """检查是否空闲"""
@@ -266,18 +266,21 @@ class EvolutionScheduler:
                 try:
                     self._on_idle_debate(topic)
                 except Exception as e:
-                    print(f"[EvolutionScheduler] Idle debate failed: {e}")
+                    logger.info(f"[EvolutionScheduler] Idle debate failed: {e}")
 
         if self._on_idle_external:
             try:
                 self._on_idle_external()
             except Exception as e:
-                print(f"[EvolutionScheduler] Idle external failed: {e}")
+                logger.info(f"[EvolutionScheduler] Idle external failed: {e}")
 
     def _pick_idle_topic(self) -> str:
         """选择空闲辩论主题"""
         # 从知识库中选择待审核或争议性主题
         from .knowledge_base import get_knowledge_base
+from core.logger import get_logger
+logger = get_logger('self_upgrade.evolution_scheduler')
+
         kb = get_knowledge_base()
 
         pending = kb.get_all(verdict=None, limit=5)

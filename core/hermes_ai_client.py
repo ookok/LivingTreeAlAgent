@@ -159,7 +159,7 @@ class UserBehaviorLearner:
         # 知识图谱
         self.knowledge_graph: Dict[str, List[str]] = {}
 
-        print(f"[UserBehavior] 初始化用户 {user_id} 的行为学习引擎")
+        logger.info(f"[UserBehavior] 初始化用户 {user_id} 的行为学习引擎")
 
     def record_access(self, url: str, intent: IntentType, duration: float = 0,
                      success: bool = True, content_type: str = ""):
@@ -324,7 +324,7 @@ class NetworkQualityEstimator:
         self.current_quality: str = "good"
         self.current_latency: float = 100.0
         self.is_censored: bool = False
-        print("[NetworkQuality] 初始化网络质量评估器")
+        logger.info("[NetworkQuality] 初始化网络质量评估器")
 
     async def check_quality(self, target: str = "https://www.google.com") -> NetworkContext:
         """检查网络质量"""
@@ -553,6 +553,9 @@ class ContentEnhancementCapability(AICapability):
                 enhancements.append("Code examples extracted")
 
             import re
+from core.logger import get_logger
+logger = get_logger('hermes_ai_client')
+
             urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
             if len(urls) > 5:
                 enhancements.append(f"{len(urls)} links found - parallel prefetch possible")
@@ -676,7 +679,7 @@ class HermesAIClient:
             "avg_latency_ms": 0
         }
 
-        print(f"[HermesAI] 初始化 AI 客户端 (用户: {user_id})")
+        logger.info(f"[HermesAI] 初始化 AI 客户端 (用户: {user_id})")
 
     async def process(self, request: AIRequest) -> AIResponse:
         """处理AI请求"""
@@ -799,13 +802,13 @@ def get_hermes_ai_client(user_id: str = "default") -> HermesAIClient:
 async def example_usage():
     """使用示例"""
 
-    print("=" * 60)
-    print("Hermes AI Client 示例")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Hermes AI Client 示例")
+    logger.info("=" * 60)
 
     client = get_hermes_ai_client("developer")
 
-    print("\n1. 智能URL处理:")
+    logger.info("\n1. 智能URL处理:")
     urls = [
         "https://github.com/microsoft/vscode",
         "https://stackoverflow.com/questions/12345678",
@@ -814,12 +817,12 @@ async def example_usage():
 
     for url in urls:
         result = await client.intelligent_fetch(url)
-        print(f"\n  URL: {url}")
-        print(f"    预测意图: {result['predicted_intent'].value}")
-        print(f"    路由类型: {result['route']['type']}")
-        print(f"    预取建议: {len(result['prefetch_urls'])} 个URL")
+        logger.info(f"\n  URL: {url}")
+        logger.info(f"    预测意图: {result['predicted_intent'].value}")
+        logger.info(f"    路由类型: {result['route']['type']}")
+        logger.info(f"    预取建议: {len(result['prefetch_urls'])} 个URL")
 
-    print("\n2. 用户行为学习:")
+    logger.info("\n2. 用户行为学习:")
     client.behavior_learner.record_access(
         "https://github.com/torvalds/linux", IntentType.CODE, duration=30
     )
@@ -834,15 +837,15 @@ async def example_usage():
     intent, confidence = client.behavior_learner.predict_intent(
         "https://github.com/django/django", ctx
     )
-    print(f"    预测意图: {intent.value} (置信度: {confidence:.2f})")
+    logger.info(f"    预测意图: {intent.value} (置信度: {confidence:.2f})")
 
-    print("\n3. 知识图谱学习:")
+    logger.info("\n3. 知识图谱学习:")
     client.learn_concept("Python", "Django")
     client.learn_concept("Python", "Flask")
     client.learn_concept("Django", "Web开发")
-    print("    已学习: Python <-> Django, Python <-> Flask, Django <-> Web开发")
+    logger.info("    已学习: Python <-> Django, Python <-> Flask, Django <-> Web开发")
 
-    print("\n4. AI请求处理:")
+    logger.info("\n4. AI请求处理:")
     request = AIRequest(
         request_id="req_001",
         user_intent=IntentType.CODE,
@@ -851,17 +854,17 @@ async def example_usage():
     )
 
     response = await client.process(request)
-    print(f"    请求ID: {response.request_id}")
-    print(f"    成功: {response.success}")
-    print(f"    执行动作: {response.actions_taken}")
-    print(f"    预测: {response.predictions}")
-    print(f"    延迟: {response.latency_ms:.2f}ms")
+    logger.info(f"    请求ID: {response.request_id}")
+    logger.info(f"    成功: {response.success}")
+    logger.info(f"    执行动作: {response.actions_taken}")
+    logger.info(f"    预测: {response.predictions}")
+    logger.info(f"    延迟: {response.latency_ms:.2f}ms")
 
-    print("\n5. 统计信息:")
+    logger.info("\n5. 统计信息:")
     stats = client.get_statistics()
-    print(f"    总请求: {stats['total_requests']}")
-    print(f"    行为学习: {stats['behavior']['unique_urls']} 个URL")
-    print(f"    知识概念: {stats['behavior']['knowledge_concepts']} 个")
+    logger.info(f"    总请求: {stats['total_requests']}")
+    logger.info(f"    行为学习: {stats['behavior']['unique_urls']} 个URL")
+    logger.info(f"    知识概念: {stats['behavior']['knowledge_concepts']} 个")
 
 
 if __name__ == "__main__":

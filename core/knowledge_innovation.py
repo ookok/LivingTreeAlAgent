@@ -195,6 +195,9 @@ class SemanticDeduplicator:
         try:
             # 使用 Ollama 获取嵌入
             from core.ollama_client import OllamaClient
+from core.logger import get_logger
+logger = get_logger('knowledge_innovation')
+
             client = OllamaClient()
 
             # Ollama 的 embeddings API
@@ -1965,12 +1968,12 @@ class KnowledgeInnovationEngine:
 
 def test_innovation_modules():
     """测试创新模块"""
-    print("=" * 60)
-    print("测试知识库创新模块")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试知识库创新模块")
+    logger.info("=" * 60)
 
     # 1. 测试语义去重
-    print("\n1. 测试语义去重引擎")
+    logger.info("\n1. 测试语义去重引擎")
     dedup = get_semantic_dedup()
 
     texts = [
@@ -1980,10 +1983,10 @@ def test_innovation_modules():
     ]
 
     is_dup, dup_id, sim = dedup.is_duplicate(texts[1], [(f"doc_{i}", t) for i, t in enumerate(texts)])
-    print(f"   '{texts[1]}' 与已有文本重复: {is_dup}, 相似度: {sim:.3f}")
+    logger.info(f"   '{texts[1]}' 与已有文本重复: {is_dup}, 相似度: {sim:.3f}")
 
     # 2. 测试价值评估
-    print("\n2. 测试价值评估")
+    logger.info("\n2. 测试价值评估")
     scorer = get_value_scorer()
     score = scorer.calculate_score(
         doc_id="test_doc",
@@ -1991,33 +1994,33 @@ def test_innovation_modules():
         source_url="https://arxiv.org/paper/123",
         created_at=datetime.now() - timedelta(days=30)
     )
-    print(f"   评分: {score.total_score:.1f}, 引用: {score.citation_score:.1f}, 权威: {score.authority_score:.1f}")
+    logger.info(f"   评分: {score.total_score:.1f}, 引用: {score.citation_score:.1f}, 权威: {score.authority_score:.1f}")
 
     # 3. 测试主动学习
-    print("\n3. 测试主动学习")
+    logger.info("\n3. 测试主动学习")
     learner = get_active_learner()
     learner.on_query("如何学习Python", result_count=5)
     learner.on_query("如何学习Python", result_count=5)
     learner.on_query("如何学习Python", result_count=5)  # 触发FAQ
-    print(f"   待处理触发: {len(learner.get_pending_triggers())}")
-    print(f"   统计: {learner.get_stats()}")
+    logger.info(f"   待处理触发: {len(learner.get_pending_triggers())}")
+    logger.info(f"   统计: {learner.get_stats()}")
 
     # 4. 测试知识图谱
-    print("\n4. 测试知识图谱")
+    logger.info("\n4. 测试知识图谱")
     kg = get_kg_enhancer()
     result = kg.enhance_knowledge("test", "Python是一种编程语言, 使用Python可以开发网站")
-    print(f"   提取实体: {result['entities_extracted']}, 关系: {result['relations_extracted']}")
+    logger.info(f"   提取实体: {result['entities_extracted']}, 关系: {result['relations_extracted']}")
 
     # 5. 测试遗忘机制
-    print("\n5. 测试遗忘机制")
+    logger.info("\n5. 测试遗忘机制")
     forgetting = get_forgetting_mechanism()
     forgetting.register_knowledge("test_doc", "这是一段测试内容")
     forgetting.on_access("test_doc")
     stats = forgetting.get_memory_stats()
-    print(f"   记忆统计: {stats}")
+    logger.info(f"   记忆统计: {stats}")
 
-    print("\n" + "=" * 60)
-    print("测试完成!")
+    logger.info("\n" + "=" * 60)
+    logger.info("测试完成!")
 
 
 if __name__ == "__main__":

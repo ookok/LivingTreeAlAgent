@@ -96,10 +96,10 @@ class ExternalAbsorption:
                 })
             return result
         except ImportError:
-            print("[ExternalAbsorption] PyGithub not installed")
+            logger.info("[ExternalAbsorption] PyGithub not installed")
             return []
         except Exception as e:
-            print(f"[ExternalAbsorption] GitHub fetch failed: {e}")
+            logger.info(f"[ExternalAbsorption] GitHub fetch failed: {e}")
             return []
 
     async def fetch_zhihu_daily(self, topic: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -152,6 +152,9 @@ class ExternalAbsorption:
 
         # 安全审查
         from .safety_pipeline import check_safety
+from core.logger import get_logger
+logger = get_logger('self_upgrade.external_absorption')
+
         safety_result = check_safety(
             insight.content_summary + " " + " ".join(insight.key_points)
         )

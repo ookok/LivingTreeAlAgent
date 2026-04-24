@@ -102,7 +102,7 @@ class DuckDuckGoEngine(BaseGlobalEngine):
                         ))
                 
         except Exception as e:
-            print(f"[DuckDuckGoEngine] Search failed: {e}")
+            logger.info(f"[DuckDuckGoEngine] Search failed: {e}")
         
         return results[:num_results]
 
@@ -180,7 +180,7 @@ class WikipediaEngine(BaseGlobalEngine):
                         ))
                     
             except Exception as e:
-                print(f"[WikipediaEngine] Search failed ({source_name}): {e}")
+                logger.info(f"[WikipediaEngine] Search failed ({source_name}): {e}")
                 continue
         
         return results[:num_results]
@@ -249,7 +249,7 @@ class OpenLibraryEngine(BaseGlobalEngine):
                     ))
                 
         except Exception as e:
-            print(f"[OpenLibraryEngine] Search failed: {e}")
+            logger.info(f"[OpenLibraryEngine] Search failed: {e}")
         
         return results
 
@@ -300,7 +300,7 @@ class RedditEngine(BaseGlobalEngine):
                 data = r.json()
                 return data.get("access_token")
         except Exception as e:
-            print(f"[RedditEngine] Auth failed: {e}")
+            logger.info(f"[RedditEngine] Auth failed: {e}")
             return None
     
     async def search(self, query: str, num_results: int = 10) -> List[SearchResult]:
@@ -348,13 +348,16 @@ class RedditEngine(BaseGlobalEngine):
                     ))
                     
         except Exception as e:
-            print(f"[RedditEngine] Search failed: {e}")
+            logger.info(f"[RedditEngine] Search failed: {e}")
         
         return results
 
 
 # 辅助函数
 from datetime import datetime
+from core.logger import get_logger
+logger = get_logger('search.tier3_engines')
+
 
 
 __all__ = [

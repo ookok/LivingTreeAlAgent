@@ -153,14 +153,14 @@ def _print_status(node):
     """打印状态"""
     try:
         status = node.get_status()
-        print("\n" + "=" * 60)
-        print(f"节点状态: {status['node_id']}")
-        print(f"  角色: {status['role']}")
-        print(f"  协调者: {status['coordinator'] or '无'}")
-        print(f"  连接数: {status['connections']}")
-        print(f"  待分发任务: {status['task_distributor']['pending']}")
-        print(f"  运行中任务: {status['task_distributor']['running']}")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info(f"节点状态: {status['node_id']}")
+        logger.info(f"  角色: {status['role']}")
+        logger.info(f"  协调者: {status['coordinator'] or '无'}")
+        logger.info(f"  连接数: {status['connections']}")
+        logger.info(f"  待分发任务: {status['task_distributor']['pending']}")
+        logger.info(f"  运行中任务: {status['task_distributor']['running']}")
+        logger.info("=" * 60)
     except:
         pass
 
@@ -427,6 +427,9 @@ def main():
         # 控制台模式
         if args.daemon:
             import threading
+from core.logger import get_logger
+logger = get_logger('relay_chain.event_ext.p2p_network.zero_config')
+
             thread = threading.Thread(target=node.start, daemon=True)
             thread.start()
             logger.info(f"节点在后台运行: {node.node_id}")

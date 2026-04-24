@@ -14,6 +14,9 @@ from datetime import datetime, timedelta
 import re
 
 from .models import SearchResult, TierLevel, APIConfig
+from core.logger import get_logger
+logger = get_logger('search.tier4_engines')
+
 
 
 class BaseFallbackEngine:
@@ -98,7 +101,7 @@ class LocalCacheEngine(BaseFallbackEngine):
                 return results
                 
             except Exception as e:
-                print(f"[LocalCacheEngine] Load cache failed: {e}")
+                logger.info(f"[LocalCacheEngine] Load cache failed: {e}")
         
         # 模糊匹配 - 在缓存目录中搜索相似查询
         results = await self._fuzzy_search(query, num_results)
@@ -169,7 +172,7 @@ class LocalCacheEngine(BaseFallbackEngine):
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[LocalCacheEngine] Save cache failed: {e}")
+            logger.info(f"[LocalCacheEngine] Save cache failed: {e}")
 
 
 class KnowledgeBaseEngine(BaseFallbackEngine):
@@ -311,7 +314,7 @@ class KnowledgeBaseEngine(BaseFallbackEngine):
                         ))
                         
             except Exception as e:
-                print(f"[KnowledgeBaseEngine] Load user KB failed: {e}")
+                logger.info(f"[KnowledgeBaseEngine] Load user KB failed: {e}")
         
         return results
     
@@ -340,7 +343,7 @@ class KnowledgeBaseEngine(BaseFallbackEngine):
                 json.dump(custom_kb, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"[KnowledgeBaseEngine] Add to KB failed: {e}")
+            logger.info(f"[KnowledgeBaseEngine] Add to KB failed: {e}")
             return False
 
 
@@ -417,7 +420,7 @@ class SemanticsCacheEngine(BaseFallbackEngine):
                         results.append(result)
                         
         except Exception as e:
-            print(f"[SemanticsCacheEngine] Search failed: {e}")
+            logger.info(f"[SemanticsCacheEngine] Search failed: {e}")
         
         return results[:num_results]
 

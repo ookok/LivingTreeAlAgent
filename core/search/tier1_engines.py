@@ -11,6 +11,9 @@ from typing import List, Optional, Dict, Any
 import httpx
 
 from .models import SearchResult, TierLevel, APIConfig, QueryType
+from core.logger import get_logger
+logger = get_logger('search.tier1_engines')
+
 
 
 class BaseCNEngine:
@@ -106,7 +109,7 @@ class BaiduEngine(BaseCNEngine):
                 results = self._parse_baidu_html(html, num_results)
                 
         except Exception as e:
-            print(f"[BaiduEngine] Search failed: {e}")
+            logger.info(f"[BaiduEngine] Search failed: {e}")
         
         return results
     
@@ -190,7 +193,7 @@ class SogouEngine(BaseCNEngine):
                 results = self._parse_sogou_html(html, num_results)
                 
         except Exception as e:
-            print(f"[SogouEngine] Search failed: {e}")
+            logger.info(f"[SogouEngine] Search failed: {e}")
         
         return results
     
@@ -271,7 +274,7 @@ class So360Engine(BaseCNEngine):
                 results = self._parse_360_html(html, num_results)
                 
         except Exception as e:
-            print(f"[So360Engine] Search failed: {e}")
+            logger.info(f"[So360Engine] Search failed: {e}")
         
         return results
     
@@ -361,7 +364,7 @@ class TiangongEngine(BaseCNEngine):
                         ))
                 
         except Exception as e:
-            print(f"[TiangongEngine] Search failed: {e}")
+            logger.info(f"[TiangongEngine] Search failed: {e}")
         
         return results
 
@@ -428,7 +431,7 @@ class JuhuasuanEngine(BaseCNEngine):
                         ))
                 
         except Exception as e:
-            print(f"[JuhuasuanEngine] Search failed: {e}")
+            logger.info(f"[JuhuasuanEngine] Search failed: {e}")
         
         return results
 

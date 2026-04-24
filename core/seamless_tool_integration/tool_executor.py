@@ -132,8 +132,8 @@ class ToolExecutor:
     executor.add_step("parse", "解析结果")
 
     # 设置回调
-    executor.on_progress(lambda step: print(f"{step.name}: {step.progress}%"))
-    executor.on_log(lambda entry: print(entry.to_string()))
+    executor.on_progress(lambda step: logger.info(f"{step.name}: {step.progress}%"))
+    executor.on_log(lambda entry: logger.info(entry.to_string()))
 
     # 执行
     result = executor.execute(
@@ -418,6 +418,9 @@ class ToolExecutor:
 
             # 监控输出
             import select
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.tool_executor')
+
 
             while True:
                 self._wait_if_paused()
@@ -624,7 +627,7 @@ def run_tool(
     ```python
     result = run_tool("aermod.exe", ["input.inp"], timeout=3600)
     if result.success:
-        print(f"执行成功，耗时: {result.execution_time_formatted}")
+        logger.info(f"执行成功，耗时: {result.execution_time_formatted}")
     ```
     """
     executor = ToolExecutor()

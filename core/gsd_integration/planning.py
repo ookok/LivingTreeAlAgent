@@ -17,6 +17,9 @@ from enum import Enum
 import json
 
 from .gsd_engine import GSDPlan, GSDTask, TaskStatus, create_gsd_task, create_gsd_plan
+from core.logger import get_logger
+logger = get_logger('gsd_integration.planning')
+
 
 
 class AgentType(Enum):
@@ -362,7 +365,7 @@ class Executor:
             try:
                 handler(*args)
             except Exception as e:
-                print(f"[Executor] Hook error: {e}")
+                logger.info(f"[Executor] Hook error: {e}")
 
 
 class WaveExecutor:

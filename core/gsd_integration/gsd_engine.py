@@ -776,7 +776,7 @@ Phase {self.workspace.current_phase}
             try:
                 handler(*args)
             except Exception as e:
-                print(f"[GSDEngine] Event handler error: {e}")
+                logger.info(f"[GSDEngine] Event handler error: {e}")
 
 
 _global_engine: Optional[GSDEngine] = None
@@ -787,6 +787,9 @@ def get_gsd_engine(workspace_path: Optional[str] = None) -> GSDEngine:
     global _global_engine
     if _global_engine is None:
         import os
+from core.logger import get_logger
+logger = get_logger('gsd_integration.gsd_engine')
+
         if workspace_path is None:
             workspace_path = os.getcwd()
         _global_engine = GSDEngine(workspace_path)

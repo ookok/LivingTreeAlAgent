@@ -105,7 +105,7 @@ class PrivacyCleaner:
             r'(' + '|'.join(self.TRACKING_PARAMS) + r')=[^&\s]*',
             re.IGNORECASE
         )
-        print("[PrivacyCleaner] 初始化隐私清理器")
+        logger.info("[PrivacyCleaner] 初始化隐私清理器")
 
     def clean_url(self, url: str) -> str:
         """清理URL中的追踪参数"""
@@ -162,7 +162,7 @@ class CodeExtractor:
             lang: re.compile('|'.join(patterns), re.MULTILINE)
             for lang, patterns in self.LANGUAGE_PATTERNS.items()
         }
-        print("[CodeExtractor] 初始化代码提取器")
+        logger.info("[CodeExtractor] 初始化代码提取器")
 
     def extract(self, content: str) -> List[ExtractedCode]:
         """提取代码片段"""
@@ -234,7 +234,7 @@ class ConceptExtractor:
 
     def __init__(self):
         self.pattern = re.compile('|'.join(self.TECH_PATTERNS), re.IGNORECASE)
-        print("[ConceptExtractor] 初始化概念提取器")
+        logger.info("[ConceptExtractor] 初始化概念提取器")
 
     def extract(self, content: str) -> List[str]:
         """提取关键概念"""
@@ -282,7 +282,7 @@ class LinkAnalyzer:
             cat: re.compile('|'.join(patterns), re.IGNORECASE)
             for cat, patterns in self.LINK_CATEGORIES.items()
         }
-        print("[LinkAnalyzer] 初始化链接分析器")
+        logger.info("[LinkAnalyzer] 初始化链接分析器")
 
     def extract_links(self, content: str, base_url: str = "") -> Dict[str, List[str]]:
         """提取并分类链接"""
@@ -343,7 +343,7 @@ class AI_ContentEnhancer:
         }
 
         self._knowledge_graph: Dict[str, List[str]] = {}
-        print("[AI_ContentEnhancer] 初始化内容增强引擎")
+        logger.info("[AI_ContentEnhancer] 初始化内容增强引擎")
 
     def enhance(self, content: str, url: str = "",
                 content_type: ContentType = ContentType.PLAIN_TEXT,
@@ -468,9 +468,9 @@ def get_content_enhancer() -> AI_ContentEnhancer:
 def example_usage():
     """使用示例"""
 
-    print("=" * 60)
-    print("AI 内容增强系统示例")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("AI 内容增强系统示例")
+    logger.info("=" * 60)
 
     enhancer = get_content_enhancer()
 
@@ -482,6 +482,9 @@ def example_usage():
     ```python
     from django.urls import path
     from rest_framework.routers import DefaultRouter
+from core.logger import get_logger
+logger = get_logger('ai_content_enhancer')
+
 
     router = DefaultRouter()
     router.register(r'users', UserViewSet)
@@ -499,32 +502,32 @@ def example_usage():
     - https://github.com/tomchristie/django-rest-framework
     """
 
-    print("\n1. 内容增强:")
+    logger.info("\n1. 内容增强:")
     result = enhancer.enhance(sample_content, "https://github.com/example/django-tutorial")
 
-    print(f"  原始长度: {result.metadata['original_length']}")
-    print(f"  隐私已清理: {result.privacy_cleaned}")
+    logger.info(f"  原始长度: {result.metadata['original_length']}")
+    logger.info(f"  隐私已清理: {result.privacy_cleaned}")
 
-    print(f"\n2. 应用了 {len(result.enhancements_applied)} 种增强:")
+    logger.info(f"\n2. 应用了 {len(result.enhancements_applied)} 种增强:")
     for e in result.enhancements_applied:
-        print(f"    - {e.value}")
+        logger.info(f"    - {e.value}")
 
-    print(f"\n3. 提取的概念 ({len(result.key_concepts)}):")
+    logger.info(f"\n3. 提取的概念 ({len(result.key_concepts)}):")
     for concept in result.key_concepts[:5]:
-        print(f"    - {concept}")
+        logger.info(f"    - {concept}")
 
-    print(f"\n4. 提取的代码片段 ({len(result.extracted_code)}):")
+    logger.info(f"\n4. 提取的代码片段 ({len(result.extracted_code)}):")
     for code in result.extracted_code:
-        print(f"    - {code.language}: {len(code.code)} 字符")
+        logger.info(f"    - {code.language}: {len(code.code)} 字符")
 
-    print(f"\n5. 摘要:")
-    print(f"    {result.summary[:100]}...")
+    logger.info(f"\n5. 摘要:")
+    logger.info(f"    {result.summary[:100]}...")
 
-    print("\n6. 隐私清理:")
+    logger.info("\n6. 隐私清理:")
     test_url = "https://example.com/page?utm_source=test&fbclid=abc123&q=search"
     cleaned = enhancer.privacy_cleaner.clean_url(test_url)
-    print(f"    原始: {test_url}")
-    print(f"    清理后: {cleaned}")
+    logger.info(f"    原始: {test_url}")
+    logger.info(f"    清理后: {cleaned}")
 
 
 if __name__ == "__main__":

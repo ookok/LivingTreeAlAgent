@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from core.logger import get_logger
+logger = get_logger('discourse_rag')
+
 
 
 class RhetoricalRelation(Enum):
@@ -297,7 +300,7 @@ class DiscourseAwareRAG:
 
         return sum(coherence_scores) / len(coherence_scores) if coherence_scores else 0.5
 
-    def generate_blueprint(
+    def generate_bluelogger.info(
         self,
         query: str,
         retrieval_results: List[RetrievalResult],
@@ -438,11 +441,11 @@ class DiscourseAwareRAG:
 
 def test_discourse_rag():
     """测试 Discourse-Aware RAG"""
-    print("=== 测试 Discourse-Aware RAG ===")
+    logger.info("=== 测试 Discourse-Aware RAG ===")
 
     rag = DiscourseAwareRAG()
 
-    print("\n1. 测试添加文档")
+    logger.info("\n1. 测试添加文档")
     doc1 = """
 Python 是一种高级编程语言。由于其简洁易学的特点，Python 在近年来变得越来越流行。
 首先，Python 拥有丰富的库支持。例如，NumPy 和 Pandas 用于数据分析。
@@ -452,31 +455,31 @@ Python 是一种高级编程语言。由于其简洁易学的特点，Python 在
     """
 
     chunk_ids = rag.add_document(doc1, metadata={"source": "python_intro"})
-    print(f"  添加文档，分割为 {len(chunk_ids)} 个块")
+    logger.info(f"  添加文档，分割为 {len(chunk_ids)} 个块")
 
-    print("\n2. 测试检索")
+    logger.info("\n2. 测试检索")
     results = rag.retrieve("Python 有什么特点", top_k=3)
-    print(f"  找到 {len(results)} 个相关块:")
+    logger.info(f"  找到 {len(results)} 个相关块:")
     for i, r in enumerate(results, 1):
-        print(f"    {i}. {r.chunk.content[:40]}... (分数: {r.final_score:.3f})")
+        logger.info(f"    {i}. {r.chunk.content[:40]}... (分数: {r.final_score:.3f})")
 
-    print("\n3. 测试统计")
+    logger.info("\n3. 测试统计")
     stats = rag.get_stats()
-    print(f"  总块数: {stats['total_chunks']}")
-    print(f"  平均关系数: {stats['avg_relations_per_chunk']:.2f}")
-    print(f"  关系分布: {stats['relation_distribution']}")
+    logger.info(f"  总块数: {stats['total_chunks']}")
+    logger.info(f"  平均关系数: {stats['avg_relations_per_chunk']:.2f}")
+    logger.info(f"  关系分布: {stats['relation_distribution']}")
 
-    print("\n4. 测试生成规划蓝图")
-    blueprint = rag.generate_blueprint("Python 有什么特点", results)
-    print(f"  蓝图中包含 {len(blueprint['sections'])} 个部分")
-    print(f"  结构描述: {blueprint['answer_structure']}")
+    logger.info("\n4. 测试生成规划蓝图")
+    blueprint = rag.generate_bluelogger.info("Python 有什么特点", results)
+    logger.info(f"  蓝图中包含 {len(blueprint['sections'])} 个部分")
+    logger.info(f"  结构描述: {blueprint['answer_structure']}")
 
-    print("\n5. 测试多跳推理")
+    logger.info("\n5. 测试多跳推理")
     reasoning = rag.multi_hop_reasoning("Python 的生态系统", hops=2)
-    print(f"  推理跳数: {reasoning['hops']}")
-    print(f"  推理链长度: {len(reasoning['reasoning'])}")
+    logger.info(f"  推理跳数: {reasoning['hops']}")
+    logger.info(f"  推理链长度: {len(reasoning['reasoning'])}")
 
-    print("\nDiscourse-Aware RAG 测试完成！")
+    logger.info("\nDiscourse-Aware RAG 测试完成！")
 
 
 if __name__ == "__main__":

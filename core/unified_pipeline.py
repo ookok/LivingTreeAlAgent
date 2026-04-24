@@ -135,7 +135,7 @@ class UnifiedPipeline:
 
     # 流式调用
     for chunk in pipeline.process_stream(query):
-        print(chunk, end="", flush=True)
+        logger.info(chunk, end="", flush=True)
     ```
     """
 
@@ -256,6 +256,9 @@ class UnifiedPipeline:
         """Ollama 客户端"""
         if self._ollama_client is None:
             from core.ollama_client import OllamaClient
+from core.logger import get_logger
+logger = get_logger('unified_pipeline')
+
             self._ollama_client = OllamaClient(base_url=self.ollama_url)
         return self._ollama_client
     
@@ -728,9 +731,9 @@ if __name__ == "__main__":
     pipeline = UnifiedPipeline()
     
     # 测试同步调用
-    print("=" * 50)
-    print("测试 UnifiedPipeline")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("测试 UnifiedPipeline")
+    logger.info("=" * 50)
     
     result = pipeline.process(
         user_id="test_user",
@@ -738,11 +741,11 @@ if __name__ == "__main__":
         session_id="test_session"
     )
     
-    print(f"\n意图: {result.intent.value}")
-    print(f"置信度: {result.confidence:.2f}")
-    print(f"缓存命中: {result.cache_hit}")
-    print(f"需要澄清: {result.needs_clarification}")
-    print(f"\n响应长度: {len(result.response)}")
-    print(f"\n响应预览:\n{result.response[:500]}...")
+    logger.info(f"\n意图: {result.intent.value}")
+    logger.info(f"置信度: {result.confidence:.2f}")
+    logger.info(f"缓存命中: {result.cache_hit}")
+    logger.info(f"需要澄清: {result.needs_clarification}")
+    logger.info(f"\n响应长度: {len(result.response)}")
+    logger.info(f"\n响应预览:\n{result.response[:500]}...")
     
-    print(f"\n执行追踪:\n{pipeline.get_execution_trace(result)}")
+    logger.info(f"\n执行追踪:\n{pipeline.get_execution_trace(result)}")

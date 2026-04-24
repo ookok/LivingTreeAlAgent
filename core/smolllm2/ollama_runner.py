@@ -95,7 +95,7 @@ class OllamaRunner:
             # 检查本地 GGUF 文件
             gguf_path = self._find_local_gguf()
             if not gguf_path:
-                print("未找到本地 GGUF 文件，尝试下载...")
+                logger.info("未找到本地 GGUF 文件，尝试下载...")
                 gguf_path = download_smolllm2()
                 if not gguf_path:
                     return False
@@ -110,6 +110,9 @@ class OllamaRunner:
             ollama_gguf_path = ollama_models / gguf_path.name
             if not ollama_gguf_path.exists():
                 import shutil
+from core.logger import get_logger
+logger = get_logger('smolllm2.ollama_runner')
+
                 shutil.copy(gguf_path, ollama_gguf_path)
 
             # 创建或更新 Modelfile
@@ -136,7 +139,7 @@ class OllamaRunner:
             return True
 
         except Exception as e:
-            print(f"创建 Modelfile 失败: {e}")
+            logger.info(f"创建 Modelfile 失败: {e}")
             return False
 
     def _find_local_gguf(self) -> Optional[Path]:
@@ -179,14 +182,14 @@ class OllamaRunner:
             )
 
             if result.returncode == 0:
-                print(f"模型 {model_name} 创建成功")
+                logger.info(f"模型 {model_name} 创建成功")
                 return True
             else:
-                print(f"模型创建失败: {result.stderr}")
+                logger.info(f"模型创建失败: {result.stderr}")
                 return False
 
         except Exception as e:
-            print(f"创建模型异常: {e}")
+            logger.info(f"创建模型异常: {e}")
             return False
 
     async def is_model_loaded(self) -> bool:
@@ -303,12 +306,12 @@ class OllamaRunnerManager:
         # 检查 Ollama 是否可用
         status = await runner.health_check()
         if not status.available:
-            print(f"Ollama 不可用: {status.error}")
+            logger.info(f"Ollama 不可用: {status.error}")
             return False
 
         # 检查模型是否已加载
         if not await runner.is_model_loaded():
-            print("模型未加载，尝试创建...")
+            logger.info("模型未加载，尝试创建...")
             if not await runner.create_model():
                 return False
 

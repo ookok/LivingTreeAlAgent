@@ -743,6 +743,9 @@ class SmartTaskExecutor:
     def _execute_parallel_stream(self, nodes: List[TaskNode]) -> Iterator[TaskContext]:
         """并行执行（流式）"""
         import concurrent.futures
+from core.logger import get_logger
+logger = get_logger('task_execution_engine')
+
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {
@@ -785,7 +788,7 @@ class SmartTaskExecutor:
             if not made_progress:
                 # 死锁检测
                 remaining = [n.node_id for n in nodes if n.node_id not in completed]
-                print(f"[SmartTaskExecutor] 警告: 可能的死锁，剩余: {remaining}")
+                logger.info(f"[SmartTaskExecutor] 警告: 可能的死锁，剩余: {remaining}")
                 break
 
     def _execute_dag_stream(self, nodes: List[TaskNode]) -> Iterator[TaskContext]:
@@ -831,7 +834,7 @@ class SmartTaskExecutor:
 
     def _execute_single(self, node: TaskNode):
         """执行单个任务"""
-        print(f"[SmartTaskExecutor] 执行: {node.title}")
+        logger.info(f"[SmartTaskExecutor] 执行: {node.title}")
 
         node.status = TaskStatus.RUNNING
         node.started_at = time.time()
@@ -857,7 +860,7 @@ class SmartTaskExecutor:
                 if self.on_node_complete:
                     self.on_node_complete(node)
 
-                print(f"[SmartTaskExecutor] 完成: {node.title} ({node.duration:.2f}s)")
+                logger.info(f"[SmartTaskExecutor] 完成: {node.title} ({node.duration:.2f}s)")
                 return
 
             except Exception as e:
@@ -868,10 +871,10 @@ class SmartTaskExecutor:
                     self.on_node_retry(node, attempt + 1)
 
                 if attempt < node.max_retries - 1:
-                    print(f"[SmartTaskExecutor] 重试 {attempt + 1}/{node.max_retries}: {node.title}")
+                    logger.info(f"[SmartTaskExecutor] 重试 {attempt + 1}/{node.max_retries}: {node.title}")
                     time.sleep(self.retry_delay * (2 ** attempt))  # 指数退避
                 else:
-                    print(f"[SmartTaskExecutor] 失败: {node.title} - {e}")
+                    logger.info(f"[SmartTaskExecutor] 失败: {node.title} - {e}")
 
         # 所有重试都失败
         node.status = TaskStatus.FAILED
@@ -932,9 +935,9 @@ def build_task_tree(nodes: List[TaskNode]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("智能任务执行引擎测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("智能任务执行引擎测试")
+    logger.info("=" * 60)
 
     # 测试智能分解判断
     decomposer = SmartDecomposer(max_depth=3)
@@ -946,17 +949,17 @@ if __name__ == "__main__":
         ("优化这个查询性能", 0.6),
     ]
 
-    print("\n[1] 智能分解判断测试")
+    logger.info("\n[1] 智能分解判断测试")
     for task, expected in test_tasks:
         decision = decomposer.should_decompose(task)
-        print(f"\n  Task: {task}")
-        print(f"  Decision: {decision.should_decompose} ({decision.trigger_type.value})")
-        print(f"  Confidence: {decision.confidence:.2f}")
-        print(f"  Reasons: {decision.reasons}")
-        print(f"  Strategy: {decision.strategy.value}")
+        logger.info(f"\n  Task: {task}")
+        logger.info(f"  Decision: {decision.should_decompose} ({decision.trigger_type.value})")
+        logger.info(f"  Confidence: {decision.confidence:.2f}")
+        logger.info(f"  Reasons: {decision.reasons}")
+        logger.info(f"  Strategy: {decision.strategy.value}")
 
     # 测试执行引擎
-    print("\n[2] 执行引擎测试")
+    logger.info("\n[2] 执行引擎测试")
     context = TaskContext(original_task="测试任务")
     executor = SmartTaskExecutor(default_retries=2)
 
@@ -966,10 +969,10 @@ if __name__ == "__main__":
         TaskNode(node_id="3", title="步骤3"),
     ]
 
-    print("\n执行节点:")
+    logger.info("\n执行节点:")
     for state in executor.execute_stream(nodes, context):
         summary = executor.get_execution_summary(nodes)
-        print(f"  Progress: {summary['completed']}/{summary['total']}")
+        logger.info(f"  Progress: {summary['completed']}/{summary['total']}")
 
-    print(f"\n摘要: {summary}")
-    print(f"上下文: {context.to_dict()}")
+    logger.info(f"\n摘要: {summary}")
+    logger.info(f"上下文: {context.to_dict()}")

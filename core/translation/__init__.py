@@ -17,7 +17,7 @@ Translation - 翻译核心模块
 
     # 单条翻译
     result = hub.translate("Hello world", target_lang="zh")
-    print(result.translated)
+    logger.info(result.translated)
 
     # 批量翻译
     results = hub.translate_batch(["Hello", "World"], target_lang="zh")
@@ -51,6 +51,9 @@ from .offline_translator import OfflineTranslator, get_offline_translator
 from .online_translator import OnlineTranslator, get_online_translator
 from .smart_translator import SmartTranslator, get_smart_translator, SmartTranslateConfig
 from .translation_hub import TranslationHub, get_translation_hub, CacheEntry
+from core.logger import get_logger
+logger = get_logger('translation.__init__')
+
 
 __all__ = [
     # 枚举

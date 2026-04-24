@@ -26,6 +26,9 @@ from datetime import datetime, timedelta
 import statistics
 
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('expert_learning.performance_monitor')
+
 
 
 class MetricType(Enum):
@@ -197,7 +200,7 @@ class PerformanceMonitor:
             "cache_hit_min": 0.30,       # 缓存命中率最低要求
         }
 
-        print("[PerformanceMonitor] Performance monitoring enabled")
+        logger.info("[PerformanceMonitor] Performance monitoring enabled")
 
     def record_request(
         self,
@@ -660,7 +663,7 @@ class PerformanceMonitor:
             self._intent_stats.clear()
             self._hourly_stats.clear()
             self._daily_stats.clear()
-            print("[PerformanceMonitor] 统计数据已重置")
+            logger.info("[PerformanceMonitor] 统计数据已重置")
 
 
 # 全局单例

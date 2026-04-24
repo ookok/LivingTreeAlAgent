@@ -341,6 +341,9 @@ def create_wordaddin_package(output_dir: str):
         output_dir: 输出目录
     """
     import os
+from core.logger import get_logger
+logger = get_logger('external_integration.office_addin')
+
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -356,7 +359,7 @@ def create_wordaddin_package(output_dir: str):
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    print(f"[AI OS Add-in] 安装包已生成: {output_dir}")
-    print("  - manifest.xml: Office 加载项清单")
-    print("  - index.html: Add-in 界面")
-    print("  - INSTALL.txt: 安装说明")
+    logger.info(f"[AI OS Add-in] 安装包已生成: {output_dir}")
+    logger.info("  - manifest.xml: Office 加载项清单")
+    logger.info("  - index.html: Add-in 界面")
+    logger.info("  - INSTALL.txt: 安装说明")

@@ -122,10 +122,10 @@ class ErrorKnowledgeBase:
         # 加载持久化数据
         self._load_persistent_data()
         
-        print(f"[ErrorKnowledgeBase] 已初始化")
-        print(f"  - 存储路径: {self.config.storage_path}")
-        print(f"  - 预定义模式: {len(PRESET_PATTERNS)}")
-        print(f"  - 预定义模板: {len(PRESET_TEMPLATES)}")
+        logger.info(f"[ErrorKnowledgeBase] 已初始化")
+        logger.info(f"  - 存储路径: {self.config.storage_path}")
+        logger.info(f"  - 预定义模式: {len(PRESET_PATTERNS)}")
+        logger.info(f"  - 预定义模板: {len(PRESET_TEMPLATES)}")
 
     def _load_preset_data(self):
         """加载预定义数据"""
@@ -153,9 +153,9 @@ class ErrorKnowledgeBase:
                         if record:
                             self._records[record.record_id] = record
                             self._index_record(record)
-                print(f"  - 加载记录: {len(self._records)}")
+                logger.info(f"  - 加载记录: {len(self._records)}")
             except Exception as e:
-                print(f"  - 加载记录失败: {e}")
+                logger.info(f"  - 加载记录失败: {e}")
         
         # 加载自定义模式
         if os.path.exists(patterns_file):
@@ -170,9 +170,9 @@ class ErrorKnowledgeBase:
                                 self.matcher.register_pattern(pattern)
                         except Exception:
                             pass
-                print(f"  - 加载模式: {len(self._patterns)}")
+                logger.info(f"  - 加载模式: {len(self._patterns)}")
             except Exception as e:
-                print(f"  - 加载模式失败: {e}")
+                logger.info(f"  - 加载模式失败: {e}")
         
         # 加载自定义模板
         if os.path.exists(templates_file):
@@ -187,9 +187,9 @@ class ErrorKnowledgeBase:
                                 self.matcher.register_template(template)
                         except Exception:
                             pass
-                print(f"  - 加载模板: {len(self._templates)}")
+                logger.info(f"  - 加载模板: {len(self._templates)}")
             except Exception as e:
-                print(f"  - 加载模板失败: {e}")
+                logger.info(f"  - 加载模板失败: {e}")
 
     def _save_persistent_data(self):
         """保存持久化数据"""
@@ -222,7 +222,7 @@ class ErrorKnowledgeBase:
                 }
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[ErrorKnowledgeBase] 保存失败: {e}")
+            logger.info(f"[ErrorKnowledgeBase] 保存失败: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 核心操作
@@ -571,6 +571,9 @@ class ErrorKnowledgeBase:
         """反序列化模板"""
         try:
             from .error_models import ErrorCategory, FixStep
+from core.logger import get_logger
+logger = get_logger('error_memory.error_knowledge_base')
+
             
             steps = [
                 FixStep(

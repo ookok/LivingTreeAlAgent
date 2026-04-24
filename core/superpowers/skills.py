@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any, Callable, Type
 from dataclasses import dataclass, field
 import abc
+from core.logger import get_logger
+logger = get_logger('superpowers.skills')
+
 
 
 @dataclass
@@ -146,9 +149,9 @@ class SkillRegistry:
                         ):
                             skill_instance = obj()
                             await self.register_skill(skill_instance)
-                            print(f"[SkillRegistry] 加载技能: {skill_instance.metadata.name}")
+                            logger.info(f"[SkillRegistry] 加载技能: {skill_instance.metadata.name}")
             except Exception as e:
-                print(f"[SkillRegistry] 加载技能文件 {skill_file} 失败: {e}")
+                logger.info(f"[SkillRegistry] 加载技能文件 {skill_file} 失败: {e}")
 
     def get_skill(self, skill_id: str) -> Optional[Skill]:
         """

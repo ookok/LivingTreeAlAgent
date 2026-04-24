@@ -157,7 +157,7 @@ class MirrorDiscoverer:
         self.mirror_cache: Dict[str, List[MirrorInfo]] = {}
         self.mirror_history: Dict[str, List[Dict]] = {}
         self.max_history = 100
-        print("[MirrorDiscoverer] 初始化镜像发现器")
+        logger.info("[MirrorDiscoverer] 初始化镜像发现器")
 
     async def discover_mirrors(self, url: str, max_candidates: int = 5) -> List[MirrorInfo]:
         """发现可用镜像"""
@@ -269,7 +269,7 @@ class NetworkPatternLearner:
         self.time_patterns: Dict[int, Dict[str, int]] = {}
         self.access_sequences: Dict[str, List[str]] = {}
         self.failure_patterns: Dict[str, Dict[str, int]] = {}
-        print("[NetworkPatternLearner] 初始化网络模式学习器")
+        logger.info("[NetworkPatternLearner] 初始化网络模式学习器")
 
     def record_access(self, url: str, success: bool, latency_ms: float,
                      error: Optional[str] = None):
@@ -328,7 +328,7 @@ class AI_NetworkOptimizer:
         self.pattern_learner = NetworkPatternLearner()
         self._proxy_list: List[str] = []
         self._enabled = True
-        print("[AI_NetworkOptimizer] 初始化AI网络优化器")
+        logger.info("[AI_NetworkOptimizer] 初始化AI网络优化器")
 
     async def get_route_plan(self, url: str, context: Optional[Dict] = None) -> RoutePlan:
         """获取路由方案"""
@@ -433,13 +433,13 @@ def get_network_optimizer() -> AI_NetworkOptimizer:
 async def example_usage():
     """使用示例"""
 
-    print("=" * 60)
-    print("AI 网络优化系统示例")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("AI 网络优化系统示例")
+    logger.info("=" * 60)
 
     optimizer = get_network_optimizer()
 
-    print("\n1. 智能路由选择:")
+    logger.info("\n1. 智能路由选择:")
     urls = [
         "https://github.com/microsoft/vscode",
         "https://pypi.org/pip",
@@ -448,13 +448,13 @@ async def example_usage():
 
     for url in urls:
         route = await optimizer.get_route_plan(url)
-        print(f"\n  URL: {url}")
-        print(f"    策略: {route.strategy.value}")
-        print(f"    实际URL: {route.primary_url}")
-        print(f"    预估延迟: {route.estimated_latency_ms:.0f}ms")
-        print(f"    评分: {route.cost_score:.2f}")
+        logger.info(f"\n  URL: {url}")
+        logger.info(f"    策略: {route.strategy.value}")
+        logger.info(f"    实际URL: {route.primary_url}")
+        logger.info(f"    预估延迟: {route.estimated_latency_ms:.0f}ms")
+        logger.info(f"    评分: {route.cost_score:.2f}")
 
-    print("\n2. 网络模式学习:")
+    logger.info("\n2. 网络模式学习:")
     optimizer.pattern_learner.record_access(
         "https://github.com/python/cpython", success=True, latency_ms=120
     )
@@ -464,16 +464,19 @@ async def example_usage():
 
     hour = datetime.now().hour
     prediction = optimizer.pattern_learner.predict_network_condition(hour)
-    print(f"  {hour}:00 网络状况:")
-    print(f"    预计高峰: {prediction['predicted_peak']}")
-    print(f"    预期延迟: {prediction['expected_latency']:.0f}ms")
+    logger.info(f"  {hour}:00 网络状况:")
+    logger.info(f"    预计高峰: {prediction['predicted_peak']}")
+    logger.info(f"    预期延迟: {prediction['expected_latency']:.0f}ms")
 
-    print("\n3. 系统统计:")
+    logger.info("\n3. 系统统计:")
     stats = optimizer.get_statistics()
     for key, value in stats.items():
-        print(f"    {key}: {value}")
+        logger.info(f"    {key}: {value}")
 
 
 if __name__ == "__main__":
     from datetime import datetime
+from core.logger import get_logger
+logger = get_logger('ai_network_optimizer')
+
     asyncio.run(example_usage())

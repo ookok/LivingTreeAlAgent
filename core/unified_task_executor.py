@@ -479,6 +479,9 @@ if __name__ == "__main__":
 
     # 从配置获取 Ollama URL
     from core.config_provider import get_ollama_url
+from core.logger import get_logger
+logger = get_logger('unified_task_executor')
+
 
     executor = UnifiedTaskExecutor(
         ollama_url=get_ollama_url(),  # 使用配置
@@ -487,6 +490,6 @@ if __name__ == "__main__":
 
     # 测试单个任务
     result = executor.execute("你好，请用一句话介绍自己")
-    print(f"Status: {result.status.value}")
-    print(f"Output: {result.output}")
-    print(f"Duration: {result.duration:.2f}s")
+    logger.info(f"Status: {result.status.value}")
+    logger.info(f"Output: {result.output}")
+    logger.info(f"Duration: {result.duration:.2f}s")

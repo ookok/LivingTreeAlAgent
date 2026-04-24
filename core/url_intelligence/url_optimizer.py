@@ -16,6 +16,9 @@ from .models import (
 )
 from .url_classifier import URLClassifier
 from .mirror_registry import MirrorRegistry
+from core.logger import get_logger
+logger = get_logger('url_intelligence.url_optimizer')
+
 
 
 class URLOptimizer:
@@ -287,7 +290,7 @@ class URLIntelligenceSystem:
                 result = self.optimize(url)
                 results.append(result)
             except Exception as e:
-                print(f"处理URL失败 {url}: {e}")
+                logger.info(f"处理URL失败 {url}: {e}")
         return results
     
     def get_statistics(self) -> Dict[str, Any]:

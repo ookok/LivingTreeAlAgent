@@ -41,6 +41,9 @@ except ImportError:
     QObject = object
 
 import logging
+from core.logger import get_logger
+logger = get_logger('smart_writing.progress_visualizer')
+
 
 logger = logging.getLogger(__name__)
 
@@ -582,16 +585,16 @@ class ProgressManager:
     def _render(self, data: ProgressData):
         if self._terminal_mode:
             output = self._renderer.render_inline(data)
-            print(output, end="", flush=True)
+            logger.info(output, end="", flush=True)
     
     def _render_steps(self, task_id: str, current: int):
         if self._terminal_mode and task_id in self._steps:
             output = self._renderer.render_steps(self._steps[task_id], current)
-            print(f"\r{output}", end="", flush=True)
+            logger.info(f"\r{output}", end="", flush=True)
     
     def clear(self):
         if self._terminal_mode:
-            print(self._renderer.clear(), end="", flush=True)
+            logger.info(self._renderer.clear(), end="", flush=True)
     
     def get_task(self, task_id: str) -> Optional[ProgressData]:
         return self._tasks.get(task_id)
@@ -673,28 +676,28 @@ def get_progress_manager() -> ProgressManager:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=== 测试进度可视化系统 ===\n")
+    logger.info("=== 测试进度可视化系统 ===\n")
     
     manager = get_progress_manager()
     
-    print("1. 简单进度条:")
+    logger.info("1. 简单进度条:")
     task = manager.start_task("test1", "下载文件", total=100)
     for i in range(101):
         manager.update_task("test1", current=i, message=f"下载中... {i}%")
         time.sleep(0.02)
     manager.complete_task("test1")
-    print("\n")
+    logger.info("\n")
     
-    print("2. 步骤指示器:")
+    logger.info("2. 步骤指示器:")
     manager.set_steps("test2", ["准备", "处理", "验证", "完成"])
     for i in range(4):
         manager.activate_step("test2", i, f"执行第{i+1}步")
         time.sleep(0.3)
-    print("\n")
+    logger.info("\n")
     
-    print("3. 上下文管理器:")
+    logger.info("3. 上下文管理器:")
     with progress("批量处理", total=50) as p:
         for i in range(50):
             p.update(message=f"处理第{i+1}项")
             time.sleep(0.03)
-    print("\n完成！")
+    logger.info("\n完成！")

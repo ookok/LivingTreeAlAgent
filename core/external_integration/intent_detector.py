@@ -14,6 +14,9 @@
 from enum import Enum
 from typing import Optional, Dict, Any
 import re
+from core.logger import get_logger
+logger = get_logger('external_integration.intent_detector')
+
 
 
 class AppType(Enum):
@@ -220,6 +223,6 @@ def quick_detect(text: str, context: Optional[str] = None) -> Dict[str, Any]:
 
     使用示例:
         >>> result = quick_detect("查一下公司章程", "word")
-        >>> print(result['intent'])  # 'query_knowledge'
+        >>> logger.info(result['intent'])  # 'query_knowledge'
     """
     return get_intent_detector().build_request(text, context)

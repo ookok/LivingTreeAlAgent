@@ -129,7 +129,7 @@ class CheckpointManager:
                 self._task_checkpoints[checkpoint.task_id].append(checkpoint.checkpoint_id)
                 
             except Exception as e:
-                print(f"[CheckpointManager] 加载检查点失败: {e}")
+                logger.info(f"[CheckpointManager] 加载检查点失败: {e}")
 
     def _save_checkpoint(self, checkpoint: Checkpoint):
         """保存检查点到磁盘"""
@@ -219,7 +219,7 @@ class CheckpointManager:
             # 清理旧检查点
             self._cleanup_old_checkpoints(task_id)
             
-            print(f"[CheckpointManager] 创建检查点: {checkpoint.checkpoint_id} (turn={turn})")
+            logger.info(f"[CheckpointManager] 创建检查点: {checkpoint.checkpoint_id} (turn={turn})")
             return checkpoint
 
     def _cleanup_old_checkpoints(self, task_id: str):
@@ -318,7 +318,7 @@ class RollbackManager:
         # 保存到磁盘
         self._save_rollback(rollback)
         
-        print(f"[RollbackManager] 创建回滚点: {rollback.rollback_id} - {reason}")
+        logger.info(f"[RollbackManager] 创建回滚点: {rollback.rollback_id} - {reason}")
         return rollback
 
     def _save_rollback(self, rollback: RollbackPoint):
@@ -354,7 +354,7 @@ class RollbackManager:
         """
         checkpoint = self.checkpoint_manager.get_checkpoint(checkpoint_id)
         if not checkpoint:
-            print(f"[RollbackManager] 检查点不存在: {checkpoint_id}")
+            logger.info(f"[RollbackManager] 检查点不存在: {checkpoint_id}")
             return None
         
         # 创建回滚点
@@ -369,7 +369,7 @@ class RollbackManager:
         checkpoint.status = CheckpointStatus.ROLLBACK
         self.checkpoint_manager._save_checkpoint(checkpoint)
         
-        print(f"[RollbackManager] 回滚到检查点: {checkpoint_id}")
+        logger.info(f"[RollbackManager] 回滚到检查点: {checkpoint_id}")
         return checkpoint, rollback_point
 
     def rollback_to_stable(
@@ -397,7 +397,7 @@ class RollbackManager:
                 break
         
         if not stable_checkpoint:
-            print(f"[RollbackManager] 未找到稳定检查点: {task_id}")
+            logger.info(f"[RollbackManager] 未找到稳定检查点: {task_id}")
             return None
         
         return self.rollback_to_checkpoint(stable_checkpoint.checkpoint_id, reason)
@@ -457,7 +457,7 @@ class BidirectionalScheduler:
         if adjustments:
             self.adjustment_history[feedback.feedback_id] = copy.deepcopy(adjustments)
         
-        print(f"[BidirectionalScheduler] 记录反馈: turn={turn}, score={score:.2f}")
+        logger.info(f"[BidirectionalScheduler] 记录反馈: turn={turn}, score={score:.2f}")
         return feedback
 
     def should_adjust_strategy(self, window_size: int = 5) -> bool:
@@ -518,6 +518,9 @@ class BidirectionalScheduler:
         
         # 统计问题频率
         from collections import Counter
+from core.logger import get_logger
+logger = get_logger('amphiloop.amphiloop_engine')
+
         issue_counts = Counter(issues)
         
         return [issue for issue, count in issue_counts.most_common(5)]
@@ -807,7 +810,7 @@ class IncrementalLearning:
         
         self.optimization_history.append(knowledge)
         
-        print(f"[IncrementalLearning] 提炼知识: {len(knowledge.get('effective_tools', []))} 个有效工具")
+        logger.info(f"[IncrementalLearning] 提炼知识: {len(knowledge.get('effective_tools', []))} 个有效工具")
         return knowledge
 
     def _extract_lessons(self, execution_records: List[Any]) -> List[str]:

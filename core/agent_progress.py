@@ -11,6 +11,9 @@ from typing import Callable, Optional, List, Dict, Any
 from datetime import datetime
 import time
 import threading
+from core.logger import get_logger
+logger = get_logger('agent_progress')
+
 
 
 class ProgressPhase(Enum):
@@ -121,7 +124,7 @@ class ProgressEmitter:
                 try:
                     self.callback(progress_info)
                 except Exception as e:
-                    print(f"[ProgressEmitter] Callback error: {e}")
+                    logger.info(f"[ProgressEmitter] Callback error: {e}")
 
     def _estimate_progress(self, phase: ProgressPhase) -> float:
         """估算阶段进度"""

@@ -112,7 +112,7 @@ class CodeMemoryStore:
                             updated_at=datetime.fromisoformat(item.get("updated_at", datetime.now().isoformat())),
                         )
             except Exception as e:
-                print(f"Failed to load memories: {e}")
+                logger.info(f"Failed to load memories: {e}")
 
     def _save_memories(self):
         """保存记忆"""
@@ -138,7 +138,7 @@ class CodeMemoryStore:
             with open(index_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Failed to save memories: {e}")
+            logger.info(f"Failed to save memories: {e}")
 
     def add_memory(
         self,
@@ -254,7 +254,7 @@ class ProjectMemoryManager:
                             settings=item.get("settings", {}),
                         )
             except Exception as e:
-                print(f"Failed to load projects: {e}")
+                logger.info(f"Failed to load projects: {e}")
 
     def _save_projects(self):
         """保存项目"""
@@ -393,7 +393,7 @@ class DomainMemoryStore:
                                 api_examples=data.get("api_examples", {}),
                             )
                     except Exception as e:
-                        print(f"Failed to load domain {domain_name}: {e}")
+                        logger.info(f"Failed to load domain {domain_name}: {e}")
 
     def _save_domain(self, domain: DomainMemory):
         """保存领域"""
@@ -590,7 +590,7 @@ class SnippetManager:
                             created_at=datetime.fromisoformat(item.get("created_at", datetime.now().isoformat())),
                         )
             except Exception as e:
-                print(f"Failed to load snippets: {e}")
+                logger.info(f"Failed to load snippets: {e}")
 
     def _save_snippets(self):
         """保存片段"""
@@ -674,6 +674,9 @@ class SnippetManager:
     ) -> Snippet:
         """创建片段"""
         import uuid
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.memory_enhanced_editor')
+
         snippet = Snippet(
             id=str(uuid.uuid4())[:8],
             name=name,

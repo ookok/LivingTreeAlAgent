@@ -218,6 +218,9 @@ class DeploymentMonitor:
         """检查系统资源"""
         try:
             import psutil
+from core.logger import get_logger
+logger = get_logger('deployment_monitor')
+
             mem = psutil.virtual_memory()
             self._status.total_memory_gb = mem.total / (1024**3)
             self._status.used_memory_gb = mem.used / (1024**3)
@@ -355,23 +358,23 @@ def get_deployment_monitor() -> DeploymentMonitor:
 if __name__ == "__main__":
     monitor = DeploymentMonitor()
     
-    print("=" * 60)
-    print("部署状态监控器测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("部署状态监控器测试")
+    logger.info("=" * 60)
     
     # 获取诊断报告
     report = monitor.get_diagnostic_report()
-    print(report)
+    logger.info(report)
     
     # 测试回调
     def on_status_change(status: SystemStatus):
-        print(f"[回调] Ollama: {status.ollama_running}, 时间: {status.timestamp}")
+        logger.info(f"[回调] Ollama: {status.ollama_running}, 时间: {status.timestamp}")
     
     monitor.add_callback(on_status_change)
     monitor.start_monitoring()
     
-    print("\n监控已启动，5秒后停止...")
+    logger.info("\n监控已启动，5秒后停止...")
     time.sleep(5)
     monitor.stop_monitoring()
     
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

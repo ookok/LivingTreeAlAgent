@@ -257,7 +257,7 @@ class PlanningBlueprintGenerator:
         3. 提取关键点
         """
         if not chunks:
-            return PlanningBlueprint(query=query)
+            return PlanningBluelogger.info(query=query)
 
         # 添加到图中
         for chunk in chunks:
@@ -278,7 +278,7 @@ class PlanningBlueprintGenerator:
         # 生成摘要
         summary = self._generate_summary(query, relevant)
 
-        return PlanningBlueprint(
+        return PlanningBluelogger.info(
             query=query,
             relevant_chunks=relevant,
             generation_order=order,
@@ -357,6 +357,9 @@ class DiscourseRAG:
 
     def __init__(self, db_path: str | Path = None):
         from core.config import get_config_dir
+from core.logger import get_logger
+logger = get_logger('disco_rag.__init__')
+
 
         if db_path is None:
             db_path = get_config_dir() / "disco_rag.db"
@@ -550,7 +553,7 @@ class DiscourseRAG:
         finally:
             conn.close()
 
-    def generate_with_blueprint(self, blueprint: PlanningBlueprint) -> str:
+    def generate_with_bluelogger.info(self, blueprint: PlanningBlueprint) -> str:
         """
         基于规划蓝图生成答案
 

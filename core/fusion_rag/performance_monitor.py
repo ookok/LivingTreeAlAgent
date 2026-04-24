@@ -15,6 +15,9 @@ import threading
 from typing import Dict, Any, List, Optional
 from collections import defaultdict, deque
 from datetime import datetime
+from core.logger import get_logger
+logger = get_logger('fusion_rag.performance_monitor')
+
 
 
 class PerformanceMonitor:
@@ -54,7 +57,7 @@ class PerformanceMonitor:
         # 告警记录
         self.alerts: List[Dict] = []
         
-        print(f"[PerformanceMonitor] 初始化完成，窗口大小: {window_size}")
+        logger.info(f"[PerformanceMonitor] 初始化完成，窗口大小: {window_size}")
     
     def record_query(
         self,

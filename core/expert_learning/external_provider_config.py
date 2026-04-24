@@ -351,14 +351,14 @@ class ExternalProviderManager:
     # 获取最优免费提供者
     provider = manager.get_best_free_provider()
     if provider:
-        print(f"使用: {provider.name}")
+        logger.info(f"使用: {provider.name}")
     
     # 获取所有可用提供者 (按优先级排序)
     providers = manager.get_available_providers(include_free_first=True)
     
     # 检查是否可以使用
     if manager.can_use("builtin_deepseek", estimated_calls=100):
-        print("可以使用 DeepSeek")
+        logger.info("可以使用 DeepSeek")
     ```
     """
     
@@ -399,7 +399,7 @@ class ExternalProviderManager:
         # 加载配置
         self._load_config()
         
-        print(f"[ExternalProviderManager] 加载了 {len(self._providers)} 个提供者配置")
+        logger.info(f"[ExternalProviderManager] 加载了 {len(self._providers)} 个提供者配置")
     
     # ── 基础操作 ─────────────────────────────────────────────────────────────
     
@@ -880,7 +880,7 @@ class ExternalProviderManager:
                 )
                 
         except Exception as e:
-            print(f"[ExternalProviderManager] 加载配置失败: {e}")
+            logger.info(f"[ExternalProviderManager] 加载配置失败: {e}")
             self._init_default_providers()
     
     def _save_config(self) -> None:
@@ -897,7 +897,7 @@ class ExternalProviderManager:
                 json.dump(data, f, ensure_ascii=False, indent=2)
                 
         except Exception as e:
-            print(f"[ExternalProviderManager] 保存配置失败: {e}")
+            logger.info(f"[ExternalProviderManager] 保存配置失败: {e}")
     
     def _init_default_providers(self) -> None:
         """初始化默认提供者"""
@@ -946,6 +946,9 @@ class ExternalProviderManager:
                 # 尝试从环境变量获取完整Key
                 if config.endpoint and config.endpoint.key_env_var:
                     import os
+from core.logger import get_logger
+logger = get_logger('expert_learning.external_provider_config')
+
                     full_key = os.environ.get(config.endpoint.key_env_var, "")
                     if full_key:
                         p_dict["api_key"] = full_key
@@ -1003,21 +1006,21 @@ def get_provider_manager() -> ExternalProviderManager:
 # ── 测试 ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("外部模型提供者配置系统测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("外部模型提供者配置系统测试")
+    logger.info("=" * 60)
     
     manager = ExternalProviderManager()
     
     # 列出模板
-    print("\n[内置模板]")
+    logger.info("\n[内置模板]")
     for template in manager.get_templates():
-        print(f"  - {template.name} ({template.provider_type.value})")
-        print(f"    费用类型: {template.cost_type.value}")
-        print(f"    模型: {[m.model_name for m in template.models[:2]]}")
+        logger.info(f"  - {template.name} ({template.provider_type.value})")
+        logger.info(f"    费用类型: {template.cost_type.value}")
+        logger.info(f"    模型: {[m.model_name for m in template.models[:2]]}")
     
     # 添加自定义提供者
-    print("\n[添加自定义提供者]")
+    logger.info("\n[添加自定义提供者]")
     provider_id = manager.add_provider(
         name="我的天工AI",
         provider_type=ProviderType.TIANGONG,
@@ -1027,33 +1030,33 @@ if __name__ == "__main__":
         priority=15,
         description="天工AI大模型",
     )
-    print(f"  添加成功: {provider_id}")
+    logger.info(f"  添加成功: {provider_id}")
     
     # 获取最优免费提供者
-    print("\n[最优免费提供者]")
+    logger.info("\n[最优免费提供者]")
     free_provider = manager.get_best_free_provider()
     if free_provider:
-        print(f"  {free_provider.name}")
+        logger.info(f"  {free_provider.name}")
     else:
-        print("  没有可用的免费提供者")
+        logger.info("  没有可用的免费提供者")
     
     # 获取所有可用提供者
-    print("\n[所有可用提供者 (优先免费)]")
+    logger.info("\n[所有可用提供者 (优先免费)]")
     for p in manager.get_available_providers(include_free_first=True):
         status = "✓" if p.enabled else "✗"
         cost = "FREE" if p.is_free() else "PAID"
-        print(f"  {status} [{cost}] {p.name} (优先级: {p.priority})")
+        logger.info(f"  {status} [{cost}] {p.name} (优先级: {p.priority})")
     
     # 统计信息
-    print("\n[统计信息]")
+    logger.info("\n[统计信息]")
     stats = manager.get_stats()
-    print(f"  总计: {stats['total']}")
-    print(f"  启用: {stats['enabled']}")
-    print(f"  免费: {stats['free']}")
-    print(f"  活跃: {stats['active']}")
+    logger.info(f"  总计: {stats['total']}")
+    logger.info(f"  启用: {stats['enabled']}")
+    logger.info(f"  免费: {stats['free']}")
+    logger.info(f"  活跃: {stats['active']}")
     
     # 清理测试数据
     manager.remove_provider(provider_id)
-    print(f"\n[清理测试数据] 已删除 {provider_id}")
+    logger.info(f"\n[清理测试数据] 已删除 {provider_id}")
     
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

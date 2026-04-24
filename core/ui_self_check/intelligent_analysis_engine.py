@@ -71,8 +71,8 @@ class IntelligentAnalysisEngine:
     engine.initialize(project_root="/path/to/project")
 
     # 设置回调
-    engine.set_error_callback(lambda r: print(f"Error: {r.root_cause}"))
-    engine.set_source_callback(lambda r: print(f"Issues: {len(r.issues)}"))
+    engine.set_error_callback(lambda r: logger.info(f"Error: {r.root_cause}"))
+    engine.set_source_callback(lambda r: logger.info(f"Issues: {len(r.issues)}"))
 
     # 触发分析
     engine.report_error(error, component_name="MainWindow", action="button_click")
@@ -136,6 +136,9 @@ class IntelligentAnalysisEngine:
             ai_result = self._ai_service.diagnose(context)
             if ai_result:
                 from .reactive_error_analyzer import DiagnosisResult as DR, ErrorSeverity
+from core.logger import get_logger
+logger = get_logger('ui_self_check.intelligent_analysis_engine')
+
                 return DR(
                     error_context=context,
                     severity=ErrorSeverity.ERROR,

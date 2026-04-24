@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+from core.logger import get_logger
+logger = get_logger('cognee_memory')
+
 
 
 class MemoryType(Enum):
@@ -415,7 +418,7 @@ class CogneeMemoryAPI:
             try:
                 handler(*args, **kwargs)
             except Exception as e:
-                print(f"Event handler error: {e}")
+                logger.info(f"Event handler error: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
@@ -428,11 +431,11 @@ class CogneeMemoryAPI:
 
 def test_cognee_memory():
     """测试 Cognee 记忆系统"""
-    print("=== 测试 Cognee 记忆系统 ===")
+    logger.info("=== 测试 Cognee 记忆系统 ===")
 
     api = CogneeMemoryAPI()
 
-    print("\n1. 测试记住信息")
+    logger.info("\n1. 测试记住信息")
     memory_id1 = api.remember(
         content="Python 是一种高级编程语言",
         memory_type="semantic",
@@ -440,7 +443,7 @@ def test_cognee_memory():
         tags=["programming", "language"],
         source="user_input"
     )
-    print(f"  记住: {memory_id1}")
+    logger.info(f"  记住: {memory_id1}")
 
     memory_id2 = api.remember(
         content="用户喜欢使用暗色主题",
@@ -449,27 +452,27 @@ def test_cognee_memory():
         tags=["preference", "ui"],
         source="interaction"
     )
-    print(f"  记住: {memory_id2}")
+    logger.info(f"  记住: {memory_id2}")
 
-    print("\n2. 测试回忆")
+    logger.info("\n2. 测试回忆")
     results = api.recall("Python", limit=5)
-    print(f"  查询 'Python': 找到 {len(results)} 条记忆")
+    logger.info(f"  查询 'Python': 找到 {len(results)} 条记忆")
     for r in results:
-        print(f"    - {r['content'][:50]}... [{r['memory_type']}]")
+        logger.info(f"    - {r['content'][:50]}... [{r['memory_type']}]")
 
-    print("\n3. 测试改进记忆")
+    logger.info("\n3. 测试改进记忆")
     success = api.improve(memory_id1, delta_importance=1)
-    print(f"  改进成功: {success}")
+    logger.info(f"  改进成功: {success}")
 
-    print("\n4. 测试统计")
+    logger.info("\n4. 测试统计")
     stats = api.get_stats()
-    print(f"  统计: {stats}")
+    logger.info(f"  统计: {stats}")
 
-    print("\n5. 测试遗忘")
+    logger.info("\n5. 测试遗忘")
     forgotten = api.forget(memory_id=memory_id2)
-    print(f"  遗忘: {forgotten} 条")
+    logger.info(f"  遗忘: {forgotten} 条")
 
-    print("\nCognee 记忆系统测试完成！")
+    logger.info("\nCognee 记忆系统测试完成！")
 
 
 if __name__ == "__main__":

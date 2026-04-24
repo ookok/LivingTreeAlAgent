@@ -245,15 +245,15 @@ class SkillClusterer:
     def _init_model(self):
         """初始化编码模型"""
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            print("⚠️ sentence-transformers 未安装，使用 TF-IDF 回退")
+            logger.info("⚠️ sentence-transformers 未安装，使用 TF-IDF 回退")
             self._model = None
             return
 
         try:
             self._model = SentenceTransformer(self.model_name)
-            print(f"✓ 加载语义编码模型: {self.model_name}")
+            logger.info(f"✓ 加载语义编码模型: {self.model_name}")
         except Exception as e:
-            print(f"⚠️ 加载模型失败: {e}，使用 TF-IDF 回退")
+            logger.info(f"⚠️ 加载模型失败: {e}，使用 TF-IDF 回退")
             self._model = None
 
     def register_skill(
@@ -334,7 +334,7 @@ class SkillClusterer:
             return
 
         if not FAISS_AVAILABLE:
-            print("⚠️ faiss 未安装，跳过索引构建")
+            logger.info("⚠️ faiss 未安装，跳过索引构建")
             return
 
         import numpy as np
@@ -349,7 +349,7 @@ class SkillClusterer:
         self._index = faiss.IndexFlatIP(self.EMBEDDING_DIM)  # 内积索引
         self._index.add(embeddings)
 
-        print(f"✓ 构建 FAISS 索引: {len(self._embeddings)} 个向量")
+        logger.info(f"✓ 构建 FAISS 索引: {len(self._embeddings)} 个向量")
 
     def clusterize(self) -> list[SkillCluster]:
         """
@@ -585,6 +585,9 @@ class SkillClusterer:
             return []
 
         import numpy as np
+from core.logger import get_logger
+logger = get_logger('skill_clusterer')
+
 
         # 搜索
         query = np.array([skill.embedding]).astype("float32")

@@ -141,8 +141,8 @@ def main():
     ]
 
     for url in test_urls:
-        print(f"原始: {{url}}")
-        print(f"转换: {{mirror.convert(url)}}")
+        logger.info(f"原始: {{url}}")
+        logger.info(f"转换: {{mirror.convert(url)}}")
         print()
 
 if __name__ == '__main__':
@@ -202,7 +202,7 @@ class PyPIConfigurator:
     def configure(self, mirror_key: str = 'tsinghua') -> bool:
         """配置镜像"""
         if mirror_key not in self.MIRRORS:
-            print(f"未知的镜像: {{mirror_key}}")
+            logger.info(f"未知的镜像: {{mirror_key}}")
             return False
 
         mirror = self.MIRRORS[mirror_key]
@@ -220,24 +220,24 @@ trusted-host = {mirror['url'].split('/')[2]}
 
         try:
             config_path.write_text(config_content)
-            print(f"✓ 配置成功: {{mirror['name']}}")
-            print(f"  配置文件: {{config_path}}")
+            logger.info(f"✓ 配置成功: {{mirror['name']}}")
+            logger.info(f"  配置文件: {{config_path}}")
             return True
         except Exception as e:
-            print(f"✗ 配置失败: {{e}}")
+            logger.info(f"✗ 配置失败: {{e}}")
             return False
 
     def list_mirrors(self):
         """列出可用镜像"""
-        print("可用镜像源:")
+        logger.info("可用镜像源:")
         for key, mirror in self.MIRRORS.items():
-            print(f"  [{key}] {{mirror['name']}} - {{mirror['url']}}")
+            logger.info(f"  [{key}] {{mirror['name']}} - {{mirror['url']}}")
 
 def main():
     configurator = PyPIConfigurator()
 
-    print("PyPI镜像配置工具")
-    print("=" * 40)
+    logger.info("PyPI镜像配置工具")
+    logger.info("=" * 40)
 
     configurator.list_mirrors()
     print()
@@ -357,20 +357,20 @@ class ComplexityAnalyzer:
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python complexity_analyzer.py <file.py>")
+        logger.info("用法: python complexity_analyzer.py <file.py>")
         return
 
     analyzer = ComplexityAnalyzer()
     result = analyzer.analyze_file(sys.argv[1])
 
     if 'error' in result:
-        print(f"错误: {result['error']}")
+        logger.info(f"错误: {result['error']}")
         return
 
-    print(f"分析结果:")
-    print(f"  函数数量: {{result['total_functions']}}")
-    print(f"  类数量: {{result['total_classes']}}")
-    print(result['summary'])
+    logger.info(f"分析结果:")
+    logger.info(f"  函数数量: {{result['total_functions']}}")
+    logger.info(f"  类数量: {{result['total_classes']}}")
+    logger.info(result['summary'])
 
 if __name__ == '__main__':
     main()
@@ -393,6 +393,9 @@ import re
 import sys
 from pathlib import Path
 from typing import List, Tuple
+from core.logger import get_logger
+logger = get_logger('ai_script_generator.script_market')
+
 
 class BatchRenamer:
     """批量文件重命名器"""
@@ -424,7 +427,7 @@ class BatchRenamer:
     def execute(self) -> int:
         """执行重命名"""
         if self.preview_mode:
-            print("预览模式，请先调用 execute() 确认")
+            logger.info("预览模式，请先调用 execute() 确认")
             return 0
 
         count = 0
@@ -434,10 +437,10 @@ class BatchRenamer:
 
             try:
                 old_path.rename(new_path)
-                print(f"✓ {{old_name}} → {{new_name}}")
+                logger.info(f"✓ {{old_name}} → {{new_name}}")
                 count += 1
             except Exception as e:
-                print(f"✗ {{old_name}} 失败: {{e}}")
+                logger.info(f"✗ {{old_name}} 失败: {{e}}")
 
         return count
 
@@ -447,7 +450,7 @@ class BatchRenamer:
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python batch_rename.py <目录> [模式] [替换]")
+        logger.info("用法: python batch_rename.py <目录> [模式] [替换]")
         return
 
     directory = sys.argv[1]
@@ -456,8 +459,8 @@ def main():
 
     renamer = BatchRenamer(directory)
 
-    print(f"目录: {{directory}}")
-    print(f"模式: {{pattern}} → {{replacement}}")
+    logger.info(f"目录: {{directory}}")
+    logger.info(f"模式: {{pattern}} → {{replacement}}")
     print()
 
     # 预览
@@ -465,12 +468,12 @@ def main():
     changes = renamer.preview()
 
     if not changes:
-        print("没有文件匹配模式")
+        logger.info("没有文件匹配模式")
         return
 
-    print(f"发现 {{len(changes)}} 个文件待重命名:")
+    logger.info(f"发现 {{len(changes)}} 个文件待重命名:")
     for old, new in changes:
-        print(f"  {{old}} → {{new}}")
+        logger.info(f"  {{old}} → {{new}}")
     print()
 
     # 执行
@@ -478,7 +481,7 @@ def main():
     if confirm.lower() == 'y':
         renamer.set_preview_mode(False)
         count = renamer.execute()
-        print(f"\\n完成: {{count}} 个文件已重命名")
+        logger.info(f"\\n完成: {{count}} 个文件已重命名")
 
 if __name__ == '__main__':
     main()

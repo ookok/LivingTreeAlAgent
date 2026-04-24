@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from .models import WorkflowState, TaskStatus
+from core.logger import get_logger
+logger = get_logger('superpowers.workflow')
+
 
 
 class WorkflowStatus(Enum):
@@ -98,7 +101,7 @@ class Workflow:
 
         except Exception as e:
             self.status = WorkflowStatus.FAILED
-            print(f"[Workflow] 执行失败: {e}")
+            logger.info(f"[Workflow] 执行失败: {e}")
 
         self.updated_at = time.time()
 

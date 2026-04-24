@@ -137,7 +137,7 @@ class SessionManager:
             try:
                 cb(event, data)
             except Exception as e:
-                print(f"[SessionManager] Callback error: {e}")
+                logger.info(f"[SessionManager] Callback error: {e}")
 
     # ============ 会话管理 ============
 
@@ -564,6 +564,9 @@ class SessionManager:
     def _row_to_message(self, row: tuple) -> UnifiedMessage:
         """数据库行转 UnifiedMessage"""
         import json
+from core.logger import get_logger
+logger = get_logger('unified_chat.session_manager')
+
         metadata = None
         if row[14]:
             try:

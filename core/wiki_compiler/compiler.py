@@ -111,7 +111,7 @@ class WikiCompiler:
                         k: RawMaterial.from_dict(v) for k, v in data.items()
                     }
             except Exception as e:
-                print(f"[WikiCompiler] 加载原材料失败: {e}")
+                logger.info(f"[WikiCompiler] 加载原材料失败: {e}")
 
         # 加载 Wiki 页面
         pages_path = self.wiki_root / "wiki_pages.json"
@@ -123,7 +123,7 @@ class WikiCompiler:
                         k: WikiPage.from_dict(v) for k, v in data.items()
                     }
             except Exception as e:
-                print(f"[WikiCompiler] 加载 Wiki 页面失败: {e}")
+                logger.info(f"[WikiCompiler] 加载 Wiki 页面失败: {e}")
 
         # 加载 Schema
         schema_path = self.wiki_root / "schema.json"
@@ -132,7 +132,7 @@ class WikiCompiler:
                 with open(schema_path, 'r', encoding='utf-8') as f:
                     self.schema = Schema.from_dict(json.load(f))
             except Exception as e:
-                print(f"[WikiCompiler] 加载 Schema 失败: {e}")
+                logger.info(f"[WikiCompiler] 加载 Schema 失败: {e}")
 
         # 构建索引
         self._rebuild_index()
@@ -159,7 +159,7 @@ class WikiCompiler:
             with open(schema_path, 'w', encoding='utf-8') as f:
                 json.dump(self.schema.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[WikiCompiler] 保存数据失败: {e}")
+            logger.info(f"[WikiCompiler] 保存数据失败: {e}")
 
     def _rebuild_index(self):
         """重建索引"""
@@ -229,7 +229,7 @@ class WikiCompiler:
                 try:
                     compiled_info = llm_compile_fn(content, title)
                 except Exception as e:
-                    print(f"[WikiCompiler] LLM编译失败: {e}")
+                    logger.info(f"[WikiCompiler] LLM编译失败: {e}")
 
             # 3. 创建源摘要页
             source_page = WikiPage(
@@ -289,7 +289,7 @@ class WikiCompiler:
                 try:
                     callback(material, result)
                 except Exception as e:
-                    print(f"[WikiCompiler] Ingest回调失败: {e}")
+                    logger.info(f"[WikiCompiler] Ingest回调失败: {e}")
 
             result.success = True
             self._save_data()
@@ -297,7 +297,7 @@ class WikiCompiler:
 
         except Exception as e:
             result.error = str(e)
-            print(f"[WikiCompiler] Ingest失败: {e}")
+            logger.info(f"[WikiCompiler] Ingest失败: {e}")
 
         return result
 
@@ -408,7 +408,7 @@ class WikiCompiler:
                             reasoning_chain=answer.reasoning_chain
                         )
                     except Exception as e:
-                        print(f"[WikiCompiler] LLM回答失败: {e}")
+                        logger.info(f"[WikiCompiler] LLM回答失败: {e}")
                         # 使用默认答案
                         answer.answer = self._compose_default_answer(relevant_pages)
                 else:
@@ -435,7 +435,7 @@ class WikiCompiler:
                 )
 
         except Exception as e:
-            print(f"[WikiCompiler] Query失败: {e}")
+            logger.info(f"[WikiCompiler] Query失败: {e}")
             answer.answer = f"查询失败: {e}"
             answer.confidence = 0.0
 
@@ -451,6 +451,9 @@ class WikiCompiler:
     def _search_relevant_pages(self, query: str) -> List[WikiPage]:
         """搜索相关页面"""
         import re
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compiler')
+
         query_lower = query.lower()
         query_keywords = set(re.findall(r'[\w]+', query_lower))
 
@@ -546,7 +549,7 @@ class WikiCompiler:
                 result.suggestions.append(f"发现 {len(result.outdated_pages)} 个过时页面，考虑更新。")
 
         except Exception as e:
-            print(f"[WikiCompiler] Check失败: {e}")
+            logger.info(f"[WikiCompiler] Check失败: {e}")
 
         return result
 

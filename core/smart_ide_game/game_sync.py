@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import random
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.game_sync')
+
 
 
 class SyncMode(Enum):
@@ -389,7 +392,7 @@ class GameSync:
             })
 
         except Exception as e:
-            print(f"Failed to receive state update: {e}")
+            logger.info(f"Failed to receive state update: {e}")
 
     def get_interpolated_player_state(
         self,
@@ -454,7 +457,7 @@ class GameSync:
             })
 
         except Exception as e:
-            print(f"Failed to receive input packet: {e}")
+            logger.info(f"Failed to receive input packet: {e}")
 
     def create_event_packet(
         self,
@@ -491,7 +494,7 @@ class GameSync:
             self._emit_event(event_data["type"], event_data["data"])
 
         except Exception as e:
-            print(f"Failed to receive event packet: {e}")
+            logger.info(f"Failed to receive event packet: {e}")
 
     def _serialize_packet(self, packet: SyncPacket) -> bytes:
         """序列化数据包"""
@@ -548,7 +551,7 @@ class GameSync:
             )
 
         except Exception as e:
-            print(f"Failed to deserialize packet: {e}")
+            logger.info(f"Failed to deserialize packet: {e}")
             return None
 
     def add_event_callback(self, event: str, callback: Callable):
@@ -564,7 +567,7 @@ class GameSync:
                 try:
                     callback(event, data)
                 except Exception as e:
-                    print(f"Event callback error: {e}")
+                    logger.info(f"Event callback error: {e}")
 
     def get_sync_stats(self) -> Dict[str, Any]:
         """获取同步统计"""

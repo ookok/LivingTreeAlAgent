@@ -197,7 +197,7 @@ class CompiledCache:
                         if chunk_data.get("embedding"):
                             self._embeddings[chunk.id] = chunk_data["embedding"]
             except Exception as e:
-                print(f"[CompiledCache] 加载预编译片段失败: {e}")
+                logger.info(f"[CompiledCache] 加载预编译片段失败: {e}")
 
         # 加载缓存条目
         if self.cache_path.exists():
@@ -219,7 +219,7 @@ class CompiledCache:
                         )
                         self._cache[entry.query_hash] = entry
             except Exception as e:
-                print(f"[CompiledCache] 加载缓存条目失败: {e}")
+                logger.info(f"[CompiledCache] 加载缓存条目失败: {e}")
 
         # 加载统计
         if self.stats_path.exists():
@@ -227,7 +227,7 @@ class CompiledCache:
                 with open(self.stats_path, 'r', encoding='utf-8') as f:
                     self._stats = json.load(f)
             except Exception as e:
-                print(f"[CompiledCache] 加载统计失败: {e}")
+                logger.info(f"[CompiledCache] 加载统计失败: {e}")
 
     def _save_state(self):
         """保存状态"""
@@ -260,7 +260,7 @@ class CompiledCache:
             with open(self.stats_path, 'w', encoding='utf-8') as f:
                 json.dump(self._stats, f, ensure_ascii=False)
         except Exception as e:
-            print(f"[CompiledCache] 保存状态失败: {e}")
+            logger.info(f"[CompiledCache] 保存状态失败: {e}")
 
     def _hash_query(self, query: str) -> str:
         """计算查询哈希"""
@@ -567,6 +567,9 @@ class CompiledCache:
     def _extract_tags(self, text: str) -> List[str]:
         """提取标签"""
         import re
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compiled_cache')
+
         tags = []
         # 提取 #标签
         tags.extend(re.findall(r'#(\w+)', text))

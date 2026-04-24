@@ -18,8 +18,8 @@ AI Reasoning Engine
         context={"last_action": "chat_completion", "provider": "z.ai"}
     )
     if result.is_config_issue:
-        print(result.inferred_config_key)   # "ZAI_API_KEY"
-        print(result.action_suggestion)      # "配置 Z.AI API Key"
+        logger.info(result.inferred_config_key)   # "ZAI_API_KEY"
+        logger.info(result.action_suggestion)      # "配置 Z.AI API Key"
 """
 
 import re
@@ -28,6 +28,9 @@ import time
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
+from core.logger import get_logger
+logger = get_logger('ai_reasoning_engine')
+
 
 logger = logging.getLogger(__name__)
 

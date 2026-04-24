@@ -26,6 +26,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque
 from dataclasses import asdict
+from core.logger import get_logger
+logger = get_logger('expert_learning.enhanced_performance_monitor')
+
 
 
 class MetricType(Enum):
@@ -109,7 +112,7 @@ class EnhancedPerformanceMonitor:
 
     # 获取报告
     report = monitor.get_report(period="1h")
-    print(f"健康度: {report.overall_health}")
+    logger.info(f"健康度: {report.overall_health}")
     ```
     """
 
@@ -148,7 +151,7 @@ class EnhancedPerformanceMonitor:
         # 健康度追踪
         self._health_history: deque = deque(maxlen=100)
 
-        print(f"[EnhancedMonitor] 已初始化 (延迟阈值:{latency_threshold_ms}ms, 质量阈值:{quality_threshold})")
+        logger.info(f"[EnhancedMonitor] 已初始化 (延迟阈值:{latency_threshold_ms}ms, 质量阈值:{quality_threshold})")
 
     def record_request(
         self,
@@ -509,40 +512,40 @@ class EnhancedPerformanceMonitor:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("增强的性能监控测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("增强的性能监控测试")
+    logger.info("=" * 60)
 
     monitor = EnhancedPerformanceMonitor(latency_threshold_ms=3000)
 
-    print("\n[Test 1: 记录请求]")
+    logger.info("\n[Test 1: 记录请求]")
     monitor.record_request("qwen3.5:9b", "Qwen 9B", latency_ms=1500, success=True, quality_score=0.9, input_tokens=100, output_tokens=200)
     monitor.record_request("qwen3.5:9b", "Qwen 9B", latency_ms=2000, success=True, quality_score=0.85, input_tokens=150, output_tokens=250)
     monitor.record_request("qwen2.5:1.5b", "Qwen 1.5B", latency_ms=800, success=True, quality_score=0.7, input_tokens=100, output_tokens=150)
     monitor.record_request("qwen3.5:9b", "Qwen 9B", latency_ms=4500, success=False, error_message="Timeout")
-    print("  已记录4个请求")
+    logger.info("  已记录4个请求")
 
-    print("\n[Test 2: 模型性能]")
+    logger.info("\n[Test 2: 模型性能]")
     perf = monitor.get_model_performance("qwen3.5:9b")
     if perf:
-        print(f"  模型: {perf.model_id}")
-        print(f"  请求数: {perf.total_requests}")
-        print(f"  平均延迟: {perf.avg_latency_ms:.0f}ms")
-        print(f"  错误率: {perf.error_rate:.1%}")
-        print(f"  健康度: {perf.health_score:.2f}")
+        logger.info(f"  模型: {perf.model_id}")
+        logger.info(f"  请求数: {perf.total_requests}")
+        logger.info(f"  平均延迟: {perf.avg_latency_ms:.0f}ms")
+        logger.info(f"  错误率: {perf.error_rate:.1%}")
+        logger.info(f"  健康度: {perf.health_score:.2f}")
 
-    print("\n[Test 3: 性能报告]")
+    logger.info("\n[Test 3: 性能报告]")
     report = monitor.get_report(period="1h")
-    print(f"  周期: {report.period}")
-    print(f"  总请求: {report.total_requests}")
-    print(f"  整体健康: {report.overall_health:.2f}")
-    print(f"  告警数: {len(report.alerts)}")
-    print(f"  建议: {report.recommendations}")
+    logger.info(f"  周期: {report.period}")
+    logger.info(f"  总请求: {report.total_requests}")
+    logger.info(f"  整体健康: {report.overall_health:.2f}")
+    logger.info(f"  告警数: {len(report.alerts)}")
+    logger.info(f"  建议: {report.recommendations}")
 
-    print("\n[Test 4: 趋势分析]")
+    logger.info("\n[Test 4: 趋势分析]")
     trend = monitor.get_trend(MetricType.LATENCY, "qwen3.5:9b")
-    print(f"  延迟趋势: {trend['trend']}")
-    print(f"  当前: {trend['current']:.0f}ms")
-    print(f"  平均: {trend['average']:.0f}ms")
+    logger.info(f"  延迟趋势: {trend['trend']}")
+    logger.info(f"  当前: {trend['current']:.0f}ms")
+    logger.info(f"  平均: {trend['average']:.0f}ms")
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

@@ -180,7 +180,7 @@ class SkillEvolutionAgent:
                 # 尝试使用最相似的技能
                 best_skill = similar_skills[0]
                 if self.config.verbose:
-                    print(f"[Agent] 发现相似技能: {best_skill.name} (匹配度: {best_skill.use_count})")
+                    logger.info(f"[Agent] 发现相似技能: {best_skill.name} (匹配度: {best_skill.use_count})")
 
                 # 直接执行技能流程
                 skill_used = best_skill
@@ -287,7 +287,7 @@ class SkillEvolutionAgent:
             phase = f"turn_{self._turn}"
 
             if self.config.verbose:
-                print(f"[Agent] Turn {self._turn}...")
+                logger.info(f"[Agent] Turn {self._turn}...")
 
             # AmphiLoop: 创建检查点
             if self.config.enable_amphiloop:
@@ -310,7 +310,7 @@ class SkillEvolutionAgent:
             if self.config.verbose:
                 content = response.content
                 if content:
-                    print(f"[Agent] LLM: {content[:200]}...")
+                    logger.info(f"[Agent] LLM: {content[:200]}...")
 
             # 解析工具调用
             tool_calls = self._parse_tool_calls(response)
@@ -326,7 +326,7 @@ class SkillEvolutionAgent:
                 args = tc["args"]
 
                 if self.config.verbose:
-                    print(f"[Agent] Tool: {tool_name}({args})")
+                    logger.info(f"[Agent] Tool: {tool_name}({args})")
 
                 # 记录执行
                 record = ExecutionRecord(
@@ -376,7 +376,7 @@ class SkillEvolutionAgent:
                         )
                         if should_terminate:
                             if self.config.verbose:
-                                print(f"[Agent] 动态终止: {reason}")
+                                logger.info(f"[Agent] 动态终止: {reason}")
                             break
 
                 # 检查是否成功
@@ -385,13 +385,13 @@ class SkillEvolutionAgent:
                 elif not result.success and result.error:
                     # 工具执行失败，记录但继续
                     if self.config.verbose:
-                        print(f"[Agent] Tool error: {result.error}")
+                        logger.info(f"[Agent] Tool error: {result.error}")
 
                     # AmphiLoop: 失败时尝试回滚
                     if self.config.enable_amphiloop and self.config.rollback_on_failure:
                         checkpoint = self.amphiloop.handle_failure(f"Tool {tool_name} failed: {result.error}")
                         if checkpoint and self.config.verbose:
-                            print(f"[Agent] 回滚到检查点: {checkpoint.checkpoint_id}")
+                            logger.info(f"[Agent] 回滚到检查点: {checkpoint.checkpoint_id}")
 
     def _parse_tool_calls(self, response) -> List[Dict[str, Any]]:
         """解析 LLM 响应中的工具调用"""
@@ -615,7 +615,7 @@ class SkillEvolutionAgent:
         self.db.add_insight_index(idx)
 
         if self.config.verbose:
-            print(f"[Agent] 创建新技能: {skill.name} (ID: {skill.skill_id})")
+            logger.info(f"[Agent] 创建新技能: {skill.name} (ID: {skill.skill_id})")
 
         if self.on_skill_created:
             self.on_skill_created(skill)
@@ -654,7 +654,7 @@ class SimpleLLMClient:
                 import ollama
                 self._client = ollama
             except ImportError:
-                print("[Warning] ollama 包未安装")
+                logger.info("[Warning] ollama 包未安装")
 
     def chat(self, messages: List[Dict[str, Any]], tools: List[Dict] = None) -> Any:
         """
@@ -699,7 +699,7 @@ class SimpleLLMClient:
             return Response(response['message']['content'])
 
         except Exception as e:
-            print(f"[Error] Ollama chat failed: {e}")
+            logger.info(f"[Error] Ollama chat failed: {e}")
             return self._mock_response(messages)
 
     def _build_tool_prompt(self, tools: List[Dict]) -> str:
@@ -762,6 +762,9 @@ def create_agent(
     """
     import os
     from pathlib import Path
+from core.logger import get_logger
+logger = get_logger('skill_evolution.agent_loop')
+
 
     # 默认路径
     if db_path is None:

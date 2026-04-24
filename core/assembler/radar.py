@@ -24,6 +24,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('assembler.radar')
+
 
 
 class License(Enum):
@@ -221,7 +224,7 @@ class OSSRadar:
                 return results
 
         except Exception as e:
-            print(f"GitHub search error: {e}")
+            logger.info(f"GitHub search error: {e}")
             return []
 
     async def _search_gitee(
@@ -262,7 +265,7 @@ class OSSRadar:
                 return results
 
         except Exception as e:
-            print(f"Gitee search error: {e}")
+            logger.info(f"Gitee search error: {e}")
             return []
 
     def _parse_github_repo(self, item: dict) -> RepoInfo:

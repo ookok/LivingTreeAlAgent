@@ -19,6 +19,9 @@ from enum import Enum
 from pathlib import Path
 import threading
 import asyncio
+from core.logger import get_logger
+logger = get_logger('data_retriever.__init__')
+
 
 
 class QueryIntent(Enum):
@@ -386,7 +389,7 @@ class UniversalDataRetriever:
                 results = await source.search(parsed)
                 all_results.extend(results)
             except Exception as e:
-                print(f"Data source {name} search error: {e}")
+                logger.info(f"Data source {name} search error: {e}")
 
         return all_results
 
@@ -652,7 +655,7 @@ class LocalSQLiteSource:
                     results.append(dict(row))
 
             except Exception as e:
-                print(f"Query error for {table}: {e}")
+                logger.info(f"Query error for {table}: {e}")
 
         conn.close()
         return results

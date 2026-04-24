@@ -14,6 +14,9 @@ import hashlib
 from typing import Optional, Dict, Any, List
 from collections import defaultdict
 import threading
+from core.logger import get_logger
+logger = get_logger('fusion_rag.session_cache')
+
 
 
 class SessionCacheLayer:
@@ -40,7 +43,7 @@ class SessionCacheLayer:
         self.time_decay_factor = time_decay_factor
         self.lock = threading.Lock()
         
-        print(f"[SessionCache] 初始化完成，最大历史: {max_history}")
+        logger.info(f"[SessionCache] 初始化完成，最大历史: {max_history}")
     
     def _compute_similarity(self, text1: str, text2: str) -> float:
         """计算文本相似度 (简单词重叠)"""

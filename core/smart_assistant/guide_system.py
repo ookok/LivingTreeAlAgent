@@ -12,6 +12,9 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
 from .models import Guide, GuideStep, GuideLevel, OperationPath
+from core.logger import get_logger
+logger = get_logger('smart_assistant.guide_system')
+
 
 
 class GuideState(Enum):
@@ -97,7 +100,7 @@ class GuideSystem:
             try:
                 callback(**kwargs)
             except Exception as e:
-                print(f"回调执行失败: {e}")
+                logger.info(f"回调执行失败: {e}")
     
     # ==================== 指引执行 ====================
     
@@ -113,7 +116,7 @@ class GuideSystem:
         """
         if self.current_guide and self.current_execution:
             if self.current_execution.state == GuideState.RUNNING:
-                print("已有指引正在运行，请先结束")
+                logger.info("已有指引正在运行，请先结束")
                 return False
         
         self.current_guide = guide
@@ -330,7 +333,7 @@ class GuideSystem:
         
         elif action.startswith("message:"):
             message = action.split(":", 1)[1]
-            print(f"指引消息: {message}")
+            logger.info(f"指引消息: {message}")
     
     # ==================== 指引渲染 ====================
     

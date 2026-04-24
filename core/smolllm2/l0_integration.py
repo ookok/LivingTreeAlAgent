@@ -129,6 +129,9 @@ class L0L4IntegratedExecutor:
             # 懒加载 L4 执行器
             try:
                 from core.fusion_rag.l4_executor import L4RelayExecutor
+from core.logger import get_logger
+logger = get_logger('smolllm2.l0_integration')
+
                 self._l4_executor = L4RelayExecutor()
             except ImportError:
                 raise RuntimeError("L4 执行器不可用，请检查 fusion_rag 模块")
@@ -259,7 +262,7 @@ async def smart_execute(
 
     用法：
     >>> result = await smart_execute("你好")
-    >>> print(result["content"])
+    >>> logger.info(result["content"])
     你好！有什么我可以帮你的吗？
     """
     executor = await get_l0l4_executor()
@@ -272,7 +275,7 @@ async def preview_route(prompt: str) -> RouteDecision:
 
     用法：
     >>> decision = await preview_route("帮我查下这个产品的库存")
-    >>> print(decision.route.value)  # -> "search"
+    >>> logger.info(decision.route.value)  # -> "search"
     """
     executor = await get_l0l4_executor()
     return await executor.route_only(prompt)

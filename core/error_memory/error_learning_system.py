@@ -67,6 +67,9 @@ class ErrorLearningSystem:
     使用示例：
     ```python
     from core.error_memory import ErrorLearningSystem
+from core.logger import get_logger
+logger = get_logger('error_memory.error_learning_system')
+
     
     # 初始化
     els = ErrorLearningSystem()
@@ -77,8 +80,8 @@ class ErrorLearningSystem:
         context={"operation": "read_file", "file": "data.csv"}
     )
     
-    print(f"匹配模式: {result['matched_pattern']['pattern_name']}")
-    print(f"推荐方案: {result['recommended_templates'][0]['template_name']}")
+    logger.info(f"匹配模式: {result['matched_pattern']['pattern_name']}")
+    logger.info(f"推荐方案: {result['recommended_templates'][0]['template_name']}")
     ```
     """
 
@@ -119,9 +122,9 @@ class ErrorLearningSystem:
             "new_templates_created": 0,
         }
         
-        print(f"[ErrorLearningSystem] 已初始化")
-        print(f"  - 自动学习: {auto_learn}")
-        print(f"  - 知识库路径: {storage_path}")
+        logger.info(f"[ErrorLearningSystem] 已初始化")
+        logger.info(f"  - 自动学习: {auto_learn}")
+        logger.info(f"  - 知识库路径: {storage_path}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 核心API
@@ -475,7 +478,7 @@ def quick_learn(error: Exception, context: Optional[Dict] = None) -> Dict[str, A
         data = json.loads(invalid_json)
     except Exception as e:
         solution = quick_learn(e, {"operation": "json_parse"})
-        print(solution["matched_pattern"]["pattern_name"])
+        logger.info(solution["matched_pattern"]["pattern_name"])
     ```
     """
     system = get_error_system()

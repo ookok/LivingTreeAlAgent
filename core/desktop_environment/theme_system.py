@@ -476,11 +476,14 @@ class ThemeSystem:
                     if current_id and current_id in self._themes:
                         self._current_theme = self._themes[current_id]
             except Exception as e:
-                print(f"Failed to load theme settings: {e}")
+                logger.info(f"Failed to load theme settings: {e}")
 
     def save_settings(self):
         """保存主题设置"""
         from . import _DATA_DIR
+from core.logger import get_logger
+logger = get_logger('desktop_environment.theme_system')
+
         settings_file = _DATA_DIR / "theme_settings.json"
 
         data = {

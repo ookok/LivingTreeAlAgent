@@ -14,7 +14,7 @@
     
     # 创建引导流程
     flow = guide.create_guide_flow("weather_api")
-    print(f"需要 {len(flow.steps)} 步完成")
+    logger.info(f"需要 {len(flow.steps)} 步完成")
     
     # 执行引导
     result = await guide.execute_guide(flow)
@@ -29,6 +29,9 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
 from threading import Lock
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.shortest_path_guide')
+
 
 logger = logging.getLogger(__name__)
 

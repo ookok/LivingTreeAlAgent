@@ -294,14 +294,14 @@ class TaskDecomposer:
         Returns:
             TaskDecomposition: 分解结果
         """
-        print(f"[TaskDecomposer] 分解任务: {task[:50]}...")
+        logger.info(f"[TaskDecomposer] 分解任务: {task[:50]}...")
 
         # 尝试 LLM 智能分解
         if self.llm_client:
             try:
                 return self._decompose_with_llm(task)
             except Exception as e:
-                print(f"[TaskDecomposer] LLM 分解失败: {e}")
+                logger.info(f"[TaskDecomposer] LLM 分解失败: {e}")
 
         # 回退到规则分解
         return self._decompose_with_rules(task)
@@ -362,7 +362,7 @@ class TaskDecomposer:
             complexity = data.get("estimated_complexity", 1)
 
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"[TaskDecomposer] 解析 LLM 输出失败: {e}")
+            logger.info(f"[TaskDecomposer] 解析 LLM 输出失败: {e}")
             return self._decompose_with_rules(task)
 
         return TaskDecomposition(
@@ -481,7 +481,7 @@ class SubTaskExecutor:
         handler = task_handler or self.task_handler
         strategy = decomposition.strategy
 
-        print(f"[SubTaskExecutor] 开始执行，策略: {strategy.value}")
+        logger.info(f"[SubTaskExecutor] 开始执行，策略: {strategy.value}")
 
         if strategy == ExecutionStrategy.PARALLEL:
             self._execute_parallel(decomposition, handler)
@@ -510,7 +510,7 @@ class SubTaskExecutor:
         handler = task_handler or self.task_handler
         strategy = decomposition.strategy
 
-        print(f"[SubTaskExecutor] 开始流式执行，策略: {strategy.value}")
+        logger.info(f"[SubTaskExecutor] 开始流式执行，策略: {strategy.value}")
 
         if strategy == ExecutionStrategy.PARALLEL:
             iterator = self._execute_parallel_stream(decomposition, handler)
@@ -525,7 +525,7 @@ class SubTaskExecutor:
     def interrupt(self):
         """中断执行"""
         self._interrupt_event.set()
-        print("[SubTaskExecutor] 收到中断信号")
+        logger.info("[SubTaskExecutor] 收到中断信号")
 
     def _execute_sequential(
         self,
@@ -580,6 +580,9 @@ class SubTaskExecutor:
     ) -> Iterator[TaskDecomposition]:
         """并行执行（流式，返回当前状态）"""
         import concurrent.futures
+from core.logger import get_logger
+logger = get_logger('task_decomposer')
+
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {
@@ -639,7 +642,7 @@ class SubTaskExecutor:
                 # 死锁检测
                 remaining = [t.task_id for t in decomposition.subtasks
                              if t.task_id not in completed]
-                print(f"[SubTaskExecutor] 警告: 可能的死锁，剩余任务: {remaining}")
+                logger.info(f"[SubTaskExecutor] 警告: 可能的死锁，剩余任务: {remaining}")
                 break
 
     def _execute_dag_stream(
@@ -683,7 +686,7 @@ class SubTaskExecutor:
         handler: Callable[[SubTask], Any],
     ):
         """执行单个子任务"""
-        print(f"[SubTaskExecutor] 执行子任务: {subtask.title}")
+        logger.info(f"[SubTaskExecutor] 执行子任务: {subtask.title}")
 
         # 更新状态
         subtask.status = TaskStatus.RUNNING
@@ -708,7 +711,7 @@ class SubTaskExecutor:
             if self.callbacks.on_subtask_complete:
                 self.callbacks.on_subtask_complete(subtask)
 
-            print(f"[SubTaskExecutor] 子任务完成: {subtask.title} (耗时: {subtask.duration:.2f}s)")
+            logger.info(f"[SubTaskExecutor] 子任务完成: {subtask.title} (耗时: {subtask.duration:.2f}s)")
 
         except Exception as e:
             subtask.error = str(e)
@@ -719,7 +722,7 @@ class SubTaskExecutor:
             if self.callbacks.on_subtask_error:
                 self.callbacks.on_subtask_error(subtask, str(e))
 
-            print(f"[SubTaskExecutor] 子任务失败: {subtask.title} - {e}")
+            logger.info(f"[SubTaskExecutor] 子任务失败: {subtask.title} - {e}")
 
     def _default_handler(self, subtask: SubTask) -> Any:
         """默认任务处理器"""
@@ -771,34 +774,34 @@ if __name__ == "__main__":
         "优化数据库查询性能",
     ]
 
-    print("=" * 60)
-    print("任务分解测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("任务分解测试")
+    logger.info("=" * 60)
 
     for task in test_tasks:
-        print(f"\n[Original Task] {task}")
-        print(f"[Should Decompose] {decomposer.should_decompose(task)}")
+        logger.info(f"\n[Original Task] {task}")
+        logger.info(f"[Should Decompose] {decomposer.should_decompose(task)}")
 
         decomposition = decomposer.decompose(task)
-        print(f"[Strategy] {decomposition.strategy.value}")
-        print(f"[Complexity] {decomposition.estimated_complexity}")
-        print(f"[Subtasks] {len(decomposition.subtasks)}")
+        logger.info(f"[Strategy] {decomposition.strategy.value}")
+        logger.info(f"[Complexity] {decomposition.estimated_complexity}")
+        logger.info(f"[Subtasks] {len(decomposition.subtasks)}")
 
         for i, subtask in enumerate(decomposition.subtasks, 1):
-            print(f"  {i}. [{subtask.priority.name}] {subtask.title}")
+            logger.info(f"  {i}. [{subtask.priority.name}] {subtask.title}")
             if subtask.depends_on:
-                print(f"     依赖: {subtask.depends_on}")
+                logger.info(f"     依赖: {subtask.depends_on}")
 
         print()
 
     # 测试执行
-    print("=" * 60)
-    print("任务执行测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("任务执行测试")
+    logger.info("=" * 60)
 
     executor = SubTaskExecutor()
     test_decomp = decomposer.decompose("实现一个简单的计算器")
 
     for state in executor.execute_stream(test_decomp):
-        print(f"[Progress] {state.progress_percent:.0f}% - "
+        logger.info(f"[Progress] {state.progress_percent:.0f}% - "
               f"{state.completed_tasks}/{state.total_tasks}")

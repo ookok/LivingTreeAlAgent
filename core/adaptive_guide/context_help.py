@@ -12,13 +12,16 @@
     
     # 获取功能帮助卡片
     card = help_system.get_help_card("weather_api")
-    print(card.title)  # "需要配置天气API"
+    logger.info(card.title)  # "需要配置天气API"
 """
 
 import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.context_help')
+
 
 logger = logging.getLogger(__name__)
 

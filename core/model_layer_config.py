@@ -308,6 +308,9 @@ def check_system_memory() -> Dict[str, float]:
     """获取系统内存信息"""
     try:
         import psutil
+from core.logger import get_logger
+logger = get_logger('model_layer_config')
+
         mem = psutil.virtual_memory()
         return {
             "total_gb": mem.total / (1024**3),
@@ -335,35 +338,35 @@ def get_recommended_models_for_hardware() -> List[ModelDefinition]:
 # ── 测试函数 ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("L0-L4 模型层配置")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("L0-L4 模型层配置")
+    logger.info("=" * 60)
     
     # 检查 Ollama
-    print(f"\n[系统检测]")
-    print(f"  Ollama 已安装: {check_ollama_installed()}")
-    print(f"  系统内存: {check_system_memory()}")
+    logger.info(f"\n[系统检测]")
+    logger.info(f"  Ollama 已安装: {check_ollama_installed()}")
+    logger.info(f"  系统内存: {check_system_memory()}")
     
     # 显示模型列表
-    print(f"\n[预定义模型] ({len(L0_L4_MODELS)} 个)")
+    logger.info(f"\n[预定义模型] ({len(L0_L4_MODELS)} 个)")
     for tier in ModelTier:
         models = get_models_by_tier(tier)
-        print(f"\n  {tier.value}:")
+        logger.info(f"\n  {tier.value}:")
         for m in models:
-            print(f"    - {m.name} ({m.ollama_name}, {m.size_gb}GB)")
-            print(f"      用途: {m.purpose}")
+            logger.info(f"    - {m.name} ({m.ollama_name}, {m.size_gb}GB)")
+            logger.info(f"      用途: {m.purpose}")
     
     # 硬件推荐
-    print(f"\n[硬件推荐]")
+    logger.info(f"\n[硬件推荐]")
     recommended = get_recommended_models_for_hardware()
-    print(f"  可运行模型: {len(recommended)} 个")
+    logger.info(f"  可运行模型: {len(recommended)} 个")
     for m in recommended[:5]:
-        print(f"    - {m.name} ({m.tier.value})")
+        logger.info(f"    - {m.name} ({m.tier.value})")
     
     # 默认配置
-    print(f"\n[默认配置]")
+    logger.info(f"\n[默认配置]")
     config = create_default_layer_config()
-    print(f"  部署模式: {config.mode}")
-    print(f"  自动部署: {config.auto_deploy_all}")
+    logger.info(f"  部署模式: {config.mode}")
+    logger.info(f"  自动部署: {config.auto_deploy_all}")
     
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

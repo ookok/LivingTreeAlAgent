@@ -11,6 +11,9 @@ from typing import List, Dict, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
 import time
 import uuid
+from core.logger import get_logger
+logger = get_logger('evolution.gep_integration')
+
 
 
 @dataclass
@@ -221,11 +224,11 @@ class GEPEngine:
             self.evaluate_population(self.fitness_function)
             
             if generation % 10 == 0:
-                print(f"Generation {generation}: Best fitness = {self.population.best_fitness}")
-                print(f"Best prompt: {self.chromosome_to_prompt(self.population.best_chromosome)}")
+                logger.info(f"Generation {generation}: Best fitness = {self.population.best_fitness}")
+                logger.info(f"Best prompt: {self.chromosome_to_prompt(self.population.best_chromosome)}")
 
             if self.population.best_fitness >= 0.95:
-                print("Evolution completed early - reached fitness threshold")
+                logger.info("Evolution completed early - reached fitness threshold")
                 break
 
             self.evolve()
@@ -357,8 +360,8 @@ def demo_gep():
         example_evaluation
     )
 
-    print("原始提示词:", base_prompt)
-    print("优化后提示词:", optimized)
+    logger.info("原始提示词:", base_prompt)
+    logger.info("优化后提示词:", optimized)
 
 
 if __name__ == "__main__":

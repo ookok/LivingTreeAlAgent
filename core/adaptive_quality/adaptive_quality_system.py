@@ -87,9 +87,9 @@ class AdaptiveQualitySystem:
         task_func=lambda level: ollama.chat(prompts, model=models[level])
     )
     
-    print(f"质量评分: {result.quality_score}")
-    print(f"使用模型: L{result.model_level}")
-    print(f"响应: {result.response}")
+    logger.info(f"质量评分: {result.quality_score}")
+    logger.info(f"使用模型: L{result.model_level}")
+    logger.info(f"响应: {result.response}")
     ```
     """
 
@@ -173,7 +173,7 @@ class AdaptiveQualitySystem:
         if auto_register:
             self._register_to_expert_learning()
         
-        print(f"[AdaptiveQualitySystem] 已初始化，支持 {len(self.models)} 个模型级别")
+        logger.info(f"[AdaptiveQualitySystem] 已初始化，支持 {len(self.models)} 个模型级别")
 
     def _register_to_expert_learning(self):
         """注册到 ExpertLearning 系统"""
@@ -192,11 +192,11 @@ class AdaptiveQualitySystem:
                         "cost_per_1k_tokens": config.cost_per_1k,
                     }
                 )
-            print("[AdaptiveQualitySystem] 已注册到 ExpertLearning")
+            logger.info("[AdaptiveQualitySystem] 已注册到 ExpertLearning")
         except ImportError:
-            print("[AdaptiveQualitySystem] ExpertLearning 未安装，跳过注册")
+            logger.info("[AdaptiveQualitySystem] ExpertLearning 未安装，跳过注册")
         except Exception as e:
-            print(f"[AdaptiveQualitySystem] 注册到 ExpertLearning 失败: {e}")
+            logger.info(f"[AdaptiveQualitySystem] 注册到 ExpertLearning 失败: {e}")
 
     async def execute(
         self,
@@ -325,7 +325,7 @@ class AdaptiveQualitySystem:
                 return task_func(level)
         except Exception as e:
             # 记录错误
-            print(f"[AQS] Level {level} 执行失败: {e}")
+            logger.info(f"[AQS] Level {level} 执行失败: {e}")
             raise
 
     def _predict_start_level(self, query: str) -> int:
@@ -410,6 +410,9 @@ class SyncAdaptiveQualitySystem:
     def execute(self, query: str, task_func: Callable, **kwargs) -> ExecutionResult:
         """同步执行"""
         import asyncio
+from core.logger import get_logger
+logger = get_logger('adaptive_quality.adaptive_quality_system')
+
         
         async def wrapper():
             return await self._async_system.execute(query, task_func, **kwargs)

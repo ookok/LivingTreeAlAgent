@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timedelta
+from core.logger import get_logger
+logger = get_logger('smart_fallback.schedule_nlp')
+
 
 
 class ScheduleType(Enum):
@@ -507,12 +510,12 @@ def parse_schedule(text: str) -> ParsedSchedule:
 
     Examples:
         >>> result = parse_schedule("每天早上9点提醒我开会")
-        >>> print(result.schedule_type)  # RECURRING
-        >>> print(result.rrule)  # FREQ=DAILY;BYHOUR=9
+        >>> logger.info(result.schedule_type)  # RECURRING
+        >>> logger.info(result.rrule)  # FREQ=DAILY;BYHOUR=9
 
         >>> result = parse_schedule("明天下午3点做报告")
-        >>> print(result.schedule_type)  # ONCE
-        >>> print(result.scheduled_at)  # 2026-04-17T15:00:00
+        >>> logger.info(result.schedule_type)  # ONCE
+        >>> logger.info(result.scheduled_at)  # 2026-04-17T15:00:00
     """
     parser = NLPScheduleParser()
     return parser.parse(text)
@@ -533,21 +536,21 @@ if __name__ == "__main__":
         "删除所有定时任务",
     ]
 
-    print("=" * 60)
-    print("自然语言定时任务解析器测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("自然语言定时任务解析器测试")
+    logger.info("=" * 60)
 
     for text in test_cases:
-        print(f"\n📝 输入: {text}")
+        logger.info(f"\n📝 输入: {text}")
         result = parse_schedule(text)
-        print(f"   命令: {result.command.value}")
-        print(f"   类型: {result.schedule_type.value if result.schedule_type else 'N/A'}")
-        print(f"   置信度: {result.confidence:.2f}")
+        logger.info(f"   命令: {result.command.value}")
+        logger.info(f"   类型: {result.schedule_type.value if result.schedule_type else 'N/A'}")
+        logger.info(f"   置信度: {result.confidence:.2f}")
         if result.scheduled_at:
-            print(f"   执行时间: {result.scheduled_at}")
+            logger.info(f"   执行时间: {result.scheduled_at}")
         if result.rrule:
-            print(f"   循环规则: {result.rrule}")
+            logger.info(f"   循环规则: {result.rrule}")
         if result.description:
-            print(f"   描述: {result.description}")
+            logger.info(f"   描述: {result.description}")
         if result.error_message:
-            print(f"   错误: {result.error_message}")
+            logger.info(f"   错误: {result.error_message}")

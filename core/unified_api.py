@@ -180,10 +180,10 @@ class UnifiedAPIClient:
                     for callback in self._listeners[msg_type]:
                         asyncio.create_task(callback(data))
             except Exception as e:
-                print(f"WebSocket message error: {e}")
+                logger.info(f"WebSocket message error: {e}")
 
         def on_error(ws, error):
-            print(f"WebSocket error: {error}")
+            logger.info(f"WebSocket error: {error}")
             self._ws_connected = False
 
         def on_close(ws, close_status_code, close_msg):
@@ -215,7 +215,7 @@ class UnifiedAPIClient:
             return False
 
         except Exception as e:
-            print(f"WebSocket connection error: {e}")
+            logger.info(f"WebSocket connection error: {e}")
             return False
 
     async def disconnect_websocket(self):
@@ -244,7 +244,7 @@ class UnifiedAPIClient:
             self._ws.send(json.dumps(data))
             return True
         except Exception as e:
-            print(f"WebSocket send error: {e}")
+            logger.info(f"WebSocket send error: {e}")
             return False
 
     # ==================== 离线支持 ====================
@@ -437,6 +437,9 @@ class HermesAPI(UnifiedAPIClient):
         if response.success and response.data:
             with open(save_path, "wb") as f:
                 import base64
+from core.logger import get_logger
+logger = get_logger('unified_api')
+
                 f.write(base64.b64decode(response.data["content"]))
         return response
 

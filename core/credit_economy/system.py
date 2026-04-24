@@ -205,6 +205,9 @@ class CreditEconomySystem:
 
     def __init__(self, storage_path: str = None):
         from pathlib import Path
+from core.logger import get_logger
+logger = get_logger('credit_economy.system')
+
         if storage_path is None:
             storage_path = Path("~/.hermes/credit_economy").expanduser()
 
@@ -256,7 +259,7 @@ class CreditEconomySystem:
                     for badge_id, badge_data in data.items():
                         self.badges[badge_id] = Badge.from_dict(badge_data)
         except Exception as e:
-            print(f"加载数据失败: {e}")
+            logger.info(f"加载数据失败: {e}")
 
     def _save_data(self):
         """保存数据"""
@@ -281,7 +284,7 @@ class CreditEconomySystem:
             with open(self.badges_file, "w", encoding="utf-8") as f:
                 json.dump(badges_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存数据失败: {e}")
+            logger.info(f"保存数据失败: {e}")
 
     def get_user_credit(self, user_id: str) -> UserCredit:
         """获取用户积分"""

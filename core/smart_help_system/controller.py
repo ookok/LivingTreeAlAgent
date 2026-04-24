@@ -305,7 +305,7 @@ class SmartHelpController:
             try:
                 callback(request)
             except Exception as e:
-                print(f"Status callback error: {e}")
+                logger.info(f"Status callback error: {e}")
 
     def _on_new_answer(self, post: MonitoredPost, answer: Answer):
         """新回答回调"""
@@ -317,7 +317,7 @@ class SmartHelpController:
                     try:
                         callback(request, answer)
                     except Exception as e:
-                        print(f"Answer callback error: {e}")
+                        logger.info(f"Answer callback error: {e}")
                 break
 
     def get_all_requests(self) -> List[HelpRequest]:
@@ -422,3 +422,6 @@ class SmartHelpController:
 
 # 辅助导入
 import time
+from core.logger import get_logger
+logger = get_logger('smart_help_system.controller')
+

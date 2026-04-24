@@ -359,7 +359,7 @@ class AppWindow:
                 self._content = self._app_instance
                 return self._app_instance
         except Exception as e:
-            print(f"Failed to load app module {module_path}: {e}")
+            logger.info(f"Failed to load app module {module_path}: {e}")
 
         return None
 
@@ -557,6 +557,9 @@ class WindowManager:
             return
 
         from screeninfo import get_monitors
+from core.logger import get_logger
+logger = get_logger('desktop_environment.window_manager')
+
         monitors = get_monitors()
         if not monitors:
             return

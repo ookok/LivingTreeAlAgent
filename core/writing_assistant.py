@@ -16,6 +16,9 @@ from .unified_model_client import (
     create_remote_client,
 )
 from .llama_cpp_client import LlamaCppConfig
+from core.logger import get_logger
+logger = get_logger('writing_assistant')
+
 
 
 class WritingAssistant:
@@ -56,7 +59,7 @@ class WritingAssistant:
             local_model_path = self._get_default_model_path()
 
         if use_local:
-            print(f"正在初始化本地模型: {local_model_path}")
+            logger.info(f"正在初始化本地模型: {local_model_path}")
             try:
                 self.model_client = create_local_client(
                     model_path=local_model_path,
@@ -64,20 +67,20 @@ class WritingAssistant:
                     n_ctx=n_ctx,
                     n_threads=n_threads,
                 )
-                print("本地模型加载完成")
+                logger.info("本地模型加载完成")
             except Exception as e:
-                print(f"本地模型加载失败: {e}，将使用远程 API...")
+                logger.info(f"本地模型加载失败: {e}，将使用远程 API...")
                 self.use_local = False
 
         if not self.use_local:
-            print(f"正在连接远程 API: {remote_api_url}")
+            logger.info(f"正在连接远程 API: {remote_api_url}")
             api_url = remote_api_url or "https://api.openai.com/v1"
             self.model_client = create_remote_client(
                 api_url=api_url,
                 api_key=remote_api_key or "",
                 model_name=remote_model,
             )
-            print("远程 API 连接就绪")
+            logger.info("远程 API 连接就绪")
 
         if not self.test_connection():
             raise RuntimeError("模型连接失败")
@@ -97,10 +100,10 @@ class WritingAssistant:
         try:
             test_msg = [Message(role="user", content="请回复'模型工作正常'")]
             response = self.chat(test_msg, max_tokens=20)
-            print(f"测试响应: {response[:50]}...")
+            logger.info(f"测试响应: {response[:50]}...")
             return True
         except Exception as e:
-            print(f"连接测试失败: {e}")
+            logger.info(f"连接测试失败: {e}")
             return False
 
     def chat(
@@ -119,7 +122,7 @@ class WritingAssistant:
             return self.model_client.chat(full_messages, config)
         except Exception as e:
             if self.use_local:
-                print(f"本地模型失败: {e}")
+                logger.info(f"本地模型失败: {e}")
             raise
 
     def chat_stream(
@@ -200,7 +203,7 @@ class WritingAssistant:
         for i, task in enumerate(tasks, 1):
             task_type = task.get("type", "unknown")
             params = task.get("params", {})
-            print(f"[{i}/{len(tasks)}] 处理任务: {task_type}")
+            logger.info(f"[{i}/{len(tasks)}] 处理任务: {task_type}")
 
             try:
                 if task_type == "generate":
@@ -216,13 +219,13 @@ class WritingAssistant:
                 else:
                     result = f"[错误] 未知任务类型: {task_type}"
                 results.append(result)
-                print(f"  ✓ 完成")
+                logger.info(f"  ✓ 完成")
             except Exception as e:
                 results.append(f"[错误] {str(e)}")
-                print(f"  ✗ 失败: {e}")
+                logger.info(f"  ✗ 失败: {e}")
 
             progress = (i / len(tasks)) * 100
-            print(f"  进度: {progress:.0f}%")
+            logger.info(f"  进度: {progress:.0f}%")
 
         return results
 
@@ -230,10 +233,10 @@ class WritingAssistant:
         history_data = [{"role": m.role, "content": m.content} for m in self._history]
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(history_data, f, ensure_ascii=False, indent=2)
-        print(f"会话已保存: {filepath}")
+        logger.info(f"会话已保存: {filepath}")
 
     def load_session(self, filepath: str):
         with open(filepath, "r", encoding="utf-8") as f:
             history_data = json.load(f)
         self._history = [Message(role=m["role"], content=m["content"]) for m in history_data]
-        print(f"会话已加载: {filepath}")
+        logger.info(f"会话已加载: {filepath}")

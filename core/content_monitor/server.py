@@ -16,6 +16,9 @@ from typing import Dict, List, Optional, Any
 from .monitor import ContentMonitor
 from .summarizer import ContentSummarizer
 from .models import AlertLevel, ContentType, SystemStats
+from core.logger import get_logger
+logger = get_logger('content_monitor.server')
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ContentMonitorServer")
@@ -249,7 +252,7 @@ async def create_server(config: Optional[Dict] = None) -> ContentMonitorServer:
 if __name__ == "__main__":
     async def test():
         server = await create_server({"port": 8765})
-        print("Server running, press Ctrl+C to stop")
+        logger.info("Server running, press Ctrl+C to stop")
         try:
             while server.running:
                 await asyncio.sleep(1)

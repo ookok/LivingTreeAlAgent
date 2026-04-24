@@ -22,6 +22,9 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Callable
 from collections import defaultdict
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('self_evolution')
+
 
 
 # ============================================================================
@@ -799,18 +802,18 @@ def predict_and_suggest(twin_id: str, query: str) -> Dict[str, Any]:
 # ============================================================================
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("[TEST] Phase 3: Self-Learning and Evolution System")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("[TEST] Phase 3: Self-Learning and Evolution System")
+    logger.info("=" * 60)
     
     # Test 1: Create Evolution Controller
-    print("\n[Test 1] Create Evolution Controller")
+    logger.info("\n[Test 1] Create Evolution Controller")
     controller = create_evolution_controller("twin_001")
-    print(f"  Twin ID: {controller.twin_id}")
-    print(f"  Status: {controller.evolution_status.value}")
+    logger.info(f"  Twin ID: {controller.twin_id}")
+    logger.info(f"  Status: {controller.evolution_status.value}")
     
     # Test 2: Process and Learn
-    print("\n[Test 2] Process and Learn")
+    logger.info("\n[Test 2] Process and Learn")
     test_samples = [
         ("create a user manager class", True, 0.8),
         ("add login method", True, 0.9),
@@ -828,23 +831,23 @@ if __name__ == "__main__":
             success=success,
             feedback_score=score
         )
-        print(f"  Query: {query[:30]}...")
-        print(f"    Intent: {result['intent']['type']}/{result['intent']['action']}")
-        print(f"    Strategy: {result['compression_strategy']}")
-        print(f"    Success: {success}")
+        logger.info(f"  Query: {query[:30]}...")
+        logger.info(f"    Intent: {result['intent']['type']}/{result['intent']['action']}")
+        logger.info(f"    Strategy: {result['compression_strategy']}")
+        logger.info(f"    Success: {success}")
     
     # Test 3: Get Performance Summary
-    print("\n[Test 3] Performance Summary")
+    logger.info("\n[Test 3] Performance Summary")
     summary = controller.learning_engine.get_performance_summary()
-    print(f"  Total Samples: {summary['total_samples']}")
-    print(f"  Patterns Learned: {summary['patterns_learned']}")
-    print(f"  Status: {summary['evolution_status']}")
+    logger.info(f"  Total Samples: {summary['total_samples']}")
+    logger.info(f"  Patterns Learned: {summary['patterns_learned']}")
+    logger.info(f"  Status: {summary['evolution_status']}")
     
     for metric_name, metric_data in summary.get("metrics", {}).items():
-        print(f"  {metric_name}: {metric_data}")
+        logger.info(f"  {metric_name}: {metric_data}")
     
     # Test 4: Predict Intent
-    print("\n[Test 4] Intent Prediction")
+    logger.info("\n[Test 4] Intent Prediction")
     predictions = [
         "create a new database connection",
         "fix the authentication error",
@@ -853,43 +856,43 @@ if __name__ == "__main__":
     
     for query in predictions:
         intent = controller.learning_engine.predict_intent(query)
-        print(f"  Query: {query}")
-        print(f"    Predicted: {intent['type']}/{intent['action']}")
-        print(f"    Confidence: {intent['confidence']:.2f}")
+        logger.info(f"  Query: {query}")
+        logger.info(f"    Predicted: {intent['type']}/{intent['action']}")
+        logger.info(f"    Confidence: {intent['confidence']:.2f}")
     
     # Test 5: Context Suggestions
-    print("\n[Test 5] Context Suggestions")
+    logger.info("\n[Test 5] Context Suggestions")
     intent = {"type": "code", "action": "create"}
     suggestions = controller.learning_engine.suggest_context(intent)
-    print(f"  Intent: {intent}")
-    print(f"  Suggestions: {suggestions}")
+    logger.info(f"  Intent: {intent}")
+    logger.info(f"  Suggestions: {suggestions}")
     
     # Test 6: Learning Insights
-    print("\n[Test 6] Learning Insights")
+    logger.info("\n[Test 6] Learning Insights")
     insights = controller.get_learning_insights()
-    print(f"  Patterns Found: {len(insights['patterns'])}")
+    logger.info(f"  Patterns Found: {len(insights['patterns'])}")
     for pattern in insights.get("patterns", [])[:3]:
-        print(f"    {pattern['type']}: {pattern['text']}")
-        print(f"      Success Rate: {pattern['success_rate']:.2f}")
+        logger.info(f"    {pattern['type']}: {pattern['text']}")
+        logger.info(f"      Success Rate: {pattern['success_rate']:.2f}")
     
-    print(f"  Recommendations: {len(insights['recommendations'])}")
+    logger.info(f"  Recommendations: {len(insights['recommendations'])}")
     for rec in insights.get("recommendations", []):
-        print(f"    - {rec}")
+        logger.info(f"    - {rec}")
     
     # Test 7: Quick Learn
-    print("\n[Test 7] Quick Learn")
+    logger.info("\n[Test 7] Quick Learn")
     result = quick_learn("twin_002", "optimize database query", True, 0.9)
-    print(f"  Intent: {result['intent']['type']}/{result['intent']['action']}")
-    print(f"  Suggestions: {result['context_suggestions']}")
+    logger.info(f"  Intent: {result['intent']['type']}/{result['intent']['action']}")
+    logger.info(f"  Suggestions: {result['context_suggestions']}")
     
     # Test 8: Predict and Suggest
-    print("\n[Test 8] Predict and Suggest")
+    logger.info("\n[Test 8] Predict and Suggest")
     result = predict_and_suggest("twin_003", "implement caching layer")
-    print(f"  Predicted Intent: {result['predicted_intent']}")
-    print(f"  Context Suggestions: {result['context_suggestions']}")
+    logger.info(f"  Predicted Intent: {result['predicted_intent']}")
+    logger.info(f"  Context Suggestions: {result['context_suggestions']}")
     
     # Test 9: Adaptive Compression Strategy
-    print("\n[Test 9] Adaptive Compression Strategy")
+    logger.info("\n[Test 9] Adaptive Compression Strategy")
     strategy = AdaptiveCompressionStrategy()
     
     intents = [
@@ -900,10 +903,10 @@ if __name__ == "__main__":
     
     for intent in intents:
         selected = strategy.select_strategy(intent, [])
-        print(f"  Intent: {intent} -> Strategy: {selected}")
+        logger.info(f"  Intent: {intent} -> Strategy: {selected}")
     
     # Test 10: Evolution Trigger
-    print("\n[Test 10] Evolution Trigger")
+    logger.info("\n[Test 10] Evolution Trigger")
     for i in range(105):
         controller.process_and_learn(
             query=f"test query {i}",
@@ -914,9 +917,9 @@ if __name__ == "__main__":
             feedback_score=0.5
         )
     
-    print(f"  Total samples processed: {len(controller.learning_engine.samples)}")
-    print(f"  Evolution triggered: {len(controller.learning_engine.samples) >= 100}")
+    logger.info(f"  Total samples processed: {len(controller.learning_engine.samples)}")
+    logger.info(f"  Evolution triggered: {len(controller.learning_engine.samples) >= 100}")
     
-    print("\n" + "=" * 60)
-    print("[COMPLETE] Phase 3 Tests")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("[COMPLETE] Phase 3 Tests")
+    logger.info("=" * 60)

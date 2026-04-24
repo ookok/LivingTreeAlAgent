@@ -143,13 +143,16 @@ class LinkPreviewService:
                 return self._parse_html(url, html_content)
 
         except Exception as e:
-            print(f"[LinkPreview] Fetch error: {e}")
+            logger.info(f"[LinkPreview] Fetch error: {e}")
             return None
 
     def _sync_fetch(self, url: str) -> Optional[LinkPreview]:
         """同步抓取 (备选方案)"""
         try:
             import urllib.request
+from core.logger import get_logger
+logger = get_logger('unified_chat.link_preview')
+
             with urllib.request.urlopen(url, timeout=10) as resp:
                 if resp.status != 200:
                     return None
@@ -159,7 +162,7 @@ class LinkPreviewService:
                 html_content = resp.read().decode("utf-8", errors="ignore")
                 return self._parse_html(url, html_content)
         except Exception as e:
-            print(f"[LinkPreview] Sync fetch error: {e}")
+            logger.info(f"[LinkPreview] Sync fetch error: {e}")
             return None
 
     def _parse_html(self, url: str, html: str) -> LinkPreview:

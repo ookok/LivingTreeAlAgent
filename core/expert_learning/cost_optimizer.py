@@ -25,6 +25,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 import threading
+from core.logger import get_logger
+logger = get_logger('expert_learning.cost_optimizer')
+
 
 
 class CostMode(Enum):
@@ -84,7 +87,7 @@ class CostOptimizer:
         estimated_tokens=1000,
         min_quality=0.7
     )
-    print(f"推荐: {result.recommended_model}, 节省: ${result.estimated_cost}")
+    logger.info(f"推荐: {result.recommended_model}, 节省: ${result.estimated_cost}")
     ```
     """
 
@@ -118,7 +121,7 @@ class CostOptimizer:
         # 模型定价
         self._pricing: Dict[str, Tuple[float, float]] = {}  # model_id -> (input_cost, output_cost) per 1M
 
-        print(f"[CostOptimizer] 已初始化 (daily=${default_daily}, weekly=${default_weekly})")
+        logger.info(f"[CostOptimizer] 已初始化 (daily=${default_daily}, weekly=${default_weekly})")
 
     def set_budget(self, daily: Optional[float] = None, weekly: Optional[float] = None, monthly: Optional[float] = None):
         """设置预算"""
@@ -129,7 +132,7 @@ class CostOptimizer:
     def set_mode(self, mode: CostMode):
         """设置成本模式"""
         self._mode = mode
-        print(f"[CostOptimizer] 模式切换: {mode.value}")
+        logger.info(f"[CostOptimizer] 模式切换: {mode.value}")
 
     def set_pricing(self, model_id: str, input_cost_per_m: float, output_cost_per_m: float):
         """设置模型定价"""
@@ -406,9 +409,9 @@ class CostOptimizer:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("成本优化引擎测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("成本优化引擎测试")
+    logger.info("=" * 60)
 
     optimizer = CostOptimizer(default_daily=5.0)
 
@@ -416,29 +419,29 @@ if __name__ == "__main__":
     optimizer.set_pricing("qwen3.5:9b", 0, 0)  # 免费
     optimizer.set_pricing("gpt-4o", 2.5, 10.0)  # 收费
 
-    print("\n[Test 1: 预算状态]")
+    logger.info("\n[Test 1: 预算状态]")
     status = optimizer.get_budget_status("daily")
-    print(f"  日预算: ${status.limit}")
-    print(f"  已使用: ${status.used:.4f}")
-    print(f"  剩余: ${status.remaining:.4f}")
-    print(f"  使用率: {status.usage_pct:.1f}%")
+    logger.info(f"  日预算: ${status.limit}")
+    logger.info(f"  已使用: ${status.used:.4f}")
+    logger.info(f"  剩余: ${status.remaining:.4f}")
+    logger.info(f"  使用率: {status.usage_pct:.1f}%")
 
-    print("\n[Test 2: 优化选择]")
+    logger.info("\n[Test 2: 优化选择]")
     result = optimizer.optimize("reasoning", estimated_tokens=1000, min_quality=0.5)
-    print(f"  推荐: {result.recommended_model}")
-    print(f"  成本: ${result.estimated_cost:.4f}")
-    print(f"  质量权衡: {result.quality_tradeoff:.2f}")
-    print(f"  推理: {result.reasoning}")
+    logger.info(f"  推荐: {result.recommended_model}")
+    logger.info(f"  成本: ${result.estimated_cost:.4f}")
+    logger.info(f"  质量权衡: {result.quality_tradeoff:.2f}")
+    logger.info(f"  推理: {result.reasoning}")
 
-    print("\n[Test 3: 记录使用]")
+    logger.info("\n[Test 3: 记录使用]")
     optimizer.record_usage("qwen3.5:9b", 100, 200, 0.9)
     optimizer.record_usage("gpt-4o", 50, 100, 0.95)
     status = optimizer.get_budget_status("daily")
-    print(f"  记录后已使用: ${status.used:.4f}")
+    logger.info(f"  记录后已使用: ${status.used:.4f}")
 
-    print("\n[Test 4: 节省报告]")
+    logger.info("\n[Test 4: 节省报告]")
     report = optimizer.get_savings_report("daily")
-    print(f"  总成本: ${report['total_cost']:.4f}")
-    print(f"  节省: ${report['savings']:.4f}")
+    logger.info(f"  总成本: ${report['total_cost']:.4f}")
+    logger.info(f"  节省: ${report['savings']:.4f}")
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

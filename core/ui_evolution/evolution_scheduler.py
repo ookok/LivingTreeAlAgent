@@ -307,7 +307,7 @@ class EvolutionScheduler:
                 self._check_scheduled_tasks()
                 
             except Exception as e:
-                print(f"进化调度器错误: {e}")
+                logger.info(f"进化调度器错误: {e}")
     
     def _check_scheduled_tasks(self):
         """检查定时任务"""
@@ -521,6 +521,9 @@ def trigger_learning(
     使用示例:
     ```python
     from core.ui_evolution import trigger_learning
+from core.logger import get_logger
+logger = get_logger('ui_evolution.evolution_scheduler')
+
     
     # 用户接受了建议
     trigger_learning(

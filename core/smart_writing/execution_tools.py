@@ -19,7 +19,7 @@
 
     tools = ExecutionTools(project_root="/path/to/project")
     result = tools.execute_command("python -m pytest tests/")
-    result = tools.run_python("print('Hello World')")
+    result = tools.run_python("logger.info('Hello World')")
 """
 
 import os
@@ -36,6 +36,9 @@ from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from .tool_definition import (
+from core.logger import get_logger
+logger = get_logger('smart_writing.execution_tools')
+
     Tool, ToolParameter, ToolResult, ToolStatus,
     ToolRegistry, ToolCategory
 )

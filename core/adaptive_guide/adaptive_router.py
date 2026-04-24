@@ -14,7 +14,7 @@
     
     # 执行功能，自动路由
     result = await router.execute_feature("weather_forecast", {"location": "Beijing"})
-    print(f"使用方案: {result['implementation']}")
+    logger.info(f"使用方案: {result['implementation']}")
     
     # 检查是否需要引导
     if result.get("requires_guide"):
@@ -455,6 +455,9 @@ class AdaptiveRouter:
         内部使用 asyncio 但不等待完成
         """
         import asyncio
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.adaptive_router')
+
         return await self.execute_feature(feature_id, input_data, config, strategy)
     
     def get_available_features(self) -> List[str]:

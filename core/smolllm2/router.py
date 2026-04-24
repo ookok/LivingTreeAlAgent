@@ -24,6 +24,9 @@ from .models import (
     RouteDecision, RouteType, IntentType, SmolLM2Config, CachedResponse, RouteStats
 )
 from .ollama_runner import OllamaRunner, get_runner_manager
+from core.logger import get_logger
+logger = get_logger('smolllm2.router')
+
 
 
 # 简单任务规则（不走 SmolLM2 的快速路径）
@@ -188,7 +191,7 @@ class L0Router:
             if decision:
                 return decision
         except Exception as e:
-            print(f"SmolLM2 分类失败: {e}")
+            logger.info(f"SmolLM2 分类失败: {e}")
 
         # 5. 兜底：默认走本地
         return self._make_decision(
@@ -290,7 +293,7 @@ class L0Router:
                 )
 
         except Exception as e:
-            print(f"SmolLM2 调用异常: {e}")
+            logger.info(f"SmolLM2 调用异常: {e}")
 
         return None
 
@@ -387,7 +390,7 @@ class L0Router:
 
             return loop.run_until_complete(self.route(prompt))
         except Exception as e:
-            print(f"同步路由失败: {e}")
+            logger.info(f"同步路由失败: {e}")
             return RouteDecision(
                 route=RouteType.LOCAL,
                 intent=IntentType.UNKNOWN,

@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 import httpx
 
 from core.model_layer_config import (
+from core.logger import get_logger
+logger = get_logger('deployment_engine')
+
     ModelTier, ServiceStatus, DeployMode,
     ModelDefinition, LayerConfig, LayerDeploymentConfig,
     L0_L4_MODELS, get_default_model_for_tier,
@@ -596,23 +599,23 @@ def get_deployment_engine() -> DeploymentEngine:
 if __name__ == "__main__":
     engine = DeploymentEngine()
     
-    print("=" * 60)
-    print("自动化模型部署引擎测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("自动化模型部署引擎测试")
+    logger.info("=" * 60)
     
     # 健康检查
-    print("\n[健康检查]")
+    logger.info("\n[健康检查]")
     health = engine.health_check()
-    print(f"  Ollama 已安装: {health['ollama_installed']}")
-    print(f"  Ollama 运行中: {health['ollama_running']}")
-    print(f"  本地模型: {health['local_models']}")
+    logger.info(f"  Ollama 已安装: {health['ollama_installed']}")
+    logger.info(f"  Ollama 运行中: {health['ollama_running']}")
+    logger.info(f"  本地模型: {health['local_models']}")
     
     # 部署单个模型测试
-    print("\n[单模型部署测试]")
+    logger.info("\n[单模型部署测试]")
     result = engine.auto_deploy_tier(
         ModelTier.L0,
-        progress_callback=lambda p, s: print(f"  [{p:.0%}] {s}")
+        progress_callback=lambda p, s: logger.info(f"  [{p:.0%}] {s}")
     )
-    print(f"  结果: {result.message}")
+    logger.info(f"  结果: {result.message}")
     
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

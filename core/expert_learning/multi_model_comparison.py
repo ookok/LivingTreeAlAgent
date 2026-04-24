@@ -25,6 +25,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 import threading
+from core.logger import get_logger
+logger = get_logger('expert_learning.multi_model_comparison')
+
 
 
 class ComparisonMetric(Enum):
@@ -87,8 +90,8 @@ class MultiModelComparison:
 
     # 对比
     result = comparator.compare("解释量子纠缠")
-    print(f"最佳: {result.best_model}")
-    print(f"排名: {result.rankings}")
+    logger.info(f"最佳: {result.best_model}")
+    logger.info(f"排名: {result.rankings}")
     ```
     """
 
@@ -102,7 +105,7 @@ class MultiModelComparison:
         """添加模型"""
         with self._lock:
             self._models[model_id] = (model_name, client)
-            print(f"[MultiModelComparison] 添加模型: {model_name} ({model_id})")
+            logger.info(f"[MultiModelComparison] 添加模型: {model_name} ({model_id})")
 
     def remove_model(self, model_id: str) -> bool:
         """移除模型"""
@@ -427,32 +430,32 @@ class MultiModelComparison:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("多模型对比系统测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("多模型对比系统测试")
+    logger.info("=" * 60)
 
     comparator = MultiModelComparison()
 
-    print("\n[Test: 模型管理]")
-    print(f"  已注册模型: {len(comparator.get_models())}")
+    logger.info("\n[Test: 模型管理]")
+    logger.info(f"  已注册模型: {len(comparator.get_models())}")
 
     # 模拟输出测试
     class MockOutput:
         def __init__(self, content):
             self.choices = [type('obj', (object,), {'message': type('msg', (object,), {'content': content})()})()]
 
-    print("\n[Test: 结果评估]")
+    logger.info("\n[Test: 结果评估]")
     output = ModelOutput("test", "Test Model", "这是一个测试回答。" * 10, 100)
     scores = comparator._evaluate(output, "测试", [ComparisonMetric.ACCURACY, ComparisonMetric.COHERENCE])
-    print(f"  评分: {scores}")
+    logger.info(f"  评分: {scores}")
 
-    print("\n[Test: 排名]")
+    logger.info("\n[Test: 排名]")
     outputs = [
         ModelOutput("m1", "Model A", "回答A" * 20, 100, scores={"overall": 0.8}),
         ModelOutput("m2", "Model B", "回答B" * 30, 200, scores={"overall": 0.9}),
         ModelOutput("m3", "Model C", "回答C" * 15, 50, scores={"overall": 0.7}),
     ]
     rankings = comparator._rank_models(outputs)
-    print(f"  排名: {rankings}")
+    logger.info(f"  排名: {rankings}")
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

@@ -15,6 +15,9 @@ import hashlib
 from typing import Dict, List, Optional, Any, Tuple, Set
 from collections import defaultdict
 from .models import (
+from core.logger import get_logger
+logger = get_logger('smart_assistant.knowledge_graph')
+
     UIPage, UIComponent, ComponentType, 
     OperationPath, OperationStep, Route,
     Guide, GuideStep, GuideLevel
@@ -97,7 +100,7 @@ class KnowledgeGraph:
             self.stats["total_pages"] = len(self.pages)
             return True
         except Exception as e:
-            print(f"注册页面失败: {e}")
+            logger.info(f"注册页面失败: {e}")
             return False
     
     def register_component(self, page_id: str, component: UIComponent) -> bool:
@@ -112,7 +115,7 @@ class KnowledgeGraph:
             是否注册成功
         """
         if page_id not in self.pages:
-            print(f"页面不存在: {page_id}")
+            logger.info(f"页面不存在: {page_id}")
             return False
         
         try:
@@ -128,7 +131,7 @@ class KnowledgeGraph:
             )
             return True
         except Exception as e:
-            print(f"注册组件失败: {e}")
+            logger.info(f"注册组件失败: {e}")
             return False
     
     def _index_keywords(self, obj: Any):
@@ -187,7 +190,7 @@ class KnowledgeGraph:
             self.stats["total_paths"] = len(self.operation_paths)
             return True
         except Exception as e:
-            print(f"注册操作路径失败: {e}")
+            logger.info(f"注册操作路径失败: {e}")
             return False
     
     # ==================== 路由管理 ====================
@@ -212,7 +215,7 @@ class KnowledgeGraph:
             self.stats["total_routes"] = len(self.routes)
             return True
         except Exception as e:
-            print(f"注册路由失败: {e}")
+            logger.info(f"注册路由失败: {e}")
             return False
     
     def resolve_route(self, uri: str) -> Optional[Tuple[Route, Dict[str, Any]]]:
@@ -286,7 +289,7 @@ class KnowledgeGraph:
             self.stats["total_guides"] = len(self.guides)
             return True
         except Exception as e:
-            print(f"注册指引失败: {e}")
+            logger.info(f"注册指引失败: {e}")
             return False
     
     def find_guide(self, target_page: str = "", target_component: str = "", 

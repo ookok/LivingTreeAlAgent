@@ -166,7 +166,7 @@ class GlobalSearch:
                     provider_results = provider(query)
                     results.extend(provider_results)
                 except Exception as e:
-                    print(f"Search provider {category} failed: {e}")
+                    logger.info(f"Search provider {category} failed: {e}")
 
         # 去重
         seen = set()
@@ -283,6 +283,9 @@ class GlobalSearch:
             app_id = action.get("app_id")
             if app_id:
                 from .app_manager import get_app_manager
+from core.logger import get_logger
+logger = get_logger('desktop_environment.search')
+
                 app_manager = get_app_manager()
                 app_manager.start_app(app_id)
                 return True

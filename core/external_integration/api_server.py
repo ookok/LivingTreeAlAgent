@@ -386,7 +386,7 @@ class ExternalAPIServer:
         await runner.setup()
         site = web.TCPSite(runner, self.host, self.port)
         await site.start()
-        print(f"API 服务器启动: http://{self.host}:{self.port}")
+        logger.info(f"API 服务器启动: http://{self.host}:{self.port}")
         await asyncio.Event().wait()  # 永久运行
 
 
@@ -427,6 +427,9 @@ class APIClient:
     async def _post(self, endpoint: str, data: Dict) -> Dict:
         """发送 POST 请求"""
         import aiohttp
+from core.logger import get_logger
+logger = get_logger('external_integration.api_server')
+
 
         async with aiohttp.ClientSession() as session:
             async with session.post(

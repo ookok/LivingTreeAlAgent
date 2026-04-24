@@ -128,7 +128,7 @@ class VectorDatabase:
                 metadata={"hnsw:space": "cosine"}
             )
         except ImportError:
-            print("[VectorDB] chromadb 未安装，降级到内存存储")
+            logger.info("[VectorDB] chromadb 未安装，降级到内存存储")
             self.db_type = VectorStoreType.MEMORY
 
     def _init_faiss(self):
@@ -137,7 +137,7 @@ class VectorDatabase:
             import faiss
             self._faiss_index = faiss.IndexFlatIP(self.embedding_dim)
         except ImportError:
-            print("[VectorDB] faiss 未安装，降级到内存存储")
+            logger.info("[VectorDB] faiss 未安装，降级到内存存储")
             self.db_type = VectorStoreType.MEMORY
 
     def set_embedding_func(self, func: Callable[[str], List[float]]):
@@ -212,6 +212,9 @@ class VectorDatabase:
 
         elif self.db_type == VectorStoreType.FAISS:
             import numpy as np
+from core.logger import get_logger
+logger = get_logger('knowledge_vector_db')
+
             D, I = self._faiss_index.search(
                 np.array([query_embedding], dtype=np.float32),
                 min(top_k * 2, len(self._documents))
@@ -339,7 +342,7 @@ class KnowledgeBaseVectorStore:
                 metadata=item["metadata"],
             )
 
-        print(f"[KnowledgeBase] 已初始化 {len(sample_knowledge)} 条知识")
+        logger.info(f"[KnowledgeBase] 已初始化 {len(sample_knowledge)} 条知识")
 
     def add_knowledge(
         self,
@@ -397,11 +400,11 @@ class KnowledgeBaseVectorStore:
 
 def test_vector_database():
     """测试向量数据库"""
-    print("=== 测试向量数据库 ===")
+    logger.info("=== 测试向量数据库 ===")
 
     db = VectorDatabase(db_type="memory")
 
-    print("\n1. 测试添加文档")
+    logger.info("\n1. 测试添加文档")
     doc_ids = []
     for i in range(5):
         doc_id = db.add(
@@ -409,60 +412,60 @@ def test_vector_database():
             metadata={"category": "programming", "index": i}
         )
         doc_ids.append(doc_id)
-        print(f"  添加文档: {doc_id}")
+        logger.info(f"  添加文档: {doc_id}")
 
-    print("\n2. 测试搜索")
+    logger.info("\n2. 测试搜索")
     results = db.search("Python 编程", top_k=3)
-    print(f"  找到 {len(results)} 个结果:")
+    logger.info(f"  找到 {len(results)} 个结果:")
     for doc, score in results:
-        print(f"    - {doc.content[:40]}... (分数: {score:.3f})")
+        logger.info(f"    - {doc.content[:40]}... (分数: {score:.3f})")
 
-    print("\n3. 测试统计")
+    logger.info("\n3. 测试统计")
     stats = db.get_stats()
-    print(f"  统计: {stats}")
+    logger.info(f"  统计: {stats}")
 
-    print("\n向量数据库测试完成！")
+    logger.info("\n向量数据库测试完成！")
 
 
 def test_knowledge_base():
     """测试知识库"""
-    print("\n=== 测试知识库向量存储 ===")
+    logger.info("\n=== 测试知识库向量存储 ===")
 
     kb = KnowledgeBaseVectorStore()
 
-    print("\n1. 测试知识库统计")
+    logger.info("\n1. 测试知识库统计")
     stats = kb.get_stats()
-    print(f"  统计: {stats}")
+    logger.info(f"  统计: {stats}")
 
-    print("\n2. 测试知识搜索")
+    logger.info("\n2. 测试知识搜索")
     queries = ["Python", "深度学习", "编程语言"]
 
     for query in queries:
         results = kb.search_knowledge(query)
-        print(f"\n  查询: {query}")
-        print(f"  找到 {len(results)} 条知识:")
+        logger.info(f"\n  查询: {query}")
+        logger.info(f"  找到 {len(results)} 条知识:")
         for r in results[:3]:
-            print(f"    - {r['content'][:50]}... (分数: {r['score']:.3f})")
+            logger.info(f"    - {r['content'][:50]}... (分数: {r['score']:.3f})")
 
-    print("\n3. 测试添加知识")
+    logger.info("\n3. 测试添加知识")
     new_id = kb.add_knowledge(
         content="机器学习是人工智能的一个分支，通过数据训练模型",
         category="ai",
         topic="machine_learning"
     )
-    print(f"  添加知识: {new_id}")
+    logger.info(f"  添加知识: {new_id}")
 
-    print("\n4. 测试更新知识")
+    logger.info("\n4. 测试更新知识")
     success = kb.update_knowledge(new_id, content="更新后的机器学习知识")
-    print(f"  更新成功: {success}")
+    logger.info(f"  更新成功: {success}")
 
-    print("\n5. 测试知识库搜索（新添加的知识）")
+    logger.info("\n5. 测试知识库搜索（新添加的知识）")
     results = kb.search_knowledge("机器学习")
-    print(f"  找到 {len(results)} 条知识:")
+    logger.info(f"  找到 {len(results)} 条知识:")
     for r in results[:3]:
-        print(f"    - {r['content'][:50]}... (分数: {r['score']:.3f})")
+        logger.info(f"    - {r['content'][:50]}... (分数: {r['score']:.3f})")
 
-    print("\n知识库向量存储测试完成！")
+    logger.info("\n知识库向量存储测试完成！")
 
 
 if __name__ == "__main__":

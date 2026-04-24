@@ -199,7 +199,7 @@ class AnswerMonitor:
                 post.last_checked_at = datetime.now()
 
             except Exception as e:
-                print(f"Monitor error for {monitor_id}: {e}")
+                logger.info(f"Monitor error for {monitor_id}: {e}")
 
             # 等待下次检查
             time.sleep(self.config.check_interval_seconds)
@@ -212,6 +212,9 @@ class AnswerMonitor:
         """
         # 模拟：每次检查随机返回0-2个回答
         import random
+from core.logger import get_logger
+logger = get_logger('smart_help_system.answer_monitor')
+
         new_count = random.randint(0, 2)
 
         answers = []
@@ -272,7 +275,7 @@ class AnswerMonitor:
             try:
                 callback(post, answer)
             except Exception as e:
-                print(f"Callback error: {e}")
+                logger.info(f"Callback error: {e}")
 
     def get_answer_summary(self, monitor_id: str) -> Optional[Dict[str, Any]]:
         """获取回答摘要"""

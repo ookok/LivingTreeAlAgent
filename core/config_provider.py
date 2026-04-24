@@ -56,6 +56,9 @@ def _load_config() -> dict:
     if os.path.exists(config_path):
         try:
             import json
+from core.logger import get_logger
+logger = get_logger('config_provider')
+
             with open(config_path, encoding="utf-8") as f:
                 file_config = json.load(f)
                 if "ollama_url" in file_config:
@@ -152,9 +155,9 @@ def get_embedding_model() -> str:
 
 if __name__ == "__main__":
     # 测试
-    print(f"Ollama URL: {get_ollama_url()}")
-    print(f"L0 Model: {get_l0_model()}")
-    print(f"L1 Model: {get_l1_model()}")
-    print(f"L3 Model: {get_l3_model()}")
-    print(f"L4 Model: {get_l4_model()}")
-    print(f"Embedding Model: {get_embedding_model()}")
+    logger.info(f"Ollama URL: {get_ollama_url()}")
+    logger.info(f"L0 Model: {get_l0_model()}")
+    logger.info(f"L1 Model: {get_l1_model()}")
+    logger.info(f"L3 Model: {get_l3_model()}")
+    logger.info(f"L4 Model: {get_l4_model()}")
+    logger.info(f"Embedding Model: {get_embedding_model()}")

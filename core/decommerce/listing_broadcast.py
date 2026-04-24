@@ -112,7 +112,7 @@ class FullListing:
     created_at: float = 0
     updated_at: float = 0
 
-    def compute_fingerprint(self) -> ListingFingerprint:
+    def compute_fingerlogger.info(self) -> ListingFingerprint:
         """计算商品指纹"""
         content = f"{self.listing_id}|{self.title}|{self.description}|{self.price}|{self.service_type}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()
@@ -120,7 +120,7 @@ class FullListing:
         title_hash = hashlib.sha256(self.title.encode()).hexdigest()
         price_hash = hashlib.sha256(f"{self.price}|{self.currency}".encode()).hexdigest()
 
-        return ListingFingerprint(
+        return ListingFingerlogger.info(
             listing_id=self.listing_id,
             seller_peer_id=self.seller_peer_id,
             content_hash=content_hash,
@@ -343,6 +343,9 @@ class ListingDiscovery:
 
         try:
             import aiohttp
+from core.logger import get_logger
+logger = get_logger('decommerce.listing_broadcast')
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{self.broker_url}/api/catalog",
@@ -353,7 +356,7 @@ class ListingDiscovery:
                         data = await resp.json()
                         fingerprints = []
                         for item in data.get("fingerprints", []):
-                            fp = ListingFingerprint(**item)
+                            fp = ListingFingerlogger.info(**item)
                             self._fingerprint_cache[fp.listing_id] = fp
                             fingerprints.append(fp)
 
@@ -417,7 +420,7 @@ class ListingDiscovery:
         # 这里应该通过WebRTC DataChannel或HTTP请求从卖家获取
         return None
 
-    def get_fingerprint(self, listing_id: str) -> Optional[ListingFingerprint]:
+    def get_fingerlogger.info(self, listing_id: str) -> Optional[ListingFingerprint]:
         """获取商品指纹"""
         return self._fingerprint_cache.get(listing_id)
 
@@ -460,7 +463,7 @@ def compute_listing_hash(listing_data: Dict[str, Any]) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def create_listing_fingerprint(
+def create_listing_fingerlogger.info(
     listing_id: str,
     seller_peer_id: str,
     title: str,
@@ -475,7 +478,7 @@ def create_listing_fingerprint(
     title_hash = hashlib.sha256(title.encode()).hexdigest()
     price_hash = hashlib.sha256(f"{price}".encode()).hexdigest()
 
-    return ListingFingerprint(
+    return ListingFingerlogger.info(
         listing_id=listing_id,
         seller_peer_id=seller_peer_id,
         content_hash=content_hash,

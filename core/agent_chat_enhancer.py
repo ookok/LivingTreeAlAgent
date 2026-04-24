@@ -1495,20 +1495,20 @@ class EnhancedAgentChat:
         # IntentEngine - 代码专用意图解析（可选）
         self._intent_engine = IntentEngine() if INTENT_ENGINE_AVAILABLE else None
         if self._intent_engine:
-            print("[EnhancedAgentChat] IntentEngine enabled - code intent parsing")
+            logger.info("[EnhancedAgentChat] IntentEngine enabled - code intent parsing")
 
         # 代码签名化 - 上下文压缩（可选）
         self._code_signer = CodeSigner() if CODE_SIGNER_AVAILABLE else None
         self._symbol_index = None  # 延迟初始化
         self._incremental_context = IncrementalContextManager() if CODE_SIGNER_AVAILABLE else None
         if self._code_signer:
-            print("[EnhancedAgentChat] CodeSigner enabled - context compression")
+            logger.info("[EnhancedAgentChat] CodeSigner enabled - context compression")
         
         # 代码澄清器 - 交互式需求澄清（可选）
         self._code_clarifier = CodeClarifier() if CODE_CLARIFIER_AVAILABLE else None
         self._clarify_sessions: Dict[str, Any] = {}  # 澄清会话存储
         if self._code_clarifier:
-            print("[EnhancedAgentChat] CodeClarifier enabled - interactive code clarification")
+            logger.info("[EnhancedAgentChat] CodeClarifier enabled - interactive code clarification")
         
         # IDE 上下文注入器 - 项目结构感知（可选）
         self._ide_context_injector = None
@@ -1516,7 +1516,7 @@ class EnhancedAgentChat:
         self._active_file: Optional[str] = None
         if IDE_CONTEXT_INJECTOR_AVAILABLE:
             # 延迟初始化，允许后续设置项目根目录
-            print("[EnhancedAgentChat] IDE Context Injector available - project structure awareness")
+            logger.info("[EnhancedAgentChat] IDE Context Injector available - project structure awareness")
         
         # 回调
         self._on_intent_detected: Optional[Callable[[IntentAnalysis], None]] = None
@@ -1551,7 +1551,7 @@ class EnhancedAgentChat:
             self._RecoveryExecutor = RecoveryExecutor
             self._RetryPolicy = RetryPolicy
         except ImportError as e:
-            print(f"[EnhancedAgentChat] 多模态模块不可用: {e}")
+            logger.info(f"[EnhancedAgentChat] 多模态模块不可用: {e}")
     
     @property
     def agent(self):
@@ -1624,7 +1624,7 @@ class EnhancedAgentChat:
             bool: 是否启用成功
         """
         if not self._MULTIMODAL_AVAILABLE:
-            print("[EnhancedAgentChat] 多模态输出不可用")
+            logger.info("[EnhancedAgentChat] 多模态输出不可用")
             return False
         
         try:
@@ -1641,11 +1641,11 @@ class EnhancedAgentChat:
                 self._multimodal_manager.set_error_callback(error_callback)
             
             self._enable_multimodal = True
-            print(f"[EnhancedAgentChat] 多模态输出已启用，模式: {mode}")
+            logger.info(f"[EnhancedAgentChat] 多模态输出已启用，模式: {mode}")
             return True
             
         except Exception as e:
-            print(f"[EnhancedAgentChat] 启用多模态输出失败: {e}")
+            logger.info(f"[EnhancedAgentChat] 启用多模态输出失败: {e}")
             return False
     
     def disable_multimodal(self) -> None:
@@ -1741,7 +1741,7 @@ class EnhancedAgentChat:
             if self._enable_multimodal and self._multimodal_manager:
                 self._multimodal_manager.output_warning(msg)
             else:
-                print(f"[EnhancedAgentChat] {msg}")
+                logger.info(f"[EnhancedAgentChat] {msg}")
         
         try:
             return executor.execute(
@@ -2175,7 +2175,7 @@ class EnhancedAgentChat:
             return
 
         self._ide_context_injector = IDEContextInjector(project_root=project_root)
-        print(f"[EnhancedAgentChat] Project root set: {project_root}")
+        logger.info(f"[EnhancedAgentChat] Project root set: {project_root}")
 
     def set_active_file(self, file_path: str):
         """
@@ -2348,6 +2348,9 @@ def enhance_agent_chat(
 def example_usage():
     """使用示例"""
     from core.agent_chat import create_agent_chat
+from core.logger import get_logger
+logger = get_logger('agent_chat_enhancer')
+
     
     # 1. 创建基础 AgentChat
     base_chat = create_agent_chat()
@@ -2362,19 +2365,19 @@ def example_usage():
     
     # 3. 设置回调
     def on_intent(intent: IntentAnalysis):
-        print(f"[意图] {intent.intent.value} ({intent.confidence:.0%})")
-        print(f"[分类] {intent.category.value}")
-        print(f"[模型] {intent.suggested_model}")
-        print(f"[语言] {intent.language or 'N/A'}")
+        logger.info(f"[意图] {intent.intent.value} ({intent.confidence:.0%})")
+        logger.info(f"[分类] {intent.category.value}")
+        logger.info(f"[模型] {intent.suggested_model}")
+        logger.info(f"[语言] {intent.language or 'N/A'}")
         if intent.need_knowledge:
-            print("[知识] 需要检索知识库")
+            logger.info("[知识] 需要检索知识库")
         if intent.need_deep_search:
-            print("[搜索] 需要深度搜索")
+            logger.info("[搜索] 需要深度搜索")
         if intent.entities:
-            print(f"[实体] {intent.entities}")
+            logger.info(f"[实体] {intent.entities}")
     
     def on_compress(original: str, compressed: str):
-        print(f"[压缩] {len(original)} → {len(compressed)} 字")
+        logger.info(f"[压缩] {len(original)} → {len(compressed)} 字")
     
     chat.set_intent_callback(on_intent)
     chat.set_compress_callback(on_compress)
@@ -2390,26 +2393,26 @@ def example_usage():
         "假设有100万用户，如何设计数据库",
     ]
     
-    print("\n" + "=" * 60)
-    print("通用意图识别测试")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("通用意图识别测试")
+    logger.info("=" * 60)
     
     for msg in test_messages:
-        print(f"\n>>> {msg}")
+        logger.info(f"\n>>> {msg}")
         # 仅测试意图分析
         intent = chat.analyze_intent(msg)
-        print(f"    意图: {intent.intent.value} ({intent.confidence:.0%})")
-        print(f"    分类: {intent.category.value}")
-        print(f"    模型: {intent.suggested_model}")
+        logger.info(f"    意图: {intent.intent.value} ({intent.confidence:.0%})")
+        logger.info(f"    分类: {intent.category.value}")
+        logger.info(f"    模型: {intent.suggested_model}")
     
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)
 
 
 def quick_test():
     """快速测试"""
-    print("=" * 60)
-    print("Agent Chat 增强模块 - 通用意图识别测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Agent Chat 增强模块 - 通用意图识别测试")
+    logger.info("=" * 60)
     
     classifier = ChatIntentClassifier()
     
@@ -2449,11 +2452,11 @@ def quick_test():
         match = "✓" if result.intent.value == expected else "✗"
         if match == "✓":
             passed += 1
-        print(f"{match} {text[:20]:<20} → {result.intent.value:<18} (期望: {expected:<18}) {desc}")
+        logger.info(f"{match} {text[:20]:<20} → {result.intent.value:<18} (期望: {expected:<18}) {desc}")
     
     print()
-    print(f"准确率: {passed}/{len(test_cases)} ({passed/len(test_cases)*100:.0f}%)")
-    print("=" * 60)
+    logger.info(f"准确率: {passed}/{len(test_cases)} ({passed/len(test_cases)*100:.0f}%)")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

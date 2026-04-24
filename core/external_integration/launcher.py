@@ -17,6 +17,9 @@ import time
 # 内部导入
 from .api_server import ExternalAPIServer
 from .clipboard_bridge import ClipboardBridge, start_clipboard_monitoring
+from core.logger import get_logger
+logger = get_logger('external_integration.launcher')
+
 
 
 def parse_args():
@@ -85,11 +88,11 @@ def run_api_server(host: str, port: int, api_key: str):
     )
 
     try:
-        print(f"\n🚀 启动 API 服务器: http://{host}:{port}")
-        print("   按 Ctrl+C 停止\n")
+        logger.info(f"\n🚀 启动 API 服务器: http://{host}:{port}")
+        logger.info("   按 Ctrl+C 停止\n")
         server.run()
     except KeyboardInterrupt:
-        print("\n\nAPI 服务器已停止")
+        logger.info("\n\nAPI 服务器已停止")
 
 
 def run_clipboard_bridge(poll_interval: float):
@@ -98,35 +101,35 @@ def run_clipboard_bridge(poll_interval: float):
 
     # 注册回调
     def on_copy(entry):
-        print(f"\n📋 检测到复制: {entry.char_count} 字符")
-        print(f"   建议操作:")
+        logger.info(f"\n📋 检测到复制: {entry.char_count} 字符")
+        logger.info(f"   建议操作:")
         for s in entry.suggestions:
-            print(f"   - {s.label} ({s.shortcut})")
+            logger.info(f"   - {s.label} ({s.shortcut})")
 
     def on_result(action, result):
-        print(f"\n✅ 已处理: {action.label}")
-        print(f"   结果已复制到剪贴板")
+        logger.info(f"\n✅ 已处理: {action.label}")
+        logger.info(f"   结果已复制到剪贴板")
 
     bridge.register_callback('on_copy', on_copy)
     bridge.register_callback('on_result', on_result)
 
     bridge.start()
-    print("\n🔍 剪贴板监控已启动")
-    print("   按 Ctrl+C 停止\n")
+    logger.info("\n🔍 剪贴板监控已启动")
+    logger.info("   按 Ctrl+C 停止\n")
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         bridge.stop()
-        print("\n\n剪贴板监控已停止")
+        logger.info("\n\n剪贴板监控已停止")
 
 
 def main():
     """主入口"""
     args = parse_args()
 
-    print("""
+    logger.info("""
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
 ║   ██████╗  ██████╗ ██████╗ ████████╗ ██████╗  ██████╗   ║
@@ -165,7 +168,7 @@ def main():
         time.sleep(1)
 
         # 启动剪贴板监控
-        print("\n🔍 启动剪贴板监控...")
+        logger.info("\n🔍 启动剪贴板监控...")
         run_clipboard_bridge(args.poll_interval)
 
 

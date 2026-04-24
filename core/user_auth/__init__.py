@@ -24,6 +24,9 @@ from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 from pathlib import Path
 import asyncio
+from core.logger import get_logger
+logger = get_logger('user_auth.__init__')
+
 
 
 # ============ 枚举定义 ============
@@ -638,7 +641,7 @@ class RealNameAuthService:
 
     async def _send_sms(self, phone: str, code: str):
         """发送短信（实际会调用短信API）"""
-        print(f"[SMS] Sending code {code} to {phone}")
+        logger.info(f"[SMS] Sending code {code} to {phone}")
         # 实际实现会调用短信网关
         await asyncio.sleep(0.1)
 
@@ -656,7 +659,7 @@ class RealNameAuthService:
         """调用认证API"""
         # 实际实现会调用外部API
         # 这里模拟验证通过
-        print(f"[VERIFY] Calling {channel} API for {real_name}")
+        logger.info(f"[VERIFY] Calling {channel} API for {real_name}")
         await asyncio.sleep(0.5)
         return True
 

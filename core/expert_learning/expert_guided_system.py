@@ -293,17 +293,17 @@ class ExpertGuidedLearningSystem:
             sys.path.insert(0, str(Path(__file__).parent.parent.parent))
             from unified_cache import UnifiedCache
             self.cache = UnifiedCache()
-            print("[ExpertLearning] [OK] Cache layer enabled")
+            logger.info("[ExpertLearning] [OK] Cache layer enabled")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Cache layer init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Cache layer init failed: {e}")
             self.cache = None
 
         # ── 第二层：知识图谱 ──────────────────────────────────────
         try:
             self.knowledge_graph = _get_knowledge_graph()()
-            print("[ExpertLearning] [OK] Knowledge graph layer enabled")
+            logger.info("[ExpertLearning] [OK] Knowledge graph layer enabled")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Knowledge graph init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Knowledge graph init failed: {e}")
             self.knowledge_graph = None
 
         # ── 第三层：行业蒸馏器 ────────────────────────────────────
@@ -312,20 +312,20 @@ class ExpertGuidedLearningSystem:
         if DistillerClass:
             try:
                 self.distiller = DistillerClass()
-                print("[ExpertLearning] [OK] Distillation layer enabled")
+                logger.info("[ExpertLearning] [OK] Distillation layer enabled")
             except Exception as e:
-                print(f"[ExpertLearning] [WARN] Distillation init failed: {e}")
+                logger.info(f"[ExpertLearning] [WARN] Distillation init failed: {e}")
 
         # ── 第四层：思维链蒸馏器 ⭐ ────────────────────────────────
         self.cot_distiller = None
         try:
             from core.expert_learning.chain_of_thought_distiller import ChainOfThoughtDistiller
             self.cot_distiller = ChainOfThoughtDistiller()
-            print("[ExpertLearning] [OK] Chain-of-Thought Distiller enabled")
+            logger.info("[ExpertLearning] [OK] Chain-of-Thought Distiller enabled")
         except ImportError:
-            print("[ExpertLearning] [WARN] CoT Distiller not available")
+            logger.info("[ExpertLearning] [WARN] CoT Distiller not available")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] CoT Distiller init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] CoT Distiller init failed: {e}")
 
         # ── 对比分析器 ─────────────────────────────────────────────
         self.comparator = ResponseComparator(llm_client)
@@ -352,44 +352,44 @@ class ExpertGuidedLearningSystem:
         try:
             from core.expert_learning.performance_monitor import PerformanceMonitor
             self._monitor = PerformanceMonitor()
-            print("[ExpertLearning] [OK] Performance Monitor enabled")
+            logger.info("[ExpertLearning] [OK] Performance Monitor enabled")
         except ImportError:
-            print("[ExpertLearning] [WARN] Performance Monitor not available")
+            logger.info("[ExpertLearning] [WARN] Performance Monitor not available")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Performance Monitor init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Performance Monitor init failed: {e}")
 
         # ── 智能卸载策略 ⭐ ─────────────────────────────────────────
         self._offload_strategy = None
         try:
             from core.expert_learning.auto_offload_strategy import AutoOffloadStrategy
             self._offload_strategy = AutoOffloadStrategy()
-            print("[ExpertLearning] [OK] Auto-Offload Strategy enabled")
+            logger.info("[ExpertLearning] [OK] Auto-Offload Strategy enabled")
         except ImportError:
-            print("[ExpertLearning] [WARN] Auto-Offload not available")
+            logger.info("[ExpertLearning] [WARN] Auto-Offload not available")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Auto-Offload init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Auto-Offload init failed: {e}")
 
         # ── 自适应模型压缩器 ⭐ ─────────────────────────────────────
         self._compressor = None
         try:
             from core.expert_learning.adaptive_model_compressor import AdaptiveModelCompressor
             self._compressor = AdaptiveModelCompressor()
-            print("[ExpertLearning] [OK] Adaptive Model Compressor enabled")
+            logger.info("[ExpertLearning] [OK] Adaptive Model Compressor enabled")
         except ImportError:
-            print("[ExpertLearning] [WARN] Adaptive Compressor not available")
+            logger.info("[ExpertLearning] [WARN] Adaptive Compressor not available")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Adaptive Compressor init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Adaptive Compressor init failed: {e}")
 
         # ── 智能配额管理器 ⭐ ───────────────────────────────────────
         self._quota_manager = None
         try:
             from core.expert_learning.smart_quota_manager import SmartQuotaManager, QuotaMode, Provider
             self._quota_manager = SmartQuotaManager()
-            print("[ExpertLearning] [OK] Smart Quota Manager enabled")
+            logger.info("[ExpertLearning] [OK] Smart Quota Manager enabled")
         except ImportError:
-            print("[ExpertLearning] [WARN] Smart Quota Manager not available")
+            logger.info("[ExpertLearning] [WARN] Smart Quota Manager not available")
         except Exception as e:
-            print(f"[ExpertLearning] [WARN] Smart Quota Manager init failed: {e}")
+            logger.info(f"[ExpertLearning] [WARN] Smart Quota Manager init failed: {e}")
 
         # 加载历史记录
         self._load_learning_records()
@@ -588,7 +588,7 @@ class ExpertGuidedLearningSystem:
             # 实际使用时：agent = HermesAgent(); return agent.chat(query)
             return f"[本地模型]: {query}"
         except Exception as e:
-            print(f"[ExpertLearning] Local generation failed: {e}")
+            logger.info(f"[ExpertLearning] Local generation failed: {e}")
             return ""
 
     def _generate_expert(self, query: str) -> Optional[str]:
@@ -608,7 +608,7 @@ class ExpertGuidedLearningSystem:
             )
             return content
         except Exception as e:
-            print(f"[ExpertLearning] Expert generation failed: {e}")
+            logger.info(f"[ExpertLearning] Expert generation failed: {e}")
             return None
 
     def _enhance_with_knowledge_graph(self, query: str) -> str:
@@ -648,7 +648,7 @@ class ExpertGuidedLearningSystem:
                 }
             )
         except Exception as e:
-            print(f"[ExpertLearning] Knowledge graph update failed: {e}")
+            logger.info(f"[ExpertLearning] Knowledge graph update failed: {e}")
 
     def _update_distiller(self, query: str, expert_response: str):
         """更新蒸馏器"""
@@ -664,7 +664,7 @@ class ExpertGuidedLearningSystem:
                 module="expert_learning",
             )
         except Exception as e:
-            print(f"[ExpertLearning] Distiller update failed: {e}")
+            logger.info(f"[ExpertLearning] Distiller update failed: {e}")
 
     def _extract_keywords(self, text: str) -> List[str]:
         """提取关键词"""
@@ -691,7 +691,7 @@ class ExpertGuidedLearningSystem:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(record.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[ExpertLearning] Save learning record failed: {e}")
+            logger.info(f"[ExpertLearning] Save learning record failed: {e}")
 
     def _load_learning_records(self):
         """加载历史学习记录"""
@@ -953,6 +953,9 @@ class ExpertGuidedLearningSystem:
 
         try:
             from core.expert_learning.external_provider_config import ProviderType, CostType
+from core.logger import get_logger
+logger = get_logger('expert_learning.expert_guided_system')
+
 
             p_type = ProviderType(provider_type.lower())
             c_type = CostType(cost_type.lower())
@@ -968,7 +971,7 @@ class ExpertGuidedLearningSystem:
                 **kwargs
             )
         except Exception as e:
-            print(f"[ExpertLearning] 添加提供者失败: {e}")
+            logger.info(f"[ExpertLearning] 添加提供者失败: {e}")
             return None
 
     def list_external_providers(self, include_free_first: bool = True) -> List[Dict[str, Any]]:

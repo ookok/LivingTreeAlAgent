@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 import httpx
 
 from core.config import OllamaConfig
+from core.logger import get_logger
+logger = get_logger('ollama_client')
+
 
 
 # ── 数据模型 ────────────────────────────────────────────────────────
@@ -122,7 +125,7 @@ class OllamaClient:
                 return models
         except Exception as e:
             # 打印错误信息
-            print(f"[OllamaClient] list_models 错误: {e}")
+            logger.info(f"[OllamaClient] list_models 错误: {e}")
             # 快速失败，避免长时间阻塞
             return []
 

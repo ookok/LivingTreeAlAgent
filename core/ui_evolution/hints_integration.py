@@ -370,12 +370,15 @@ def create_ui_hints_integration(
     ```
     """
     if not HINTS_AVAILABLE:
-        print("警告: intelligent_hints 模块不可用")
+        logger.info("警告: intelligent_hints 模块不可用")
         return None
     
     try:
         # 导入 SmartUISystem
         from .smart_ui_system import get_smart_ui_system
+from core.logger import get_logger
+logger = get_logger('ui_evolution.hints_integration')
+
         
         # 创建系统
         smart_ui = get_smart_ui_system()
@@ -390,7 +393,7 @@ def create_ui_hints_integration(
         return UIOperationInterceptor(smart_ui, config)
         
     except Exception as e:
-        print(f"创建 UI 提示集成失败: {e}")
+        logger.info(f"创建 UI 提示集成失败: {e}")
         return None
 
 
@@ -426,7 +429,7 @@ def enable_context_sniffer_integration(interceptor: UIOperationInterceptor):
         )
         
     except Exception as e:
-        print(f"启用 ContextSniffer 集成失败: {e}")
+        logger.info(f"启用 ContextSniffer 集成失败: {e}")
 
 
 # =============================================================================

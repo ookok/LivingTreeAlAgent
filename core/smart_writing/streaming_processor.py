@@ -121,7 +121,7 @@ class StreamingProcessor:
     
     # 异步流式处理
     async for chunk_result in processor.process_stream(large_document):
-        print(f"处理中: {chunk_result['progress']}%")
+        logger.info(f"处理中: {chunk_result['progress']}%")
         
     # 增量处理（中断恢复）
     checkpoint = processor.create_checkpoint()
@@ -560,6 +560,9 @@ class StreamingProcessor:
     def get_memory_usage(self) -> Dict[str, int]:
         """获取内存使用情况"""
         import sys
+from core.logger import get_logger
+logger = get_logger('smart_writing.streaming_processor')
+
         
         # 估算缓存大小
         cache_size = sum(

@@ -23,7 +23,7 @@ result = adapter.process(user_id="user1", query="Python 异步编程")
 agent = HermesAgent()
 agent.use_pipeline = True  # 启用流水线
 for chunk in agent.send_message("Python 异步编程"):
-    print(chunk)
+    logger.info(chunk)
 ```
 
 Author: Hermes Desktop Team
@@ -249,6 +249,9 @@ def create_pipeline_agent(
     """
     if agent_class is None:
         from core.agent import HermesAgent
+from core.logger import get_logger
+logger = get_logger('agent_pipeline_adapter')
+
         agent_class = HermesAgent
     
     # 动态创建支持流水线的类
@@ -268,52 +271,52 @@ def create_pipeline_agent(
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
-    print("=" * 50)
-    print("测试 HermesAgent Pipeline 适配器")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("测试 HermesAgent Pipeline 适配器")
+    logger.info("=" * 50)
     
     # 测试独立适配器
     adapter = HermesAgentPipelineAdapter()
     
     # 快速意图分类
-    print("\n[1] 快速意图分类测试")
+    logger.info("\n[1] 快速意图分类测试")
     intent = adapter.get_intent("Python 异步编程的原理是什么？")
-    print(f"    查询: Python 异步编程的原理是什么？")
-    print(f"    意图: {intent.value}")
+    logger.info(f"    查询: Python 异步编程的原理是什么？")
+    logger.info(f"    意图: {intent.value}")
     
     intent2 = adapter.get_intent("帮我写一个排序算法")
-    print(f"    查询: 帮我写一个排序算法")
-    print(f"    意图: {intent2.value}")
+    logger.info(f"    查询: 帮我写一个排序算法")
+    logger.info(f"    意图: {intent2.value}")
     
     # 完整流水线测试
-    print("\n[2] 完整流水线测试")
+    logger.info("\n[2] 完整流水线测试")
     result = adapter.process(
         user_id="test_user",
         query="Python 异步编程",
         session_id="test_session"
     )
     
-    print(f"    意图: {result.intent.value}")
-    print(f"    置信度: {result.confidence:.2f}")
-    print(f"    缓存命中: {result.cache_hit}")
-    print(f"    需要澄清: {result.needs_clarification}")
-    print(f"    响应长度: {len(result.response)}")
-    print(f"    执行步骤: {len(result.execution_trace)}")
+    logger.info(f"    意图: {result.intent.value}")
+    logger.info(f"    置信度: {result.confidence:.2f}")
+    logger.info(f"    缓存命中: {result.cache_hit}")
+    logger.info(f"    需要澄清: {result.needs_clarification}")
+    logger.info(f"    响应长度: {len(result.response)}")
+    logger.info(f"    执行步骤: {len(result.execution_trace)}")
     
-    print("\n[3] 执行追踪")
-    print(adapter.pipeline.get_execution_trace(result))
+    logger.info("\n[3] 执行追踪")
+    logger.info(adapter.pipeline.get_execution_trace(result))
     
-    print("\n[4] 响应预览")
-    print(result.response[:300] + "..." if len(result.response) > 300 else result.response)
+    logger.info("\n[4] 响应预览")
+    logger.info(result.response[:300] + "..." if len(result.response) > 300 else result.response)
     
     # 测试工厂函数
-    print("\n[5] 测试工厂函数")
+    logger.info("\n[5] 测试工厂函数")
     try:
         PipelineAgent = create_pipeline_agent()
-        print(f"    创建 PipelineAgent: {PipelineAgent}")
+        logger.info(f"    创建 PipelineAgent: {PipelineAgent}")
     except Exception as e:
-        print(f"    跳过（需要完整 HermesAgent 环境）: {e}")
+        logger.info(f"    跳过（需要完整 HermesAgent 环境）: {e}")
     
-    print("\n" + "=" * 50)
-    print("测试完成")
-    print("=" * 50)
+    logger.info("\n" + "=" * 50)
+    logger.info("测试完成")
+    logger.info("=" * 50)

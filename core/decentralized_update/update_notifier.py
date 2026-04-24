@@ -22,8 +22,8 @@
 #
 # # 同步到博客和论坛
 # result = await notifier.sync_to_blog_forum(notes)
-# print(f"博客: {result.blog_url}")
-# print(f"论坛: {result.forum_url}")
+# logger.info(f"博客: {result.blog_url}")
+# logger.info(f"论坛: {result.forum_url}")
 # ```
 #
 # ============================================================================
@@ -778,6 +778,9 @@ async def generate_and_sync_update(
 
 if __name__ == "__main__":
     import argparse
+from core.logger import get_logger
+logger = get_logger('decentralized_update.update_notifier')
+
 
     parser = argparse.ArgumentParser(description="Hermes Desktop 更新说明生成器")
     parser.add_argument("--from", dest="from_version", required=True, help="原版本")
@@ -803,16 +806,16 @@ if __name__ == "__main__":
             source=source
         )
 
-        print(f"更新说明已生成: v{notes.version}")
-        print(f"博客内容预览:\n{notes.blog_url or '未发布'}")
+        logger.info(f"更新说明已生成: v{notes.version}")
+        logger.info(f"博客内容预览:\n{notes.blog_url or '未发布'}")
 
         if args.sync:
             result = await notifier.sync_to_blog_forum(notes)
-            print(f"\n同步结果:")
-            print(f"  博客: {result.blog_url}")
-            print(f"  论坛: {result.forum_url}")
-            print(f"  邮件: {'已发送' if result.email_sent else '未发送'}")
+            logger.info(f"\n同步结果:")
+            logger.info(f"  博客: {result.blog_url}")
+            logger.info(f"  论坛: {result.forum_url}")
+            logger.info(f"  邮件: {'已发送' if result.email_sent else '未发送'}")
             if result.error_message:
-                print(f"  错误: {result.error_message}")
+                logger.info(f"  错误: {result.error_message}")
 
     asyncio.run(main())

@@ -14,6 +14,9 @@ import hashlib
 from typing import Optional, Dict, Any, List
 from collections import OrderedDict
 import threading
+from core.logger import get_logger
+logger = get_logger('fusion_rag.exact_cache')
+
 
 
 class ExactCacheLayer:
@@ -47,7 +50,7 @@ class ExactCacheLayer:
         # SimHash 索引 (近似匹配)
         self.simhash_index: Dict[str, str] = {}
         
-        print(f"[ExactCache] 初始化完成，内存缓存容量: {memory_size}")
+        logger.info(f"[ExactCache] 初始化完成，内存缓存容量: {memory_size}")
     
     def _hash_query(self, query: str) -> str:
         """计算查询哈希"""

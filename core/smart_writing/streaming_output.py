@@ -29,6 +29,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC, abstractmethod
 import logging
+from core.logger import get_logger
+logger = get_logger('smart_writing.streaming_output')
+
 
 logger = logging.getLogger(__name__)
 
@@ -1028,23 +1031,23 @@ def stream_markdown(
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=== 测试流式输出系统 ===\n")
+    logger.info("=== 测试流式输出系统 ===\n")
     
     # 测试 1：基础打字机效果
-    print("1. 基础打字机效果:")
+    logger.info("1. 基础打字机效果:")
     output = StreamingOutput()
     output.set_speed(OutputSpeed.FAST)
     result = output.stream_sync("你好，这是一段测试文本。")
-    print(f"\n结果: {result}\n")
+    logger.info(f"\n结果: {result}\n")
     
     # 测试 2：Markdown 流式输出
-    print("2. Markdown 流式输出:")
+    logger.info("2. Markdown 流式输出:")
     markdown = """# 标题
 这是一个**加粗**文本。
 
 ```python
 def hello():
-    print("Hello!")
+    logger.info("Hello!")
 ```
 
 - 列表项 1
@@ -1055,4 +1058,4 @@ def hello():
     output2 = EnhancedStreamingOutput()
     output2.set_speed(OutputSpeed.FAST)
     result2 = output2.stream_markdown_sync(markdown)
-    print(f"\n结果:\n{result2}")
+    logger.info(f"\n结果:\n{result2}")

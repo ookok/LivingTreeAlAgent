@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 import urllib.request
 import urllib.error
+from core.logger import get_logger
+logger = get_logger('vheer_client')
+
 
 
 class VheerModel(Enum):
@@ -380,7 +383,7 @@ class VheerClient:
                     f.write(content)
                 return True
         except Exception as e:
-            print(f"Download failed: {e}")
+            logger.info(f"Download failed: {e}")
             return False
 
     def list_available_models(self, type: str = "image") -> List[Dict[str, Any]]:

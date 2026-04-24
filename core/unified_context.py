@@ -213,6 +213,9 @@ class UnifiedContextProvider:
         if self._memory_palace is None:
             try:
                 from core.memory_palace import MemoryPalace
+from core.logger import get_logger
+logger = get_logger('unified_context')
+
                 self._memory_palace = MemoryPalace()
             except ImportError:
                 logger.warning("MemoryPalace 不可用")
@@ -382,11 +385,11 @@ if __name__ == "__main__":
 
     # 测试获取上下文
     context = provider.get_context()
-    print(f"Context loaded: {context.to_dict()}")
+    logger.info(f"Context loaded: {context.to_dict()}")
 
     # 测试构建提示词
     prompt = provider.build_prompt(
         user_query="你好，请介绍一下自己",
         system_prompt="你是一个友好的 AI 助手"
     )
-    print(f"\n=== Prompt ===\n{prompt}")
+    logger.info(f"\n=== Prompt ===\n{prompt}")

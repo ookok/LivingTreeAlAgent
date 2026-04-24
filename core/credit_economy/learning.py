@@ -20,6 +20,9 @@ import time
 import math
 
 from .credit_registry import CreditRegistry, PluginCreditProfile
+from core.logger import get_logger
+logger = get_logger('credit_economy.learning')
+
 
 
 @dataclass
@@ -497,7 +500,7 @@ class CreditLearning:
             try:
                 callback(data)
             except Exception as e:
-                print(f"Learning observer error: {e}")
+                logger.info(f"Learning observer error: {e}")
 
     # ==================== 历史 ====================
 

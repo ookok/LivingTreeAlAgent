@@ -28,6 +28,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import Counter
 import re
+from core.logger import get_logger
+logger = get_logger('expert_learning.knowledge_consistency')
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -313,7 +316,7 @@ class KnowledgeConsistencyVerifier:
     verifier = KnowledgeConsistencyVerifier()
     verifier.register_model("ollama_9b", "qwen3.5:9b", ollama_client)
     report = verifier.verify("太阳从哪边升起？")
-    print(report.result.consensus_level)
+    logger.info(report.result.consensus_level)
     ```
     """
 
@@ -435,23 +438,23 @@ class KnowledgeConsistencyVerifier:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("多模型知识一致性验证系统测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("多模型知识一致性验证系统测试")
+    logger.info("=" * 60)
 
     verifier = KnowledgeConsistencyVerifier()
 
-    print("\n[Test 1: 相似度计算]")
+    logger.info("\n[Test 1: 相似度计算]")
     checker = ConsistencyChecker()
     text1 = "Python是一种高级编程语言，广泛用于Web开发、数据分析和AI领域。"
     text2 = "Python是高级编程语言，常用于Web、数据分析和人工智能。"
-    print(f"  相似度: {checker.calculate_similarity(text1, text2):.2%}")
+    logger.info(f"  相似度: {checker.calculate_similarity(text1, text2):.2%}")
 
-    print("\n[Test 2: 关键事实提取]")
+    logger.info("\n[Test 2: 关键事实提取]")
     text3 = "2024年GDP增长5.2%，腾讯公司市值超过3万亿元。"
-    print(f"  事实: {checker.extract_key_facts(text3)}")
+    logger.info(f"  事实: {checker.extract_key_facts(text3)}")
 
-    print("\n[Test 3: 投票决策]")
+    logger.info("\n[Test 3: 投票决策]")
     voter = VotingDecider()
     responses = [
         ModelResponse("m1", "模型A", "答案是Python。", 100),
@@ -459,7 +462,7 @@ if __name__ == "__main__":
         ModelResponse("m3", "模型C", "答案是Java。", 200),
     ]
     answer, agreeing, conflicting = voter.decide(responses)
-    print(f"  答案: {answer}")
-    print(f"  同意: {agreeing}, 反对: {conflicting}")
+    logger.info(f"  答案: {answer}")
+    logger.info(f"  同意: {agreeing}, 反对: {conflicting}")
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

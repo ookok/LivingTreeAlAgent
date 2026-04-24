@@ -85,7 +85,7 @@ class KnowledgeBaseLayer:
                     self._ollama_client = "requests"
                     self._embedding_model_name = "nomic-embed-text"
                     self._embedding_dim = len(emb)
-                    print(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=nomic-embed-text, dim={self._embedding_dim})")
+                    logger.info(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=nomic-embed-text, dim={self._embedding_dim})")
                     return
 
             # ── 尝试 qwen2.5:1.5b（备用，本地 LLM 可用） ─────────
@@ -101,19 +101,19 @@ class KnowledgeBaseLayer:
                     self._ollama_client = "requests"
                     self._embedding_model_name = "qwen2.5:1.5b"
                     self._embedding_dim = len(emb2)
-                    print(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=qwen2.5:1.5b, dim={self._embedding_dim})")
+                    logger.info(f"[KnowledgeBase] Ollama 嵌入引擎就绪 (模型=qwen2.5:1.5b, dim={self._embedding_dim})")
                     return
 
             raise RuntimeError("No embedding model available")
 
         except Exception as e:
             self._ollama_client = None
-            print(f"[KnowledgeBase] Ollama 嵌入不可用: {e}，降级为 hash 嵌入")
+            logger.info(f"[KnowledgeBase] Ollama 嵌入不可用: {e}，降级为 hash 嵌入")
 
 
 
 
-        print(f"[KnowledgeBase] 初始化完成，嵌入模型: {self.embedding_model}")
+        logger.info(f"[KnowledgeBase] 初始化完成，嵌入模型: {self.embedding_model}")
 
     
     def _tokenize(self, text: str) -> List[str]:
@@ -450,6 +450,9 @@ class KnowledgeBaseLayer:
             搜索结果列表
         """
         import time as time_module
+from core.logger import get_logger
+logger = get_logger('fusion_rag.knowledge_base')
+
         
         with self.lock:
             self.search_count += 1

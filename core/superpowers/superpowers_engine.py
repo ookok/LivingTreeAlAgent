@@ -17,6 +17,9 @@ from .subagent import get_subagent_manager, get_parallel_dispatcher
 from .tdd_workflow import get_tdd_workflow
 from .trigger_system import get_trigger_system
 from .workflow import get_workflow_manager
+from core.logger import get_logger
+logger = get_logger('superpowers.superpowers_engine')
+
 
 
 class SuperpowersMode(Enum):
@@ -152,7 +155,7 @@ class SuperpowersEngine:
         # 初始化工作流
         await self._init_workflows()
 
-        print(f"[Superpowers] 初始化完成，模式: {self.config.mode.value}")
+        logger.info(f"[Superpowers] 初始化完成，模式: {self.config.mode.value}")
 
     async def _load_skills(self):
         """加载技能"""
@@ -160,7 +163,7 @@ class SuperpowersEngine:
         if skill_registry:
             skills_dir = self.workspace_dir / "skills"
             await skill_registry.load_skills(skills_dir)
-            print(f"[Superpowers] 加载了 {len(skill_registry.get_all_skills())} 个技能")
+            logger.info(f"[Superpowers] 加载了 {len(skill_registry.get_all_skills())} 个技能")
 
     async def _init_subagents(self):
         """初始化子代理"""
@@ -172,7 +175,7 @@ class SuperpowersEngine:
                     name=f"SubAgent {i+1}"
                 )
                 await subagent_manager.create_agent(agent_config)
-            print(f"[Superpowers] 初始化了 {self.config.max_subagents} 个子代理")
+            logger.info(f"[Superpowers] 初始化了 {self.config.max_subagents} 个子代理")
 
     async def _init_workflows(self):
         """初始化工作流"""
@@ -354,19 +357,19 @@ class SuperpowersEngine:
                 else:
                     handler(*args)
             except Exception as e:
-                print(f"[Superpowers] Event handler error: {e}")
+                logger.info(f"[Superpowers] Event handler error: {e}")
 
     def shutdown(self):
         """关闭 Superpowers"""
-        print("[Superpowers] 正在关闭...")
+        logger.info("[Superpowers] 正在关闭...")
         # 清理资源
         for name, component in self._components.items():
             if hasattr(component, 'shutdown'):
                 try:
                     component.shutdown()
                 except Exception as e:
-                    print(f"[Superpowers] 关闭组件 {name} 时出错: {e}")
-        print("[Superpowers] 已关闭")
+                    logger.info(f"[Superpowers] 关闭组件 {name} 时出错: {e}")
+        logger.info("[Superpowers] 已关闭")
 
 
 _global_engine: Optional[SuperpowersEngine] = None

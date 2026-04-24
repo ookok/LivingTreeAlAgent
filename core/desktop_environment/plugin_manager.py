@@ -166,7 +166,7 @@ class PluginManager:
                             plugin = PluginInfo.from_dict(plugin_data)
                             plugins[plugin.id] = plugin
         except Exception as e:
-            print(f"Failed to query P2P market: {e}")
+            logger.info(f"Failed to query P2P market: {e}")
 
         return plugins
 
@@ -257,7 +257,7 @@ class PluginManager:
             return True
 
         except Exception as e:
-            print(f"Failed to install plugin {plugin_id}: {e}")
+            logger.info(f"Failed to install plugin {plugin_id}: {e}")
             return False
 
     async def _download_plugin(
@@ -335,7 +335,7 @@ class PluginManager:
         """检查依赖"""
         for dep_id in plugin.dependencies:
             if dep_id not in self._installed_plugins:
-                print(f"Missing dependency: {dep_id}")
+                logger.info(f"Missing dependency: {dep_id}")
                 return False
         return True
 
@@ -409,6 +409,9 @@ class PluginManager:
         try:
             import sys
             import importlib.util
+from core.logger import get_logger
+logger = get_logger('desktop_environment.plugin_manager')
+
 
             # 添加到 Python 路径
             if str(plugin_dir.parent) not in sys.path:
@@ -435,7 +438,7 @@ class PluginManager:
             return instance
 
         except Exception as e:
-            print(f"Failed to load plugin {plugin_id}: {e}")
+            logger.info(f"Failed to load plugin {plugin_id}: {e}")
             return None
 
     def unload_plugin(self, plugin_id: str) -> bool:
@@ -489,7 +492,7 @@ class PluginManager:
                         plugin = PluginInfo.from_dict(plugin_data)
                         self._installed_plugins[plugin.id] = plugin
             except Exception as e:
-                print(f"Failed to load installed plugins: {e}")
+                logger.info(f"Failed to load installed plugins: {e}")
 
     def _save_installed_plugins(self):
         """保存已安装插件"""

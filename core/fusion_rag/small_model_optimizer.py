@@ -55,7 +55,7 @@ class SmallModelOptimizer:
             "rewrite": self._rewrite
         }
         
-        print(f"[SmallModelOptimizer] 初始化完成，模型: {model_name}")
+        logger.info(f"[SmallModelOptimizer] 初始化完成，模型: {model_name}")
     
     def _generate_cache_key(self, query: str, results: List[Dict]) -> str:
         """生成缓存键"""
@@ -83,6 +83,9 @@ class SmallModelOptimizer:
         # 模拟 Ollama 调用 (实际使用 requests 库)
         try:
             import requests
+from core.logger import get_logger
+logger = get_logger('fusion_rag.small_model_optimizer')
+
             
             url = f"{self.ollama_url}/api/generate"
             

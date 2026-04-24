@@ -279,7 +279,7 @@ class UserCustomizationProtector:
             return True
 
         except Exception as e:
-            print(f"Backup error: {e}")
+            logger.info(f"Backup error: {e}")
             return False
 
     def restore_customizations(self, backup_path: Path) -> bool:
@@ -304,7 +304,7 @@ class UserCustomizationProtector:
             return True
 
         except Exception as e:
-            print(f"Restore error: {e}")
+            logger.info(f"Restore error: {e}")
             return False
 
     def _merge_restore(self, src: Path, dst: Path):
@@ -476,7 +476,7 @@ class SmartUpgradeManager:
             try:
                 cb(data or {})
             except Exception as e:
-                print(f"Upgrade callback error: {e}")
+                logger.info(f"Upgrade callback error: {e}")
 
     async def check_for_updates(self) -> Optional[UpgradePackage]:
         """检查更新"""
@@ -677,6 +677,9 @@ class SmartUpgradeManager:
     async def _simulate_delay(self, seconds: float):
         """模拟延迟"""
         import asyncio
+from core.logger import get_logger
+logger = get_logger('upgrade_manager.__init__')
+
         await asyncio.sleep(seconds)
 
     def get_upgrade_state(self) -> UpgradeState:

@@ -504,11 +504,11 @@ def execute_schedule_command(text: str) -> Dict[str, Any]:
 
     Examples:
         >>> result = execute_schedule_command("每天早上9点提醒我开会")
-        >>> print(result["success"])  # True
-        >>> print(result["task_id"])  # "a1b2c3d4"
+        >>> logger.info(result["success"])  # True
+        >>> logger.info(result["task_id"])  # "a1b2c3d4"
 
         >>> result = execute_schedule_command("查看我的定时任务")
-        >>> print(result["tasks"])  # [TaskInfo, ...]
+        >>> logger.info(result["tasks"])  # [TaskInfo, ...]
     """
     executor = ScheduleCommandExecutor()
     return executor.execute(text)
@@ -517,6 +517,9 @@ def execute_schedule_command(text: str) -> Dict[str, Any]:
 if __name__ == "__main__":
     # 测试用例
     import sys
+from core.logger import get_logger
+logger = get_logger('smart_fallback.schedule_command')
+
 
     test_cases = [
         "每天早上9点提醒我开会",
@@ -526,19 +529,19 @@ if __name__ == "__main__":
         "删除所有定时任务",
     ]
 
-    print("=" * 60)
-    print("定时任务命令执行器测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("定时任务命令执行器测试")
+    logger.info("=" * 60)
 
     executor = ScheduleCommandExecutor()
 
     for text in test_cases:
-        print(f"\n📝 输入: {text}")
+        logger.info(f"\n📝 输入: {text}")
         result = executor.execute(text)
-        print(f"   成功: {result['success']}")
+        logger.info(f"   成功: {result['success']}")
         if result.get('message'):
-            print(f"   消息:\n{result['message']}")
+            logger.info(f"   消息:\n{result['message']}")
         if result.get('error'):
-            print(f"   错误: {result['error']}")
+            logger.info(f"   错误: {result['error']}")
         if result.get('tasks') is not None:
-            print(f"   任务数: {len(result['tasks'])}")
+            logger.info(f"   任务数: {len(result['tasks'])}")

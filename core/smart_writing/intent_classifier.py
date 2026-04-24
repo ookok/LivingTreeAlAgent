@@ -504,7 +504,7 @@ class DocumentIntentClassifier:
         
         # 从文本分类
         result = classifier.classify("帮我写一个武汉化工项目的可行性研究报告")
-        print(result.primary_type)   # → "可行性研究报告"
+        logger.info(result.primary_type)   # → "可行性研究报告"
         
         # 从上传文档内容分类
         result = classifier.classify_from_document(doc_content, file_name="某某项目EIA.pdf")
@@ -522,6 +522,9 @@ class DocumentIntentClassifier:
         if self._skill_evolution is None:
             try:
                 from core.skill_evolution.agent_loop import SkillEvolutionAgent
+from core.logger import get_logger
+logger = get_logger('smart_writing.intent_classifier')
+
                 self._skill_evolution = SkillEvolutionAgent()
             except ImportError:
                 pass

@@ -10,7 +10,7 @@
 使用示例：
     matrix = DowngradeMatrix()
     impl = matrix.get_best_available("weather_forecast")
-    print(f"使用方案: {impl.name}")
+    logger.info(f"使用方案: {impl.name}")
 """
 
 import os
@@ -18,6 +18,9 @@ import logging
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.downgrade_matrix')
+
 
 logger = logging.getLogger(__name__)
 

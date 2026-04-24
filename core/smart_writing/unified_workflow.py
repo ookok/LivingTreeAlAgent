@@ -183,8 +183,8 @@ class SmartWritingWorkflow:
     
     # 流式执行
     for stage_result in workflow.execute_stream(requirement):
-        print(f"Stage: {stage_result['stage']}")
-        print(f"Content: {stage_result.get('content', '')}")
+        logger.info(f"Stage: {stage_result['stage']}")
+        logger.info(f"Content: {stage_result.get('content', '')}")
     ```
     """
     
@@ -1231,6 +1231,9 @@ class SmartWritingWorkflow:
         try:
             from docx import Document
             from docx.shared import Pt
+from core.logger import get_logger
+logger = get_logger('smart_writing.unified_workflow')
+
             
             path = f"{output_dir}/{filename}.docx"
             doc = Document()
@@ -1312,7 +1315,7 @@ def demo_enhanced_usage():
     
     # 完成澄清
     result = clarifier.complete_session(session)
-    print(f"澄清结果: {result}")
+    logger.info(f"澄清结果: {result}")
     
     # 2. 使用自进化引擎
     engine = get_evolution_engine()
@@ -1327,11 +1330,11 @@ def demo_enhanced_usage():
     
     # 获取参考文档
     refs = engine.get_reference_documents("武汉化工项目", "feasibility_report")
-    print(f"参考文档: {len(refs)} 个")
+    logger.info(f"参考文档: {len(refs)} 个")
     
     # 获取写作指导
     guidance = engine.get_writing_guidance("feasibility_report", "化工项目")
-    print(f"章节结构: {guidance.get('sections', [])[:5]}")
+    logger.info(f"章节结构: {guidance.get('sections', [])[:5]}")
     
     # 3. 使用计算模型
     calc = get_calculation_engine()
@@ -1342,11 +1345,11 @@ def demo_enhanced_usage():
         "annual_cashflows": [1500, 1500, 1500, 1500, 1500],
         "discount_rate": 8
     })
-    print(f"NPV: {npv_result.result_value}")
+    logger.info(f"NPV: {npv_result.result_value}")
     
     # 4. 获取进化指标
     metrics = engine.get_metrics()
-    print(f"进化进度: {metrics}")
+    logger.info(f"进化进度: {metrics}")
     
     # 5. 完整工作流
     workflow = get_smart_writing_workflow()
@@ -1359,5 +1362,5 @@ def demo_enhanced_usage():
             enable_ai_review=True,
         )
     )
-    print(f"生成完成，置信度: {ctx.confidence:.2f}")
+    logger.info(f"生成完成，置信度: {ctx.confidence:.2f}")
 

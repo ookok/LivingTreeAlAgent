@@ -20,6 +20,9 @@ import hashlib
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('cross_platform.migration_qr')
+
 
 
 class MigrationType(Enum):
@@ -194,7 +197,7 @@ class MigrationQR:
             return data
 
         except Exception as e:
-            print(f"[MigrationQR] Decode error: {e}")
+            logger.info(f"[MigrationQR] Decode error: {e}")
             return None
 
     def _decode_qr(self, img) -> str:
@@ -257,7 +260,7 @@ class MigrationQR:
             return buf.getvalue()
 
         except Exception as e:
-            print(f"[MigrationQR] Simple QR error: {e}")
+            logger.info(f"[MigrationQR] Simple QR error: {e}")
             return None
 
 

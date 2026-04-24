@@ -12,6 +12,9 @@ from datetime import datetime
 from enum import Enum
 import random
 import string
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.game_room')
+
 
 
 class RoomType(Enum):
@@ -610,7 +613,7 @@ class RoomManager:
                 try:
                     callback(event, data)
                 except Exception as e:
-                    print(f"Event listener error: {e}")
+                    logger.info(f"Event listener error: {e}")
 
     def _room_to_dict(self, room: GameRoom) -> Dict[str, Any]:
         """房间转字典"""

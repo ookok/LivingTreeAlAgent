@@ -71,11 +71,14 @@ def _import_modules():
             MultiModelComparison
         )
         from core.expert_learning.enhanced_performance_monitor import (
+from core.logger import get_logger
+logger = get_logger('expert_learning.intelligent_learning_system')
+
             EnhancedPerformanceMonitor, MetricType
         )
         return True
     except ImportError as e:
-        print(f"[IntelligentLearningSystem] 模块导入失败: {e}")
+        logger.info(f"[IntelligentLearningSystem] 模块导入失败: {e}")
         return False
 
 
@@ -126,14 +129,14 @@ class IntelligentLearningSystem:
 
     # 处理请求（自动选择最优策略）
     result = system.process("解释量子计算原理")
-    print(result.content)
+    logger.info(result.content)
 
     # 学习新知识
     system.learn(query="...", response="...")
 
     # 获取系统状态
     status = system.get_status()
-    print(f"系统健康度: {status.system_health}")
+    logger.info(f"系统健康度: {status.system_health}")
 
     # 获取优化建议
     tips = system.get_optimization_tips()
@@ -206,8 +209,8 @@ class IntelligentLearningSystem:
         self._on_learning: Optional[Callable] = None
         self._on_optimization: Optional[Callable] = None
 
-        print("[IntelligentLearningSystem] 智能学习系统初始化完成")
-        print(f"  配置: {json.dumps(self.config, ensure_ascii=False)}")
+        logger.info("[IntelligentLearningSystem] 智能学习系统初始化完成")
+        logger.info(f"  配置: {json.dumps(self.config, ensure_ascii=False)}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 核心处理方法
@@ -404,7 +407,7 @@ class IntelligentLearningSystem:
                 capabilities.get("output_cost", 0),
             )
 
-        print(f"[IntelligentLearningSystem] 模型注册完成: {model_name}")
+        logger.info(f"[IntelligentLearningSystem] 模型注册完成: {model_name}")
 
     def set_connection_status(self, status: str):
         """设置连接状态"""
@@ -577,47 +580,47 @@ def get_intelligent_learning_system(config: Optional[Dict] = None) -> Intelligen
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("智能学习系统统一入口测试")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("智能学习系统统一入口测试")
+    logger.info("=" * 70)
 
     try:
         system = get_intelligent_learning_system({"daily_budget": 5.0})
 
-        print("\n[Test 1: 处理查询]")
+        logger.info("\n[Test 1: 处理查询]")
         result = system.process("你好")
-        print(f"  来源: {result.source}")
-        print(f"  置信度: {result.confidence:.2f}")
-        print(f"  内容: {result.content[:50]}...")
+        logger.info(f"  来源: {result.source}")
+        logger.info(f"  置信度: {result.confidence:.2f}")
+        logger.info(f"  内容: {result.content[:50]}...")
 
-        print("\n[Test 2: 学习新知识]")
+        logger.info("\n[Test 2: 学习新知识]")
         system.learn("Python是什么", "Python是一种高级编程语言...", source="expert", quality=0.9)
-        print("  知识已学习")
+        logger.info("  知识已学习")
 
-        print("\n[Test 3: 搜索知识]")
+        logger.info("\n[Test 3: 搜索知识]")
         results = system.search_knowledge("Python")
-        print(f"  找到 {len(results)} 条相关知识")
+        logger.info(f"  找到 {len(results)} 条相关知识")
 
-        print("\n[Test 4: 系统状态]")
+        logger.info("\n[Test 4: 系统状态]")
         status = system.get_status()
-        print(f"  在线: {status.is_online}")
-        print(f"  健康度: {status.system_health:.2f}")
-        print(f"  预算剩余: ${status.budget_remaining:.2f}")
+        logger.info(f"  在线: {status.is_online}")
+        logger.info(f"  健康度: {status.system_health:.2f}")
+        logger.info(f"  预算剩余: ${status.budget_remaining:.2f}")
 
-        print("\n[Test 5: 优化建议]")
+        logger.info("\n[Test 5: 优化建议]")
         tips = system.get_optimization_tips()
         for tip in tips:
-            print(f"  • {tip}")
+            logger.info(f"  • {tip}")
 
-        print("\n[Test 6: 详细统计]")
+        logger.info("\n[Test 6: 详细统计]")
         stats = system.get_stats()
-        print(f"  总请求: {stats['total_requests']}")
-        print(f"  离线知识: {stats['offline_loop']['knowledge_stats']['total_fragments']}")
-        print(f"  注册模型: {stats['model_selector']['registered_models']}")
+        logger.info(f"  总请求: {stats['total_requests']}")
+        logger.info(f"  离线知识: {stats['offline_loop']['knowledge_stats']['total_fragments']}")
+        logger.info(f"  注册模型: {stats['model_selector']['registered_models']}")
 
     except ImportError as e:
-        print(f"\n测试跳过（模块未完全安装）: {e}")
+        logger.info(f"\n测试跳过（模块未完全安装）: {e}")
     except Exception as e:
-        print(f"\n测试失败: {e}")
+        logger.info(f"\n测试失败: {e}")
 
-    print("\n" + "=" * 70)
+    logger.info("\n" + "=" * 70)

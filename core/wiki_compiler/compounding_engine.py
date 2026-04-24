@@ -132,7 +132,7 @@ class CompoundingEngine:
                         CompoundingRecord(**r) for r in data.get("records", [])
                     ]
             except Exception as e:
-                print(f"[CompoundingEngine] 加载状态失败: {e}")
+                logger.info(f"[CompoundingEngine] 加载状态失败: {e}")
 
         stats_path = self.persist_path / "stats.json"
         if stats_path.exists():
@@ -178,7 +178,7 @@ class CompoundingEngine:
             with open(self.persist_path / "stats.json", 'w', encoding='utf-8') as f:
                 json.dump(self._stats, f, ensure_ascii=False)
         except Exception as e:
-            print(f"[CompoundingEngine] 保存状态失败: {e}")
+            logger.info(f"[CompoundingEngine] 保存状态失败: {e}")
 
     def get_context_for_query(self, query: str) -> Tuple[str, float]:
         """
@@ -226,6 +226,9 @@ class CompoundingEngine:
     def _extract_keywords(self, text: str) -> List[str]:
         """提取关键词"""
         import re
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compounding_engine')
+
         # 简单分词
         words = re.findall(r'[\w]+', text.lower())
         # 过滤停用词

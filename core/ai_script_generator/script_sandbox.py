@@ -120,14 +120,14 @@ class RestrictedBuiltins:
         self._restrict_input()
         self._restrict_open()
 
-    def _restrict_print(self):
+    def _restrict_logger.info(self):
         """限制 print（只允许记录输出，不实际打印）"""
         import builtins as bi
 
         _original_print = bi.print
         _outputs = []
 
-        def _safe_print(*args, **kwargs):
+        def _safe_logger.info(*args, **kwargs):
             sep = kwargs.get('sep', ' ')
             end = kwargs.get('end', '\n')
             output = sep.join(str(a) for a in args) + end
@@ -233,6 +233,9 @@ class ResourceMonitor:
         except ImportError:
             # fallback: 粗略估算
             import gc
+from core.logger import get_logger
+logger = get_logger('ai_script_generator.script_sandbox')
+
             gc.collect()
             return 0
 

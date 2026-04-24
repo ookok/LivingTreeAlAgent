@@ -19,6 +19,9 @@ from .superpowers_engine import SuperpowersEngine, get_superpowers_engine
 from .skills import Skill, SkillRegistry, get_skill_registry
 from .workflow import WorkflowManager, get_workflow_manager
 from .trigger_system import TriggerSystem, get_trigger_system
+from core.logger import get_logger
+logger = get_logger('superpowers.integration')
+
 
 
 class EvolutionSkillAdapter(Skill):
@@ -93,7 +96,7 @@ class SuperpowersIntegration:
         for skill in skills:
             adapter = EvolutionSkillAdapter(skill)
             await self.skill_registry.register_skill(adapter)
-            print(f"[SuperpowersIntegration] 同步技能: {skill.name}")
+            logger.info(f"[SuperpowersIntegration] 同步技能: {skill.name}")
 
     async def _get_existing_skills(self) -> List[TaskSkill]:
         """

@@ -16,7 +16,7 @@ Auto Diagnosis System - 自动诊断系统
     
     diagnoser = get_auto_diagnoser()
     report = diagnoser.diagnose_recent_errors()
-    print(report)
+    logger.info(report)
 """
 
 import os
@@ -485,6 +485,9 @@ class AutoDiagnoser:
         """获取系统信息"""
         import platform
         import sys
+from core.logger import get_logger
+logger = get_logger('error_management.auto_diagnosis')
+
         
         return {
             "os": platform.system(),
@@ -510,9 +513,9 @@ if __name__ == "__main__":
     
     # 生成诊断报告
     report = diagnoser.generate_diagnostic_report()
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    logger.info(json.dumps(report, indent=2, ensure_ascii=False))
     
     # 诊断最近错误
     diagnosis = diagnoser.diagnose_recent_errors()
-    print("\nRecent errors diagnosis:")
-    print(json.dumps(diagnosis, indent=2, ensure_ascii=False))
+    logger.info("\nRecent errors diagnosis:")
+    logger.info(json.dumps(diagnosis, indent=2, ensure_ascii=False))

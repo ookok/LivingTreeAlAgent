@@ -294,8 +294,8 @@ class ImplementationStage(PipelineStage):
             "def run_command(args):",
             "    cmd = args.command or 'run'",
             "    if args.verbose:",
-            "        print(f'[VERBOSE] Executing command: {cmd}')",
-            "        print(f'[VERBOSE] Input: {args.input}')",
+            "        logger.info(f'[VERBOSE] Executing command: {cmd}')",
+            "        logger.info(f'[VERBOSE] Input: {args.input}')",
             "",
             "    if cmd == 'run' or cmd == 'convert':",
             "        return handle_convert(args)",
@@ -304,7 +304,7 @@ class ImplementationStage(PipelineStage):
             "    elif cmd == 'download':",
             "        return handle_download(args)",
             "    else:",
-            "        print(f'Unknown command: {cmd}')",
+            "        logger.info(f'Unknown command: {cmd}')",
             "        return 1",
             "",
             "",
@@ -313,8 +313,8 @@ class ImplementationStage(PipelineStage):
             "    output_path = Path(args.output)",
             "    output_path.mkdir(parents=True, exist_ok=True)",
             "    if args.verbose:",
-            "        print(f'Converting {input_path} to {args.format or \"default\"} format')",
-            "    print(f'Processed: {input_path.name}')",
+            "        logger.info(f'Converting {input_path} to {args.format or \"default\"} format')",
+            "    logger.info(f'Processed: {input_path.name}')",
             "    return 0",
             "",
             "",
@@ -326,15 +326,15 @@ class ImplementationStage(PipelineStage):
             "    for f in files:",
             "        if f.is_file():",
             "            if args.verbose:",
-            "                print(f'Processing: {f}')",
-            "            print(f'Processed: {f.name}')",
-            "    print(f'Batch processed {len(files)} files')",
+            "                logger.info(f'Processing: {f}')",
+            "            logger.info(f'Processed: {f.name}')",
+            "    logger.info(f'Batch processed {len(files)} files')",
             "    return 0",
             "",
             "",
             "def handle_download(args):",
-            "    print(f'Downloading from: {args.input}')",
-            "    print(f'Output to: {args.output}')",
+            "    logger.info(f'Downloading from: {args.input}')",
+            "    logger.info(f'Output to: {args.output}')",
             "    return 0",
             "",
             "",
@@ -349,10 +349,10 @@ class ImplementationStage(PipelineStage):
             "    try:",
             "        return run_command(args)",
             "    except KeyboardInterrupt:",
-            "        print('\\nInterrupted by user')",
+            "        logger.info('\\nInterrupted by user')",
             "        return 130",
             "    except Exception as e:",
-            "        print(f'Error: {e}', file=sys.stderr)",
+            "        logger.info(f'Error: {e}', file=sys.stderr)",
             "        return 1",
             "",
             "",
@@ -801,6 +801,9 @@ class CLIGeneratorPipeline:
     def _slugify(self, text: str) -> str:
         """生成slug格式的名称（ASCII安全）"""
         import unicodedata
+from core.logger import get_logger
+logger = get_logger('cli_anything')
+
         # Unicode normalization and ASCII conversion
         text = unicodedata.normalize('NFKD', text)
         text = text.encode('ascii', 'ignore').decode('ascii')

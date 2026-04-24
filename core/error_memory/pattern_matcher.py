@@ -315,23 +315,26 @@ class ErrorPatternMatcher:
             from .error_models import PRESET_PATTERNS, PRESET_TEMPLATES
         except ImportError:
             from error_models import PRESET_PATTERNS, PRESET_TEMPLATES
+from core.logger import get_logger
+logger = get_logger('error_memory.pattern_matcher')
+
         self._patterns.update(PRESET_PATTERNS)
         self._templates.update(PRESET_TEMPLATES)
         
         # 匹配统计
         self._match_stats = defaultdict(int)
         
-        print(f"[ErrorPatternMatcher] 已初始化，{len(self._patterns)} 个模式，{len(self._templates)} 个模板")
+        logger.info(f"[ErrorPatternMatcher] 已初始化，{len(self._patterns)} 个模式，{len(self._templates)} 个模板")
 
     def register_pattern(self, pattern: ErrorPattern):
         """注册错误模式"""
         self._patterns[pattern.pattern_id] = pattern
-        print(f"[ErrorPatternMatcher] 注册模式: {pattern.pattern_name}")
+        logger.info(f"[ErrorPatternMatcher] 注册模式: {pattern.pattern_name}")
 
     def register_template(self, template: FixTemplate):
         """注册修复模板"""
         self._templates[template.template_id] = template
-        print(f"[ErrorPatternMatcher] 注册模板: {template.template_name}")
+        logger.info(f"[ErrorPatternMatcher] 注册模板: {template.template_name}")
 
     def find_matching_patterns(
         self,

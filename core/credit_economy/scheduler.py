@@ -27,6 +27,9 @@ import time
 
 from .credit_registry import CreditRegistry, UserCreditProfile, PluginCreditProfile
 from .task_estimator import TaskEstimator, TaskSpec, EstimationResult
+from core.logger import get_logger
+logger = get_logger('credit_economy.scheduler')
+
 
 
 class SchedulingStrategy(Enum):
@@ -436,7 +439,7 @@ class Scheduler:
             try:
                 callback(data)
             except Exception as e:
-                print(f"Scheduler observer error: {e}")
+                logger.info(f"Scheduler observer error: {e}")
 
     # ==================== 历史 ====================
 

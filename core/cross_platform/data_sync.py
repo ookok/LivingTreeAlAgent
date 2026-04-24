@@ -145,11 +145,14 @@ class LocalStorage:
                     for key, item in data.items():
                         self._data[key] = DataSnapshot(**item)
             except Exception as e:
-                print(f"[LocalStorage] Load error: {e}")
+                logger.info(f"[LocalStorage] Load error: {e}")
 
     def _save_to_disk(self):
         """保存到磁盘"""
         import os
+from core.logger import get_logger
+logger = get_logger('cross_platform.data_sync')
+
         disk_path = self.db_path.replace('.db', '.json')
         os.makedirs(os.path.dirname(disk_path), exist_ok=True)
         try:
@@ -157,7 +160,7 @@ class LocalStorage:
                 data = {k: asdict(v) for k, v in self._data.items()}
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[LocalStorage] Save error: {e}")
+            logger.info(f"[LocalStorage] Save error: {e}")
 
     def get(self, key: str) -> Optional[DataSnapshot]:
         """获取数据"""
@@ -304,7 +307,7 @@ class SyncManager:
                 await asyncio.sleep(5)  # 5秒同步一次
 
             except Exception as e:
-                print(f"[SyncManager] Sync loop error: {e}")
+                logger.info(f"[SyncManager] Sync loop error: {e}")
 
     async def _process_sync_queue(self):
         """处理同步队列"""
@@ -342,7 +345,7 @@ class SyncManager:
             try:
                 listener(event)
             except Exception as e:
-                print(f"[SyncManager] Listener error: {e}")
+                logger.info(f"[SyncManager] Listener error: {e}")
 
     async def set(self, key: str, value: Any, metadata: Dict[str, Any] = None):
         """设置数据并触发同步"""

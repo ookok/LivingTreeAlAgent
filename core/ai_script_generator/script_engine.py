@@ -471,7 +471,7 @@ class {class_name}Panel(QWidget):
         """处理操作"""
         content = self.content.toPlainText()
         # TODO: 实现具体逻辑
-        print(f"Content: {{content}}")
+        logger.info(f"Content: {{content}}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -496,21 +496,21 @@ class WorkflowAutomator:
     def add_step(self, name: str, func: Callable):
         """添加工作流步骤"""
         self.steps.append(func)
-        print(f"[+] 添加步骤: {{name}}")
+        logger.info(f"[+] 添加步骤: {{name}}")
 
     def execute(self):
         """执行工作流"""
-        print(f"开始执行工作流: {len(self.steps)} 个步骤")
+        logger.info(f"开始执行工作流: {len(self.steps)} 个步骤")
         for i, step in enumerate(self.steps, 1):
-            print(f"  步骤 {{i}}: {{step.__name__}}")
+            logger.info(f"  步骤 {{i}}: {{step.__name__}}")
             try:
                 result = step()
                 self.results.append(result)
-                print(f"  ✓ 完成")
+                logger.info(f"  ✓ 完成")
             except Exception as e:
-                print(f"  ✗ 失败: {{e}}")
+                logger.info(f"  ✗ 失败: {{e}}")
                 self.results.append(None)
-        print(f"工作流执行完成: {{len([r for r in self.results if r])}} 成功")
+        logger.info(f"工作流执行完成: {{len([r for r in self.results if r])}} 成功")
 
     def generate_script(self) -> str:
         """生成可执行脚本"""
@@ -525,7 +525,7 @@ from pathlib import Path
 
 def main():
     # TODO: 实现具体工作流逻辑
-    print("执行{workflow_name}...")
+    logger.info("执行{workflow_name}...")
 
 if __name__ == "__main__":
     main()
@@ -533,7 +533,7 @@ if __name__ == "__main__":
 
 # 使用示例
 automator = WorkflowAutomator()
-# automator.add_step("步骤1", lambda: print("执行步骤1"))
+# automator.add_step("步骤1", lambda: logger.info("执行步骤1"))
 # automator.execute()
 ''',
 
@@ -559,7 +559,7 @@ class DataVisualizer:
     def create_chart(self) -> Any:
         """创建图表"""
         if not HAS_PYQT_CHART:
-            print("PyQt6 Charts 未安装，使用文本模式")
+            logger.info("PyQt6 Charts 未安装，使用文本模式")
             return self._text_chart()
 
         # 创建柱状图示例
@@ -612,8 +612,8 @@ def main():
     }}
 
     viz = DataVisualizer(sample_data)
-    print(viz._text_chart())
-    print(viz.get_summary())
+    logger.info(viz._text_chart())
+    logger.info(viz.get_summary())
 
 if __name__ == "__main__":
     main()
@@ -649,7 +649,7 @@ class SmartRouter:
         """路由决策"""
         for rule in self.rules:
             if re.search(rule.match_pattern, url):
-                print(f"匹配规则: {{rule.name}} -> {{rule.action}}")
+                logger.info(f"匹配规则: {{rule.name}} -> {{rule.action}}")
                 return self._execute_action(url, rule)
             else:
                 return self.fallback_action
@@ -807,10 +807,10 @@ class FileConverter:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             with open(target_path, 'w', encoding='utf-8') as f:
                 f.write(result)
-            print(f"[OK] Converted: {source_path.name}")
+            logger.info(f"[OK] Converted: {source_path.name}")
             return True
         except Exception as e:
-            print(f"[ERROR] {e}")
+            logger.info(f"[ERROR] {e}")
             return False
 
     def _to_csv(self, content: str) -> str:
@@ -833,7 +833,7 @@ class FileConverter:
         return content
 
 if __name__ == "__main__":
-    print("File Converter Ready")
+    logger.info("File Converter Ready")
 ''',
 
     'web_scraping': '''
@@ -863,7 +863,7 @@ class WebScraper:
             r.raise_for_status()
             return r.text
         except Exception as e:
-            print(f"[ERROR] {e}")
+            logger.info(f"[ERROR] {e}")
             return None
 
     def extract(self, html: str) -> str:
@@ -881,10 +881,10 @@ class WebScraper:
     def export(self, filepath: str = "scraped.json"):
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump([{'url': c.url, 'title': c.title, 'content': c.content} for c in self.content_cache.values()], f, ensure_ascii=False, indent=2)
-        print(f"[OK] Exported to {filepath}")
+        logger.info(f"[OK] Exported to {filepath}")
 
 if __name__ == "__main__":
-    print("Web Scraper Ready")
+    logger.info("Web Scraper Ready")
 ''',
 
     'image_processing': '''
@@ -916,12 +916,12 @@ class ImageProcessor:
         for path in paths:
             info = self.get_info(path)
             if info:
-                print(f"[OK] {info.filename} ready for resize to {size}")
+                logger.info(f"[OK] {info.filename} ready for resize to {size}")
                 results.append(info.path)
         return results
 
 if __name__ == "__main__":
-    print("Image Processor Ready")
+    logger.info("Image Processor Ready")
 ''',
 
     'data_export': '''
@@ -930,6 +930,9 @@ import csv
 from pathlib import Path
 from typing import List, Dict, Any
 from enum import Enum
+from core.logger import get_logger
+logger = get_logger('ai_script_generator.script_engine')
+
 
 class ExportFormat(Enum):
     JSON = "json"
@@ -954,15 +957,15 @@ class DataExporter:
                         w = csv.DictWriter(f, fieldnames=data[0].keys())
                         w.writeheader()
                         w.writerows(data)
-            print(f"[OK] Exported {len(data)} records to {path}")
+            logger.info(f"[OK] Exported {len(data)} records to {path}")
             self.history.append({'path': path, 'count': len(data)})
             return True
         except Exception as e:
-            print(f"[ERROR] {e}")
+            logger.info(f"[ERROR] {e}")
             return False
 
 if __name__ == "__main__":
-    print("Data Exporter Ready")
+    logger.info("Data Exporter Ready")
 '''
     }
 
@@ -1139,7 +1142,7 @@ class AIScriptEngine:
     result = await engine.generate(request)
 
     if result.success:
-        print(result.script.code)
+        logger.info(result.script.code)
     ```
     """
 

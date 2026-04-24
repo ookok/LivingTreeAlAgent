@@ -90,7 +90,7 @@ class LambdaWorker(Worker):
     使用方式:
         worker = LambdaWorker(
             task_fn=lambda: do_work(),
-            finished_callback=lambda r: print(r),
+            finished_callback=lambda r: logger.info(r),
             progress_callback=lambda p: update_ui(p)
         )
         pool.run(worker)
@@ -126,7 +126,7 @@ class LambdaWorker(Worker):
             self.finished.emit(result)
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"[LambdaWorker] Error in {self.task_id}: {error_msg}")
+            logger.info(f"[LambdaWorker] Error in {self.task_id}: {error_msg}")
             traceback.print_exc()
             self.error.emit(error_msg)
 
@@ -328,7 +328,7 @@ def run_async(
             return "完成!"
 
         def on_done(result):
-            print(f"结果: {result}")
+            logger.info(f"结果: {result}")
 
         run_async(long_task, on_done)
     """
@@ -347,20 +347,23 @@ def run_async(
 # 示例 1: 使用 LambdaWorker
 from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 import time
+from core.logger import get_logger
+logger = get_logger('utils.thread_pool_manager')
+
 
 def heavy_task():
     time.sleep(2)
     return "任务完成!"
 
 def on_finished(result):
-    print(f"收到结果: {result}")
+    logger.info(f"收到结果: {result}")
 
 button = QPushButton("执行任务")
 button.clicked.connect(lambda:
     get_pool().run_lambda(
         heavy_task,
         finished_callback=on_finished,
-        progress_callback=lambda p: print(f"进度: {p}")
+        progress_callback=lambda p: logger.info(f"进度: {p}")
     )
 )
 

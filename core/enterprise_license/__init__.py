@@ -91,7 +91,7 @@ class EnterpriseLicenseClient:
         
         return self._device_id
     
-    def get_device_fingerprint(self) -> str:
+    def get_device_fingerlogger.info(self) -> str:
         """获取设备指纹"""
         if self._device_fingerprint:
             return self._device_fingerprint
@@ -356,6 +356,9 @@ class EnterpriseLicenseClient:
 def main():
     """命令行工具"""
     import argparse
+from core.logger import get_logger
+logger = get_logger('enterprise_license.__init__')
+
     
     parser = argparse.ArgumentParser(description="企业许可证工具")
     subparsers = parser.add_subparsers(dest="command", help="子命令")
@@ -379,15 +382,15 @@ def main():
     
     if args.command == "generate-code":
         code = EnterpriseLicenseClient.generate_enterprise_code(args.enterprise_name)
-        print(f"企业名称: {args.enterprise_name}")
-        print(f"8位码: {code}")
+        logger.info(f"企业名称: {args.enterprise_name}")
+        logger.info(f"8位码: {code}")
     
     elif args.command == "verify-code":
         valid = EnterpriseLicenseClient.verify_enterprise_code(args.enterprise_name, args.code)
-        print(f"验证结果: {'通过' if valid else '失败'}")
+        logger.info(f"验证结果: {'通过' if valid else '失败'}")
     
     elif args.command == "register":
-        print("注册功能需要通过桌面客户端操作")
+        logger.info("注册功能需要通过桌面客户端操作")
     
     else:
         parser.print_help()

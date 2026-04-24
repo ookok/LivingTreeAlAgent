@@ -102,6 +102,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
+from core.logger import get_logger
+logger = get_logger('assembler.adapter_gen')
+
 
 # 模块路径
 MODULE_PATH = Path("{module_path}")
@@ -164,7 +167,7 @@ def create_adapter() -> {safe_name.title()}Adapter:
 
 if __name__ == "__main__":
     adapter = create_adapter()
-    print(json.dumps(adapter.execute("info"), ensure_ascii=False, indent=2))
+    logger.info(json.dumps(adapter.execute("info"), ensure_ascii=False, indent=2))
 '''
 
         return adapter_code

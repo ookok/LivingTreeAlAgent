@@ -177,11 +177,11 @@ class SmartReviewBrain:
     
     # 获取问题
     for issue in report.issues:
-        print(f"{issue.severity.value}: {issue.title}")
+        logger.info(f"{issue.severity.value}: {issue.title}")
         
     # 获取修改建议
     for suggestion in report.revision_suggestions:
-        print(f"- {suggestion['section']}: {suggestion['content']}")
+        logger.info(f"- {suggestion['section']}: {suggestion['content']}")
         
     # 自动修复
     fixed_content = await brain.auto_fix(content, report)
@@ -846,6 +846,9 @@ class SmartReviewBrain:
     def _check_standards(self, content: Dict) -> Dict:
         """检查标准时效性"""
         import re
+from core.logger import get_logger
+logger = get_logger('smart_writing.smart_review_brain')
+
         outdated = []
         
         text = self._flatten_content(content)

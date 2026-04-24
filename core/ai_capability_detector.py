@@ -620,6 +620,9 @@ class AICapabilityDetector:
             # 尝试pynvml (NVIDIA)
             try:
                 import pynvml
+from core.logger import get_logger
+logger = get_logger('ai_capability_detector')
+
                 pynvml.nvmlInit()
                 handle = pynvml.nvmlDeviceGetHandleByIndex(0)
                 name = pynvml.nvmlDeviceGetName(handle)
@@ -934,7 +937,7 @@ class AICapabilityRegistry:
                 return self._current_profile
 
         except Exception as e:
-            print(f"加载画像失败: {e}")
+            logger.info(f"加载画像失败: {e}")
 
         return None
 
@@ -970,7 +973,7 @@ class AICapabilityRegistry:
             conn.close()
 
         except Exception as e:
-            print(f"保存画像失败: {e}")
+            logger.info(f"保存画像失败: {e}")
 
     def _profile_from_dict(self, data: Dict[str, Any]) -> CapabilityProfile:
         """从字典创建CapabilityProfile"""

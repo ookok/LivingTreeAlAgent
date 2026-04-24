@@ -140,7 +140,7 @@ class AppSandbox:
         """发送通知"""
         if not self.check_action("ui.notification"):
             raise PermissionError("Notification not allowed")
-        print(f"[{level.upper()}] {self.app_info.name}: {message}")
+        logger.info(f"[{level.upper()}] {self.app_info.name}: {message}")
 
     def _api_storage(self, key: str, value: Any = None):
         """存储数据"""
@@ -342,7 +342,7 @@ class AppManager:
             return instance
 
         except Exception as e:
-            print(f"Failed to start app {app_id}: {e}")
+            logger.info(f"Failed to start app {app_id}: {e}")
             self._app_states[app_id] = AppState.STOPPED
             return None
 
@@ -381,7 +381,7 @@ class AppManager:
             return True
 
         except Exception as e:
-            print(f"Failed to stop app {app_id}: {e}")
+            logger.info(f"Failed to stop app {app_id}: {e}")
             self._app_states[app_id] = AppState.STOPPED
             return False
 
@@ -449,6 +449,9 @@ class AppManager:
     def _get_registered_apps_file(self) -> Path:
         """获取已注册应用文件"""
         from . import _DATA_DIR
+from core.logger import get_logger
+logger = get_logger('desktop_environment.app_manager')
+
         return _DATA_DIR / "registered_apps.json"
 
     def _load_registered_apps(self):
@@ -463,7 +466,7 @@ class AppManager:
                         self._registered_apps[app_info.id] = app_info
                         self._app_states[app_info.id] = AppState.STOPPED
             except Exception as e:
-                print(f"Failed to load registered apps: {e}")
+                logger.info(f"Failed to load registered apps: {e}")
 
     def _save_registered_apps(self):
         """保存已注册应用"""

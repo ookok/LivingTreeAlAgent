@@ -12,10 +12,10 @@
 使用示例：
     detector = UserProfileDetector()
     profile = detector.detect_profile()
-    print(f"技术等级: {profile.tech_level.value}")
+    logger.info(f"技术等级: {profile.tech_level.value}")
     
     guide = detector.get_optimal_guide("weather_api", profile)
-    print(f"推荐引导: {guide.guide_type}")
+    logger.info(f"推荐引导: {guide.guide_type}")
 """
 
 import os
@@ -639,6 +639,9 @@ class UserProfileDetector:
         """测量网络速度"""
         try:
             import socket
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.user_profile_detector')
+
             socket.create_connection(("8.8.8.8", 53), timeout=3)
             return "fast"
         except:

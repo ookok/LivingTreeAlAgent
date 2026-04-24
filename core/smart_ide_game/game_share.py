@@ -119,6 +119,9 @@ class QRCodeGenerator:
             # 尝试使用qrcode库
             import qrcode
             import qrcode.constants
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.game_share')
+
 
             error_levels = {
                 "L": qrcode.constants.ERROR_CORRECT_L,
@@ -265,7 +268,7 @@ class GameShare:
                             metadata=item.get("metadata", {}),
                         )
             except Exception as e:
-                print(f"Failed to load shares: {e}")
+                logger.info(f"Failed to load shares: {e}")
 
     def _save_shares(self):
         """保存分享"""

@@ -29,7 +29,7 @@ try:
     PYQT_AVAILABLE = True
 except ImportError:
     PYQT_AVAILABLE = False
-    print("PyQt6 not available, desktop UI disabled")
+    logger.info("PyQt6 not available, desktop UI disabled")
 
 # ============================================================================
 # 桌面窗口 (PyQt)
@@ -403,7 +403,7 @@ class MobileDesktop:
             from kivy.clock import Clock
             from kivy.properties import BooleanProperty
         except ImportError:
-            print("Kivy not available")
+            logger.info("Kivy not available")
             return
 
         self.kivy_available = True
@@ -435,6 +435,9 @@ class MobileDesktop:
         """添加应用到桌面"""
         # 创建图标按钮
         from kivy.uix.button import Button
+from core.logger import get_logger
+logger = get_logger('desktop_environment.desktop_window')
+
         btn = Button(
             text=name,
             size_hint=(None, None),

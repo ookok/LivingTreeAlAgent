@@ -26,7 +26,7 @@
     # 获取相似模板
     template = distiller.get_template("为什么海水是蓝色的")
     if template:
-        print(f"使用模板: {template['pattern']}")
+        logger.info(f"使用模板: {template['pattern']}")
 """
 
 from __future__ import annotations
@@ -39,6 +39,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from enum import Enum
 import re
+from core.logger import get_logger
+logger = get_logger('expert_learning.chain_of_thought_distiller')
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -379,7 +382,7 @@ class ChainOfThoughtDistiller:
         # 保存模板
         self._save_template(template)
 
-        print(f"[CoTDistiller] 提取模板: {template_id} (类型: {record.query_type.value})")
+        logger.info(f"[CoTDistiller] 提取模板: {template_id} (类型: {record.query_type.value})")
 
     def _extract_query_pattern(self, query: str) -> str:
         """提取问题模式"""
@@ -517,7 +520,7 @@ class ChainOfThoughtDistiller:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(record.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[CoTDistiller] 保存记录失败: {e}")
+            logger.info(f"[CoTDistiller] 保存记录失败: {e}")
 
     def _save_template(self, template: ChainTemplate):
         """保存模板"""
@@ -527,7 +530,7 @@ class ChainOfThoughtDistiller:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(template.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[CoTDistiller] 保存模板失败: {e}")
+            logger.info(f"[CoTDistiller] 保存模板失败: {e}")
 
     def _load_data(self):
         """加载已有数据"""
@@ -592,7 +595,7 @@ class ExpertGuidedLearningSystem:
 
         # 思维链蒸馏器
         self._cot_distiller = ChainOfThoughtDistiller()
-        print("[ExpertLearning] ✅ 思维链蒸馏器已启用")
+        logger.info("[ExpertLearning] ✅ 思维链蒸馏器已启用")
 
     def _generate_expert(self, query: str) -> Optional[str]:
         """专家模型生成（增强版：包含思维链）"""
@@ -601,7 +604,7 @@ class ExpertGuidedLearningSystem:
         # 如果有思维链提示
         hint = self._cot_distiller.get_prompt_hint(query)
         if hint:
-            print(f"[ExpertLearning] 使用思维链提示: {hint[:50]}...")
+            logger.info(f"[ExpertLearning] 使用思维链提示: {hint[:50]}...")
 
         # 返回响应
         return response

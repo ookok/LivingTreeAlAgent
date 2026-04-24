@@ -20,6 +20,9 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import statistics
+from core.logger import get_logger
+logger = get_logger('expert_learning.auto_offload_strategy')
+
 
 # ── 复杂度等级 ──────────────────────────────────────────────────────────────
 
@@ -172,7 +175,7 @@ class AutoOffloadStrategy:
             "证明", "论证", "逻辑",
         ]
 
-        print("[AutoOffload] Strategy initialized")
+        logger.info("[AutoOffload] Strategy initialized")
 
     def evaluate_complexity(self, query: str) -> ComplexityMetrics:
         """
@@ -530,7 +533,7 @@ class AutoOffloadStrategy:
         elif expert_latency < 1000:  # 低于1秒
             self.config.expert_threshold = max(0.7, self.config.expert_threshold - 0.05)
 
-        print(f"[AutoOffload] Thresholds adjusted: local<{self.config.local_threshold:.2f}, "
+        logger.info(f"[AutoOffload] Thresholds adjusted: local<{self.config.local_threshold:.2f}, "
               f"hybrid<{self.config.hybrid_threshold:.2f}, expert<{self.config.expert_threshold:.2f}")
 
 

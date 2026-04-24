@@ -178,7 +178,7 @@ class FeedbackCollector:
             self._rebuild_stats()
             
         except Exception as e:
-            print(f"加载反馈数据失败: {e}")
+            logger.info(f"加载反馈数据失败: {e}")
     
     def _save(self):
         """保存到持久化"""
@@ -208,7 +208,7 @@ class FeedbackCollector:
                 json.dump(data, f, ensure_ascii=False, indent=2)
                 
         except Exception as e:
-            print(f"保存反馈数据失败: {e}")
+            logger.info(f"保存反馈数据失败: {e}")
     
     def record_prediction(
         self,
@@ -470,6 +470,9 @@ def record_prediction_feedback(
     使用示例:
     ```python
     from core.ui_evolution import record_prediction_feedback
+from core.logger import get_logger
+logger = get_logger('ui_evolution.feedback_collector')
+
     
     # 预测
     record_prediction_feedback(

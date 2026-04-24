@@ -254,7 +254,7 @@ class RegulationRAG:
                 results = self._semantic_search(query, top_k)
 
         except Exception as e:
-            print(f"[RegulationRAG] 检索失败: {e}")
+            logger.info(f"[RegulationRAG] 检索失败: {e}")
             results = []
 
         # 更新统计
@@ -485,6 +485,9 @@ def create_regulation_rag(
     """创建法规 RAG 引擎（便捷工厂函数）"""
 
     from core.regulation_vector_db import create_regulation_db
+from core.logger import get_logger
+logger = get_logger('fusion_rag.regulation_rag')
+
 
     # 创建法规库
     regulation_db = create_regulation_db(
@@ -524,8 +527,8 @@ def create_regulation_rag(
 def example_usage():
     """使用示例"""
 
-    print("=" * 60)
-    print("创建法规 RAG 引擎...")
+    logger.info("=" * 60)
+    logger.info("创建法规 RAG 引擎...")
 
     rag = create_regulation_rag(
         db_type="chroma",
@@ -533,7 +536,7 @@ def example_usage():
         mode="hybrid"
     )
 
-    print("\n执行检索...")
+    logger.info("\n执行检索...")
 
     # 示例查询
     queries = [
@@ -543,8 +546,8 @@ def example_usage():
     ]
 
     for query_text, filters in queries:
-        print(f"\n查询: '{query_text}'")
-        print(f"过滤器: {filters}")
+        logger.info(f"\n查询: '{query_text}'")
+        logger.info(f"过滤器: {filters}")
 
         results = rag.search(
             query_text=query_text,
@@ -552,14 +555,14 @@ def example_usage():
             **filters
         )
 
-        print(f"找到 {len(results)} 条结果:")
+        logger.info(f"找到 {len(results)} 条结果:")
         for i, r in enumerate(results[:3], 1):
-            print(f"  [{i}] {r['title']} (得分: {r['score']:.4f}, 来源: {r['source']})")
+            logger.info(f"  [{i}] {r['title']} (得分: {r['score']:.4f}, 来源: {r['source']})")
 
-    print("\n统计信息:")
+    logger.info("\n统计信息:")
     stats = rag.get_statistics()
     for key, value in stats.items():
-        print(f"  {key}: {value}")
+        logger.info(f"  {key}: {value}")
 
 
 if __name__ == "__main__":

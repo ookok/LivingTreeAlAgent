@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from .streaming_output import StreamConfig, TextStreamer
     from .progress_visualizer import ProgressStage, ProgressTracker
     from .error_recovery import RecoveryContext, RecoverableError
+from core.logger import get_logger
+logger = get_logger('smart_writing.multimodal_output')
+
 
 logger = logging.getLogger(__name__)
 
@@ -189,23 +192,23 @@ class ConsoleOutputHandler:
     def handle(self, event: OutputEvent) -> None:
         """处理输出事件"""
         if event.event_type == OutputEventType.TEXT:
-            print(event.content or "", end="", flush=True)
+            logger.info(event.content or "", end="", flush=True)
         elif event.event_type == OutputEventType.PROGRESS_START:
-            print(f"\n🔄 {event.metadata.get('message', '开始')}", flush=True)
+            logger.info(f"\n🔄 {event.metadata.get('message', '开始')}", flush=True)
         elif event.event_type == OutputEventType.PROGRESS_UPDATE:
             bar = self._make_progress_bar(event.metadata.get("progress", 0))
             stage = event.metadata.get("stage", "")
             msg = event.metadata.get("message", "")
-            print(f"\r{bar} {stage} {msg}", end="", flush=True)
+            logger.info(f"\r{bar} {stage} {msg}", end="", flush=True)
         elif event.event_type == OutputEventType.PROGRESS_COMPLETE:
-            print(f"\n✅ {event.metadata.get('message', '完成')}", flush=True)
+            logger.info(f"\n✅ {event.metadata.get('message', '完成')}", flush=True)
         elif event.event_type == OutputEventType.ERROR:
             msg = f"❌ 错误: {event.content}"
-            print(f"\n{msg}", flush=True)
+            logger.info(f"\n{msg}", flush=True)
         elif event.event_type == OutputEventType.WARNING:
-            print(f"\n⚠️ 警告: {event.content}", flush=True)
+            logger.info(f"\n⚠️ 警告: {event.content}", flush=True)
         elif event.event_type == OutputEventType.COMPLETE:
-            print(f"\n{'='*50}\n✅ {event.content or '完成!'}\n", flush=True)
+            logger.info(f"\n{'='*50}\n✅ {event.content or '完成!'}\n", flush=True)
     
     def _make_progress_bar(self, progress: float, width: int = 30) -> str:
         filled = int(width * progress)
@@ -214,10 +217,10 @@ class ConsoleOutputHandler:
         return f"[{bar}] {pct}"
     
     def flush(self) -> None:
-        print(flush=True)
+        logger.info(flush=True)
     
     def close(self) -> None:
-        print(flush=True)
+        logger.info(flush=True)
 
 
 # =============================================================================
@@ -662,7 +665,7 @@ def output_complete(message: str = "完成") -> None:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=== 测试多模态输出管理器 ===\n")
+    logger.info("=== 测试多模态输出管理器 ===\n")
     
     # 创建管理器
     manager = MultimodalOutputManager(mode=OutputMode.NORMAL)
@@ -672,23 +675,23 @@ if __name__ == "__main__":
     manager.add_handler(console_handler)
     
     # 测试文本输出
-    print("\n1. 测试文本输出:")
+    logger.info("\n1. 测试文本输出:")
     manager.output_text("你好，这是一段测试文本。\n")
     
     # 测试进度追踪
-    print("\n2. 测试进度追踪:")
+    logger.info("\n2. 测试进度追踪:")
     with ProgressTracker(manager, "测试阶段", 5) as tracker:
         for i in range(5):
             time.sleep(0.3)
             tracker.step(f"步骤 {i+1}/5")
     
     # 测试错误输出
-    print("\n3. 测试错误输出:")
+    logger.info("\n3. 测试错误输出:")
     manager.output_error("这是一个测试错误")
     
     # 测试完成输出
-    print("\n4. 测试完成输出:")
+    logger.info("\n4. 测试完成输出:")
     manager.output_complete("所有测试完成!")
     
     manager.close()
-    print("\n完成!")
+    logger.info("\n完成!")

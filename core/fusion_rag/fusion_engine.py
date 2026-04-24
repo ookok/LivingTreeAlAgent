@@ -17,6 +17,9 @@ from collections import defaultdict
 if TYPE_CHECKING:
     from .l4_executor import L4RelayExecutor
     from .write_back_cache import WriteBackCache
+from core.logger import get_logger
+logger = get_logger('fusion_rag.fusion_engine')
+
 
 
 class FusionEngine:
@@ -57,7 +60,7 @@ class FusionEngine:
         self.l4_execution_count = 0
         self.write_back_count = 0
         
-        print(f"[FusionEngine] 初始化完成，默认算法: {self.default_algorithm}")
+        logger.info(f"[FusionEngine] 初始化完成，默认算法: {self.default_algorithm}")
     
     def _normalize_scores(self, results: List[Dict], score_key: str = "score") -> List[Dict]:
         """归一化分数"""
@@ -375,7 +378,7 @@ class FusionEngine:
                 await self.write_back_cache.write_back(messages, result)
                 self.write_back_count += 1
             except Exception as e:
-                print(f"[FusionEngine] 回填缓存失败: {e}")
+                logger.info(f"[FusionEngine] 回填缓存失败: {e}")
 
         return result
 
@@ -451,7 +454,7 @@ class FusionEngine:
                     "l4_provider": l4_result.get("_provider", "unknown")
                 }
             except Exception as e:
-                print(f"[FusionEngine] L4 执行失败: {e}")
+                logger.info(f"[FusionEngine] L4 执行失败: {e}")
                 # L4 失败，返回缓存结果
                 if fused_results:
                     answer = self.generate_answer(

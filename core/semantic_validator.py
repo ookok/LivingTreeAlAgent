@@ -160,9 +160,9 @@ class SemanticValidator:
         """初始化 spaCy 模型"""
         try:
             self._nlp = spacy.load(self.spacy_model)
-            print(f"✓ 加载 spaCy 模型: {self.spacy_model}")
+            logger.info(f"✓ 加载 spaCy 模型: {self.spacy_model}")
         except Exception as e:
-            print(f"⚠️ 加载 spaCy 模型失败: {e}")
+            logger.info(f"⚠️ 加载 spaCy 模型失败: {e}")
             self._nlp = None
 
     def validate_chunk(
@@ -548,9 +548,12 @@ class ChonkieValidator:
         # 尝试导入 Chonkie
         try:
             from chonkie import RecursiveChunker
+from core.logger import get_logger
+logger = get_logger('semantic_validator')
+
             self._chunker = RecursiveChunker()
         except ImportError:
-            print("⚠️ chonkie 未安装，使用简单分块")
+            logger.info("⚠️ chonkie 未安装，使用简单分块")
 
     def chunk_with_validation(
         self,

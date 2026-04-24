@@ -20,6 +20,9 @@ from threading import RLock
 import time
 import hashlib
 import json
+from core.logger import get_logger
+logger = get_logger('credit_economy.transaction_ledger')
+
 
 
 class TransactionType(Enum):
@@ -573,7 +576,7 @@ class TransactionLedger:
             try:
                 callback(data)
             except Exception as e:
-                print(f"Ledger observer error: {e}")
+                logger.info(f"Ledger observer error: {e}")
 
     # ==================== 导出 ====================
 
@@ -605,7 +608,7 @@ class TransactionLedger:
                 self._transactions.append(Transaction(**tx_data))
             return True
         except Exception as e:
-            print(f"Import error: {e}")
+            logger.info(f"Import error: {e}")
             return False
 
 

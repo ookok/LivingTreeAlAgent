@@ -208,7 +208,7 @@ class DownloadManager:
             try:
                 callback(task)
             except Exception as e:
-                print(f"[DownloadManager] Progress callback error: {e}")
+                logger.info(f"[DownloadManager] Progress callback error: {e}")
     
     async def download(
         self,
@@ -484,6 +484,9 @@ class DownloadManager:
         """打开下载目录"""
         import platform
         import subprocess
+from core.logger import get_logger
+logger = get_logger('download_manager')
+
         
         path = str(self.download_dir)
         

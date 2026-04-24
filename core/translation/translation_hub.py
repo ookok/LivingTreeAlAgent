@@ -462,6 +462,9 @@ class TranslationHub:
     def _detect_language_regex(self, text: str) -> str:
         """使用正则表达式检测语言（降级方案）"""
         import re
+from core.logger import get_logger
+logger = get_logger('translation.translation_hub')
+
         
         # 中文检测
         if re.search(r'[\u4e00-\u9fff]', text):
@@ -503,7 +506,7 @@ class TranslationHub:
             try:
                 cb(event, data)
             except Exception as e:
-                print(f"[TranslationHub] Callback error: {e}")
+                logger.info(f"[TranslationHub] Callback error: {e}")
 
     # ============ 配置 ============
 

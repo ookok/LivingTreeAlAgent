@@ -26,6 +26,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
+from core.logger import get_logger
+logger = get_logger('smart_writing.multimodal_generator')
+
 
 logger = logging.getLogger(__name__)
 
@@ -899,8 +902,8 @@ if __name__ == "__main__":
     
     # 测试表格
     table = gen.generate_investment_estimate_table("某某项目", 5000)
-    print("=== 投资估算表 ===")
-    print(table.markdown_table)
+    logger.info("=== 投资估算表 ===")
+    logger.info(table.markdown_table)
     
     # 测试甘特图
     gantt = gen.generate_project_schedule("某某项目", [
@@ -909,12 +912,12 @@ if __name__ == "__main__":
         {"name": "施工图设计", "start": "2024-05", "end": "2024-07"},
         {"name": "施工建设", "start": "2024-07", "end": "2025-12"},
     ])
-    print("\n=== 项目进度甘特图 ===")
-    print(gantt.mermaid_code)
+    logger.info("\n=== 项目进度甘特图 ===")
+    logger.info(gantt.mermaid_code)
     
     # 测试流程图
     flowchart = gen.generate_process_flowchart("生产工艺", [
         "原料预处理", "反应合成", "产品分离", "精制纯化", "成品包装"
     ])
-    print("\n=== 工艺流程图 ===")
-    print(flowchart.mermaid_code)
+    logger.info("\n=== 工艺流程图 ===")
+    logger.info(flowchart.mermaid_code)

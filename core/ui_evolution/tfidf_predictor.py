@@ -468,10 +468,13 @@ def predict_next(sequence: List[str]) -> PredictionResult:
     使用示例:
     ```python
     from core.ui_evolution import predict_next
+from core.logger import get_logger
+logger = get_logger('ui_evolution.tfidf_predictor')
+
     
     # 预测
     result = predict_next(["click:send", "input:message"])
-    print(f"建议: {result.predicted_action}, 置信度: {result.confidence}")
+    logger.info(f"建议: {result.predicted_action}, 置信度: {result.confidence}")
     ```
     """
     predictor = get_predictor()

@@ -109,19 +109,19 @@ class ModelManager:
                     break
             
             if not model_info:
-                print(f"[ModelManager] 本地模型不存在: {model_name}")
+                logger.info(f"[ModelManager] 本地模型不存在: {model_name}")
                 return False
             
             # 加载模型
             client = self.load_model(model_info)
             if client:
-                print(f"[ModelManager] 成功加载本地模型: {model_name}")
+                logger.info(f"[ModelManager] 成功加载本地模型: {model_name}")
                 return True
             else:
-                print(f"[ModelManager] 加载本地模型失败: {model_name}")
+                logger.info(f"[ModelManager] 加载本地模型失败: {model_name}")
                 return False
         except Exception as e:
-            print(f"[ModelManager] 使用本地模型时出错: {e}")
+            logger.info(f"[ModelManager] 使用本地模型时出错: {e}")
             return False
     
     def _get_ollama_models(self) -> List[ModelInfo]:
@@ -199,7 +199,7 @@ class ModelManager:
             bool: 是否下载成功
         """
         try:
-            print(f"[ModelManager] 开始下载模型: {model_name}")
+            logger.info(f"[ModelManager] 开始下载模型: {model_name}")
             
             # 标记是否为 Ollama 模型的备用下载
             is_ollama_fallback = False
@@ -209,7 +209,7 @@ class ModelManager:
             local_models = self._get_local_gguf_models()
             for model in local_models:
                 if model.name == model_name:
-                    print(f"[ModelManager] 模型已存在本地: {model_name}")
+                    logger.info(f"[ModelManager] 模型已存在本地: {model_name}")
                     if progress_callback:
                         progress_callback(100, 100, "模型已存在")
                     return True
@@ -218,7 +218,7 @@ class ModelManager:
             ollama_models = ["nomic-embed-text", "mxbai-embed-large"]
             if model_name in ollama_models:
                 # 首先尝试直接下载 GGUF 文件（优先使用 ModelScope）
-                print(f"[ModelManager] 尝试直接下载 GGUF 文件...")
+                logger.info(f"[ModelManager] 尝试直接下载 GGUF 文件...")
                 if progress_callback:
                     progress_callback(0, 100, "尝试下载 GGUF 文件...")
                 
@@ -267,7 +267,7 @@ class ModelManager:
             # 获取当前模型的下载信息
             model_info = model_downloads.get(model_name)
             if not model_info:
-                print(f"[ModelManager] 不支持的模型: {model_name}")
+                logger.info(f"[ModelManager] 不支持的模型: {model_name}")
                 if progress_callback:
                     progress_callback(0, 100, f"错误: 模型 {model_name} 不支持下载")
                 return False
@@ -277,7 +277,7 @@ class ModelManager:
                 from modelscope.hub.api import HubApi
                 from modelscope.msdatasets import MsDataset
                 
-                print(f"[ModelManager] 使用 ModelScope SDK 下载模型...")
+                logger.info(f"[ModelManager] 使用 ModelScope SDK 下载模型...")
                 
                 # 创建进度回调包装器
                 class ModelScopeProgress:
@@ -304,50 +304,50 @@ class ModelManager:
                     progress_callback=progress.update if progress else None
                 )
                 
-                print(f"[ModelManager] ModelScope SDK 下载完成: {local_model_dir}")
+                logger.info(f"[ModelManager] ModelScope SDK 下载完成: {local_model_dir}")
                 
                 # 检查下载的文件
                 gguf_file_path = self._models_dir / model_info["gguf_file"]
                 if gguf_file_path.exists():
                     file_size = gguf_file_path.stat().st_size
-                    print(f"[ModelManager] 模型文件已保存: {gguf_file_path}, 大小: {file_size / (1024*1024):.1f}MB")
+                    logger.info(f"[ModelManager] 模型文件已保存: {gguf_file_path}, 大小: {file_size / (1024*1024):.1f}MB")
                     
                     # 检查文件大小是否合理（至少100MB）
                     if file_size < 100 * 1024 * 1024:  # 100MB
-                        print(f"[ModelManager] 模型文件太小，可能下载不完整")
+                        logger.info(f"[ModelManager] 模型文件太小，可能下载不完整")
                         if progress_callback:
                             progress_callback(0, 100, "错误: 模型文件太小，下载可能不完整")
                         return False
                     
                     return True
                 else:
-                    print(f"[ModelManager] 模型文件不存在: {gguf_file_path}")
+                    logger.info(f"[ModelManager] 模型文件不存在: {gguf_file_path}")
                     if progress_callback:
                         progress_callback(0, 100, "错误: 模型文件不存在")
                     return False
                     
             except ImportError:
-                print(f"[ModelManager] ModelScope SDK 未安装，尝试使用其他方式...")
+                logger.info(f"[ModelManager] ModelScope SDK 未安装，尝试使用其他方式...")
                 # 如果 SDK 未安装，尝试使用统一下载中心
                 if is_ollama_fallback:
                     # 如果是Ollama模型的备用下载，ModelScope不可用时直接尝试Ollama pull
-                    print(f"[ModelManager] ModelScope SDK不可用，尝试Ollama pull...")
+                    logger.info(f"[ModelManager] ModelScope SDK不可用，尝试Ollama pull...")
                     if progress_callback:
                         progress_callback(0, 100, "ModelScope不可用，尝试Ollama...")
                     return self._download_ollama_model(model_name, progress_callback)
                 return self._download_with_fallback(model_name, model_info, progress_callback, is_ollama_fallback=is_ollama_fallback)
             except Exception as e:
-                print(f"[ModelManager] ModelScope SDK 下载失败: {e}")
+                logger.info(f"[ModelManager] ModelScope SDK 下载失败: {e}")
                 # 尝试使用统一下载中心作为备选
                 if is_ollama_fallback:
                     # 如果是Ollama模型的备用下载，ModelScope下载失败后尝试Ollama pull
-                    print(f"[ModelManager] ModelScope下载失败，尝试Ollama pull作为备用...")
+                    logger.info(f"[ModelManager] ModelScope下载失败，尝试Ollama pull作为备用...")
                     if progress_callback:
                         progress_callback(0, 100, "ModelScope下载失败，尝试Ollama...")
                     return self._download_ollama_model(model_name, progress_callback)
                 return self._download_with_fallback(model_name, model_info, progress_callback, is_ollama_fallback=is_ollama_fallback)
         except Exception as e:
-            print(f"[ModelManager] 异常: {e}")
+            logger.info(f"[ModelManager] 异常: {e}")
             import traceback
             traceback.print_exc()
             if progress_callback:
@@ -367,11 +367,11 @@ class ModelManager:
             # 构建下载URL
             model_url = f"https://modelscope.cn/models/{model_info['modelscope_repo']}/resolve/master/{model_info['gguf_file']}"
             
-            print(f"[ModelManager] 使用备用HTTP方式下载: {model_url}")
+            logger.info(f"[ModelManager] 使用备用HTTP方式下载: {model_url}")
             
             # 定义进度回调
             def on_progress(task):
-                print(f"[ModelManager] 进度回调: {task.status.value}, {task.progress:.1f}%")
+                logger.info(f"[ModelManager] 进度回调: {task.status.value}, {task.progress:.1f}%")
                 if progress_callback:
                     status_map = {
                         "pending": "等待中...",
@@ -406,35 +406,35 @@ class ModelManager:
             while task.status not in [DownloadStatus.COMPLETED, DownloadStatus.FAILED, DownloadStatus.CANCELLED]:
                 time.sleep(1)
                 if time.time() - start_time > 600:  # 10分钟超时
-                    print(f"[ModelManager] 下载超时")
+                    logger.info(f"[ModelManager] 下载超时")
                     break
             
             if task.status == DownloadStatus.COMPLETED:
                 gguf_file_path = self._models_dir / model_info["gguf_file"]
                 if gguf_file_path.exists():
                     file_size = gguf_file_path.stat().st_size
-                    print(f"[ModelManager] 模型文件已保存: {gguf_file_path}, 大小: {file_size / (1024*1024):.1f}MB")
+                    logger.info(f"[ModelManager] 模型文件已保存: {gguf_file_path}, 大小: {file_size / (1024*1024):.1f}MB")
                     
                     if file_size < 100 * 1024 * 1024:  # 100MB
-                        print(f"[ModelManager] 模型文件太小，可能下载不完整")
+                        logger.info(f"[ModelManager] 模型文件太小，可能下载不完整")
                         if progress_callback:
                             progress_callback(0, 100, "错误: 模型文件太小，下载可能不完整")
                         return False
                     
                     return True
                 else:
-                    print(f"[ModelManager] 模型文件不存在")
+                    logger.info(f"[ModelManager] 模型文件不存在")
                     if progress_callback:
                         progress_callback(0, 100, "错误: 模型文件不存在")
                     return False
             else:
-                print(f"[ModelManager] 备用下载失败: {task.error}")
+                logger.info(f"[ModelManager] 备用下载失败: {task.error}")
                 if progress_callback:
                     progress_callback(0, 100, f"错误: 下载失败: {task.error or '未知错误'}")
                 
                 # 如果是Ollama模型的备用下载，HTTP下载也失败后尝试Ollama pull
                 if is_ollama_fallback:
-                    print(f"[ModelManager] HTTP下载也失败了，尝试Ollama pull作为最后的备用...")
+                    logger.info(f"[ModelManager] HTTP下载也失败了，尝试Ollama pull作为最后的备用...")
                     if progress_callback:
                         progress_callback(0, 100, "HTTP下载失败，尝试Ollama pull...")
                     return self._download_ollama_model(model_name, progress_callback)
@@ -442,13 +442,13 @@ class ModelManager:
                 return False
                 
         except Exception as e:
-             print(f"[ModelManager] 备用下载异常: {e}")
+             logger.info(f"[ModelManager] 备用下载异常: {e}")
              if progress_callback:
                  progress_callback(0, 100, f"错误: {str(e)}")
              
              # 如果是Ollama模型的备用下载，HTTP下载异常后尝试Ollama pull
              if is_ollama_fallback:
-                 print(f"[ModelManager] HTTP下载异常，尝试Ollama pull作为最后的备用...")
+                 logger.info(f"[ModelManager] HTTP下载异常，尝试Ollama pull作为最后的备用...")
                  if progress_callback:
                      progress_callback(0, 100, "HTTP下载异常，尝试Ollama pull...")
                  return self._download_ollama_model(model_name, progress_callback)
@@ -462,7 +462,7 @@ class ModelManager:
         try:
             import subprocess
             
-            print(f"[ModelManager] 尝试使用 ollama pull 下载模型: {model_name}")
+            logger.info(f"[ModelManager] 尝试使用 ollama pull 下载模型: {model_name}")
             
             if progress_callback:
                 progress_callback(0, 100, "正在检查 Ollama 服务...")
@@ -476,17 +476,17 @@ class ModelManager:
                     timeout=10
                 )
                 if check_result.returncode != 0:
-                    print(f"[ModelManager] Ollama 服务未运行，跳过 ollama pull")
+                    logger.info(f"[ModelManager] Ollama 服务未运行，跳过 ollama pull")
                     if progress_callback:
                         progress_callback(0, 100, "Ollama 服务未运行，将尝试其他下载方式...")
                     return False  # 返回False，让调用者尝试其他下载方式
             except FileNotFoundError:
-                print(f"[ModelManager] Ollama 未安装，跳过 ollama pull")
+                logger.info(f"[ModelManager] Ollama 未安装，跳过 ollama pull")
                 if progress_callback:
                     progress_callback(0, 100, "Ollama 未安装，将尝试其他下载方式...")
                 return False  # 返回False，让调用者尝试其他下载方式
             except Exception as e:
-                print(f"[ModelManager] 检查 Ollama 服务失败: {e}，跳过 ollama pull")
+                logger.info(f"[ModelManager] 检查 Ollama 服务失败: {e}，跳过 ollama pull")
                 if progress_callback:
                     progress_callback(0, 100, f"Ollama 服务不可用，将尝试其他下载方式...")
                 return False  # 返回False，让调用者尝试其他下载方式
@@ -503,7 +503,7 @@ class ModelManager:
             for line in process.stdout:
                 line = line.strip()
                 if line:
-                    print(f"[OLLAMA] {line}")
+                    logger.info(f"[OLLAMA] {line}")
                     
                     # 解析进度
                     if "%" in line:
@@ -517,7 +517,7 @@ class ModelManager:
                                         progress_callback(pct, 100, f"下载中... {line}")
                                     break
                         except Exception as e:
-                            print(f"[PROGRESS PARSE ERROR] {e}")
+                            logger.info(f"[PROGRESS PARSE ERROR] {e}")
                     elif "verifying" in line.lower():
                         if progress_callback:
                             progress_callback(99, 100, "验证中...")
@@ -528,16 +528,16 @@ class ModelManager:
             process.wait()
             
             if process.returncode == 0:
-                print(f"[ModelManager] Ollama 模型下载成功: {model_name}")
+                logger.info(f"[ModelManager] Ollama 模型下载成功: {model_name}")
                 return True
             else:
-                print(f"[ModelManager] Ollama 模型下载失败")
+                logger.info(f"[ModelManager] Ollama 模型下载失败")
                 if progress_callback:
                     progress_callback(0, 100, "错误: 下载失败")
                 return False
                 
         except Exception as e:
-            print(f"[ModelManager] Ollama 下载异常: {e}")
+            logger.info(f"[ModelManager] Ollama 下载异常: {e}")
             if progress_callback:
                 progress_callback(0, 100, f"错误: {str(e)}")
             return False
@@ -643,4 +643,7 @@ class ModelManager:
         """
         self.config.ollama.default_model = model_name
         from core.config import save_config
+from core.logger import get_logger
+logger = get_logger('model_manager')
+
         save_config(self.config)

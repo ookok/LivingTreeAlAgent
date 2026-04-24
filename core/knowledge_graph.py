@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from core.logger import get_logger
+logger = get_logger('knowledge_graph')
+
 
 
 class EntityType(Enum):
@@ -415,67 +418,67 @@ class KnowledgeGraphQueryEngine:
 
 def test_knowledge_graph():
     """测试知识图谱"""
-    print("=== 测试知识图谱 ===")
+    logger.info("=== 测试知识图谱 ===")
 
     kg = KnowledgeGraph(name="测试图谱")
 
-    print("\n1. 测试添加实体")
+    logger.info("\n1. 测试添加实体")
     python_id = kg.add_entity("Python", "concept", {"description": "编程语言"})
     guido_id = kg.add_entity("Guido van Rossum", "person", {"nationality": "荷兰"})
     microsoft_id = kg.add_entity("Microsoft", "organization", {"type": "科技公司"})
     ai_id = kg.add_entity("人工智能", "concept", {"description": "AI"})
-    print(f"  添加实体: Python ({python_id})")
-    print(f"  添加实体: Guido ({guido_id})")
-    print(f"  添加实体: Microsoft ({microsoft_id})")
-    print(f"  添加实体: AI ({ai_id})")
+    logger.info(f"  添加实体: Python ({python_id})")
+    logger.info(f"  添加实体: Guido ({guido_id})")
+    logger.info(f"  添加实体: Microsoft ({microsoft_id})")
+    logger.info(f"  添加实体: AI ({ai_id})")
 
-    print("\n2. 测试添加关系")
+    logger.info("\n2. 测试添加关系")
     rel1 = kg.add_relation("Guido van Rossum", "Python", "created", weight=1.0)
     rel2 = kg.add_relation("Python", "AI", "related_to", weight=0.8)
     rel3 = kg.add_relation("Guido van Rossum", "Microsoft", "works_for", weight=0.5)
     rel4 = kg.add_relation("Microsoft", "AI", "related_to", weight=0.7)
-    print(f"  添加关系: Guido 创建 Python")
-    print(f"  添加关系: Python 相关于 AI")
-    print(f"  添加关系: Guido 工作于 Microsoft")
-    print(f"  添加关系: Microsoft 相关于 AI")
+    logger.info(f"  添加关系: Guido 创建 Python")
+    logger.info(f"  添加关系: Python 相关于 AI")
+    logger.info(f"  添加关系: Guido 工作于 Microsoft")
+    logger.info(f"  添加关系: Microsoft 相关于 AI")
 
-    print("\n3. 测试获取关系")
+    logger.info("\n3. 测试获取关系")
     relations = kg.get_relations("Guido van Rossum", direction="out")
-    print(f"  Guido 的关系:")
+    logger.info(f"  Guido 的关系:")
     for entity, rel in relations:
-        print(f"    - {rel.relation_type.value} -> {entity.name}")
+        logger.info(f"    - {rel.relation_type.value} -> {entity.name}")
 
-    print("\n4. 测试路径发现")
+    logger.info("\n4. 测试路径发现")
     paths = kg.find_path("Guido van Rossum", "AI", max_depth=3)
-    print(f"  从 Guido 到 AI 的路径:")
+    logger.info(f"  从 Guido 到 AI 的路径:")
     for path in paths:
         entity_names = [kg._entities[eid].name for eid in path]
-        print(f"    - {' -> '.join(entity_names)}")
+        logger.info(f"    - {' -> '.join(entity_names)}")
 
-    print("\n5. 测试推理")
+    logger.info("\n5. 测试推理")
     inferences = kg.infer(python_id)
-    print(f"  Python 的推理:")
-    print(f"    同类型实体: {inferences['same_type_entities']}")
+    logger.info(f"  Python 的推理:")
+    logger.info(f"    同类型实体: {inferences['same_type_entities']}")
 
-    print("\n6. 测试统计")
+    logger.info("\n6. 测试统计")
     stats = kg.get_stats()
-    print(f"  统计:")
-    print(f"    总实体数: {stats['total_entities']}")
-    print(f"    总关系数: {stats['total_relations']}")
-    print(f"    实体类型: {stats['entity_types']}")
+    logger.info(f"  统计:")
+    logger.info(f"    总实体数: {stats['total_entities']}")
+    logger.info(f"    总关系数: {stats['total_relations']}")
+    logger.info(f"    实体类型: {stats['entity_types']}")
 
-    print("\n7. 测试子图导出")
+    logger.info("\n7. 测试子图导出")
     subgraph = kg.get_subgraph("Guido van Rossum", depth=2)
-    print(f"  子图:")
-    print(f"    实体数: {len(subgraph['entities'])}")
-    print(f"    关系数: {len(subgraph['relations'])}")
+    logger.info(f"  子图:")
+    logger.info(f"    实体数: {len(subgraph['entities'])}")
+    logger.info(f"    关系数: {len(subgraph['relations'])}")
 
-    print("\n8. 测试查询引擎")
+    logger.info("\n8. 测试查询引擎")
     engine = KnowledgeGraphQueryEngine(kg)
     result = engine.natural_language_query("谁在工作中")
-    print(f"  查询结果: {result}")
+    logger.info(f"  查询结果: {result}")
 
-    print("\n知识图谱测试完成！")
+    logger.info("\n知识图谱测试完成！")
 
 
 if __name__ == "__main__":

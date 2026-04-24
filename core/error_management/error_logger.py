@@ -375,6 +375,9 @@ def get_error_logger() -> ErrorLogger:
 def setup_exception_handler():
     """设置异常处理器，捕获系统异常退出"""
     import sys
+from core.logger import get_logger
+logger = get_logger('error_management.error_logger')
+
     original_excepthook = sys.excepthook
     
     def exception_handler(exc_type, exc_value, exc_traceback):
@@ -429,12 +432,12 @@ if __name__ == "__main__":
         raise AttributeError("type object 'GlobalColor' has no attribute 'lightBlue'")
     except Exception as e:
         error_entry = error_logger.log_error(e, component="main_window", context={"action": "initialize"})
-        print(f"Error logged: {error_entry['error_code']}")
-        print(f"Diagnosis: {error_entry['diagnosis']}")
+        logger.info(f"Error logged: {error_entry['error_code']}")
+        logger.info(f"Diagnosis: {error_entry['diagnosis']}")
     
     # 测试统计
-    print("\nError stats:")
-    print(json.dumps(error_logger.get_error_stats(), indent=2))
+    logger.info("\nError stats:")
+    logger.info(json.dumps(error_logger.get_error_stats(), indent=2))
     
-    print("\nError trends:")
-    print(json.dumps(error_logger.analyze_error_trends(), indent=2))
+    logger.info("\nError trends:")
+    logger.info(json.dumps(error_logger.analyze_error_trends(), indent=2))

@@ -130,7 +130,7 @@ class TaskRouter:
 
         # 执行任务（自动递归）
         for progress in router.execute():
-            print(progress)
+            logger.info(progress)
     """
 
     MAX_DEPTH = 3  # 最大递归深度
@@ -307,6 +307,9 @@ class TaskRouter:
             response = self.llm_callback(prompt)
             # 尝试解析 JSON
             import re
+from core.logger import get_logger
+logger = get_logger('task_router')
+
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())

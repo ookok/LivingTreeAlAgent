@@ -153,7 +153,7 @@ class StatusMonitor:
             try:
                 cb(self)
             except Exception as e:
-                print(f"[StatusMonitor] Callback error: {e}")
+                logger.info(f"[StatusMonitor] Callback error: {e}")
 
     async def start(self):
         """启动监控"""
@@ -188,7 +188,7 @@ class StatusMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[StatusMonitor] Monitor error: {e}")
+                logger.info(f"[StatusMonitor] Monitor error: {e}")
 
     def _has_changes(self) -> bool:
         """检查状态是否有变化"""
@@ -281,6 +281,9 @@ class StatusMonitor:
         jitter = 0
         if len(self._rtt_history) >= 2:
             import statistics
+from core.logger import get_logger
+logger = get_logger('unified_chat.status_monitor')
+
             jitter = statistics.stdev(self._rtt_history) if len(self._rtt_history) > 1 else 0
 
         self.network_status = NetworkStatus(

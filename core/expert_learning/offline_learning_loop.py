@@ -53,6 +53,9 @@ from enum import Enum
 from pathlib import Path
 from collections import defaultdict, deque
 import re
+from core.logger import get_logger
+logger = get_logger('expert_learning.offline_learning_loop')
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -235,10 +238,10 @@ class OfflineLearningLoop:
         self._load_evolution_records()
         self._load_stats()
 
-        print(f"[OfflineLearningLoop] 已初始化")
-        print(f"  - 知识碎片: {len(self._knowledge_base)}")
-        print(f"  - 连接状态: {self._connection_status.value}")
-        print(f"  - 进化记录: {len(self._evolution_records)}")
+        logger.info(f"[OfflineLearningLoop] 已初始化")
+        logger.info(f"  - 知识碎片: {len(self._knowledge_base)}")
+        logger.info(f"  - 连接状态: {self._connection_status.value}")
+        logger.info(f"  - 进化记录: {len(self._evolution_records)}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 核心响应方法
@@ -716,7 +719,7 @@ class OfflineLearningLoop:
             if self._on_connection_change:
                 self._on_connection_change(old_status, status)
 
-            print(f"[OfflineLearningLoop] 连接状态: {old_status.value} -> {status.value}")
+            logger.info(f"[OfflineLearningLoop] 连接状态: {old_status.value} -> {status.value}")
 
     def get_connection_status(self) -> ConnectionStatus:
         """获取连接状态"""
@@ -762,7 +765,7 @@ class OfflineLearningLoop:
             self._stats["knowledge_fragments"] = len(self._knowledge_base)
 
         except Exception as e:
-            print(f"[OfflineLearningLoop] 加载知识库失败: {e}")
+            logger.info(f"[OfflineLearningLoop] 加载知识库失败: {e}")
 
     def _save_knowledge_base(self):
         """保存知识库"""
@@ -792,7 +795,7 @@ class OfflineLearningLoop:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
-            print(f"[OfflineLearningLoop] 保存知识库失败: {e}")
+            logger.info(f"[OfflineLearningLoop] 保存知识库失败: {e}")
 
     def _save_knowledge_fragment(self, fragment: KnowledgeFragment):
         """保存单个知识碎片"""
@@ -821,7 +824,7 @@ class OfflineLearningLoop:
                 self._evolution_records.append(record)
 
         except Exception as e:
-            print(f"[OfflineLearningLoop] 加载进化记录失败: {e}")
+            logger.info(f"[OfflineLearningLoop] 加载进化记录失败: {e}")
 
     def _save_evolution_record(self, record: SelfEvolutionRecord):
         """保存进化记录"""
@@ -846,7 +849,7 @@ class OfflineLearningLoop:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
-            print(f"[OfflineLearningLoop] 保存进化记录失败: {e}")
+            logger.info(f"[OfflineLearningLoop] 保存进化记录失败: {e}")
 
     def _load_stats(self):
         """加载统计"""
@@ -967,7 +970,7 @@ class OfflineLearningLoop:
             return count
 
         except Exception as e:
-            print(f"[OfflineLearningLoop] 导入知识失败: {e}")
+            logger.info(f"[OfflineLearningLoop] 导入知识失败: {e}")
             return 0
 
 
@@ -991,43 +994,43 @@ def get_offline_learning_loop() -> OfflineLearningLoop:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("完全离线的自学习循环系统测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("完全离线的自学习循环系统测试")
+    logger.info("=" * 60)
 
     loop = OfflineLearningLoop()
 
     # 测试响应
-    print("\n[Test 1: 模板响应]")
+    logger.info("\n[Test 1: 模板响应]")
     response = loop.get_response("你好")
-    print(f"  响应: {response.content[:50]}...")
-    print(f"  来源: {response.source}")
-    print(f"  置信度: {response.confidence}")
+    logger.info(f"  响应: {response.content[:50]}...")
+    logger.info(f"  来源: {response.source}")
+    logger.info(f"  置信度: {response.confidence}")
 
-    print("\n[Test 2: 学习新知识]")
+    logger.info("\n[Test 2: 学习新知识]")
     loop.learn(
         query="什么是Python",
         response="Python是一种高级编程语言...",
         source="expert",
         confidence=0.9,
     )
-    print(f"  知识碎片数: {len(loop._knowledge_base)}")
+    logger.info(f"  知识碎片数: {len(loop._knowledge_base)}")
 
-    print("\n[Test 3: 获取已学知识]")
+    logger.info("\n[Test 3: 获取已学知识]")
     response = loop.get_response("什么是Python")
-    print(f"  响应: {response.content[:50]}...")
-    print(f"  来源: {response.source}")
+    logger.info(f"  响应: {response.content[:50]}...")
+    logger.info(f"  来源: {response.source}")
 
-    print("\n[Test 4: 搜索知识]")
+    logger.info("\n[Test 4: 搜索知识]")
     results = loop.search_knowledge("Python编程")
-    print(f"  搜索结果: {len(results)} 条")
+    logger.info(f"  搜索结果: {len(results)} 条")
 
-    print("\n[Test 5: 统计信息]")
+    logger.info("\n[Test 5: 统计信息]")
     stats = loop.get_stats()
-    print(f"  总请求: {stats['total_requests']}")
-    print(f"  离线请求: {stats['offline_requests']}")
-    print(f"  知识命中: {stats['knowledge_hits']}")
-    print(f"  进化次数: {stats['evolution_count']}")
+    logger.info(f"  总请求: {stats['total_requests']}")
+    logger.info(f"  离线请求: {stats['offline_requests']}")
+    logger.info(f"  知识命中: {stats['knowledge_hits']}")
+    logger.info(f"  进化次数: {stats['evolution_count']}")
 
-    print("\n" + "=" * 60)
-    print("测试完成")
+    logger.info("\n" + "=" * 60)
+    logger.info("测试完成")

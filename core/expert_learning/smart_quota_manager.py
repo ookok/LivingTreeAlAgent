@@ -145,7 +145,7 @@ class SmartQuotaManager:
 
     # 使用自定义提供者ID (来自ExternalProviderManager)
     if manager.can_call_by_id("provider_abc123", estimated_tokens=1000):
-        print("可以使用自定义提供者")
+        logger.info("可以使用自定义提供者")
     ```
     """
 
@@ -182,7 +182,7 @@ class SmartQuotaManager:
         self._init_periods()
         self._load_state()
 
-        print("[SmartQuotaManager] Smart quota management enabled (prefer_free={})".format(prefer_free))
+        logger.info("[SmartQuotaManager] Smart quota management enabled (prefer_free={})".format(prefer_free))
 
     @property
     def provider_manager(self):
@@ -743,7 +743,7 @@ class SmartQuotaManager:
             with open(self.storage_path, "w", encoding="utf-8") as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[SmartQuotaManager] Failed to save state: {e}")
+            logger.info(f"[SmartQuotaManager] Failed to save state: {e}")
 
     def _load_state(self) -> None:
         """从磁盘加载状态"""
@@ -767,7 +767,7 @@ class SmartQuotaManager:
             # 检查是否需要重置
             self._check_period_reset()
         except Exception as e:
-            print(f"[SmartQuotaManager] Failed to load state: {e}")
+            logger.info(f"[SmartQuotaManager] Failed to load state: {e}")
 
     def _check_period_reset(self) -> None:
         """检查并重置过期周期"""
@@ -884,6 +884,9 @@ class SmartQuotaManager:
 
         try:
             from core.expert_learning.external_provider_config import ProviderType, CostType
+from core.logger import get_logger
+logger = get_logger('expert_learning.smart_quota_manager')
+
 
             # 转换类型
             p_type = ProviderType(provider_type.lower())
@@ -900,7 +903,7 @@ class SmartQuotaManager:
                 **kwargs
             )
         except Exception as e:
-            print(f"[SmartQuotaManager] 添加提供者失败: {e}")
+            logger.info(f"[SmartQuotaManager] 添加提供者失败: {e}")
             return None
 
     def list_available_providers(self, include_free_first: bool = True) -> List[Dict[str, Any]]:

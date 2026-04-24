@@ -49,6 +49,9 @@ except ImportError:
 # 语义索引
 try:
     from core.semantic_index import (
+from core.logger import get_logger
+logger = get_logger('twin_context_integration')
+
         SemanticIndexer, VirtualFileSystem, SemanticChunk,
         LazySemanticLoader
     )
@@ -697,7 +700,7 @@ class TwinContextFactory:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"保存失败: {e}")
+            logger.info(f"保存失败: {e}")
             return False
     
     def load_state(self, path: str) -> bool:
@@ -711,7 +714,7 @@ class TwinContextFactory:
             
             return True
         except Exception as e:
-            print(f"加载失败: {e}")
+            logger.info(f"加载失败: {e}")
             return False
 
 
@@ -758,8 +761,8 @@ def full_process(twin_id: str, query: str, context: str,
     
     用法:
         result = full_process("twin_123", query, context, code)
-        print(result["compressed"])
-        print(result["verification_report"])
+        logger.info(result["compressed"])
+        logger.info(result["verification_report"])
     """
     factory = get_twin_context_factory()
     manager = factory.get_or_create(twin_id, "default_user")

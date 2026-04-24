@@ -469,6 +469,9 @@ class RecoveryExecutor:
     
     def _save_checkpoint(self, context: RecoveryContext, result: Any):
         import hashlib
+from core.logger import get_logger
+logger = get_logger('smart_writing.error_recovery')
+
         cp_id = hashlib.md5(f"{context.task_id}:{context.operation_name}:{time.time()}".encode()).hexdigest()[:16]
         checkpoint = Checkpoint(
             checkpoint_id=cp_id, task_id=context.task_id, step_index=context.attempt,
@@ -510,9 +513,9 @@ def get_checkpoint_manager() -> CheckpointManager:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=== 测试错误恢复机制 ===\n")
+    logger.info("=== 测试错误恢复机制 ===\n")
     
-    print("1. 测试重试机制:")
+    logger.info("1. 测试重试机制:")
     attempt_count = 0
     
     def unreliable_function():
@@ -527,21 +530,21 @@ if __name__ == "__main__":
     executor.retry_policy.initial_delay = 0.1
     
     result = executor.execute(unreliable_function, task_id="test1", operation_name="unreliable_call")
-    print(f"结果: {result}, 总尝试次数: {attempt_count}\n")
+    logger.info(f"结果: {result}, 总尝试次数: {attempt_count}\n")
     
-    print("2. 测试检查点:")
+    logger.info("2. 测试检查点:")
     cp_manager = get_checkpoint_manager()
     cp = Checkpoint(checkpoint_id="test_cp_1", task_id="test_task", step_index=1, step_name="step1", data={"key": "value"})
     cp_manager.save(cp)
     loaded = cp_manager.get_latest("test_task")
-    print(f"加载检查点: {loaded.step_name if loaded else 'None'}\n")
+    logger.info(f"加载检查点: {loaded.step_name if loaded else 'None'}\n")
     
-    print("3. 测试熔断器:")
+    logger.info("3. 测试熔断器:")
     cb = CircuitBreaker("test_service", failure_threshold=3, timeout=2)
     for i in range(5):
         cb.record_failure()
-        print(f"  尝试 {i+1}: is_open={cb.is_open}")
+        logger.info(f"  尝试 {i+1}: is_open={cb.is_open}")
     time.sleep(2.5)
-    print(f"  超时后: is_open={cb.is_open}")
+    logger.info(f"  超时后: is_open={cb.is_open}")
     
-    print("\n完成!")
+    logger.info("\n完成!")

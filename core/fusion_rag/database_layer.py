@@ -15,6 +15,9 @@ import re
 from typing import Optional, Dict, Any, List
 from collections import defaultdict
 import threading
+from core.logger import get_logger
+logger = get_logger('fusion_rag.database_layer')
+
 
 
 class DatabaseLayer:
@@ -42,7 +45,7 @@ class DatabaseLayer:
         self.cache_hit_count = 0
         self.lock = threading.Lock()
         
-        print(f"[DatabaseLayer] 初始化完成，缓存容量: {cache_size}")
+        logger.info(f"[DatabaseLayer] 初始化完成，缓存容量: {cache_size}")
     
     def _generate_sql_cache_key(self, sql_template: str, params: tuple) -> str:
         """生成 SQL 缓存键"""

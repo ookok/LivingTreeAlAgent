@@ -138,7 +138,7 @@ class ChatHub:
             try:
                 cb(event, data)
             except Exception as e:
-                print(f"[ChatHub] UI callback error: {e}")
+                logger.info(f"[ChatHub] UI callback error: {e}")
 
     def _on_status_changed(self, status_monitor: StatusMonitor):
         """状态监控回调"""
@@ -376,7 +376,7 @@ class ChatHub:
         except Exception as e:
             message.status = MessageStatus.FAILED
             self.session_manager.update_message_status(message.msg_id, MessageStatus.FAILED)
-            print(f"[ChatHub] Send via P2P failed: {e}")
+            logger.info(f"[ChatHub] Send via P2P failed: {e}")
 
     async def _upload_file(self, message: UnifiedMessage):
         """上传文件"""
@@ -425,7 +425,7 @@ class ChatHub:
         except Exception as e:
             message.status = MessageStatus.FAILED
             self.session_manager.update_message_status(message.msg_id, MessageStatus.FAILED)
-            print(f"[ChatHub] Send via email failed: {e}")
+            logger.info(f"[ChatHub] Send via email failed: {e}")
 
     # ============ 消息接收 ============
 
@@ -469,7 +469,7 @@ class ChatHub:
             try:
                 await self._p2p_connector.start_call(peer_id, call_type)
             except Exception as e:
-                print(f"[ChatHub] Start call failed: {e}")
+                logger.info(f"[ChatHub] Start call failed: {e}")
 
         self._notify_ui("call_started", call)
         return call
@@ -530,6 +530,9 @@ class ChatHub:
     def search_messages(self, query: str, session_id: str = "") -> List:
         """搜索消息"""
         from .session_manager import SearchScope
+from core.logger import get_logger
+logger = get_logger('unified_chat.chat_hub')
+
         if session_id:
             return self.session_manager.search_messages(query, SearchScope.CURRENT_SESSION, session_id)
         return self.session_manager.search_messages(query, SearchScope.ALL_SESSIONS)

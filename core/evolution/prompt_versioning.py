@@ -14,6 +14,9 @@ from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import shutil
+from core.logger import get_logger
+logger = get_logger('evolution.prompt_versioning')
+
 
 
 class VersionStatus(Enum):
@@ -695,7 +698,7 @@ def demo_version_management():
         description="基础数据分析提示词"
     )
 
-    print(f"创建提示词: {prompt_id}, 版本: {version_id1}")
+    logger.info(f"创建提示词: {prompt_id}, 版本: {version_id1}")
 
     # 更新提示词
     version_id2 = manager.update_prompt(
@@ -705,29 +708,29 @@ def demo_version_management():
         description="增强版数据分析提示词"
     )
 
-    print(f"更新提示词，新版本: {version_id2}")
+    logger.info(f"更新提示词，新版本: {version_id2}")
 
     # 发布版本
     manager.publish_version(version_id2, "admin")
-    print("发布版本")
+    logger.info("发布版本")
 
     # 查看版本历史
     versions = manager.get_version_history(prompt_id)
-    print(f"版本历史: {len(versions)} 个版本")
+    logger.info(f"版本历史: {len(versions)} 个版本")
 
     # 比较版本
     if len(versions) >= 2:
         diff = manager.compare_versions(versions[0].version_id, versions[1].version_id)
-        print("版本差异:")
-        print(diff)
+        logger.info("版本差异:")
+        logger.info(diff)
 
     # 回滚版本
     rollback_version = manager.rollback_to_version(version_id1, "admin")
-    print(f"回滚到版本 {version_id1}，新回滚版本: {rollback_version}")
+    logger.info(f"回滚到版本 {version_id1}，新回滚版本: {rollback_version}")
 
     # 查看审计日志
     logs = manager.get_audit_logs(prompt_id)
-    print(f"审计日志: {len(logs)} 条记录")
+    logger.info(f"审计日志: {len(logs)} 条记录")
 
 
 if __name__ == "__main__":

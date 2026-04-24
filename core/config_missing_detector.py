@@ -20,9 +20,9 @@
     detector = ConfigMissingDetector()
     result = detector.check_error(error_message)
     if result.is_missing_config:
-        print(result.config_key)  # e.g., "OPENAI_API_KEY"
-        print(result.hint)         # "请配置 OpenAI API Key"
-        print(result.link_text)     # "[配置 API Key]"
+        logger.info(result.config_key)  # e.g., "OPENAI_API_KEY"
+        logger.info(result.hint)         # "请配置 OpenAI API Key"
+        logger.info(result.link_text)     # "[配置 API Key]"
 """
 
 import re
@@ -392,6 +392,9 @@ class ConfigMissingDetector:
             # 尝试获取 SystemBrain
             try:
                 from core.system_brain import get_system_brain
+from core.logger import get_logger
+logger = get_logger('config_missing_detector')
+
                 brain = get_system_brain()
                 self._reasoning_engine = AIReasoningEngine(system_brain=brain)
                 logger.info("[Detector] AI Reasoning Engine initialized with SystemBrain")

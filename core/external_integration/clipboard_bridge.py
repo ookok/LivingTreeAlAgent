@@ -31,6 +31,9 @@ except ImportError:
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
+from core.logger import get_logger
+logger = get_logger('external_integration.clipboard_bridge')
+
 
 
 class ClipboardAction(Enum):
@@ -113,14 +116,14 @@ class ClipboardBridge:
         self._running = True
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        print("[ClipboardBridge] 已启动剪贴板监控")
+        logger.info("[ClipboardBridge] 已启动剪贴板监控")
 
     def stop(self):
         """停止监控"""
         self._running = False
         if self._thread:
             self._thread.join(timeout=1)
-        print("[ClipboardBridge] 已停止剪贴板监控")
+        logger.info("[ClipboardBridge] 已停止剪贴板监控")
 
     def register_callback(self, event: str, callback: Callable):
         """注册回调"""
@@ -133,7 +136,7 @@ class ClipboardBridge:
             try:
                 self._check_clipboard()
             except Exception as e:
-                print(f"[ClipboardBridge] 监控错误: {e}")
+                logger.info(f"[ClipboardBridge] 监控错误: {e}")
             time.sleep(self.poll_interval)
 
     def _check_clipboard(self):
@@ -252,7 +255,7 @@ class ClipboardBridge:
         if PYPERCLIP_AVAILABLE:
             pyperclip.copy(text)
         else:
-            print("[ClipboardBridge] pyperclip not available, skipping clipboard write")
+            logger.info("[ClipboardBridge] pyperclip not available, skipping clipboard write")
 
     def show_suggestions(self) -> List[Dict[str, str]]:
         """获取当前建议列表（用于 UI 显示）"""
@@ -313,9 +316,9 @@ class GlobalHotkeyBridge:
         """启动快捷键监听"""
         # TODO: 使用 pynput 或 keyboard 库实现全局监听
         # 这里先打印提示
-        print("[GlobalHotkeyBridge] 快捷键已配置:")
+        logger.info("[GlobalHotkeyBridge] 快捷键已配置:")
         for combo, action in self._hotkeys.items():
-            print(f"  {combo.upper().replace('+', ' + ')} -> {action}")
+            logger.info(f"  {combo.upper().replace('+', ' + ')} -> {action}")
 
     def stop(self):
         """停止快捷键监听"""
@@ -325,7 +328,7 @@ class GlobalHotkeyBridge:
         """处理结果回调"""
         # 将结果复制到剪贴板
         self.clipboard_bridge.copy_to_clipboard(result)
-        print(f"[GlobalHotkeyBridge] 结果已复制到剪贴板")
+        logger.info(f"[GlobalHotkeyBridge] 结果已复制到剪贴板")
 
 
 # ============== 便捷函数 ==============

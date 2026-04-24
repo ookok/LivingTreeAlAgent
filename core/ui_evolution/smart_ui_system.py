@@ -331,12 +331,15 @@ def smart_predict(
     使用示例:
     ```python
     from core.ui_evolution import smart_predict
+from core.logger import get_logger
+logger = get_logger('ui_evolution.smart_ui_system')
+
     
     # 用户点击了输入框
     suggestion = smart_predict("click", "input_field")
     
     if suggestion.is_confident:
-        print(f"建议: {suggestion.action}, 置信度: {suggestion.confidence:.0%}")
+        logger.info(f"建议: {suggestion.action}, 置信度: {suggestion.confidence:.0%}")
     ```
     """
     system = get_smart_ui_system()

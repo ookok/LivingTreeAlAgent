@@ -482,6 +482,9 @@ class SmartUpdateDecider:
     def _has_server_characteristics(self) -> bool:
         """检测服务器特征"""
         import psutil
+from core.logger import get_logger
+logger = get_logger('decentralized_update.smart_update_decider')
+
 
         # 内存大于 16GB
         if psutil.virtual_memory().total > 16 * 1024 * 1024 * 1024:
@@ -785,8 +788,8 @@ async def quick_decide(
 
     Example:
         result = await quick_decide("1.2.0", 15 * 1024 * 1024)
-        print(f"策略: {result.strategy.value}")
-        print(f"通知时机: {result.notify_timing}")
+        logger.info(f"策略: {result.strategy.value}")
+        logger.info(f"通知时机: {result.notify_timing}")
     """
     decider = get_smart_decider()
     return await decider.decide_update_strategy(

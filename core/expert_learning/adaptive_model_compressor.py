@@ -20,6 +20,9 @@ from enum import Enum
 import statistics
 import json
 from pathlib import Path
+from core.logger import get_logger
+logger = get_logger('expert_learning.adaptive_model_compressor')
+
 
 # ── 领域能力等级 ─────────────────────────────────────────────────────────────
 
@@ -111,7 +114,7 @@ class AdaptiveModelCompressor:
 
     # 获取压缩建议
     plan = compressor.get_compression_plan()
-    print(f"建议: {plan['recommendations']}")
+    logger.info(f"建议: {plan['recommendations']}")
 
     # 应用压缩
     compressor.apply_compression(plan)
@@ -152,7 +155,7 @@ class AdaptiveModelCompressor:
         # 加载历史配置
         self._load_config()
 
-        print("[AdaptiveCompressor] Initialized")
+        logger.info("[AdaptiveCompressor] Initialized")
 
     def _init_default_domains(self):
         """初始化默认领域配置"""
@@ -251,22 +254,22 @@ class AdaptiveModelCompressor:
         if recent_requests > 50:
             if cap.level == CapabilityLevel.COMPRESSED:
                 cap.level = CapabilityLevel.STANDARD
-                print(f"[Compressor] {domain}: COMPRESSED -> STANDARD (高频)")
+                logger.info(f"[Compressor] {domain}: COMPRESSED -> STANDARD (高频)")
             elif cap.level == CapabilityLevel.OFFLOADED:
                 cap.level = CapabilityLevel.COMPRESSED
-                print(f"[Compressor] {domain}: OFFLOADED -> COMPRESSED (使用增加)")
+                logger.info(f"[Compressor] {domain}: OFFLOADED -> COMPRESSED (使用增加)")
 
         # 超高频领域 → 完整能力
         if recent_requests > 200:
             if cap.level in [CapabilityLevel.STANDARD, CapabilityLevel.COMPRESSED]:
                 cap.level = CapabilityLevel.FULL
-                print(f"[Compressor] {domain}: -> FULL (超高频)")
+                logger.info(f"[Compressor] {domain}: -> FULL (超高频)")
 
         # 低频领域 → 压缩能力
         elif recent_requests < 5 and cap.request_count > 20:
             if cap.level == CapabilityLevel.FULL:
                 cap.level = CapabilityLevel.STANDARD
-                print(f"[Compressor] {domain}: FULL -> STANDARD (低频)")
+                logger.info(f"[Compressor] {domain}: FULL -> STANDARD (低频)")
 
         # 更新能力参数
         self._update_capability_params(cap, recent_requests)
@@ -431,7 +434,7 @@ class AdaptiveModelCompressor:
                         new_level = CapabilityLevel(rec["to"])
                         old_level = self._domains[domain].level
                         self._domains[domain].level = new_level
-                        print(f"[Compressor] Applied: {domain} {old_level.value} -> {new_level.value}")
+                        logger.info(f"[Compressor] Applied: {domain} {old_level.value} -> {new_level.value}")
 
         self._save_config()
 
@@ -530,7 +533,7 @@ class AdaptiveModelCompressor:
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[Compressor] Save config failed: {e}")
+            logger.info(f"[Compressor] Save config failed: {e}")
 
     def _load_config(self):
         """加载配置"""
@@ -550,7 +553,7 @@ class AdaptiveModelCompressor:
                     self._domains[domain].last_used = data.get("last_used", 0)
 
         except Exception as e:
-            print(f"[Compressor] Load config failed: {e}")
+            logger.info(f"[Compressor] Load config failed: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""

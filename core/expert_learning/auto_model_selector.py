@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 import threading
+from core.logger import get_logger
+logger = get_logger('expert_learning.auto_model_selector')
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -217,7 +220,7 @@ class AutoModelSelector:
     selector = AutoModelSelector()
     selector.register_model("ollama_9b", "qwen3.5:9b", {"strengths": [TaskType.REASONING]})
     rec = selector.recommend("解释量子计算原理")
-    print(rec.primary_model.model_name)
+    logger.info(rec.primary_model.model_name)
     ```
     """
 
@@ -229,7 +232,7 @@ class AutoModelSelector:
         self._tracker = PerformanceTracker()
         self._models: Dict[str, ModelCapability] = {}
         self._on_selection: Optional[Callable] = None
-        print("[AutoModelSelector] 已初始化")
+        logger.info("[AutoModelSelector] 已初始化")
 
     def register_model(self, model_id: str, model_name: str, capabilities: Dict[str, Any]):
         """注册模型"""
@@ -246,7 +249,7 @@ class AutoModelSelector:
             cost_per_1k_tokens=capabilities.get("cost_per_1k_tokens", 0),
         )
         self._models[model_id] = model
-        print(f"[AutoModelSelector] 注册: {model_name}")
+        logger.info(f"[AutoModelSelector] 注册: {model_name}")
 
     def unregister_model(self, model_id: str) -> bool:
         """注销模型"""
@@ -352,9 +355,9 @@ class AutoModelSelector:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("自动模型选择策略引擎测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("自动模型选择策略引擎测试")
+    logger.info("=" * 60)
 
     selector = AutoModelSelector(prefer_free=True)
 
@@ -362,15 +365,15 @@ if __name__ == "__main__":
     selector.register_model("balanced", "qwen2.5:1.5b", {"strengths": [TaskType.QUESTION, TaskType.SUMMARIZATION], "avg_latency_ms": 2000, "cost_per_1k_tokens": 0})
     selector.register_model("strong", "qwen3.5:9b", {"strengths": [TaskType.REASONING, TaskType.CODE_GENERATION, TaskType.ANALYSIS], "avg_latency_ms": 5000, "quality_score": 0.9, "cost_per_1k_tokens": 0})
 
-    print("\n[Test 1: 任务分类]")
+    logger.info("\n[Test 1: 任务分类]")
     classifier = IntentClassifier()
     for q in ["你好", "帮我写代码", "解释量子计算", "总结文章"]:
         task, conf = classifier.classify(q)
-        print(f"  '{q}' -> {task.value} ({conf:.2f})")
+        logger.info(f"  '{q}' -> {task.value} ({conf:.2f})")
 
-    print("\n[Test 2: 模型推荐]")
+    logger.info("\n[Test 2: 模型推荐]")
     rec = selector.recommend("帮我写Python快速排序")
-    print(f"  推荐: {rec.primary_model.model_name}, 置信度: {rec.confidence:.2f}")
-    print(f"  推理: {rec.reasoning}")
+    logger.info(f"  推荐: {rec.primary_model.model_name}, 置信度: {rec.confidence:.2f}")
+    logger.info(f"  推理: {rec.reasoning}")
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)

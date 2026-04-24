@@ -51,6 +51,56 @@ from .multi_turn_analyzer import (
     ExplorationPath,
 )
 
+from .layered_analyzer import (
+    LayeredHybridAnalyzer,
+    AnalysisDepth,
+    RelationType,
+    ChunkRelation,
+    Layer1Summary,
+    Layer2ChunkAnalysis,
+    Layer3RelationNetwork,
+    Layer4Synthesis,
+    LayeredAnalysisResult,
+    analyze_layered,
+)
+
+from .multi_agent_analyzer import (
+    AgentType,
+    AgentStatus,
+    MessageType,
+    AgentMessage,
+    AgentConfig,
+    AgentResult,
+    MessageBus,
+    MultiAgentCoordinator,
+    SummaryAgent,
+    EntityAgent,
+    RelationAgent,
+    InsightAgent,
+    SynthesisAgent,
+    analyze_multi_agent,
+    quick_analyze,
+)
+
+# Phase 4: 渐进式理解
+from .progressive_understanding_impl import (
+    ProgressiveUnderstanding,
+    ProgressiveResult,
+    UnderstandingConfig,
+    UnderstandingDepth,
+    UnderstandingSession,
+    UnderstandingContext,
+    KnowledgeAccumulator,
+    KnowledgeItem,
+    ProgressTracker,
+    ComprehensionProgress,
+    ComprehensionPhase,
+    ComprehensionState,
+    SessionManager,
+    create_progressive_understander,
+    quick_understand,
+)
+
 # 便捷函数
 from .adaptive_compressor import compress_adaptive
 from .semantic_chunker import chunk_semantic
@@ -79,4 +129,47 @@ __all__ = [
     "MultiTurnAnalyzer",
     "TurnResult",
     "ExplorationPath",
+    # 分层分析
+    "LayeredHybridAnalyzer",
+    "AnalysisDepth",
+    "RelationType",
+    "ChunkRelation",
+    "Layer1Summary",
+    "Layer2ChunkAnalysis",
+    "Layer3RelationNetwork",
+    "Layer4Synthesis",
+    "LayeredAnalysisResult",
+    "analyze_layered",
+    # 多智能体协同
+    "AgentType",
+    "AgentStatus",
+    "MessageType",
+    "AgentMessage",
+    "AgentConfig",
+    "AgentResult",
+    "MessageBus",
+    "MultiAgentCoordinator",
+    "SummaryAgent",
+    "EntityAgent",
+    "RelationAgent",
+    "InsightAgent",
+    "SynthesisAgent",
+    "analyze_multi_agent",
+    "quick_analyze",
+    # 渐进式理解 (Phase 4)
+    "ProgressiveUnderstanding",
+    "ProgressiveResult",
+    "UnderstandingConfig",
+    "UnderstandingDepth",
+    "UnderstandingSession",
+    "UnderstandingContext",
+    "KnowledgeAccumulator",
+    "KnowledgeItem",
+    "ProgressTracker",
+    "ComprehensionProgress",
+    "ComprehensionPhase",
+    "ComprehensionState",
+    "SessionManager",
+    "create_progressive_understander",
+    "quick_understand",
 ]

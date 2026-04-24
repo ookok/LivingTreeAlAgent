@@ -1,5 +1,224 @@
 # MEMORY.md - 长期记忆
 
+## Programming OS 范式革命（2026-04-24）
+
+### 核心理念转变
+
+用户提出：**从"带AI的编辑器"到"意图处理器"的范式革命**
+
+| 传统 IDE | AI-IDE |
+|----------|---------|
+| 程序员手写每一行代码 | 程序员表达意图，AI 生成优化代码 |
+| 键盘输入 → 编辑器 → 文件系统 | 意图 → 意图处理器 → 验证 → 版本控制 |
+| 用户关心"怎么写" | 用户只关心"做什么" |
+
+### 必须抛弃的 6 个传统组件
+
+1. **文件浏览器** → 功能模块视图（用户只关心功能，不关心文件路径）
+2. **代码编辑器** → 意图工作台（编辑器降级为预览窗口）
+3. **命令行终端** → 自然语言执行
+4. **Git 手动操作** → 变更容器（一键应用/撤销）
+5. **测试运行** → 质量管道（自动运行，质量报告）
+6. **配置文件** → 自动检测 + 意图配置
+
+### MVP 定义（2-3周）
+
+```
+核心功能：
+- 意图输入（自然语言）
+- 意图理解（IntentEngine）
+- 代码生成（模板）
+- 代码预览（diff）
+- 一键应用
+- 质量报告
+
+验证目标：
+- 10 个测试意图中 7 个能直接生成可用代码
+- 用户满意度 > 80%
+```
+
+### 新增核心模块设计
+
+| 模块 | 位置 | 说明 |
+|------|------|------|
+| Intent Engine | `core/intent_engine/` | 完整意图理解，不只是分类 |
+| VFS | `core/virtual_fs/` | 草稿区+快照+签入 |
+| Permission Engine | `core/permission_engine/` | L1-L5 权限分级 |
+
+### 自动驾驶愿景
+
+```
+L1: 代码补全、语法检查 ← 现状
+L2: 生成简单函数、修复错误
+L3: 明确场景完全接管 ← 我们的目标
+L4: 处理复杂任务，人类偶尔干预
+L5: 描述需求，完成设计到部署全过程
+```
+
+### 陷阱提醒
+
+1. ❌ 不要兼容传统流程 → ✅ 强制纯 AI 驱动
+2. ❌ 不要提供太多选项 → ✅ 自动选择最优
+3. ❌ 不要暴露技术复杂性 → ✅ 透明在背后
+4. ❌ 不要一步到位 → ✅ MVP 优先
+
+### 大型工程性能优化（上下文经济学）
+
+**核心矛盾**: 无限增长的上下文 vs 有限计算/内存
+
+**核心策略**: 从"全知全能"转向"按需加载"
+
+| 优化技术 | 说明 |
+|----------|------|
+| Context Triage | 意图类型 → 上下文策略 |
+| Symbol Index | O(1) 符号查找，替代全文 grep |
+| VFS 惰性加载 | 仅加载"脏"区域 |
+| 意图预热 | 根据历史意图预加载索引 |
+| 增量上下文 | 上下文累加，非重置 |
+| 边缘缓存 | 高频意图结果缓存 |
+
+**本地网关架构**:
+```
+[IDE Plugin] → [Local Gateway] → [LLM API]
+             (索引/缓存/路由)
+```
+
+**核心原则**: "足够好"而非"完美"
+- 等待30秒的AI → 被用户抛弃
+- 3秒响应的AI → 用户体验更佳
+
+### 意图保持型压缩（2026-04-24 新增）
+
+**核心理念**: 不是"压缩"，而是"信息密度革命"。用 1% 的 Token 传递 99% 的意图。
+
+| 技术 | 原理 | 压缩比 |
+|------|------|--------|
+| 代码签名化 | 保留函数签名+目的+依赖，丢弃实现细节 | 10:1 |
+| 分层上下文金字塔 | L1-L5 按需加载，简单任务用高层摘要 | 5:1-50:1 |
+| 意图编码 | 将自然语言编码为结构化查询 | 减少50%上下文需求 |
+| 语义分块 | AST分析 + 重要性打分，优先保留关键节点 | 3:1-10:1 |
+
+**Token价值评估体系**:
+- 📈 高价值：接口定义、依赖关系、意图信息
+- 📊 中等价值：核心逻辑、错误处理
+- 📉 低价值：样板代码、重复模式
+- 💨 零价值：注释空白、调试代码
+
+**Token预算制度**:
+- 简单任务：512 tokens
+- 中等任务：2048 tokens
+- 复杂任务：8192 tokens
+- 深度分析：16384 tokens
+
+**预处理管道**: 意图分析 → 上下文选择 → 代码压缩 → 意图编码 → LLM API → 后处理
+
+### 推理式编程助手（2026-04-24 新增）
+
+**核心设计**：推理引擎 + 可视化轨迹 + Git工作流三大支柱
+
+| 组件 | 功能 | 特点 |
+|------|------|------|
+| 任务分解器 | OpenCode风格，递归分解任务 | 考虑依赖、产出、难点 |
+| 推导链追踪 | 记录每个推理步骤 | alternatives + decision + reason |
+| Git管理器 | 智能提交分组 | 推导过程存储在commit body |
+| 时间旅行 | 回到任意决策点 | Git作为记忆系统 |
+
+**多模型协作**：
+- CodeAnalyzerModel：代码分析
+- TaskPlannerModel：任务规划
+- CoderModel：代码生成
+- VerifierModel：验证
+
+**MVP第一周**：
+1. 基础IDE插件框架
+2. 硬编码任务分解
+3. 基础推导显示
+4. 手动Git提交
+
+### 端到端体验优化（2026-04-24 新增）
+
+**核心洞察**：本地部署的"慢"不是因为模型弱，而是交互充满"摩擦"
+
+| 摩擦类型 | 说明 | 解决方案 |
+|---------|------|---------|
+| 上下文切换 | 在IDE、终端、聊天窗口来回切换 | 上下文自动注入 |
+| 等待摩擦 | 提问→等待→验证循环 | 预测性预加载 + 分层模型 |
+| 执行摩擦 | 模型只能"说"，不能"做" | 工具调用 + 沙箱执行 |
+
+**五大优化领域**：
+1. **上下文感知**：项目级上下文注入、活跃文件感知
+2. **延迟优化**：预测性预加载、渐进式输出、离线优先
+3. **工具集成**：Function Calling、沙箱代码执行、调试器集成
+4. **反馈循环**：偏好学习、质量评分、知识库RAG
+5. **多模态**：图片理解、语音输入、插件生态
+
+**目标**：从"需要伺候的聊天对象" → "能自主工作的副驾驶"
+
+---
+
+## Expert Learning 模块修复（2026-04-24）
+
+### 缓存层 API 修复
+`core/expert_learning/expert_guided_system.py` 修复：
+
+1. **缓存调用修复**：`cache.get()` → `cache.get_l4()`
+   - UnifiedCache 使用分层 API: `get_l0_route`/`set_l0_route`, `get_search`/`set_search`, `get_l4`/`set_l4`
+   - 返回值是 `CacheHit` 对象，需用 `.data` 获取实际数据
+
+2. **OllamaClient 修复**：
+   - 不能直接传 `base_url` 参数，需用 `OllamaConfig(base_url=...)`
+   - `chat()` 返回生成器，需用 `chat_sync()` 获取完整响应
+
+3. **缓存填充逻辑**：专家不可用时也需缓存本地结果
+
+### B) HermesAgent 深度集成（2026-04-24）
+
+`core/agent_chat.py` 集成 ExpertLearning：
+
+- `_init_expert_learning()`: 初始化专家学习系统
+- `get_learning_stats()`: 获取学习统计（cache_hit_rate, corrections 等）
+- 自动启用：enable_enhancement=True 时自动初始化
+
+### C) 思维链蒸馏器（创新功能，2026-04-24）
+
+`core/expert_learning/chain_of_thought_distiller.py` - 创新功能：
+
+**核心功能**：
+- 记录专家/本地模型的推理过程
+- 提取思维链模板（因果/类比/演绎/归纳等）
+- 相似问题自动匹配模板
+- 提供推理提示注入
+
+**模板结构**：
+```python
+ChainTemplate:
+  - id: 模板ID
+  - query_pattern: 问题关键词
+  - query_type: 推理类型
+  - reasoning_steps: 推理步骤列表
+  - pattern: 模式摘要
+  - usage_count: 使用次数
+  - success_rate: 成功率
+```
+
+**使用方式**：
+```python
+distiller = ChainOfThoughtDistiller()
+
+# 记录推理
+distiller.record_reasoning(
+    query="为什么天空是蓝色的",
+    expert_reasoning="1. 识别光学问题 2. 瑞利散射...",
+    local_reasoning="因为太阳光...",
+    expert_answer="因为瑞利散射...",
+    local_answer="因为太阳光..."
+)
+
+# 获取相似模板
+template = distiller.get_template("为什么海水是蓝色")
+hint = distiller.get_prompt_hint("为什么天空是蓝色")
+```
+
 ## 用户模型配置（永久记住）
 
 | 层级 | 模型 | 连接方式 | API Key | 用途 |
@@ -104,6 +323,59 @@ execute_task() → _run_autonomous_loop() → _finish_task()
 **注意**：深度搜索链路（`HermesAgent` / `DeepSearchWikiSystem`）不触发 Skill 自动创建。
 Skill 自进化只在 `SkillEvolutionAgent` 中生效。
 
+## IntentEngine - 意图引擎核心模块（2026-04-24 新建）
+
+`core/intent_engine/` - 实现"意图处理器"范式的核心
+
+### 模块结构
+
+| 文件 | 功能 |
+|------|------|
+| `intent_types.py` | 意图类型定义（IntentType 枚举、Intent 数据类） |
+| `intent_parser.py` | 意图解析器（动作提取、目标提取、意图分类） |
+| `tech_stack_detector.py` | 技术栈检测（语言/框架/数据库/工具/云服务） |
+| `constraint_extractor.py` | 约束条件提取（性能/安全/格式/质量约束） |
+| `composite_detector.py` | 复合意图检测（并列/顺序任务分解） |
+| `intent_engine.py` | 主入口（整合各组件，提供统一 API） |
+
+### 意图类型（30+ 种）
+
+- **代码生成**: CODE_GENERATION, API_DESIGN, DATABASE_DESIGN, UI_GENERATION
+- **代码修改**: CODE_MODIFICATION, CODE_REFACTOR, CODE_OPTIMIZATION
+- **调试修复**: DEBUGGING, BUG_FIX, ERROR_RESOLUTION
+- **代码理解**: CODE_UNDERSTANDING, CODE_EXPLANATION, CODE_REVIEW
+- **测试验证**: TEST_GENERATION, SECURITY_CHECK, PERFORMANCE_ANALYSIS
+- **运维部署**: DEPLOYMENT, CONFIGURATION, ENVIRONMENT_SETUP
+
+### 使用方式
+
+```python
+from core.intent_engine import IntentEngine
+
+engine = IntentEngine()
+intent = engine.parse("帮我写一个用户登录接口，要用 FastAPI")
+
+# 解析结果
+print(intent.intent_type)   # api_design
+print(intent.tech_stack)    # ['fastapi', 'python']
+print(intent.action)        # 编写
+print(intent.target)        # 用户登录接口
+print(intent.constraints)   # [认证方式: jwt]
+print(intent.confidence)   # 0.63
+print(engine.suggest_model(intent))  # qwen3.5:9b
+```
+
+### 集成到 AgentChat
+
+`core/agent_chat_enhancer.py` 中已集成 IntentEngine：
+
+```python
+chat = enhance_agent_chat(base_chat)
+intent = chat.analyze_code_intent("帮我写一个用户登录接口")
+```
+
+---
+
 ## 用户偏好
 
 - 回复语言：**中文**
@@ -183,6 +455,69 @@ ToolRegistry.register(
 - 修复: `agent.session_db._local.conn = None` → 重建会话
 - 隔离测试: 使用独立 db 路径避免锁冲突
 - 残留锁清理: `PRAGMA wal_checkpoint(TRUNCATE)` + 删除 -wal/-shm
+
+## 智能学习系统六大模块（2026-04-24）
+
+在 `core/expert_learning/` 下创建了完整的智能学习系统：
+
+### 1. 离线自学习循环 `offline_learning_loop.py`
+- **永不掉线机制**：4层降级策略（精确匹配→模式匹配→模板→紧急响应）
+- **知识碎片管理**：基于哈希的精确匹配 + 关键词索引
+- **自我进化**：成功率追踪、相似知识合并、低置信度清理
+- **关键类**：`OfflineLearningLoop`, `KnowledgeFragment`
+
+### 2. 知识一致性验证 `knowledge_consistency.py`
+- **多模型并行推理**：支持异步并发调用
+- **一致性检测**：Jaccard相似度 + 关键事实提取对比
+- **投票决策**：多数投票 + 相似度投票
+- **关键类**：`KnowledgeConsistencyVerifier`, `ConsensusLevel`
+
+### 3. 自动模型选择 `auto_model_selector.py`
+- **意图分类**：16种任务类型自动识别
+- **复杂度评估**：长度/结构/领域/任务复杂度
+- **动态选择**：基于擅长领域、历史表现、延迟、成本综合评分
+- **关键类**：`AutoModelSelector`, `TaskType`, `IntentClassifier`
+
+### 4. 成本优化引擎 `cost_optimizer.py`
+- **预算管理**：日/周/月三级预算
+- **智能切换**：FREE_ONLY/FREE_PREFERRED/BALANCED/QUALITY_FIRST 四种模式
+- **节省追踪**：与假设全付费对比计算节省
+- **关键类**：`CostOptimizer`, `CostMode`
+
+### 5. 多模型对比 `multi_model_comparison.py`
+- **并行推理**：同时调用多个模型
+- **多维评估**：准确性/连贯性/简洁性/创意性/事实性
+- **差异分析**：长度/结构/关键词差异检测
+- **关键类**：`MultiModelComparison`, `ComparisonMetric`
+
+### 6. 性能监控 `enhanced_performance_monitor.py`
+- **实时监控**：延迟/质量/错误率/吞吐量
+- **异常检测**：延迟过高/质量低/错误率飙升
+- **趋势分析**：metric趋势（上升/下降/稳定）
+- **关键类**：`EnhancedPerformanceMonitor`, `MetricType`
+
+### 统一入口 `intelligent_learning_system.py`
+- `IntelligentLearningSystem` 整合所有模块
+- 单例模式全局访问
+- 核心方法：`process()`, `learn()`, `get_status()`, `get_optimization_tips()`
+
+### 使用示例
+```python
+from core.expert_learning import get_intelligent_learning_system
+
+system = get_intelligent_learning_system({'daily_budget': 5.0})
+
+# 注册模型
+system.register_model('qwen_9b', 'qwen3.5:9b', client, {'strengths': ['reasoning']})
+
+# 处理请求（自动选择最优策略）
+result = system.process('解释量子计算原理')
+print(result.content)
+
+# 获取系统状态
+status = system.get_status()
+print(f"健康度: {status.system_health}")
+```
 
 ### HermesAgent KB 类型（重要区别）
 | 组件 | KB 类型 | 路径 |

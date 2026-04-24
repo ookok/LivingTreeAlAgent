@@ -23,6 +23,75 @@ import time
 import re
 import hashlib
 
+# Intent Engine
+try:
+    from core.intent_engine import IntentEngine, Intent, IntentType
+    INTENT_ENGINE_AVAILABLE = True
+except ImportError:
+    INTENT_ENGINE_AVAILABLE = False
+    IntentEngine = None
+    Intent = None
+    IntentType = None
+
+# 代码签名化（延迟导入，避免循环依赖）
+CODE_SIGNER_AVAILABLE = False
+CodeSigner = None
+signaturize_code = None
+LayeredContextBuilder = None
+SymbolIndex = None
+IncrementalContextManager = None
+ContextLevel = None
+
+# 尝试直接导入（不通过 core 包）
+try:
+    import importlib.util
+    spec = importlib.util.find_spec("core.long_context.code_signer")
+    if spec:
+        from core.long_context import code_signer as _cs_mod
+        CodeSigner = getattr(_cs_mod, 'CodeSigner', None)
+        signaturize_code = getattr(_cs_mod, 'signaturize_code', None)
+    
+    spec2 = importlib.util.find_spec("core.long_context.layered_context_pyramid")
+    if spec2:
+        from core.long_context import layered_context_pyramid as _lcp_mod
+        LayeredContextBuilder = getattr(_lcp_mod, 'LayeredContextBuilder', None)
+        SymbolIndex = getattr(_lcp_mod, 'SymbolIndex', None)
+        IncrementalContextManager = getattr(_lcp_mod, 'IncrementalContextManager', None)
+        ContextLevel = getattr(_lcp_mod, 'ContextLevel', None)
+    
+    if CodeSigner and LayeredContextBuilder:
+        CODE_SIGNER_AVAILABLE = True
+except Exception:
+    pass
+
+# 代码澄清器
+CODE_CLARIFIER_AVAILABLE = False
+CodeClarifier = None
+
+try:
+    import importlib.util
+    spec3 = importlib.util.find_spec("core.smart_writing.code_clarifier")
+    if spec3:
+        from core.smart_writing import code_clarifier as _cc_mod
+        CodeClarifier = getattr(_cc_mod, 'CodeClarifier', None)
+        CODE_CLARIFIER_AVAILABLE = True
+except Exception:
+    pass
+
+# IDE 上下文注入器
+IDE_CONTEXT_INJECTOR_AVAILABLE = False
+IDEContextInjector = None
+
+try:
+    import importlib.util
+    spec4 = importlib.util.find_spec("core.smart_writing.ide_context_injector")
+    if spec4:
+        from core.smart_writing import ide_context_injector as _ici_mod
+        IDEContextInjector = getattr(_ici_mod, 'IDEContextInjector', None)
+        IDE_CONTEXT_INJECTOR_AVAILABLE = True
+except Exception:
+    pass
+
 # 尝试导入 PyQt6 组件（可选）
 try:
     from PyQt6.QtWidgets import QWidget
@@ -1423,6 +1492,32 @@ class EnhancedAgentChat:
         self._context_manager = ChatContextManager() if enable_context else None
         self._guidance_generator = GuidanceGenerator(max_questions=max_guidance_questions) if enable_guidance else None
         
+        # IntentEngine - 代码专用意图解析（可选）
+        self._intent_engine = IntentEngine() if INTENT_ENGINE_AVAILABLE else None
+        if self._intent_engine:
+            print("[EnhancedAgentChat] IntentEngine enabled - code intent parsing")
+
+        # 代码签名化 - 上下文压缩（可选）
+        self._code_signer = CodeSigner() if CODE_SIGNER_AVAILABLE else None
+        self._symbol_index = None  # 延迟初始化
+        self._incremental_context = IncrementalContextManager() if CODE_SIGNER_AVAILABLE else None
+        if self._code_signer:
+            print("[EnhancedAgentChat] CodeSigner enabled - context compression")
+        
+        # 代码澄清器 - 交互式需求澄清（可选）
+        self._code_clarifier = CodeClarifier() if CODE_CLARIFIER_AVAILABLE else None
+        self._clarify_sessions: Dict[str, Any] = {}  # 澄清会话存储
+        if self._code_clarifier:
+            print("[EnhancedAgentChat] CodeClarifier enabled - interactive code clarification")
+        
+        # IDE 上下文注入器 - 项目结构感知（可选）
+        self._ide_context_injector = None
+        self._ide_context: Any = None
+        self._active_file: Optional[str] = None
+        if IDE_CONTEXT_INJECTOR_AVAILABLE:
+            # 延迟初始化，允许后续设置项目根目录
+            print("[EnhancedAgentChat] IDE Context Injector available - project structure awareness")
+        
         # 回调
         self._on_intent_detected: Optional[Callable[[IntentAnalysis], None]] = None
         self._on_compress: Optional[Callable[[str, str], None]] = None
@@ -1431,6 +1526,32 @@ class EnhancedAgentChat:
         
         # 当前对话的追问结果（用于后续显示）
         self._last_guidance: Optional[GuidanceResult] = None
+        
+        # === 多模态输出支持 (Phase 4) ===
+        self._multimodal_manager = None
+        self._progress_tracker = None
+        self._enable_multimodal = False
+        
+        # 尝试导入多模态模块
+        self._MULTIMODAL_AVAILABLE = False
+        try:
+            from core.smart_writing import (
+                MultimodalOutputManager,
+                OutputMode,
+                PyQt6OutputManager,
+                ProgressTracker,
+                RecoveryExecutor,
+                RetryPolicy,
+            )
+            self._MULTIMODAL_AVAILABLE = True
+            self._MultimodalOutputManager = MultimodalOutputManager
+            self._OutputMode = OutputMode
+            self._PyQt6OutputManager = PyQt6OutputManager
+            self._ProgressTracker = ProgressTracker
+            self._RecoveryExecutor = RecoveryExecutor
+            self._RetryPolicy = RetryPolicy
+        except ImportError as e:
+            print(f"[EnhancedAgentChat] 多模态模块不可用: {e}")
     
     @property
     def agent(self):
@@ -1480,6 +1601,159 @@ class EnhancedAgentChat:
             guidance_text += f"{i}. {q}\n"
         
         return response + guidance_text
+    
+    # ============== 多模态输出配置 (Phase 4) ==============
+    
+    def enable_multimodal(
+        self,
+        mode: str = "normal",
+        text_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Optional[Callable[[str, float, str], None]] = None,
+        error_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
+        """
+        启用多模态输出功能
+        
+        Args:
+            mode: 输出模式 ("quiet"/"normal"/"verbose"/"stream")
+            text_callback: 文本更新回调
+            progress_callback: 进度更新回调
+            error_callback: 错误回调
+            
+        Returns:
+            bool: 是否启用成功
+        """
+        if not self._MULTIMODAL_AVAILABLE:
+            print("[EnhancedAgentChat] 多模态输出不可用")
+            return False
+        
+        try:
+            # 创建多模态管理器
+            mode_enum = getattr(self._OutputMode, mode.upper(), self._OutputMode.NORMAL)
+            self._multimodal_manager = self._MultimodalOutputManager(mode=mode_enum)
+            
+            # 设置回调
+            if text_callback:
+                self._multimodal_manager.set_text_callback(text_callback)
+            if progress_callback:
+                self._multimodal_manager.set_progress_callback(progress_callback)
+            if error_callback:
+                self._multimodal_manager.set_error_callback(error_callback)
+            
+            self._enable_multimodal = True
+            print(f"[EnhancedAgentChat] 多模态输出已启用，模式: {mode}")
+            return True
+            
+        except Exception as e:
+            print(f"[EnhancedAgentChat] 启用多模态输出失败: {e}")
+            return False
+    
+    def disable_multimodal(self) -> None:
+        """禁用多模态输出"""
+        if self._multimodal_manager:
+            self._multimodal_manager.close()
+            self._multimodal_manager = None
+        self._enable_multimodal = False
+    
+    def set_progress(self, stage: str, progress: float, message: str = "") -> None:
+        """
+        设置进度显示
+        
+        Args:
+            stage: 阶段名称
+            progress: 进度 0.0-1.0
+            message: 消息
+        """
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_progress_update(stage, progress, message)
+    
+    def show_error(self, error: str, recoverable: bool = True) -> None:
+        """
+        显示错误
+        
+        Args:
+            error: 错误消息
+            recoverable: 是否可恢复
+        """
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_error(error, recoverable)
+    
+    def start_progress(self, stage: str, total_steps: int = 5) -> None:
+        """
+        开始进度追踪
+        
+        Args:
+            stage: 阶段名称
+            total_steps: 总步数
+        """
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_progress_start(stage, total_steps)
+    
+    def complete_progress(self, message: str = "完成") -> None:
+        """完成进度"""
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_progress_complete("任务", message)
+    
+    def output_stream(self, text: str, delay: float = 0.02) -> None:
+        """
+        流式输出文本
+        
+        Args:
+            text: 文本内容
+            delay: 字符延迟
+        """
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_text(text, stream=True)
+    
+    def execute_with_retry(
+        self,
+        func: Callable,
+        *args,
+        task_id: str = "default",
+        operation_name: str = "操作",
+        max_retries: int = 3,
+        **kwargs,
+    ) -> Any:
+        """
+        执行带重试的操作
+        
+        Args:
+            func: 要执行的函数
+            task_id: 任务 ID
+            operation_name: 操作名称
+            max_retries: 最大重试次数
+            **kwargs: 额外参数
+            
+        Returns:
+            函数执行结果
+        """
+        # 创建重试策略
+        retry_policy = self._RetryPolicy(
+            max_retries=max_retries,
+            initial_delay=1.0,
+            exponential_base=2.0,
+        )
+        executor = self._RecoveryExecutor(retry_policy=retry_policy)
+        
+        # 定义重试回调
+        def on_retry(error, attempt):
+            msg = f"重试 {attempt}/{max_retries}: {error}"
+            if self._enable_multimodal and self._multimodal_manager:
+                self._multimodal_manager.output_warning(msg)
+            else:
+                print(f"[EnhancedAgentChat] {msg}")
+        
+        try:
+            return executor.execute(
+                func, *args,
+                task_id=task_id,
+                operation_name=operation_name,
+                on_retry=on_retry,
+                **kwargs,
+            )
+        except Exception as e:
+            self.show_error(str(e))
+            raise
     
     def analyze_intent(
         self,
@@ -1531,94 +1805,474 @@ class EnhancedAgentChat:
         original_message = message
         intent_analysis: Optional[IntentAnalysis] = None
         
-        # 1. 意图识别
-        if self.enable_intent:
-            intent_analysis = self.analyze_intent(message)
-            
-            if self._on_intent_detected:
-                self._on_intent_detected(intent_analysis)
-        
-        # 2. Query 压缩
-        if self.enable_compress and self._query_compressor:
-            compressed = self._query_compressor.compress(
-                message,
-                force=force_compress
-            )
-            
-            if compressed != message and self._on_compress:
-                self._on_compress(original_message, compressed)
-            
-            message = compressed
-        
-        # 3. 添加到上下文历史（用户消息）
-        if self.enable_context and self._context_manager:
-            self._context_manager.add_message(
-                self.session_id,
-                'user',
-                message,
-                intent_analysis.intent if intent_analysis else None,
-                metadata={
-                    'original': original_message,
-                    'compressed': message != original_message
-                }
-            )
-        
-        # 4. 调用原始 chat
-        def wrapper_callback(delta: str):
-            if stream_callback:
-                stream_callback(delta)
-            if self.base_chat.on_message:
-                self.base_chat.on_message(delta)
-        
-        # 临时替换回调
-        original_on_message = self.base_chat.on_message
-        self.base_chat.on_message = wrapper_callback
+        # === Phase 4: 多模态输出 - 开始阶段 ===
+        if self._enable_multimodal and self._multimodal_manager:
+            self._multimodal_manager.output_progress_start("AI 处理", 5)
         
         try:
-            response = self.base_chat.chat(message, max_wait)
-        finally:
-            # 恢复回调
-            self.base_chat.on_message = original_on_message
-        
-        # 5. 添加响应到历史
-        if self.enable_context and self._context_manager:
-            self._context_manager.add_message(
-                self.session_id,
-                'assistant',
-                response
-            )
-            
-            # 触发上下文更新回调
-            if self._on_context_update:
-                ctx = self._context_manager.get_context(self.session_id)
-                self._on_context_update(ctx)
-        
-        # 6. 生成追问（如果启用）
-        if self.enable_guidance and self._guidance_generator and intent_analysis:
-            ctx = None
-            if self._context_manager:
-                ctx = self._context_manager.get_context(self.session_id)
-            
-            # 检查是否应该显示追问
-            if self._guidance_generator.should_show_guidance(
-                intent_analysis.intent,
-                ctx,
-                len(response)
-            ):
-                guidance = self._guidance_generator.generate(
-                    intent=intent_analysis.intent,
-                    response=response,
-                    context=ctx,
-                    user_message=original_message
-                )
-                self._last_guidance = guidance
+            # 1. 意图识别
+            if self.enable_intent:
+                if self._enable_multimodal:
+                    self._multimodal_manager.output_progress_update("AI 处理", 0.1, "分析意图...")
+                intent_analysis = self.analyze_intent(message)
                 
-                # 触发追问回调
-                if self._on_guidance_generated:
-                    self._on_guidance_generated(guidance)
-        
-        return response
+                if self._on_intent_detected:
+                    self._on_intent_detected(intent_analysis)
+            
+            # 2. Query 压缩
+            if self.enable_compress and self._query_compressor:
+                compressed = self._query_compressor.compress(
+                    message,
+                    force=force_compress
+                )
+                
+                if compressed != message and self._on_compress:
+                    self._on_compress(original_message, compressed)
+                
+                message = compressed
+            
+            # 3. 添加到上下文历史（用户消息）
+            if self.enable_context and self._context_manager:
+                self._context_manager.add_message(
+                    self.session_id,
+                    'user',
+                    message,
+                    intent_analysis.intent if intent_analysis else None,
+                    metadata={
+                        'original': original_message,
+                        'compressed': message != original_message
+                    }
+                )
+            
+            # 4. 调用原始 chat
+            if self._enable_multimodal:
+                self._multimodal_manager.output_progress_update("AI 处理", 0.3, "生成响应...")
+            
+            def wrapper_callback(delta: str):
+                if stream_callback:
+                    stream_callback(delta)
+                if self.base_chat.on_message:
+                    self.base_chat.on_message(delta)
+            
+            # 临时替换回调
+            original_on_message = self.base_chat.on_message
+            self.base_chat.on_message = wrapper_callback
+            
+            try:
+                response = self.base_chat.chat(message, max_wait)
+            except Exception as e:
+                # 错误处理
+                if self._enable_multimodal and self._multimodal_manager:
+                    self._multimodal_manager.output_error(str(e))
+                raise
+            finally:
+                # 恢复回调
+                self.base_chat.on_message = original_on_message
+            
+            # 5. 添加响应到历史
+            if self.enable_context and self._context_manager:
+                self._context_manager.add_message(
+                    self.session_id,
+                    'assistant',
+                    response
+                )
+                
+                # 触发上下文更新回调
+                if self._on_context_update:
+                    ctx = self._context_manager.get_context(self.session_id)
+                    self._on_context_update(ctx)
+            
+            # 6. 生成追问（如果启用）
+            if self.enable_guidance and self._guidance_generator and intent_analysis:
+                ctx = None
+                if self._context_manager:
+                    ctx = self._context_manager.get_context(self.session_id)
+                
+                # 检查是否应该显示追问
+                if self._guidance_generator.should_show_guidance(
+                    intent_analysis.intent,
+                    ctx,
+                    len(response)
+                ):
+                    guidance = self._guidance_generator.generate(
+                        intent=intent_analysis.intent,
+                        response=response,
+                        context=ctx,
+                        user_message=original_message
+                    )
+                    self._last_guidance = guidance
+                    
+                    # 触发追问回调
+                    if self._on_guidance_generated:
+                        self._on_guidance_generated(guidance)
+            
+            # === Phase 4: 多模态输出 - 完成 ===
+            if self._enable_multimodal and self._multimodal_manager:
+                self._multimodal_manager.output_progress_complete("AI 处理", "完成")
+            
+            return response
+            
+        except Exception as e:
+            # === Phase 4: 错误处理 ===
+            if self._enable_multimodal and self._multimodal_manager:
+                self._multimodal_manager.output_error(str(e), recoverable=True)
+            raise
     
+    def analyze_code_intent(self, query: str) -> Optional[Any]:
+        """
+        ⭐ 分析代码专用意图（使用 IntentEngine）
+        
+        比通用 analyze_intent 更细粒度，适合代码开发场景。
+        
+        Returns:
+            Intent: 结构化代码意图，包含：
+            - intent_type: 意图类型（CODE_GENERATION, DEBUGGING 等）
+            - action: 动作（编写/修改/调试等）
+            - target: 目标（登录接口/缓存模块等）
+            - tech_stack: 技术栈（FastAPI, Redis 等）
+            - constraints: 约束条件
+            - confidence: 置信度
+            - suggested_model: 建议使用的模型
+        """
+        if not self._intent_engine:
+            return None
+        
+        return self._intent_engine.parse(query)
+    
+    def get_code_intent_explanation(self, query: str) -> str:
+        """获取代码意图的详细解释（用于调试）"""
+        if not self._intent_engine:
+            return "IntentEngine 未启用"
+        
+        intent = self._intent_engine.parse(query)
+        return self._intent_engine.explain(intent)
+
+    # ============== 代码签名化 API ==============
+
+    def signaturize_code(self, code: str) -> Optional[Any]:
+        """
+        签名化代码（大幅压缩上下文）
+
+        用 1% 的 Token 传递 99% 的意图。
+
+        Returns:
+            SignatureResult: 签名化结果，包含：
+            - signature_code: 签名化后的代码
+            - compression_ratio: 压缩比例
+            - saved_ratio: 节省比例
+            - elements: 提取的代码元素
+        """
+        if not self._code_signer:
+            return None
+
+        return self._code_signer.signaturize(code)
+
+    def build_layered_context(
+        self,
+        query: str,
+        intent_type: str = "general",
+        target_file: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """
+        构建分层上下文（按需加载）
+
+        根据任务复杂度动态选择上下文层级：
+        - L1: 文件概览（~64 tokens）
+        - L2: 符号索引（~256 tokens）
+        - L3: 相关代码（~1K tokens）
+        - L4: 完整实现（~4K tokens）
+        - L5: 全部代码（~16K tokens）
+
+        Args:
+            query: 用户查询
+            intent_type: 意图类型
+            target_file: 目标文件路径
+
+        Returns:
+            (context, level_name): 上下文内容和层级名称
+        """
+        if not self._code_signer:
+            return "", "unavailable"
+
+        # 延迟初始化符号索引
+        if self._symbol_index is None and hasattr(self.base_chat.agent, 'project_root'):
+            self._symbol_index = SymbolIndex()
+            self._symbol_index.build_from_project(self.base_chat.agent.project_root)
+
+        # 构建分层上下文
+        builder = LayeredContextBuilder(self._symbol_index)
+        context, level = builder.build_context(query, intent_type, target_file)
+
+        return context, level.name
+
+    def add_incremental_context(
+        self,
+        level: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ):
+        """
+        添加增量上下文（累加而非重置）
+
+        持续追踪对话历史中的上下文。
+        """
+        if not self._incremental_context:
+            return
+
+        ctx_level = ContextLevel[f"L{level[-1]}_FILE_OVERVIEW"] if "L1" in level else ContextLevel.L2_SYMBOL_INDEX
+        self._incremental_context.add_context(ctx_level, content, metadata)
+
+    def get_incremental_summary(self) -> str:
+        """获取增量上下文摘要"""
+        if not self._incremental_context:
+            return ""
+        return self._incremental_context.get_context_summary()
+
+    # ============== 代码澄清 API ==============
+
+    def start_code_clarify(
+        self,
+        requirement: str,
+        context_files: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        开始代码澄清会话
+
+        Args:
+            requirement: 代码需求描述
+            context_files: 上下文文件列表（用于自动检测技术栈）
+
+        Returns:
+            澄清会话状态，包含问题列表
+        """
+        if not self._code_clarifier:
+            return None
+
+        session = self._code_clarifier.start_session(
+            requirement=requirement,
+            context_files=context_files
+        )
+        self._clarify_sessions[session["session_id"]] = session
+        return session
+
+    def get_clarify_questions(
+        self,
+        session_id: str,
+        answered_field: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        获取澄清问题
+
+        Args:
+            session_id: 会话 ID
+            answered_field: 已回答的字段（触发后续问题）
+
+        Returns:
+            问题列表
+        """
+        if not self._code_clarifier:
+            return []
+
+        session = self._clarify_sessions.get(session_id)
+        if not session:
+            return []
+
+        return self._code_clarifier.get_next_questions(session, answered_field)
+
+    def answer_clarify(
+        self,
+        session_id: str,
+        field: str,
+        value: Any
+    ) -> Dict[str, Any]:
+        """
+        回答澄清问题
+
+        Args:
+            session_id: 会话 ID
+            field: 字段名
+            value: 回答值
+
+        Returns:
+            更新后的会话状态
+        """
+        if not self._code_clarifier:
+            return {}
+
+        session = self._clarify_sessions.get(session_id)
+        if not session:
+            return {}
+
+        updated = self._code_clarifier.answer(session, field, value)
+        self._clarify_sessions[session_id] = updated
+        return updated
+
+    def get_code_suggestions(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        获取代码建议
+
+        Args:
+            session_id: 会话 ID
+
+        Returns:
+            建议列表
+        """
+        if not self._code_clarifier:
+            return []
+
+        session = self._clarify_sessions.get(session_id)
+        if not session:
+            return []
+
+        return self._code_clarifier.get_code_suggestions(session)
+
+    def complete_code_clarify(self, session_id: str) -> Dict[str, Any]:
+        """
+        完成代码澄清会话
+
+        Args:
+            session_id: 会话 ID
+
+        Returns:
+            完整的代码需求信息
+        """
+        if not self._code_clarifier:
+            return {}
+
+        final = self._code_clarifier.complete_session(
+            {"session_id": session_id}
+        )
+        if session_id in self._clarify_sessions:
+            del self._clarify_sessions[session_id]
+        return final
+
+    def quick_code_clarify(self, requirement: str) -> Dict[str, Any]:
+        """
+        快速代码澄清（无需手动管理会话）
+
+        Args:
+            requirement: 代码需求描述
+
+        Returns:
+            完整的代码需求信息
+        """
+        if not self._code_clarifier:
+            return {}
+
+        return self._code_clarifier.start_session(requirement) or \
+               self._code_clarifier.complete_session({})
+
+    # ============== IDE 上下文注入 API ==============
+
+    def set_project_root(self, project_root: str):
+        """
+        设置项目根目录
+
+        Args:
+            project_root: 项目根目录路径
+        """
+        if not IDE_CONTEXT_INJECTOR_AVAILABLE:
+            return
+
+        self._ide_context_injector = IDEContextInjector(project_root=project_root)
+        print(f"[EnhancedAgentChat] Project root set: {project_root}")
+
+    def set_active_file(self, file_path: str):
+        """
+        设置当前活跃文件
+
+        Args:
+            file_path: 活跃文件的绝对路径
+        """
+        self._active_file = file_path
+        if self._ide_context_injector:
+            self._ide_context_injector.set_active_file(file_path)
+
+    def get_ide_context(
+        self,
+        active_file: Optional[str] = None,
+        query: Optional[str] = None,
+        include_content: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        获取 IDE 上下文
+
+        Args:
+            active_file: 当前活跃文件
+            query: 用户查询（用于相关性排序）
+            include_content: 是否包含文件内容
+
+        Returns:
+            IDE 上下文字典
+        """
+        if not self._ide_context_injector:
+            return None
+
+        # 使用指定的文件或当前的活跃文件
+        file_path = active_file or self._active_file
+
+        ctx = self._ide_context_injector.get_context(
+            active_file=file_path,
+            query=query,
+            include_content=include_content,
+        )
+        self._ide_context = ctx
+        return ctx.to_dict()
+
+    def get_ide_context_text(self, query: Optional[str] = None) -> str:
+        """
+        获取适合 LLM 的 IDE 上下文文本
+
+        Args:
+            query: 用户查询
+
+        Returns:
+            格式化的上下文文本
+        """
+        if not self._ide_context_injector:
+            return ""
+
+        return self._ide_context_injector.get_context_for_llm(
+            active_file=self._active_file,
+            query=query,
+        )
+
+    def inject_ide_context(
+        self,
+        active_file: Optional[str] = None,
+        query: Optional[str] = None,
+    ) -> str:
+        """
+        获取并注入 IDE 上下文到系统提示
+
+        Args:
+            active_file: 当前活跃文件
+            query: 用户查询
+
+        Returns:
+            上下文文本
+        """
+        context_text = self.get_ide_context_text(query)
+
+        # 更新活跃文件
+        if active_file:
+            self.set_active_file(active_file)
+
+        return context_text
+
+    def get_project_stats(self) -> Optional[Dict[str, Any]]:
+        """
+        获取项目统计信息
+
+        Returns:
+            项目统计字典
+        """
+        if not self._ide_context_injector:
+            return None
+
+        stats = self._ide_context_injector.scan_project()
+        return stats.to_dict()
+
     def get_context_info(self) -> Dict[str, Any]:
         """获取上下文信息"""
         if not self._context_manager:

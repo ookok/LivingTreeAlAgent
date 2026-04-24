@@ -141,7 +141,10 @@ class AgentChat:
         # 通过 Chat 执行所有操作
         result = chat.chat("你好")
         result = chat.chat("朗读 C:/bak/test.txt")
-        result = chat.chat("将 C:/data/环评报告.docx 添加到知识库")
+        result = chat.chat("什么是AI Agent")          # → search 意图
+
+    禁用增强模式：
+        chat = AgentChat(agent, enable_enhancement=False)
     """
 
     def __init__(
@@ -152,6 +155,7 @@ class AgentChat:
         on_message: Optional[Callable[[str], None]] = None,  # 消息回调
         on_thinking: Optional[Callable[[str], None]] = None,  # 推理回调
         on_tool: Optional[Callable[[str, str, bool], None]] = None,  # 工具回调
+        enable_enhancement: bool = True,  # ⭐ 默认启用增强模式
     ):
         self.agent = agent
         self.kb = kb  # KnowledgeBaseLayer 共享实例
@@ -159,6 +163,12 @@ class AgentChat:
         self.on_message = on_message
         self.on_thinking = on_thinking
         self.on_tool = on_tool
+        self.enable_enhancement = enable_enhancement
+
+        # ⭐ 自动集成增强版 AgentChat
+        self._enhanced_chat = None
+        if self.enable_enhancement:
+            self._init_enhancement()
 
         # TTS 引擎
         self._sound_engine: Optional[Any] = None
@@ -177,6 +187,11 @@ class AgentChat:
 
         # DRET 系统（可选）
         self._dret = None
+
+        # Expert Learning 系统（可选）
+        self._expert_learning = None
+        if self.enable_enhancement:
+            self._init_expert_learning()
 
     # ── 公开 API ───────────────────────────────────────────────────
 
@@ -200,9 +215,11 @@ class AgentChat:
 
     def chat(self, message: str, max_wait: float = 30.0) -> str:
         """
-        统一 Chat 入口（通过 HermesAgent.send_message）
+        统一 Chat 入口（自动增强版）
 
         自动处理：
+        - 增强模式：16种意图识别 + Query压缩 + 上下文管理
+        - 普通模式：直接调用 HermesAgent
         - SessionDB 事务错误自动恢复
         - 工具调用结果收集
         - 流式响应聚合
@@ -214,6 +231,10 @@ class AgentChat:
         Returns:
             Agent 的完整回复文本
         """
+        # ⭐ 增强模式优先
+        if self._enhanced_chat:
+            return self._enhanced_chat.chat(message, max_wait)
+
         full_response = []
 
         try:
@@ -412,6 +433,229 @@ class AgentChat:
             self._dret.gap_detector.knowledge_base = self.kb
 
         return self._dret
+
+    # ── 增强模式初始化 ──────────────────────────────────────────────
+
+    def _init_enhancement(self):
+        """初始化增强版 AgentChat"""
+        try:
+            from core.agent_chat_enhancer import enhance_agent_chat
+            self._enhanced_chat = enhance_agent_chat(self)
+            print("[AgentChat] ✅ 增强模式已启用：意图识别 + Query压缩 + 上下文管理")
+        except ImportError as e:
+            print(f"[AgentChat] ⚠️ 增强模块未安装，降级为普通模式: {e}")
+            self._enhanced_chat = None
+        except Exception as e:
+            print(f"[AgentChat] ⚠️ 增强模式初始化失败，降级为普通模式: {e}")
+            self._enhanced_chat = None
+
+    def _init_expert_learning(self):
+        """初始化专家指导学习系统"""
+        try:
+            from core.expert_learning.expert_guided_system import create_expert_learning_system
+            self._expert_learning = create_expert_learning_system()
+            print("[AgentChat] ✅ Expert Learning 系统已启用：三层学习 + 思维链蒸馏")
+        except ImportError as e:
+            print(f"[AgentChat] ⚠️ Expert Learning 模块未安装: {e}")
+            self._expert_learning = None
+        except Exception as e:
+            print(f"[AgentChat] ⚠️ Expert Learning 初始化失败: {e}")
+            self._expert_learning = None
+
+    def get_intent_analysis(self, message: str) -> Optional[Any]:
+        """获取当前消息的意图分析结果（仅增强模式）"""
+        if self._enhanced_chat:
+            return self._enhanced_chat.classify_intent(message)
+        return None
+
+    def get_learning_stats(self) -> Optional[Dict[str, Any]]:
+        """获取 Expert Learning 统计信息"""
+        if self._expert_learning:
+            return self._expert_learning.get_stats()
+        return None
+
+    def get_performance_metrics(
+        self,
+        period: str = "1h"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        获取性能指标仪表板数据
+
+        Args:
+            period: 时间窗口 "5m", "15m", "1h", "24h"
+
+        Returns:
+            包含性能快照、调优建议、系统健康度的完整报告
+        """
+        if self._expert_learning:
+            return self._expert_learning.get_performance_metrics(period)
+        return None
+
+    def set_anomaly_callback(self, callback):
+        """设置异常回调"""
+        if self._expert_learning:
+            self._expert_learning.set_anomaly_callback(callback)
+
+    # ── 配额管理器方法 ⭐ ─────────────────────────────────────────
+
+    def get_quota_mode(self) -> Optional[str]:
+        """获取当前配额模式 (harvest/maintenance/conservation)"""
+        if self._expert_learning:
+            return self._expert_learning.get_quota_mode()
+        return None
+
+    def set_quota_mode(self, mode: str, locked: bool = False) -> bool:
+        """
+        设置配额模式
+
+        Args:
+            mode: 模式 (harvest/maintenance/conservation)
+            locked: 是否锁定（锁定后不会自动切换）
+
+        Returns:
+            bool: 是否成功
+        """
+        if self._expert_learning:
+            return self._expert_learning.set_quota_mode(mode, locked)
+        return False
+
+    def can_use_external_api(
+        self,
+        provider: str = "deepseek",
+        estimated_tokens: int = 1000,
+        priority: str = "normal"
+    ) -> bool:
+        """
+        检查是否可以使用外部API
+
+        Args:
+            provider: API提供商 (deepseek/anthropic/openai等)
+            estimated_tokens: 预估token数
+            priority: 请求优先级 (low/normal/high)
+
+        Returns:
+            bool: 是否允许调用
+        """
+        if self._expert_learning:
+            return self._expert_learning.can_use_external_api(provider, estimated_tokens, priority)
+        return True
+
+    def get_quota_stats(self, period: str = "daily") -> Optional[Dict[str, Any]]:
+        """
+        获取配额使用统计
+
+        Args:
+            period: 时间周期 (daily/weekly/monthly/all)
+
+        Returns:
+            Dict: 使用统计信息
+        """
+        if self._expert_learning:
+            return self._expert_learning.get_quota_stats(period)
+        return None
+
+    def get_quota_recommendation(self) -> Optional[Dict[str, Any]]:
+        """
+        获取配额模式推荐
+
+        Returns:
+            Dict: 推荐结果 (current_mode, recommended_mode, reason, urgency)
+        """
+        if self._expert_learning:
+            return self._expert_learning.get_quota_recommendation()
+        return None
+
+    # ── 外部提供者配置方法 ⭐ ───────────────────────────────────────
+
+    def add_external_provider(
+        self,
+        name: str,
+        provider_type: str,
+        api_key: str = "",
+        cost_type: str = "paid",
+        endpoint_base_url: str = "",
+        priority: int = 100,
+        default_model: str = "",
+        **kwargs
+    ) -> Optional[str]:
+        """
+        添加外部API提供者
+
+        Args:
+            name: 显示名称
+            provider_type: 提供者类型 (openai/deepseek/anthropic/ollama/groq等)
+            api_key: API Key
+            cost_type: 费用类型 (free/freemium/paid)
+            endpoint_base_url: API基础URL
+            priority: 优先级
+            default_model: 默认模型
+
+        Returns:
+            str: 提供者ID 或 None
+        """
+        if self._expert_learning:
+            return self._expert_learning.add_external_provider(
+                name=name,
+                provider_type=provider_type,
+                api_key=api_key,
+                cost_type=cost_type,
+                endpoint_base_url=endpoint_base_url,
+                priority=priority,
+                default_model=default_model,
+                **kwargs
+            )
+        return None
+
+    def list_external_providers(self, include_free_first: bool = True) -> List[Dict[str, Any]]:
+        """
+        列出所有外部提供者
+
+        Args:
+            include_free_first: 是否优先显示免费的
+
+        Returns:
+            List[Dict]: 提供者列表
+        """
+        if self._expert_learning:
+            return self._expert_learning.list_external_providers(include_free_first)
+        return []
+
+    def enable_provider(self, provider_id: str, enabled: bool = True) -> bool:
+        """启用/禁用提供者"""
+        if self._expert_learning:
+            return self._expert_learning.enable_provider(provider_id, enabled)
+        return False
+
+    def remove_external_provider(self, provider_id: str) -> bool:
+        """删除外部提供者"""
+        if self._expert_learning:
+            return self._expert_learning.remove_external_provider(provider_id)
+        return False
+
+    def get_free_providers(self) -> List[Dict[str, Any]]:
+        """获取所有免费提供者"""
+        if self._expert_learning:
+            return self._expert_learning.get_free_providers()
+        return []
+
+    def select_best_provider(
+        self,
+        estimated_tokens: int = 1000,
+        prefer_free: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        选择最优提供者
+
+        Args:
+            estimated_tokens: 预估输入token数
+            prefer_free: 是否优先免费
+
+        Returns:
+            Dict: 最优提供者信息
+        """
+        if self._expert_learning:
+            return self._expert_learning.select_best_provider(estimated_tokens, prefer_free)
+        return None
 
     # ── 内部方法 ─────────────────────────────────────────────────
 

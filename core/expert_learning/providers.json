@@ -1,0 +1,827 @@
+{
+  "version": "1.0",
+  "providers": [
+    {
+      "id": "builtin_ollama",
+      "name": "本地 Ollama",
+      "provider_type": "ollama",
+      "cost_type": "free",
+      "endpoint": {
+        "base_url": "http://localhost:11434",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 1,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "qwen2.5:0.5b",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 4096
+        },
+        {
+          "model_name": "qwen2.5:1.5b",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "qwen3.5:4b",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "qwen3.5:9b",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 16384
+        }
+      ],
+      "default_model": "qwen2.5:1.5b",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "本地 Ollama 模型服务",
+      "tags": [
+        "local",
+        "free",
+        "fast"
+      ]
+    },
+    {
+      "id": "builtin_groq",
+      "name": "Groq (免费高速)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": "GROQ_API_KEY"
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Groq 高速免费API (Llama/Mixtral/Gemma)",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_803af737",
+      "name": "Test Groq (Free)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Test free Groq",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_b2f069da",
+      "name": "Test DeepSeek",
+      "provider_type": "deepseek",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.deepseek.com",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "sk-t***-xxx",
+      "enabled": true,
+      "priority": 5,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "deepseek-chat",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-coder",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-reasoner",
+          "input_cost": 0.27,
+          "output_cost": 2.19,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "deepseek-chat",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Updated",
+      "tags": [
+        "paid",
+        "coder",
+        "reasoning"
+      ]
+    },
+    {
+      "id": "provider_745f5bdb",
+      "name": "Test Anthropic",
+      "provider_type": "anthropic",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.anthropic.com",
+        "api_path": "/v1/messages",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 20,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "claude-sonnet-4-20250514",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-sonnet-20241022",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-haiku-20241022",
+          "input_cost": 0.8,
+          "output_cost": 4.0,
+          "max_tokens": 4096
+        }
+      ],
+      "default_model": "claude-sonnet-4-20250514",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Anthropic Claude 系列",
+      "tags": [
+        "paid",
+        "claude",
+        "high-quality"
+      ]
+    },
+    {
+      "id": "provider_473d41a3",
+      "name": "Test Groq (Free)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Test free Groq",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_f83bb65e",
+      "name": "Test DeepSeek",
+      "provider_type": "deepseek",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.deepseek.com",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "sk-t***-xxx",
+      "enabled": true,
+      "priority": 5,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "deepseek-chat",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-coder",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-reasoner",
+          "input_cost": 0.27,
+          "output_cost": 2.19,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "deepseek-chat",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Updated",
+      "tags": [
+        "paid",
+        "coder",
+        "reasoning"
+      ]
+    },
+    {
+      "id": "provider_086b86f4",
+      "name": "Test Anthropic",
+      "provider_type": "anthropic",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.anthropic.com",
+        "api_path": "/v1/messages",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 20,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "claude-sonnet-4-20250514",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-sonnet-20241022",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-haiku-20241022",
+          "input_cost": 0.8,
+          "output_cost": 4.0,
+          "max_tokens": 4096
+        }
+      ],
+      "default_model": "claude-sonnet-4-20250514",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Anthropic Claude 系列",
+      "tags": [
+        "paid",
+        "claude",
+        "high-quality"
+      ]
+    },
+    {
+      "id": "provider_729dd5c1",
+      "name": "Test Groq (Free)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Test free Groq",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_24e2f1fb",
+      "name": "Test DeepSeek",
+      "provider_type": "deepseek",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.deepseek.com",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "sk-t***-xxx",
+      "enabled": true,
+      "priority": 5,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "deepseek-chat",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-coder",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-reasoner",
+          "input_cost": 0.27,
+          "output_cost": 2.19,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "deepseek-chat",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Updated",
+      "tags": [
+        "paid",
+        "coder",
+        "reasoning"
+      ]
+    },
+    {
+      "id": "provider_bb8eb0f5",
+      "name": "Test Anthropic",
+      "provider_type": "anthropic",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.anthropic.com",
+        "api_path": "/v1/messages",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 20,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "claude-sonnet-4-20250514",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-sonnet-20241022",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-haiku-20241022",
+          "input_cost": 0.8,
+          "output_cost": 4.0,
+          "max_tokens": 4096
+        }
+      ],
+      "default_model": "claude-sonnet-4-20250514",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Anthropic Claude 系列",
+      "tags": [
+        "paid",
+        "claude",
+        "high-quality"
+      ]
+    },
+    {
+      "id": "provider_a04381c0",
+      "name": "Test Groq (Free)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Test free Groq",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_b41e2f46",
+      "name": "Test DeepSeek",
+      "provider_type": "deepseek",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.deepseek.com",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "sk-t***-xxx",
+      "enabled": true,
+      "priority": 5,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "deepseek-chat",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-coder",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-reasoner",
+          "input_cost": 0.27,
+          "output_cost": 2.19,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "deepseek-chat",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Updated",
+      "tags": [
+        "paid",
+        "coder",
+        "reasoning"
+      ]
+    },
+    {
+      "id": "provider_419c6d75",
+      "name": "Test Anthropic",
+      "provider_type": "anthropic",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.anthropic.com",
+        "api_path": "/v1/messages",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 20,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "claude-sonnet-4-20250514",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-sonnet-20241022",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-haiku-20241022",
+          "input_cost": 0.8,
+          "output_cost": 4.0,
+          "max_tokens": 4096
+        }
+      ],
+      "default_model": "claude-sonnet-4-20250514",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Anthropic Claude 系列",
+      "tags": [
+        "paid",
+        "claude",
+        "high-quality"
+      ]
+    },
+    {
+      "id": "provider_be07c98e",
+      "name": "Test Groq (Free)",
+      "provider_type": "groq",
+      "cost_type": "freemium",
+      "endpoint": {
+        "base_url": "https://api.groq.com",
+        "api_path": "/openai/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 2,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "llama-3.3-70b-versatile",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        },
+        {
+          "model_name": "mixtral-8x7b-32768",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 32768
+        },
+        {
+          "model_name": "gemma2-9b-it",
+          "input_cost": 0,
+          "output_cost": 0,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "llama-3.3-70b-versatile",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Test free Groq",
+      "tags": [
+        "free",
+        "fast",
+        "llama"
+      ]
+    },
+    {
+      "id": "provider_1ac61ffc",
+      "name": "Test DeepSeek",
+      "provider_type": "deepseek",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.deepseek.com",
+        "api_path": "/v1/chat/completions",
+        "key_env_var": ""
+      },
+      "api_key": "sk-t***-xxx",
+      "enabled": true,
+      "priority": 5,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "deepseek-chat",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-coder",
+          "input_cost": 0.14,
+          "output_cost": 0.28,
+          "max_tokens": 16384
+        },
+        {
+          "model_name": "deepseek-reasoner",
+          "input_cost": 0.27,
+          "output_cost": 2.19,
+          "max_tokens": 8192
+        }
+      ],
+      "default_model": "deepseek-chat",
+      "status": "active",
+      "use_count": 1,
+      "error_count": 0,
+      "description": "Updated",
+      "tags": [
+        "paid",
+        "coder",
+        "reasoning"
+      ]
+    },
+    {
+      "id": "provider_c5b1efe2",
+      "name": "Test Anthropic",
+      "provider_type": "anthropic",
+      "cost_type": "paid",
+      "endpoint": {
+        "base_url": "https://api.anthropic.com",
+        "api_path": "/v1/messages",
+        "key_env_var": ""
+      },
+      "api_key": "***",
+      "enabled": true,
+      "priority": 20,
+      "preferred_for_types": [],
+      "daily_limit": 1000,
+      "monthly_limit": 10000,
+      "rate_limit_rpm": 60,
+      "models": [
+        {
+          "model_name": "claude-sonnet-4-20250514",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-sonnet-20241022",
+          "input_cost": 3.0,
+          "output_cost": 15.0,
+          "max_tokens": 200000
+        },
+        {
+          "model_name": "claude-3-5-haiku-20241022",
+          "input_cost": 0.8,
+          "output_cost": 4.0,
+          "max_tokens": 4096
+        }
+      ],
+      "default_model": "claude-sonnet-4-20250514",
+      "status": "active",
+      "use_count": 0,
+      "error_count": 0,
+      "description": "Anthropic Claude 系列",
+      "tags": [
+        "paid",
+        "claude",
+        "high-quality"
+      ]
+    }
+  ]
+}

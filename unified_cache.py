@@ -51,6 +51,10 @@ from dataclasses import dataclass, field, asdict
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
+# 日志系统
+from core.logger import get_logger
+logger = get_logger("core.unified_cache")
+
 # ── L0 Router 缓存 ──────────────────────────────────────────────────────────
 try:
     from client.src.business.smolllm2.router import L0Router, LRUCache as L0LRUCache
@@ -364,9 +368,9 @@ class QueryCompressor:
         self._stats = {"llm_compress": 0, "keyword_compress": 0, "chunk": 0}
 
         if self._llm_available:
-            print(f"[QueryCompressor] LLM 语义压缩就绪（模型={self.model}），300-500字 query 将自动压缩")
+            logger.info(f"LLM 语义压缩就绪（模型={self.model}），300-500字 query 将自动压缩")
         else:
-            print(f"[QueryCompressor] LLM 不可用，降级为 keyword 快缩 + 分块策略")
+            logger.warning(f"LLM 不可用，降级为 keyword 快缩 + 分块策略")
 
     def _check_llm(self) -> bool:
         """检测 LLM 是否可用，优先选择非思考模型"""
@@ -844,9 +848,9 @@ class SemanticSimilarityCache:
 
         if self._ollama_available and self.enable_ollama:
             self._l3_mode = "ollama"
-            print(f"[SemanticSimCache] Ollama embedding 可用（模型={self.EMBEDDING_MODEL}），使用真实向量语义匹配")
+            logger.info(f"Ollama embedding 可用（模型={self.EMBEDDING_MODEL}），使用真实向量语义匹配")
         else:
-            print(f"[SemanticSimCache] Ollama embedding 不可用，使用关键词 Jaccard 语义匹配（阈值={similarity_threshold}）")
+            logger.warning(f"Ollama embedding 不可用，使用关键词 Jaccard 语义匹配（阈值={similarity_threshold}）")
 
     def _check_ollama(self) -> bool:
         """检测 Ollama 是否可用"""
@@ -1056,7 +1060,7 @@ class SimilarQueryDetector:
         # 新 query 进入时，先问有没有相似的
         similar = detector.find_similar("杭州五一有什么好玩的")
         if similar:
-            print(f"已有相似答案，相似度 {similar['similarity']:.2f}")
+            logger.debug(f"已有相似答案，相似度 {similar['similarity']:.2f}")
             return similar["response"]
 
         # 没有相似的，执行搜索后存入
@@ -1352,9 +1356,9 @@ class SearchCache:
         if self._manager is None and _CACHE_MGR_AVAILABLE:
             try:
                 self._manager = CacheManager()
-                print("[SearchCache] CacheManager 初始化成功")
+                logger.info("CacheManager 初始化成功")
             except Exception as e:
-                print(f"[SearchCache] CacheManager 初始化失败: {e}")
+                logger.error(f"CacheManager 初始化失败: {e}")
 
     def get(self, query: str, context: str = None) -> Optional[CacheHit]:
         """获取搜索缓存（逐级查询 L1 → L2 → L3）"""
@@ -1377,7 +1381,7 @@ class SearchCache:
                     source=f"{tier}级搜索缓存命中"
                 )
         except Exception as e:
-            print(f"[SearchCache] get 异常: {e}")
+            logger.error(f"get 异常: {e}")
 
         self._misses += 1
         return None
@@ -1390,7 +1394,7 @@ class SearchCache:
         try:
             self._manager.set(query, response, context, model_id)
         except Exception as e:
-            print(f"[SearchCache] set 异常: {e}")
+            logger.error(f"set 异常: {e}")
 
     def clear(self):
         if self._manager:
@@ -1448,7 +1452,7 @@ class L4ResponseCache:
                     memory_size=memory_size,
                     ttl_seconds=ttl_days * 86400,
                 )
-                print(f"[L4ResponseCache] ExactCacheLayer 初始化成功 (memory={memory_size}, ttl={ttl_days}d)")
+                logger.info(f"ExactCacheLayer 初始化成功 (memory={memory_size}, ttl={ttl_days}d)")
 
                 self._write_back = WriteBackCache(
                     l1_cache=l1_cache,
@@ -1460,13 +1464,13 @@ class L4ResponseCache:
                 # WriteBackCache 启动（可能因无事件循环报 warning，后续 async 调用时会自动启动）
                 try:
                     self._write_back.start()
-                    print("[L4ResponseCache] WriteBackCache 启动成功")
+                    logger.info("WriteBackCache 启动成功")
                 except RuntimeError as e:
                     # 无运行中事件循环时，记录但不阻塞（后续 cache.set 触发时会重试）
-                    print(f"[L4ResponseCache] WriteBackCache 延迟启动（无事件循环）: {e}")
+                    logger.warning(f"WriteBackCache 延迟启动（无事件循环）: {e}")
                     self._write_back._running = True  # 标记为运行，异步回填在有loop时执行
             except Exception as e:
-                print(f"[L4ResponseCache] 初始化失败: {e}")
+                logger.error(f"初始化失败: {e}")
 
     def _make_key(self, query: str, context: str = None) -> str:
         """生成缓存 key（使用标准化 query）"""
@@ -1492,7 +1496,7 @@ class L4ResponseCache:
                     source="L4响应精确缓存命中"
                 )
         except Exception as e:
-            print(f"[L4ResponseCache] get 异常: {e}")
+            logger.error(f"get 异常: {e}")
 
         self._misses += 1
         return None
@@ -1535,7 +1539,7 @@ class L4ResponseCache:
                 except Exception:
                     pass
         except Exception as e:
-            print(f"[L4ResponseCache] set 异常: {e}")
+            logger.error(f"set 异常: {e}")
 
     def exists(self, query: str, context: str = None) -> bool:
         if self._exact is None:
@@ -1590,13 +1594,13 @@ class UnifiedCache:
         # 相似 query 检测（新增！）
         similar = cache.find_similar("杭州五一有什么好玩的")
         if similar:
-            print(f"发现相似答案! 相似度={similar['similarity']:.2f} 匹配类型={similar['match_type']}")
+            logger.info(f"发现相似答案! 相似度={similar['similarity']:.2f} 匹配类型={similar['match_type']}")
             return similar["response"]
 
         # L0 路由
         hit = cache.get_l0_route("南京溧水养猪场环评报告")
         if hit:
-            print(f"路由命中: {hit.data}")
+            logger.debug(f"路由命中: {hit.data}")
         else:
             decision = await router.route(query)
             cache.set_l0_route(query, asdict(decision))
@@ -1616,7 +1620,7 @@ class UnifiedCache:
         cache.set_l4(query, answer, context=session_id)
 
         # 统计
-        print(cache.stats())
+        logger.info(cache.stats())
     """
 
     def __init__(
@@ -1797,33 +1801,33 @@ class UnifiedCache:
     def print_report(self):
         """打印缓存报告"""
         s = self.stats()
-        print("\n" + "=" * 60)
-        print("📊 统一缓存状态报告".center(52))
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("📊 统一缓存状态报告".center(52))
+        logger.info("=" * 60)
         ov = s["overall"]
-        print(f"  总请求: {ov['total_requests']}  |  命中: {ov['cache_hits']}  |  未命中: {ov['cache_misses']}")
-        print(f"  综合命中率: {ov['hit_rate']}")
-        print("-" * 60)
-        print(f"  L0 路由缓存: {s['l0']['l0_hits']} hits / {s['l0']['l0_cache_size']} 条目")
-        print(f"  Search 缓存: {s['search']['search_hits']} hits | {s['search']['tier_hits']}")
+        logger.info(f"  总请求: {ov['total_requests']}  |  命中: {ov['cache_hits']}  |  未命中: {ov['cache_misses']}")
+        logger.info(f"  综合命中率: {ov['hit_rate']}")
+        logger.info("-" * 60)
+        logger.info(f"  L0 路由缓存: {s['l0']['l0_hits']} hits / {s['l0']['l0_cache_size']} 条目")
+        logger.info(f"  Search 缓存: {s['search']['search_hits']} hits | {s['search']['tier_hits']}")
         l4s = s["l4"]
-        print(f"  L4 响应缓存: {l4s['l4_hits']} hits | exact: {l4s['exact_cache'].get('hit_rate', 'N/A')}")
+        logger.info(f"  L4 响应缓存: {l4s['l4_hits']} hits | exact: {l4s['exact_cache'].get('hit_rate', 'N/A')}")
         sim = s.get("similar", {})
-        print(f"  相似缓存: {sim.get('hits', 0)} hits / {sim.get('entries', 0)} 条 | 模式: {sim.get('mode', 'N/A')}")
-        print(f"  总计节省延迟: {ov['total_latency_saved_ms']:.0f} ms")
+        logger.info(f"  相似缓存: {sim.get('hits', 0)} hits / {sim.get('entries', 0)} 条 | 模式: {sim.get('mode', 'N/A')}")
+        logger.info(f"  总计节省延迟: {ov['total_latency_saved_ms']:.0f} ms")
         
         # 智能配置信息
         if "smart_config" in s:
             sc = s["smart_config"]
             cap = sc.get("capacity", {})
-            print("-" * 60)
-            print(f"  智能配置:")
-            print(f"    自适应 TTL: {sc.get('adaptive_ttl', False)}")
-            print(f"    容量管理: {sc.get('capacity_management', False)}")
-            print(f"    内存使用: {cap.get('memory_mb', 0):.0f}MB / {cap.get('memory_percent', 0):.1%}")
-            print(f"    磁盘使用: {cap.get('disk_mb', 0):.0f}MB / {cap.get('disk_percent', 0):.1%}")
+            logger.info("-" * 60)
+            logger.info(f"  智能配置:")
+            logger.info(f"    自适应 TTL: {sc.get('adaptive_ttl', False)}")
+            logger.info(f"    容量管理: {sc.get('capacity_management', False)}")
+            logger.info(f"    内存使用: {cap.get('memory_mb', 0):.0f}MB / {cap.get('memory_percent', 0):.1%}")
+            logger.info(f"    磁盘使用: {cap.get('disk_mb', 0):.0f}MB / {cap.get('disk_percent', 0):.1%}")
         
-        print("=" * 60)
+        logger.info("=" * 60)
     
     # ── 智能 TTL 接口 ─────────────────────────────────────────────────────────
     
@@ -1886,7 +1890,7 @@ def get_unified_cache(
                     l4_memory_size=l4_memory_size,
                     compressor_model=compressor_model,
                 )
-                print("[UnifiedCache] 全局实例已创建")
+                logger.info("全局实例已创建")
     return _cache_instance
 
 

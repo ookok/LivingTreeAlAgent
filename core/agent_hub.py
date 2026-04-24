@@ -21,6 +21,10 @@ import threading
 from datetime import datetime
 from typing import Optional
 
+# 日志系统
+from core.logger import get_logger
+logger = get_logger("core.agent_hub")
+
 # PyQt6/PyQt5 兼容
 try:
     from PyQt6.QtWidgets import (
@@ -148,34 +152,34 @@ class AgentHub(QWidget):
 
     def _init_modules(self):
         """初始化五大模块"""
-        print("=" * 60)
-        print("🔧 初始化 AgentHub 五大核心模块...")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("🔧 初始化 AgentHub 五大核心模块...")
+        logger.info("=" * 60)
 
         self.task_router = TaskRouter(max_depth=3, complexity_threshold=0.7)
-        print("✓ TaskRouter 已初始化")
+        logger.info("✓ TaskRouter 已初始化")
 
         self.permission_engine = PermissionEngine(
             parent_widget=self,
             auto_approve_low=False,
         )
         self.permission_engine.on_alert(self._on_permission_alert)
-        print("✓ PermissionEngine 已初始化")
+        logger.info("✓ PermissionEngine 已初始化")
 
         self.skill_clusterer = SkillClusterer()
-        print("✓ SkillClusterer 已初始化")
+        logger.info("✓ SkillClusterer 已初始化")
 
         self.semantic_validator = SemanticValidator()
-        print("✓ SemanticValidator 已初始化")
+        logger.info("✓ SemanticValidator 已初始化")
 
         self.resource_monitor = ResourceMonitor(interval=3)
         self.resource_monitor.on_alert(self._on_resource_alert)
         self.resource_monitor.on_load_change(self._on_load_change)
-        print("✓ ResourceMonitor 已初始化")
+        logger.info("✓ ResourceMonitor 已初始化")
 
-        print("=" * 60)
-        print("✅ 五大核心模块全部就绪！")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("✅ 五大核心模块全部就绪！")
+        logger.info("=" * 60)
 
     def _init_ui(self):
         """初始化界面"""

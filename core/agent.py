@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Callable, Iterator, Optional, List, Dict, Any
 from dataclasses import dataclass
 
+# 日志系统
+from core.logger import get_logger
+logger = get_logger("core.agent")
+
 from core.ollama_client import OllamaClient, ChatMessage, StreamChunk
 from core.unified_model_client import (
     UnifiedModelClient,
@@ -292,7 +296,7 @@ class L0IntentClassifier:
                     "stats": self._stats,
                 }
             except Exception as e:
-                print(f"[L0IntentClassifier] LLM 推断失败: {e}，回退到默认 search")
+                logger.warning(f"LLM 推断失败: {e}，回退到默认 search")
                 return {
                     "type": "search",
                     "confidence": 0.5,
@@ -657,7 +661,7 @@ class HermesAgent:
             try:
                 self._init_model_client(backend)
             except Exception as e:
-                print(f"[HermesAgent] 后台初始化模型客户端时出错: {e}")
+                logger.error(f"后台初始化模型客户端时出错: {e}")
         
         threading.Thread(target=init_model, daemon=True).start()
 
@@ -681,7 +685,7 @@ class HermesAgent:
             self._gpu_vram_gb = election_result.gpu_vram_gb
             print_election_report(election_result)
         except Exception as e:
-            print(f"[HermesAgent] 模型选举失败: {e}，使用默认配置")
+            logger.warning(f"模型选举失败: {e}，使用默认配置")
             self._elected_l0 = "smollm2:latest"
             self._elected_l3 = "qwen3.5:4b"
             self._elected_l4 = "qwen3.5:9b"
@@ -690,12 +694,12 @@ class HermesAgent:
         try:
             # 如果明确指定 ollama，直接创建 OllamaClient（跳过本地模型检测）
             if backend == "ollama":
-                print("[HermesAgent] 使用 Ollama 后端")
+                logger.info("使用 Ollama 后端")
                 self.ollama = OllamaClient(self.config.ollama)
                 self._use_unified = False
                 self.model = self.ollama
                 self._current_backend = ModelBackend.OLLAMA
-                print("[HermesAgent] Ollama 后端初始化成功")
+                logger.info("Ollama 后端初始化成功")
                 return
 
             # 以下处理 vllm / nano_vllm / llama-cpp
@@ -718,19 +722,19 @@ class HermesAgent:
             # 如果找到模型路径，尝试使用本地后端
             if model_path:
                 # 首先尝试使用统一模型客户端
-                print("[HermesAgent] 尝试使用统一模型客户端加载本地模型")
+                logger.debug("尝试使用统一模型客户端加载本地模型")
                 try:
                     from core.unified_model_client import create_local_client
                     self.model = create_local_client(model_path)
                     self._use_unified = True
                     self._current_backend = ModelBackend.LLAMA_CPP
-                    print("[HermesAgent] 统一模型客户端加载成功")
+                    logger.info("统一模型客户端加载成功")
                     return
                 except Exception as e:
-                    print(f"[HermesAgent] 统一模型客户端失败: {e}，尝试 llama-cpp...")
+                    logger.warning(f"统一模型客户端失败: {e}，尝试 llama-cpp...")
 
                 # 尝试 llama-cpp
-                print("[HermesAgent] 尝试 llama-cpp 后端")
+                logger.debug("尝试 llama-cpp 后端")
                 result = self._priority_loader.load_model(
                     model_path=model_path,
                     backend_preference=preferred,
@@ -742,36 +746,36 @@ class HermesAgent:
                     self._use_unified = False
                     self.model = result.client
                     self._current_backend = result.backend
-                    print(f"[HermesAgent] llama-cpp 成功，后端: {result.backend.value}")
+                    logger.info(f"llama-cpp 成功，后端: {result.backend.value}")
                     return
                 else:
-                    print(f"[HermesAgent] llama-cpp 失败: {result.message}")
+                    logger.error(f"llama-cpp 失败: {result.message}")
 
             # 未找到本地模型或加载失败，回退到 Ollama
-            print("[HermesAgent] 回退到 Ollama 后端")
+            logger.warning("回退到 Ollama 后端")
             self.ollama = OllamaClient(self.config.ollama)
             self._use_unified = False
             self.model = self.ollama
             self._current_backend = ModelBackend.OLLAMA
-            print("[HermesAgent] Ollama 后端初始化成功")
+            logger.info("Ollama 后端初始化成功")
 
         except Exception as e:
-            print(f"[HermesAgent] 模型客户端初始化失败: {e}")
+            logger.error(f"模型客户端初始化失败: {e}")
             raise RuntimeError("无法初始化模型客户端")
 
         # ── L0 意图分类器 + 用户数字分身（所有路径后统一初始化）────
         try:
             self._l0_classifier = L0IntentClassifier(ollama_client=self.ollama)
-            print("[HermesAgent] L0 意图分类器初始化成功")
+            logger.info("L0 意图分类器初始化成功")
         except Exception as e:
-            print(f"[HermesAgent] L0 意图分类器初始化失败: {e}")
+            logger.warning(f"L0 意图分类器初始化失败: {e}")
             self._l0_classifier = L0IntentClassifier()
 
         try:
             self._user_twin = get_user_digital_twin(self._user_id)
-            print(f"[HermesAgent] 用户数字分身初始化成功 (level={self._user_twin.level})")
+            logger.info(f"用户数字分身初始化成功 (level={self._user_twin.level})")
         except Exception as e:
-            print(f"[HermesAgent] 用户数字分身初始化失败: {e}")
+            logger.warning(f"用户数字分身初始化失败: {e}")
 
     def _get_default_gguf_model(self) -> Optional[str]:
         """获取默认 GGUF 模型路径"""
@@ -786,10 +790,10 @@ class HermesAgent:
             if valid_models:
                 # 优先使用第一个可用的本地模型
                 model_path = valid_models[0].path
-                print(f"[HermesAgent] 找到默认本地模型: {model_path}")
+                logger.debug(f"找到默认本地模型: {model_path}")
                 return model_path
             else:
-                print("[HermesAgent] 未找到有效的本地模型，跳过")
+                logger.debug("未找到有效的本地模型，跳过")
         
         # 传统方式查找模型
         models_dir = Path(self.config.model_path.models_dir or "models")
@@ -802,7 +806,7 @@ class HermesAgent:
             for f in models_dir.rglob("*"):
                 # 过滤掉 mmproj 文件
                 if f.suffix.lower() in gguf_exts and "mmproj" not in f.name.lower():
-                    print(f"[HermesAgent] 找到默认模型: {f}")
+                    logger.debug(f"找到默认模型: {f}")
                     return str(f)
 
         return None
@@ -900,7 +904,7 @@ class HermesAgent:
                 if not model_exists:
                     # 使用第一个可用模型
                     model_name = models[0].name
-                    print(f"[HermesAgent] 使用可用模型: {model_name}")
+                    logger.info(f"使用可用模型: {model_name}")
                 # 调用 Ollama
                 for chunk in self.ollama.chat(messages=messages, model=model_name, **kwargs):
                     yield chunk
@@ -910,7 +914,7 @@ class HermesAgent:
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                print(f"[HermesAgent] Ollama 调用出错: {e}")
+                logger.error(f"Ollama 调用出错: {e}")
             # 如果 Ollama 失败，不 fallback 到其他后端，直接报错
             yield StreamChunk(error=f"Ollama 调用失败: {e}")
             return
@@ -969,22 +973,22 @@ class HermesAgent:
                     # 流式输出
                     full_text = ""
                     try:
-                        print(f"[HermesAgent] 调用 Nano-vLLM generate_stream，提示词: {prompt[:100]}...")
+                        logger.debug(f"调用 Nano-vLLM generate_stream，提示词: {prompt[:100]}...")
                         for i, token in enumerate(self.model.generate_stream(prompt, sampling_params)):
-                            print(f"[HermesAgent] 收到 token {i}: {token}")
+                            logger.debug(f"收到 token {i}: {token}")
                             full_text += token
                             yield StreamChunk(delta=token)
                         
-                        print(f"[HermesAgent] 生成完成，总长度: {len(full_text)}")
+                        logger.debug(f"生成完成，总长度: {len(full_text)}")
                         yield StreamChunk(done=True, total_duration=0, eval_count=len(full_text))
                         return
                     except Exception as e:
-                        print(f"[HermesAgent] Nano-vLLM generate_stream 出错: {e}")
+                        logger.error(f"Nano-vLLM generate_stream 出错: {e}")
                         import traceback
                         traceback.print_exc()
                         # 尝试使用非流式方法
                         if hasattr(self.model, 'generate'):
-                            print(f"[HermesAgent] 尝试使用 generate 方法")
+                            logger.debug("尝试使用 generate 方法")
                             result = self.model.generate(prompt, sampling_params)
                             if result:
                                 if hasattr(result, '__iter__') and not isinstance(result, str):
@@ -1015,7 +1019,7 @@ class HermesAgent:
                             yield StreamChunk(done=True)
                             return
             except Exception as e:
-                print(f"[HermesAgent] 模型调用出错: {e}")
+                logger.error(f"模型调用出错: {e}")
 
         # 所有后端都失败
         yield StreamChunk(error="无法连接到任何模型后端。请确保 Ollama 服务正在运行并已下载模型。")
@@ -1163,10 +1167,10 @@ class HermesAgent:
         try:
             _, EmotionVector, _, _ = _lazy_emotion_imports()
             emotion_vec = EmotionVector.from_text_analysis(text)
-            print(f"[HermesAgent] 情绪分析: {emotion_vec.dominant_emotion().value} "
+            logger.debug(f"情绪分析: {emotion_vec.dominant_emotion().value} ")
                   f"(valence={emotion_vec.valence:.2f}, arousal={emotion_vec.arousal:.2f})")
         except Exception as e:
-            print(f"[HermesAgent] 情绪分析出错: {e}")
+            logger.warning(f"情绪分析出错: {e}")
             emotion_vec = None
 
         # ── 意图分类：决定管道策略（L0分类器）─────────────────────
@@ -1175,11 +1179,11 @@ class HermesAgent:
             intent_result = self._l0_classifier.classify(text)
             query_type = intent_result["type"]
             intent_method = intent_result["method"]
-            print(f"[HermesAgent] 意图分类: {query_type} (方法={intent_method})")
+            logger.debug(f"意图分类: {query_type} (方法={intent_method})")
         else:
             # 降级到旧的规则分类器
             query_type = self._classify_query_type(text)
-            print(f"[HermesAgent] 意图分类(降级): {query_type}")
+            logger.debug(f"意图分类(降级): {query_type}")
 
         kb_results: List[Dict[str, Any]] = []
         deep_results: List[Dict[str, Any]] = []
@@ -1192,7 +1196,7 @@ class HermesAgent:
             # 判断是否需要表达关心
             if self._user_twin.should_express_care():
                 care_text = self._user_twin.get_care_response()
-                print(f"[HermesAgent] 数字分身 → 表达关心: {care_text}")
+                logger.debug(f"数字分身 → 表达关心: {care_text}")
                 yield StreamChunk(delta=care_text)
                 care_expressed = True
 
@@ -1213,7 +1217,7 @@ class HermesAgent:
             decomposition = self._decomposer.decompose(text)
             self._current_decomposition = decomposition
 
-            print(f"[HermesAgent] 任务分解: {decomposition.total_tasks} 个子任务 "
+            logger.info(f"任务分解: {decomposition.total_tasks} 个子任务 ")
                   f"(策略: {decomposition.strategy.value})")
 
             # 触发 UI 回调 - 分解完成
@@ -1240,7 +1244,7 @@ class HermesAgent:
                     results = self._search_knowledge_base(subtask_prompt)
                     subtask_results.extend(results)
                 except Exception as e:
-                    print(f"[HermesAgent] 子任务搜索出错: {e}")
+                    logger.error(f"子任务搜索出错: {e}")
 
                 # 返回结果
                 return {
@@ -1263,34 +1267,34 @@ class HermesAgent:
         if query_type == "dialogue":
             # 对话类：跳过 KB/深度搜索，直接用 L0 轻量模型
             model_name = self.get_l0_model()
-            print(f"[HermesAgent] 对话类 → 跳过搜索，使用 L0 模型: {model_name}")
+            logger.debug(f"对话类 → 跳过搜索，使用 L0 模型: {model_name}")
             progress_emitter.emit_phase(ProgressPhase.LLM_GENERATING, "生成回复...")
         else:
             # 任务/搜索类：完整管道
             # 1. 知识库搜索
             progress_emitter.emit_phase(ProgressPhase.KNOWLEDGE_SEARCH, "搜索知识库...")
-            print("[HermesAgent] 执行知识库搜索...")
+            logger.debug("执行知识库搜索...")
             try:
                 kb_results = self._search_knowledge_base(text)
-                print(f"[HermesAgent] 知识库搜索完成，找到 {len(kb_results)} 条结果")
+                logger.info(f"知识库搜索完成，找到 {len(kb_results)} 条结果")
             except Exception as e:
-                print(f"[HermesAgent] 知识库搜索出错: {e}")
+                logger.error(f"知识库搜索出错: {e}")
 
             # 2. 深度搜索（仅搜索类）
             if query_type == "search":
                 progress_emitter.emit_phase(ProgressPhase.DEEP_SEARCH, "执行深度搜索...")
-                print("[HermesAgent] 执行深度搜索...")
+                logger.debug("执行深度搜索...")
                 try:
                     deep_results = asyncio.run(self._deep_search(text))
-                    print(f"[HermesAgent] 深度搜索完成，找到 {len(deep_results)} 条结果")
+                    logger.info(f"深度搜索完成，找到 {len(deep_results)} 条结果")
                 except Exception as e:
-                    print(f"[HermesAgent] 深度搜索失败: {e}")
+                    logger.error(f"深度搜索失败: {e}")
 
             # 3. 模型路由
             progress_emitter.emit_phase(ProgressPhase.MODEL_ROUTE, "选择最优模型...")
-            print("[HermesAgent] 执行模型路由...")
+            logger.debug("执行模型路由...")
             model_name = self._route_model(text)
-            print(f"[HermesAgent] 选择模型: {model_name}")
+            logger.info(f"选择模型: {model_name}")
             
             progress_emitter.emit_phase(ProgressPhase.LLM_GENERATING, "正在生成回复...")
 
@@ -1335,13 +1339,13 @@ class HermesAgent:
                 # 模型支持流式 thinking，启用回调
                 if reasoning_cb:
                     llm_kwargs["reasoning_callback"] = reasoning_cb
-                print(f"[HermesAgent] 启用流式 thinking 输出")
+                logger.debug("启用流式 thinking 输出")
             else:
                 # 模型不支持 thinking，不传递回调
                 if "reasoning_callback" in llm_kwargs:
                     del llm_kwargs["reasoning_callback"]
                 if can_think:
-                    print(f"[HermesAgent] 模型不支持流式 thinking，跳过")
+                    logger.debug("模型不支持流式 thinking，跳过")
 
             # ── 统一调用 _llm_chat（它处理 Ollama/本地模型/HTTP） ──
             for chunk in self._llm_chat(messages, **llm_kwargs):
@@ -1570,7 +1574,7 @@ class HermesAgent:
             
             return kb_results + graph_results
         except Exception as e:
-            print(f"[HermesAgent] 知识库搜索出错: {e}")
+            logger.error(f"知识库搜索出错: {e}")
             return []
 
     async def _deep_search(self, query: str) -> List[Dict[str, Any]]:
@@ -1589,10 +1593,10 @@ class HermesAgent:
             
             # 如果没有结果，尝试纠错后重试
             if not search_results:
-                print("[HermesAgent] 深度搜索无结果，尝试纠错重试...")
+                logger.info("深度搜索无结果，尝试纠错重试...")
                 corrected_query = self._fix_typo(query)
                 if corrected_query and corrected_query != query:
-                    print(f"[HermesAgent] 纠错后的查询: {corrected_query}")
+                    logger.debug(f"纠错后的查询: {corrected_query}")
                     results = await self.tier_router.search(corrected_query, num_results=5)
                     for result in results:
                         search_results.append({
@@ -1605,10 +1609,10 @@ class HermesAgent:
             
             # 如果仍然没有结果，降级到 web_search
             if not search_results:
-                print("[HermesAgent] 深度搜索失败，降级到 web_search...")
+                logger.warning("深度搜索失败，降级到 web_search...")
                 web_results = self._web_search_fallback(query)
                 if web_results:
-                    print(f"[HermesAgent] web_search 降级成功，找到 {len(web_results)} 条结果")
+                    logger.info(f"web_search 降级成功，找到 {len(web_results)} 条结果")
                     search_results = web_results
                     
                     # 自动将 web_search 结果存入知识库（供下次搜索命中）
@@ -1620,9 +1624,9 @@ class HermesAgent:
             
             return search_results
         except Exception as e:
-            print(f"[HermesAgent] 深度搜索出错: {e}")
+            logger.error(f"深度搜索出错: {e}")
             # 出错时也尝试 web_search 降级
-            print("[HermesAgent] 异常降级到 web_search...")
+            logger.error("异常降级到 web_search...")
             web_results = self._web_search_fallback(query)
             if web_results:
                 self._store_search_results_to_kb(query, web_results)
@@ -1648,9 +1652,9 @@ class HermesAgent:
                         query=query,
                         url=url
                     )
-                    print(f"[HermesAgent] 已存入知识库: {content[:50]}...")
+                    logger.info(f"已存入知识库: {content[:50]}...")
         except Exception as e:
-            print(f"[HermesAgent] 存入知识库失败: {e}")
+            logger.error(f"存入知识库失败: {e}")
     
     def _fix_typo(self, query: str) -> Optional[str]:
         """
@@ -1735,7 +1739,7 @@ class HermesAgent:
             return results
             
         except Exception as e:
-            print(f"[HermesAgent] web_search 降级失败: {e}")
+            logger.error(f"web_search 降级失败: {e}")
             return []
 
     def _route_model(self, query: str) -> str:
@@ -1755,7 +1759,7 @@ class HermesAgent:
             # ── 检测模型能力 ─────────────────────────────────────────
             if hasattr(self, '_capability_detector'):
                 caps = self._capability_detector.detect(model_name)
-                print(f"[HermesAgent] 模型能力: {caps.get_capability_summary()}")
+                logger.debug(f"模型能力: {caps.get_capability_summary()}")
                 
                 # 存储当前模型能力（用于流式输出决策）
                 self._current_model_caps = caps
@@ -1764,7 +1768,7 @@ class HermesAgent:
             
             return model_name
         except Exception as e:
-            print(f"[HermesAgent] 模型路由出错: {e}")
+            logger.error(f"模型路由出错: {e}")
             model_name = self._get_current_model_name()
             self._current_model_caps = None
             return model_name

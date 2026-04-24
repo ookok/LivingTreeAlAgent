@@ -1,0 +1,116 @@
+# LivingTree AI 日志配置
+# ========================
+# 配置文档: https://docs.python.org/3/library/logging.config.html
+
+version: 1
+disable_existing_loggers: false
+
+# 表单格式
+formatters:
+  # 标准格式
+  default:
+    format: "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+  # 详细格式
+  detailed:
+    format: "%(asctime)s | %(levelname)-8s | %(process)d:%(thread)d | %(name)s:%(funcName)s:%(lineno)d | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S.%f"
+
+  # JSON格式
+  json:
+    class: core.logger.JSONFormatter
+    format: '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
+
+  # 简单格式
+  simple:
+    format: "%(levelname)s - %(message)s"
+
+# 处理器
+handlers:
+  # 控制台输出
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: default
+    stream: ext://sys.stdout
+
+  # 带颜色的控制台 (TTY)
+  console_color:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: colored
+    stream: ext://sys.stdout
+
+  # 主日志文件 (滚动)
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: default
+    filename: ~/.livingtree/logs/livingtree.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf-8
+
+  # 错误日志文件
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: ~/.livingtree/logs/error.log
+    maxBytes: 10485760
+    backupCount: 3
+    encoding: utf-8
+
+  # 调试日志文件
+  debug_file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: ~/.livingtree/logs/debug.log
+    maxBytes: 20971520  # 20MB
+    backupCount: 2
+    encoding: utf-8
+
+# 日志器
+loggers:
+  # 主日志器
+  livingtree:
+    level: INFO
+    handlers: [console, file, error_file]
+    propagate: false
+
+  # 核心模块
+  core:
+    level: DEBUG
+    handlers: [console, file, error_file, debug_file]
+    propagate: false
+
+  # UI模块
+  ui:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  # Agent模块
+  core.agent:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
+  # 知识库模块
+  core.knowledge:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+# 根日志器
+root:
+  level: INFO
+  handlers: [console]
+
+# 环境变量覆盖
+# LIVINGTREE_LOG_LEVEL=DEBUG
+# LIVINGTREE_LOG_FILE=true
+# LIVINGTREE_LOG_JSON=false
+# LIVINGTREE_LOG_COLOR=true

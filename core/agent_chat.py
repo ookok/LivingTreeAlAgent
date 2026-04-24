@@ -21,6 +21,10 @@ import tempfile
 import sqlite3
 from typing import Optional, Iterator, Dict, Any, Callable, List
 
+# 日志系统
+from core.logger import get_logger
+logger = get_logger("core.agent_chat")
+
 # 控制台编码
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -441,12 +445,12 @@ class AgentChat:
         try:
             from core.agent_chat_enhancer import enhance_agent_chat
             self._enhanced_chat = enhance_agent_chat(self)
-            print("[AgentChat] ✅ 增强模式已启用：意图识别 + Query压缩 + 上下文管理")
+            logger.info("增强模式已启用：意图识别 + Query压缩 + 上下文管理")
         except ImportError as e:
-            print(f"[AgentChat] ⚠️ 增强模块未安装，降级为普通模式: {e}")
+            logger.warning(f"增强模块未安装，降级为普通模式: {e}")
             self._enhanced_chat = None
         except Exception as e:
-            print(f"[AgentChat] ⚠️ 增强模式初始化失败，降级为普通模式: {e}")
+            logger.warning(f"增强模式初始化失败，降级为普通模式: {e}")
             self._enhanced_chat = None
 
     def _init_expert_learning(self):
@@ -454,12 +458,12 @@ class AgentChat:
         try:
             from core.expert_learning.expert_guided_system import create_expert_learning_system
             self._expert_learning = create_expert_learning_system()
-            print("[AgentChat] ✅ Expert Learning 系统已启用：三层学习 + 思维链蒸馏")
+            logger.info("Expert Learning 系统已启用：三层学习 + 思维链蒸馏")
         except ImportError as e:
-            print(f"[AgentChat] ⚠️ Expert Learning 模块未安装: {e}")
+            logger.warning(f"Expert Learning 模块未安装: {e}")
             self._expert_learning = None
         except Exception as e:
-            print(f"[AgentChat] ⚠️ Expert Learning 初始化失败: {e}")
+            logger.warning(f"Expert Learning 初始化失败: {e}")
             self._expert_learning = None
 
     def get_intent_analysis(self, message: str) -> Optional[Any]:
@@ -845,9 +849,9 @@ def create_agent_chat(
 
 def main():
     """CLI 测试入口"""
-    print("=" * 60)
-    print("HermesAgent.Chat 交互测试")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("HermesAgent.Chat 交互测试")
+    logger.info("=" * 60)
 
     chat = create_agent_chat(backend="ollama")
 
@@ -855,21 +859,21 @@ def main():
     chat.sayhello()
 
     # 交互循环
-    print("\n[输入 'quit' 退出]")
+    logger.info("[输入 'quit' 退出]")
     while True:
         try:
             user_input = input("\n你: ").strip()
             if not user_input:
                 continue
             if user_input.lower() in ("quit", "exit", "q"):
-                print("再见！")
+                logger.info("再见！")
                 break
 
             result = chat.chat(user_input)
-            print(f"\nHermes: {result}")
+            logger.info(f"\nHermes: {result}")
 
         except (KeyboardInterrupt, EOFError):
-            print("\n\n再见！")
+            logger.info("\n\n再见！")
             break
 
 

@@ -1,13 +1,15 @@
 """
 聊天面板 — 中央主区域
 
-负责：
+功能：
   · 流式渲染 Markdown 消息（用 QTextBrowser + HTML 近似）
   · 工具调用状态块
   · 审批卡片
   · 消息输入框 + 发送/停止按钮
   · 配置缺失检测与提示
   · 主动需求澄清引导 (ConversationalClarifier)
+  · Agent 问候语显示（sayhello）
+  · 流式输出集成
 """
 
 import json
@@ -233,6 +235,7 @@ class ChatPanel(QWidget):
         self._active_tool_blocks: dict[str, ToolBlock] = {}  # tool_name -> block
         self._config_banner = None
         self._config_manager = None
+        self._is_streaming = False  # 流式输出状态
 
         # 需求澄清引导
         self._clarifier = None
@@ -307,13 +310,13 @@ class ChatPanel(QWidget):
         self.msg_layout = QVBoxLayout(self.msg_container)
         self.msg_layout.setContentsMargins(24, 20, 24, 20)
         self.msg_layout.setSpacing(16)
-        
+
         # Agent状态显示区域
         self.agent_status_area = QWidget()
         self.agent_status_layout = QVBoxLayout(self.agent_status_area)
         self.agent_status_layout.setSpacing(8)
         self.msg_layout.addWidget(self.agent_status_area)
-        
+
         # 欢迎占位
         self._welcome = QLabel(
             "向 Hermes 发送消息开始对话\n\n"
@@ -339,7 +342,7 @@ class ChatPanel(QWidget):
             self._config_banner.config_clicked.connect(self.config_hint_requested)
             root.addWidget(self._config_banner)
 
-        # ── 输入区 ────────────────────────────────────────────────────
+        # ── 输入区 ───────────────────────────────────────────────────
         input_area = QWidget()
         input_area.setObjectName("InputArea")
         input_area.setFixedHeight(120)
@@ -384,7 +387,7 @@ class ChatPanel(QWidget):
         btn_col = QVBoxLayout()
         btn_col.setSpacing(8)
         btn_col.setAlignment(Qt.AlignmentFlag.AlignVCenter)  # 垂直居中对齐
-        
+
         self.send_btn = QPushButton("发送")
         self.send_btn.setObjectName("SendButton")
         self.send_btn.setFixedWidth(80)
@@ -406,7 +409,7 @@ class ChatPanel(QWidget):
             }
         """)
         self.send_btn.clicked.connect(self._on_send)
-        
+
         self.stop_btn = QPushButton("停止")
         self.stop_btn.setObjectName("StopButton")
         self.stop_btn.setFixedWidth(80)
@@ -426,7 +429,7 @@ class ChatPanel(QWidget):
             }
         """)
         self.stop_btn.clicked.connect(self.stop_requested)
-        
+
         btn_col.addWidget(self.send_btn)
         btn_col.addWidget(self.stop_btn)
         row.addLayout(btn_col)
@@ -437,13 +440,13 @@ class ChatPanel(QWidget):
     def show_agent_loading(self, message="Hermes Agent 正在处理..."):
         """显示Agent加载过程"""
         self._hide_welcome()
-        
+
         # 清除之前的状态
         for i in reversed(range(self.agent_status_layout.count())):
             widget = self.agent_status_layout.itemAt(i).widget()
             if widget:
                 widget.deleteLater()
-        
+
         # 创建加载状态面板
         loading_panel = QWidget()
         loading_panel.setStyleSheet("""
@@ -454,34 +457,34 @@ class ChatPanel(QWidget):
         """)
         loading_layout = QHBoxLayout(loading_panel)
         loading_layout.setSpacing(12)
-        
+
         # 加载动画
         spinner = QLabel("⏳")
         spinner.setStyleSheet("font-size: 14px;")
-        
+
         # 状态文本
         status_text = QLabel(message)
         status_text.setStyleSheet("color: #94A3B8; font-size: 14px;")
-        
+
         loading_layout.addWidget(spinner)
         loading_layout.addWidget(status_text)
         loading_layout.addStretch()
-        
+
         self.agent_status_layout.addWidget(loading_panel)
         self._scroll_to_bottom()
-        
+
         return loading_panel
 
     def show_model_inference(self, model_name, prompt="正在调用模型..."):
         """显示模型调用过程"""
         self._hide_welcome()
-        
+
         # 清除之前的状态
         for i in reversed(range(self.agent_status_layout.count())):
             widget = self.agent_status_layout.itemAt(i).widget()
             if widget:
                 widget.deleteLater()
-        
+
         # 创建模型调用面板
         inference_panel = QWidget()
         inference_panel.setStyleSheet("""
@@ -492,35 +495,207 @@ class ChatPanel(QWidget):
         """)
         inference_layout = QVBoxLayout(inference_panel)
         inference_layout.setSpacing(8)
-        
+
         # 模型信息
         model_info = QLabel(f"🤖 模型: {model_name}")
         model_info.setStyleSheet("color: #3B82F6; font-size: 14px; font-weight: 500;")
-        
+
         # 调用状态
         status_layout = QHBoxLayout()
         status_layout.setSpacing(8)
-        
+
         spinner = QLabel("🔄")
         spinner.setStyleSheet("font-size: 14px;")
-        
+
         status_text = QLabel(prompt)
         status_text.setStyleSheet("color: #94A3B8; font-size: 13px;")
-        
+
         status_layout.addWidget(spinner)
         status_layout.addWidget(status_text)
         status_layout.addStretch()
-        
+
         inference_layout.addWidget(model_info)
         inference_layout.addLayout(status_layout)
-        
+
         self.agent_status_layout.addWidget(inference_panel)
         self._scroll_to_bottom()
-        
+
         return inference_panel
+
+    def show_greeting(self, message: str = None):
+        """
+        显示 Agent 问候语（sayhello）
+
+        Args:
+            message: 问候消息，如果为 None 则使用默认问候
+        """
+        self._hide_welcome()
+
+        # 清除状态区域
+        for i in reversed(range(self.agent_status_layout.count())):
+            widget = self.agent_status_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        # 默认问候语
+        if message is None:
+            message = "你好！我是生命之树AI（LivingTreeAI），你的 AI 桌面助手。有什么我可以帮你的吗？"
+
+        # 创建问候卡片
+        greeting_card = QFrame()
+        greeting_card.setStyleSheet("""
+            QFrame {
+                background: #1E293B;
+                border: 1px solid #334155;
+                border-radius: 12px;
+                padding: 16px;
+            }
+        """)
+
+        card_layout = QVBoxLayout(greeting_card)
+        card_layout.setSpacing(12)
+
+        # 头像和标题行
+        header_layout = QHBoxLayout()
+
+        avatar = QLabel("🌳")
+        avatar.setStyleSheet("font-size: 32px;")
+        header_layout.addWidget(avatar)
+
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(2)
+
+        title = QLabel("生命之树AI")
+        title.setStyleSheet("""
+            color: #10B981;
+            font-size: 15px;
+            font-weight: 600;
+        """)
+        title_layout.addWidget(title)
+
+        subtitle = QLabel("桌面助手 · 已就绪")
+        subtitle.setStyleSheet("color: #64748B; font-size: 12px;")
+        title_layout.addWidget(subtitle)
+
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # 问候消息
+        greeting_label = QLabel(message)
+        greeting_label.setWordWrap(True)
+        greeting_label.setStyleSheet("""
+            color: #E2E8F0;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 8px 0;
+        """)
+        card_layout.addWidget(greeting_label)
+
+        # 快捷操作
+        quick_actions = QLabel("💡 快捷提示：发送消息开始对话，或使用深度搜索查找信息")
+        quick_actions.setStyleSheet("""
+            color: #64748B;
+            font-size: 12px;
+            padding: 8px;
+            background: #0F172A;
+            border-radius: 6px;
+        """)
+        card_layout.addWidget(quick_actions)
+
+        self.agent_status_layout.addWidget(greeting_card)
+        self._scroll_to_bottom()
+
+        return greeting_card
 
     def clear_agent_status(self):
         """清除Agent状态显示"""
+        for i in reversed(range(self.agent_status_layout.count())):
+            widget = self.agent_status_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+    def start_streaming_output(self, model_name: str = None):
+        """
+        开始流式输出（用于 Agent 回复）
+
+        Args:
+            model_name: 使用的模型名称
+        """
+        self._hide_welcome()
+        self._is_streaming = True
+
+        # 清除状态区域
+        for i in reversed(range(self.agent_status_layout.count())):
+            widget = self.agent_status_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        # 创建流式输出状态卡
+        streaming_card = QFrame()
+        streaming_card.setStyleSheet("""
+            QFrame {
+                background: #1E293B;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 10px 14px;
+            }
+        """)
+
+        card_layout = QHBoxLayout(streaming_card)
+        card_layout.setSpacing(10)
+
+        # 动画指示器
+        self._streaming_indicator = QLabel("◐")
+        self._streaming_indicator.setStyleSheet("""
+            color: #3B82F6;
+            font-size: 16px;
+        """)
+        card_layout.addWidget(self._streaming_indicator)
+
+        # 状态文本
+        if model_name:
+            status_text = QLabel(f"🤖 {model_name} 正在思考...")
+        else:
+            status_text = QLabel("💭 正在思考...")
+        status_text.setStyleSheet("color: #94A3B8; font-size: 13px;")
+        self._streaming_status_text = status_text
+        card_layout.addWidget(status_text)
+
+        card_layout.addStretch()
+        self.agent_status_layout.addWidget(streaming_card)
+
+        # 启动动画
+        self._start_streaming_animation()
+
+        self._scroll_to_bottom()
+        return streaming_card
+
+    def _start_streaming_animation(self):
+        """流式输出动画"""
+        if not self._is_streaming:
+            return
+
+        chars = ["◐", "◓", "◑", "◒"]
+        current = getattr(self, "_streaming_animation_index", 0)
+        if hasattr(self, "_streaming_indicator"):
+            self._streaming_indicator.setText(chars[current % 4])
+        self._streaming_animation_index = (current + 1) % 4
+
+        QTimer.singleShot(200, self._start_streaming_animation)
+
+    def update_streaming_status(self, text: str):
+        """更新流式输出状态文本"""
+        if hasattr(self, "_streaming_status_text"):
+            self._streaming_status_text.setText(f"💭 {text}")
+            self._scroll_to_bottom()
+
+    def end_streaming_output(self):
+        """结束流式输出"""
+        self._is_streaming = False
+        self._streaming_animation_index = 0
+
+        # 清除状态区域
         for i in reversed(range(self.agent_status_layout.count())):
             widget = self.agent_status_layout.itemAt(i).widget()
             if widget:
@@ -733,7 +908,7 @@ class ChatPanel(QWidget):
     def show_initialization_progress(self, steps):
         """显示Hermes Agent初始化过程"""
         self._hide_welcome()
-        
+
         # 创建初始化进度面板
         init_panel = QWidget()
         init_panel.setStyleSheet("""
@@ -743,7 +918,7 @@ class ChatPanel(QWidget):
             padding: 20px;
         """)
         init_layout = QVBoxLayout(init_panel)
-        
+
         # 标题
         title = QLabel("🧠 Hermes Agent 初始化")
         title.setStyleSheet("""
@@ -753,7 +928,7 @@ class ChatPanel(QWidget):
             margin-bottom: 16px;
         """)
         init_layout.addWidget(title)
-        
+
         # 进度条
         progress_bar = QProgressBar()
         progress_bar.setMaximum(len(steps))
@@ -771,7 +946,7 @@ class ChatPanel(QWidget):
             }
         """)
         init_layout.addWidget(progress_bar)
-        
+
         # 状态标签
         status_label = QLabel("正在初始化...")
         status_label.setStyleSheet("""
@@ -780,25 +955,25 @@ class ChatPanel(QWidget):
             margin-top: 12px;
         """)
         init_layout.addWidget(status_label)
-        
+
         # 步骤列表
         steps_widget = QWidget()
         steps_layout = QVBoxLayout(steps_widget)
         steps_layout.setSpacing(8)
-        
+
         step_labels = []
         for step in steps:
             step_label = QLabel(f"⏳ {step}")
             step_label.setStyleSheet("color: #64748B; font-size: 13px;")
             steps_layout.addWidget(step_label)
             step_labels.append(step_label)
-        
+
         init_layout.addWidget(steps_widget)
-        
+
         # 插入到消息容器
         self.msg_layout.insertWidget(self.msg_layout.count() - 1, init_panel)
         self._scroll_to_bottom()
-        
+
         # 模拟初始化过程
         def update_progress(index=0):
             if index < len(steps):
@@ -807,17 +982,17 @@ class ChatPanel(QWidget):
                 status_label.setText(f"正在 {step}...")
                 step_labels[index].setText(f"✅ {step}")
                 step_labels[index].setStyleSheet("color: #10B981; font-size: 13px;")
-                
+
                 # 继续下一个步骤
                 QTimer.singleShot(800, lambda: update_progress(index + 1))
             else:
                 # 初始化完成
                 status_label.setText("初始化完成！")
                 status_label.setStyleSheet("color: #10B981; font-size: 14px; font-weight: 500;")
-                
+
                 # 2秒后移除初始化面板
                 QTimer.singleShot(2000, lambda: init_panel.deleteLater())
-        
+
         # 开始初始化动画
         QTimer.singleShot(100, lambda: update_progress(0))
 

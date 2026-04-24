@@ -4,9 +4,13 @@
 
 | 层级 | 模型 | 连接方式 | API Key | 用途 |
 |------|------|----------|---------|------|
-| **L0** | SmolLM2.gguf (models文件夹) → **fallback**: qwen3.5:2b | 本地 Ollama (http://localhost:11434) | 无 | 快速路由/意图分类 |
-| **L3** | qwen3.5:4b | 本地 Ollama | 无 | 推理/意图理解 |
-| **L4** | qwen3.6:latest | 本地 Ollama | 无 | 深度生成/思考模式 |
+| **L0** | qwen2.5:0.5b | 远程 Ollama (http://www.mogoo.com.cn:8899/v1) | 无 | 快速路由/意图分类 |
+| **L1** | qwen2.5:1.5b | 远程 Ollama | 无 | 轻量推理/搜索 |
+| **L3** | qwen3.5:4b | 远程 Ollama | 无 | 推理/意图理解 |
+| **L4** | qwen3.5:9b | 远程 Ollama | 无 | 深度生成/思考模式 |
+
+> 远程服务: http://www.mogoo.com.cn:8899/v1（无 API Key）
+> 测试通过: 2026-04-24
 
 > ⚠️ 踩坑：qwen3.6:latest / qwen3.5:4b 是思考模型，API 返回 `content=""`，答案在 `thinking` 字段。
 > 推荐压缩模型：`qwen2.5:1.5b`（非思考，干净中文输出，3-5s）
@@ -143,3 +147,72 @@ ToolRegistry.register(
 - pywin32: 未安装 → Windows SAPI 不可用
 - edge-tts: 未安装 → edge-tts 不可用
 - 朗读回退: 仅打印文本到控制台
+
+## 重构进度（2026-04-24）
+
+### 已完成重构
+
+| # | 重构项 | 文件 | 状态 | 说明 |
+|---|--------|------|------|------|
+| **R1** | 统一入口整合 | `core/unified_pipeline.py` | ✅ | 7步流水线，复用FusionRAG组件 |
+| **R2** | 任务执行解耦 | `core/unified_task_executor.py` | ✅ | 串行/并行/DAG执行策略 |
+| **R3** | 上下文统一管理 | `core/unified_context.py` | ✅ | 整合MemoryPalace/SessionDB |
+| **R4** | 智能写作工作流 | `core/smart_writing/unified_workflow.py` | ✅ | 8阶段流水线 |
+| **R5** | UI面板重构 | `ui/smart_writing_panel.py` | ✅ | 业务逻辑分离 |
+
+### R4 SmartWritingWorkflow 架构
+
+**8阶段流水线**：
+```
+需求澄清 → 知识检索 → 深度搜索 → 内容生成 → AI审核 → 分身辩论 → 虚拟会议 → 最终修订
+```
+
+**复用组件**：
+- `AIEnhancedGeneration` - AI审核 + 分身辩论
+- `ProjectGeneration` - 项目文档生成
+- `WikiGenerator` - 深度搜索
+- `KnowledgeBaseLayer` - 知识检索
+
+### R4-1 智能写作增强模块（2026-04-24 增强版）
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| **计算模型库** | `core/smart_writing/calculation_models.py` | 通过CLI调用EIA引擎，NPV/IRR/排放量/LEC等20+计算 |
+| **数据采集管道** | `core/smart_writing/data_collector.py` | 国家统计局/环境部/气象局/高德地图等政府+第三方API |
+| **意图分类器** | `core/smart_writing/intent_classifier.py` | 动态识别文档类型，不固定枚举，多维度分类 |
+| **交互式澄清** | `core/smart_writing/interactive_clarifier.py` | 引导式访谈、自动补全、与进化引擎集成 |
+| **多模态生成** | `core/smart_writing/multimodal_generator.py` | 表格、图表、甘特图、流程图、公式生成 |
+| **自进化引擎** | `core/smart_writing/self_evolution.py` | 经验积累/专家反馈/新类型识别/知识库集成 |
+
+**集成系统**：
+- `SkillEvolutionAgent` - 技能自进化
+- `ExpertPanel` - 专家反馈
+- `KnowledgeBaseVectorStore` - 知识存储
+- `WikiGenerator` - 深度搜索
+- `CLIAnything` + `EIA CalculationEngine` - 外部计算
+
+**使用方式**：
+```python
+from core.smart_writing.self_evolution import get_evolution_engine
+from core.smart_writing.intent_classifier import quick_classify
+
+# 自进化引擎
+engine = get_evolution_engine()
+engine.learn_from_generation(requirement, doc_type, content, quality_score)
+refs = engine.get_reference_documents(requirement, doc_type)
+metrics = engine.get_metrics()
+
+# 动态识别文档类型
+result = quick_classify("上传的文件内容...")  # 不固定类型
+```
+
+### R5 SmartWritingPanel 架构
+
+**UI分离原则**：
+- UI层 (`SmartWritingPanel`): 负责展示和用户交互
+- 业务层 (`SmartWritingWorkflow`): 负责核心逻辑
+- 工作线程 (`WritingWorker`): 异步执行
+
+### 已知问题
+- `core/agent.py` 引用不存在的 `core.agent_progress` 模块
+- 测试需绕过 `core/__init__.py` 直接加载模块

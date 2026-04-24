@@ -270,6 +270,15 @@ class MainPage(QWidget):
             except ImportError as e:
                 logger.error(f"[MainPage] 智能写作面板导入失败: {e}")
                 QMessageBox.warning(self, "错误", f"智能写作面板加载失败: {e}")
+        elif module_id == "project_generation":
+            try:
+                from ui.project_generation_panel import ProjectGenerationPanel
+                panel = ProjectGenerationPanel()
+                self._panels[module_id] = panel
+                logger.info(f"[MainPage] 项目生成面板已加载")
+            except ImportError as e:
+                logger.error(f"[MainPage] 项目生成面板导入失败: {e}")
+                QMessageBox.warning(self, "错误", f"项目生成面板加载失败: {e}")
         else:
             logger.warning(f"[MainPage] 未知模块: {module_id}")
 

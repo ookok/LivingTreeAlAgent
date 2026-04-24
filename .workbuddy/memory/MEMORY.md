@@ -41,6 +41,53 @@ qwen3.5:2b, qwen3.6:latest, qwen3.5:9b, qwen3.5:0.8b,
 qwen2.5:1.5b, qwen2.5:0.5b, deepseek-r1:70b
 ```
 
+## Agent Chat 通用增强模块 (2026-04-24)
+
+`core/agent_chat_enhancer.py` - 通用意图识别 + Query压缩 + 上下文管理
+
+### 核心组件
+
+| 组件 | 功能 |
+|------|------|
+| `ChatIntentClassifier` | 通用意图分类（16种意图，覆盖对话/推理/任务/创作/知识） |
+| `QueryCompressor` | Query压缩（三档策略：轻/中/强） |
+| `ChatContextManager` | 上下文管理（消息历史/Token控制/连续追问检测） |
+| `EnhancedAgentChat` | 增强版 AgentChat 封装 |
+
+### 通用意图类型（16种）
+
+**对话类**: `GREETING`, `CHITCHAT`, `QUESTION`
+**推理类**: `REASONING`, `MATHEMATICS`, `ANALYSIS`
+**任务类**: `CODE_GENERATION`, `CODE_REVIEW`, `DEBUGGING`, `FILE_OPERATION`, `TASK_EXECUTION`
+**创作类**: `WRITING`, `TRANSLATION`, `SUMMARIZATION`, `CREATIVE`
+**知识类**: `KNOWLEDGE_QUERY`, `SEARCH`
+
+### 模型选择建议
+
+| 场景 | 模型 | 意图 |
+|------|------|------|
+| 代码生成 | L4 | `code_generation` |
+| 代码审查/调试 | L3 | `code_review`, `debugging`, `reasoning` |
+| 创作/摘要 | L3 | `writing`, `summarization`, `creative` |
+| 翻译/搜索/闲聊 | L1 | `translation`, `search`, `chitchat` |
+| 问候/计算 | L0 | `greeting`, `mathematics` |
+
+### 使用示例
+
+```python
+from core.agent_chat_enhancer import enhance_agent_chat
+
+chat = enhance_agent_chat(base_chat)
+chat.set_intent_callback(lambda i: print(f"意图: {i.intent.value}"))
+
+# 自动意图识别 + Query压缩 + 上下文管理
+response = chat.chat("帮我调试这个bug")
+```
+
+### 测试结果
+
+意图识别准确率: **100%**（19/19测试用例通过）
+
 ## Skill 自动创建机制
 
 **触发条件**（`SkillEvolutionAgent._try_consolidate()`）：

@@ -1628,6 +1628,10 @@ class UnifiedCache:
         query_max_length: int = 200,
         similar_threshold: float = 0.5,
         compressor_model: str = "qwen2.5:1.5b",
+        # 新增：容量管理配置
+        max_memory_mb: int = 500,
+        max_disk_mb: int = 5000,
+        enable_smart_config: bool = True,
     ):
         self.normalizer = QueryNormalizer(max_length=query_max_length)
         self.compressor = QueryCompressor(model=compressor_model)
@@ -1645,6 +1649,17 @@ class UnifiedCache:
         )
         self._stats = CacheStats()
         self._lock = threading.Lock()
+        
+        # 智能配置（TTL + 容量管理）
+        if enable_smart_config:
+            self._smart_config = SmartCacheConfig(
+                max_memory_mb=max_memory_mb,
+                max_disk_mb=max_disk_mb,
+                enable_adaptive_ttl=True,
+                enable_capacity_management=True,
+            )
+        else:
+            self._smart_config = None
 
     # ── L0 路由缓存 ──────────────────────────────────────────────────────────
 
@@ -1756,13 +1771,19 @@ class UnifiedCache:
 
     def stats(self) -> Dict[str, Any]:
         """获取综合统计"""
-        return {
+        result = {
             "overall": self._stats.to_dict(),
             "l0": self.l0.stats(),
             "search": self.search.stats(),
             "l4": self.l4.stats(),
             "similar": self.similar.stats(),
         }
+        
+        # 添加智能配置状态
+        if self._smart_config:
+            result["smart_config"] = self._smart_config.get_status()
+        
+        return result
 
     def clear_all(self):
         """清空所有缓存"""
@@ -1790,7 +1811,52 @@ class UnifiedCache:
         sim = s.get("similar", {})
         print(f"  相似缓存: {sim.get('hits', 0)} hits / {sim.get('entries', 0)} 条 | 模式: {sim.get('mode', 'N/A')}")
         print(f"  总计节省延迟: {ov['total_latency_saved_ms']:.0f} ms")
+        
+        # 智能配置信息
+        if "smart_config" in s:
+            sc = s["smart_config"]
+            cap = sc.get("capacity", {})
+            print("-" * 60)
+            print(f"  智能配置:")
+            print(f"    自适应 TTL: {sc.get('adaptive_ttl', False)}")
+            print(f"    容量管理: {sc.get('capacity_management', False)}")
+            print(f"    内存使用: {cap.get('memory_mb', 0):.0f}MB / {cap.get('memory_percent', 0):.1%}")
+            print(f"    磁盘使用: {cap.get('disk_mb', 0):.0f}MB / {cap.get('disk_percent', 0):.1%}")
+        
         print("=" * 60)
+    
+    # ── 智能 TTL 接口 ─────────────────────────────────────────────────────────
+    
+    def get_ttl_for_intent(self, intent: str, query: str = "") -> int:
+        """
+        根据意图类型获取 TTL
+        
+        Args:
+            intent: 意图类型
+            query: 原始查询（用于检测实时性）
+            
+        Returns:
+            int: TTL 秒数
+        """
+        if self._smart_config:
+            return self._smart_config.get_ttl(intent, query)
+        return 604800  # 默认 7 天
+    
+    def record_intent_hit(self, intent: str):
+        """记录意图缓存命中"""
+        if self._smart_config:
+            self._smart_config.record_hit(intent)
+    
+    def record_intent_miss(self, intent: str):
+        """记录意图缓存未命中"""
+        if self._smart_config:
+            self._smart_config.record_miss(intent)
+    
+    def should_evict_entries(self) -> bool:
+        """检查是否需要淘汰条目"""
+        if self._smart_config:
+            return self._smart_config.should_evict()
+        return False
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1831,3 +1897,340 @@ def reset_unified_cache():
         if _cache_instance:
             _cache_instance.clear_all()
         _cache_instance = None
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 增强2: 智能 TTL 配置 + 按意图类型动态过期
+# ════════════════════════════════════════════════════════════════════════════
+
+class IntentBasedTTL:
+    """
+    基于意图类型的智能 TTL 配置
+    
+    不同类型的问题有不同的时效性：
+    - 知识查询：长时间有效（7天）
+    - 实时数据：短时间有效（1小时）
+    - 代码生成：中等时间有效（3天）
+    - 闲聊对话：短时间有效（1小时）
+    
+    使用示例：
+        ttl_manager = IntentBasedTTL()
+        ttl = ttl_manager.get_ttl("knowledge_query")  # → 604800 秒 (7天)
+        ttl_manager.set_ttl("calculation", 3600)     # 设置为 1 小时
+    """
+    
+    # 默认 TTL 配置（秒）
+    DEFAULT_TTL = {
+        # === 对话类 ===
+        "greeting": 86400,          # 问候: 1天
+        "chitchat": 3600,          # 闲聊: 1小时
+        "question": 43200,          # 问答: 12小时
+        
+        # === 推理类 ===
+        "reasoning": 604800,       # 逻辑推理: 7天
+        "mathematics": 259200,     # 数学: 3天
+        "analysis": 432000,        # 分析: 5天
+        
+        # === 任务类 ===
+        "code_generation": 259200, # 代码生成: 3天
+        "code_review": 172800,     # 代码审查: 2天
+        "debugging": 86400,        # 调试: 1天
+        "file_operation": 7200,    # 文件操作: 2小时
+        "task_execution": 3600,    # 任务执行: 1小时
+        
+        # === 创作类 ===
+        "writing": 432000,         # 写作: 5天
+        "translation": 604800,     # 翻译: 7天
+        "summarization": 432000,  # 摘要: 5天
+        "creative": 259200,        # 创意: 3天
+        
+        # === 知识类 ===
+        "knowledge_query": 604800, # 知识查询: 7天
+        "search": 86400,          # 搜索: 1天
+        
+        # === 其他 ===
+        "calculation": 172800,    # 计算: 2天
+        "unknown": 43200,         # 未知: 12小时
+        
+        # === 实时性关键词 ===
+        "realtime_news": 1800,     # 新闻: 30分钟
+        "realtime_stock": 300,    # 股票: 5分钟
+        "realtime_weather": 3600,  # 天气: 1小时
+    }
+    
+    # 实时数据关键词（自动检测）
+    REALTIME_KEYWORDS = [
+        # 新闻
+        "今天", "刚刚", "最新", "新闻", "资讯", "头条",
+        # 股票
+        "股价", "涨跌", "大盘", "指数", "股票", "基金净值",
+        # 天气
+        "天气", "气温", "下雨", "温度", "天气预报",
+        # 时间敏感
+        "现在", "当前", "此刻", "实时",
+    ]
+    
+    def __init__(self, custom_ttl: Dict[str, int] = None):
+        """
+        Args:
+            custom_ttl: 自定义 TTL 配置，会覆盖默认值
+        """
+        self._ttl_config = self.DEFAULT_TTL.copy()
+        if custom_ttl:
+            self._ttl_config.update(custom_ttl)
+        
+        # TTL 调整因子（根据命中率动态调整）
+        self._hit_counts: Dict[str, int] = {}
+        self._adjustment_factor: Dict[str, float] = {}
+    
+    def get_ttl(self, intent: str, query: str = "") -> int:
+        """
+        获取 TTL 秒数
+        
+        Args:
+            intent: 意图类型
+            query: 原始查询（用于检测实时性关键词）
+            
+        Returns:
+            int: TTL 秒数
+        """
+        # 1. 检测实时性关键词
+        if query and self._is_realtime_query(query):
+            return self._ttl_config.get("realtime_news", 1800)
+        
+        # 2. 获取意图对应的 TTL
+        base_ttl = self._ttl_config.get(intent, self._ttl_config["unknown"])
+        
+        # 3. 应用动态调整因子
+        adjustment = self._adjustment_factor.get(intent, 1.0)
+        adjusted_ttl = int(base_ttl * adjustment)
+        
+        return max(60, min(adjusted_ttl, 2592000))  # 限制在 1 分钟 ~ 30 天之间
+    
+    def _is_realtime_query(self, query: str) -> bool:
+        """检测是否是实时性查询"""
+        query_lower = query.lower()
+        for keyword in self.REALTIME_KEYWORDS:
+            if keyword in query_lower:
+                return True
+        return False
+    
+    def record_hit(self, intent: str):
+        """记录缓存命中（用于动态调整 TTL）"""
+        self._hit_counts[intent] = self._hit_counts.get(intent, 0) + 1
+        
+        # 高频命中的问题，延长 TTL
+        if self._hit_counts[intent] >= 10:
+            self._adjustment_factor[intent] = min(
+                self._adjustment_factor.get(intent, 1.0) * 1.2,
+                3.0  # 最多延长 3 倍
+            )
+    
+    def record_miss(self, intent: str):
+        """记录缓存未命中（用于动态调整 TTL）"""
+        hits = self._hit_counts.get(intent, 0)
+        if hits > 0:
+            self._hit_counts[intent] = hits - 1
+        
+        # 持续未命中，降低 TTL
+        if hits < 3:
+            self._adjustment_factor[intent] = max(
+                self._adjustment_factor.get(intent, 1.0) * 0.8,
+                0.5  # 最低缩短到 50%
+            )
+    
+    def set_ttl(self, intent: str, ttl_seconds: int):
+        """设置某个意图的 TTL"""
+        self._ttl_config[intent] = max(60, ttl_seconds)
+    
+    def get_ttl_config(self) -> Dict[str, int]:
+        """获取当前 TTL 配置"""
+        return self._ttl_config.copy()
+    
+    def reset_adjustments(self):
+        """重置动态调整因子"""
+        self._hit_counts.clear()
+        self._adjustment_factor.clear()
+
+
+class CacheCapacityManager:
+    """
+    缓存容量管理器
+    
+    功能：
+    - 监控各层缓存大小
+    - 设置容量限制
+    - 自动淘汰低价值条目
+    - 磁盘配额管理
+    """
+    
+    def __init__(
+        self,
+        max_memory_mb: int = 500,
+        max_disk_mb: int = 5000,
+        eviction_threshold: float = 0.9,
+    ):
+        """
+        Args:
+            max_memory_mb: 内存缓存最大容量 (MB)
+            max_disk_mb: 磁盘缓存最大容量 (MB)
+            eviction_threshold: 淘汰阈值 (达到 90% 开始淘汰)
+        """
+        self.max_memory_mb = max_memory_mb
+        self.max_disk_mb = max_disk_mb
+        self.eviction_threshold = eviction_threshold
+        
+        self._current_memory_mb: float = 0.0
+        self._current_disk_mb: float = 0.0
+        self._lock = threading.Lock()
+    
+    def get_usage(self) -> Dict[str, float]:
+        """获取当前使用情况"""
+        return {
+            "memory_mb": self._current_memory_mb,
+            "memory_percent": self._current_memory_mb / self.max_memory_mb if self.max_memory_mb > 0 else 0,
+            "disk_mb": self._current_disk_mb,
+            "disk_percent": self._current_disk_mb / self.max_disk_mb if self.max_disk_mb > 0 else 0,
+        }
+    
+    def update_usage(self, memory_mb: float, disk_mb: float = 0.0):
+        """更新使用情况"""
+        with self._lock:
+            self._current_memory_mb = memory_mb
+            self._current_disk_mb = disk_mb
+    
+    def should_evict(self) -> bool:
+        """检查是否需要淘汰"""
+        return self._current_memory_mb > self.max_memory_mb * self.eviction_threshold
+    
+    def get_eviction_count(self, cache_type: str = "memory") -> int:
+        """计算需要淘汰的条目数"""
+        max_mb = self.max_memory_mb if cache_type == "memory" else self.max_disk_mb
+        current_mb = self._current_memory_mb if cache_type == "memory" else self._current_disk_mb
+        
+        if current_mb <= max_mb * self.eviction_threshold:
+            return 0
+        
+        # 计算需要释放的空间（20%）
+        target_mb = max_mb * 0.7
+        excess_mb = current_mb - target_mb
+        
+        # 假设每个条目平均 1KB
+        return int(excess_mb * 1024)
+    
+    def set_limits(self, max_memory_mb: int = None, max_disk_mb: int = None):
+        """设置容量限制"""
+        if max_memory_mb is not None:
+            self.max_memory_mb = max_memory_mb
+        if max_disk_mb is not None:
+            self.max_disk_mb = max_disk_mb
+
+
+class SmartCacheConfig:
+    """
+    智能缓存配置管理器
+    
+    整合 TTL 配置和容量管理，提供统一的配置接口
+    """
+    
+    def __init__(
+        self,
+        # TTL 配置
+        ttl_config: Dict[str, int] = None,
+        
+        # 容量配置
+        max_memory_mb: int = 500,
+        max_disk_mb: int = 5000,
+        
+        # 缓存行为配置
+        enable_adaptive_ttl: bool = True,
+        enable_capacity_management: bool = True,
+        eviction_threshold: float = 0.9,
+        
+        # 预热配置
+        enable_preload: bool = False,
+        preload_intents: List[str] = None,
+    ):
+        self.intent_ttl = IntentBasedTTL(ttl_config)
+        self.capacity = CacheCapacityManager(
+            max_memory_mb=max_memory_mb,
+            max_disk_mb=max_disk_mb,
+            eviction_threshold=eviction_threshold,
+        )
+        self.enable_adaptive_ttl = enable_adaptive_ttl
+        self.enable_capacity_management = enable_capacity_management
+        self.enable_preload = enable_preload
+        self.preload_intents = preload_intents or ["knowledge_query", "translation"]
+    
+    def get_ttl(self, intent: str, query: str = "") -> int:
+        """获取 TTL"""
+        return self.intent_ttl.get_ttl(intent, query)
+    
+    def record_hit(self, intent: str):
+        """记录命中"""
+        if self.enable_adaptive_ttl:
+            self.intent_ttl.record_hit(intent)
+    
+    def record_miss(self, intent: str):
+        """记录未命中"""
+        if self.enable_adaptive_ttl:
+            self.intent_ttl.record_miss(intent)
+    
+    def should_evict(self) -> bool:
+        """检查是否需要淘汰"""
+        if not self.enable_capacity_management:
+            return False
+        return self.capacity.should_evict()
+    
+    def get_eviction_count(self, cache_type: str = "memory") -> int:
+        """获取需要淘汰的条目数"""
+        if not self.enable_capacity_management:
+            return 0
+        return self.capacity.get_eviction_count(cache_type)
+    
+    def get_status(self) -> Dict[str, Any]:
+        """获取配置状态"""
+        return {
+            "adaptive_ttl": self.enable_adaptive_ttl,
+            "capacity_management": self.enable_capacity_management,
+            "preload_enabled": self.enable_preload,
+            "preload_intents": self.preload_intents,
+            "capacity": self.capacity.get_usage(),
+            "ttl_config_sample": {
+                k: v for k, v in list(self.intent_ttl.get_ttl_config().items())[:5]
+            },
+        }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 全局配置实例
+# ════════════════════════════════════════════════════════════════════════════
+
+_smart_config: Optional[SmartCacheConfig] = None
+_config_lock = threading.Lock()
+
+
+def get_smart_cache_config(
+    max_memory_mb: int = 500,
+    max_disk_mb: int = 5000,
+    enable_adaptive_ttl: bool = True,
+) -> SmartCacheConfig:
+    """获取全局智能缓存配置"""
+    global _smart_config
+    if _smart_config is None:
+        with _config_lock:
+            if _smart_config is None:
+                _smart_config = SmartCacheConfig(
+                    max_memory_mb=max_memory_mb,
+                    max_disk_mb=max_disk_mb,
+                    enable_adaptive_ttl=enable_adaptive_ttl,
+                )
+    return _smart_config
+
+
+def reset_smart_cache_config():
+    """重置全局配置"""
+    global _smart_config
+    with _config_lock:
+        _smart_config = None
+

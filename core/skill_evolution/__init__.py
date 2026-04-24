@@ -71,6 +71,35 @@ from .agent_loop import (
     create_agent,
 )
 
+# 技能质量与匹配模块
+from .skill_quality_scorer import (
+    SkillQualityScorer,
+    SkillQualityReport,
+    QualityScore,
+    QualityDimension,
+    get_quality_scorer,
+    quick_evaluate,
+    get_top_skills,
+)
+
+from .skill_matching_optimizer import (
+    SkillMatchingOptimizer,
+    MatchResult,
+    MatchRequest,
+    MatchFactor,
+    get_matching_optimizer,
+    quick_match,
+    batch_match,
+)
+
+from .skill_integration import (
+    SkillQualityAndMatchingIntegration,
+    get_integration,
+    quick_recommend,
+    get_skill_report,
+    quick_feedback,
+)
+
 __all__ = [
     # 枚举
     "MemoryLayer",
@@ -104,6 +133,28 @@ __all__ = [
     "SkillEvolutionAgent",
     "SimpleLLMClient",
     "create_agent",
+    # 质量评分
+    "SkillQualityScorer",
+    "SkillQualityReport",
+    "QualityScore",
+    "QualityDimension",
+    "get_quality_scorer",
+    "quick_evaluate",
+    "get_top_skills",
+    # 匹配优化
+    "SkillMatchingOptimizer",
+    "MatchResult",
+    "MatchRequest",
+    "MatchFactor",
+    "get_matching_optimizer",
+    "quick_match",
+    "batch_match",
+    # 集成模块
+    "SkillQualityAndMatchingIntegration",
+    "get_integration",
+    "quick_recommend",
+    "get_skill_report",
+    "quick_feedback",
 ]
 
 # 默认数据库路径

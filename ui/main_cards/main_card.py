@@ -56,11 +56,11 @@ MODULES_CONFIG = {
         "status": "active"
     },
     "project_generation": {
-        "icon": "🧱",
+        "icon": "📋",
         "name": "项目生成",
-        "color": "#06b6d4",      # 青色
-        "desc": "需求文档转代码/全栈自动生成",
-        "status": "normal"
+        "color": "#06b6d4",
+        "desc": "咨询报告一键生成/多格式输出/数据采集",
+        "status": "active"
     },
     "enterprise_mgmt": {
         "icon": "🏢",

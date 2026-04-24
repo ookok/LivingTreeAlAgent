@@ -1,6 +1,6 @@
 """
 工作区面板 — 右侧栏
-显示 hermes-agent 的工作目录文件树、文件预览、Agent 记忆
+显示 hermes-agent 的工作目录文件树、文件预览、Agent 记忆、代理源管理
 """
 
 import os
@@ -12,6 +12,13 @@ from PyQt6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QTextEdit, QPushButton,
     QTabWidget, QFrame,
 )
+
+# 导入统一代理面板
+try:
+    from ui.unified_proxy_panel import UnifiedProxyPanel
+    HAS_UNIFIED_PROXY = True
+except ImportError:
+    HAS_UNIFIED_PROXY = False
 
 
 class WorkspacePanel(QWidget):
@@ -100,6 +107,15 @@ class WorkspacePanel(QWidget):
         self.memory_view.setPlaceholderText("Agent 记忆将在此显示…\n(~/.hermes/memory/)")
         mem_layout.addWidget(self.memory_view)
         self.tabs.addTab(mem_tab, "记忆")
+
+        # ── 代理源选项卡 ──────────────────────────────────────────────
+        if HAS_UNIFIED_PROXY:
+            proxy_tab = QWidget()
+            proxy_layout = QVBoxLayout(proxy_tab)
+            proxy_layout.setContentsMargins(0, 4, 0, 0)
+            self.proxy_panel = UnifiedProxyPanel()
+            proxy_layout.addWidget(self.proxy_panel)
+            self.tabs.addTab(proxy_tab, "代理源")
 
     # ------------------------------------------------------------------
     # 公共接口

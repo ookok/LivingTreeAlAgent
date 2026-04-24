@@ -28,6 +28,13 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QUrl
 
+# 导入统一代理面板
+try:
+    from ui.unified_proxy_panel import UnifiedProxyPanel
+    HAS_UNIFIED_PROXY = True
+except ImportError:
+    HAS_UNIFIED_PROXY = False
+
 
 class UserGuidePanel(QWidget):
     """用户须知面板 - 快速访问文档"""
@@ -1820,6 +1827,15 @@ class WorkspacePanel(QWidget):
         """)
         mem_layout.addWidget(self.memory_view)
         self.tabs.addTab(mem_tab, "🧠 记忆")
+
+        # ── 代理源选项卡 ──────────────────────────────────────────────
+        if HAS_UNIFIED_PROXY:
+            proxy_tab = QWidget()
+            proxy_layout = QVBoxLayout(proxy_tab)
+            proxy_layout.setContentsMargins(0, 8, 0, 4)
+            self.proxy_panel = UnifiedProxyPanel()
+            proxy_layout.addWidget(self.proxy_panel)
+            self.tabs.addTab(proxy_tab, "🌐 代理源")
 
     def _check_knowledge_base(self):
         """检查知识库是否已初始化"""

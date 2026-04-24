@@ -135,6 +135,90 @@ L5: 描述需求，完成设计到部署全过程
 3. 基础推导显示
 4. 手动Git提交
 
+---
+
+## 统一代理配置方案（2026-04-24 新增）
+
+### 设计原则
+- **一处设置，全局生效** - 所有代理设置集中在一个地方
+- **支持 GitHub 搜索源** - 原生 GitHub API 搜索
+
+### 新增文件
+| 文件 | 功能 |
+|------|------|
+| `core/unified_proxy_config.py` | 统一代理配置中心（单例） |
+| `ui/unified_proxy_panel.py` | 代理设置 UI 面板 |
+| `docs/unified_proxy_config.md` | 方案文档 |
+
+### 核心功能
+```python
+from core.unified_proxy_config import UnifiedProxyConfig
+
+config = UnifiedProxyConfig.get_instance()
+config.set_proxy("http://127.0.0.1:7890")  # 一处设置
+
+# GitHub 搜索
+results = config.search_github("python async", max_results=5)
+```
+
+### UI 集成
+Workspace Panel 新增 **代理源** 选项卡：
+- 代理设置（启用/清除）
+- 搜索源开关（GitHub、DuckDuckGo、Google、Bing）
+- 快速搜索
+
+### 测试验证
+- ✅ 统一代理配置测试通过
+- ✅ GitHub 搜索功能正常
+- ✅ 市场白名单正确识别所有搜索源
+
+---
+
+## 专家训练模块设计（2026-04-24 新增）
+
+### 核心组件
+
+| 组件 | 功能 | 特点 |
+|------|------|------|
+| `ExpertTrainingDashboard` | 主面板，集成所有功能 | 5个选项卡：总览、专家管理、知识库、训练中心、性能监控 |
+| `TrainingWizard` | 三阶段训练向导 | 提示注入 → 蒸馏数据 → 模型微调 |
+| `MetricsCard` | 指标卡片组件 | 缓存命中率、纠正率、准确率等 |
+| `CircularProgress` | 圆形进度指示器 | 系统健康度可视化 |
+| `ExpertCard` | 专家卡片组件 | 专家信息展示与操作 |
+| `KnowledgeTree` | 知识树组件 | 按领域分组展示知识 |
+
+### 潜在功能点（15个）
+
+**第一层（已识别）**：
+1. 思维链模板库 - 推理链存储与复用
+2. 多专家协作系统 - 主/辅专家模式
+3. 知识版本控制 - 变更历史与回滚
+4. 自适应学习节奏 - 根据用户活跃度调整
+5. 实时学习可视化 - 知识增长动画
+
+**第二层（高级）**：
+6. 主动学习系统 - 不确定性采样
+7. 跨领域知识迁移 - 知识复用
+8. 遗忘机制 - 艾宾浩斯曲线
+9. 联邦学习集成 - 隐私保护
+10. 元学习优化器 - 学习如何学习
+
+**第三层（创新）**：
+11. 知识图谱自愈
+12. 多模态学习
+13. 因果推理增强
+14. 社会学习模拟
+15. 认知架构集成
+
+### 测试结果
+- ✅ 所有测试通过
+- ✅ 与现有系统（ExpertGuidedLearningSystem、IntelligentLearningSystem、ExpertTrainingPipeline）集成正常
+
+### 相关文件
+- `ui/expert_training_dashboard.py` - 主面板
+- `docs/expert_training_features.md` - 功能潜力分析文档
+- `test_expert_training_dashboard.py` - 测试文件
+
 ### 端到端体验优化（2026-04-24 新增）
 
 **核心洞察**：本地部署的"慢"不是因为模型弱，而是交互充满"摩擦"

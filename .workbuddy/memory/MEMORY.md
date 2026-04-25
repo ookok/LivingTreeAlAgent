@@ -448,6 +448,68 @@ evolution:
 
 ---
 
+## Evolution Engine 开发（2026-04-25）
+
+### 目录结构
+```
+core/evolution_engine/
+├── __init__.py                 # 导出主要类
+├── evolution_engine.py          # 主控制器
+├── sensors/
+│   ├── __init__.py
+│   ├── base.py                # 传感器基类（SensorType, EvolutionSignal, BaseSensor）
+│   ├── performance_sensor.py   # 性能传感器
+│   └── architecture_smell_sensor.py  # 架构异味传感器
+├── aggregator/
+│   ├── __init__.py
+│   └── signal_aggregator.py   # 信号聚合器（RRF融合）
+├── proposal/
+│   └── __init__.py
+├── executor/
+│   └── __init__.py
+├── memory/
+│   └── __init__.py
+└── safety/
+    └── __init__.py
+```
+
+### MVP Phase 1 完成功能
+
+**已实现**:
+- ✅ BaseSensor - 传感器基类，支持后台扫描循环
+- ✅ PerformanceSensor - 性能监控（延迟/内存/CPU）
+- ✅ ArchitectureSmellSensor - 架构检测（循环依赖/上帝类/深继承）
+- ✅ SignalAggregator - 多源信号融合（RRF + 加权平均）
+- ✅ EvolutionEngine - 主控制器（感知-聚合-提案闭环）
+
+**核心API**:
+```python
+from core.evolution_engine import create_evolution_engine
+
+# 创建引擎
+engine = create_evolution_engine(
+    project_root="path/to/project",
+    enable_performance=True,
+    enable_architecture=True,
+    scan_interval=3600
+)
+
+# 启动
+engine.start()
+
+# 同步扫描
+result = engine.scan_once()
+
+# 获取提案
+proposals = engine.get_proposals()
+
+# 批准/拒绝
+engine.approve_proposal(proposal_id)
+engine.reject_proposal(proposal_id)
+```
+
+---
+
 ## 专家训练模块设计（2026-04-24 新增）
 
 ### 核心组件

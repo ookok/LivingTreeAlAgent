@@ -69,7 +69,7 @@ class ErrorLearningSystem:
     
     使用示例：
     ```python
-    from core.error_memory import ErrorLearningSystem
+    from client.src.business.error_memory import ErrorLearningSystem
 
     
     # 初始化

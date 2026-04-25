@@ -203,7 +203,7 @@ class SelfEvolvingSystem:
         """延迟加载错误记忆"""
         if self._error_memory is None and self._enabled['error_learning']:
             try:
-                from core.error_memory import ErrorLearningSystem
+                from client.src.business.error_memory import ErrorLearningSystem
                 self._error_memory = ErrorLearningSystem()
                 logger.info("Error memory loaded")
             except ImportError as e:
@@ -490,7 +490,7 @@ class SelfEvolvingSystem:
     async def _handle_error(self, ctx: ExecutionContext) -> Optional[Dict]:
         """处理错误"""
         try:
-            from core.error_memory import quick_fix_from_exception
+            from client.src.business.error_memory import quick_fix_from_exception
             solution = quick_fix_from_exception(ctx.error_info['error'])
             return solution
         except Exception:
@@ -509,7 +509,7 @@ class SelfEvolvingSystem:
     async def _record_error(self, ctx: ExecutionContext):
         """记录错误"""
         try:
-            from core.error_memory import quick_learn
+            from client.src.business.error_memory import quick_learn
             quick_learn(ctx.error_info['error'], {'task': ctx.task})
         except Exception:
             pass

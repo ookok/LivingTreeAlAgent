@@ -13,7 +13,7 @@ Error Memory System - 智能错误修复记忆系统
 
 使用示例：
 ```python
-from core.error_memory import (
+from client.src.business.error_memory import (
     ErrorLearningSystem,
     ErrorKnowledgeBase,
     quick_learn,

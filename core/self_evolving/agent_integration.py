@@ -151,7 +151,7 @@ class EvolutionMiddleware:
         """延迟加载错误记忆"""
         if self._error_memory is None and self._enabled['error_fix']:
             try:
-                from core.error_memory import ErrorLearningSystem
+                from client.src.business.error_memory import ErrorLearningSystem
                 self._error_memory = ErrorLearningSystem()
             except ImportError as e:
                 logger.warning(f"Error memory not available: {e}")
@@ -356,7 +356,7 @@ class EvolutionMiddleware:
         try:
             if self.error_memory:
                 # 尝试使用错误记忆系统
-                from core.error_memory import quick_fix_from_exception
+                from client.src.business.error_memory import quick_fix_from_exception
                 solution = quick_fix_from_exception(
                     error_info['error'],
                     {'task': message}

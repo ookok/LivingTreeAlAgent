@@ -136,7 +136,7 @@ def test_module_integration():
         from client.src.business.adaptive_quality import AdaptiveQualitySystem, quick_evaluate
         print("  [OK] AdaptiveQualitySystem")
         
-        from core.error_memory import ErrorLearningSystem, quick_fix_from_message
+        from client.src.business.error_memory import ErrorLearningSystem, quick_fix_from_message
         print("  [OK] ErrorLearningSystem")
         
         from client.src.business.reflective_agent import ReflectiveAgentLoop

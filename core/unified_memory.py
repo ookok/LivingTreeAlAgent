@@ -525,7 +525,7 @@ class ErrorMemoryAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.error_memory import get_error_system
+        from client.src.business.error_memory import get_error_system
         self._system = get_error_system()
     
     @property
@@ -543,7 +543,7 @@ class ErrorMemoryAdapter(IMemorySystem):
     def store(self, item: MemoryItem) -> str:
         """存储到错误记忆系统"""
         # 通过快速修复接口
-        from core.error_memory import quick_learn
+        from client.src.business.error_memory import quick_learn
         
         if item.metadata.get("error"):
             quick_learn(item.metadata["error"], item.metadata)
@@ -552,7 +552,7 @@ class ErrorMemoryAdapter(IMemorySystem):
     
     def retrieve(self, query: MemoryQuery) -> MemoryResult:
         """从错误记忆系统检索"""
-        from core.error_memory import quick_fix_from_message
+        from client.src.business.error_memory import quick_fix_from_message
         
         # 查询错误解决方案
         solution = quick_fix_from_message(query.query, {})

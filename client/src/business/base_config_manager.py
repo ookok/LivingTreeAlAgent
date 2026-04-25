@@ -68,9 +68,17 @@ class BaseConfigManager:
         """
         self._config_class = config_class
         self._config_path = config_path
-        self._config_obj = None   # dataclass 实例（dataclass 模式）
-        self._config_dict = None  # 字典（字典模式）
         self._observers: List[Callable[[str, Any, Any], None]] = []
+
+        # 根据模式初始化配置存储
+        if config_class is not None:
+            # dataclass 模式：暂不初始化，等 load() 或手动设置
+            self._config_obj = None
+            self._config_dict = None
+        else:
+            # 字典模式：立即调用钩子方法获取默认配置
+            self._config_dict = self._init_default_config()
+            self._config_obj = None
         
     def load(self, path: Optional[Path] = None) -> bool:
         """

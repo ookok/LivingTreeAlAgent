@@ -149,7 +149,7 @@ class BaseIntentEngine:
         """
         # 1. 检查缓存
         if self.enable_cache:
-            cached = self._get_from_cache(text)
+            cached = self.get_from_cache(text)
             if cached is not None:
                 self.cache_hits += 1
                 return cached
@@ -159,7 +159,7 @@ class BaseIntentEngine:
         
         # 3. 存入缓存
         if self.enable_cache and result is not None:
-            self._save_to_cache(text, result)
+            self.save_to_cache(text, result)
         
         # 4. 更新统计
         self.total_parsed += 1
@@ -282,7 +282,6 @@ class BaseIntentEngine:
         
         key = self.preprocess(text)
         if key in self._cache:
-            self.cache_hits += 1
             return self._cache[key]
         
         return None

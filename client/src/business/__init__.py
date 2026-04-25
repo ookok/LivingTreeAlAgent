@@ -1,7 +1,7 @@
-"""核心模块"""
+"""Business logic modules (cleaned 2026-04-26).
 
-from client.src.business.agent import HermesAgent
-from core.ollama_client import OllamaClient
-from core.session_db import SessionDB
-from core.memory_manager import MemoryManager
-from core.tools_registry import ToolRegistry, ToolDispatcher
+All legacy `core.` imports have been removed.
+Modules should be imported directly, e.g.:
+    from client.src.business.base_config_manager import BaseConfigManager
+    from client.src.business.smart_proxy_gateway import SmartProxyGateway
+"""

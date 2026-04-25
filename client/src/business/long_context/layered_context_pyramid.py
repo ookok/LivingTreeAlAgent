@@ -506,7 +506,7 @@ class LayeredContextBuilder:
         
         # 初始化代码签名器
         if not self.code_signer:
-            from core.long_context.code_signer import CodeSigner
+            from client.src.business.long_context.code_signer import CodeSigner
             self.code_signer = CodeSigner()
         
         lines = ["## 相关代码\n"]

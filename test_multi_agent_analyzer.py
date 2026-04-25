@@ -31,7 +31,7 @@ class TestMultiAgentAnalyzers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """设置测试环境"""
-        from core.long_context import (
+        from client.src.business.long_context import (
             MultiAgentCoordinator,
             AgentType,
             SummaryAgent,
@@ -333,7 +333,7 @@ class TestMultiAgentAnalyzers(unittest.TestCase):
         print("测试 8: 便捷函数")
         print("="*60)
 
-        from core.long_context import quick_analyze, analyze_multi_agent
+        from client.src.business.long_context import quick_analyze, analyze_multi_agent
 
         # 快速分析
         print("快速分析...")
@@ -367,7 +367,7 @@ class TestMultiAgentAnalyzers(unittest.TestCase):
         print("测试 9: MessageBus")
         print("="*60)
 
-        from core.long_context import MessageBus, AgentMessage, MessageType
+        from client.src.business.long_context import MessageBus, AgentMessage, MessageType
 
         bus = MessageBus()
 
@@ -401,7 +401,7 @@ class TestMultiAgentAnalyzers(unittest.TestCase):
         print("测试 10: 性能测试")
         print("="*60)
 
-        from core.long_context import MultiAgentCoordinator
+        from client.src.business.long_context import MultiAgentCoordinator
 
         coordinator = MultiAgentCoordinator()
 

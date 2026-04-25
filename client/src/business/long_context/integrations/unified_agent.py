@@ -36,7 +36,7 @@ ProgressiveUnderstanding 集成层
 └─────────────────────────────────────────────────────────────────────────────┘
 
 使用示例:
-    from core.long_context.integrations import UnifiedAgent
+    from client.src.business.long_context.integrations import UnifiedAgent
 
     # 创建统一智能体
     agent = UnifiedAgent(depth="deep")
@@ -59,7 +59,7 @@ from typing import Dict, List, Optional, Any, Callable, Awaitable
 from enum import Enum
 
 # Phase 1-4 组件
-from core.long_context.progressive_understanding_impl import (
+from client.src.business.long_context.progressive_understanding_impl import (
     ProgressiveUnderstanding,
     ProgressiveResult,
     UnderstandingConfig,

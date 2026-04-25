@@ -20,7 +20,7 @@ try:
     import sys
     sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
     
-    from core.long_context.progressive_understanding_impl import (
+    from client.src.business.long_context.progressive_understanding_impl import (
         ProgressiveUnderstanding,
         UnderstandingConfig,
         UnderstandingDepth,

@@ -17,7 +17,7 @@ import sys
 import time
 sys.stdout.reconfigure(encoding='utf-8')
 
-from core.long_context import (
+from client.src.business.long_context import (
     LayeredHybridAnalyzer,
     AnalysisDepth,
     analyze_layered,

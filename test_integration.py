@@ -14,7 +14,7 @@ print("=" * 60)
 # 测试 1: 模块导入
 print("\n[测试 1] 模块导入")
 try:
-    from core.long_context import (
+    from client.src.business.long_context import (
         # Phase 4 组件
         ProgressiveUnderstanding,
         ProgressiveResult,
@@ -139,7 +139,7 @@ except Exception as e:
 # 测试 7: ProgressiveUnderstanding 集成
 print("\n[测试 7] ProgressiveUnderstanding 集成")
 try:
-    from core.long_context import quick_understand
+    from client.src.business.long_context import quick_understand
 
     # 直接使用渐进式理解
     text = """

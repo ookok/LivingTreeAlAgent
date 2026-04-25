@@ -34,6 +34,15 @@ from .intent_types import Intent, IntentType
 # 意图→执行桥接器
 from .intent_action_bridge import IntentActionBridge, get_bridge
 
+from .intent_evolution import (
+    IntentEvolutionEngine,
+    IntentGraph,
+    IntentClarity,
+    EvolutionStatus,
+    ClarificationStep,
+    EvolutionResult,
+)
+
 # 动作处理器（可扩展）
 from .action_handlers import (
     BaseActionHandler,
@@ -57,6 +66,13 @@ __all__ = [
     'IntentStatus',
     'Intent',
     'IntentType',
+    # 意图演化引擎（新增）
+    'IntentEvolutionEngine',
+    'IntentGraph',
+    'IntentClarity',
+    'EvolutionStatus',
+    'ClarificationStep',
+    'EvolutionResult',
     # 桥接器
     'IntentActionBridge',
     'get_bridge',

@@ -31,6 +31,14 @@ from .executor.atomic_executor import AtomicExecutor, AtomicResult
 from .executor.rollback_manager import RollbackManager, RollbackPoint, RollbackType
 from .executor.step_executor import StepExecutor, StepExecutionResult, StepStatus
 
+# 探索性执行引擎（新增）
+from .exploratory_executor import (
+    ExploratoryExecutor,
+    CandidateSolution,
+    CandidateStatus,
+    ExplorationResult,
+)
+
 # Phase 4: 进化记忆
 from .memory.evolution_log import (
     EvolutionLog, ScanRecord, ProposalRecord,
@@ -166,4 +174,10 @@ __all__ = [
     'BenchmarkEvaluator',
     'BenchmarkScore',
     'BenchmarkTask',
+
+    # 探索性执行引擎（新增）
+    'ExploratoryExecutor',
+    'CandidateSolution',
+    'CandidateStatus',
+    'ExplorationResult',
 ]

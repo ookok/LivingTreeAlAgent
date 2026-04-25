@@ -223,7 +223,14 @@ class Intent:
             "什么", "怎么", "帮", "一下", "帮我", "这个", "那个",
             "需要", "想要", "能不能", "请", "need", "want", "help"
         }
-        words = re.split(r'[\s,，。、！？；：""''（）\(\)\[\]{}]', self.raw_input)
+        # 分词：先用空白字符分，再按中文/英文标点二次分割
+        import re
+        tokens = re.split(r'\s+', self.raw_input.strip())
+        punct = ',，。、！？；：""\'\'（）【】\[\]{}()'
+        words = []
+        for token in tokens:
+            parts = re.split('|'.join(re.escape(c) for c in punct), token)
+            words.extend(p.strip() for p in parts if p.strip())
         words = [w.strip().lower() for w in words if w.strip()]
         keywords = [w for w in words if len(w) >= 2 and w not in stop_words]
         return keywords[:20]

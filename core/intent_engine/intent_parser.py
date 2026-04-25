@@ -1,411 +1,209 @@
-# -*- coding: utf-8 -*-
 """
-Intent Parser - 意图解析器
-=========================
-
-基于规则的意图类型识别和解析。
-
-功能：
-1. 动作词提取（写/创建/修改/调试/分析...）
-2. 目标提取（登录接口/用户模块/缓存层...）
-3. 意图类型分类
-4. 置信度计算
-
-使用方式：
-    parser = IntentParser()
-    result = parser.parse("帮我写一个用户登录接口")
+意图解析器 - 将自然语言解析为结构化意图
 """
 
-from __future__ import annotations
-
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+from enum import Enum
 import re
-from typing import List, Dict, Tuple, Optional
-from .intent_types import Intent, IntentType, IntentPriority
+
+
+class IntentType(Enum):
+    """意图类型枚举"""
+    CODE_GENERATION = "code_generation"        # 代码生成
+    CODE_COMPLETION = "code_completion"        # 代码补全
+    CODE_REVIEW = "code_review"                # 代码审查
+    BUG_FIX = "bug_fix"                        # Bug修复
+    REFACTORING = "refactoring"                # 重构
+    QUERY = "query"                            # 查询
+    EXECUTION = "execution"                    # 执行
+    EXPLANATION = "explanation"                # 解释
+    CREATION = "creation"                      # 创建
+    MODIFICATION = "modification"              # 修改
+    DELETION = "deletion"                      # 删除
+    SEARCH = "search"                         # 搜索
+    ANALYSIS = "analysis"                     # 分析
+    UNKNOWN = "unknown"                       # 未知
+
+
+@dataclass
+class ParsedIntent:
+    """解析后的意图对象"""
+    raw_text: str                              # 原始文本
+    intent_type: IntentType = IntentType.UNKNOWN  # 意图类型
+    entities: Dict[str, Any] = field(default_factory=dict)  # 实体提取
+    parameters: Dict[str, Any] = field(default_factory=dict)  # 参数
+    confidence: float = 0.0                    # 置信度
+    constraints: List[str] = field(default_factory=list)     # 约束条件
+    context: Dict[str, Any] = field(default_factory=dict)    # 上下文
 
 
 class IntentParser:
     """
     意图解析器
     
-    基于关键词和模式匹配进行意图解析。
-    无需 LLM 调用，快速响应。
+    核心功能：
+    1. 文本预处理（分词、规范化）
+    2. 实体提取（文件路径、函数名、变量等）
+    3. 意图类型识别
+    4. 参数解析
     """
     
-    def __init__(self):
-        # 动作词 → 意图类型映射
-        self.action_patterns = {
-            # 代码生成类
-            IntentType.CODE_GENERATION: [
-                r"写", r"创建", r"生成", r"实现", r"编写", r"制作",
-                r"write", r"create", r"generate", r"implement", r"build", r"make"
-            ],
-            IntentType.API_DESIGN: [
-                r"接口", r"API", r"endpoint", r"路由", r"endpoint",
-                r"写接口", r"定义接口", r"设计接口"
-            ],
-            IntentType.DATABASE_DESIGN: [
-                r"表", r"数据库", r"schema", r"表结构", r"设计表",
-                r"创建表", r"数据库设计"
-            ],
-            IntentType.UI_GENERATION: [
-                r"界面", r"页面", r"UI", r"组件", r"前端", r"按钮",
-                r"表单", r"弹窗", r"写页面", r"写界面"
-            ],
-            
-            # 代码修改类
-            IntentType.CODE_MODIFICATION: [
-                r"修改", r"改动", r"调整", r"改一下", r"改动一下",
-                r"modify", r"change", r"edit", r"update"
-            ],
-            IntentType.CODE_REFACTOR: [
-                r"重构", r"优化代码", r"整理代码", r"规范化",
-                r"refactor", r"restructure", r"reorganize"
-            ],
-            IntentType.CODE_OPTIMIZATION: [
-                r"优化", r"提升性能", r"加速", r"减少.*延迟",
-                r"optimize", r"improve.*performance", r"speed up"
-            ],
-            
-            # 调试修复类
-            IntentType.DEBUGGING: [
-                r"调试", r"debug", r"排查", r"找出.*问题",
-                r"为什么.*错", r"报错了", r"出问题了"
-            ],
-            IntentType.BUG_FIX: [
-                r"修复.*bug", r"修.*bug", r"解决.*问题",
-                r"fix.*bug", r"fix.*error", r"修复错误"
-            ],
-            IntentType.ERROR_RESOLUTION: [
-                r"报错", r"错误", r"exception", r"Error",
-                r"failed", r"失败", r"问题"
-            ],
-            
-            # 代码理解类
-            IntentType.CODE_UNDERSTANDING: [
-                r"理解", r"看懂", r"解释.*代码", r"说明",
-                r"understand", r"explain", r"what.*does"
-            ],
-            IntentType.CODE_EXPLANATION: [
-                r"这是.*什么", r"代码.*解释", r"这段.*干.*什.*么",
-                r"代码.*讲解"
-            ],
-            IntentType.CODE_REVIEW: [
-                r"审查", r"review", r"检查.*代码", r"代码.*质量",
-                r"评审"
-            ],
-            IntentType.DOCUMENTATION: [
-                r"文档", r"注释", r"说明文档", r"api.*文档",
-                r"doc", r"documentation", r"readme"
-            ],
-            
-            # 测试验证类
-            IntentType.TEST_GENERATION: [
-                r"测试", r"用例", r"写.*测试", r"单元测试",
-                r"test", r"unit test", r"test case"
-            ],
-            IntentType.SECURITY_CHECK: [
-                r"安全", r"漏洞", r"security", r"sql.*注入",
-                r"xss", r"csrf", r"权限"
-            ],
-            IntentType.PERFORMANCE_ANALYSIS: [
-                r"性能", r"瓶颈", r"优化.*性能", r"performance",
-                r"慢", r"卡顿"
-            ],
-            
-            # 运维部署类
-            IntentType.DEPLOYMENT: [
-                r"部署", r"上线", r"发布", r"deploy", r"release",
-                r"发布.*生产", r"发布.*环境"
-            ],
-            IntentType.CONFIGURATION: [
-                r"配置", r"设置", r"config", r"配置.*文件",
-                r"环境变量"
-            ],
-            IntentType.ENVIRONMENT_SETUP: [
-                r"环境", r"搭建", r"安装.*依赖", r"setup",
-                r"初始化", r"环境.*准备"
-            ],
-            
-            # 文件操作类
-            IntentType.FILE_OPERATION: [
-                r"文件", r"读取", r"写入", r"删除.*文件",
-                r"file", r"read", r"write", r"delete"
-            ],
-            IntentType.FOLDER_STRUCTURE: [
-                r"目录", r"文件夹", r"结构", r"组织",
-                r"folder", r"directory", r"structure"
-            ],
-            
-            # 知识问答类
-            IntentType.KNOWLEDGE_QUERY: [
-                r"什么是", r".*的区别", r"如何", r"怎么实现",
-                r"what.*is", r"how.*to", r"difference between"
-            ],
-            IntentType.BEST_PRACTICE: [
-                r"最佳实践", r"推荐", r"建议.*做法",
-                r"best practice", r"recommended"
-            ],
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self.config = config or {}
+        self._init_patterns()
+        
+    def _init_patterns(self):
+        """初始化正则表达式模式"""
+        # 代码相关模式
+        self.patterns = {
+            'file_path': r'[\w./\\]+\.\w+',  # 文件路径
+            'function_name': r'def\s+(\w+)|(\w+)\s*\(' ,  # 函数名
+            'class_name': r'class\s+(\w+)',   # 类名
+            'variable': r'(\w+)\s*=',         # 变量
+            'import_statement': r'import\s+(\w+)|from\s+(\w+)',  # 导入语句
+            'comment': r'#\s*(.+)',            # 注释
         }
         
-        # 动作词提取模式
-        self.action_words = {
-            # 动作词 → 标准动作
-            "写": "编写代码",
-            "创建": "创建",
-            "生成": "生成",
-            "实现": "实现",
-            "编写": "编写",
-            "制作": "制作",
-            "修改": "修改",
-            "改动": "修改",
-            "调整": "调整",
-            "重构": "重构",
-            "优化": "优化",
-            "调试": "调试",
-            "修复": "修复",
-            "解决": "解决",
-            "排查": "排查",
-            "理解": "理解",
-            "解释": "解释",
-            "审查": "审查",
-            "检查": "检查",
-            "测试": "测试",
-            "部署": "部署",
-            "上线": "上线",
-            "发布": "发布",
-            "配置": "配置",
-            "设置": "设置",
-            "搭建": "搭建",
-            "安装": "安装",
-            "读取": "读取",
-            "写入": "写入",
-            "删除": "删除",
-            "查询": "查询",
-            "设计": "设计",
-            "分析": "分析",
-            "查看": "查看",
-            "生成": "生成",
-            "导入": "导入",
-            "导出": "导出",
-            "迁移": "迁移",
-            "转换": "转换",
+        # 意图关键词映射
+        self.intent_keywords = {
+            IntentType.CODE_GENERATION: ['生成', '创建', '编写', '写', '实现', 'build', 'create', 'generate', 'write'],
+            IntentType.CODE_COMPLETION: ['补全', '完成', '填充', 'complete', 'fill', 'autocomplete'],
+            IntentType.CODE_REVIEW: ['审查', 'review', '检查', 'check', 'lint'],
+            IntentType.BUG_FIX: ['修复', 'fix', 'bug', '错误', 'error', '问题'],
+            IntentType.REFACTORING: ['重构', 'refactor', '优化', 'optimize', '重写'],
+            IntentType.QUERY: ['查询', 'query', '查找', 'find', '搜索', 'search'],
+            IntentType.EXECUTION: ['执行', 'run', '运行', 'execute', 'start'],
+            IntentType.EXPLANATION: ['解释', 'explain', '说明', '什么是', 'how'],
+            IntentType.CREATION: ['新建', 'new', '新增', 'add'],
+            IntentType.MODIFICATION: ['修改', 'edit', 'change', '更新', 'update'],
+            IntentType.DELETION: ['删除', 'delete', 'remove', '清除'],
+            IntentType.SEARCH: ['搜索', 'search', '查找', 'find', 'locate'],
+            IntentType.ANALYSIS: ['分析', 'analyze', '分析', '评估', 'evaluate'],
         }
         
-        # 意图优先级规则
-        self.priority_rules = {
-            IntentType.ERROR_RESOLUTION: IntentPriority.CRITICAL,
-            IntentType.BUG_FIX: IntentPriority.CRITICAL,
-            IntentType.DEBUGGING: IntentPriority.HIGH,
-            IntentType.DEPLOYMENT: IntentPriority.HIGH,
-            IntentType.CODE_GENERATION: IntentPriority.MEDIUM,
-            IntentType.CODE_MODIFICATION: IntentPriority.MEDIUM,
-            IntentType.CODE_REFACTOR: IntentPriority.MEDIUM,
-            IntentType.CODE_OPTIMIZATION: IntentPriority.MEDIUM,
-        }
-        
-        # 编译正则表达式
-        self._compile_patterns()
-    
-    def _compile_patterns(self):
-        """编译所有正则表达式"""
-        self.compiled_patterns = {}
-        for intent_type, patterns in self.action_patterns.items():
-            self.compiled_patterns[intent_type] = [
-                re.compile(p, re.IGNORECASE) for p in patterns
-            ]
-    
-    def parse(self, query: str) -> Intent:
+    def parse(self, text: str, context: Optional[Dict[str, Any]] = None) -> ParsedIntent:
         """
-        解析用户查询
+        解析自然语言文本为结构化意图
         
         Args:
-            query: 用户输入的自然语言查询
+            text: 自然语言输入
+            context: 上下文信息
             
         Returns:
-            Intent: 结构化的意图对象
+            ParsedIntent: 解析后的意图对象
         """
-        intent = Intent(raw_input=query)
+        # 1. 文本预处理
+        processed_text = self._preprocess(text)
         
-        # 1. 检测意图类型
-        intent_type, type_confidence = self._classify_intent(query)
-        intent.intent_type = intent_type
-        intent.confidence = type_confidence
+        # 2. 实体提取
+        entities = self._extract_entities(processed_text)
         
-        # 2. 提取动作词
-        action = self._extract_action(query)
-        intent.action = action
+        # 3. 意图类型识别
+        intent_type, confidence = self._classify_intent(processed_text)
         
-        # 3. 提取目标
-        target, target_desc = self._extract_target(query, intent_type)
-        intent.target = target
-        intent.target_description = target_desc
+        # 4. 参数解析
+        parameters = self._extract_parameters(processed_text, intent_type)
         
-        # 4. 设置优先级
-        intent.priority = self._determine_priority(intent_type, query)
+        # 5. 约束条件提取
+        constraints = self._extract_constraints(processed_text)
         
-        # 5. 检测语言
-        intent.language = self._detect_language(query)
-        
-        # 6. 计算完整性
-        intent.completeness = self._calculate_completeness(intent)
-        
-        return intent
+        return ParsedIntent(
+            raw_text=text,
+            intent_type=intent_type,
+            entities=entities,
+            parameters=parameters,
+            confidence=confidence,
+            constraints=constraints,
+            context=context or {}
+        )
     
-    def _classify_intent(self, query: str) -> Tuple[IntentType, float]:
-        """
-        意图分类
+    def _preprocess(self, text: str) -> str:
+        """文本预处理"""
+        # 移除多余空白
+        text = re.sub(r'\s+', ' ', text).strip()
+        # 转小写（用于关键词匹配）
+        return text.lower()
+    
+    def _extract_entities(self, text: str) -> Dict[str, Any]:
+        """提取实体信息"""
+        entities = {}
         
-        返回:
-            (意图类型, 置信度)
-        """
-        scores: Dict[IntentType, float] = {}
-        
-        for intent_type, patterns in self.compiled_patterns.items():
-            score = 0.0
-            for pattern in patterns:
-                if pattern.search(query):
-                    score += 1.0
+        # 提取文件路径
+        file_paths = re.findall(self.patterns['file_path'], text)
+        if file_paths:
+            entities['file_paths'] = file_paths
             
+        # 提取函数名
+        function_names = re.findall(self.patterns['function_name'], text)
+        if function_names:
+            entities['function_names'] = [f for f in function_names if f]
+            
+        # 提取类名
+        class_names = re.findall(self.patterns['class_name'], text)
+        if class_names:
+            entities['class_names'] = class_names
+            
+        return entities
+    
+    def _classify_intent(self, text: str) -> tuple[IntentType, float]:
+        """识别意图类型"""
+        scores = {}
+        
+        for intent_type, keywords in self.intent_keywords.items():
+            score = sum(1 for keyword in keywords if keyword.lower() in text)
             if score > 0:
-                # 归一化：匹配越多，置信度越高
-                confidence = min(score / len(patterns) * 0.7 + 0.3, 0.95)
-                scores[intent_type] = confidence
-        
+                scores[intent_type] = score / len(keywords)
+                
         if not scores:
-            return IntentType.UNKNOWN, 0.5
-        
-        # 返回得分最高的意图类型
-        best_type = max(scores.items(), key=lambda x: x[1])
-        return best_type[0], best_type[1]
-    
-    def _extract_action(self, query: str) -> str:
-        """
-        提取动作词
-        
-        例如：
-            "帮我写一个登录接口" → "编写"
-            "修复这个bug" → "修复"
-        """
-        for action_key, standard_action in self.action_words.items():
-            if action_key in query:
-                return standard_action
-        
-        return ""
-    
-    def _extract_target(self, query: str, intent_type: IntentType) -> Tuple[str, str]:
-        """
-        提取目标
-        
-        Args:
-            query: 查询文本
-            intent_type: 意图类型
+            return IntentType.UNKNOWN, 0.0
             
-        Returns:
-            (目标, 目标描述)
-        """
-        target = ""
-        target_desc = ""
-        
-        # 移除动作词后的文本
-        clean_query = query
-        for action_key in self.action_words:
-            clean_query = clean_query.replace(action_key, "")
-            clean_query = clean_query.replace(f"帮我{action_key}", "")
-            clean_query = clean_query.replace(f"我要{action_key}", "")
-            clean_query = clean_query.replace(f"帮我一下{action_key}", "")
-        
-        clean_query = clean_query.strip()
-        
-        # 提取名词短语
-        # 简化版：提取连续的汉字/英文
-        pattern = r'[\u4e00-\u9fa5a-zA-Z0-9]{2,30}'
-        matches = re.findall(pattern, clean_query)
-        
-        if matches:
-            # 取最长的作为目标
-            target = max(matches, key=len)
-            target_desc = " ".join(matches[:3])  # 前3个作为描述
-        
-        return target, target_desc
+        # 返回最高分的意图类型
+        best_intent = max(scores.items(), key=lambda x: x[1])
+        return best_intent[0], min(best_intent[1], 1.0)
     
-    def _determine_priority(self, intent_type: IntentType, query: str) -> IntentPriority:
-        """
-        确定意图优先级
+    def _extract_parameters(self, text: str, intent_type: IntentType) -> Dict[str, Any]:
+        """提取参数"""
+        params = {}
         
-        考虑意图类型 + 紧急程度词
-        """
-        # 基于类型确定基础优先级
-        priority = self.priority_rules.get(intent_type, IntentPriority.MEDIUM)
-        
-        # 紧急程度词调整
-        urgent_words = [r"紧急", r"马上", r"立即", r"尽快", r"critical", r"urgent"]
-        for word in urgent_words:
-            if re.search(word, query, re.IGNORECASE):
-                if priority.value > IntentPriority.HIGH.value:
-                    priority = IntentPriority.HIGH
-                if priority.value > IntentPriority.CRITICAL.value:
-                    priority = IntentPriority.CRITICAL
-        
-        # 紧急度降低
-        low_priority_words = [r"以后", r"有空", r"不急", r"慢慢来"]
-        for word in low_priority_words:
-            if word in query:
-                if priority.value < IntentPriority.MEDIUM.value:
-                    priority = IntentPriority.LOW
-        
-        return priority
+        # 根据意图类型提取不同参数
+        if intent_type == IntentType.CODE_GENERATION:
+            # 提取语言/框架信息
+            languages = ['python', 'javascript', 'java', 'cpp', 'go', 'rust']
+            for lang in languages:
+                if lang in text:
+                    params['language'] = lang
+                    
+        elif intent_type == IntentType.BUG_FIX:
+            # 提取错误信息
+            if 'error' in text or '错误' in text:
+                error_match = re.search(r'(error|错误)[:\s]+(.+)', text)
+                if error_match:
+                    params['error_message'] = error_match.group(2)
+                    
+        elif intent_type == IntentType.EXECUTION:
+            # 提取命令
+            if 'run' in text or '执行' in text:
+                cmd_match = re.search(r'run\s+(.+)', text)
+                if cmd_match:
+                    params['command'] = cmd_match.group(1)
+                    
+        return params
     
-    def _detect_language(self, query: str) -> str:
-        """
-        检测查询语言
+    def _extract_constraints(self, text: str) -> List[str]:
+        """提取约束条件"""
+        constraints = []
         
-        Returns:
-            "zh" / "en" / "mixed"
-        """
-        # 中文字符数量
-        chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', query))
-        # 英文字符数量
-        english_chars = len(re.findall(r'[a-zA-Z]', query))
-        
-        total = chinese_chars + english_chars
-        if total == 0:
-            return "zh"
-        
-        chinese_ratio = chinese_chars / total
-        
-        if chinese_ratio > 0.7:
-            return "zh"
-        elif english_chars > 0.7:
-            return "en"
-        else:
-            return "mixed"
-    
-    def _calculate_completeness(self, intent: Intent) -> float:
-        """
-        计算意图完整性
-        
-        完整性 = 意图描述是否足够清晰
-        """
-        score = 0.0
-        
-        # 意图类型明确 (+0.3)
-        if intent.intent_type != IntentType.UNKNOWN:
-            score += 0.3
-        
-        # 有动作词 (+0.2)
-        if intent.action:
-            score += 0.2
-        
-        # 有目标 (+0.3)
-        if intent.target:
-            score += 0.3
-        
-        # 技术栈明确 (+0.2)
-        if intent.tech_stack:
-            score += 0.2
-        
-        return min(score, 1.0)
-    
-    def batch_parse(self, queries: List[str]) -> List[Intent]:
-        """批量解析"""
-        return [self.parse(q) for q in queries]
+        # 提取性能约束
+        if '快' in text or 'fast' in text or 'quick' in text:
+            constraints.append('performance:high')
+            
+        # 提取安全约束
+        if '安全' in text or 'secure' in text:
+            constraints.append('security:required')
+            
+        # 提取兼容性约束
+        if '兼容' in text or 'compatible' in text:
+            constraints.append('compatibility:required')
+            
+        return constraints

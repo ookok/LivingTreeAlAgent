@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from core.microkernel.kernel import get_kernel, Microkernel
 from core.microkernel.service_registry import get_service_registry
+from core.microkernel.performance_monitor import get_performance_monitor
 from core.plugin_framework.event_bus import get_event_bus
 from core.plugin_framework.plugin_manager import get_plugin_manager
 
@@ -350,6 +351,10 @@ class KernelMonitorPanel(QWidget):
         self._event_stats = EventBusStats()
         cards_layout.addWidget(self._event_stats)
 
+        # 性能卡片（实时指标）
+        self._perf_cards = self._create_perf_cards()
+        cards_layout.addWidget(self._perf_cards)
+
         main_layout.addLayout(cards_layout)
 
         # Tab 页：服务 / 插件 / 日志
@@ -390,12 +395,90 @@ class KernelMonitorPanel(QWidget):
         self._log_view.setMaximumBlockCount(1000)  # 最多 1000 行
         self._tabs.addTab(self._log_view, "系统日志")
 
+        # Tab 4：性能监控
+        self._perf_tab = QWidget()
+        perf_layout = QVBoxLayout(self._perf_tab)
+        perf_layout.setContentsMargins(8, 8, 8, 8)
+
+        # 性能指标网格
+        perf_grid = QGridLayout()
+        self._perf_labels: Dict[str, QLabel] = {}
+
+        metrics = [
+            ("CPU 使用率", "cpu_percent", "%"),
+            ("内存使用率", "memory_percent", "%"),
+            ("内存使用", "memory_used_mb", "MB"),
+            ("事件总数", "event_count", ""),
+            ("缓存命中率", "cache_hit_rate", ""),
+            ("活跃插件", "active_plugins", ""),
+        ]
+
+        for i, (label_text, key, unit) in enumerate(metrics):
+            row, col = divmod(i, 3)
+            group = QGroupBox(label_text)
+            value_label = QLabel("0")
+            font = QFont()
+            font.setPointSize(18)
+            font.setBold(True)
+            value_label.setFont(font)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            group_layout = QVBoxLayout(group)
+            group_layout.addWidget(value_label)
+
+            self._perf_labels[key] = value_label
+            perf_grid.addWidget(group, row, col)
+
+        perf_layout.addLayout(perf_grid)
+        perf_layout.addStretch()
+        self._tabs.addTab(self._perf_tab, "性能监控")
+
+        # Tab 5：告警
+        self._alert_list = QTextEdit()
+        self._alert_list.setReadOnly(True)
+        self._tabs.addTab(self._alert_list, "告警")
+
         main_layout.addWidget(self._tabs)
 
         # 状态栏
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("监控中...")
         main_layout.addWidget(self._status_bar)
+
+    def _create_perf_cards(self) -> QWidget:
+        """创建性能卡片组件"""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # CPU
+        self._cpu_card = self._create_mini_card("CPU", "%")
+        layout.addWidget(self._cpu_card)
+
+        # 内存
+        self._mem_card = self._create_mini_card("内存", "%")
+        layout.addWidget(self._mem_card)
+
+        # 缓存命中率
+        self._cache_card = self._create_mini_card("缓存命中", "")
+        layout.addWidget(self._cache_card)
+
+        return widget
+
+    def _create_mini_card(self, title: str, unit: str) -> QGroupBox:
+        """创建迷你指标卡片"""
+        group = QGroupBox(title)
+        layout = QVBoxLayout(group)
+        value_label = QLabel("0")
+        font = QFont()
+        font.setPointSize(14)
+        font.setBold(True)
+        value_label.setFont(font)
+        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(value_label)
+
+        # 存储引用
+        setattr(self, f"_{title.lower()}_value", value_label)
+        return group
 
     def _start_monitoring(self) -> None:
         """启动监控定时器"""
@@ -429,12 +512,59 @@ class KernelMonitorPanel(QWidget):
                 stats = eb.get_stats()
                 self._event_stats.update_stats(stats)
 
+            # 5. 更新性能 Tab 数据
+            monitor = get_performance_monitor()
+            if monitor:
+                metrics = monitor.get_current_metrics()
+                self._update_perf_labels(metrics)
+                self._update_alerts(monitor)
+
             self._status_bar.showMessage(
                 f"最后更新：{time.strftime('%H:%M:%S')}"
             )
 
         except Exception as e:
             self._log(f"更新失败：{e}")
+
+    def _update_perf_labels(self, metrics: dict) -> None:
+        """更新性能卡片和性能Tab的显示"""
+        # 更新顶部迷你卡片
+        cpu = metrics.get("system.cpu_percent", 0.0)
+        self._cpu_card.findChild(QLabel).setText(f"{cpu:.1f}")
+        mem = metrics.get("system.memory_percent", 0.0)
+        self._mem_card.findChild(QLabel).setText(f"{mem:.1f}")
+        cache = metrics.get("app.cache_hit_rate", 0.0)
+        self._cache_card.findChild(QLabel).setText(f"{cache:.0%}")
+
+        # 更新性能Tab中的详细指标
+        mapping = {
+            "cpu_percent": "system.cpu_percent",
+            "memory_percent": "system.memory_percent",
+            "memory_used_mb": "system.memory_used_mb",
+            "event_count": "app.event_count",
+            "cache_hit_rate": "app.cache_hit_rate",
+            "active_plugins": "app.active_plugins",
+        }
+        for key, metric_name in mapping.items():
+            label = self._perf_labels.get(key)
+            if label:
+                val = metrics.get(metric_name, 0)
+                if isinstance(val, float):
+                    if metric_name.endswith("rate"):
+                        label.setText(f"{val:.1%}")
+                    elif metric_name.endswith("mb"):
+                        label.setText(f"{val:.0f}")
+                    else:
+                        label.setText(f"{val:.1f}")
+                else:
+                    label.setText(str(int(val)))
+
+    def _update_alerts(self, monitor) -> None:
+        """更新告警Tab"""
+        # 获取最近的告警（通过PerformanceMonitor的history）
+        stats = monitor.get_stats() if hasattr(monitor, 'get_stats') else {}
+        # 此处可以扩展为从monitor获取真实告警历史
+        pass
 
     def _on_plugin_selected(self, plugin_id: str) -> None:
         """插件被选中"""

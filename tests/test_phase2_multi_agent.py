@@ -10,7 +10,7 @@ import asyncio
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.multi_agent import (
+from client.src.business.multi_agent import (
     MultiAgentWorkflow,
     DynamicTaskDecomposer,
     AgentLifecycleManager,
@@ -113,7 +113,7 @@ class TestAgentLifecycleManager(unittest.TestCase):
     def test_factory_registration(self):
         """测试工厂注册"""
         def test_factory(name, **kwargs):
-            from core.multi_agent import Agent, AgentRole
+            from client.src.business.multi_agent import Agent, AgentRole
             return Agent(
                 id="test_id",
                 name=name,
@@ -127,7 +127,7 @@ class TestAgentLifecycleManager(unittest.TestCase):
     
     def test_agent_pool(self):
         """测试代理池"""
-        from core.multi_agent import Agent, AgentRole
+        from client.src.business.multi_agent import Agent, AgentRole
         
         agent = Agent(
             id="pool_agent",

@@ -69,7 +69,7 @@ MultiAgentWorkflow
 ### 1. 多代理协作工作流
 
 ```python
-from core.multi_agent import (
+from client.src.business.multi_agent import (
     MultiAgentWorkflow, AgentRole
 )
 
@@ -98,7 +98,7 @@ print(result)
 ### 2. 动态任务分解
 
 ```python
-from core.multi_agent import DynamicTaskDecomposer
+from client.src.business.multi_agent import DynamicTaskDecomposer
 
 decomposer = DynamicTaskDecomposer()
 
@@ -115,7 +115,7 @@ for task in tasks:
 ### 3. 代理生命周期管理
 
 ```python
-from core.multi_agent import AgentLifecycleManager, Agent, AgentRole
+from client.src.business.multi_agent import AgentLifecycleManager, Agent, AgentRole
 
 manager = AgentLifecycleManager()
 

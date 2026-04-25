@@ -3,21 +3,57 @@
 ==============
 
 管理邮件账户配置的持久化。
+支持从 UnifiedConfig 读取配置。
 """
 
 import json
 import os
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from pathlib import Path
 
 from .email_account import EmailAccount
+
+if TYPE_CHECKING:
+    from core.config.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 
 # 配置路径
 CONFIG_DIR = Path.home() / ".workbuddy" / "email_notification"
 CONFIG_FILE = CONFIG_DIR / "accounts.json"
+
+
+class UnifiedConfigMixin:
+    """
+    统一配置混入类
+    
+    从 UnifiedConfig 读取邮件配置
+    """
+    
+    _unified_config: Optional["UnifiedConfig"] = None
+    
+    def _get_unified_config(self) -> "UnifiedConfig":
+        """获取统一配置实例"""
+        if self._unified_config is None:
+            from core.config.unified_config import UnifiedConfig
+            self._unified_config = UnifiedConfig.get_instance()
+        return self._unified_config
+    
+    def is_email_enabled(self) -> bool:
+        """检查邮件功能是否启用"""
+        unified = self._get_unified_config()
+        return unified.get("email.enabled", False)
+    
+    def get_smtp_config(self) -> Dict[str, Any]:
+        """获取SMTP配置"""
+        unified = self._get_unified_config()
+        return unified.get("email.smtp", {})
+    
+    def get_notification_config(self) -> Dict[str, Any]:
+        """获取通知配置"""
+        unified = self._get_unified_config()
+        return unified.get("email.notification", {})
 
 
 def ensure_config_dir():
@@ -82,16 +118,25 @@ def save_config(accounts: List[EmailAccount]) -> bool:
         return False
 
 
-class EmailConfigManager:
+class EmailConfigManager(UnifiedConfigMixin):
     """
     邮件配置管理器
 
     提供配置的增删改查操作。
+    支持从 UnifiedConfig 读取邮件系统配置。
     """
 
     def __init__(self):
         self._accounts: List[EmailAccount] = []
         self._load()
+    
+    def is_system_enabled(self) -> bool:
+        """检查邮件系统是否启用（从统一配置）"""
+        return self.is_email_enabled()
+    
+    def get_notification_types(self) -> Dict[str, bool]:
+        """获取启用的通知类型"""
+        return self.get_notification_config()
 
     def _load(self):
         """加载配置"""

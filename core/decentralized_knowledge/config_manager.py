@@ -1,6 +1,8 @@
 """
 去中心化配置管理
 Decentralized Configuration Management
+
+支持从 UnifiedConfig 读取配置
 """
 
 import asyncio
@@ -9,9 +11,34 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from core.config.unified_config import UnifiedConfig
+
+
+class UnifiedConfigMixin:
+    """
+    统一配置混入类
+    
+    从 UnifiedConfig 读取配置
+    """
+    
+    _unified_config: Optional["UnifiedConfig"] = None
+    
+    def _get_unified_config(self) -> "UnifiedConfig":
+        """获取统一配置实例"""
+        if self._unified_config is None:
+            from core.config.unified_config import UnifiedConfig
+            self._unified_config = UnifiedConfig.get_instance()
+        return self._unified_config
+    
+    def _load_from_unified_config(self) -> Dict[str, Any]:
+        """从统一配置加载去中心化配置"""
+        unified = self._get_unified_config()
+        return unified.get_decentralized_config()
 
 
 @dataclass
@@ -109,6 +136,49 @@ class DecentralizedConfig:
             
         except Exception as e:
             logger.error(f"加载配置文件失败: {e}")
+            return cls()
+    
+    @classmethod
+    def from_unified_config(cls, use_unified: bool = True) -> "DecentralizedConfig":
+        """
+        从统一配置创建配置对象
+        
+        Args:
+            use_unified: 是否使用统一配置
+        
+        Returns:
+            DecentralizedConfig: 配置对象
+        """
+        if not use_unified:
+            return cls()
+        
+        try:
+            from core.config.unified_config import get_decentralized_config
+            unified_config = get_decentralized_config()
+            
+            config = cls(
+                p2p_enabled=unified_config.get("enabled", True),
+                p2p_port=unified_config.get("p2p", {}).get("port", 9001),
+                max_peers=unified_config.get("p2p", {}).get("max_peers", 50),
+                relay_enabled=unified_config.get("relay", {}).get("enabled", True),
+                sync_enabled=unified_config.get("knowledge_sync", {}).get("enabled", True),
+                sync_interval=unified_config.get("knowledge_sync", {}).get("interval", 300),
+                collab_enabled=unified_config.get("collaboration", {}).get("enabled", True),
+            )
+            
+            # 设置中继服务器
+            relay_servers = unified_config.get("relay", {}).get("servers", [])
+            if relay_servers:
+                config.relay_servers = [
+                    {"host": server, "port": 8888, "region": "default"}
+                    for server in relay_servers
+                ]
+            
+            logger.info("已从 UnifiedConfig 加载去中心化配置")
+            return config
+            
+        except Exception as e:
+            logger.warning(f"从统一配置加载失败，使用默认配置: {e}")
             return cls()
     
     def save(self, path: Optional[Path] = None) -> bool:

@@ -4,13 +4,14 @@
 Unified Commission System - Unified Config Manager
 
 负责加载、验证、管理所有配置，支持热重载
+已集成 UnifiedConfig 系统
 """
 
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Dict, List, Optional, Tuple, Callable, TYPE_CHECKING
 import yaml
 
 from .models import (
@@ -23,6 +24,9 @@ from .models import (
     TestResult
 )
 
+if TYPE_CHECKING:
+    from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,10 +37,55 @@ class ConfigObserver:
         pass
 
 
-class UnifiedConfigManager:
+class UnifiedConfigMixin:
+    """
+    统一配置混入类
+    
+    从 UnifiedConfig 读取配置，提供与原有API兼容的接口
+    """
+    
+    _unified_config: Optional["UnifiedConfig"] = None
+    
+    def _get_unified_config(self) -> "UnifiedConfig":
+        """获取统一配置实例"""
+        if self._unified_config is None:
+            from core.config.unified_config import UnifiedConfig
+            self._unified_config = UnifiedConfig.get_instance()
+        return self._unified_config
+    
+    def _get_commission_module_config(self, module_name: str) -> Dict[str, Any]:
+        """从统一配置获取模块配置"""
+        unified = self._get_unified_config()
+        return unified.get(f"commission.modules.{module_name}", {
+            "enabled": True,
+            "rate": 0.2,
+        })
+    
+    def _get_commission_payment_config(self, provider: str = None) -> Dict[str, Any]:
+        """从统一配置获取支付配置"""
+        unified = self._get_unified_config()
+        payment = unified.get("commission.payment", {})
+        if provider:
+            return payment.get(provider, {})
+        return payment
+    
+    def _get_commission_settlement_config(self) -> Dict[str, Any]:
+        """从统一配置获取结算配置"""
+        unified = self._get_unified_config()
+        return unified.get("commission.settlement", {})
+    
+    def _is_commission_enabled(self) -> bool:
+        """检查佣金系统是否启用"""
+        unified = self._get_unified_config()
+        return unified.get("commission.enabled", True)
+
+
+class UnifiedConfigManager(UnifiedConfigMixin):
     """
     统一配置管理器
     职责：加载、验证、管理所有佣金系统配置
+    
+    支持从 UnifiedConfig 读取配置，同时保持文件配置兼容性
     """
     
     _instance = None
@@ -44,6 +93,7 @@ class UnifiedConfigManager:
     _config_path: str = ""
     _observers: List[ConfigObserver] = []
     _validator: Optional['ConfigValidator'] = None
+    _use_unified_config: bool = True  # 默认使用统一配置
     
     def __new__(cls, config_path: str = None):
         if cls._instance is None:
@@ -62,6 +112,9 @@ class UnifiedConfigManager:
         
         # 初始化默认配置
         self._init_default_config()
+        
+        # 尝试从统一配置加载
+        self._load_from_unified_config()
     
     def _get_default_config_path(self) -> str:
         """获取默认配置文件路径"""
@@ -69,6 +122,52 @@ class UnifiedConfigManager:
         config_dir = Path.home() / ".hermes-desktop" / "commission"
         config_dir.mkdir(parents=True, exist_ok=True)
         return str(config_dir / "commission_config.yaml")
+    
+    def _load_from_unified_config(self) -> None:
+        """从统一配置加载佣金配置"""
+        if not self._use_unified_config:
+            return
+        
+        try:
+            unified = self._get_unified_config()
+            
+            # 加载模块配置
+            for module_name in ["deep_search", "creation", "stock_futures", "game", "ide"]:
+                module_config = unified.get(f"commission.modules.{module_name}", {})
+                if module_config:
+                    if "modules" not in self._config:
+                        self._config["modules"] = {}
+                    # 合并配置，保留原有字段
+                    existing = self._config["modules"].get(module_name, {})
+                    self._config["modules"][module_name] = {**existing, **module_config}
+            
+            # 加载支付配置
+            payment = unified.get("commission.payment", {})
+            if payment:
+                existing_payment = self._config.get("payment", {})
+                self._config["payment"] = {**existing_payment, **payment}
+            
+            # 加载结算配置
+            settlement = unified.get("commission.settlement", {})
+            if settlement:
+                existing_settlement = self._config.get("settlement", {})
+                self._config["settlement"] = {**existing_settlement, **settlement}
+            
+            logger.info("已从 UnifiedConfig 加载佣金配置")
+            
+        except Exception as e:
+            logger.warning(f"从统一配置加载失败，使用默认配置: {e}")
+    
+    def enable_unified_config(self, enabled: bool = True) -> None:
+        """
+        启用/禁用统一配置
+        
+        Args:
+            enabled: 是否使用统一配置
+        """
+        self._use_unified_config = enabled
+        if enabled:
+            self._load_from_unified_config()
     
     def _init_default_config(self):
         """初始化默认配置"""

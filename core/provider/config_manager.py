@@ -8,6 +8,7 @@ config_manager.py — 配置热更新
   - A/B 测试配置
   - 配置持久化与重载
   - 监听配置文件变化
+  - 从 UnifiedConfig 读取配置
 """
 
 from __future__ import annotations
@@ -20,9 +21,12 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from .base import DriverMode, DriverState
+
+if TYPE_CHECKING:
+    from core.config.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +100,59 @@ class ProviderConfig:
 
 # ── 配置管理器 ──────────────────────────────────────────────────
 
-class ProviderConfigManager:
+class UnifiedConfigMixin:
+    """
+    统一配置混入类
+    
+    从 UnifiedConfig 读取配置
+    """
+    
+    _unified_config: Optional["UnifiedConfig"] = None
+    
+    def _get_unified_config(self) -> "UnifiedConfig":
+        """获取统一配置实例"""
+        if self._unified_config is None:
+            from core.config.unified_config import UnifiedConfig
+            self._unified_config = UnifiedConfig.get_instance()
+        return self._unified_config
+    
+    def _load_from_unified_config(self) -> None:
+        """从统一配置加载Provider配置"""
+        try:
+            unified = self._get_unified_config()
+            
+            # 加载槽位配置
+            slots_config = unified.get("provider.slots", {})
+            for slot_key, slot_data in slots_config.items():
+                if slot_data:
+                    slot = ModelSlotConfig(
+                        slot_id=slot_key,
+                        model_id=slot_data.get("model", ""),
+                        driver_name=slot_data.get("provider", ""),
+                        priority=slot_data.get("priority", 100),
+                        enabled=slot_data.get("enabled", True),
+                    )
+                    # 检查是否已存在
+                    existing = self._config.get_slot(slot_key)
+                    if not existing:
+                        self._config.slots.append(slot)
+            
+            # 加载策略配置
+            strategy = unified.get("provider.strategy", {})
+            if strategy:
+                self._config.global_params.update({
+                    "strategy_mode": strategy.get("mode", "failover"),
+                    "health_check_interval": strategy.get("health_check_interval", 60),
+                    "auto_switch": strategy.get("auto_switch", True),
+                })
+            
+            logger.info("[ConfigManager] 已从 UnifiedConfig 加载配置")
+            
+        except Exception as e:
+            logger.warning(f"[ConfigManager] 从统一配置加载失败: {e}")
+
+
+class ProviderConfigManager(UnifiedConfigMixin):
     """
     Provider 配置管理器
 
@@ -105,6 +161,7 @@ class ProviderConfigManager:
       - 运行时修改配置
       - 配置变更通知
       - 热重载
+      - 从 UnifiedConfig 读取配置
     """
 
     DEFAULT_CONFIG_FILE = "provider_config.json"
@@ -113,6 +170,7 @@ class ProviderConfigManager:
         self,
         config_path: str = "",
         on_change: Optional[Callable] = None,
+        use_unified_config: bool = True,
     ):
         self._config = ProviderConfig()
         self._config_path = Path(config_path) if config_path else None
@@ -121,6 +179,11 @@ class ProviderConfigManager:
         self._last_loaded: float = 0.0
         self._watch_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._use_unified_config = use_unified_config
+        
+        # 尝试从统一配置加载
+        if use_unified_config:
+            self._load_from_unified_config()
 
     @property
     def config(self) -> ProviderConfig:

@@ -14,7 +14,7 @@ from typing import List, Dict, Any
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from core.agent import (
+from client.src.business.agent import (
     AgentType, AgentCapability, TaskStatus, TaskPriority,
     Agent, AgentFactory, AgentOrchestrator, MockTaskExecutor,
     WorkflowDefinition, TaskContext
@@ -60,7 +60,7 @@ class TestTaskQueue:
     
     def test_enqueue_dequeue(self):
         """测试入队出队"""
-        from core.agent import TaskQueue
+        from client.src.business.agent import TaskQueue
         
         queue = TaskQueue()
         
@@ -83,7 +83,7 @@ class TestTaskQueue:
     
     def test_priority_ordering(self):
         """测试优先级排序"""
-        from core.agent import TaskQueue
+        from client.src.business.agent import TaskQueue
         
         queue = TaskQueue()
         

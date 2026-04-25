@@ -64,7 +64,7 @@ from core.model_capabilities import (
     MultimodalCapability,
     ModelCapabilities,
 )
-from core.task_decomposer import (
+from client.src.business.task_decomposer import (
     TaskDecomposer,
     SubTaskExecutor,
     TaskDecompositionCallbacks,

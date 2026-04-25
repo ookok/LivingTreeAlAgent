@@ -19,7 +19,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 # 导入 Evolution Engine
-from core.evolution_engine import (
+from client.src.business.evolution_engine import (
     EvolutionEngine, create_evolution_engine,
     get_evolution_log, get_learning_engine, get_pattern_miner, get_decision_tracker,
     DecisionType, DecisionContext, DecisionFactor
@@ -248,7 +248,7 @@ try:
     tracker.link_execution(chain_id, 'exec_001')
     
     # 记录结果
-    from core.evolution_engine.memory.decision_tracker import DecisionOutcome
+    from client.src.business.evolution_engine.memory.decision_tracker import DecisionOutcome
     tracker.resolve_outcome(
         chain_id,
         DecisionOutcome.SUCCESS,

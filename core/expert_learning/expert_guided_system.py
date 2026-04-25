@@ -37,7 +37,7 @@ from pathlib import Path
 # ── 延迟导入避免循环依赖 ──────────────────────────────────────────
 
 def _get_hermes_agent():
-    from core.agent import HermesAgent
+    from client.src.business.agent import HermesAgent
     return HermesAgent
 
 def _get_skill_evolution():

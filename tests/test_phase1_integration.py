@@ -12,8 +12,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.intent_engine import IntentEngine
-from core.agent import AgentOrchestrator, AgentFactory, TaskPriority
-from core.evolution_engine import create_evolution_engine
+from client.src.business.agent import AgentOrchestrator, AgentFactory, TaskPriority
+from client.src.business.evolution_engine import create_evolution_engine
 from core.self_awareness import SelfAwarenessSystem
 from core.a2a_protocol import A2AProtocol, AgentMessage
 

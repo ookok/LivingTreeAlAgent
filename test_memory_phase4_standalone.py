@@ -26,7 +26,7 @@ print("-" * 40)
 try:
     # 直接导入 memory 模块
     sys.path.insert(0, str(Path(__file__).parent))
-    from core.evolution_engine.memory.evolution_log import EvolutionLog, get_evolution_log
+    from client.src.business.evolution_engine.memory.evolution_log import EvolutionLog, get_evolution_log
     
     # 创建独立的日志实例
     db_path = os.path.join(test_dir, 'test_evolution.db')
@@ -66,7 +66,7 @@ print("\n[2] 测试 LearningEngine (强化学习引擎)")
 print("-" * 40)
 
 try:
-    from core.evolution_engine.memory.learning_engine import LearningEngine, get_learning_engine
+    from client.src.business.evolution_engine.memory.learning_engine import LearningEngine, get_learning_engine
     
     learning = get_learning_engine()
     
@@ -132,7 +132,7 @@ print("\n[3] 测试 PatternMiner (模式挖掘器)")
 print("-" * 40)
 
 try:
-    from core.evolution_engine.memory.pattern_miner import PatternMiner, get_pattern_miner
+    from client.src.business.evolution_engine.memory.pattern_miner import PatternMiner, get_pattern_miner
     
     miner = get_pattern_miner()
     
@@ -198,7 +198,7 @@ print("\n[4] 测试 DecisionTracker (决策追踪器)")
 print("-" * 40)
 
 try:
-    from core.evolution_engine.memory.decision_tracker import (
+    from client.src.business.evolution_engine.memory.decision_tracker import (
         DecisionTracker, get_decision_tracker,
         DecisionType, DecisionContext, DecisionFactor,
         DecisionOutcome
@@ -294,7 +294,7 @@ print("\n[5] 测试模块导出")
 print("-" * 40)
 
 try:
-    from core.evolution_engine.memory import (
+    from client.src.business.evolution_engine.memory import (
         get_evolution_log,
         get_learning_engine,
         get_pattern_miner,

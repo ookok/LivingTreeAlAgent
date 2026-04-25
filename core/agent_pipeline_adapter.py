@@ -251,7 +251,7 @@ def create_pipeline_agent(
         支持流水线的 Agent 实例
     """
     if agent_class is None:
-        from core.agent import HermesAgent
+        from client.src.business.agent import HermesAgent
 
         agent_class = HermesAgent
     

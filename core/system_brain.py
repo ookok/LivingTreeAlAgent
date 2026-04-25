@@ -570,7 +570,7 @@ class SystemBrain:
                 "steps": list           # 分解的步骤
             }
         """
-        from core.task_decomposer import get_chain_of_thought_prompt
+        from client.src.business.task_decomposer import get_chain_of_thought_prompt
         
         if use_chain_of_thought:
             prompt = get_chain_of_thought_prompt(question)

@@ -21,7 +21,7 @@ def test_task_decomposer():
     print("Test 1: Task Decomposition System")
     print("="*60)
     
-    from core.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, format_task_result
+    from client.src.business.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, format_task_result
     
     # Create decomposer
     decomposer = TaskDecomposer()
@@ -71,7 +71,7 @@ def test_system_brain():
     print("Test 2: System Brain")
     print("="*60)
     
-    from core.system_brain import SystemBrain, SystemBrainConfig
+    from client.src.business.system_brain import SystemBrain, SystemBrainConfig
     
     # Create config
     config = SystemBrainConfig(

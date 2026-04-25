@@ -19,6 +19,20 @@ from .models import (ChannelType, ChannelSession, P2PConnection,
 
 logger = logging.getLogger(__name__)
 
+# 导入统一配置
+try:
+    from core.config.unified_config import UnifiedConfig
+    _config = UnifiedConfig.get_instance()
+except ImportError:
+    _config = None
+
+
+def _get_max_retries(category: str = "p2p") -> int:
+    """安全获取重试次数"""
+    if _config:
+        return _config.get_max_retries(category)
+    return 3
+
 
 @dataclass
 class Message:
@@ -75,7 +89,7 @@ class MultiChannelManager:
         
         # 传输配置
         self._file_chunk_size = 64 * 1024  # 64KB
-        self._max_retries = 3
+        self._max_retries = _get_max_retries("p2p")
         
         # P2P通信 (复用)
         self._p2p_protocol = None

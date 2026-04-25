@@ -391,7 +391,7 @@ class ConfigMissingDetector:
             from core.ai_reasoning_engine import AIReasoningEngine
             # 尝试获取 SystemBrain
             try:
-                from core.system_brain import get_system_brain
+                from client.src.business.system_brain import get_system_brain
                 brain = get_system_brain()
                 self._reasoning_engine = AIReasoningEngine(system_brain=brain)
                 logger.info("[Detector] AI Reasoning Engine initialized with SystemBrain")

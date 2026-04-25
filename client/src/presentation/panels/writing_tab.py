@@ -29,7 +29,7 @@ from PyQt6.QtGui import QFont, QAction, QIcon, QTextCursor
 
 from writing.ai_writer import AIWriter, WritingContext, WritingMode, DocType, SubjectDomain, WritingFormat
 from writing.outline_generator import OutlineGenerator
-from core.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, DecomposedTask
+from client.src.business.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, DecomposedTask
 
 
 @dataclass
@@ -70,7 +70,7 @@ class WritingWorker(QThread):
             result = self.executor.execute(self.task)
             
             # 生成最终结果
-            from core.task_decomposer import format_task_result
+            from client.src.business.task_decomposer import format_task_result
             output = format_task_result(result)
             
             self.finished_signal.emit(output)

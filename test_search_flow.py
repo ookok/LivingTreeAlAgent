@@ -5,7 +5,7 @@
 
 import asyncio
 import traceback
-from core.agent import HermesAgent
+from client.src.business.agent import HermesAgent
 
 async def test_search_flow():
     """测试搜索流程"""

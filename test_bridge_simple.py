@@ -9,7 +9,7 @@ print("[1] Starting...")
 
 try:
     print("[2] Importing bridge module...")
-    from core.evolution_engine.bridge import (
+    from client.src.business.evolution_engine.bridge import (
         EvolutionIntentBridge,
         IntentSignal,
         IntentSignalType,

@@ -41,12 +41,12 @@ class TestEvolutionEngine(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.evolution_engine import create_evolution_engine
+        from client.src.business.evolution_engine import create_evolution_engine
         self.assertIsNotNone(create_evolution_engine)
     
     def test_engine_creation(self):
         """测试引擎创建"""
-        from core.evolution_engine import create_evolution_engine
+        from client.src.business.evolution_engine import create_evolution_engine
         engine = create_evolution_engine(
             project_root=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             enable_performance=False,
@@ -56,7 +56,7 @@ class TestEvolutionEngine(unittest.TestCase):
     
     def test_proposal_generation(self):
         """测试提案生成"""
-        from core.evolution_engine import create_evolution_engine
+        from client.src.business.evolution_engine import create_evolution_engine
         engine = create_evolution_engine(
             project_root=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             enable_performance=False,
@@ -97,27 +97,27 @@ class TestAgentOrchestrator(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.agent import AgentOrchestrator, AgentFactory, TaskPriority
+        from client.src.business.agent import AgentOrchestrator, AgentFactory, TaskPriority
         self.assertIsNotNone(AgentOrchestrator)
         self.assertIsNotNone(AgentFactory)
         self.assertIsNotNone(TaskPriority)
     
     def test_factory_creation(self):
         """测试工厂创建"""
-        from core.agent import AgentFactory
+        from client.src.business.agent import AgentFactory
         factory = AgentFactory()
         self.assertIsNotNone(factory)
     
     def test_orchestrator_creation(self):
         """测试编排器创建"""
-        from core.agent import AgentOrchestrator, AgentFactory
+        from client.src.business.agent import AgentOrchestrator, AgentFactory
         factory = AgentFactory()
         orchestrator = AgentOrchestrator(agent_factory=factory)
         self.assertIsNotNone(orchestrator)
     
     def test_task_creation(self):
         """测试任务创建"""
-        from core.agent import AgentOrchestrator, AgentFactory, TaskPriority
+        from client.src.business.agent import AgentOrchestrator, AgentFactory, TaskPriority
         factory = AgentFactory()
         orchestrator = AgentOrchestrator(agent_factory=factory)
         task = orchestrator.create_task("测试任务", TaskPriority.MEDIUM)

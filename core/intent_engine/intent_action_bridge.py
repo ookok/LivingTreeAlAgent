@@ -442,7 +442,7 @@ class IntentActionBridge:
         静默失败，不影响主执行流程。
         """
         try:
-            from core.evolution_engine.bridge import (
+            from client.src.business.evolution_engine.bridge import (
                 EvolutionIntentBridge,
                 ExecutionFeedback,
             )
@@ -450,8 +450,8 @@ class IntentActionBridge:
             if bridge is None:
                 # 延迟创建（第一次使用时）
                 try:
-                    from core.evolution_engine.bridge import create_bridge
-                    from core.evolution_engine import create_evolution_engine
+                    from client.src.business.evolution_engine.bridge import create_bridge
+                    from client.src.business.evolution_engine import create_evolution_engine
                     engine = create_evolution_engine(project_root=self._project_root or ".")
                     bridge = create_bridge(self._intent_engine, engine)
                     self._evolution_bridge = bridge

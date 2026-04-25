@@ -33,7 +33,7 @@ if hasattr(sys.stdout, "reconfigure"):
 # ── 延迟导入避免循环依赖 ──────────────────────────────────────────
 
 def _get_agent_class():
-    from core.agent import HermesAgent
+    from client.src.business.agent import HermesAgent
     return HermesAgent
 
 def _get_kb_class():
@@ -179,7 +179,7 @@ class AgentChat:
 
         # 注册回调
         if on_thinking or on_tool:
-            from core.agent import AgentCallbacks
+            from client.src.business.agent import AgentCallbacks
             cbs = AgentCallbacks(
                 thinking=on_thinking,
                 tool_result=on_tool,

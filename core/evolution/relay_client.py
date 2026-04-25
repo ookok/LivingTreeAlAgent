@@ -14,6 +14,20 @@ from .models import (
     WeeklyReport, ClientConfig, ReportStatus,
 )
 
+# 导入统一配置
+try:
+    from core.config.unified_config import UnifiedConfig
+    _config = UnifiedConfig.get_instance()
+except ImportError:
+    _config = None
+
+
+def _get_max_retries(category: str = "http") -> int:
+    """安全获取重试次数"""
+    if _config:
+        return _config.get_max_retries(category)
+    return 3
+
 
 class RelayClient:
     """
@@ -28,7 +42,7 @@ class RelayClient:
 
     DEFAULT_SERVER_URL = "http://localhost:8766"
     DEFAULT_TIMEOUT = 10  # 秒
-    MAX_RETRIES = 3
+    # MAX_RETRIES = 3  # 已迁移到统一配置 (使用 _get_max_retries())
 
     def __init__(
         self,
@@ -70,7 +84,7 @@ class RelayClient:
 
         url = f"{self._server_url}{endpoint}"
 
-        for retry in range(self.MAX_RETRIES):
+        for retry in range(_get_max_retries("http")):
             try:
                 headers = {
                     "Content-Type": "application/json",
@@ -96,7 +110,7 @@ class RelayClient:
 
             except urllib.error.URLError as e:
                 self._logger.warning(f"请求失败 (retry {retry+1}): {e}")
-                if retry < self.MAX_RETRIES - 1:
+                if retry < _get_max_retries("http") - 1:
                     time.sleep(1 * (retry + 1))  # 指数退避
                 else:
                     return None

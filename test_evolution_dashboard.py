@@ -42,7 +42,7 @@ def test_dashboard():
     
     # 带引擎的测试（可选）
     try:
-        from core.evolution_engine import create_evolution_engine
+        from client.src.business.evolution_engine import create_evolution_engine
         
         print("\n📡 尝试连接 Evolution Engine...")
         engine = create_evolution_engine(project_root=".")

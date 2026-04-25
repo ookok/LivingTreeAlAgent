@@ -193,7 +193,7 @@ logger = get_logger('self_upgrade.debate_engine')
         """调用本地模型"""
         # 复用 system_brain 的本地模型
         try:
-            from core.system_brain import get_system_brain
+            from client.src.business.system_brain import get_system_brain
 
             brain = get_system_brain()
             result = await brain.generate(prompt, max_tokens=500)

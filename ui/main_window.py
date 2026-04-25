@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QKeyEvent, QAction, QIcon
 
 from core.config import AppConfig, load_config, save_config
-from core.agent import HermesAgent, AgentCallbacks
+from client.src.business.agent import HermesAgent, AgentCallbacks
 from core.ollama_client import OllamaClient
 from core.session_db import SessionDB
-from core.system_brain import get_system_brain, SystemBrainConfig
+from client.src.business.system_brain import get_system_brain, SystemBrainConfig
 from core.config_manager import get_config_manager
 from core.auth_system import get_auth_system
 from core.smart_config import get_smart_config

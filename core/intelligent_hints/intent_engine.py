@@ -124,7 +124,7 @@ class HintIntentEngine:
                 self._local_client = get_l0_router()
             except ImportError:
                 try:
-                    from core.system_brain import get_system_brain
+                    from client.src.business.system_brain import get_system_brain
                     self._local_client = get_system_brain()
                 except ImportError:
                     self._local_client = None

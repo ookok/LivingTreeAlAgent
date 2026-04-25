@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Optional, List, Dict, Any
 from dataclasses import dataclass
 
-from core.ollama_client import OllamaClient, ChatMessage, StreamChunk
+from client.src.business.ollama_client import OllamaClient, ChatMessage, StreamChunk
 from core.unified_model_client import (
     UnifiedModelClient,
     UnifiedModelManager,

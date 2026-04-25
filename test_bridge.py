@@ -19,7 +19,7 @@ print("=" * 60)
 print("\n[Test 1] Creating Bridge...")
 
 try:
-    from core.evolution_engine.bridge import (
+    from client.src.business.evolution_engine.bridge import (
         EvolutionIntentBridge,
         IntentSignal,
         IntentSignalType,

@@ -92,7 +92,7 @@ class LightweightPolisher:
             return get_l0_router()
         except ImportError:
             try:
-                from core.system_brain import get_system_brain
+                from client.src.business.system_brain import get_system_brain
                 return get_system_brain()
             except ImportError:
                 return None
@@ -321,7 +321,7 @@ class HermesPolisher:
             return get_l0_router()
         except ImportError:
             try:
-                from core.system_brain import get_system_brain
+                from client.src.business.system_brain import get_system_brain
                 return get_system_brain()
             except ImportError:
                 return None

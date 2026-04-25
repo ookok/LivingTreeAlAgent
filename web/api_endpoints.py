@@ -89,7 +89,7 @@ if FASTAPI_AVAILABLE:
         """聊天完成"""
         try:
             # 导入核心模块
-            from core.agent import HermesAgent
+            from client.src.business.agent import HermesAgent
 
             # 执行聊天
             agent = HermesAgent.get_instance()
@@ -491,7 +491,7 @@ if FASTAPI_AVAILABLE:
                 msg_type = data.get("type")
 
                 if msg_type == "chat":
-                    from core.agent import HermesAgent
+                    from client.src.business.agent import HermesAgent
                     agent = HermesAgent.get_instance()
                     response = await agent.chat(data.get("message", ""))
 

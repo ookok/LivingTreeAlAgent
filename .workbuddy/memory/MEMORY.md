@@ -482,6 +482,41 @@ core/evolution_engine/
 - ✅ SignalAggregator - 多源信号融合（RRF + 加权平均）
 - ✅ EvolutionEngine - 主控制器（感知-聚合-提案闭环）
 
+### MVP Phase 2 完成功能（2026-04-25）
+
+**已实现**:
+- ✅ ProposalTemplate - 性能/架构类提案模板
+- ✅ ProposalGenerator - 从聚合信号生成结构化提案
+- ✅ StructuredProposal - 完整提案结构定义
+- ✅ SafetyFence - 安全围栏（禁止路径/高风险操作检测）
+- ✅ EvolutionEngine 集成提案生成和安全验证
+
+**核心数据结构**:
+```python
+StructuredProposal
+├── proposal_id, title, description
+├── proposal_type: ProposalType
+├── priority: ProposalPriority
+├── signals: List[TriggerSignal]
+├── estimated_benefits, estimated_risk
+├── steps: List[ProposalStep]
+└── status: ProposalStatus
+```
+
+**提案API**:
+```python
+# 获取提案详情
+detail = engine.get_proposal_detail(proposal_id)
+
+# 验证提案安全
+validation = engine.validate_proposal(proposal_id)
+print(validation['violations_report'])
+
+# 批准/拒绝提案
+engine.approve_proposal(proposal_id)
+engine.reject_proposal(proposal_id)
+```
+
 **核心API**:
 ```python
 from core.evolution_engine import create_evolution_engine

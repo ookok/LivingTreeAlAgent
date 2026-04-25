@@ -20,6 +20,10 @@ import time
 import logging
 from datetime import datetime
 
+from .proposal.structured_proposal import StructuredProposal, ProposalStatus
+from .proposal.proposal_generator import ProposalGenerator
+from .safety.safety_fence import SafetyFence
+
 logger = logging.getLogger('evolution.engine')
 
 
@@ -48,13 +52,21 @@ class EvolutionEngine:
         # 聚合器
         self._aggregator = None
         
-        # 提案队列
-        self._proposal_queue: List[Any] = []
+        # 提案生成器（Phase 2）
+        self._proposal_generator = ProposalGenerator(str(self.project_root))
+        
+        # 安全围栏（Phase 2）
+        self._safety_fence = SafetyFence(str(self.project_root))
+        
+        # 提案队列（使用 StructuredProposal）
+        self._proposal_queue: List[StructuredProposal] = []
         
         # 统计
         self._stats = {
             'total_signals': 0,
             'total_proposals': 0,
+            'proposals_approved': 0,
+            'proposals_rejected': 0,
             'started_at': None,
             'last_scan_at': None,
         }
@@ -184,74 +196,27 @@ class EvolutionEngine:
         """
         生成进化提案
         
-        简化实现：将聚合信号转换为提案
+        使用 ProposalGenerator 从聚合信号生成结构化提案
         """
-        for signal_group in aggregated_signals:
-            proposal = self._create_proposal(signal_group)
-            if proposal:
-                self._proposal_queue.append(proposal)
-                self._stats['total_proposals'] += 1
-                logger.info(
-                    f"[EvolutionEngine] 提案生成: {proposal['proposal_id']} - {proposal['title']}"
+        # 使用提案生成器生成提案
+        proposals = self._proposal_generator.generate_proposals(aggregated_signals)
+        
+        for proposal in proposals:
+            # 安全检查
+            if not self._safety_fence.validate_proposal(proposal):
+                violations_report = self._safety_fence.get_violations_report()
+                logger.warning(
+                    f"[EvolutionEngine] 提案 {proposal.proposal_id} 未通过安全检查:\n"
+                    f"{violations_report}"
                 )
-    
-    def _create_proposal(self, signal_group: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """从信号组创建提案"""
-        signal_type = signal_group['signal_type']
-        
-        # 提案模板
-        templates = {
-            'high_latency': {
-                'type': 'optimize',
-                'title': f"性能优化：{signal_type}",
-                'description': f"检测到 {signal_group['signal_count']} 个高延迟信号",
-                'risk_level': 'medium',
-            },
-            'memory_leak': {
-                'type': 'optimize',
-                'title': f"内存泄漏修复",
-                'description': f"检测到内存持续增长",
-                'risk_level': 'low',
-            },
-            'circular_dependency': {
-                'type': 'refactor',
-                'title': f"循环依赖重构",
-                'description': f"检测到 {signal_group['metrics'].get('cycle_length', 'N/A')} 个模块存在循环依赖",
-                'risk_level': 'high',
-            },
-            'god_class': {
-                'type': 'refactor',
-                'title': f"上帝类拆分",
-                'description': f"检测到 {signal_group['signal_count']} 个上帝类",
-                'risk_level': 'medium',
-            },
-            'cpu_bottleneck': {
-                'type': 'optimize',
-                'title': f"CPU瓶颈优化",
-                'description': f"CPU使用率过高",
-                'risk_level': 'low',
-            },
-        }
-        
-        template = templates.get(signal_type, {
-            'type': 'unknown',
-            'title': f"问题修复：{signal_type}",
-            'description': f"检测到 {signal_group['signal_count']} 个相关信号",
-            'risk_level': 'medium',
-        })
-        
-        proposal_id = f"{signal_type.upper()}-{datetime.now().strftime('%Y%m%d')}-{signal_group['aggregated_id']}"
-        
-        return {
-            'proposal_id': proposal_id,
-            'title': template['title'],
-            'description': template['description'],
-            'proposal_type': template['type'],
-            'risk_level': template['risk_level'],
-            'signal_group': signal_group,
-            'created_at': datetime.now().isoformat(),
-            'status': 'pending',
-        }
+                continue
+            
+            self._proposal_queue.append(proposal)
+            self._stats['total_proposals'] += 1
+            logger.info(
+                f"[EvolutionEngine] 提案生成: {proposal.proposal_id} - {proposal.title} "
+                f"[{proposal.priority.value}]"
+            )
     
     def scan_once(self) -> Dict[str, Any]:
         """
@@ -273,6 +238,8 @@ class EvolutionEngine:
             'signals_collected': self._stats['total_signals'],
             'aggregated_groups': len(aggregated),
             'proposals_generated': len(self._proposal_queue),
+            'pending_proposals': len([p for p in self._proposal_queue 
+                                     if p.status == ProposalStatus.PENDING]),
             'timestamp': datetime.now().isoformat(),
         }
     
@@ -281,14 +248,33 @@ class EvolutionEngine:
         获取提案列表
         
         Args:
-            status: 可选的状态过滤
+            status: 可选的状态过滤（pending, approved, rejected）
         
         Returns:
             提案列表
         """
         if status:
-            return [p for p in self._proposal_queue if p['status'] == status]
-        return self._proposal_queue.copy()
+            try:
+                status_enum = ProposalStatus(status)
+                return [p.to_dict() for p in self._proposal_queue if p.status == status_enum]
+            except ValueError:
+                pass
+        return [p.to_dict() for p in self._proposal_queue]
+    
+    def get_proposal_detail(self, proposal_id: str) -> Optional[Dict[str, Any]]:
+        """
+        获取提案详情
+        
+        Args:
+            proposal_id: 提案ID
+        
+        Returns:
+            提案详情或 None
+        """
+        for proposal in self._proposal_queue:
+            if proposal.proposal_id == proposal_id:
+                return proposal.to_dict()
+        return None
     
     def approve_proposal(self, proposal_id: str) -> bool:
         """
@@ -301,8 +287,19 @@ class EvolutionEngine:
             是否成功
         """
         for proposal in self._proposal_queue:
-            if proposal['proposal_id'] == proposal_id:
-                proposal['status'] = 'approved'
+            if proposal.proposal_id == proposal_id:
+                # 最终安全检查
+                if not self._safety_fence.validate_proposal(proposal):
+                    logger.warning(
+                        f"[EvolutionEngine] 提案 {proposal_id} 安全检查未通过"
+                    )
+                    return False
+                
+                proposal.status = ProposalStatus.APPROVED
+                proposal.approved_by = "user"
+                proposal.updated_at = datetime.now()
+                self._stats['proposals_approved'] += 1
+                
                 logger.info(f"[EvolutionEngine] 提案已批准: {proposal_id}")
                 return True
         return False
@@ -318,21 +315,67 @@ class EvolutionEngine:
             是否成功
         """
         for proposal in self._proposal_queue:
-            if proposal['proposal_id'] == proposal_id:
-                proposal['status'] = 'rejected'
+            if proposal.proposal_id == proposal_id:
+                proposal.status = ProposalStatus.REJECTED
+                proposal.updated_at = datetime.now()
                 self._proposal_queue.remove(proposal)
+                self._stats['proposals_rejected'] += 1
+                
                 logger.info(f"[EvolutionEngine] 提案已拒绝: {proposal_id}")
                 return True
         return False
     
+    def validate_proposal(self, proposal_id: str) -> Dict[str, Any]:
+        """
+        验证提案安全性
+        
+        Args:
+            proposal_id: 提案ID
+        
+        Returns:
+            验证结果
+        """
+        for proposal in self._proposal_queue:
+            if proposal.proposal_id == proposal_id:
+                is_safe = self._safety_fence.validate_proposal(proposal)
+                violations_report = self._safety_fence.get_violations_report()
+                
+                return {
+                    'proposal_id': proposal_id,
+                    'is_safe': is_safe,
+                    'violations_report': violations_report,
+                }
+        
+        return {
+            'proposal_id': proposal_id,
+            'is_safe': False,
+            'violations_report': '提案不存在',
+        }
+    
+    def get_safety_violations(self) -> str:
+        """
+        获取当前安全违规报告
+        
+        Returns:
+            违规报告字符串
+        """
+        return self._safety_fence.get_violations_report()
+    
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
+        pending_count = len([p for p in self._proposal_queue 
+                           if p.status == ProposalStatus.PENDING])
+        approved_count = len([p for p in self._proposal_queue 
+                            if p.status == ProposalStatus.APPROVED])
+        
         return {
             **self._stats,
             'sensors_count': len(self._sensors),
-            'pending_proposals': len([p for p in self._proposal_queue if p['status'] == 'pending']),
+            'pending_proposals': pending_count,
+            'approved_proposals': approved_count,
             'running': self._running,
             'project_root': str(self.project_root),
+            'safety_enabled': self._safety_fence.enabled,
         }
     
     def get_sensor_status(self) -> Dict[str, Any]:

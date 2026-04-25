@@ -226,6 +226,249 @@ class PluginManager(QObject):
         self.plugin_unregistered.emit(plugin_id)
         return True
 
+    # ─────────────────────────────────────────────────────────
+    # 热插拔（运行时安装/卸载/重载）
+    # ─────────────────────────────────────────────────────────
+
+    def install_plugin_from_directory(self, plugin_dir: str) -> Optional[str]:
+        """
+        从目录运行时安装插件
+
+        热插拔：无需重启即可使用新插件。
+
+        Args:
+            plugin_dir: 插件目录路径（包含 manifest.json）
+
+        Returns:
+            成功返回 plugin_id，失败返回 None
+
+        Emits:
+            plugin_registered: 注册成功
+            plugin_loaded: 加载成功
+            plugin_activated: 激活成功
+        """
+        import importlib.util
+
+        manifest_path = os.path.join(plugin_dir, "manifest.json")
+        if not os.path.exists(manifest_path):
+            logger.error(f"[PluginManager] No manifest.json in: {plugin_dir}")
+            return None
+
+        try:
+            # 1. 读取 manifest
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+
+            plugin_id = manifest_data.get("id")
+            if not plugin_id:
+                logger.error("[PluginManager] manifest.json missing 'id' field")
+                return None
+
+            if plugin_id in self._plugins:
+                logger.warning(f"[PluginManager] Plugin already installed: {plugin_id}")
+                return None
+
+            # 2. 检查依赖
+            deps = manifest_data.get("dependencies", [])
+            missing_deps = [
+                dep for dep in deps
+                if dep not in self._plugins and dep not in self._plugin_classes
+            ]
+            if missing_deps:
+                logger.error(
+                    f"[PluginManager] Missing dependencies for {plugin_id}: "
+                    f"{missing_deps}"
+                )
+                return None
+
+            # 3. 动态导入插件模块
+            main_py = os.path.join(plugin_dir, "main.py")
+            plugin_class = None
+
+            if os.path.exists(main_py):
+                spec = importlib.util.spec_from_file_location(
+                    f"plugin_.{plugin_id}", main_py,
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # 查找 BasePlugin 的子类
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if (
+                        isinstance(attr, type)
+                        and issubclass(attr, BasePlugin)
+                        and attr is not BasePlugin
+                    ):
+                        plugin_class = attr
+                        break
+
+            # 4. 创建 manifest 对象
+            from .base_plugin import PluginManifest
+            manifest = PluginManifest(
+                id=manifest_data["id"],
+                name=manifest_data.get("name", plugin_id),
+                version=manifest_data.get("version", "1.0.0"),
+                description=manifest_data.get("description", ""),
+                author=manifest_data.get("author", ""),
+                dependencies=manifest_data.get("dependencies", []),
+                optional_deps=manifest_data.get("optional_deps", []),
+                plugin_type=PluginType.MODULE,  # 默认类型
+                priority=manifest_data.get("priority", 0),
+                lazy_load=manifest_data.get("lazy_load", True),
+            )
+
+            # 5. 注册插件类
+            if plugin_class:
+                self._plugin_classes[plugin_id] = plugin_class
+
+            # 6. 注册插件
+            info = PluginInfo(manifest=manifest)
+            self._plugins[plugin_id] = info
+            self.plugin_registered.emit(plugin_id)
+
+            logger.info(f"[PluginManager] Hot-installed plugin: {plugin_id}")
+            return plugin_id
+
+        except Exception as e:
+            logger.error(f"[PluginManager] Hot-install failed: {e}")
+            logger.error(traceback.format_exc())
+            return None
+
+    def uninstall_plugin_runtime(
+        self,
+        plugin_id: str,
+        force: bool = False,
+    ) -> bool:
+        """
+        运行时卸载插件
+
+        热插拔：无需重启即可移除插件。
+
+        Args:
+            plugin_id: 插件 ID
+            force: 是否强制卸载（忽略依赖检查）
+
+        Returns:
+            是否成功卸载
+
+        Emits:
+            plugin_deactivated: 停用成功
+            plugin_unregistered: 注销成功
+        """
+        if plugin_id not in self._plugins:
+            logger.warning(f"[PluginManager] Plugin not found: {plugin_id}")
+            return False
+
+        # 检查是否有其他插件依赖此插件
+        if not force:
+            dependents = self._find_dependents(plugin_id)
+            if dependents:
+                logger.error(
+                    f"[PluginManager] Cannot uninstall {plugin_id}: "
+                    f"still depended by {dependents}"
+                )
+                return False
+
+        try:
+            info = self._plugins[plugin_id]
+
+            # 1. 停用插件
+            if info.state == PluginState.ACTIVE:
+                self.deactivate_plugin(plugin_id)
+
+            # 2. 销毁插件实例
+            if info.instance:
+                info.instance._do_destroy()
+                info.instance = None
+
+            # 3. 注销插件
+            del self._plugins[plugin_id]
+            if plugin_id in self._plugin_classes:
+                del self._plugin_classes[plugin_id]
+
+            self.plugin_unregistered.emit(plugin_id)
+
+            logger.info(f"[PluginManager] Hot-uninstalled plugin: {plugin_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[PluginManager] Hot-uninstall failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+
+    def reload_plugin(self, plugin_id: str) -> bool:
+        """
+        运行时重载插件
+
+        热插拔：重新加载插件代码（用于开发调试）。
+
+        Args:
+            plugin_id: 插件 ID
+
+        Returns:
+            是否成功重载
+        """
+        if plugin_id not in self._plugins:
+            logger.warning(f"[PluginManager] Plugin not found: {plugin_id}")
+            return False
+
+        try:
+            info = self._plugins[plugin_id]
+            manifest = info.manifest
+
+            # 1. 记录当前状态
+            was_active = info.state == PluginState.ACTIVE
+
+            # 2. 停用并销毁
+            if info.state == PluginState.ACTIVE:
+                self.deactivate_plugin(plugin_id)
+            if info.instance:
+                info.instance._do_destroy()
+                info.instance = None
+
+            # 3. 重新加载（通过 install_plugin_from_directory）
+            # 找到插件目录
+            plugin_dir = None
+            for d in self._plugin_dirs:
+                if os.path.exists(os.path.join(d, plugin_id)):
+                    plugin_dir = os.path.join(d, plugin_id)
+                    break
+
+            if not plugin_dir:
+                logger.error(f"[PluginManager] Plugin directory not found: {plugin_id}")
+                return False
+
+            # 4. 注销旧插件
+            del self._plugins[plugin_id]
+            if plugin_id in self._plugin_classes:
+                del self._plugin_classes[plugin_id]
+
+            # 5. 重新安装
+            new_id = self.install_plugin_from_directory(plugin_dir)
+            if not new_id:
+                return False
+
+            # 6. 如果之前是激活状态，重新激活
+            if was_active:
+                self.activate_plugin(new_id)
+
+            logger.info(f"[PluginManager] Hot-reloaded plugin: {plugin_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[PluginManager] Hot-reload failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+
+    def _find_dependents(self, plugin_id: str) -> List[str]:
+        """查找依赖指定插件的其他插件"""
+        dependents = []
+        for pid, info in self._plugins.items():
+            if plugin_id in info.manifest.dependencies:
+                dependents.append(pid)
+        return dependents
+
     def initialize_plugin(self, plugin_id: str) -> bool:
         """
         初始化单个插件（创建Widget）
@@ -422,6 +665,200 @@ class PluginManager(QObject):
             result[opt_id] = opt_id in self._plugins
 
         return result
+
+    # ─────────────────────────────────────────────────────────
+    # 依赖拓扑排序
+    # ─────────────────────────────────────────────────────────
+
+    def topological_sort_plugins(self) -> List[str]:
+        """
+        对插件进行拓扑排序（按依赖关系确定加载顺序）
+
+        Returns:
+            排序后的插件 ID 列表（被依赖的插件在前）
+
+        Raises:
+            ValueError: 存在循环依赖
+        """
+        # 构建邻接表（plugin_id -> 依赖它的插件列表）
+        in_degree: Dict[str, int] = {}
+        dependents: Dict[str, List[str]] = {}
+
+        for plugin_id, info in self._plugins.items():
+            if plugin_id not in in_degree:
+                in_degree[plugin_id] = 0
+            # 统计入度（被多少个插件依赖）
+            for dep_id in info.manifest.dependencies:
+                if dep_id in self._plugins:
+                    in_degree[plugin_id] = in_degree.get(plugin_id, 0) + 1
+                    if dep_id not in dependents:
+                        dependents[dep_id] = []
+                    dependents[dep_id].append(plugin_id)
+
+        # Kahn 算法：从入度为 0 的节点开始
+        queue = [pid for pid, deg in in_degree.items() if deg == 0]
+        sorted_list: List[str] = []
+
+        while queue:
+            # 按插件优先级排序（数值越大越先加载）
+            queue.sort(key=lambda pid: self._plugins[pid].manifest.priority, reverse=True)
+
+            current = queue.pop(0)
+            sorted_list.append(current)
+
+            # 减少依赖当前插件的其他插件的入度
+            if current in dependents:
+                for dependent in dependents[current]:
+                    in_degree[dependent] -= 1
+                    if in_degree[dependent] == 0:
+                        queue.append(dependent)
+
+        # 检查是否有循环依赖
+        if len(sorted_list) != len(self._plugins):
+            remaining = set(self._plugins.keys()) - set(sorted_list)
+            raise ValueError(
+                f"Circular dependency detected among: {remaining}"
+            )
+
+        return sorted_list
+
+    def get_plugin_load_order(self) -> List[str]:
+        """
+        获取插件加载顺序（考虑依赖和优先级）
+
+        Returns:
+            加载顺序列表（从先加载到后加载）
+        """
+        try:
+            return self.topological_sort_plugins()
+        except ValueError as e:
+            logger.error(f"[PluginManager] {e}")
+            # 存在循环依赖时，返回按优先级排序的列表（尽力而为）
+            return sorted(
+                self._plugins.keys(),
+                key=lambda pid: self._plugins[pid].manifest.priority,
+                reverse=True,
+            )
+
+    def initialize_all_sorted(self) -> Dict[str, bool]:
+        """
+        按依赖顺序初始化所有插件
+
+        Returns:
+            插件 ID -> 是否成功初始化的字典
+        """
+        load_order = self.get_plugin_load_order()
+        results: Dict[str, bool] = {}
+
+        logger.info(
+            f"[PluginManager] Initializing plugins in order: {load_order}"
+        )
+
+        for plugin_id in load_order:
+            info = self._plugins[plugin_id]
+            # 跳过已加载的
+            if info.state != PluginState.REGISTERED:
+                results[plugin_id] = True
+                continue
+            # 检查必需依赖是否已加载
+            deps_met = all(
+                dep_id in self._plugins and
+                self._plugins[dep_id].state in (
+                    PluginState.LOADED, PluginState.ACTIVE, PluginState.INACTIVE,
+                )
+                for dep_id in info.manifest.dependencies
+            )
+            if not deps_met:
+                logger.warning(
+                    f"[PluginManager] Skipping {plugin_id}: dependencies not loaded"
+                )
+                results[plugin_id] = False
+                continue
+
+            success = self.initialize_plugin(plugin_id)
+            results[plugin_id] = success
+
+        return results
+
+    def detect_circular_dependency(self) -> List[List[str]]:
+        """
+        检测循环依赖
+
+        Returns:
+            循环依赖链列表（每个子列表是一个循环链）
+        """
+        cycles = []
+        visited = set()
+        path = []
+
+        def dfs(pid: str) -> bool:
+            """深度优先搜索，返回是否发现环"""
+            if pid in path:
+                # 发现环
+                cycle_start = path.index(pid)
+                cycles.append(path[cycle_start:] + [pid])
+                return True
+
+            if pid in visited:
+                return False
+
+            visited.add(pid)
+            path.append(pid)
+
+            info = self._plugins.get(pid)
+            if info:
+                for dep_id in info.manifest.dependencies:
+                    if dep_id in self._plugins:
+                        if dfs(dep_id):
+                            pass  # 继续收集其他环
+
+            path.pop()
+            return False
+
+        for pid in self._plugins:
+            if pid not in visited:
+                dfs(pid)
+
+        return cycles
+
+    def get_dependency_tree(self, plugin_id: str, indent: int = 0) -> str:
+        """
+        获取插件的依赖树（文本表示）
+
+        Args:
+            plugin_id: 插件 ID
+            indent: 缩进级别
+
+        Returns:
+            依赖树字符串
+        """
+        info = self._plugins.get(plugin_id)
+        if not info:
+            return " " * indent + f"{plugin_id} (not found)"
+
+        lines = []
+        prefix = " " * indent
+        state_marker = {
+            PluginState.REGISTERED: "○",
+            PluginState.LOADED: "◐",
+            PluginState.ACTIVE: "●",
+            PluginState.INACTIVE: "◑",
+            PluginState.ERROR: "✗",
+        }.get(info.state, "?")
+
+        lines.append(
+            f"{prefix}{state_marker} {plugin_id} "
+            f"(priority={info.manifest.priority})"
+        )
+
+        for dep_id in info.manifest.dependencies:
+            lines.append(self.get_dependency_tree(dep_id, indent + 2))
+
+        return "\n".join(lines)
+
+    # ─────────────────────────────────────────────────────────
+    # 懒加载辅助
+    # ─────────────────────────────────────────────────────────
 
     def _lazy_load_plugin(self, plugin_id: str) -> bool:
         """懒加载插件类"""

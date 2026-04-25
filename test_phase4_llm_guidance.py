@@ -18,7 +18,7 @@ def test_import():
     print("[TEST] Phase 4 模块导入...")
     
     try:
-        from core.llm_guidance import (
+        from client.src.business.llm_guidance import (
             LLMSource,
             GuidanceStrategy,
             TriggerCondition,
@@ -38,7 +38,7 @@ def test_import():
         return False
     
     try:
-        from core.full_guidance_integration import (
+        from client.src.business.full_guidance_integration import (
             FullGuidanceResult,
             FullGuidanceEngine,
             FullGuidanceAgentChat,
@@ -59,7 +59,7 @@ def test_llm_config():
     """测试 LLM 配置"""
     print("\n[TEST] LLM 配置...")
     
-    from core.llm_guidance import LLMGuidanceConfig, LLMSource, GuidanceStrategy
+    from client.src.business.llm_guidance import LLMGuidanceConfig, LLMSource, GuidanceStrategy
     
     config = LLMGuidanceConfig(
         source=LLMSource.OLLAMA_LOCAL,
@@ -88,7 +88,7 @@ def test_ollama_client():
     """测试 Ollama 客户端"""
     print("\n[TEST] Ollama 客户端...")
     
-    from core.llm_guidance import OllamaClient
+    from client.src.business.llm_guidance import OllamaClient
     
     client = OllamaClient(base_url="http://localhost:11434", timeout=5.0)
     
@@ -117,7 +117,7 @@ def test_llm_generator():
     """测试 LLM 追问生成器"""
     print("\n[TEST] LLM 追问生成器...")
     
-    from core.llm_guidance import (
+    from client.src.business.llm_guidance import (
         LLMGuidanceGenerator,
         LLMGuidanceConfig,
         LLMSource,
@@ -168,7 +168,7 @@ def test_trigger():
     """测试触发器"""
     print("\n[TEST] 触发器...")
     
-    from core.llm_guidance import (
+    from client.src.business.llm_guidance import (
         GuidanceTrigger,
         TriggerCondition,
     )
@@ -217,7 +217,7 @@ def test_hybrid_generator():
     """测试混合生成器"""
     print("\n[TEST] 混合生成器...")
     
-    from core.llm_guidance import (
+    from client.src.business.llm_guidance import (
         HybridGuidanceGenerator,
         LLMGuidanceConfig,
         LLMSource,
@@ -264,7 +264,7 @@ def test_full_guidance_engine():
     """测试完整追问引擎"""
     print("\n[TEST] 完整追问引擎...")
     
-    from core.full_guidance_integration import FullGuidanceEngine
+    from client.src.business.full_guidance_integration import FullGuidanceEngine
     from core.agent_chat_enhancer import ChatIntent
     
     engine = FullGuidanceEngine(
@@ -325,8 +325,8 @@ def test_convenience_functions():
     """测试便捷函数"""
     print("\n[TEST] 便捷函数...")
     
-    from core.llm_guidance import create_llm_generator, quick_llm_guidance
-    from core.full_guidance_integration import quick_full_guidance
+    from client.src.business.llm_guidance import create_llm_generator, quick_llm_guidance
+    from client.src.business.full_guidance_integration import quick_full_guidance
     
     # 测试创建 LLM 生成器
     generator = create_llm_generator(
@@ -360,7 +360,7 @@ def test_data_flow():
     """测试数据流"""
     print("\n[TEST] 数据流...")
     
-    from core.full_guidance_integration import FullGuidanceEngine
+    from client.src.business.full_guidance_integration import FullGuidanceEngine
     from core.agent_chat_enhancer import ChatIntent
     
     engine = FullGuidanceEngine(

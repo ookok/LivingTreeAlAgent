@@ -12,7 +12,7 @@ Execution Agent - 工具执行集成
 Author: Hermes Desktop Team
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('evolution.execution_agent')
 
 import time

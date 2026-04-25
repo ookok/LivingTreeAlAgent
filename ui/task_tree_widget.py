@@ -471,7 +471,7 @@ if __name__ == "__main__":
     window.resize(800, 600)
 
     # 添加测试数据
-    from core.task_execution_engine import TaskNode, TaskStatus
+    from client.src.business.task_execution_engine import TaskNode, TaskStatus
 
     nodes = [
         TaskNode(node_id="root", title="实现用户认证系统", depth=0),

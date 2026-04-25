@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 def _get_system_defaults() -> Dict[str, str]:
     """从系统配置读取默认值，失败时回退到安全默认值"""
     try:
-        from core.config_provider import get_ollama_url, get_l3_model
+        from client.src.business.config_provider import get_ollama_url, get_l3_model
         return {
             "ollama_url": get_ollama_url(),
             "model_name": get_l3_model(),

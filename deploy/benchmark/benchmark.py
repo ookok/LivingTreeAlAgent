@@ -23,7 +23,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 try:
-    from core.config_provider import get_ollama_url
+    from client.src.business.config_provider import get_ollama_url
     HAS_OLLAMA = True
 except ImportError:
     HAS_OLLAMA = False

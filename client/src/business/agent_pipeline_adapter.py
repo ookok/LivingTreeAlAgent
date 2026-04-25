@@ -29,7 +29,7 @@ for chunk in agent.send_message("Python 异步编程"):
 Author: Hermes Desktop Team
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('agent_pipeline_adapter')
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 from typing import Optional, Iterator, Dict, Any, List
 
-from core.unified_pipeline import (
+from client.src.business.unified_pipeline import (
     UnifiedPipeline,
     PipelineContext,
     IntentType,

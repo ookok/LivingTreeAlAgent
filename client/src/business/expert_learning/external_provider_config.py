@@ -15,7 +15,7 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('expert_learning.external_provider_config')
 
 import json

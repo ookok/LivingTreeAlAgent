@@ -19,7 +19,7 @@ from typing import Callable, Iterator, Optional, List, Dict, Any
 
 from core.ollama_client import OllamaClient, ChatMessage, StreamChunk
 from client.src.business.config import OllamaConfig
-from core.context_preprocessor import ContextPreprocessor, ProcessingStats
+from client.src.business.context_preprocessor import ContextPreprocessor, ProcessingStats
 
 logger = logging.getLogger(__name__)
 

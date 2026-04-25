@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from core.knowledge_innovation import KnowledgeGraphEnhancer
+from client.src.business.knowledge_innovation import KnowledgeGraphEnhancer
 
 def test_chinese_extraction():
     """测试中文实体和关系提取"""

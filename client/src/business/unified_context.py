@@ -13,7 +13,7 @@
 Author: Hermes Desktop Team
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('unified_context')
 
 from __future__ import annotations

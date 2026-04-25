@@ -42,7 +42,7 @@ def fix_file(filepath: Path) -> bool:
             prev_stripped = prev.strip()
             
             # 模式: logger import/init 没有缩进，但前一行有缩进（是函数内的 import）
-            if (stripped.startswith('from core.logger import get_logger') or 
+            if (stripped.startswith('from client.src.business.logger import get_logger') or 
                 stripped.startswith('logger = get_logger')):
                 
                 # 检查前一行是否有缩进（如果是函数内）
@@ -62,7 +62,7 @@ def fix_file(filepath: Path) -> bool:
         content = '\n'.join(new_lines)
         
         # 检查是否已有 logger import
-        if 'from core.logger import get_logger' not in content:
+        if 'from client.src.business.logger import get_logger' not in content:
             # 在顶部添加 logger import
             # 找到 docstring 或 import 区结尾
             import_end = 0
@@ -95,7 +95,7 @@ def fix_file(filepath: Path) -> bool:
             insert_pos = import_end + 1
             
             # 添加 import 和 logger 初始化
-            import_stmt = 'from core.logger import get_logger'
+            import_stmt = 'from client.src.business.logger import get_logger'
             logger_stmt = f'logger = get_logger(\'{logger_name}\')'
             
             # 在适当位置插入

@@ -15,7 +15,7 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('adaptive_quality.adaptive_quality_system')
 
 from __future__ import annotations

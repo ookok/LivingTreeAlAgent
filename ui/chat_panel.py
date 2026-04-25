@@ -888,7 +888,7 @@ class ChatPanel(QWidget):
             return
 
         try:
-            from core.task_execution_engine import ExecutionStrategy
+            from client.src.business.task_execution_engine import ExecutionStrategy
             strategy = strategy or ExecutionStrategy.SEQUENTIAL
         except ImportError:
             strategy = "sequential"

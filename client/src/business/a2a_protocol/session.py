@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('a2a_session')
 

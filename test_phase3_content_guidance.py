@@ -18,7 +18,7 @@ def test_import():
     print("[TEST] Phase 3 模块导入...")
     
     try:
-        from core.content_guidance import (
+        from client.src.business.content_guidance import (
             ContentType,
             ContentQuality,
             GuidanceDepth,
@@ -36,7 +36,7 @@ def test_import():
         return False
     
     try:
-        from core.content_guidance_integration import (
+        from client.src.business.content_guidance_integration import (
             ContentAwareEnhancedAgentChat,
             enhance_agent_chat_with_content,
             quick_content_analysis,
@@ -56,7 +56,7 @@ def test_content_type_detection():
     """测试内容类型识别"""
     print("\n[TEST] 内容类型识别...")
     
-    from core.content_guidance import ContentTypeDetector, ContentType
+    from client.src.business.content_guidance import ContentTypeDetector, ContentType
     
     detector = ContentTypeDetector()
     
@@ -105,7 +105,7 @@ def test_content_analyzer():
     """测试内容分析器"""
     print("\n[TEST] 内容分析器...")
     
-    from core.content_guidance import ContentAnalyzer, ContentType
+    from client.src.business.content_guidance import ContentAnalyzer, ContentType
     
     analyzer = ContentAnalyzer()
     
@@ -154,7 +154,7 @@ def test_quality_evaluation():
     """测试质量评估"""
     print("\n[TEST] 质量评估...")
     
-    from core.content_guidance import (
+    from client.src.business.content_guidance import (
         ContentQualityEvaluator,
         ContentType,
     )
@@ -212,7 +212,7 @@ def test_semantic_guidance():
     """测试语义追问生成"""
     print("\n[TEST] 语义追问生成...")
     
-    from core.content_guidance import (
+    from client.src.business.content_guidance import (
         SemanticGuidanceGenerator,
         GuidanceDepth,
     )
@@ -272,7 +272,7 @@ def test_domain_strategies():
     """测试领域特定追问策略"""
     print("\n[TEST] 领域特定追问策略...")
     
-    from core.content_guidance import (
+    from client.src.business.content_guidance import (
         DomainGuidanceStrategies,
         ContentType,
         ContentAnalyzer,
@@ -329,7 +329,7 @@ def test_convenience_functions():
     """测试便捷函数"""
     print("\n[TEST] 便捷函数...")
     
-    from core.content_guidance_integration import (
+    from client.src.business.content_guidance_integration import (
         quick_content_analysis,
         generate_intelligent_guidance,
     )
@@ -375,7 +375,7 @@ def test_integration_module():
     """测试集成模块"""
     print("\n[TEST] 集成模块...")
     
-    from core.content_guidance_integration import (
+    from client.src.business.content_guidance_integration import (
         ContentAwareEnhancedAgentChat,
         EnhancedGuidanceResult,
     )

@@ -275,7 +275,7 @@ async def integrate_with_task_system():
         TaskConverter,
         AgentType
     )
-    from core.task_execution_engine import TaskContext, TaskNode as ExecTaskNode, TaskStatus as ExecStatus
+    from client.src.business.task_execution_engine import TaskContext, TaskNode as ExecTaskNode, TaskStatus as ExecStatus
     from core.task_router import TaskNode, TaskStatus as RouterStatus
     
     # 1. 创建 A2A 任务管理器

@@ -22,12 +22,12 @@ def fix_file_syntax(filepath: Path) -> bool:
     original_content = content
     changes_made = 0
     
-    # 模式1: from core.logger import get_logger 后跟 logger = get_logger(...) 
+    # 模式1: from client.src.business.logger import get_logger 后跟 logger = get_logger(...) 
     # 在 try/except 块内但没有正确缩进
     pattern1 = r'(\n    try:\n)(.*?)(\n)(from core\.logger import get_logger\n)(logger = get_logger\([^)]+\)\n)'
     
     # 检查是否已经导入了 core.logger
-    if 'from core.logger import get_logger' not in content:
+    if 'from client.src.business.logger import get_logger' not in content:
         # 模式: 在 try 块内的 import 语句没有正确缩进
         # 查找 "    try:" 后紧跟着 "from core.logger" 但没有正确缩进的情况
         lines = content.split('\n')
@@ -42,7 +42,7 @@ def fix_file_syntax(filepath: Path) -> bool:
             if line.strip() == 'try:' and i + 1 < len(lines):
                 next_line = lines[i + 1]
                 # 检查是否有 from core.logger 在错误位置
-                if 'from core.logger import get_logger' in next_line or \
+                if 'from client.src.business.logger import get_logger' in next_line or \
                    'from core import logger' in next_line or \
                    'import logging' in next_line and i + 2 < len(lines) and \
                    'logger' in lines[i + 2]:
@@ -69,7 +69,7 @@ def fix_file_syntax(filepath: Path) -> bool:
                         if stripped.startswith('from core.logger') or \
                            stripped.startswith('import logger') or \
                            stripped.startswith('logger = get_logger'):
-                            if 'from core.logger import get_logger' in bl:
+                            if 'from client.src.business.logger import get_logger' in bl:
                                 if not logger_import_added:
                                     # 添加到顶部
                                     new_lines.append(bl)  # 先添加这行，稍后排序
@@ -90,11 +90,11 @@ def fix_file_syntax(filepath: Path) -> bool:
             content = '\n'.join(new_lines)
     
     # 模式2: 简单的 "from core.logger" 紧跟在 try: 之后但缩进错误
-    # 匹配: try:\nfrom core.logger import get_logger\n
+    # 匹配: try:\nfrom client.src.business.logger import get_logger\n
     pattern2 = r'(\n    try:\n)(from core\.logger import get_logger\n)(logger = get_logger)'
     
     # 先检查是否需要添加 logger import
-    if 'logger = get_logger' in content and 'from core.logger import get_logger' not in content:
+    if 'logger = get_logger' in content and 'from client.src.business.logger import get_logger' not in content:
         # 需要添加 import
         # 找一个合适的位置添加
         lines = content.split('\n')
@@ -118,7 +118,7 @@ def fix_file_syntax(filepath: Path) -> bool:
                     last_import_idx = i
             
             if last_import_idx >= 0:
-                lines.insert(last_import_idx + 1, 'from core.logger import get_logger')
+                lines.insert(last_import_idx + 1, 'from client.src.business.logger import get_logger')
                 content = '\n'.join(lines)
                 changes_made += 1
     

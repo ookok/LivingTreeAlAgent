@@ -2181,7 +2181,7 @@ class DeploymentPanel(QWidget):
     def _init_backend(self):
         """初始化后端连接"""
         try:
-            from core.deployment_monitor import DeploymentMonitor
+            from client.src.business.deployment_monitor import DeploymentMonitor
             self._monitor = DeploymentMonitor()
             self._refresh_status()
         except ImportError:

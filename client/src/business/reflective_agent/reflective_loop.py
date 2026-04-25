@@ -4,7 +4,7 @@
 核心能力：执行-反思-改进的迭代循环
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('reflective_agent.reflective_loop')
 
 import asyncio

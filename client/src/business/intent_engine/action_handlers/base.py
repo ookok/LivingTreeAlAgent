@@ -237,7 +237,7 @@ class LLMClient:
         # 从系统配置读取默认值（未显式传入时）
         if not default_url or not default_model:
             try:
-                from core.config_provider import get_ollama_url, get_l3_model
+                from client.src.business.config_provider import get_ollama_url, get_l3_model
                 default_url = default_url or get_ollama_url()
                 default_model = default_model or get_l3_model()
             except Exception:

@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont, QColor, QTextCursor
 # 添加项目路径
 sys.path.insert(0, ".")
 
-from core.task_execution_engine import (
+from client.src.business.task_execution_engine import (
     SmartDecomposer,
     SmartTaskExecutor,
     TaskContext,
@@ -30,7 +30,7 @@ from core.task_execution_engine import (
 )
 from client.src.business.task_decomposer import SubTask
 from client.src.business.agent import HermesAgent, AgentCallbacks
-from core.agent_progress import AgentProgress, ProgressPhase
+from client.src.business.agent_progress import AgentProgress, ProgressPhase
 from ui.task_tree_widget import TaskTreeWidget
 
 

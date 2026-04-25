@@ -20,7 +20,7 @@ from enum import Enum
 import statistics
 import json
 from pathlib import Path
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('expert_learning.adaptive_model_compressor')
 
 

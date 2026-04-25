@@ -13,7 +13,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('ui_evolution.evolution_scheduler')
 
 import json

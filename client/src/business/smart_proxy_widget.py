@@ -154,7 +154,7 @@ class ProxySourceListWidget(QWidget):
     def _on_add_clicked(self):
         """添加代理源"""
         # 简化实现：使用预定义的源
-        from core.smart_proxy_gateway import ProxySource, ProxySourceType
+        from client.src.business.smart_proxy_gateway import ProxySource, ProxySourceType
 
         predefined = [
             {"id": "scdn", "name": "SCDN代理池", "url": "https://proxy.scdn.io/api/get_proxy.php"},
@@ -364,7 +364,7 @@ class GitProxyConfigWidget(QWidget):
 
     def _on_apply_clicked(self):
         """应用配置"""
-        from core.git_proxy_config import GitProxyConfig
+        from client.src.business.git_proxy_config import GitProxyConfig
 
         proxy = self.proxy_input.text().strip()
         if not proxy:
@@ -520,7 +520,7 @@ class AppProxyConfigWidget(QWidget):
 
     def _on_export_clicked(self):
         """导出环境变量"""
-        from core.app_proxy_config import AppProxyConfig
+        from client.src.business.app_proxy_config import AppProxyConfig
 
         proxy = self.proxy_input.text().strip()
         if not proxy:
@@ -699,7 +699,7 @@ class SmartProxyWidget(QWidget):
     def _update_stats(self):
         """更新统计信息"""
         if not self._gateway:
-            from core.smart_proxy_gateway import get_gateway
+            from client.src.business.smart_proxy_gateway import get_gateway
             self._gateway = get_gateway()
 
         stats = self._gateway.get_pool_stats()

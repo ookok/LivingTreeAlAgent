@@ -56,7 +56,7 @@ class UnifiedProxyPanel(QWidget):
     def _get_config(self):
         """获取配置实例（延迟加载）"""
         if self._config is None:
-            from core.unified_proxy_config import UnifiedProxyConfig
+            from client.src.business.unified_proxy_config import UnifiedProxyConfig
             self._config = UnifiedProxyConfig.get_instance()
         return self._config
 
@@ -469,7 +469,7 @@ class UnifiedProxyPanel(QWidget):
     def _on_github_changed(self, state):
         """GitHub 开关变化"""
         config = self._get_config()
-        from core.unified_proxy_config import SearchSource
+        from client.src.business.unified_proxy_config import SearchSource
 
         if state:
             config.enable_source(SearchSource.GITHUB)
@@ -479,7 +479,7 @@ class UnifiedProxyPanel(QWidget):
     def _on_source_changed(self, state):
         """其他搜索源变化"""
         config = self._get_config()
-        from core.unified_proxy_config import SearchSource
+        from client.src.business.unified_proxy_config import SearchSource
 
         source_map = {
             self.duckduckgo_check: SearchSource.DUCKDUCKGO,
@@ -586,7 +586,7 @@ class UnifiedProxyPanel(QWidget):
 
         try:
             config = self._get_config()
-            from core.unified_proxy_config import SearchSource
+            from client.src.business.unified_proxy_config import SearchSource
 
             results = await config.search(query, SearchSource.DUCKDUCKGO, 5)
 

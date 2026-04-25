@@ -97,14 +97,14 @@ class PrintMigrator:
 
     def _should_add_import(self, content: str) -> bool:
         """检查是否需要添加import"""
-        return "from core.logger import" not in content and "import core.logger" not in content
+        return "from client.src.business.logger import" not in content and "import client.src.business.logger" not in content
 
     def _add_import(self, content: str, module_path: str) -> str:
         """添加import语句"""
         logger_name = self._get_logger_name(module_path)
 
         # 在import区域添加
-        import_line = f"from core.logger import get_logger\nlogger = get_logger('{logger_name}')\n"
+        import_line = f"from client.src.business.logger import get_logger\nlogger = get_logger('{logger_name}')\n"
 
         # 查找最后一个import语句的位置
         lines = content.split('\n')

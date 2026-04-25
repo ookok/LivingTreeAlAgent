@@ -17,7 +17,7 @@ def test_model_layer_config():
     print("测试 1: 模型层配置")
     print("=" * 60)
     
-    from core.model_layer_config import (
+    from client.src.business.model_layer_config import (
         ModelTier, ServiceStatus, DeployMode,
         L0_L4_MODELS, get_models_by_tier,
         get_default_model_for_tier, create_default_layer_config,
@@ -60,7 +60,7 @@ def test_deployment_engine():
     print("测试 2: 部署引擎")
     print("=" * 60)
     
-    from core.deployment_engine import DeploymentEngine, get_deployment_engine
+    from client.src.business.deployment_engine import DeploymentEngine, get_deployment_engine
     
     # 创建引擎
     engine = get_deployment_engine()
@@ -89,7 +89,7 @@ def test_deployment_monitor():
     print("测试 3: 部署监控")
     print("=" * 60)
     
-    from core.deployment_monitor import DeploymentMonitor, get_deployment_monitor
+    from client.src.business.deployment_monitor import DeploymentMonitor, get_deployment_monitor
     
     # 创建监控器
     monitor = get_deployment_monitor()
@@ -134,8 +134,8 @@ def test_model_deployment():
     print("测试 4: 模型部署（检查模式）")
     print("=" * 60)
     
-    from core.deployment_engine import DeploymentEngine
-    from core.model_layer_config import ModelTier, get_default_model_for_tier
+    from client.src.business.deployment_engine import DeploymentEngine
+    from client.src.business.model_layer_config import ModelTier, get_default_model_for_tier
     
     engine = DeploymentEngine()
     

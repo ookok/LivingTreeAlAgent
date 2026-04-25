@@ -45,7 +45,7 @@ def _get_unified_config():
     global _UnifiedProxyConfig
     if _UnifiedProxyConfig is None:
         try:
-            from core.unified_proxy_config import UnifiedProxyConfig
+            from client.src.business.unified_proxy_config import UnifiedProxyConfig
             _UnifiedProxyConfig = UnifiedProxyConfig
         except ImportError:
             # 如果统一配置不存在，使用简化实现

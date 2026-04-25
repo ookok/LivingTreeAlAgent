@@ -9,9 +9,9 @@ from typing import Optional, List, Dict, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.logger import get_logger
-from core.model_layer_config import ModelTier, ServiceStatus, DeployMode
-from core.deployment_engine import DeploymentEngine, get_deployment_engine
+from client.src.business.logger import get_logger
+from client.src.business.model_layer_config import ModelTier, ServiceStatus, DeployMode
+from client.src.business.deployment_engine import DeploymentEngine, get_deployment_engine
 
 
 def _get_default_monitor_config() -> Dict[str, Any]:

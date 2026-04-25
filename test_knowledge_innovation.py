@@ -35,7 +35,7 @@ def test_innovation_modules():
     print("测试 1-5: 知识库创新模块")
     print("=" * 70)
 
-    from core.knowledge_innovation import (
+    from client.src.business.knowledge_innovation import (
         test_innovation_modules as test_modules,
     )
 
@@ -142,7 +142,7 @@ def test_knowledge_hooks():
     print("测试 9: 知识库钩子")
     print("=" * 70)
 
-    from core.knowledge_hooks import test_hooks, get_hook_manager
+    from client.src.business.knowledge_hooks import test_hooks, get_hook_manager
 
     # 测试钩子
     test_hooks()

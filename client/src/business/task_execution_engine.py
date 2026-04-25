@@ -21,7 +21,7 @@ from typing import Any, Callable, Iterator, List, Optional, Dict
 from threading import Event, Lock
 import random
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('task_execution_engine')
 

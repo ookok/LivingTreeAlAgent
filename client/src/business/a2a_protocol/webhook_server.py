@@ -17,7 +17,7 @@ try:
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('a2a_webhook')
 

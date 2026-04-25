@@ -11,7 +11,7 @@ import sys
 import time
 sys.path.insert(0, "f:/mhzyapp/LivingTreeAlAgent")
 
-from core.intent_preserving_compressor import (
+from client.src.business.intent_preserving_compressor import (
     IntentPreservingCompressor,
     IntentRecognizer,
     CodeSignatureExtractor,

@@ -185,7 +185,7 @@ logging_dir: {self.config.output_dir}/logs
 from unsloth import FastLanguageModel
 import torch
 from datasets import load_dataset
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('expert_distillation.fine_tune_expert')
 
 

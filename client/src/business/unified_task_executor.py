@@ -17,7 +17,7 @@
 Author: Hermes Desktop Team
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('unified_task_executor')
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ class UnifiedTaskExecutor:
         **kwargs
     ):
         # 从配置模块获取默认值
-        from core.config_provider import get_ollama_url, get_l1_model
+        from client.src.business.config_provider import get_ollama_url, get_l1_model
 
         self._ollama_url = ollama_url or get_ollama_url()
         self._max_workers = max_workers
@@ -137,7 +137,7 @@ class UnifiedTaskExecutor:
                 self.base_url = base_url
 
             def chat_sync(self, messages, model=None, **kwargs):
-                from core.config_provider import get_l1_model
+                from client.src.business.config_provider import get_l1_model
                 model = model or get_l1_model()
                 content = messages[0]["content"] if isinstance(messages[0], dict) else messages[0].content
                 resp = requests.post(
@@ -156,7 +156,7 @@ class UnifiedTaskExecutor:
         """智能任务执行器（延迟加载）"""
         if self._smart_executor is None:
             try:
-                from core.task_execution_engine import SmartTaskExecutor
+                from client.src.business.task_execution_engine import SmartTaskExecutor
                 self._smart_executor = SmartTaskExecutor(
                     llm_client=self.ollama_client,
                     max_depth=3,
@@ -481,7 +481,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     # 从配置获取 Ollama URL
-    from core.config_provider import get_ollama_url
+    from client.src.business.config_provider import get_ollama_url
 
 
     executor = UnifiedTaskExecutor(

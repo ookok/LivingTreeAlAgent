@@ -20,8 +20,8 @@ def find_and_fix_file(filepath: Path) -> Tuple[bool, List[str]]:
     original = content
     changes = []
     
-    # 模式1: 查找 "try:\n" 后紧跟着 "from core.logger import" 但没有正确缩进
-    # 匹配: try:\nfrom core.logger import get_logger\nlogger = get_logger
+    # 模式1: 查找 "try:\n" 后紧跟着 "from client.src.business.logger import" 但没有正确缩进
+    # 匹配: try:\nfrom client.src.business.logger import get_logger\nlogger = get_logger
     patterns = [
         # Pattern: try: 块内的 logger import
         (r'(\n    try:\n)(from core\.logger import get_logger\n)(logger = get_logger)',
@@ -46,7 +46,7 @@ def find_and_fix_file(filepath: Path) -> Tuple[bool, List[str]]:
         line = lines[i]
         
         # 检测 logger 相关 import
-        if line.strip().startswith('from core.logger import get_logger'):
+        if line.strip().startswith('from client.src.business.logger import get_logger'):
             # 检查是否在 try 块内但缩进错误
             # 获取前一行
             if i > 0:
@@ -99,7 +99,7 @@ def find_and_fix_file(filepath: Path) -> Tuple[bool, List[str]]:
             
             if import_section_end > 0:
                 lines = content.split('\n')
-                lines.insert(import_section_end + 1, 'from core.logger import get_logger')
+                lines.insert(import_section_end + 1, 'from client.src.business.logger import get_logger')
                 content = '\n'.join(lines)
                 changes.append("添加 logger import 到顶部")
         

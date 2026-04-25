@@ -20,7 +20,7 @@ import threading
 
 # 避免循环导入
 if TYPE_CHECKING:
-    from core.unified_memory import MemoryRouter, MemoryItem, MemoryQuery, MemoryResult, MemoryType, MemoryPriority
+    from client.src.business.unified_memory import MemoryRouter, MemoryItem, MemoryQuery, MemoryResult, MemoryType, MemoryPriority
 
 # 全局路由器实例
 _router_instance: Optional['MemoryRouter'] = None
@@ -44,7 +44,7 @@ def get_unified_memory_router() -> Optional['MemoryRouter']:
             return _router_instance
         
         try:
-            from core.unified_memory import MemoryRouter
+            from client.src.business.unified_memory import MemoryRouter
             _router_instance = MemoryRouter.get_instance()
             return _router_instance
         except ImportError as e:
@@ -113,7 +113,7 @@ class UnifiedMemoryMixin:
             return {}
         
         try:
-            from core.unified_memory import MemoryItem, MemoryType, MemoryPriority as UnifiedPriority
+            from client.src.business.unified_memory import MemoryItem, MemoryType, MemoryPriority as UnifiedPriority
             
             # 转换类型
             type_map = {
@@ -179,7 +179,7 @@ class UnifiedMemoryMixin:
             return {"items": [], "total": 0, "sources": []}
         
         try:
-            from core.unified_memory import MemoryQuery, MemoryType
+            from client.src.business.unified_memory import MemoryQuery, MemoryType
             
             # 转换类型
             type_map = {
@@ -459,7 +459,7 @@ def quick_store(content: str, memory_type: str = "session") -> bool:
         return False
     
     try:
-        from core.unified_memory import MemoryItem, MemoryType
+        from client.src.business.unified_memory import MemoryItem, MemoryType
         
         type_map = {
             "working": MemoryType.WORKING,
@@ -497,7 +497,7 @@ def quick_retrieve(query: str, memory_type: str = None) -> List[Dict]:
         return []
     
     try:
-        from core.unified_memory import MemoryQuery, MemoryType
+        from client.src.business.unified_memory import MemoryQuery, MemoryType
         
         type_map = {
             "working": MemoryType.WORKING,

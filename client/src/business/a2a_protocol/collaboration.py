@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('a2a_collab')
 

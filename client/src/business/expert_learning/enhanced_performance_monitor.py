@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque
 from dataclasses import asdict
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('expert_learning.enhanced_performance_monitor')
 
 

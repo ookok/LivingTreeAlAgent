@@ -34,7 +34,7 @@ def migrate_file(file_path: str) -> int:
     original = content
 
     # 1. 添加import (如果没有)
-    if 'from core.logger import get_logger' not in content:
+    if 'from client.src.business.logger import get_logger' not in content:
         # 找到import区域
         lines = content.split('\n')
         import_pos = 0
@@ -51,7 +51,7 @@ def migrate_file(file_path: str) -> int:
                 module_name = module_name[len(prefix):]
                 break
 
-        import_line = f"from core.logger import get_logger\nlogger = get_logger('{module_name}')\n"
+        import_line = f"from client.src.business.logger import get_logger\nlogger = get_logger('{module_name}')\n"
         lines.insert(import_pos, import_line)
         content = '\n'.join(lines)
 

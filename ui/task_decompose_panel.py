@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QAction, QIcon
 
-from core.task_execution_engine import (
+from client.src.business.task_execution_engine import (
     SmartDecomposer, SmartTaskExecutor, TaskContext,
     TaskNode, ExecutionStrategy, TaskStatus
 )

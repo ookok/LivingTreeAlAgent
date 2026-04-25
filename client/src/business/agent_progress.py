@@ -11,7 +11,7 @@ from typing import Callable, Optional, List, Dict, Any
 from datetime import datetime
 import time
 import threading
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('agent_progress')
 
 

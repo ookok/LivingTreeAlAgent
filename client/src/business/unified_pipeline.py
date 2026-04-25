@@ -21,7 +21,7 @@
 Author: Hermes Desktop Team
 """
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('unified_pipeline')
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ class UnifiedPipeline:
         **kwargs
     ):
         # 从配置模块获取默认值
-        from core.config_provider import (
+        from client.src.business.config_provider import (
             get_ollama_url, get_l0_model, get_l3_model,
             get_l4_model, get_embedding_model
         )
@@ -180,7 +180,7 @@ class UnifiedPipeline:
 
     def _init_config(self, **kwargs):
         """初始化配置"""
-        from core.config_provider import get_default_model
+        from client.src.business.config_provider import get_default_model
         self.ollama_url = kwargs.get("ollama_url", get_ollama_url())
         self.embed_model = kwargs.get("embed_model", "nomic-embed-text")
         self.l0_model = kwargs.get("l0_model", get_default_model("l0"))

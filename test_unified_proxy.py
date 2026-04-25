@@ -23,7 +23,7 @@ def test_unified_config():
     print("Testing Unified Proxy Config")
     print("=" * 50)
 
-    from core.unified_proxy_config import UnifiedProxyConfig, SearchSource
+    from client.src.business.unified_proxy_config import UnifiedProxyConfig, SearchSource
 
     # 获取单例
     config = UnifiedProxyConfig.get_instance()
@@ -75,7 +75,7 @@ async def test_github_search():
     print("Testing GitHub Search")
     print("=" * 50)
 
-    from core.unified_proxy_config import UnifiedProxyConfig
+    from client.src.business.unified_proxy_config import UnifiedProxyConfig
 
     config = UnifiedProxyConfig.get_instance()
 
@@ -109,7 +109,7 @@ def test_market_whitelist():
     print("测试市场白名单")
     print("=" * 50)
 
-    from core.app_proxy_config import MarketWhitelist
+    from client.src.business.app_proxy_config import MarketWhitelist
 
     # 测试 GitHub URL
     test_urls = [

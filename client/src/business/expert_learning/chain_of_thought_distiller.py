@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from enum import Enum
 import re
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('expert_learning.chain_of_thought_distiller')
 
 

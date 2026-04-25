@@ -72,7 +72,7 @@ class KnowledgeHookManager:
         try:
             from core.knowledge_auto_ingest import get_kb_ingest, get_kb_gc
             from core.deep_search_kb_integration import get_ds_kb_integration
-            from core.knowledge_innovation import (
+            from client.src.business.knowledge_innovation import (
                 get_semantic_dedup,
                 get_value_scorer,
                 get_active_learner,

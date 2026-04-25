@@ -18,7 +18,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 from urllib.parse import urlparse
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('a2a_channel')
 

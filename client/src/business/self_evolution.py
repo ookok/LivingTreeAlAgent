@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Callable
 from collections import defaultdict
 from enum import Enum
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 logger = get_logger('self_evolution')
 
 

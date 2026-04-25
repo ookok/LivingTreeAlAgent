@@ -42,7 +42,7 @@ def fix_all_files():
                 content = '\n'.join(new_lines)
                 
                 # 检查是否已有 logger import，没有则添加
-                if 'from core.logger import get_logger' not in content:
+                if 'from client.src.business.logger import get_logger' not in content:
                     # 在 import 区添加
                     import_end = 0
                     for idx, line in enumerate(content.split('\n')):
@@ -51,15 +51,15 @@ def fix_all_files():
                             import_end = idx
                     
                     lines = content.split('\n')
-                    lines.insert(import_end + 1, 'from core.logger import get_logger')
+                    lines.insert(import_end + 1, 'from client.src.business.logger import get_logger')
                     content = '\n'.join(lines)
                     
                     # 添加 logger 初始化 - 提取原来的 logger 名称
                     logger_name_match = re.search(r"logger = get_logger\('([^']+)'\)", pyfile.read_text(encoding='utf-8'))
                     if logger_name_match:
                         name = logger_name_match.group(1)
-                        content = content.replace('from core.logger import get_logger', 
-                                               f'from core.logger import get_logger\n\nlogger = get_logger(\'{name}\')')
+                        content = content.replace('from client.src.business.logger import get_logger', 
+                                               f'from client.src.business.logger import get_logger\n\nlogger = get_logger(\'{name}\')')
                 
                 pyfile.write_text(content, encoding='utf-8')
                 fixed_files.append(str(pyfile.relative_to(base)))

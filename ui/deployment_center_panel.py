@@ -15,13 +15,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QColor, QPalette
 import time
 
-from core.model_layer_config import (
+from client.src.business.model_layer_config import (
     ModelTier, ServiceStatus, DeployMode,
     ModelDefinition, L0_L4_MODELS, get_models_by_tier,
     LayerDeploymentConfig, LayerConfig, create_default_layer_config
 )
-from core.deployment_engine import DeploymentEngine, get_deployment_engine
-from core.deployment_monitor import DeploymentMonitor, get_deployment_monitor, SystemStatus
+from client.src.business.deployment_engine import DeploymentEngine, get_deployment_engine
+from client.src.business.deployment_monitor import DeploymentMonitor, get_deployment_monitor, SystemStatus
 
 
 # ── 样式定义 ────────────────────────────────────────────────────────────────

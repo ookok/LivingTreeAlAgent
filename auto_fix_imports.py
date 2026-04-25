@@ -20,7 +20,7 @@ def fix_file(filepath: Path) -> Tuple[bool, str]:
     lines = content.split('\n')
     
     # 检测错误的 import 模式
-    # 模式1: from core.logger import get_logger 在函数/try块内但没有正确缩进
+    # 模式1: from client.src.business.logger import get_logger 在函数/try块内但没有正确缩进
     # 查找: 行不以4空格开头但应该是 (即在 try: 后面但缩进错误)
     
     i = 0
@@ -31,7 +31,7 @@ def fix_file(filepath: Path) -> Tuple[bool, str]:
         line = lines[i]
         
         # 检测错误模式: from core.logger 前面有代码但缩进不足
-        if line.strip().startswith('from core.logger import get_logger') or \
+        if line.strip().startswith('from client.src.business.logger import get_logger') or \
            line.strip().startswith('logger = get_logger'):
             
             # 检查是否是错误放置
@@ -66,7 +66,7 @@ def fix_file(filepath: Path) -> Tuple[bool, str]:
         content = '\n'.join(new_lines)
         
         # 添加 logger import 到顶部（如果还没有）
-        if 'from core.logger import get_logger' not in content:
+        if 'from client.src.business.logger import get_logger' not in content:
             # 找到导入区
             import_lines = []
             other_lines = []
@@ -87,7 +87,7 @@ def fix_file(filepath: Path) -> Tuple[bool, str]:
             
             # 添加 logger import
             if import_lines:
-                import_lines.append('from core.logger import get_logger')
+                import_lines.append('from client.src.business.logger import get_logger')
             
             # 重建文件
             content = '\n'.join(import_lines + other_lines)
@@ -100,8 +100,8 @@ def fix_file(filepath: Path) -> Tuple[bool, str]:
                 logger_name = match.group(1)
                 # 在导入后添加
                 content = content.replace(
-                    'from core.logger import get_logger',
-                    f'from core.logger import get_logger\n\nlogger = get_logger(\'{logger_name}\')'
+                    'from client.src.business.logger import get_logger',
+                    f'from client.src.business.logger import get_logger\n\nlogger = get_logger(\'{logger_name}\')'
                 )
         
         filepath.write_text(content, encoding='utf-8')

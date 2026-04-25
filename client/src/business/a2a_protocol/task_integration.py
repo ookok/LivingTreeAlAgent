@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.logger import get_logger
+from client.src.business.logger import get_logger
 
 logger = get_logger('a2a_integration')
 
@@ -126,7 +126,7 @@ class TaskConverter:
     @staticmethod
     def to_task_context(session: 'SessionContext', root_task_id: str = "") -> 'TaskContext':
         """从 SessionContext 转换为 TaskContext"""
-        from core.task_execution_engine import TaskContext
+        from client.src.business.task_execution_engine import TaskContext
         
         ctx = TaskContext(
             root_task_id=root_task_id or session.context_id or "",

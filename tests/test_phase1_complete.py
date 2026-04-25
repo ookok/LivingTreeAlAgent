@@ -71,12 +71,12 @@ class TestSelfAwareness(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.self_awareness import SelfAwarenessSystem
+        from client.src.business.self_awareness import SelfAwarenessSystem
         self.assertIsNotNone(SelfAwarenessSystem)
     
     def test_system_creation(self):
         """测试系统创建"""
-        from core.self_awareness import SelfAwarenessSystem
+        from client.src.business.self_awareness import SelfAwarenessSystem
         system = SelfAwarenessSystem(
             project_root=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
@@ -84,7 +84,7 @@ class TestSelfAwareness(unittest.TestCase):
     
     def test_health_check(self):
         """测试健康检查"""
-        from core.self_awareness import SelfAwarenessSystem
+        from client.src.business.self_awareness import SelfAwarenessSystem
         system = SelfAwarenessSystem(
             project_root=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )

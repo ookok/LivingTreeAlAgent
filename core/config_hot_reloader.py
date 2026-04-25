@@ -329,8 +329,8 @@ class ConfigHotReloader:
         # 保存历史
         self._save_history(changes)
 
-        # 清除 config_provider 的缓存
-        self._clear_config_provider_cache()
+        # 增量更新 config_provider 的缓存（只更新变更的项）
+        self._update_config_provider_cache_incremental(changes)
 
         # 通知回调
         with self._lock:
@@ -345,7 +345,7 @@ class ConfigHotReloader:
         self._publish_config_changed_event(changes)
 
     def _clear_config_provider_cache(self) -> None:
-        """清除 config_provider 的缓存"""
+        """清除 config_provider 的缓存（兼容旧代码）"""
         try:
             from core import config_provider
             if hasattr(config_provider, '_cached_config'):
@@ -353,6 +353,71 @@ class ConfigHotReloader:
                 logger.info("[ConfigHotReloader] Cleared config_provider cache")
         except Exception as e:
             logger.error(f"[ConfigHotReloader] Failed to clear config_provider cache: {e}")
+
+    def _update_config_provider_cache_incremental(self, changes: List[ConfigChange]) -> None:
+        """
+        增量更新 config_provider 的缓存
+
+        只更新变更的配置项，避免全量清除缓存后重新加载的开销。
+
+        Args:
+            changes: ConfigChange 列表
+        """
+        try:
+            from core import config_provider
+
+            # 确保缓存已初始化
+            if config_provider._cached_config is None:
+                config_provider._load_config()
+                return  # _load_config() 已经填充了缓存
+
+            # 增量更新：遍历变更，只更新变更的配置项
+            for change in changes:
+                if change.change_type == ConfigChangeType.DELETED:
+                    # 文件被删除：清除整个缓存，下次重新加载
+                    config_provider._cached_config = None
+                    logger.warning(
+                        f"[ConfigHotReloader] Config file deleted: {change.config_path}, "
+                        f"clearing entire cache"
+                    )
+                    return
+
+                new_value = change.new_value
+                if not isinstance(new_value, dict):
+                    continue
+
+                # 更新 ollama_url（如果配置中包含）
+                if "ollama_url" in new_value:
+                    old_url = config_provider._cached_config.get("ollama_url")
+                    new_url = new_value["ollama_url"]
+                    if old_url != new_url:
+                        config_provider._cached_config["ollama_url"] = new_url
+                        logger.info(
+                            f"[ConfigHotReloader] Incremental update: "
+                            f"ollama_url = {new_url}"
+                        )
+
+                # 更新 models（如果配置中包含）
+                if "models" in new_value and isinstance(new_value["models"], dict):
+                    if "models" not in config_provider._cached_config:
+                        config_provider._cached_config["models"] = {}
+                    config_provider._cached_config["models"].update(new_value["models"])
+                    logger.info(
+                        f"[ConfigHotReloader] Incremental update: "
+                        f"models = {list(new_value['models'].keys())}"
+                    )
+
+            logger.info("[ConfigHotReloader] Incremental cache update completed")
+
+        except Exception as e:
+            logger.error(f"[ConfigHotReloader] Incremental update failed: {e}")
+            logger.error(traceback.format_exc())
+            # 失败时回退到全量清除
+            try:
+                config_provider._cached_config = None
+                logger.warning("[ConfigHotReloader] Fallback: cleared entire cache")
+            except Exception:
+                pass
 
     def _publish_config_changed_event(self, changes: List[ConfigChange]) -> None:
         """发布配置变更事件到 EventBus"""

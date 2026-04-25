@@ -12,7 +12,7 @@
 
 快速开始:
 ```python
-from core.world_model_simulator import (
+from client.src.business.world_model_simulator import (
     WorldModel,
     SimulationEngine,
     SimulationConfig,

@@ -8,15 +8,15 @@ Agent Skills 初始化
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from core.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
-from core.agent_skills.skill_loader import SkillLoader
-from core.agent_skills.skill_executor import SkillExecutor
-from core.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
-from core.agent_skills.context_aware import ContextAwareLoader
-from core.agent_skills.workflows.spec_driven import SpecDrivenWorkflow
-from core.agent_skills.workflows.test_driven import TestDrivenWorkflow
-from core.agent_skills.workflows.code_review import CodeReviewWorkflow
-from core.agent_skills.workflows.security import SecurityWorkflow
+from client.src.business.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
+from client.src.business.agent_skills.skill_loader import SkillLoader
+from client.src.business.agent_skills.skill_executor import SkillExecutor
+from client.src.business.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
+from client.src.business.agent_skills.context_aware import ContextAwareLoader
+from client.src.business.agent_skills.workflows.spec_driven import SpecDrivenWorkflow
+from client.src.business.agent_skills.workflows.test_driven import TestDrivenWorkflow
+from client.src.business.agent_skills.workflows.code_review import CodeReviewWorkflow
+from client.src.business.agent_skills.workflows.security import SecurityWorkflow
 
 logger = logging.getLogger(__name__)
 

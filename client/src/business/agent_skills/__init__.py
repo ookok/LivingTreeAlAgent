@@ -21,7 +21,7 @@ Date: 2026-04-22
 Updated: 2026-04-25 (对齐 Hermes Agent)
 """
 
-from core.agent_skills.skill_registry import (
+from client.src.business.agent_skills.skill_registry import (
     SkillRegistry, 
     SkillManifest, 
     SkillCategory,
@@ -31,12 +31,12 @@ from core.agent_skills.skill_registry import (
     OutputType,
     SkillEvolution,
 )
-from core.agent_skills.skill_loader import SkillLoader
-from core.agent_skills.skill_executor import SkillExecutor
-from core.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
-from core.agent_skills.context_aware import ContextAwareLoader
-from core.agent_skills.initializer import AgentSkillsInitializer
-from core.agent_skills.auto_evolution_skill import (
+from client.src.business.agent_skills.skill_loader import SkillLoader
+from client.src.business.agent_skills.skill_executor import SkillExecutor
+from client.src.business.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
+from client.src.business.agent_skills.context_aware import ContextAwareLoader
+from client.src.business.agent_skills.initializer import AgentSkillsInitializer
+from client.src.business.agent_skills.auto_evolution_skill import (
     AutoEvolutionSkill,
     PatternDetector,
     SkillSeedGenerator,
@@ -44,14 +44,14 @@ from core.agent_skills.auto_evolution_skill import (
     SkillSeed,
     EvolutionCandidate,
 )
-from core.agent_skills.honcho_user_modeling import (
+from client.src.business.agent_skills.honcho_user_modeling import (
     HonchoUserModeling,
     UserProfile,
     UserPreference,
     Dialect,
     CommunicationStyle,
 )
-from core.agent_skills.cron_scheduler import (
+from client.src.business.agent_skills.cron_scheduler import (
     CronScheduler,
     ScheduledTask,
     TaskStatus,

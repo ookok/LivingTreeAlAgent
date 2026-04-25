@@ -12,7 +12,7 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.agent_skills import (
+from client.src.business.agent_skills import (
     AgentSkillsInitializer,
     SkillRegistry,
     SkillCategory,

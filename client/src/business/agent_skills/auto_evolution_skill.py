@@ -25,7 +25,7 @@ from datetime import datetime
 from collections import Counter
 import hashlib
 
-from core.agent_skills.skill_registry import (
+from client.src.business.agent_skills.skill_registry import (
     SkillRegistry, 
     SkillManifest, 
     SkillCategory,

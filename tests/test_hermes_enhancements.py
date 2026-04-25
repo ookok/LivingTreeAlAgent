@@ -25,7 +25,7 @@ class TestSkillRegistryEnhanced:
     
     def test_register_with_hermes_format(self):
         """测试 Hermes SKILL.md 格式注册"""
-        from core.agent_skills import (
+        from client.src.business.agent_skills import (
             SkillRegistry,
             SkillCategory,
             AgentType,
@@ -67,7 +67,7 @@ class TestSkillRegistryEnhanced:
         
     def test_register_with_enum_fallback(self):
         """测试枚举值回退"""
-        from core.agent_skills import SkillRegistry
+        from client.src.business.agent_skills import SkillRegistry
         
         registry = SkillRegistry()
         
@@ -83,7 +83,7 @@ class TestSkillRegistryEnhanced:
         manifest = registry.register_from_dict(skill_data)
         
         # 应该使用默认值
-        from core.agent_skills import SkillCategory, AgentType
+        from client.src.business.agent_skills import SkillCategory, AgentType
         assert manifest.category == SkillCategory.DEVELOPMENT
         assert manifest.agent == AgentType.GENERAL
 
@@ -93,7 +93,7 @@ class TestAutoEvolutionSkill:
     
     def test_pattern_detection(self):
         """测试模式检测"""
-        from core.agent_skills.auto_evolution_skill import PatternDetector
+        from client.src.business.agent_skills.auto_evolution_skill import PatternDetector
         
         detector = PatternDetector(min_frequency=2)
         
@@ -118,7 +118,7 @@ class TestAutoEvolutionSkill:
         
     def test_skill_seed_generation(self):
         """测试技能种子生成"""
-        from core.agent_skills.auto_evolution_skill import (
+        from client.src.business.agent_skills.auto_evolution_skill import (
             PatternDetector,
             SkillSeedGenerator,
         )
@@ -145,8 +145,8 @@ class TestAutoEvolutionSkill:
             
     def test_full_evolution_flow(self):
         """测试完整进化流程"""
-        from core.agent_skills import SkillRegistry
-        from core.agent_skills.auto_evolution_skill import AutoEvolutionSkill
+        from client.src.business.agent_skills import SkillRegistry
+        from client.src.business.agent_skills.auto_evolution_skill import AutoEvolutionSkill
         
         registry = SkillRegistry()
         evolution = AutoEvolutionSkill(registry, min_pattern_frequency=2)
@@ -181,7 +181,7 @@ class TestHonchoUserModeling:
     
     def test_profile_creation(self):
         """测试用户画像创建"""
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
         
         honcho = HonchoUserModeling()
         profile = honcho.get_profile("test-user")
@@ -191,7 +191,7 @@ class TestHonchoUserModeling:
         
     def test_dialect_detection(self):
         """测试方言检测"""
-        from core.agent_skills.honcho_user_modeling import (
+        from client.src.business.agent_skills.honcho_user_modeling import (
             HonchoUserModeling,
             Dialect,
         )
@@ -218,7 +218,7 @@ class TestHonchoUserModeling:
         
     def test_triggers_learning(self):
         """测试触发词学习"""
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
         
         honcho = HonchoUserModeling()
         
@@ -239,7 +239,7 @@ class TestHonchoUserModeling:
         
     def test_response_adaptation(self):
         """测试响应适配"""
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
         
         honcho = HonchoUserModeling()
         
@@ -271,7 +271,7 @@ def example():
         
     def test_query_adaptation(self):
         """测试查询适配"""
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
         
         honcho = HonchoUserModeling()
         
@@ -283,7 +283,7 @@ def example():
         
     def test_context_retrieval(self):
         """测试上下文获取"""
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
         
         honcho = HonchoUserModeling()
         
@@ -303,7 +303,7 @@ class TestCronScheduler:
     
     def test_cron_parser(self):
         """测试 Cron 表达式解析"""
-        from core.agent_skills.cron_scheduler import CronParser
+        from client.src.business.agent_skills.cron_scheduler import CronParser
         
         # 解析每天早上9点
         fields = CronParser.parse("0 9 * * *")
@@ -314,7 +314,7 @@ class TestCronScheduler:
         
     def test_cron_next_run(self):
         """测试下次执行时间计算"""
-        from core.agent_skills.cron_scheduler import CronParser
+        from client.src.business.agent_skills.cron_scheduler import CronParser
         
         # 每5分钟
         cron = "*/5 * * * *"
@@ -325,7 +325,7 @@ class TestCronScheduler:
         
     def test_schedule_cron_task(self):
         """测试 Cron 任务创建"""
-        from core.agent_skills.cron_scheduler import CronScheduler
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler
         
         scheduler = CronScheduler()
         
@@ -341,7 +341,7 @@ class TestCronScheduler:
         
     def test_schedule_interval_task(self):
         """测试间隔任务创建"""
-        from core.agent_skills.cron_scheduler import CronScheduler
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler
         
         scheduler = CronScheduler()
         
@@ -356,7 +356,7 @@ class TestCronScheduler:
         
     def test_natural_language_parsing(self):
         """测试自然语言解析"""
-        from core.agent_skills.cron_scheduler import NaturalLanguageScheduler
+        from client.src.business.agent_skills.cron_scheduler import NaturalLanguageScheduler
         
         # 每小时
         config = NaturalLanguageScheduler.parse("每1小时")
@@ -368,7 +368,7 @@ class TestCronScheduler:
         
     def test_schedule_natural_task(self):
         """测试自然语言任务创建"""
-        from core.agent_skills.cron_scheduler import CronScheduler
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler
         
         scheduler = CronScheduler()
         
@@ -382,7 +382,7 @@ class TestCronScheduler:
         
     def test_task_execution(self):
         """测试任务执行"""
-        from core.agent_skills.cron_scheduler import CronScheduler, TaskStatus
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler, TaskStatus
         
         scheduler = CronScheduler()
         
@@ -407,7 +407,7 @@ class TestCronScheduler:
         
     def test_task_control(self):
         """测试任务控制"""
-        from core.agent_skills.cron_scheduler import CronScheduler
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler
         
         scheduler = CronScheduler()
         
@@ -432,14 +432,14 @@ class TestIntegration:
     
     def test_full_agent_enhancement(self):
         """测试完整的 Agent 增强"""
-        from core.agent_skills import (
+        from client.src.business.agent_skills import (
             SkillRegistry,
             SkillCategory,
             AgentType,
         )
-        from core.agent_skills.auto_evolution_skill import AutoEvolutionSkill
-        from core.agent_skills.honcho_user_modeling import HonchoUserModeling
-        from core.agent_skills.cron_scheduler import CronScheduler
+        from client.src.business.agent_skills.auto_evolution_skill import AutoEvolutionSkill
+        from client.src.business.agent_skills.honcho_user_modeling import HonchoUserModeling
+        from client.src.business.agent_skills.cron_scheduler import CronScheduler
         
         # 初始化组件
         registry = SkillRegistry()

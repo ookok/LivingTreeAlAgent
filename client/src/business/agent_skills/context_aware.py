@@ -7,7 +7,7 @@
 
 import logging
 from typing import Dict, List, Optional, Any, Set
-from core.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
+from client.src.business.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
 
 logger = logging.getLogger(__name__)
 

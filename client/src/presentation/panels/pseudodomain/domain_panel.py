@@ -845,7 +845,7 @@ class DomainPanel(QWidget):
     async def _init_hub(self):
         """初始化中枢"""
         try:
-            from core.pseudodomain import get_pseudodomain_hub_async
+            from client.src.business.pseudodomain import get_pseudodomain_hub_async
             self.domain_hub = await get_pseudodomain_hub_async()
 
             # 注册回调

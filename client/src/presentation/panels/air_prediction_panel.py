@@ -62,7 +62,7 @@ except ImportError:
 
 # 大气预测核心
 try:
-    from core.seamless_tool_integration import (
+    from client.src.business.seamless_tool_integration import (
         SeamlessIntegrationManager, ProjectData, SourceParams,
         MeteorologyData, ReceptorGrid, ScaleType,
         ExecutionStep, ExecutionStatus, PredictionResult
@@ -495,7 +495,7 @@ class ResultDisplay(QWidget if HAS_PYQT else object):
 
         if filepath:
             try:
-                from core.seamless_tool_integration import ReportGenerator
+                from client.src.business.seamless_tool_integration import ReportGenerator
                 generator = ReportGenerator(self._result)
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(generator.generate_text_report())

@@ -6,7 +6,7 @@
 
 使用方式：
 ```python
-from ui.guidance_integration import AgentChatWithGuidance
+from client.src.presentation.guidance_integration import AgentChatWithGuidance
 
 # 创建带追问功能的 AgentChat
 chat = AgentChatWithGuidance(base_chat)
@@ -17,7 +17,7 @@ chat = create_chat_with_guidance(base_chat)
 
 UI 集成方式：
 ```python
-from ui.components import GuidancePanel, GuidanceDisplayMode
+from client.src.presentation.components import GuidancePanel, GuidanceDisplayMode
 
 # 在 AgentChat 的响应区域下方添加追问面板
 panel = GuidancePanel(
@@ -303,7 +303,7 @@ if __name__ == "__main__" and PYQT6_AVAILABLE and UI_AVAILABLE:
     )
     from PyQt6.QtCore import Qt
 
-    from ui.components import GuidancePanel, GuidanceDisplayMode
+    from client.src.presentation.components import GuidancePanel, GuidanceDisplayMode
 
     class DemoWindow(QWidget):
         """演示窗口"""
@@ -437,7 +437,7 @@ elif __name__ == "__main__":
     print()
     print("使用方式：")
     print("1. 导入组件：")
-    print("   from ui.guidance_integration import AgentChatWithGuidance")
+    print("   from client.src.presentation.guidance_integration import AgentChatWithGuidance")
     print()
     print("2. 创建实例：")
     print("   chat = AgentChatWithGuidance(base_chat)")

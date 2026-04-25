@@ -18,14 +18,14 @@ from PyQt6.QtGui import QKeyEvent, QAction, QIcon
 
 from client.src.business.config import AppConfig, load_config, save_config
 from client.src.business.agent import HermesAgent, AgentCallbacks
-from core.ollama_client import OllamaClient
-from core.session_db import SessionDB
+from client.src.business.ollama_client import OllamaClient
+from client.src.business.session_db import SessionDB
 from client.src.business.system_brain import get_system_brain, SystemBrainConfig
-from core.config_manager import get_config_manager
-from core.auth_system import get_auth_system
-from core.smart_config import get_smart_config
+from client.src.business.config_manager import get_config_manager
+from client.src.business.auth_system import get_auth_system
+from client.src.business.smart_config import get_smart_config
 from client.src.presentation.panels.task_progress import get_task_progress_manager
-from core.search_tool import AISearchTool
+from client.src.business.search_tool import AISearchTool
 from client.src.presentation.panels.a2ui import A2UIManager, A2UIPanel, UILoader, FallbackManager, ProgressManager, ConfigQuickEdit
 
 from client.src.presentation.panels.session_panel import SessionPanel

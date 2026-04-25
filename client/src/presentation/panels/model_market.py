@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from core.unified_downloader import get_download_center, DownloadTask, SourceType
+from client.src.business.unified_downloader import get_download_center, DownloadTask, SourceType
 from client.src.business.config import get_models_dir
 
 

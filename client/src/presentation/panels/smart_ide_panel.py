@@ -35,12 +35,12 @@ import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from core.smart_ide_game import (
+from client.src.business.smart_ide_game import (
     SmartIDEGameSystem, CodeEditorCore, AICodingAssistant,
     MemoryEnhancedEditor, CollabEditor,
     LanguageType, TaskType
 )
-from core.github_project_manager import GitHubProjectManager, get_github_project_manager
+from client.src.business.github_project_manager import GitHubProjectManager, get_github_project_manager
 
 
 # ==================== 代码编辑器组件 ====================

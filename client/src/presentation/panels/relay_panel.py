@@ -486,7 +486,7 @@ class RelayPanel(QWidget):
     def _connect_with_config(self, config: Dict[str, Any]):
         """使用配置连接"""
         if not self.relay_client:
-            from core.relay_client import create_relay_client, ClientType
+            from client.src.business.relay_client import create_relay_client, ClientType
             
             type_map = {"desktop": ClientType.DESKTOP, "mobile": ClientType.MOBILE, "web": ClientType.WEB}
             

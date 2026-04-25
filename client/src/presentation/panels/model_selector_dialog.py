@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QIcon
 
-from core.model_manager import ModelManager, ModelInfo
+from client.src.business.model_manager import ModelManager, ModelInfo
 from client.src.business.config import AppConfig
 
 
@@ -341,7 +341,7 @@ class ModelSelectorDialog(QDialog):
     def on_download_paused(self):
         """下载暂停"""
         # 从系统下载中心暂停下载
-        from core.unified_downloader import get_download_center
+        from client.src.business.unified_downloader import get_download_center
         download_center = get_download_center()
         tasks = download_center.list_tasks()
         for task in tasks:
@@ -352,7 +352,7 @@ class ModelSelectorDialog(QDialog):
     def on_download_resumed(self):
         """下载继续"""
         # 从系统下载中心继续下载
-        from core.unified_downloader import get_download_center
+        from client.src.business.unified_downloader import get_download_center
         download_center = get_download_center()
         tasks = download_center.list_tasks()
         for task in tasks:

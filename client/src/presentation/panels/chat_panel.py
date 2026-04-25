@@ -578,7 +578,7 @@ class ChatPanel(QWidget):
     def _init_clarifier(self):
         """初始化需求澄清器"""
         try:
-            from core.conversational_clarifier import get_conversational_clarifier
+            from client.src.business.conversational_clarifier import get_conversational_clarifier
             self._clarifier = get_conversational_clarifier()
         except ImportError:
             self._clarifier = None

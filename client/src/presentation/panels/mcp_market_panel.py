@@ -31,7 +31,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from core.mcp_manager import (
+from client.src.business.mcp_manager import (
     MCPServer, MCPTool, MCPDatabase,
     ServerStatus, ServerSource, MCPProtocol
 )

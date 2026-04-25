@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QIcon, QAction
 
-from core.recommendation import (
+from client.src.business.recommendation import (
     get_profile_manager,
     get_recall_engine,
     get_ranking_engine,

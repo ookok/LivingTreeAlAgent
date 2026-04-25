@@ -61,7 +61,7 @@ class SmartAssistantPanel(QWidget):
     def _init_assistant(self):
         """初始化助手"""
         try:
-            from core.smart_assistant import get_smart_assistant
+            from client.src.business.smart_assistant import get_smart_assistant
             self.assistant = get_smart_assistant()
             
             # 注册导航回调
@@ -436,7 +436,7 @@ class SmartAssistantPanel(QWidget):
         
         # 显示指引详情
         if self.assistant:
-            from core.smart_assistant import get_guide_system
+            from client.src.business.smart_assistant import get_guide_system
             guide_system = get_guide_system()
             guides = self.assistant.kg.find_guide(tags=[guide_id])
             if guides:

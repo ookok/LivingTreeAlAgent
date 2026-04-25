@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction
 
-from core.module_manager import get_module_manager, ModuleConfig
+from client.src.business.module_manager import get_module_manager, ModuleConfig
 from client.src.presentation.panels.recommendation_panel import RecommendationPanel
 
 

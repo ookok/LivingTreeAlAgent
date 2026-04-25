@@ -27,7 +27,7 @@ from datetime import datetime
 
 # 导入核心模块
 try:
-    from core.meeting import (
+    from client.src.business.meeting import (
         MeetingManager, Meeting, MeetingStatus,
         TranscriptionResult, SummaryResult,
         SummaryTemplate, ExportFormat
@@ -688,7 +688,7 @@ class MeetingPanel(QWidget):
             with open(self.current_meeting.transcription_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 # 重建转录结果
-                from core.meeting import TranscriptionResult, TranscriptionSegment
+                from client.src.business.meeting import TranscriptionResult, TranscriptionSegment
                 segments = [
                     TranscriptionSegment(
                         start_time=s["start"],

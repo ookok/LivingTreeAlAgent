@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from core.auth_system import AuthSystem, AuthResult, UserRole
+from client.src.business.auth_system import AuthSystem, AuthResult, UserRole
 
 
 class LoginDialog(QWidget):

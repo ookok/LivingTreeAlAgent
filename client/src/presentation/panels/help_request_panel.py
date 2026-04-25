@@ -29,7 +29,7 @@ from datetime import datetime
 
 # 导入核心模块
 try:
-    from core.smart_help_system import (
+    from client.src.business.smart_help_system import (
         SmartHelpController, HelpRequest, HelpStatus,
         QuestionSanitizer, PlatformSelector, Platform
     )

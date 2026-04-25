@@ -177,7 +177,7 @@ class SocialCommercePanel(QWidget):
     def refresh_matches(self):
         """刷新匹配数据"""
         try:
-            from core.social_commerce import get_matchmaking_engine, get_intent_radar
+            from client.src.business.social_commerce import get_matchmaking_engine, get_intent_radar
             engine = get_matchmaking_engine()
             radar = get_intent_radar()
 
@@ -199,7 +199,7 @@ class SocialCommercePanel(QWidget):
     def _refresh_credit(self):
         """刷新信用显示"""
         try:
-            from core.social_commerce import get_credit_network
+            from client.src.business.social_commerce import get_credit_network
             credit = get_credit_network()
             # 简化：显示总览
             self.credit_label.setText("信用分: 初始化中...")

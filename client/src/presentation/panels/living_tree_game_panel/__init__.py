@@ -14,7 +14,7 @@ import random
 
 # 尝试导入游戏系统
 try:
-    from core.living_tree_game import (
+    from client.src.business.living_tree_game import (
         LivingTreeGameManager, ForestAdventure, NumberPuzzleGame,
         LifeTreeNurturing, EcologyMiniGames, SeasonalFestival,
         AIForestPet, EcologyAchievementChain, WeatherImpactSystem,

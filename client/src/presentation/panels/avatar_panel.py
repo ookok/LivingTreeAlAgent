@@ -30,7 +30,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from core.digital_avatar import (
+from client.src.business.digital_avatar import (
     DigitalAvatar, AvatarDatabase, AvatarLevel, GrowthEvent
 )
 

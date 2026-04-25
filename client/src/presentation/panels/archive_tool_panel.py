@@ -385,7 +385,7 @@ class ArchiveToolPanel(QWidget):
         """初始化工具"""
         if self.archive_tool is None:
             try:
-                from core.archive_tool import ArchiveTool
+                from client.src.business.archive_tool import ArchiveTool
                 self.archive_tool = ArchiveTool()
             except Exception as e:
                 logger.error(f"Failed to init archive tool: {e}")
@@ -489,7 +489,7 @@ class ArchiveToolPanel(QWidget):
     async def _do_compress(self, source, output, fmt, lvl, password, split_size):
         """执行压缩"""
         try:
-            from core.archive_tool import ArchiveFormat, CompressionLevel
+            from client.src.business.archive_tool import ArchiveFormat, CompressionLevel
 
             fmt_enum = ArchiveFormat.SEVENZ if fmt == "7z" else ArchiveFormat.ZIP
             level_enum = CompressionLevel.NORMAL

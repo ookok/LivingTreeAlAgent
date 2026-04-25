@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor, QPalette
 
-from core.assembler import get_assembler
+from client.src.business.assembler import get_assembler
 from core.assembler.navigator import RequirementSpec
 from core.assembler.conflict import ResolutionStrategy
 from core.metaverse_ui.bridge_styles import HolographicColors, HolographicStyles

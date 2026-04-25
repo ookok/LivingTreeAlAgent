@@ -24,7 +24,7 @@ from PyQt6.QtGui import QFont
 import asyncio
 from typing import Optional
 
-from core.smolllm2 import (
+from client.src.business.smolllm2 import (
     L0Router, SmolLM2Config, RouteType, IntentType,
     SMOLLLM2_MANIFEST, find_smallest_gguf
 )
@@ -387,8 +387,8 @@ class SmolLM2Panel(QWidget):
 
         def download_with_url_routing():
             try:
-                from core.unified_downloader import get_download_center, SourceType
-                from core.url_intelligence import optimize_url
+                from client.src.business.unified_downloader import get_download_center, SourceType
+                from client.src.business.url_intelligence import optimize_url
 
                 center = get_download_center()
                 manifest = SMOLLLM2_MANIFEST

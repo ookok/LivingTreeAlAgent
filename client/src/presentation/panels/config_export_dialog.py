@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from core.config_manager import ConfigManager, ExportResult, ImportResult
+from client.src.business.config_manager import ConfigManager, ExportResult, ImportResult
 
 
 class ExportWorker(QThread):

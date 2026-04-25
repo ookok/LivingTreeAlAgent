@@ -24,7 +24,7 @@ from dataclasses import asdict
 
 # 尝试导入进化引擎
 try:
-    from core.evolution import (
+    from client.src.business.evolution import (
         VisualEvolutionEngine, ParameterTuner, ABTestFramework,
         SelfDiagnosis, GeneType, Gene, Chromosome, EvolutionSnapshot
     )

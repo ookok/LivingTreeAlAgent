@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QIcon, QFont
 
-from core.md_to_doc import (
+from client.src.business.md_to_doc import (
     ConversionConfig, Task, TaskStatus, TargetFormat,
     TaskType, StyleTemplate, get_default_template, get_builtin_templates,
     ImageConfig, LinkConfig, CodeConfig, TableConfig,

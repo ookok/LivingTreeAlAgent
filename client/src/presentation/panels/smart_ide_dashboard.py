@@ -43,14 +43,14 @@ from enum import Enum
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from core.smart_ide_game import (
+from client.src.business.smart_ide_game import (
     SmartIDEGameSystem, CodeEditorCore, AICodingAssistant,
     MemoryEnhancedEditor, CollabEditor, DebuggerManager,
     LanguageType, TaskType, AIRecommendation,
     CodePosition, CompletionItem, Diagnostic, Symbol,
     IDESettings, GameSettings, UserPreferences
 )
-from core.github_project_manager import GitHubProjectManager, get_github_project_manager
+from client.src.business.github_project_manager import GitHubProjectManager, get_github_project_manager
 
 
 # ==================== 初始化相关 ====================

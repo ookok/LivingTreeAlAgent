@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QColor, QAction, QIcon, QPainter, QCursor
 
-from core.enhanced_task import TaskManager, Task, TaskStatus, TaskPriority
+from client.src.business.enhanced_task import TaskManager, Task, TaskStatus, TaskPriority
 
 
 # ── 样式配置 ────────────────────────────────────────────────────────────────

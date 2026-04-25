@@ -30,7 +30,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from core.lan_chat import (
+from client.src.business.lan_chat import (
     LANUser, LANChatManager, UserStatus,
     DISCOVERY_PORT, CHAT_PORT
 )

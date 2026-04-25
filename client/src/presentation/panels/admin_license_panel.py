@@ -26,7 +26,7 @@ from PyQt6.QtCore import QDate
 
 # 尝试导入授权模块
 try:
-    from core.admin_license_system import (
+    from client.src.business.admin_license_system import (
         get_author_config_manager,
         get_admin_auth,
         get_admin_manager,

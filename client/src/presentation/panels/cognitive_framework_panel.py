@@ -286,7 +286,7 @@ class CognitiveFrameworkPanel(QWidget):
         
         try:
             # 调用认知框架协作者
-            from core.cognitive_framework import get_cognitive_collaborator
+            from client.src.business.cognitive_framework import get_cognitive_collaborator
             collaborator = get_cognitive_collaborator()
             
             self.framework, output = collaborator.collaborate(

@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QAction
 
-from core.translation import (
+from client.src.business.translation import (
     get_translation_hub,
     TranslatorType, TranslatorStatus,
     TranslationResult, TranslationTask,

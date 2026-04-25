@@ -731,7 +731,7 @@ class ForumPanel(QWidget):
     async def _init_forum(self):
         """初始化论坛"""
         try:
-            from core.forum import get_forum_hub_async
+            from client.src.business.forum import get_forum_hub_async
             self.forum_hub = await get_forum_hub_async()
 
             # 加载话题

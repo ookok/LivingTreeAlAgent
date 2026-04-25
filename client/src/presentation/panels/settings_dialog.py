@@ -598,7 +598,7 @@ class SettingsDialog(QDialog):
         self.logging_enabled.setChecked(True)
         general_lay.addWidget(self.logging_enabled)
 
-        from core.error_logger import LOG_DIR
+        from client.src.business.error_logger import LOG_DIR
         log_dir_label = QLabel(f"日志目录: {LOG_DIR}")
         log_dir_label.setStyleSheet("color:#666;font-size:11px;")
         general_lay.addWidget(log_dir_label)

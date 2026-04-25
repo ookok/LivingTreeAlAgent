@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from core.intelligent_hints import (
+from client.src.business.intelligent_hints import (
     get_hints_system,
     HintConfig,
     HintLevel,

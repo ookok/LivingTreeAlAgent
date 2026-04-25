@@ -333,7 +333,7 @@ class CommunityRightsPanel(QWidget):
     def _init_manager(self):
         """初始化管理器"""
         try:
-            from core.community_rights import get_community_rights_manager
+            from client.src.business.community_rights import get_community_rights_manager
             self.manager = get_community_rights_manager()
             self._refresh_data()
         except Exception as e:

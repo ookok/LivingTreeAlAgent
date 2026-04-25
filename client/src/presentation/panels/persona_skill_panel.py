@@ -28,7 +28,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from core.persona_skill import (
+from client.src.business.persona_skill import (
     PersonaEngine, PersonaRegistry, PersonaSkill,
     PersonaCategory, PersonaTier
 )

@@ -40,7 +40,7 @@ class SecurityCheckThread(QThread):
     progress = pyqtSignal(str, int)
 
     def run(self):
-        from core.security import (
+        from client.src.business.security import (
             get_security_manager,
             get_firewall_manager,
             get_antivirus_helper,
@@ -169,7 +169,7 @@ class FirewallPage(QWizardPage):
 
     def refresh_status(self):
         """刷新防火墙状态"""
-        from core.security import get_firewall_manager
+        from client.src.business.security import get_firewall_manager
 
         self.status_label.setText("正在检查...")
         QApplication.processEvents()
@@ -201,7 +201,7 @@ class FirewallPage(QWizardPage):
 
     def add_rules(self):
         """添加防火墙规则"""
-        from core.security import get_firewall_manager
+        from client.src.business.security import get_firewall_manager
 
         self.btn_add_rules.setEnabled(False)
         self.status_label.setText("正在添加防火墙规则...")
@@ -274,7 +274,7 @@ class AntivirusPage(QWizardPage):
 
     def detect_antivirus(self):
         """检测杀毒软件"""
-        from core.security import get_antivirus_helper
+        from client.src.business.security import get_antivirus_helper
 
         try:
             helper = get_antivirus_helper()
@@ -312,7 +312,7 @@ class AntivirusPage(QWizardPage):
 
     def open_trust_settings(self):
         """打开信任设置页面"""
-        from core.security import get_antivirus_helper
+        from client.src.business.security import get_antivirus_helper
 
         try:
             helper = get_antivirus_helper()
@@ -334,7 +334,7 @@ class AntivirusPage(QWizardPage):
 
     def add_to_defender(self):
         """添加到 Windows Defender"""
-        from core.security import get_antivirus_helper, get_security_manager
+        from client.src.business.security import get_antivirus_helper, get_security_manager
 
         try:
             helper = get_antivirus_helper()
@@ -375,7 +375,7 @@ class SummaryPage(QWizardPage):
 
     def initializePage(self):
         """页面初始化时更新结果"""
-        from core.security import get_security_manager
+        from client.src.business.security import get_security_manager
 
         try:
             manager = get_security_manager()
@@ -468,7 +468,7 @@ class SecuritySetupWizard(QWizard):
         """向导完成"""
         if result:
             # 标记首次运行完成
-            from core.security import get_security_manager
+            from client.src.business.security import get_security_manager
             manager = get_security_manager()
             manager.complete_first_run_setup()
 

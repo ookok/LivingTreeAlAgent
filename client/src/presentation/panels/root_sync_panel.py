@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor, QAction
 
-from core.models import SystemConfig
+from client.src.business.models import SystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -523,7 +523,7 @@ class RootSyncPanel(QWidget):
 
     def _start_system(self):
         try:
-            from core.root_sync import RootSyncSystem, FolderConfig
+            from client.src.business.root_sync import RootSyncSystem, FolderConfig
             self.sync_system = RootSyncSystem()
             
             # 从配置文件加载设备列表

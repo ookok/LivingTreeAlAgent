@@ -59,7 +59,7 @@ class MailboxPanel(QWidget):
     def _init_unified_inbox(self):
         """初始化统一收件箱"""
         try:
-            from core.decentralized_mailbox import get_unified_inbox
+            from client.src.business.decentralized_mailbox import get_unified_inbox
             self.unified_inbox = get_unified_inbox()
             # 加载各来源邮件
             self.unified_inbox.load_internal_messages()
@@ -464,7 +464,7 @@ class MailboxPanel(QWidget):
     def _refresh_unified_inbox(self):
         """刷新统一收件箱"""
         try:
-            from core.decentralized_mailbox import get_unified_inbox
+            from client.src.business.decentralized_mailbox import get_unified_inbox
 
             unified = get_unified_inbox()
             messages = unified.get_inbox(limit=100)

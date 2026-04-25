@@ -564,7 +564,7 @@ class GovDataPanel(QWidget):
         """延迟初始化GovDataQuery"""
         if self._gov_query is None:
             try:
-                from core.gov_data_query import get_gov_data_query
+                from client.src.business.gov_data_query import get_gov_data_query
                 self._gov_query = get_gov_data_query()
             except ImportError:
                 self._gov_query = None

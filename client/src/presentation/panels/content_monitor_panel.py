@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
-from core.content_monitor import (
+from client.src.business.content_monitor import (
     ContentMonitor, ContentRecognizer, ContentSummarizer,
     create_server, ContentType, AlertLevel, ContentStatus
 )

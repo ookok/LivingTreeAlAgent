@@ -35,7 +35,7 @@ from PyQt6.QtGui import (
 # 导入智能清理核心
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from core.smart_cleanup import (
+from client.src.business.smart_cleanup import (
     SmartCleanupEngine, CleanupLevel, CleanupDecision,
     FileCategory, CleanupConfig, FileMetadata, CleanupCandidate
 )

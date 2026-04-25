@@ -54,7 +54,7 @@ from typing import Dict, List, Optional, Set, Any
 from collections import defaultdict
 import logging
 
-from core.config.unified_config import UnifiedConfig
+from client.src.business.config import UnifiedConfig
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)

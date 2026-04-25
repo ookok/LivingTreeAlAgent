@@ -394,7 +394,7 @@ class PersonaLibrary:
         self._load()
     
     def _get_default_storage_path(self) -> Path:
-        from core.config import get_config_dir
+        from client.src.business.config import get_config_dir
         return get_config_dir() / "persona_library.json"
     
     def _load(self):

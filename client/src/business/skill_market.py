@@ -508,7 +508,7 @@ class SkillManager:
     """
 
     def __init__(self, db_path: str | Path = None, skills_dir: Path = None):
-        from core.config import get_config_dir
+        from client.src.business.config import get_config_dir
         
         if db_path is None:
             db_path = get_config_dir() / "skills.db"

@@ -20,7 +20,7 @@ from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, Future
 import uuid
 
-from core.config.unified_config import UnifiedConfig
+from client.src.business.config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 

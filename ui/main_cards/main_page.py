@@ -300,7 +300,7 @@ class MainPage(QWidget):
     def _show_settings(self):
         """显示设置面板"""
         try:
-            from core.config import AppConfig
+            from client.src.business.config import AppConfig
             from ui.settings_dialog import SettingsDialog
             
             # 创建默认配置（如果不存在）

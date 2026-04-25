@@ -55,7 +55,7 @@ def _get_unified_cache():
 def _get_ollama_url():
     """获取 Ollama URL，支持统一配置"""
     try:
-        from core.config.unified_config import get_ollama_url
+        from client.src.business.config import get_ollama_url
         return get_ollama_url()
     except ImportError:
         return "http://localhost:11434"

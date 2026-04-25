@@ -18,7 +18,7 @@ import logging
 from typing import Callable, Iterator, Optional, List, Dict, Any
 
 from core.ollama_client import OllamaClient, ChatMessage, StreamChunk
-from core.config import OllamaConfig
+from client.src.business.config import OllamaConfig
 from core.context_preprocessor import ContextPreprocessor, ProcessingStats
 
 logger = logging.getLogger(__name__)

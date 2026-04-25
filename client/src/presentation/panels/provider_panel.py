@@ -18,7 +18,7 @@ from PyQt6.QtGui import QFont
 import os
 from typing import Dict, List, Optional, Any
 
-from core.config import get_hermes_home
+from client.src.business.config import get_hermes_home
 from core.providers import (
     list_providers, get_provider, get_label, has_api_key,
     get_api_key, get_recommended_models, PROVIDER_CATEGORIES,

@@ -73,7 +73,7 @@ class SessionDB:
 
     def __init__(self, db_path: str | Path | None = None):
         if db_path is None:
-            from core.config import get_config_dir
+            from client.src.business.config import get_config_dir
             db_path = get_config_dir() / "sessions.db"
         self.db_path = Path(db_path)
         self._write_count = 0

@@ -13,7 +13,7 @@ from typing import Dict, Set, Optional, Any, List
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from core.config.unified_config import UnifiedConfig
+from client.src.business.config import UnifiedConfig
 
 try:
     from fastapi import WebSocket, WebSocketDisconnect

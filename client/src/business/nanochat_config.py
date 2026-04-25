@@ -1,6 +1,6 @@
 """
 LivingTree AI - Nanochat 风格极简配置系统
-==============================================
+=============================================
 
 设计哲学 (来自 nanochat):
     - 配置即代码 (Configuration as Code)
@@ -8,22 +8,7 @@ LivingTree AI - Nanochat 风格极简配置系统
     - 合理的默认值，大多数情况不需要改
     - 直接导入使用，不用单例模式
     - 不需要热重载，改配置就重启
-    - 环境变量在 Python 中直接处理
-
-使用示例:
-    from core.config.nanochat_config import config
-    
-    # 访问配置（像访问属性一样简单）
-    print(config.ollama.url)
-    print(config.retries.default)
-    print(config.timeouts.default)
-    
-    # 修改配置（运行时）
-    config.ollama.url = "http://new-host:11434"
-    
-    # 从环境变量加载 API Key
-    if config.api_keys.openai is None:
-        config.api_keys.openai = os.getenv("OPENAI_API_KEY")
+    - 环境变量在 Python 中直接处理。
 """
 
 from dataclasses import dataclass, field
@@ -164,7 +149,7 @@ class NanochatConfig:
         5. 不需要热重载（重启即可）
     
     使用示例:
-        from core.config.nanochat_config import config
+        from client.src.business.nanochat_config import config
         
         # 读取配置
         url = config.ollama.url
@@ -367,4 +352,6 @@ config = NanochatConfig()
 # config.load_from_env()
 
 # 导出
-__all__ = ['config', 'NanochatConfig']
+__all__ = ['config', 'NanochatConfig', 'EndpointConfig', 'RetryConfig', 
+           'TimeoutConfig', 'DelayConfig', 'AgentConfig', 'LLMConfig', 
+           'ApiKeysConfig', 'PathsConfig', 'LimitsConfig']

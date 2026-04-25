@@ -225,7 +225,7 @@ def _register_config_tools():
     def p2p_check_config(context: Dict, feature: Optional[str] = None) -> Dict:
         """检查配置"""
         try:
-            from core.config import load_config
+            from client.src.business.config import load_config
             from core.config_missing_detector import get_config_detector
 
             cfg = load_config()
@@ -345,7 +345,7 @@ def _register_config_tools():
     def p2p_update_config(context: Dict, key: str, value: str) -> Dict:
         """更新配置"""
         try:
-            from core.config import load_config, save_config
+            from client.src.business.config import load_config, save_config
             import json
 
             cfg = load_config()
@@ -464,7 +464,7 @@ def _register_relay_tools():
         """连接中继服务器"""
         try:
             from core.model_store import get_store_manager
-            from core.config import load_config
+            from client.src.business.config import load_config
 
             cfg = load_config()
             relay_servers = cfg.model_store.relay_servers
@@ -507,7 +507,7 @@ def _register_relay_tools():
     def p2p_get_relay_status(context: Dict) -> Dict:
         """获取中继状态"""
         try:
-            from core.config import load_config
+            from client.src.business.config import load_config
 
             cfg = load_config()
             relay_servers = cfg.model_store.relay_servers

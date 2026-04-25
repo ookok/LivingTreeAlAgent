@@ -14,7 +14,7 @@ import sys
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.config.nanochat_config import config, NanochatConfig
+from client.src.business.nanochat_config import config, NanochatConfig
 
 
 def demo_basic_access():
@@ -119,7 +119,7 @@ def demo_compatibility_layer():
         warnings.simplefilter("always")
         
         # 旧 API 仍然工作（但会显示弃用警告）
-        from core.config.unified_config import UnifiedConfig
+        from client.src.business.config import UnifiedConfig
         
         old_config = UnifiedConfig.get_instance()
         url = old_config.get("endpoints.ollama.url")
@@ -151,7 +151,7 @@ def main():
     print("✅ 所有演示完成")
     print("=" * 60)
     print("\n💡 建议:")
-    print("  1. 新代码使用: from core.config.nanochat_config import config")
+    print("  1. 新代码使用: from client.src.business.nanochat_config import config")
     print("  2. 旧代码逐步迁移，兼容层会显示弃用警告")
     print("  3. 查看迁移指南: docs/配置迁移指南_Nanochat风格.md\n")
 

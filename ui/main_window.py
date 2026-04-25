@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QKeyEvent, QAction, QIcon
 
-from core.config import AppConfig, load_config, save_config
+from client.src.business.config import AppConfig, load_config, save_config
 from client.src.business.agent import HermesAgent, AgentCallbacks
 from core.ollama_client import OllamaClient
 from core.session_db import SessionDB
@@ -758,7 +758,7 @@ class MainWindow(QWidget):
         """初始化配置同步（启动时自动拉取）"""
         try:
             from core.config_sync import get_sync_manager
-            from core.config import load_config as load_local_config, save_config as save_local_config
+            from client.src.business.config import load_config as load_local_config, save_config as save_local_config
             import platform
 
             sync_mgr = get_sync_manager()

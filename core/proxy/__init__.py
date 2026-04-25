@@ -23,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 导入新配置系统（Nanochat 风格）
-from core.config.nanochat_config import config
+from client.src.business.nanochat_config import config
 
 
 

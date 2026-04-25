@@ -24,7 +24,7 @@ from core.model_layer_config import (
 
 # 导入配置获取函数
 try:
-    from core.config.unified_config import get_config
+    from client.src.business.config import get_config
 except ImportError:
     get_config = None
 

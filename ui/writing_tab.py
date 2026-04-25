@@ -433,7 +433,7 @@ class WritingTab(QWidget):
     def _get_projects_dir(self) -> Optional[Path]:
         """获取项目目录"""
         try:
-            from core.config import get_projects_dir
+            from client.src.business.config import get_projects_dir
             return get_projects_dir()
         except Exception:
             # 如果配置模块不可用，使用默认目录

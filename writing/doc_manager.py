@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
-from core.config import get_projects_dir
+from client.src.business.config import get_projects_dir
 
 
 @dataclass

@@ -127,7 +127,7 @@ class AgentChatWithTasks(QMainWindow):
     def _setup_agent(self):
         """初始化 Agent"""
         try:
-            from core.config import AppConfig
+            from client.src.business.config import AppConfig
             config = AppConfig.default()
 
             # 创建 Agent 回调

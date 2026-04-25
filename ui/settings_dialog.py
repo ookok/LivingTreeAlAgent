@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont
 from pathlib import Path
 
-from core.config import AppConfig
+from client.src.business.config import AppConfig
 
 
 class SettingsDialog(QDialog):
@@ -292,7 +292,7 @@ class SettingsDialog(QDialog):
         lay.setSpacing(16)
         lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        from core.config import get_models_dir
+        from client.src.business.config import get_models_dir
         models_dir = get_models_dir()
 
         self.models_dir = QLineEdit(str(models_dir))
@@ -386,7 +386,7 @@ class SettingsDialog(QDialog):
         lay = QFormLayout(w)
         lay.setSpacing(12)
 
-        from core.config import get_projects_dir
+        from client.src.business.config import get_projects_dir
         proj_dir = get_projects_dir()
 
         self.proj_dir = QLineEdit(str(proj_dir))
@@ -1357,7 +1357,7 @@ class SettingsDialog(QDialog):
 
     def _on_save(self):
         from pathlib import Path
-        from core.config import OllamaConfig, ModelPathConfig, AgentConfig, WritingConfig
+        from client.src.business.config import OllamaConfig, ModelPathConfig, AgentConfig, WritingConfig
         import os
 
         # 处理配置对象可能是字典的情况

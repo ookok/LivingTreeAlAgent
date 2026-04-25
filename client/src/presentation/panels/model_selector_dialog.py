@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QIcon
 
 from core.model_manager import ModelManager, ModelInfo
-from core.config import AppConfig
+from client.src.business.config import AppConfig
 
 
 class DownloadThread(QThread):

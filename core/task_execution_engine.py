@@ -27,7 +27,7 @@ logger = get_logger('task_execution_engine')
 
 # 导入统一配置
 try:
-    from core.config.unified_config import get_max_retries, get_retry_delay, get_config as _get_unified_config
+    from client.src.business.config import get_max_retries, get_retry_delay, get_config as _get_unified_config
     _uconfig = _get_unified_config()
 except ImportError:
     _uconfig = None

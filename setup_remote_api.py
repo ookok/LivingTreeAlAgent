@@ -11,7 +11,7 @@ from pathlib import Path
 _root = Path(__file__).parent
 sys.path.insert(0, str(_root))
 
-from core.config import load_config, save_config, AppConfig
+from client.src.business.config import load_config, save_config, AppConfig
 
 
 def configure_alibaba_api():

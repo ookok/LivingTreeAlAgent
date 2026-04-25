@@ -25,7 +25,7 @@ import urllib.error
 
 # 尝试导入配置（client 路径可能不同）
 try:
-    from core.config.unified_config import get_config
+    from client.src.business.config import get_config
     _has_config = True
 except ImportError:
     _has_config = False

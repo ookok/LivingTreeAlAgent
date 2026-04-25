@@ -1,5 +1,5 @@
 # optimal_config.py - 计算最优配置
-# 基于 nanochat "compute-optimal-config" 理念
+# 基于 nanochat "compute-optimal-config" 理念：
 
 """
 LivingTreeAI 极简配置系统
@@ -8,7 +8,7 @@ LivingTreeAI 极简配置系统
 核心理念：单参数调优 - 只需传入任务复杂度(depth)，其他所有参数自动计算
 
 使用示例:
-    from core.config.optimal_config import compute_optimal_config, get_depth
+    from client.src.business.optimal_config import compute_optimal_config, get_depth
     
     # 简单任务
     config = compute_optimal_config(depth=1)
@@ -22,6 +22,7 @@ LivingTreeAI 极简配置系统
 
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+import math
 import os
 
 
@@ -134,8 +135,6 @@ def compute_optimal_config(depth: int = 3) -> OptimalConfig:
         - max_tokens ∝ depth^1.5 (指数增长支持复杂任务)
         - max_workers ∝ sqrt(depth) (资源有限，平方根增长)
     """
-    import math
-    
     # 边界处理
     depth = max(1, min(10, depth))
     
@@ -144,36 +143,36 @@ def compute_optimal_config(depth: int = 3) -> OptimalConfig:
     log_depth = math.log2(max(2, depth))  # log2(depth)
     sqrt_depth = math.sqrt(depth)  # sqrt(depth)
     
-    # ── 网络超时 ────────────────────────────────────────────
+    # ── 网络超时 ───────────────────────────────────────────
     timeout = BaseConfig.BASE_TIMEOUT * (1 + 0.3 * math.pow(depth_factor, 0.7))
     long_timeout = timeout * 2
     quick_timeout = timeout * 0.2
     retry_delay = BaseConfig.BASE_RETRY_DELAY * math.pow(depth_factor, 0.5)
     
-    # ── 重试配置 ────────────────────────────────────────────
+    # ── 重试配置 ───────────────────────────────────────────
     max_retries = max(1, min(10, 2 + int(log_depth)))
     exponential_base = 1.5 + 0.1 * depth
     
-    # ── 轮询延迟 ────────────────────────────────────────────
+    # ── 轮询延迟 ───────────────────────────────────────────
     polling_short = 0.05 * sqrt_depth  # 0.05 - 0.16
     polling_medium = 0.2 * sqrt_depth   # 0.2 - 0.63
     polling_long = 1.0 * depth_factor   # 0.2 - 2.0
     wait_short = 0.5 * sqrt_depth       # 0.5 - 1.58
     wait_long = 5.0 * depth_factor      # 1.0 - 10.0
     
-    # ── 资源限制 ────────────────────────────────────────────
+    # ── 资源限制 ───────────────────────────────────────────
     max_tokens = int(BaseConfig.BASE_MAX_TOKENS * math.pow(depth_factor, 1.5))
     max_context = int(BaseConfig.BASE_MAX_CONTEXT * math.pow(depth_factor, 1.3))
     max_workers = max(1, min(8, int(2 * sqrt_depth)))
     batch_size = int(BaseConfig.BASE_BATCH_SIZE * sqrt_depth)
     
-    # ── LLM 参数 ────────────────────────────────────────────
+    # ── LLM 参数 ───────────────────────────────────────────
     # 复杂度越高，温度略增 (保持创造性但不过度随机)
     llm_temperature = min(1.0, 0.5 + 0.05 * depth)
     # Top-p 随复杂度降低 (更集中于高概率token)
     llm_top_p = max(0.7, 0.95 - 0.02 * depth)
     
-    # ── Agent 参数 ──────────────────────────────────────────
+    # ── Agent 参数 ───────────────────────────────────────────
     agent_init_timeout = 5.0 * sqrt_depth
     agent_max_iterations = max(10, 30 * depth)
     
@@ -323,10 +322,10 @@ def sync_to_unified_config(depth: int = 3) -> None:
         depth: 任务复杂度
     """
     try:
-        from core.config.unified_config import get_config
+        from client.src.business.config import get_unified_config
         
         config = compute_optimal_config(depth)
-        cfg = get_config()
+        cfg = get_unified_config()
         
         # 同步超时
         cfg.set('timeouts.default', config.timeout)
@@ -345,7 +344,7 @@ def sync_to_unified_config(depth: int = 3) -> None:
         cfg.set('limits.max_tokens', config.max_tokens)
         cfg.set('limits.max_context', config.max_context)
         
-        # 同步 LLM
+        # 同步LLM
         cfg.set('llm.temperature', config.llm_temperature)
         cfg.set('llm.top_p', config.llm_top_p)
         
@@ -353,34 +352,11 @@ def sync_to_unified_config(depth: int = 3) -> None:
         pass  # UnifiedConfig 未安装
 
 
-# ── 使用示例 ────────────────────────────────────────────────────────
+# ── 导出 ────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    print("=" * 60)
-    print("LivingTreeAI 计算最优配置演示")
-    print("=" * 60)
-    
-    # 演示不同深度的配置
-    for depth in [1, 3, 5, 7, 10]:
-        config = compute_optimal_config(depth)
-        print(f"\n[Depth {depth}] {'=' * 40}")
-        print(f"  timeout: {config.timeout}s")
-        print(f"  max_retries: {config.max_retries}")
-        print(f"  max_tokens: {config.max_tokens}")
-        print(f"  max_workers: {config.max_workers}")
-        print(f"  llm_temperature: {config.llm_temperature}")
-    
-    # 任务类型推断
-    print("\n" + "=" * 60)
-    print("任务类型 -> Depth 映射")
-    print("=" * 60)
-    for task in ['ping', 'search', 'code_fix', 'refactor', 'architect', 'autonomous']:
-        depth = get_depth_from_task(task)
-        print(f"  {task}: depth={depth}")
-    
-    # 预设配置
-    print("\n" + "=" * 60)
-    print("预设配置")
-    print("=" * 60)
-    for name, config in PRESETS.items():
-        print(f"  {name}: timeout={config.timeout}s, max_tokens={config.max_tokens}")
+__all__ = [
+    'OptimalConfig', 'compute_optimal_config', 'get_depth_from_task',
+    'compute_optimal_config_for_task', 'get_preset',
+    'quick_config', 'normal_config', 'heavy_config',
+    'sync_to_unified_config', 'PRESETS',
+]

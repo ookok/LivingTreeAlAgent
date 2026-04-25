@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import sys
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "core" / "config"))
+sys.path.insert(0, str(PROJECT_ROOT / "client" / "src" / "business"))
 
 # ============= Mock logger =============
 
@@ -37,7 +37,7 @@ logger = MockLogger()
 # ============= 尝试导入 optimal_config =============
 
 try:
-    from core.config.optimal_config import compute_optimal_config, compute_optimal_config_for_task
+    from client.src.business.optimal_config import compute_optimal_config, compute_optimal_config_for_task
     OPTIMAL_CONFIG_AVAILABLE = True
 except ImportError:
     # Fallback 实现

@@ -26,7 +26,7 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 try:
-    from core.config.unified_config import get_config as _get_unified_config
+    from client.src.business.config import get_config as _get_unified_config
     _uconfig_is = _get_unified_config()
 except Exception:
     _uconfig_is = None

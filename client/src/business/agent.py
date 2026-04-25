@@ -24,7 +24,7 @@ from core.unified_model_client import (
 from core.session_db import SessionDB
 from core.memory_manager import MemoryManager
 from core.tools_registry import ToolRegistry, ToolDispatcher, SCHEMA
-from core.config import AppConfig
+from client.src.business.config import AppConfig
 from core.session_stats import SessionStats, get_stats_tracker
 from core.model_priority_loader import (
     ModelBackend,

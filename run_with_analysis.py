@@ -33,7 +33,7 @@ def run_client():
     try:
         logger.info("开始加载配置...")
         
-        from core.config import load_config
+        from client.src.business.config import load_config
         config = load_config()
         logger.info(f"配置加载成功: {config.ollama.base_url}")
         

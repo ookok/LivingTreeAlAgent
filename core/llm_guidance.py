@@ -35,7 +35,7 @@ except ImportError:
 
 # 导入统一配置
 try:
-    from core.config.unified_config import get_ollama_url, get
+    from client.src.business.config import get_ollama_url, get
 except ImportError:
     # 兼容旧环境
     def get_ollama_url():

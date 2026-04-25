@@ -785,7 +785,7 @@ class LayeredAIConfigPanel(QWidget):
                 else:
                     # 使用系统下载中心下载 GGUF 模型
                     from core.model_manager import ModelManager
-                    from core.config import AppConfig
+                    from client.src.business.config import AppConfig
                     from core.unified_downloader import get_download_center
                     
                     config = AppConfig()

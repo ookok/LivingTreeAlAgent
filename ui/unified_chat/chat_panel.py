@@ -1593,7 +1593,7 @@ class ChatPanel(QWidget):
         """异步转写音频文件"""
         try:
             # 尝试使用 Ollama whisper 模型
-            from core.config import get_hermes_home
+            from client.src.business.config import get_hermes_home
             import subprocess
             import json
             

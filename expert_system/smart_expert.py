@@ -93,7 +93,7 @@ class PersonalizedExpert:
         if interaction_log_path:
             self.interaction_log_path = interaction_log_path
         else:
-            from core.config import get_config_dir
+            from client.src.business.config import get_config_dir
             self.interaction_log_path = str(get_config_dir() / "interaction_logs.json")
         
         self._interaction_logs: List[InteractionLog] = []

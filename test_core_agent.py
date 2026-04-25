@@ -12,7 +12,7 @@ _root = Path(__file__).parent
 sys.path.insert(0, str(_root))
 
 from client.src.business.agent import HermesAgent, AgentCallbacks
-from core.config import AppConfig
+from client.src.business.config import AppConfig
 from core.ollama_client import OllamaClient
 
 
@@ -20,7 +20,7 @@ def test_ollama_connection():
     """测试 Ollama 连接"""
     print("=== 测试 Ollama 连接 ===")
     try:
-        from core.config import OllamaConfig
+        from client.src.business.config import OllamaConfig
         ollama_config = OllamaConfig()
         client = OllamaClient(ollama_config)
         

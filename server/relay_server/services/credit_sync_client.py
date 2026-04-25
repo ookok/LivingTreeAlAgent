@@ -22,7 +22,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 import httpx
 
-from core.config.unified_config import UnifiedConfig
+from client.src.business.config import UnifiedConfig
 
 
 # ============ 同步状态枚举 ============

@@ -23,7 +23,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QColor
 from core.first_run_config import (
     FirstRunConfig, ConfigStep, WizardStep, get_first_run_config
 )
-from core.config import AppConfig, OllamaConfig, save_config
+from client.src.business.config import AppConfig, OllamaConfig, save_config
 
 
 class WelcomeWizard(QDialog):
@@ -825,7 +825,7 @@ class WelcomeWizard(QDialog):
     def _apply_config(self):
         """应用配置到主配置文件"""
         # 构建 AppConfig
-        from core.config import (
+        from client.src.business.config import (
             OllamaConfig, ModelPathConfig, ModelMarketConfig,
             WritingConfig, SearchConfig, AgentConfig, AppConfig
         )

@@ -214,3 +214,157 @@ def get_projects_dir() -> Path:
 
 def get_config_dir() -> Path:
     return _get_config_dir()
+
+
+# ── UnifiedConfig 兼容层 ─────────────────────────────────────────────
+# 为了兼容从 core.config 迁移过来的代码
+
+import warnings
+from typing import Any, Optional, Dict
+
+# 导入 NanochatConfig
+from .nanochat_config import NanochatConfig as _NanochatConfig, config as _nanochat_config
+
+
+class UnifiedConfig:
+    """
+    兼容层: UnifiedConfig → NanochatConfig
+    
+    旧代码继续工作，但使用新的配置系统。
+    
+    示例:
+        # 旧代码（仍然工作）
+        from client.src.business.config import UnifiedConfig
+        config = UnifiedConfig.get_instance()
+        url = config.get("endpoints.ollama.url")
+        
+        # 新代码（推荐）
+        from client.src.business.nanochat_config import config
+        url = config.ollama.url
+    """
+    
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls) -> "UnifiedConfig":
+        """获取单例实例（兼容旧 API）"""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    def __init__(self):
+        """初始化（实际上只是包装新配置）"""
+        self._config = _nanochat_config
+    
+    # ── 兼容旧 API: get/set ─────────────────────────────────────────────
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        兼容旧 API: config.get("endpoints.ollama.url")
+        
+        新 API: config.ollama.url
+        """
+        keys = key.split('.')
+        obj = self._config
+        
+        for k in keys:
+            if hasattr(obj, k):
+                obj = getattr(obj, k)
+            elif isinstance(obj, dict) and k in obj:
+                obj = obj[k]
+            else:
+                return default
+        
+        return obj
+    
+    def set(self, key: str, value: Any) -> None:
+        """
+        兼容旧 API: config.set("endpoints.ollama.url", "...")
+        
+        新 API: config.ollama.url = "..."
+        """
+        keys = key.split('.')
+        obj = self._config
+        
+        for k in keys[:-1]:
+            if hasattr(obj, k):
+                obj = getattr(obj, k)
+            elif isinstance(obj, dict) and k in obj:
+                obj = obj[k]
+        
+        last_key = keys[-1]
+        if hasattr(obj, last_key):
+            setattr(obj, last_key, value)
+        elif isinstance(obj, dict):
+            obj[last_key] = value
+    
+    # ── 兼容旧 API: get_* 方法 ─────────────────────────────────────────
+    
+    def get_ollama_url(self) -> str:
+        """新 API: config.ollama.url"""
+        return self._config.ollama.url
+    
+    def get_ollama_timeout(self) -> int:
+        """新 API: config.ollama.timeout"""
+        return self._config.ollama.timeout
+    
+    def get_timeout(self, name: str = "default") -> int:
+        """新 API: config.timeouts.<name>"""
+        return getattr(self._config.timeouts, name, 30)
+    
+    def get_delay(self, name: str = "polling_medium") -> float:
+        """新 API: config.delays.<name>"""
+        return getattr(self._config.delays, name, 0.5)
+    
+    def get_max_retries(self, category: str = "default") -> int:
+        """新 API: config.retries.<category> 或 config.retries.default"""
+        return getattr(self._config.retries, category, self._config.retries.default)
+    
+    def get_retry_delay(self, category: str = "default") -> float:
+        """新 API: 使用 config.retries.exponential_base（近似）"""
+        return float(self._config.retries.exponential_base)
+    
+    def get_retry_config(self, category: str = "default") -> Dict[str, Any]:
+        """新 API: 直接访问 config.retries"""
+        return {
+            "max_retries": self.get_max_retries(category),
+            "delay": self.get_retry_delay(category),
+            "backoff": "exponential",
+        }
+    
+    def get_path(self, name: str = "data") -> str:
+        """新 API: config.paths.<name>"""
+        return getattr(self._config.paths, name, f"./{name}")
+    
+    def get_api_key(self, provider: str) -> Optional[str]:
+        """新 API: config.api_keys.<provider>"""
+        return getattr(self._config.api_keys, provider, None)
+    
+    # ── 新增: 直接访问新配置 ──────────────────────────────────────────
+    
+    @property
+    def new_config(self) -> _NanochatConfig:
+        """直接访问新的 Nanochat 配置（推荐）"""
+        return self._config
+
+
+def get_unified_config() -> UnifiedConfig:
+    """兼容旧 API: 获取全局配置实例"""
+    return UnifiedConfig.get_instance()
+
+
+def set_unified_config(config: UnifiedConfig):
+    """兼容旧 API: 设置全局配置实例"""
+    UnifiedConfig._instance = config
+
+
+# 更新 __all__ 导出
+__all__ = [
+    'AppConfig', 'OllamaConfig', 'ModelPathConfig', 'ModelMarketConfig',
+    'ModelStoreConfig', 'WritingConfig', 'SearchConfig', 'AgentConfig',
+    'load_config', 'save_config', 'get_hermes_home', 'get_env_value',
+    'get_models_dir', 'get_projects_dir', 'get_config_dir',
+    # 新增：UnifiedConfig 兼容层
+    'UnifiedConfig', 'get_unified_config', 'set_unified_config',
+]
+

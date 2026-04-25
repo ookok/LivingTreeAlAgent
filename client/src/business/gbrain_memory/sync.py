@@ -66,7 +66,7 @@ class SyncManager:
     """
 
     def __init__(self, brain_dir: str | Path = None):
-        from core.config import get_config_dir
+        from client.src.business.config import get_config_dir
 
         if brain_dir is None:
             brain_dir = get_config_dir() / "gbrain"

@@ -66,7 +66,7 @@ class LocalModelPriorityLoader:
 
     def _get_default_models_dir(self) -> str:
         """获取默认模型目录"""
-        from core.config import get_config_dir
+        from client.src.business.config import get_config_dir
         return str(get_config_dir() / "models")
 
     def check_backend_availability(self) -> List[BackendInfo]:
@@ -437,7 +437,7 @@ class LocalModelPriorityLoader:
         """使用 Ollama 加载"""
         try:
             from core.ollama_client import OllamaClient
-            from core.config import OllamaConfig
+            from client.src.business.config import OllamaConfig
             import subprocess
             import os
             

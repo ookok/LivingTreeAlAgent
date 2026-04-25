@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.abspath('.'))
 
 try:
-    from core.config import load_config, AppConfig
+    from client.src.business.config import load_config, AppConfig
     from client.src.business.agent import HermesAgent, AgentCallbacks
     logger.info("成功导入必要模块")
 except Exception as e:

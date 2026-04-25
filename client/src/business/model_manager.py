@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
-from core.config import AppConfig, OllamaConfig
+from client.src.business.config import AppConfig, OllamaConfig
 from core.ollama_client import OllamaClient
 from core.model_priority_loader import ModelBackend, LocalModelPriorityLoader
 
@@ -642,5 +642,5 @@ class ModelManager:
             model_name: 模型名称
         """
         self.config.ollama.default_model = model_name
-        from core.config import save_config
+        from client.src.business.config import save_config
         save_config(self.config)

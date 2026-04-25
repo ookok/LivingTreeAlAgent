@@ -12,7 +12,7 @@ _root = Path(__file__).parent
 sys.path.insert(0, str(_root))
 
 from core.model_manager import ModelManager
-from core.config import AppConfig
+from client.src.business.config import AppConfig
 
 
 def test_model_download():

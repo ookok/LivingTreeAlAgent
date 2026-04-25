@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from core.config import OllamaConfig
+from client.src.business.config import OllamaConfig
 
 
 # ── 数据模型 ────────────────────────────────────────────────────────

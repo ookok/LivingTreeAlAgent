@@ -17,7 +17,7 @@ from core.deployment_engine import DeploymentEngine, get_deployment_engine
 def _get_default_monitor_config() -> Dict[str, Any]:
     """从统一配置获取默认值"""
     try:
-        from core.config.unified_config import get_config
+        from client.src.business.config import get_config
         config = get_config()
         return config.get_polling_config("check")
     except Exception:

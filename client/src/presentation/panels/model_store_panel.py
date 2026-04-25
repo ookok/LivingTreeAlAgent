@@ -357,7 +357,7 @@ class ModelStorePanel(QWidget):
         """加载模型数据"""
         try:
             from core.model_store import get_store_manager
-            from core.config import load_config
+            from client.src.business.config import load_config
 
             # 加载配置获取中继服务器
             cfg = load_config()

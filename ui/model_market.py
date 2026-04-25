@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont
 
 from core.unified_downloader import get_download_center, DownloadTask, SourceType
-from core.config import get_models_dir
+from client.src.business.config import get_models_dir
 
 
 class ModelMarketEntry:
@@ -233,7 +233,7 @@ class ModelMarketPanel(QWidget):
         self._start_dl(entry)
 
     def _start_dl(self, entry: ModelMarketEntry):
-        from core.config import get_models_dir
+        from client.src.business.config import get_models_dir
         models_dir = get_models_dir()
         target = models_dir / entry.file_name
         

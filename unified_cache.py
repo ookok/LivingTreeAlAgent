@@ -51,7 +51,7 @@ from dataclasses import dataclass, field, asdict
 
 # 统一配置导入
 try:
-    from core.config.unified_config import get_config, get_timeout
+    from client.src.business.config import get_config, get_timeout
 except ImportError:
     get_config = get_timeout = None
 

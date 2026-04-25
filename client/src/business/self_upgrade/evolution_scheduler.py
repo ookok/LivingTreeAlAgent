@@ -9,7 +9,7 @@ from typing import Optional, Callable, List, Dict, Any
 from pathlib import Path
 
 from .models import EvolutionTask
-from core.config.unified_config import UnifiedConfig
+from client.src.business.config import UnifiedConfig
 
 
 class EvolutionScheduler:

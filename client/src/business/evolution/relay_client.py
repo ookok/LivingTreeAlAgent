@@ -10,6 +10,7 @@ from datetime import datetime
 import urllib.request
 import urllib.error
 
+from core.config.unified_config import UnifiedConfig
 from .models import (
     WeeklyReport, ClientConfig, ReportStatus,
 )
@@ -97,7 +98,8 @@ class RelayClient:
             except urllib.error.URLError as e:
                 self._logger.warning(f"请求失败 (retry {retry+1}): {e}")
                 if retry < self.MAX_RETRIES - 1:
-                    time.sleep(1 * (retry + 1))  # 指数退避
+                    evo_config = UnifiedConfig.get_instance().get_evolution_config()
+                    time.sleep(evo_config.get("retry_delay", 1) * (retry + 1))  # 指数退避
                 else:
                     return None
 
@@ -152,6 +154,8 @@ class RelayClient:
             Dict[str, bool]: week_id -> 是否成功
         """
         results = {}
+        evo_config = UnifiedConfig.get_instance().get_evolution_config()
+        report_interval = evo_config.get("report_interval", 0.5)
 
         for report in reports:
             success = self.upload_report(report)
@@ -159,7 +163,7 @@ class RelayClient:
 
             # 上报间隔
             if success:
-                time.sleep(0.5)
+                time.sleep(report_interval)
 
         return results
 

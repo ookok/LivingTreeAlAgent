@@ -386,6 +386,8 @@ class UnifiedConfig:
                 "idle_minutes": 5,          # 空闲触发分钟数
                 "check_interval": 30,        # 空闲检查间隔（秒）
                 "thread_join_timeout": 2.0,   # 线程 join 超时（秒）
+                "retry_delay": 1,            # 重试延迟基数（秒）
+                "report_interval": 0.5,      # 上报间隔（秒）
             },
             
             # ── P2P 网络配置 ──
@@ -395,6 +397,16 @@ class UnifiedConfig:
                 "health_check_interval": 30,     # P2P健康检查间隔（秒）
                 "gossip_interval": 5,             # Gossip协议间隔（秒）
                 "sync_interval": 30,              # 完整同步间隔（秒）
+            },
+
+            # ── 浏览器自动化配置 ──
+            "browser_automation": {
+                "clipboard_poll_interval": 1,      # 剪贴板轮询间隔（秒）
+                "keyboard_poll_interval": 1,      # 键盘监听轮询间隔（秒）
+                "error_recovery_delay": 5,        # 错误恢复延迟（秒）
+                "default_wait_seconds": 3,         # 默认等待秒数
+                "browser_startup_delay": 2,        # 浏览器启动延迟（秒）
+                "click_delay": 0.5,               # 点击操作延迟（秒）
             },
             
             # ── Decommence 电商配置 ──
@@ -941,6 +953,25 @@ class UnifiedConfig:
         return {
             "idle_minutes": self.get("evolution.idle_minutes", 5),
             "check_interval": self.get("evolution.check_interval", 30),
+            "thread_join_timeout": self.get("evolution.thread_join_timeout", 2.0),
+            "retry_delay": self.get("evolution.retry_delay", 1),
+            "report_interval": self.get("evolution.report_interval", 0.5),
+        }
+
+    def get_browser_automation_config(self) -> Dict[str, Any]:
+        """
+        获取浏览器自动化配置
+        
+        Returns:
+            浏览器自动化配置字典
+        """
+        return {
+            "clipboard_poll_interval": self.get("browser_automation.clipboard_poll_interval", 1),
+            "keyboard_poll_interval": self.get("browser_automation.keyboard_poll_interval", 1),
+            "error_recovery_delay": self.get("browser_automation.error_recovery_delay", 5),
+            "default_wait_seconds": self.get("browser_automation.default_wait_seconds", 3),
+            "browser_startup_delay": self.get("browser_automation.browser_startup_delay", 2),
+            "click_delay": self.get("browser_automation.click_delay", 0.5),
         }
     
     def get_commission_config(self, module: Optional[str] = None) -> Dict[str, Any]:

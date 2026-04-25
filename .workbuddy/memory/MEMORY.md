@@ -383,8 +383,50 @@ security:
 - **P1-F** → 智能写作/AI模块 ✅ 已完成（2026-04-25）
 - **P1-G** → 安全/加密模块 ✅ 已完成（2026-04-25）
 - **P1-H** → UI/自动化模块 ✅ 已完成（2026-04-25）
+- **P2** → 渐进式完善 ✅ 已完成（2026-04-25）
 
-**P1-H UI/自动化模块（2026-04-25）**:
+**配置迁移进度**：P0 + P1 + P2 全部完成 ✅
+
+**P1-H UI/自动化模块 ✅ 已完成（2026-04-25）**:
+
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `ui_automation.py` | wait_timeout=10.0, poll_interval=0.5 | `ui_automation.wait_timeout`, `ui_automation.poll_interval` |
+| `ui_automation.py` | type_interval=0.1 | `ui_automation.type_interval` |
+| `ui_automation.py` | workflow_step_delay=0.3 | `ui_automation.workflow_step_delay` |
+| `async_task_queue.py` | max_workers=2, default_debounce=3.0 | `task_queue.max_workers`, `task_queue.default_debounce` |
+| `async_task_queue.py` | pause_timeout=5.0, task_timeout=30 | `task_queue.pause_timeout`, `task_queue.task_timeout` |
+| `evolution_scheduler.py` | idle_minutes=5, check_interval=30 | `evolution.idle_minutes`, `evolution.check_interval` |
+| `evolution_scheduler.py` | thread_join_timeout=2.0 | `evolution.thread_join_timeout` |
+
+**新增配置节 evolution**:
+```yaml
+evolution:
+  idle_minutes: 5
+  check_interval: 30
+  thread_join_timeout: 2.0
+```
+
+**P2 渐进式完善（2026-04-25）**:
+
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `browser_automation_guide.py` | clipboard_poll_interval=1, keyboard_poll_interval=1 | `browser_automation.*` |
+| `browser_automation_guide.py` | error_recovery_delay=5, default_wait_seconds=3 | `browser_automation.*` |
+| `browser_automation_guide.py` | browser_startup_delay=2, click_delay=0.5 | `browser_automation.*` |
+| `evolution/relay_client.py` | retry_delay=1 (指数退避基数) | `evolution.retry_delay` |
+| `evolution/relay_client.py` | report_interval=0.5 | `evolution.report_interval` |
+
+**新增配置节 browser_automation**:
+```yaml
+browser_automation:
+  clipboard_poll_interval: 1
+  keyboard_poll_interval: 1
+  error_recovery_delay: 5
+  default_wait_seconds: 3
+  browser_startup_delay: 2
+  click_delay: 0.5
+```
 
 | 模块 | 迁移内容 | 配置键 |
 |------|----------|--------|

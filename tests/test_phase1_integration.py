@@ -15,7 +15,7 @@ from core.intent_engine import IntentEngine
 from client.src.business.agent import AgentOrchestrator, AgentFactory, TaskPriority
 from client.src.business.evolution_engine import create_evolution_engine
 from core.self_awareness import SelfAwarenessSystem
-from core.a2a_protocol import A2AProtocol, AgentMessage
+from client.src.business.a2a_protocol import A2AProtocol, AgentMessage
 
 
 class TestIntentEngineIntegration(unittest.TestCase):

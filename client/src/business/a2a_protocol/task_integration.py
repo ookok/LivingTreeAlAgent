@@ -46,7 +46,7 @@ class TaskConverter:
     @staticmethod
     def from_task_node(node, task_context=None) -> 'A2ATask':
         """从 TaskNode 转换为 A2A Task"""
-        from core.a2a_protocol import Task, TaskStatus as A2ATaskStatus
+        from client.src.business.a2a_protocol import Task, TaskStatus as A2ATaskStatus
         
         # 状态映射
         status_map = {
@@ -109,7 +109,7 @@ class TaskConverter:
     @staticmethod
     def from_task_context(context) -> 'SessionContext':
         """从 TaskContext 转换为 SessionContext"""
-        from core.a2a_protocol import SessionContext
+        from client.src.business.a2a_protocol import SessionContext
         
         return SessionContext(
             user_id=context.root_task_id or "default",
@@ -164,7 +164,7 @@ class AgentAdapter:
     
     def to_endpoint(self) -> 'AgentEndpoint':
         """转换为 A2A 端点"""
-        from core.a2a_protocol.channel import AgentEndpoint, TransportType
+        from client.src.business.a2a_protocol.channel import AgentEndpoint, TransportType
         
         return AgentEndpoint(
             agent_id=self.agent_id,
@@ -317,7 +317,7 @@ class A2ATaskManager:
         Returns:
             a2a_task_id
         """
-        from core.a2a_protocol import Task, SessionContext
+        from client.src.business.a2a_protocol import Task, SessionContext
         
         # 转换为 A2A Task
         a2a_task = TaskConverter.from_task_node(node, task_context)
@@ -512,7 +512,7 @@ def create_a2a_task_manager(
     Returns:
         A2ATaskManager 实例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
     
     gateway = create_a2a_gateway(
         agent_id=agent_id,

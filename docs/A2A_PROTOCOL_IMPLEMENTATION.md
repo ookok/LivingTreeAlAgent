@@ -20,8 +20,8 @@ core/a2a_protocol/
 ## 快速开始
 
 ```python
-from core.a2a_protocol.gateway import create_a2a_gateway
-from core.a2a_protocol import Task
+from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+from client.src.business.a2a_protocol import Task
 
 gateway = create_a2a_gateway(
     agent_id="livingtree",
@@ -64,7 +64,7 @@ await gateway.send_task("planner", task)
 #### 1. A2ATaskManager - 任务管理器
 
 ```python
-from core.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
+from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
 
 # 创建任务管理器
 manager = create_a2a_task_manager(
@@ -109,7 +109,7 @@ await manager.wake_agent(
 #### 2. AgentTeam - Agent 团队
 
 ```python
-from core.a2a_protocol.collaboration import create_agent_team, TeamRole
+from client.src.business.a2a_protocol.collaboration import create_agent_team, TeamRole
 
 # 创建团队
 team = create_agent_team(
@@ -143,7 +143,7 @@ team.broadcast("architect", {"type": "meeting", "content": "15分钟后开会"})
 #### 3. 任务类型转换
 
 ```python
-from core.a2a_protocol.task_integration import TaskConverter
+from client.src.business.a2a_protocol.task_integration import TaskConverter
 from core.task_router import TaskNode
 
 # TaskNode → A2A Task
@@ -176,7 +176,7 @@ context = TaskConverter.to_task_context(session)
 #### HMAC 签名验证
 
 ```python
-from core.a2a_protocol.security import WebhookValidator
+from client.src.business.a2a_protocol.security import WebhookValidator
 
 validator = WebhookValidator(secret_key="your_key", timestamp_tolerance_ms=300000)
 
@@ -190,7 +190,7 @@ is_valid = validator.verify_signature(signature, '{"trigger": "task"}')
 #### Prompt Injection 检测
 
 ```python
-from core.a2a_protocol.security import PromptInjectionDetector, ThreatLevel
+from client.src.business.a2a_protocol.security import PromptInjectionDetector, ThreatLevel
 
 detector = PromptInjectionDetector()
 
@@ -208,7 +208,7 @@ clean_text = detector.sanitize(dangerous_text)
 ### Webhook 即时唤醒
 
 ```python
-from core.a2a_protocol.webhook_server import create_webhook_server
+from client.src.business.a2a_protocol.webhook_server import create_webhook_server
 
 # 创建 Webhook 服务器
 server = create_webhook_server(
@@ -230,8 +230,8 @@ await server.start()
 
 ```python
 import asyncio
-from core.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
-from core.a2a_protocol.collaboration import create_agent_team, TeamRole
+from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
+from client.src.business.a2a_protocol.collaboration import create_agent_team, TeamRole
 
 async def main():
     # 1. 创建任务管理器

@@ -129,19 +129,19 @@ class TestA2AProtocol(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.a2a_protocol import A2AProtocol, AgentMessage
+        from client.src.business.a2a_protocol import A2AProtocol, AgentMessage
         self.assertIsNotNone(A2AProtocol)
         self.assertIsNotNone(AgentMessage)
     
     def test_protocol_creation(self):
         """测试协议创建"""
-        from core.a2a_protocol import A2AProtocol
+        from client.src.business.a2a_protocol import A2AProtocol
         protocol = A2AProtocol()
         self.assertIsNotNone(protocol)
     
     def test_message_creation(self):
         """测试消息创建"""
-        from core.a2a_protocol import AgentMessage
+        from client.src.business.a2a_protocol import AgentMessage
         msg = AgentMessage(
             sender="agent1",
             receiver="agent2",

@@ -11,7 +11,7 @@ import pytest
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from core.a2a_protocol import (
+from client.src.business.a2a_protocol import (
     MessageType, AgentCapability, AgentInfo, A2AMessage,
     Task, A2AProtocol, AgentRegistry, TaskOrchestrator
 )

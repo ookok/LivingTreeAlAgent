@@ -12,9 +12,9 @@ async def basic_example():
     """
     基础 A2A 使用示例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
-    from core.a2a_protocol import Task, TaskStatus
-    from core.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol import Task, TaskStatus
+    from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
     
     # 创建任务管理器
     manager = create_a2a_task_manager(
@@ -65,9 +65,9 @@ async def task_dispatch_example():
     """
     任务分发示例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
-    from core.a2a_protocol import Task
-    from core.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol import Task
+    from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
     from core.task_router import TaskNode, TaskStatus as RouterStatus
     
     # 创建任务管理器
@@ -114,9 +114,9 @@ async def team_collaboration_example():
     """
     Agent 团队协作示例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
-    from core.a2a_protocol.task_integration import create_a2a_task_manager
-    from core.a2a_protocol.collaboration import (
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager
+    from client.src.business.a2a_protocol.collaboration import (
         create_agent_team, 
         TeamRole,
         AgentTeam
@@ -221,8 +221,8 @@ async def session_context_example():
     """
     会话上下文注入示例
     """
-    from core.a2a_protocol.task_integration import create_a2a_task_manager
-    from core.a2a_protocol.session import SessionContext
+    from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager
+    from client.src.business.a2a_protocol.session import SessionContext
     
     manager = create_a2a_task_manager()
     
@@ -269,8 +269,8 @@ async def integrate_with_task_system():
     """
     与 LivingTreeAI 现有任务系统集成示例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
-    from core.a2a_protocol.task_integration import (
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol.task_integration import (
         create_a2a_task_manager,
         TaskConverter,
         AgentType
@@ -349,8 +349,8 @@ async def instant_wake_example():
     """
     即时唤醒示例
     """
-    from core.a2a_protocol.gateway import create_a2a_gateway
-    from core.a2a_protocol.security import PromptInjectionDetector, ThreatLevel
+    from client.src.business.a2a_protocol.gateway import create_a2a_gateway
+    from client.src.business.a2a_protocol.security import PromptInjectionDetector, ThreatLevel
     
     # 创建网关
     gateway = create_a2a_gateway(

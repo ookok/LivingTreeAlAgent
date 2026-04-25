@@ -5,7 +5,7 @@
 支持跨平台：Windows、macOS、Linux
 
 使用示例：
-    from core.i18n import i18n, set_locale, get_available_locales
+    from client.src.business.i18n import i18n, set_locale, get_available_locales
 
     # 翻译字符串
     print(i18n._("Hello World"))  # 你好世界

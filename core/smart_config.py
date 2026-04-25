@@ -7,6 +7,8 @@ Smart Configuration System
 - 基于环境自动调整配置
 - 由系统大脑驱动的自我优化
 - 配置版本管理和回滚
+
+已集成 UnifiedConfig 系统，从统一配置读取配置
 """
 
 import os
@@ -14,7 +16,7 @@ import json
 import time
 import threading
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, List
+from typing import Dict, Any, Optional, Callable, List, TYPE_CHECKING
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 import platform
@@ -22,7 +24,7 @@ import psutil
 
 from PyQt6.QtCore import QTimer
 
-
+# 为了向后兼容，保留原有的类定义
 class Environment(Enum):
     """运行环境类型"""
     UNKNOWN = "unknown"
@@ -163,7 +165,46 @@ class EnvironmentDetector:
 
     @staticmethod
     def detect() -> RuntimeEnvironment:
-        """检测运行环境"""
+        """检测运行环境（优先使用UnifiedConfig）"""
+        # 尝试使用UnifiedConfig
+        try:
+            from core.config.unified_config import get_config
+            unified = get_config()
+            env = unified.get_runtime_environment()
+            # 转换类型
+            runtime = RuntimeEnvironment()
+            runtime.os_type = env.os_type
+            runtime.os_version = env.os_version or ""
+            runtime.cpu_count = env.cpu_count
+            runtime.cpu_brand = env.cpu_brand or "Unknown"
+            runtime.memory_total = env.memory_total
+            runtime.memory_available = env.memory_available
+            runtime.gpu_available = env.gpu_available
+            runtime.is_portable = env.is_portable
+            runtime.disk_free_space = env.disk_free_space
+            runtime.python_version = env.python_version or platform.python_version()
+            runtime.python_arch = env.python_arch or platform.machine()
+            runtime.memory_usage = env.memory_usage
+            
+            # 转换environment
+            env_map = {
+                "windows": Environment.WINDOWS,
+                "linux": Environment.LINUX,
+                "darwin": Environment.MACOS,
+                "wsl": Environment.WSL,
+                "docker": Environment.DOCKER,
+            }
+            runtime.environment = env_map.get(env.environment, Environment.UNKNOWN)
+            return runtime
+        except Exception:
+            pass
+        
+        # 回退到原始实现
+        return EnvironmentDetector._detect_legacy()
+
+    @staticmethod
+    def _detect_legacy() -> RuntimeEnvironment:
+        """遗留检测实现"""
         env = RuntimeEnvironment()
 
         # OS信息
@@ -281,6 +322,8 @@ class SmartConfig:
     3. 基于环境自动选择配置方案
     4. 支持系统大脑驱动的自我优化
     5. 配置历史记录
+
+    支持从 UnifiedConfig 读取配置
     """
 
     def __init__(
@@ -322,11 +365,32 @@ class SmartConfig:
         # 回调
         self._optimization_callback: Optional[Callable] = None
 
+        # UnifiedConfig 集成
+        self._use_unified: bool = True
+        self._unified_config: Optional[Any] = None
+
         # 加载配置
         self._load_config()
 
         # 检测环境
         self.detect_environment()
+    
+    def _get_unified_config(self):
+        """获取统一配置实例"""
+        if self._unified_config is None:
+            try:
+                from core.config.unified_config import UnifiedConfig
+                self._unified_config = UnifiedConfig.get_instance()
+            except Exception:
+                pass
+        return self._unified_config
+    
+    def _load_from_unified(self) -> Dict[str, Any]:
+        """从UnifiedConfig加载配置"""
+        unified = self._get_unified_config()
+        if unified:
+            return unified.get("smart_config", {})
+        return {}
 
     def _get_config_dir(self) -> Path:
         """获取配置目录"""
@@ -471,13 +535,42 @@ class SmartConfig:
 
     def get_profile(self) -> ConfigProfile:
         """获取当前配置方案"""
-        profile_name = self._config.get("profile", "default")
+        # 优先从UnifiedConfig获取
+        unified = self._get_unified_config()
+        if unified:
+            profile_name = unified.get_smart_config_profile()
+        else:
+            profile_name = self._config.get("profile", "default")
+        
+        # 如果是auto，使用推荐profile
+        if profile_name == "auto":
+            if unified:
+                profile_name = unified.get_recommended_profile()
+            else:
+                env = self.get_runtime_environment()
+                profile_name = self._auto_select_profile_name(env)
+        
         try:
-            profile = Profile[profile_name.upper()]
+            profile = Profile(profile_name.lower())
         except KeyError:
             profile = Profile.DEFAULT
 
         return DEFAULT_PROFILES.get(profile, DEFAULT_PROFILES[Profile.DEFAULT])
+    
+    def _auto_select_profile_name(self, env: RuntimeEnvironment) -> str:
+        """自动选择配置方案名称"""
+        if env.is_portable:
+            return "portable"
+        
+        memory_gb = env.memory_total / (1024**3) if env.memory_total else 8
+        
+        if memory_gb < 4:
+            return "low_memory"
+        
+        if memory_gb >= 16 and env.cpu_count >= 4 and env.gpu_available:
+            return "high_performance"
+        
+        return "default"
 
     def set_profile(self, profile: Profile, reason: str = ""):
         """设置配置方案"""
@@ -773,6 +866,28 @@ class SmartConfig:
         }
 
         return config
+    
+    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        深度合并两个配置字典
+        
+        Args:
+            base: 基础配置
+            override: 覆盖配置
+        
+        Returns:
+            合并后的配置
+        """
+        from copy import deepcopy
+        result = deepcopy(base)
+        
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = deepcopy(value)
+        
+        return result
 
     def export_config(self, path: str = None) -> str:
         """
@@ -797,19 +912,45 @@ class SmartConfig:
 
         return path
 
-    def import_config(self, path: str):
+    def import_config(self, path: str, strategy: str = "merge", use_unified: bool = True):
         """
         导入配置
 
         Args:
             path: 导入文件路径
+            strategy: 合并策略 (merge | replace)
+            use_unified: 是否使用 UnifiedConfig 导入（默认 True）
         """
+        # 优先使用 UnifiedConfig 导入
+        if use_unified:
+            try:
+                from core.config.unified_config import get_config
+                unified = get_config()
+                unified.import_config(path, strategy)
+                # 同步到 SmartConfig
+                self._config = unified.export()
+                self._save_config()
+                logger.info(f"配置已从 UnifiedConfig 导入: {path}")
+                return
+            except Exception as e:
+                logger.warning(f"UnifiedConfig 导入失败，回退到原生导入: {e}")
+        
+        # 回退到原生导入
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         if "config" in data:
-            self._config = data["config"]
-            self._save_config()
+            config_data = data["config"]
+        else:
+            config_data = data
+        
+        if strategy == "replace":
+            self._config = config_data
+        elif strategy == "merge":
+            self._config = self._deep_merge(self._config, config_data)
+        
+        self._save_config()
+        logger.info(f"配置已导入: {path}")
 
     def get_status(self) -> Dict[str, Any]:
         """获取配置状态"""

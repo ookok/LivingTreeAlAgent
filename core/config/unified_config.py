@@ -23,10 +23,13 @@ import yaml
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional, Dict, Union
-from dataclasses import dataclass, field
+from typing import Any, Optional, Dict, Union, List, TYPE_CHECKING
+from dataclasses import dataclass, field, asdict
 from threading import Lock
 from copy import deepcopy
+from enum import Enum
+import platform
+import psutil
 
 logger = logging.getLogger("core.config.unified")
 
@@ -34,6 +37,49 @@ logger = logging.getLogger("core.config.unified")
 CONFIG_DIR = Path.home() / ".livingtree"
 CONFIG_FILE = CONFIG_DIR / "unified.yaml"
 ENV_FILE = CONFIG_DIR / ".env"
+
+
+class Environment(Enum):
+    """运行环境类型"""
+    UNKNOWN = "unknown"
+    WINDOWS = "windows"
+    LINUX = "linux"
+    MACOS = "macos"
+    WSL = "wsl"
+    DOCKER = "docker"
+
+
+class ConfigProfile(Enum):
+    """配置方案"""
+    AUTO = "auto"
+    DEFAULT = "default"
+    HIGH_PERFORMANCE = "high_performance"
+    LOW_MEMORY = "low_memory"
+    PORTABLE = "portable"
+
+
+@dataclass
+class RuntimeEnvironment:
+    """运行时环境信息"""
+    environment: str = "unknown"
+    os_type: str = ""
+    os_version: str = ""
+    cpu_count: int = 0
+    cpu_brand: str = ""
+    memory_total: int = 0  # bytes
+    memory_available: int = 0  # bytes
+    memory_gb: float = 0.0
+    gpu_available: bool = False
+    gpu_memory: int = 0  # bytes
+    is_wsl: bool = False
+    is_docker: bool = False
+    is_portable: bool = False
+    disk_free_space: int = 0  # bytes
+    network_type: str = "unknown"
+    python_version: str = ""
+    python_arch: str = ""
+    cpu_usage: float = 0.0
+    memory_usage: float = 0.0
 
 
 @dataclass
@@ -100,6 +146,7 @@ class UnifiedConfig:
         self._apply_env_substitution()
         
         self._initialized = True
+        self._runtime_env: Optional[RuntimeEnvironment] = None
         logger.info("统一配置管理器初始化完成")
     
     def _get_default_config(self) -> Dict[str, Any]:
@@ -501,6 +548,51 @@ class UnifiedConfig:
                 "navigation": {
                     "timeout": 30,
                     "wait_for_load": True,
+                },
+            },
+            
+            # ── Smart Config 智能配置 ──
+            "smart_config": {
+                "profile": "auto",             # auto/default/high_performance/low_memory/portable
+                "auto_detect": True,           # 自动检测环境
+                "auto_optimize": False,        # 自动应用优化建议
+                "environment": {
+                    "detected": False,
+                    "os_type": "",
+                    "memory_gb": 0,
+                    "cpu_count": 0,
+                    "gpu_available": False,
+                    "is_portable": False,
+                },
+                "profiles": {
+                    "default": {
+                        "ollama_num_ctx": 8192,
+                        "ollama_num_gpu": 0,
+                        "agent_max_iterations": 90,
+                        "agent_max_tokens": 4096,
+                        "max_concurrent_tasks": 3,
+                    },
+                    "high_performance": {
+                        "ollama_num_ctx": 16384,
+                        "ollama_num_gpu": -1,
+                        "agent_max_iterations": 150,
+                        "agent_max_tokens": 8192,
+                        "max_concurrent_tasks": 5,
+                    },
+                    "low_memory": {
+                        "ollama_num_ctx": 4096,
+                        "ollama_num_gpu": 0,
+                        "agent_max_iterations": 50,
+                        "agent_max_tokens": 2048,
+                        "max_concurrent_tasks": 1,
+                    },
+                    "portable": {
+                        "ollama_num_ctx": 8192,
+                        "ollama_num_gpu": 0,
+                        "agent_max_iterations": 90,
+                        "agent_max_tokens": 4096,
+                        "max_concurrent_tasks": 2,
+                    },
                 },
             },
         }
@@ -917,14 +1009,203 @@ class UnifiedConfig:
             "navigation": self.get("browser_gateway.navigation", {}),
         }
     
+    # ── Smart Config 智能配置 API ──────────────────────────────────
+    
     def get_smart_config_profile(self) -> str:
         """
         获取当前智能配置profile
         
         Returns:
-            Profile名称 (default/high_performance/low_memory/portable)
+            Profile名称 (auto/default/high_performance/low_memory/portable)
         """
-        return self.get("smart_config.profile", "default")
+        return self.get("smart_config.profile", "auto")
+    
+    def set_smart_config_profile(self, profile: str) -> None:
+        """
+        设置智能配置profile
+        
+        Args:
+            profile: Profile名称 (default/high_performance/low_memory/portable)
+        """
+        self.set("smart_config.profile", profile)
+        logger.info(f"Smart Config profile 已设置为: {profile}")
+    
+    def detect_runtime_environment(self) -> RuntimeEnvironment:
+        """
+        检测运行时环境
+        
+        Returns:
+            RuntimeEnvironment: 运行时环境信息
+        """
+        if self._runtime_env:
+            return self._runtime_env
+        
+        env = RuntimeEnvironment()
+        
+        # OS信息
+        env.os_type = platform.system().lower()
+        if env.os_type == "windows":
+            env.environment = Environment.WINDOWS.value
+            env.os_version = platform.version()
+        elif env.os_type == "linux":
+            env.environment = Environment.LINUX.value
+            env.os_version = platform.version()
+            # 检测WSL
+            if Path("/proc/version").exists():
+                try:
+                    content = Path("/proc/version").read_text().lower()
+                    if "microsoft" in content or "wsl" in content:
+                        env.is_wsl = True
+                        env.environment = Environment.WSL.value
+                except Exception:
+                    pass
+            # 检测Docker
+            if Path("/.dockerenv").exists():
+                env.is_docker = True
+                env.environment = Environment.DOCKER.value
+        elif env.os_type == "darwin":
+            env.environment = Environment.MACOS.value
+            env.os_version = platform.mac_ver()[0] or ""
+        
+        # CPU信息
+        env.cpu_count = os.cpu_count() or 1
+        env.cpu_brand = platform.processor() or "Unknown"
+        
+        # 内存信息
+        try:
+            mem = psutil.virtual_memory()
+            env.memory_total = mem.total
+            env.memory_available = mem.available
+            env.memory_usage = mem.percent / 100.0
+            env.memory_gb = mem.total / (1024**3)
+        except Exception:
+            env.memory_total = 8 * 1024**3
+            env.memory_available = 4 * 1024**3
+            env.memory_gb = 8.0
+        
+        # 磁盘空间
+        try:
+            disk = psutil.disk_usage("/")
+            env.disk_free_space = disk.free
+        except Exception:
+            env.disk_free_space = 10 * 1024**3
+        
+        # GPU检测
+        env.gpu_available = self._detect_gpu()
+        
+        # 便携模式检测
+        env.is_portable = self._detect_portable()
+        
+        # Python信息
+        env.python_version = platform.python_version()
+        env.python_arch = platform.machine()
+        
+        # 保存到配置
+        self._runtime_env = env
+        self.set("smart_config.environment", {
+            "detected": True,
+            "os_type": env.os_type,
+            "memory_gb": env.memory_gb,
+            "cpu_count": env.cpu_count,
+            "gpu_available": env.gpu_available,
+            "is_portable": env.is_portable,
+        })
+        
+        logger.info(f"运行时环境检测完成: {env.environment}, {env.memory_gb:.1f}GB, {env.cpu_count}核")
+        return env
+    
+    def _detect_gpu(self) -> bool:
+        """检测GPU是否可用"""
+        try:
+            if platform.system().lower() == "windows":
+                import subprocess
+                result = subprocess.run(
+                    ["wmic", "path", "win32_VideoController", "get", "name"],
+                    capture_output=True, text=True
+                )
+                return bool(result.stdout.strip())
+            else:
+                return False
+        except Exception:
+            return False
+    
+    def _detect_portable(self) -> bool:
+        """检测便携模式"""
+        script_dir = Path(__file__).parent.parent
+        return (script_dir / "portable.txt").exists()
+    
+    def get_recommended_profile(self) -> str:
+        """
+        根据运行时环境获取推荐配置profile
+        
+        Returns:
+            推荐的Profile名称
+        """
+        env = self.detect_runtime_environment()
+        
+        # 便携模式
+        if env.is_portable:
+            return ConfigProfile.PORTABLE.value
+        
+        # 低内存机器 (<4GB)
+        if env.memory_gb < 4:
+            return ConfigProfile.LOW_MEMORY.value
+        
+        # 高性能机器 (16GB+内存，多核CPU，有GPU)
+        if env.memory_gb >= 16 and env.cpu_count >= 4 and env.gpu_available:
+            return ConfigProfile.HIGH_PERFORMANCE.value
+        
+        # 默认
+        return ConfigProfile.DEFAULT.value
+    
+    def get_profile_config(self, profile: str = None) -> Dict[str, Any]:
+        """
+        获取指定profile的配置
+        
+        Args:
+            profile: Profile名称，为空则获取当前profile
+        
+        Returns:
+            Profile配置字典
+        """
+        if profile is None:
+            profile = self.get_smart_config_profile()
+        
+        # 如果是auto，使用推荐profile
+        if profile == "auto":
+            profile = self.get_recommended_profile()
+        
+        return self.get(f"smart_config.profiles.{profile}", self.get("smart_config.profiles.default", {}))
+    
+    def apply_profile(self, profile: str = None) -> Dict[str, Any]:
+        """
+        应用配置profile
+        
+        Args:
+            profile: Profile名称，为空则使用推荐的profile
+        
+        Returns:
+            应用后的配置
+        """
+        if profile is None or profile == "auto":
+            profile = self.get_recommended_profile()
+        
+        self.set("smart_config.profile", profile)
+        profile_config = self.get_profile_config(profile)
+        
+        logger.info(f"已应用配置profile: {profile}")
+        return profile_config
+    
+    def get_runtime_environment(self) -> RuntimeEnvironment:
+        """
+        获取运行时环境（懒加载）
+        
+        Returns:
+            RuntimeEnvironment: 运行时环境信息
+        """
+        if not self._runtime_env:
+            return self.detect_runtime_environment()
+        return self._runtime_env
     
     def reload(self) -> None:
         """重新加载配置"""
@@ -952,6 +1233,166 @@ class UnifiedConfig:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_text(self.to_yaml(), encoding="utf-8")
         logger.info(f"配置已保存: {save_path}")
+    
+    def import_config(
+        self,
+        path: Optional[Path] = None,
+        strategy: str = "merge",  # merge | replace | validate
+        validate: bool = True
+    ) -> Dict[str, Any]:
+        """
+        从文件导入配置
+        
+        Args:
+            path: 导入文件路径
+            strategy: 合并策略
+                - merge: 合并到现有配置（默认）
+                - replace: 替换整个配置
+                - validate: 仅验证，不导入
+            validate: 是否验证配置结构
+        
+        Returns:
+            导入的配置字典
+        """
+        import_path = path or CONFIG_FILE
+        
+        if not import_path.exists():
+            raise FileNotFoundError(f"配置文件不存在: {import_path}")
+        
+        # 根据扩展名判断格式
+        suffix = import_path.suffix.lower()
+        if suffix in [".yaml", ".yml"]:
+            config_data = yaml.safe_load(import_path.read_text(encoding="utf-8")) or {}
+        elif suffix == ".json":
+            config_data = json.loads(import_path.read_text(encoding="utf-8"))
+        else:
+            # 尝试自动检测格式
+            content = import_path.read_text(encoding="utf-8").strip()
+            if content.startswith("{") or content.startswith("["):
+                config_data = json.loads(content)
+            else:
+                config_data = yaml.safe_load(content) or {}
+        
+        # 验证配置结构
+        if validate:
+            self._validate_import_config(config_data)
+        
+        # 根据策略应用配置
+        if strategy == "replace":
+            self._config = config_data
+            logger.info(f"配置已替换: {import_path}")
+        elif strategy == "merge":
+            self._config = self._deep_merge(self._config, config_data)
+            logger.info(f"配置已合并: {import_path}")
+        elif strategy == "validate":
+            logger.info(f"配置验证通过: {import_path}")
+        else:
+            raise ValueError(f"未知的合并策略: {strategy}")
+        
+        return config_data
+    
+    def _validate_import_config(self, config: Dict[str, Any]) -> None:
+        """
+        验证导入的配置结构
+        
+        Args:
+            config: 要验证的配置字典
+        
+        Raises:
+            ValueError: 配置结构无效
+        """
+        if not isinstance(config, dict):
+            raise ValueError("配置必须是字典类型")
+        
+        # 检查必需的顶级键
+        required_keys = ["endpoints", "timeouts"]
+        for key in required_keys:
+            if key not in config:
+                logger.warning(f"建议包含顶级键: {key}")
+        
+        # 检查数据类型
+        invalid_keys = []
+        for key, value in config.items():
+            if isinstance(value, dict):
+                continue
+            if not isinstance(value, (str, int, float, bool, list, type(None))):
+                invalid_keys.append(key)
+        
+        if invalid_keys:
+            logger.warning(f"以下键的值类型可能不兼容: {invalid_keys}")
+    
+    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        深度合并两个配置字典
+        
+        Args:
+            base: 基础配置
+            override: 覆盖配置
+        
+        Returns:
+            合并后的配置
+        """
+        result = deepcopy(base)
+        
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = deepcopy(value)
+        
+        return result
+    
+    def from_yaml(self, yaml_content: str, strategy: str = "merge") -> Dict[str, Any]:
+        """
+        从 YAML 字符串导入配置
+        
+        Args:
+            yaml_content: YAML 格式的配置字符串
+            strategy: 合并策略
+        
+        Returns:
+            导入的配置字典
+        """
+        config_data = yaml.safe_load(yaml_content) or {}
+        return self.import_config_str(config_data, strategy)
+    
+    def from_json(self, json_content: str, strategy: str = "merge") -> Dict[str, Any]:
+        """
+        从 JSON 字符串导入配置
+        
+        Args:
+            json_content: JSON 格式的配置字符串
+            strategy: 合并策略
+        
+        Returns:
+            导入的配置字典
+        """
+        config_data = json.loads(json_content)
+        return self.import_config_str(config_data, strategy)
+    
+    def import_config_str(
+        self,
+        config_data: Dict[str, Any],
+        strategy: str = "merge"
+    ) -> Dict[str, Any]:
+        """
+        从字典导入配置
+        
+        Args:
+            config_data: 配置字典
+            strategy: 合并策略
+        
+        Returns:
+            导入的配置字典
+        """
+        if strategy == "replace":
+            self._config = deepcopy(config_data)
+        elif strategy == "merge":
+            self._config = self._deep_merge(self._config, config_data)
+        else:
+            raise ValueError(f"未知的合并策略: {strategy}")
+        
+        return deepcopy(config_data)
 
 
 # ── 便捷函数 ─────────────────────────────────────────────────────────
@@ -975,6 +1416,59 @@ def get(key: str, default: Any = None) -> Any:
 def set_config(key: str, value: Any) -> None:
     """快捷函数：设置配置值"""
     get_config().set(key, value)
+
+
+def import_config(
+    path: Optional[Path] = None,
+    strategy: str = "merge",
+    validate: bool = True
+) -> Dict[str, Any]:
+    """
+    快捷函数：从文件导入配置
+    
+    Args:
+        path: 导入文件路径
+        strategy: 合并策略 (merge | replace | validate)
+        validate: 是否验证配置结构
+    
+    Returns:
+        导入的配置字典
+    """
+    return get_config().import_config(path, strategy, validate)
+
+
+def export_config() -> Dict[str, Any]:
+    """
+    快捷函数：导出当前配置
+    
+    Returns:
+        配置字典
+    """
+    return get_config().export()
+
+
+def save_config(path: Optional[Path] = None) -> None:
+    """
+    快捷函数：保存配置到文件
+    
+    Args:
+        path: 保存路径
+    """
+    get_config().save(path)
+
+
+def load_config(path: Optional[Path] = None, strategy: str = "merge") -> Dict[str, Any]:
+    """
+    快捷函数：加载配置（别名）
+    
+    Args:
+        path: 导入文件路径
+        strategy: 合并策略
+    
+    Returns:
+        导入的配置字典
+    """
+    return get_config().import_config(path, strategy)
 
 
 # ── 预定义配置访问 ──────────────────────────────────────────────────
@@ -1053,6 +1547,28 @@ def get_email_config() -> Dict[str, Any]:
 def get_browser_gateway_config() -> Dict[str, Any]:
     """获取浏览器网关配置"""
     return get_config().get_browser_gateway_config()
+
+
+# ── Smart Config 便捷函数 ───────────────────────────────────────────
+
+def detect_environment() -> RuntimeEnvironment:
+    """检测运行时环境"""
+    return get_config().detect_runtime_environment()
+
+
+def get_recommended_profile() -> str:
+    """根据环境获取推荐配置profile"""
+    return get_config().get_recommended_profile()
+
+
+def apply_profile(profile: str = None) -> Dict[str, Any]:
+    """应用配置profile"""
+    return get_config().apply_profile(profile)
+
+
+def get_runtime_env() -> RuntimeEnvironment:
+    """获取运行时环境"""
+    return get_config().get_runtime_environment()
 
 
 # ── 初始化入口 ──────────────────────────────────────────────────────

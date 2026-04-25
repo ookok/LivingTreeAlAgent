@@ -22,6 +22,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 导入新配置系统（Nanochat 风格）
+from core.config.nanochat_config import config
+
+
 
 class ProxyType(Enum):
     """代理类型"""
@@ -171,25 +175,25 @@ class SmartProxyGateway:
                 name="GitHub",
                 url="https://api.github.com",
                 timeout=30,
-                max_retries=3
+                max_retries=config.retries.api
             ),
             "openai": EndpointConfig(
                 name="OpenAI",
                 url="https://api.openai.com",
                 timeout=60,
-                max_retries=3
+                max_retries=config.retries.api
             ),
             "anthropic": EndpointConfig(
                 name="Anthropic",
                 url="https://api.anthropic.com",
                 timeout=60,
-                max_retries=3
+                max_retries=config.retries.api
             ),
             "deepseek": EndpointConfig(
                 name="DeepSeek",
                 url="https://api.deepseek.com",
                 timeout=60,
-                max_retries=3
+                max_retries=config.retries.api
             )
         }
         

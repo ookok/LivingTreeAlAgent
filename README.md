@@ -1,8 +1,8 @@
-# LivingTree AI Agent
+# LivingTreeAI - 智能代理平台
 
 > *「根系装配园开放，每一位开发者都是嫁接者，将创新的枝条接入生命之树。」*
 
-一个基于 PyQt6 的智能代理开发平台，集成本次会话实现的所有高级功能，包括企业级 P2P 存储、数字分身、积分经济系统和智能浏览器。
+**LivingTreeAI** 是一个具备**自我意识**的智能代理平台，融合意图驱动IDE、多智能体协作与自我进化能力，让AI真正成为你的数字伙伴。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -10,180 +10,227 @@
 
 ---
 
-## 核心功能
+## 🧭 愿景
 
-### 🤖 智能代理架构
+```
+LivingTreeAI = 智能代理平台 + 自我进化系统 + 意图驱动IDE
+```
 
-| 模块 | 说明 |
-|------|------|
-| **分层代理架构** | LLM Agent、SequentialAgent、ParallelAgent、LoopAgent 分层设计 |
-| **角色管理系统** | agency-agents 风格，支持角色能力矩阵和协作工作流 |
-| **共享工作空间** | OpenSpace 风格，多 Agent 共享上下文和消息总线 |
-| **技能进化系统** | 技能固化、合并、分裂、遗忘完整生命周期管理 |
-
-### 🎭 虚拟会议系统
-
-| 模块 | 说明 |
-|------|------|
-| **虚拟会议** | 支持评审会、法庭、课堂等多种场景 |
-| **数字分身** | 语音克隆、数字分身参加会议 |
-| **实时字幕** | 流式 Whisper 实时语音识别 |
-| **同声传译** | 多语言实时翻译 |
-| **会议纪要** | LLM 自动生成会议纪要 |
-
-### 🧬 AmphiLoop 引擎
-
-| 模块 | 说明 |
-|------|------|
-| **双向调度** | 感知→推理→执行→反馈→调整完整闭环 |
-| **检查点系统** | 执行状态快照与回滚 |
-| **容错回滚** | 失败时自动回退到稳定状态 |
-| **增量学习** | 从经验中持续优化 |
-
-### ⚡ Entraly 优化
-
-| 模块 | 说明 |
-|------|------|
-| **PRISM 优化器** | 4维评估体系（更新频率、使用频率、语义相似度、香农熵） |
-| **0/1 背包选择** | 动态规划算法压缩上下文到最小 token 容量 |
-| **实时仪表盘** | 本地监控 token 消耗和成本节省 |
-
-### 🌟 数字分身系统
-
-| 模块 | 说明 |
-|------|------|
-| **数字分身管理** | 创建、管理和升级数字分身 |
-| **数字分身出租** | 允许用户出租数字分身参与其他用户的活动 |
-| **活动参与** | 数字分身可以参与各种活动，如会议、游戏等 |
-| **积分交易** | 出租数字分身可以获得积分，积分可以用于其他服务 |
-
-### 💰 积分经济系统
-
-| 模块 | 说明 |
-|------|------|
-| **积分管理** | 管理用户积分，包括赚取、花费、转移和交易 |
-| **成就系统** | 完成任务获得成就，提升用户等级 |
-| **徽章系统** | 获得特殊徽章，展示用户成就 |
-
-### 🛒 电商系统
-
-| 模块 | 说明 |
-|------|------|
-| **多种服务类型** | 实物商品、远程实景直播、AI 计算服务、数字商品 |
-| **积分支付** | 支持使用积分购买商品和服务 |
-| **支付流程** | 买家付款→资金冻结→服务开始→服务完成→打款卖家 |
-
-### 🌐 AI 增强浏览器
-
-| 模块 | 说明 |
-|------|------|
-| **浏览器自动化** | 支持导航、提取内容、填写表单、搜索、截图等操作 |
-| **扩展系统** | 借鉴 qutebrowser 的插件系统 |
-| **插件系统** | 支持插件的注册、钩子和命令 |
+我们正在构建的不是一个普通的AI助手，而是一个能够：
+- 🌱 **自我生长** - 从经验中学习，不断优化
+- 🔄 **自我修复** - 自动检测并修复问题
+- 🧠 **理解意图** - 听懂你想做什么，而非只是你说了什么
+- 🤝 **协作进化** - 多智能体协同工作，共同成长
 
 ---
 
-## 技术架构
+## 🏛️ 五大技术支柱
 
-> 🌳 项目采用三层架构（client/src/）
+| 支柱 | 定位 | 核心能力 |
+|------|------|----------|
+| 🧠 **智能代理** | 核心引擎 | 多智能体协作、任务分解、知识管理 |
+| 🔄 **自我进化** | 差异化优势 | 自我测试、诊断、修复、进化 |
+| 💡 **意图驱动** | 用户接口 | 自然语言交互、代码生成、验证 |
+| 📊 **领域面板** | 功能载体 | 金融面板、游戏面板、平台面板 |
+| 🔧 **基础设施** | 技术底座 | 统一配置、代理网关、A2A协议 |
+
+---
+
+## 🚀 Phase 1：核心引擎（进行中）
+
+**当前阶段**：构建 IntentEngine MVP 和统一配置系统
+
+### 核心模块
+
+#### 1. IntentEngine - 意图驱动引擎 ⭐ NEW
+
+```python
+from core.intent_engine import IntentParser, IntentClassifier, IntentExecutor
+
+# 解析自然语言意图
+parser = IntentParser()
+intent = parser.parse("帮我写一个用户登录函数")
+
+# 分类意图（优先级、复杂度）
+classifier = IntentClassifier()
+category = classifier.classify(intent)
+
+# 执行意图
+executor = IntentExecutor()
+result = await executor.execute(intent, category)
+```
+
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| `intent_parser.py` | 意图解析，12种意图类型 | ✅ MVP |
+| `intent_classifier.py` | P0-P3优先级评估 | ✅ MVP |
+| `intent_executor.py` | 异步执行引擎 | ✅ MVP |
+| `intent_cache.py` | LRU+TTL缓存 | ✅ MVP |
+
+#### 2. Evolution Engine - 进化引擎
+
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| 基因突变器 | 策略参数自动调优 | ✅ 核心完成 |
+| 适者生存 | 优秀策略筛选 | ✅ 核心完成 |
+| 交叉遗传 | 策略交叉组合 | 🔄 开发中 |
+| 表观遗传 | 经验固化与传递 | 📋 规划中 |
+
+#### 3. 自我意识系统
+
+| 组件 | 功能 | 状态 |
+|------|------|------|
+| MirrorLauncher | 镜像测试启动器 | 🔄 开发中 |
+| ComponentScanner | UI组件扫描器 | 📋 规划中 |
+| AutoTester | 自动化测试引擎 | 📋 规划中 |
+| HotFixEngine | 热修复引擎 | 📋 规划中 |
+
+#### 4. 统一配置中心
+
+```python
+from core.config import get_unified_config, ServiceEndpoint
+
+config = get_unified_config()
+
+# 核心服务配置
+model_url = config.model_service.url
+relay_url = config.relay_service.url
+```
+
+| 配置项 | 说明 | 状态 |
+|--------|------|------|
+| 服务端点 | model/relay/knowledge | ✅ P0完成 |
+| 超时配置 | default/long_running | ✅ P0完成 |
+| 日志配置 | level/file/format | ✅ P0完成 |
+| 重试配置 | max_retries/delay | 🔄 P1进行中 |
+| 代理配置 | proxy_enabled/url | 📋 P2规划中 |
+
+---
+
+## 📊 演进路线图
+
+```
+Phase 0: 基础夯实     ✅ 已完成 (2026-04)
+Phase 1: 核心引擎     🔄 当前 (8周)
+Phase 2: 智能代理     📋 规划中 (8-16周)
+Phase 3: 领域面板     📋 规划中 (16-24周)
+Phase 4: 自我进化     📋 规划中 (24-32周)
+Phase 5: 生态完善     📋 规划中 (32周后)
+```
+
+### Phase 1 任务清单
+
+| 优先级 | 任务 | 周期 | 状态 |
+|--------|------|------|------|
+| P0 | IntentEngine MVP | 2周 | ✅ Day 1完成 |
+| P0 | Evolution Engine核心 | 3周 | 🔄 进行中 |
+| P0 | 自我意识系统核心 | 3周 | 📋 规划中 |
+| P0 | 统一配置中心 | 2周 | ✅ Day 1完成 |
+| P1 | PyQt6测试指挥官 | 2周 | 📋 规划中 |
+
+---
+
+## 🛠️ 技术架构
 
 ```
 LivingTreeAlAgent/
-├── client/src/                    # 桌面客户端
-│   ├── main.py                     # 客户端入口
-│   ├── presentation/              # 表现层 (UI)
-│   │   ├── panels/                # 功能面板
-│   │   ├── components/            # 可复用组件
-│   │   └── widgets/               # 独立小部件
+├── client/src/                    # 桌面客户端 (PyQt6)
+│   ├── presentation/              # 表现层 (UI面板)
 │   ├── business/                  # 业务逻辑层
-│   │   ├── fusion_rag/            # 多源融合检索
-│   │   ├── hermes_agent/          # 代理框架
-│   │   ├── knowledge_graph/       # 知识图谱
-│   │   └── ...                    # 其他核心模块
 │   └── infrastructure/            # 基础设施层
-│       ├── database/              # 数据库
-│       ├── config/                # 配置管理
-│       └── model/                 # 模型管理
-├── core/                          # 核心引擎 (legacy)
+├── core/                          # 核心引擎
+│   ├── intent_engine/            # 💡 意图驱动 (NEW)
+│   ├── evolution/                 # 🔄 进化引擎
+│   ├── self_evolution/            # 🔄 自我进化
+│   ├── agent/                     # 🧠 智能代理
+│   ├── config/                    # 🔧 统一配置 (NEW)
+│   └── ...
 ├── server/                        # 服务端
-├── docs/                          # 文档
-│   ├── architecture_manual.md     # 架构手册
-│   ├── developer_manual.md         # 开发手册
-│   └── operation_manual.md         # 操作手册
+├── docs/                          # 设计文档 (63个)
 └── main.py                        # 统一入口
 ```
 
 ---
 
-## 快速开始
+## ⚡ 快速开始
 
 ### 环境要求
 
 - Python 3.11+
-- PyQt6
+- PyQt6 6.0+
 - Windows 10+ / macOS / Ubuntu
 
-### 安装依赖
+### 安装
 
 ```bash
+git clone https://github.com/ookok/LivingTreeAlAgent.git
+cd LivingTreeAlAgent
 pip install -e ./client
 pip install -e ./server/relay_server
-pip install -e ./app
 ```
 
-### 启动应用
+### 启动
 
 ```bash
-# 启动桌面客户端（默认）
+# 桌面客户端
 python main.py client
 
-# 启动中继服务器
+# 中继服务器
 python main.py relay
 
-# 启动追踪服务器
-python main.py tracker
-
-# 启动所有服务
+# 全部服务
 python main.py all
 ```
 
 ---
 
-## 文档导航
+## 📈 设计文档
 
-| 文档 | 说明 |
-|------|------|
-| [架构手册](docs/architecture_manual.md) | 系统架构与设计模式 |
-| [开发手册](docs/developer_manual.md) | 开发规范与代码示例 |
-| [操作手册](docs/operation_manual.md) | 日常操作指南 |
+| 类别 | 数量 | 状态 |
+|------|------|------|
+| P0 核心文档 | 4个 | ✅ 完成 |
+| P1 重要文档 | 12个 | ✅ 完成 |
+| P2 增强文档 | 15个 | ✅ 完成 |
+| 其他文档 | 32个 | ✅ 完成 |
+| **总计** | **63个** | ✅ 全部完成 |
 
----
-
-## 更新日志
-
-### 2026-04-24
-
-- 新增 L4 层知识蒸馏模块 (`core/expert_distillation/`)
-- 新增用户须知功能（架构/开发/操作手册）
-- 重构 Workspace Panel，添加文档快速访问
-
-### 2026-04-21
-
-- 完成三层架构工程化拆分
-- 新增 AmphiLoop 引擎、Entraly 优化
-- 新增 Hermes Agent 技能系统
-- 新增企业级 P2P 存储系统和任务调度系统
-- 新增数字分身系统和积分经济系统
-- 新增 AI 增强浏览器
+关键文档：
+- [`docs/LIVING_TREE_AI_ROADMAP.md`](docs/LIVING_TREE_AI_ROADMAP.md) - 战略路线图
+- [`docs/SELF_AWARENESS_SYSTEM_DESIGN.md`](docs/SELF_AWARENESS_SYSTEM_DESIGN.md) - 自我意识系统
+- [`docs/UI_TEST_FIX_SYSTEM_DESIGN.md`](docs/UI_TEST_FIX_SYSTEM_DESIGN.md) - UI测试修复系统
 
 ---
 
-## 致谢
+## 🆕 最新更新 (2026-04-25)
 
-- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) - Hermes Agent 架构参考
+### Phase 1 Day 1
+
+- ✅ **IntentEngine MVP** - 意图驱动引擎核心模块发布
+  - 意图解析器（12种意图类型）
+  - 意图分类器（P0-P3优先级）
+  - 异步执行引擎
+  - LRU+TTL缓存机制
+
+- ✅ **统一配置 P0** - 配置中心核心完成
+  - ServiceEndpoint 服务端点
+  - UnifiedConfig 统一配置类
+  - 支持 YAML 加载/保存
+  - 单例模式配置管理
+
+---
+
+## 🙏 致谢
+
 - [PyQt6](https://pypi.org/project/PyQt6/) - 桌面应用框架
 - [Ollama](https://ollama.ai/) - 本地 LLM 运行框架
+- [ NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) - Agent 架构参考
 
 ---
 
-*LivingTree AI Agent - 让智能体自我进化* 🌟
+## 📄 License
+
+MIT License
+
+---
+
+*LivingTree AI - 让智能体像生命一样进化* 🌱

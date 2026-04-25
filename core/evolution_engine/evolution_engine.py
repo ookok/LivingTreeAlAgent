@@ -24,6 +24,12 @@ from .proposal.structured_proposal import StructuredProposal, ProposalStatus
 from .proposal.proposal_generator import ProposalGenerator
 from .safety.safety_fence import SafetyFence
 
+# Phase 3: 执行引擎
+from .executor.git_sandbox import GitSandbox
+from .executor.atomic_executor import AtomicExecutor
+from .executor.rollback_manager import RollbackManager, RollbackType
+from .executor.step_executor import StepExecutor, StepStatus
+
 logger = logging.getLogger('evolution.engine')
 
 
@@ -58,8 +64,17 @@ class EvolutionEngine:
         # 安全围栏（Phase 2）
         self._safety_fence = SafetyFence(str(self.project_root))
         
+        # Phase 3: 执行引擎
+        self._git_sandbox = GitSandbox(str(self.project_root))
+        self._atomic_executor = AtomicExecutor(str(self.project_root))
+        self._rollback_manager = RollbackManager(str(self.project_root))
+        self._step_executor = StepExecutor(str(self.project_root))
+        
         # 提案队列（使用 StructuredProposal）
         self._proposal_queue: List[StructuredProposal] = []
+        
+        # 执行中的提案
+        self._executing_proposals: Dict[str, Dict[str, Any]] = {}
         
         # 统计
         self._stats = {
@@ -67,6 +82,8 @@ class EvolutionEngine:
             'total_proposals': 0,
             'proposals_approved': 0,
             'proposals_rejected': 0,
+            'proposals_executed': 0,
+            'proposals_failed': 0,
             'started_at': None,
             'last_scan_at': None,
         }
@@ -360,6 +377,217 @@ class EvolutionEngine:
             违规报告字符串
         """
         return self._safety_fence.get_violations_report()
+    
+    # ── Phase 3: 执行提案 ──
+    
+    def execute_proposal(self, proposal_id: str) -> Dict[str, Any]:
+        """
+        执行提案
+        
+        Args:
+            proposal_id: 提案ID
+            
+        Returns:
+            执行结果
+        """
+        # 查找提案
+        proposal = None
+        for p in self._proposal_queue:
+            if p.proposal_id == proposal_id:
+                proposal = p
+                break
+        
+        if not proposal:
+            return {
+                'success': False,
+                'error': '提案不存在'
+            }
+        
+        # 检查提案状态
+        if proposal.status != ProposalStatus.APPROVED:
+            return {
+                'success': False,
+                'error': f'提案状态不是已批准: {proposal.status.value}'
+            }
+        
+        # 再次安全检查
+        if not self._safety_fence.validate_proposal(proposal):
+            return {
+                'success': False,
+                'error': '安全检查未通过',
+                'violations': self._safety_fence.get_violations_report()
+            }
+        
+        # 创建快照
+        snapshot = self._git_sandbox.create_snapshot(
+            f"执行提案: {proposal.title}"
+        )
+        
+        # 创建回滚点
+        changed_files = [s.location for s in proposal.signals if s.location]
+        rollback_point = self._rollback_manager.create_rollback_point(
+            proposal_id=proposal_id,
+            snapshot_id=snapshot.snapshot_id,
+            description=proposal.title,
+            changed_files=changed_files
+        )
+        
+        # 记录执行状态
+        execution_state = {
+            'proposal_id': proposal_id,
+            'snapshot_id': snapshot.snapshot_id,
+            'rollback_point_id': rollback_point.point_id,
+            'started_at': datetime.now().isoformat(),
+            'steps_completed': 0,
+            'steps_total': len(proposal.steps),
+            'status': 'running',
+        }
+        self._executing_proposals[proposal_id] = execution_state
+        
+        # 更新提案状态
+        proposal.status = ProposalStatus.EXECUTING
+        proposal.executed_at = datetime.now()
+        
+        # 执行步骤
+        step_results = []
+        all_success = True
+        
+        for step in proposal.steps:
+            # 检查是否需要用户确认
+            if step.requires_confirmation:
+                # 简化处理：跳过需要确认的步骤
+                logger.info(f"[EvolutionEngine] 跳过需确认步骤: {step.step_id}")
+                step_results.append({
+                    'step_id': step.step_id,
+                    'status': 'skipped',
+                    'reason': '需要用户确认'
+                })
+                continue
+            
+            # 执行步骤
+            step_dict = step.to_dict()
+            result = self._step_executor.execute_step(step_dict)
+            
+            step_results.append({
+                'step_id': result.step_id,
+                'status': result.status.value,
+                'output': result.output,
+                'error': result.error,
+                'files_changed': result.files_changed
+            })
+            
+            if result.status != StepStatus.COMPLETED:
+                all_success = False
+                break
+            
+            execution_state['steps_completed'] += 1
+        
+        # 更新执行状态
+        execution_state['completed_at'] = datetime.now().isoformat()
+        execution_state['status'] = 'completed' if all_success else 'failed'
+        
+        # 更新统计
+        if all_success:
+            self._stats['proposals_executed'] += 1
+            proposal.status = ProposalStatus.COMPLETED
+            
+            # 提交回滚点
+            self._rollback_manager.commit(rollback_point.point_id)
+            
+            logger.info(f"[EvolutionEngine] 提案执行成功: {proposal_id}")
+        else:
+            self._stats['proposals_failed'] += 1
+            proposal.status = ProposalStatus.FAILED
+            
+            # 回滚
+            self._rollback_manager.rollback(
+                rollback_point.point_id,
+                RollbackType.FULL
+            )
+            
+            logger.warning(f"[EvolutionEngine] 提案执行失败: {proposal_id}")
+        
+        return {
+            'success': all_success,
+            'proposal_id': proposal_id,
+            'steps_completed': execution_state['steps_completed'],
+            'steps_total': execution_state['steps_total'],
+            'step_results': step_results,
+            'snapshot_id': snapshot.snapshot_id,
+            'rollback_point_id': rollback_point.point_id,
+        }
+    
+    def get_execution_status(self, proposal_id: str) -> Optional[Dict[str, Any]]:
+        """
+        获取提案执行状态
+        
+        Args:
+            proposal_id: 提案ID
+            
+        Returns:
+            执行状态或 None
+        """
+        return self._executing_proposals.get(proposal_id)
+    
+    def rollback_proposal(self, proposal_id: str) -> Dict[str, Any]:
+        """
+        回滚提案
+        
+        Args:
+            proposal_id: 提案ID
+            
+        Returns:
+            回滚结果
+        """
+        # 查找提案
+        proposal = None
+        for p in self._proposal_queue:
+            if p.proposal_id == proposal_id:
+                proposal = p
+                break
+        
+        if not proposal:
+            return {
+                'success': False,
+                'error': '提案不存在'
+            }
+        
+        # 查找执行状态
+        execution = self._executing_proposals.get(proposal_id)
+        if not execution:
+            return {
+                'success': False,
+                'error': '提案未执行过'
+            }
+        
+        # 执行回滚
+        rollback_point_id = execution.get('rollback_point_id')
+        result = self._rollback_manager.rollback(rollback_point_id, RollbackType.FULL)
+        
+        # 更新提案状态
+        proposal.status = ProposalStatus.PENDING
+        
+        return {
+            'success': result.success,
+            'proposal_id': proposal_id,
+            'files_restored': result.files_restored,
+            'files_removed': result.files_removed,
+            'error': result.error
+        }
+    
+    def get_executor_status(self) -> Dict[str, Any]:
+        """获取执行引擎状态"""
+        return {
+            'git_sandbox': {
+                'current_branch': self._git_sandbox._current_branch,
+                'snapshots_count': len(self._git_sandbox.snapshots),
+            },
+            'rollback_manager': {
+                'active_point': self._rollback_manager._active_point,
+                'points_count': len(self._rollback_manager._rollback_points),
+            },
+            'executing_proposals': len(self._executing_proposals),
+        }
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""

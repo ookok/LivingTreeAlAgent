@@ -491,30 +491,31 @@ core/evolution_engine/
 - ✅ SafetyFence - 安全围栏（禁止路径/高风险操作检测）
 - ✅ EvolutionEngine 集成提案生成和安全验证
 
-**核心数据结构**:
-```python
-StructuredProposal
-├── proposal_id, title, description
-├── proposal_type: ProposalType
-├── priority: ProposalPriority
-├── signals: List[TriggerSignal]
-├── estimated_benefits, estimated_risk
-├── steps: List[ProposalStep]
-└── status: ProposalStatus
+### MVP Phase 3 完成功能（2026-04-25）
+
+**已实现**:
+- ✅ GitSandbox - Git沙箱环境（分支创建/快照管理）
+- ✅ AtomicExecutor - 原子操作执行器（备份/回滚）
+- ✅ RollbackManager - 回滚管理器（全量/部分/单步回滚）
+- ✅ StepExecutor - 单步执行器（分析/代码变更/重构/测试）
+- ✅ EvolutionEngine 集成执行引擎
+
+**执行流程**:
+```
+批准提案 → 创建快照 → 创建回滚点 → 执行步骤 → 验证 → 提交/回滚
 ```
 
-**提案API**:
+**执行API**:
 ```python
-# 获取提案详情
-detail = engine.get_proposal_detail(proposal_id)
+# 执行提案
+result = engine.execute_proposal(proposal_id)
+print(result['success'], result['steps_completed'])
 
-# 验证提案安全
-validation = engine.validate_proposal(proposal_id)
-print(validation['violations_report'])
+# 获取执行状态
+status = engine.get_execution_status(proposal_id)
 
-# 批准/拒绝提案
-engine.approve_proposal(proposal_id)
-engine.reject_proposal(proposal_id)
+# 回滚提案
+rollback_result = engine.rollback_proposal(proposal_id)
 ```
 
 **核心API**:

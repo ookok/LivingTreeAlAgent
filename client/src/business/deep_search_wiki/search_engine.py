@@ -156,7 +156,7 @@ class SmartSearchEngine:
         return SourceType.UNKNOWN
     
     async def search(self, query: str, max_results: int = 10) -> List[SearchResult]:
-        """执行搜索"""
+        """执行搜索（返回搜索结果，不含全文）"""
         search_query = self.expand_query(query)
         
         # 使用缓存
@@ -186,6 +186,59 @@ class SmartSearchEngine:
         self._search_cache[cache_key] = unique_results
         
         return unique_results
+
+    async def search_and_fetch(
+        self,
+        query: str,
+        max_results: int = 5,
+        use_jina: bool = True,
+    ) -> List[SearchResult]:
+        """执行深度搜索：搜索 + 自动提取全文
+        
+        这是增强版搜索，在获取搜索结果后自动使用 Jina Reader
+        提取每个结果的全文内容。
+        
+        Args:
+            query: 搜索关键词
+            max_results: 最大结果数（建议 ≤10，避免请求过多）
+            use_jina: 是否使用 Jina Reader
+            
+        Returns:
+            List[SearchResult]: 搜索结果（包含全文内容）
+        """
+        # 1. 获取搜索结果
+        results = await self.search(query, max_results)
+        
+        # 2. 并发提取全文
+        import asyncio
+        from client.src.business.web_content_extractor import batch_extract
+        
+        urls = [r.url for r in results if r.url]
+        
+        try:
+            # 批量提取内容
+            contents = await batch_extract(urls, use_jina=use_jina, max_concurrent=3)
+            
+            # 3. 将内容写回 SearchResult
+            for result in results:
+                if result.url in contents:
+                    result.content = contents[result.url]
+                    result.word_count = len(result.content.split()) if result.content else 0
+                    
+        except Exception as e:
+            logger.warning(f"批量提取失败，降级到逐个提取: {e}")
+            # 降级：逐个提取
+            for result in results:
+                if not result.content:
+                    try:
+                        content = await self.fetch_content(result.url, use_jina=use_jina)
+                        if content:
+                            result.content = content
+                            result.word_count = len(content.split())
+                    except Exception as e2:
+                        logger.error(f"提取失败 {result.url}: {e2}")
+        
+        return results
     
     def _generate_demo_results(self, query: str) -> List[SearchResult]:
         """生成演示搜索结果"""
@@ -246,19 +299,44 @@ class SmartSearchEngine:
         
         return results
     
-    async def fetch_content(self, url: str) -> Optional[str]:
-        """获取页面内容"""
+    async def fetch_content(self, url: str, use_jina: bool = True) -> Optional[str]:
+        """获取页面内容
+        
+        Args:
+            url: 目标网页 URL
+            use_jina: 是否使用 Jina Reader（默认 True）
+            
+        Returns:
+            Optional[str]: 提取的文本内容（Markdown 格式）
+        """
+        # 策略1：使用 Jina Reader（高质量）
+        if use_jina:
+            try:
+                from client.src.business.web_content_extractor import extract_content
+                content = await extract_content(url, use_jina=True)
+                if content:
+                    logger.info(f"Jina Reader 提取成功: {url} ({len(content)} chars)")
+                    return content
+                else:
+                    logger.warning(f"Jina Reader 返回空内容: {url}")
+            except Exception as e:
+                logger.warning(f"Jina Reader 提取失败: {url} - {e}")
+
+        # 策略2：内置简单提取（降级）
         try:
             session = await self._get_session()
             async with session.get(url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }) as response:
                 if response.status == 200:
-                    content = await response.text()
-                    # 简单的正文提取
-                    return self._extract_main_content(content)
-        except Exception:
-            pass
+                    html = await response.text()
+                    # 使用内置提取
+                    from client.src.business.web_content_extractor.extractor import ContentExtractor
+                    extractor = ContentExtractor()
+                    return extractor._simple_extract(html)
+        except Exception as e:
+            logger.error(f"内置提取失败: {url} - {e}")
+        
         return None
     
     def _extract_main_content(self, html: str) -> str:

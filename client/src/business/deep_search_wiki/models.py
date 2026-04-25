@@ -254,4 +254,5 @@ class SearchResult:
     domain: str = ""
     score: float = 0.0               # 相关性评分
     is_verified: bool = False        # 是否已验证
-    content: str = ""                # 获取的正文内容
+    content: str = ""                # 获取的正文内容（Markdown 格式）
+    word_count: int = 0              # 内容字数

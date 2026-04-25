@@ -1,94 +1,33 @@
 """
-UI Components - 通用 UI 组件库
+通用组件库 - 统一导出
+
+使用方式：
+    from client.src.presentation.components import PrimaryButton, SearchInput, InfoCard
 """
 
-from .spinner import QSpinner
-from .card import QCardWidget
-from .gauge import QGauge
-
-# 流式输出组件
-from .streaming_output import (
-    StreamingOutputWidget,
-    StreamingTextBrowser,
-    StreamingEngine,
-    ThinkingPanel,
-    MarkdownHighlighter,
-    CodeBlockHighlighter,
-    StreamingType,
-    StreamChunk,
-    ThinkingStep,
-)
-
-# 意图工作台
-from .intent_workspace import (
-    IntentWorkspace,
-    IntentAnalyzer,
-    IntentType,
-    WorkMode,
-)
-
-# 代码差异高亮
-from .diff_viewer import (
-    DiffViewer,
-    SideBySideDiffViewer,
-    InlineDiffViewer,
-    DiffCalculator,
-    DiffSyntaxHighlighter,
-    DiffType,
-)
-
-# 追问面板 (Phase 2 新增)
-from .guidance_panel import (
-    GuidancePanel,
-    GuidanceButton,
-    GuidanceCard,
-    GuidanceManager,
-    GuidanceItem,
-    GuidanceDisplayMode,
-    GuidancePosition,
-    create_guidance_panel,
-    quick_guidance_response,
-    DARK_THEME_STYLES,
-    LIGHT_THEME_STYLES,
-)
+from .buttons import PrimaryButton, SecondaryButton, IconButton, DangerButton
+from .inputs import PrimaryLineEdit, SearchInput, PrimaryTextEdit, LabeledInput
+from .cards import Card, InfoCard, StatsCard, ActionCard
+from .dialogs import DialogService, BaseDialog, ConfirmDialog
 
 __all__ = [
-    # 基础组件
-    "QSpinner",
-    "QCardWidget",
-    "QGauge",
-    # 流式输出
-    "StreamingOutputWidget",
-    "StreamingTextBrowser",
-    "StreamingEngine",
-    "ThinkingPanel",
-    "MarkdownHighlighter",
-    "CodeBlockHighlighter",
-    "StreamingType",
-    "StreamChunk",
-    "ThinkingStep",
-    # 意图工作台
-    "IntentWorkspace",
-    "IntentAnalyzer",
-    "IntentType",
-    "WorkMode",
-    # 差异高亮
-    "DiffViewer",
-    "SideBySideDiffViewer",
-    "InlineDiffViewer",
-    "DiffCalculator",
-    "DiffSyntaxHighlighter",
-    "DiffType",
-    # 追问面板
-    "GuidancePanel",
-    "GuidanceButton",
-    "GuidanceCard",
-    "GuidanceManager",
-    "GuidanceItem",
-    "GuidanceDisplayMode",
-    "GuidancePosition",
-    "create_guidance_panel",
-    "quick_guidance_response",
-    "DARK_THEME_STYLES",
-    "LIGHT_THEME_STYLES",
+    # 按钮
+    "PrimaryButton",
+    "SecondaryButton",
+    "IconButton",
+    "DangerButton",
+    # 输入框
+    "PrimaryLineEdit",
+    "SearchInput",
+    "PrimaryTextEdit",
+    "LabeledInput",
+    # 卡片
+    "Card",
+    "InfoCard",
+    "StatsCard",
+    "ActionCard",
+    # 对话框
+    "DialogService",
+    "BaseDialog",
+    "ConfirmDialog",
 ]

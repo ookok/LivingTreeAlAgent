@@ -338,7 +338,7 @@ def test_integration_with_existing_system():
         print("[INFO] 检查 ExpertGuidedLearningSystem...")
 
         try:
-            from core.expert_learning.expert_guided_system import (
+            from client.src.business.expert_learning.expert_guided_system import (
                 ExpertGuidedLearningSystem,
                 LearningPhase,
                 CorrectionLevel,
@@ -353,7 +353,7 @@ def test_integration_with_existing_system():
         print("\n[INFO] 检查 IntelligentLearningSystem...")
 
         try:
-            from core.expert_learning.intelligent_learning_system import (
+            from client.src.business.expert_learning.intelligent_learning_system import (
                 IntelligentLearningSystem,
                 get_intelligent_learning_system,
             )

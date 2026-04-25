@@ -330,7 +330,7 @@ class ExpertGuidedLearningSystem:
         # ── 第四层：思维链蒸馏器 ⭐ ────────────────────────────────
         self.cot_distiller = None
         try:
-            from core.expert_learning.chain_of_thought_distiller import ChainOfThoughtDistiller
+            from client.src.business.expert_learning.chain_of_thought_distiller import ChainOfThoughtDistiller
             self.cot_distiller = ChainOfThoughtDistiller()
             logger.info("[ExpertLearning] [OK] Chain-of-Thought Distiller enabled")
         except ImportError:
@@ -361,7 +361,7 @@ class ExpertGuidedLearningSystem:
         # ── 性能监控器 ⭐ ───────────────────────────────────────────
         self._monitor = None
         try:
-            from core.expert_learning.performance_monitor import PerformanceMonitor
+            from client.src.business.expert_learning.performance_monitor import PerformanceMonitor
             self._monitor = PerformanceMonitor()
             logger.info("[ExpertLearning] [OK] Performance Monitor enabled")
         except ImportError:
@@ -372,7 +372,7 @@ class ExpertGuidedLearningSystem:
         # ── 智能卸载策略 ⭐ ─────────────────────────────────────────
         self._offload_strategy = None
         try:
-            from core.expert_learning.auto_offload_strategy import AutoOffloadStrategy
+            from client.src.business.expert_learning.auto_offload_strategy import AutoOffloadStrategy
             self._offload_strategy = AutoOffloadStrategy()
             logger.info("[ExpertLearning] [OK] Auto-Offload Strategy enabled")
         except ImportError:
@@ -383,7 +383,7 @@ class ExpertGuidedLearningSystem:
         # ── 自适应模型压缩器 ⭐ ─────────────────────────────────────
         self._compressor = None
         try:
-            from core.expert_learning.adaptive_model_compressor import AdaptiveModelCompressor
+            from client.src.business.expert_learning.adaptive_model_compressor import AdaptiveModelCompressor
             self._compressor = AdaptiveModelCompressor()
             logger.info("[ExpertLearning] [OK] Adaptive Model Compressor enabled")
         except ImportError:
@@ -394,7 +394,7 @@ class ExpertGuidedLearningSystem:
         # ── 智能配额管理器 ⭐ ───────────────────────────────────────
         self._quota_manager = None
         try:
-            from core.expert_learning.smart_quota_manager import SmartQuotaManager, QuotaMode, Provider
+            from client.src.business.expert_learning.smart_quota_manager import SmartQuotaManager, QuotaMode, Provider
             self._quota_manager = SmartQuotaManager()
             logger.info("[ExpertLearning] [OK] Smart Quota Manager enabled")
         except ImportError:
@@ -857,7 +857,7 @@ class ExpertGuidedLearningSystem:
         if not self._quota_manager:
             return False
         try:
-            from core.expert_learning.smart_quota_manager import QuotaMode
+            from client.src.business.expert_learning.smart_quota_manager import QuotaMode
             mode_enum = QuotaMode(mode)
             self._quota_manager.set_mode(mode_enum, locked=locked)
             return True
@@ -874,7 +874,7 @@ class ExpertGuidedLearningSystem:
         if not self._quota_manager:
             return True  # 默认允许
         try:
-            from core.expert_learning.smart_quota_manager import Provider
+            from client.src.business.expert_learning.smart_quota_manager import Provider
             provider_enum = Provider(provider)
             return self._quota_manager.can_call(provider_enum, estimated_tokens, priority)
         except Exception:
@@ -910,7 +910,7 @@ class ExpertGuidedLearningSystem:
         """记录API调用成本"""
         if self._quota_manager:
             try:
-                from core.expert_learning.smart_quota_manager import Provider
+                from client.src.business.expert_learning.smart_quota_manager import Provider
                 self._quota_manager.record_usage(
                     provider=Provider(provider),
                     model=model,
@@ -927,7 +927,7 @@ class ExpertGuidedLearningSystem:
     def get_provider_manager(self):
         """获取外部提供者管理器"""
         try:
-            from core.expert_learning.external_provider_config import get_provider_manager
+            from client.src.business.expert_learning.external_provider_config import get_provider_manager
             return get_provider_manager()
         except ImportError:
             return None
@@ -963,7 +963,7 @@ class ExpertGuidedLearningSystem:
             return None
 
         try:
-            from core.expert_learning.external_provider_config import ProviderType, CostType
+            from client.src.business.expert_learning.external_provider_config import ProviderType, CostType
 
 
             p_type = ProviderType(provider_type.lower())

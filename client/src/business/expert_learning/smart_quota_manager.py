@@ -192,7 +192,7 @@ class SmartQuotaManager:
         """获取提供者管理器 (懒加载)"""
         if self._provider_manager is None:
             try:
-                from core.expert_learning.external_provider_config import get_provider_manager
+                from client.src.business.expert_learning.external_provider_config import get_provider_manager
                 self._provider_manager = get_provider_manager()
             except ImportError:
                 self._provider_manager = None
@@ -886,7 +886,7 @@ class SmartQuotaManager:
             return None
 
         try:
-            from core.expert_learning.external_provider_config import ProviderType, CostType
+            from client.src.business.expert_learning.external_provider_config import ProviderType, CostType
 
 
             # 转换类型

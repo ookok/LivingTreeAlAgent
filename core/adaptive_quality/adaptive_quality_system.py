@@ -181,7 +181,7 @@ class AdaptiveQualitySystem:
     def _register_to_expert_learning(self):
         """注册到 ExpertLearning 系统"""
         try:
-            from core.expert_learning.auto_model_selector import AutoModelSelector
+            from client.src.business.expert_learning.auto_model_selector import AutoModelSelector
             
             selector = AutoModelSelector()
             for level, config in self.models.items():

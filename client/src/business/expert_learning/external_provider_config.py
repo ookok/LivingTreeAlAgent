@@ -335,7 +335,7 @@ class ExternalProviderManager:
     
     使用示例:
     ```python
-    from core.expert_learning.external_provider_config import (
+    from client.src.business.expert_learning.external_provider_config import (
         ExternalProviderManager, ProviderType, CostType
     )
     

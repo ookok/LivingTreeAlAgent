@@ -215,7 +215,7 @@ class BaseExpertTemplate:
         self.domain = domain_name
         
         # 复用现有模块
-        from core.expert_learning import IntelligentLearningSystem
+        from client.src.business.expert_learning import IntelligentLearningSystem
         from core.knowledge_graph import KnowledgeGraphManager
         
         self.learning_system = IntelligentLearningSystem()
@@ -224,7 +224,7 @@ class BaseExpertTemplate:
         self.validation_engine = ValidationEngine()
         
         # 离线学习支持 (复用现有)
-        from core.expert_learning.offline_learning_loop import OfflineLearningLoop
+        from client.src.business.expert_learning.offline_learning_loop import OfflineLearningLoop
         self.offline_loop = OfflineLearningLoop()
     
     def learn(self, content: str) -> LearningResult:
@@ -562,7 +562,7 @@ class ExpertTrainingFactory:
         """阶段4: 持续进化"""
         
         # 复用 OfflineLearningLoop
-        from core.expert_learning.offline_learning_loop import OfflineLearningLoop
+        from client.src.business.expert_learning.offline_learning_loop import OfflineLearningLoop
         loop = OfflineLearningLoop()
         
         loop.start_continuous_learning(interval=interval_hours)

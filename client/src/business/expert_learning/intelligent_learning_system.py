@@ -57,23 +57,23 @@ def _import_modules():
     global EnhancedPerformanceMonitor, get_offline_learning_loop
 
     try:
-        from core.expert_learning.offline_learning_loop import (
+        from client.src.business.expert_learning.offline_learning_loop import (
             OfflineLearningLoop, get_offline_learning_loop,
             ConnectionStatus as OfflineStatus
         )
-        from core.expert_learning.knowledge_consistency import (
+        from client.src.business.expert_learning.knowledge_consistency import (
             KnowledgeConsistencyVerifier, ConsensusLevel, VerificationStatus
         )
-        from core.expert_learning.auto_model_selector import (
+        from client.src.business.expert_learning.auto_model_selector import (
             AutoModelSelector, TaskType
         )
-        from core.expert_learning.cost_optimizer import (
+        from client.src.business.expert_learning.cost_optimizer import (
             CostOptimizer, CostMode
         )
-        from core.expert_learning.multi_model_comparison import (
+        from client.src.business.expert_learning.multi_model_comparison import (
             MultiModelComparison
         )
-        from core.expert_learning.enhanced_performance_monitor import (
+        from client.src.business.expert_learning.enhanced_performance_monitor import (
 
             EnhancedPerformanceMonitor, MetricType
         )

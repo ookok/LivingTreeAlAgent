@@ -162,7 +162,7 @@ class KnowledgeGapDetector:
     
     def __init__(self, llm_caller=None):
         # 复用现有 IntentEngine
-        from core.intent_engine import IntentEngine
+        from client.src.business.intent_engine import IntentEngine
         self.intent_engine = IntentEngine(use_llm_enhancement=True)
         
         # 新增: 知识库对比

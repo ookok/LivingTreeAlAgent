@@ -13,7 +13,7 @@ import threading
 from typing import Any, Dict
 
 # 导入待测试模块
-from core.intent_engine.intent_cache import (
+from client.src.business.intent_engine.intent_cache import (
     IntentCache,
     CacheStrategy,
     CacheStats,

@@ -202,7 +202,7 @@ class AppMetricsCollector:
 
             # 缓存命中率（如果有 UnifiedIntentCache）
             try:
-                from core.intent_engine.unified_intent_cache import get_unified_cache
+                from client.src.business.intent_engine.unified_intent_cache import get_unified_cache
                 cache = get_unified_cache()
                 if cache:
                     stats = cache.get_stats()

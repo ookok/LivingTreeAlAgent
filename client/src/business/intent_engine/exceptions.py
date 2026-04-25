@@ -20,7 +20,7 @@
 5. **链式追踪**: cause chain 保留完整调用栈
 
 使用示例：
-    from core.intent_engine.exceptions import (
+    from client.src.business.intent_engine.exceptions import (
         IntentError, LLMError, HandlerError,
         graceful_fallback,
     )

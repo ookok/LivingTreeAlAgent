@@ -20,8 +20,8 @@ from datetime import datetime
 from enum import Enum
 
 if TYPE_CHECKING:
-    from core.intent_engine import IntentEngine
-    from core.intent_engine.intent_types import Intent, IntentType, IntentPriority
+    from client.src.business.intent_engine import IntentEngine
+    from client.src.business.intent_engine.intent_types import Intent, IntentType, IntentPriority
     from client.src.business.evolution_engine import EvolutionEngine
 
 logger = logging.getLogger(__name__)
@@ -510,7 +510,7 @@ def create_full_bridge() -> EvolutionIntentBridge:
     Returns:
         配置完整的 EvolutionIntentBridge
     """
-    from core.intent_engine import IntentEngine
+    from client.src.business.intent_engine import IntentEngine
     from client.src.business.evolution_engine import create_evolution_engine
     
     # 初始化引擎

@@ -26,7 +26,7 @@
 意图驱动引擎核心类。
 
 ```python
-from core.intent_engine.intent_engine import IntentEngine
+from client.src.business.intent_engine.intent_engine import IntentEngine
 
 engine = IntentEngine()
 
@@ -47,7 +47,7 @@ result = engine.parse("帮我写一个Python函数")
 意图缓存系统。
 
 ```python
-from core.intent_engine.intent_cache import IntentCache, get_intent_cache
+from client.src.business.intent_engine.intent_cache import IntentCache, get_intent_cache
 
 cache = get_intent_cache()
 cache.set("key", "value")

@@ -18,18 +18,18 @@ class TestIntentEngine(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.intent_engine import IntentEngine
+        from client.src.business.intent_engine import IntentEngine
         self.assertIsNotNone(IntentEngine)
     
     def test_engine_creation(self):
         """测试引擎创建"""
-        from core.intent_engine import IntentEngine
+        from client.src.business.intent_engine import IntentEngine
         engine = IntentEngine()
         self.assertIsNotNone(engine)
     
     def test_basic_parsing(self):
         """测试基本解析"""
-        from core.intent_engine import IntentEngine
+        from client.src.business.intent_engine import IntentEngine
         engine = IntentEngine()
         intent = engine.parse("写一个登录接口")
         self.assertIsNotNone(intent)

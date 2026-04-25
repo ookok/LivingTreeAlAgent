@@ -10,15 +10,15 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from core.intent_engine.intent_types import Intent, IntentType, IntentConstraint
-from core.intent_engine.action_handlers.base import ActionContext, ActionResultStatus
-from core.intent_engine.action_handlers.code_handler import (
+from client.src.business.intent_engine.intent_types import Intent, IntentType, IntentConstraint
+from client.src.business.intent_engine.action_handlers.base import ActionContext, ActionResultStatus
+from client.src.business.intent_engine.action_handlers.code_handler import (
     CodeGenerationHandler, CodeReviewHandler, CodeDebugHandler,
 )
-from core.intent_engine.action_handlers.knowledge_handler import (
+from client.src.business.intent_engine.action_handlers.knowledge_handler import (
     KnowledgeQueryHandler, ConceptExplainerHandler,
 )
-from core.intent_engine.action_handlers.file_handler import FileOperationHandler
+from client.src.business.intent_engine.action_handlers.file_handler import FileOperationHandler
 
 
 def _make_ctx(intent: Intent, **overrides) -> ActionContext:

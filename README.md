@@ -45,7 +45,7 @@ LivingTreeAI = 智能代理平台 + 自我进化系统 + 意图驱动IDE
 #### 1. IntentEngine - 意图驱动引擎 ⭐ NEW
 
 ```python
-from core.intent_engine import IntentParser, IntentClassifier, IntentExecutor
+from client.src.business.intent_engine import IntentParser, IntentClassifier, IntentExecutor
 
 # 解析自然语言意图
 parser = IntentParser()

@@ -12,7 +12,7 @@
 
 快速开始:
 ```python
-from core.multi_path_explorer import MultiPathExplorer, ExplorerConfig, ExecutionNode
+from client.src.business.multi_path_explorer import MultiPathExplorer, ExplorerConfig, ExecutionNode
 
 # 创建探索器
 explorer = MultiPathExplorer(ExplorerConfig(max_parallel_paths=4))

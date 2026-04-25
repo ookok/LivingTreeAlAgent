@@ -19,9 +19,9 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QStatusBar,
 )
 
-from core.microkernel.kernel import get_kernel, Microkernel
-from core.microkernel.service_registry import get_service_registry
-from core.microkernel.performance_monitor import get_performance_monitor
+from client.src.business.microkernel.kernel import get_kernel, Microkernel
+from client.src.business.microkernel.service_registry import get_service_registry
+from client.src.business.microkernel.performance_monitor import get_performance_monitor
 from core.plugin_framework.event_bus import get_event_bus
 from core.plugin_framework.plugin_manager import get_plugin_manager
 

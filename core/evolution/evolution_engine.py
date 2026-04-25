@@ -12,6 +12,7 @@ from .gene_mutator import GeneMutator, MutationStrategy
 from .survival_selector import SurvivalSelector, SelectionStrategy
 from .crossover_engine import CrossoverEngine, CrossoverStrategy
 from .evolution_logger import EvolutionLogger
+from .epigenetic import EpigeneticEngine
 
 
 @dataclass
@@ -36,15 +37,22 @@ class EvolutionEngine:
         self.config = config or EvolutionConfig()
         self.population = Population(config=self.config)
         self.logger = EvolutionLogger()
-        
+
         # 初始化组件
         self.mutator = GeneMutator(self.config)
         self.selector = SurvivalSelector(self.config)
         self.crossover = CrossoverEngine(self.config)
-        
+
+        # 表观遗传引擎
+        self.epigenetic = EpigeneticEngine(
+            lamarckian_rate=self.config.lamarckian_rate,
+            baldwin_rate=self.config.baldwin_rate,
+            enabled=self.config.epigenetic_enabled,
+        )
+
         # 适应度函数
         self.fitness_function: Optional[Callable] = None
-        
+
         # 回调函数
         self.on_generation: Optional[Callable[[int, Population], None]] = None
         
@@ -90,25 +98,43 @@ class EvolutionEngine:
                 self.population,
                 strategy=SelectionStrategy[self.config.selection_strategy.upper()]
             )
-            
+
             # 2. 交叉
             offspring = self.crossover.crossover_population(
                 selection_result.selected,
                 strategy=CrossoverStrategy[self.config.crossover_strategy.upper()]
             )
-            
+
             # 3. 变异
             mutated_offspring = self.mutator.mutate_population(
                 Population(individuals=offspring),
                 strategy=MutationStrategy.GAUSSIAN,
                 generation=generation
             )
-            
+
+            # 3.5 表观遗传学习（拉马克 + 鲍德温）
+            if self.epigenetic.enabled:
+                mutated_offspring, baldwin_fitnesses = (
+                    self.epigenetic.apply_epigenetic_learning(
+                        mutated_offspring,
+                        fitness_func,
+                        gene_min=self.config.gene_min,
+                        gene_max=self.config.gene_max,
+                    )
+                )
+            else:
+                baldwin_fitnesses = None
+
             # 4. 评估后代
             temp_population = Population(individuals=mutated_offspring)
-            for ind in temp_population.individuals:
-                ind.fitness = fitness_func(ind.genes)
-                
+            for i, ind in enumerate(temp_population.individuals):
+                if baldwin_fitnesses is not None:
+                    # 鲍德温：用学习后的适应度（基因不变）
+                    ind.fitness = baldwin_fitnesses[i]
+                else:
+                    # 正常或拉马克：评估基因（拉马克已修改基因）
+                    ind.fitness = fitness_func(ind.genes)
+
             # 5. 选择幸存者
             survivors = self.selector.select_survivors(
                 self.population.individuals,
@@ -168,31 +194,46 @@ class EvolutionEngine:
     def evolve_single_generation(self) -> bool:
         """
         执行单代进化
-        
+
         Returns:
             是否继续进化（False表示已终止）
         """
         if not self.fitness_function:
             return False
-            
+
         generation = self.population.generation
-        
+
         # 选择
         selection_result = self.selector.select(self.population)
-        
+
         # 交叉
         offspring = self.crossover.crossover_population(selection_result.selected)
-        
+
         # 变异
         mutated_offspring = self.mutator.mutate_population(
             Population(individuals=offspring),
             generation=generation
         )
-        
+
+        # 表观遗传学习（拉马克 + 鲍德温）
+        baldwin_fitnesses = None
+        if self.epigenetic.enabled:
+            mutated_offspring, baldwin_fitnesses = (
+                self.epigenetic.apply_epigenetic_learning(
+                    mutated_offspring,
+                    self.fitness_function,
+                    gene_min=self.config.gene_min,
+                    gene_max=self.config.gene_max,
+                )
+            )
+
         # 评估后代
-        for ind in mutated_offspring:
-            ind.fitness = self.fitness_function(ind.genes)
-            
+        for i, ind in enumerate(mutated_offspring):
+            if baldwin_fitnesses is not None:
+                ind.fitness = baldwin_fitnesses[i]  # 鲍德温：用学习适应度
+            else:
+                ind.fitness = self.fitness_function(ind.genes)
+
         # 选择幸存者
         survivors = self.selector.select_survivors(
             self.population.individuals,

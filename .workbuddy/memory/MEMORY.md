@@ -22,7 +22,7 @@
 | Phase 1: 核心引擎 | ✅✅✅ | 10个 | 100% |
 | Phase 2: 智能代理 | ✅✅✅ | 14个 | 100% |
 | Phase 3: 领域面板 | ✅✅ | 4个 | 80% |
-| Phase 4: 自我进化 | ✅✅ | 2个 | 60% |
+| Phase 4: 自我进化 | ✅✅✅ | 13个 | 100% |
 | Phase 5: 生态完善 | ✅✅ | 2个 | 60% |
 | Phase 6: 云原生 | 🔄 | 5个 | 20% |
 
@@ -68,6 +68,25 @@
 ### Phase 4: 自我进化
 - SmartProxyGateway - 智能代理网关 (负载均衡/故障转移)
 - VisualEvolutionEngine - 可视化进化引擎 (遗传算法)
+- **NSGA2Engine - 多目标进化优化 (非支配排序+拥挤度距离)**
+- **AdaptiveEvolutionEngine - 自适应进化策略 (实时参数调整)**
+- **EpigeneticEngine - 表观遗传引擎 (Lamarckian + Baldwinian)**
+- **LamarckianLearner - 拉马克主义 (学习获得性状直接写入基因)**
+- **BaldwinianLearner - 鲍德温效应 (学习能力影响适应度，基因不遗传)**
+- **CrossoverEngine - 交叉遗传 (7种策略)**
+- **SelfAwarenessSystem - 自我意识系统 (零干扰后台自动升级修复)**
+  - MirrorLauncher - 镜像启动器 (沙盒测试环境)
+  - ComponentScanner - 组件扫描器 (自动发现UI组件)
+  - ProblemDetector - 问题检测器 (异常分析/语法检查)
+  - HotFixEngine - 热修复引擎 (自动修复代码)
+  - AutoTester - 自动测试执行器 (镜像环境测试)
+  - RootCauseTracer - 根因追踪器 (问题根源分析)
+  - DeploymentManager - 部署管理器 (修复部署/回滚)
+  - BackupManager - 备份管理器 (版本备份/恢复)
+- EvolutionPanel - 进化引擎 UI 可视化面板 (PyQt6)
+- ParameterTuner - 参数调优器
+- ABTestFramework - A/B测试框架
+- SelfDiagnosis - 系统自我诊断
 
 ### Phase 5: 生态完善
 - PluginManager - 插件管理系统 (沙箱/钩子/权限)

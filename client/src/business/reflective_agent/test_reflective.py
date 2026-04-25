@@ -8,7 +8,7 @@ import asyncio
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from core.reflective_agent import (
+from client.src.business.reflective_agent import (
     ReflectiveAgentLoop,
     ReflectiveLoopConfig,
     ExecutionPlan,

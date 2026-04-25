@@ -139,7 +139,7 @@ def test_module_integration():
         from core.error_memory import ErrorLearningSystem, quick_fix_from_message
         print("  [OK] ErrorLearningSystem")
         
-        from core.reflective_agent import ReflectiveAgentLoop
+        from client.src.business.reflective_agent import ReflectiveAgentLoop
         print("  [OK] ReflectiveAgentLoop")
         
         from core.self_evolving import SelfEvolvingSystem

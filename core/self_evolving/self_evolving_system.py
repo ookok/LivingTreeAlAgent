@@ -186,7 +186,7 @@ class SelfEvolvingSystem:
         """延迟加载反思循环"""
         if self._reflection_loop is None and self._enabled['reflection']:
             try:
-                from core.reflective_agent import ReflectiveAgentLoop, ReflectiveLoopConfig
+                from client.src.business.reflective_agent import ReflectiveAgentLoop, ReflectiveLoopConfig
                 config = ReflectiveLoopConfig(
                     max_reflection_turns=3,
                     improvement_threshold=0.7,

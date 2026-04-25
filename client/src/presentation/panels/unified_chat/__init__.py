@@ -17,7 +17,7 @@ Unified Chat UI - 统一聊天 PyQt6 UI 模块
             open_file_with_default_app, show_file_in_folder
 
 使用方式:
-    from ui.unified_chat import ChatPanel
+    from client.src.presentation.unified_chat import ChatPanel
 
     panel = ChatPanel()
     panel.set_my_identity(node_id, short_id, name)

@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QSizePolicy, QSplitter,
     QStatusBar, QMenuBar, QMenu,
 )
-from ui.components import QSpinner
+from client.src.presentation.panels.components import QSpinner
 from PyQt6.QtGui import QFont, QAction, QPalette, QColor, QIcon
 
 # 图标 (使用 emoji 作为占位)

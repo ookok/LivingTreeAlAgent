@@ -502,7 +502,7 @@ class ProjectGenerationPanel(QWidget):
     def _open_ai_review_panel(self):
         """打开AI增强审核面板"""
         try:
-            from ui.ai_enhanced_generation_panel import AIEnhancedGenerationPanel
+            from client.src.presentation.panels.ai_enhanced_generation_panel import AIEnhancedGenerationPanel
             dialog = QDialog(self)
             dialog.setWindowTitle("AI增强审核")
             dialog.setMinimumSize(900, 700)

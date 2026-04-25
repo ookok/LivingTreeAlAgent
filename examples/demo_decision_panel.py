@@ -26,7 +26,7 @@ from core.decision_engine import (
     get_decision_engine,
     UserProfile, MarketScenario, InvestmentStrategy, ScenarioType, StrategyType
 )
-from ui.decision_panel import (
+from client.src.presentation.panels.decision_panel import (
     DecisionSupportPanel, UserProfileDialog, DisclaimerDialog, ScenarioCard, StrategyTableWidget
 )
 

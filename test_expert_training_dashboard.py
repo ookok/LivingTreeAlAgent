@@ -17,7 +17,7 @@ def test_import():
     print("=" * 60)
 
     try:
-        from ui.expert_training_dashboard import (
+        from client.src.presentation.panels.expert_training_dashboard import (
             ExpertTrainingDashboard,
             TrainingWizard,
             KnowledgeImportDialog,
@@ -271,7 +271,7 @@ def test_ui_components():
             print("[INFO] 创建 QApplication")
             app = QApplication([])
 
-        from ui.expert_training_dashboard import (
+        from client.src.presentation.panels.expert_training_dashboard import (
             ExpertTrainingDashboard,
             TrainingWizard,
             KnowledgeImportDialog,

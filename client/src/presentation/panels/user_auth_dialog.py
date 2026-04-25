@@ -303,7 +303,7 @@ class LoginDialog(QWidget):
             self._tabs.setCurrentIndex(2)
             self.login_successful.emit(result.user.id)
             
-            from ui.toast_notification import toast_success
+            from client.src.presentation.panels.toast_notification import toast_success
             toast_success(f"欢迎回来, {result.user.username}!")
         else:
             QMessageBox.warning(self, "登录失败", result.message)
@@ -350,7 +350,7 @@ class LoginDialog(QWidget):
             self._login_password.clear()
             self._tabs.setCurrentIndex(0)
             
-            from ui.toast_notification import toast_success
+            from client.src.presentation.panels.toast_notification import toast_success
             toast_success("注册成功！")
         else:
             QMessageBox.warning(self, "注册失败", result.message)
@@ -372,7 +372,7 @@ class LoginDialog(QWidget):
             QMessageBox.information(self, "保存成功", "个人资料已保存")
             self._update_profile_display()
             
-            from ui.toast_notification import toast_success
+            from client.src.presentation.panels.toast_notification import toast_success
             toast_success("资料已保存")
         else:
             QMessageBox.warning(self, "保存失败", "请重试")
@@ -401,7 +401,7 @@ class LoginDialog(QWidget):
             self._old_password.clear()
             self._new_password.clear()
             
-            from ui.toast_notification import toast_success
+            from client.src.presentation.panels.toast_notification import toast_success
             toast_success("密码修改成功")
         else:
             QMessageBox.warning(self, "失败", result.message)
@@ -415,7 +415,7 @@ class LoginDialog(QWidget):
         self._login_password.clear()
         self.logout_signal.emit()
         
-        from ui.toast_notification import toast_info
+        from client.src.presentation.panels.toast_notification import toast_info
         toast_info("已退出登录")
     
     def _update_profile_display(self):

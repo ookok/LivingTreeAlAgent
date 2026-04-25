@@ -175,19 +175,19 @@ class SettingsDialog(QDialog):
         create_scroll_tab(writing_tab, "Writing")
 
         # ── Providers ────────────────────────────────────────
-        from ui.provider_panel import ProviderPanel
+        from client.src.presentation.panels.provider_panel import ProviderPanel
         provider_tab = ProviderPanel()
         self.provider_panel = provider_tab
         create_scroll_tab(provider_tab, "Providers")
 
         # ── Profiles ────────────────────────────────────────
-        from ui.profile_panel import ProfilePanel
+        from client.src.presentation.panels.profile_panel import ProfilePanel
         profile_tab = ProfilePanel()
         self.profile_panel = profile_tab
         create_scroll_tab(profile_tab, "Profiles")
 
         # ── Status ───────────────────────────────────────────
-        from ui.status_panel import StatusPanel
+        from client.src.presentation.panels.status_panel import StatusPanel
         status_tab = StatusPanel()
         self.status_panel = status_tab
         create_scroll_tab(status_tab, "Status")

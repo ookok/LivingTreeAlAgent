@@ -534,7 +534,7 @@ class ConfigExportDialog(QWidget):
                 f"跳过 {result.items_skipped} 个"
             )
             
-            from ui.toast_notification import toast_success
+            from client.src.presentation.panels.toast_notification import toast_success
             toast_success(f"导入成功: {result.items_imported} 个项目")
         else:
             self._status_label.setText(f"❌ 导入失败")

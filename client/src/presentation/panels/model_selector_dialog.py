@@ -308,7 +308,7 @@ class ModelSelectorDialog(QDialog):
             
             if reply == QMessageBox.StandardButton.Yes:
                 # 显示下载进度对话框
-                from ui.model_download_progress import ModelDownloadProgress
+                from client.src.presentation.panels.model_download_progress import ModelDownloadProgress
                 download_progress = ModelDownloadProgress(model_name, self)
                 download_progress.download_cancelled.connect(self.on_download_cancelled)
                 download_progress.download_paused.connect(self.on_download_paused)

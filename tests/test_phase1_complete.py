@@ -216,7 +216,7 @@ class TestIDEIntentPanel(unittest.TestCase):
     def test_import(self):
         """测试导入"""
         try:
-            from ui.ide_intent_panel import IntentIDEPanel
+            from client.src.presentation.panels.ide_intent_panel import IntentIDEPanel
             self.assertIsNotNone(IntentIDEPanel)
         except ImportError:
             self.skipTest("IDE Intent Panel 未实现")

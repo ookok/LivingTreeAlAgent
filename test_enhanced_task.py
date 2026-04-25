@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPu
 from PyQt6.QtCore import QTimer
 
 from core.enhanced_task import TaskManager, TaskStatus, TaskPriority, get_task_manager
-from ui.enhanced_task_panel import EnhancedTaskPanel
+from client.src.presentation.panels.enhanced_task_panel import EnhancedTaskPanel
 
 
 class TestWindow(QMainWindow):

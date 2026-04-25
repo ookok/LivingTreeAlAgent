@@ -31,7 +31,7 @@ from client.src.business.task_execution_engine import (
 from client.src.business.task_decomposer import SubTask
 from client.src.business.agent import HermesAgent, AgentCallbacks
 from client.src.business.agent_progress import AgentProgress, ProgressPhase
-from ui.task_tree_widget import TaskTreeWidget
+from client.src.presentation.panels.task_tree_widget import TaskTreeWidget
 
 
 class AgentChatWithTasks(QMainWindow):

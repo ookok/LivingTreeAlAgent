@@ -19,7 +19,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from client.src.business.evolution_engine import EvolutionEngine
-    from ui.evolution_dashboard import EvolutionDashboard
+    from client.src.presentation.panels.evolution_dashboard import EvolutionDashboard
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ def init_evolution_dashboard(
         EvolutionDashboard 实例
     """
     try:
-        from ui.evolution_dashboard import EvolutionDashboard
+        from client.src.presentation.panels.evolution_dashboard import EvolutionDashboard
         
         # 如果没有传入引擎，自动创建
         if engine is None:

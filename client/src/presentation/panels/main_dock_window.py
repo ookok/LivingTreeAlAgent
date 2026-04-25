@@ -79,6 +79,9 @@ class MainDockWindow(QMainWindow):
         self._active_plugins: Dict[str, BasePlugin] = {}
         self._plugin_views: Dict[str, Any] = {}  # plugin_id -> view
 
+        self._current_view_mode: str = "tabbed"  # tabbed, dock, standalone
+        self._standalone_windows: Dict[str, QWidget] = {}
+
         self._setup_ui()
         self._setup_plugin_system()
         self._setup_tray()
@@ -438,24 +441,70 @@ class MainDockWindow(QMainWindow):
         self._tabbed_action.setChecked(True)
         self._dock_action.setChecked(False)
         self._standalone_action.setChecked(False)
-        # TODO: 实现视图切换逻辑
+        
+        # 恢复标签页视图
+        if hasattr(self, '_tab_widget') and self._tab_widget:
+            self.setCentralWidget(self._tab_widget)
+            self._tab_widget.setVisible(True)
+        
+        # 隐藏停靠窗口
+        if hasattr(self, '_dock_area') and self._dock_area:
+            self._dock_area.setVisible(False)
+        
+        self._current_view_mode = "tabbed"
         self._status_bar.showMessage("已切换到标签页视图")
+        self.layout_changed.emit("tabbed")
 
     def _on_switch_dock(self) -> None:
         """切换到停靠视图"""
         self._tabbed_action.setChecked(False)
         self._dock_action.setChecked(True)
         self._standalone_action.setChecked(False)
-        # TODO: 实现视图切换逻辑
+        
+        # 创建并显示停靠区域
+        if not hasattr(self, '_dock_area') or not self._dock_area:
+            self._create_dock_areas()
+        
+        if self._dock_area:
+            self._dock_area.setVisible(True)
+        
+        # 隐藏标签页
+        if hasattr(self, '_tab_widget') and self._tab_widget:
+            self._tab_widget.setVisible(False)
+        
+        self._current_view_mode = "dock"
         self._status_bar.showMessage("已切换到停靠视图")
+        self.layout_changed.emit("dock")
 
     def _on_switch_standalone(self) -> None:
         """切换到独立窗口视图"""
         self._tabbed_action.setChecked(False)
         self._dock_action.setChecked(False)
         self._standalone_action.setChecked(True)
-        # TODO: 实现视图切换逻辑
+        
+        # 为每个活跃插件创建独立窗口
+        for plugin_id, plugin in self._active_plugins.items():
+            if plugin.widget and plugin_id not in self._standalone_windows:
+                window = QWidget(None, Qt.WindowType.Window)
+                window.setWindowTitle(plugin.manifest.name)
+                window.setMinimumSize(600, 400)
+                
+                layout = QVBoxLayout(window)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(plugin.widget)
+                
+                window.show()
+                self._standalone_windows[plugin_id] = window
+        
+        # 隐藏主工作区
+        if hasattr(self, '_tab_widget') and self._tab_widget:
+            self._tab_widget.setVisible(False)
+        if hasattr(self, '_dock_area') and self._dock_area:
+            self._dock_area.setVisible(False)
+        
+        self._current_view_mode = "standalone"
         self._status_bar.showMessage("已切换到独立窗口视图")
+        self.layout_changed.emit("standalone")
 
     def _on_about(self) -> None:
         """关于对话框"""

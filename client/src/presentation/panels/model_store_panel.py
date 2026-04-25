@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QCheckBox, QFrame, QScrollArea, QProgressDialog,
     QMessageBox, QInputDialog, QDialog
 )
-from ui.components import QCardWidget
+from client.src.presentation.panels.components import QCardWidget
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
 

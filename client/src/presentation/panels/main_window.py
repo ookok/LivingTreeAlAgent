@@ -24,27 +24,27 @@ from client.src.business.system_brain import get_system_brain, SystemBrainConfig
 from core.config_manager import get_config_manager
 from core.auth_system import get_auth_system
 from core.smart_config import get_smart_config
-from ui.task_progress import get_task_progress_manager
+from client.src.presentation.panels.task_progress import get_task_progress_manager
 from core.search_tool import AISearchTool
-from ui.a2ui import A2UIManager, A2UIPanel, UILoader, FallbackManager, ProgressManager, ConfigQuickEdit
+from client.src.presentation.panels.a2ui import A2UIManager, A2UIPanel, UILoader, FallbackManager, ProgressManager, ConfigQuickEdit
 
-from ui.session_panel import SessionPanel
-from ui.chat_panel import ChatPanel
-from ui.workspace_panel import WorkspacePanel
-from ui.model_market import ModelMarketPanel
-from ui.model_pool_panel import ModelPoolPanel
-from ui.settings_dialog import SettingsDialog
-from ui.toast_notification import get_toast_manager, toast_success, toast_warning, toast_error
-from ui.user_auth_dialog import LoginDialog
-from ui.config_export_dialog import ConfigExportDialog
-from ui.writing_tab import WritingTab
-from ui.task_progress import TaskProgressManager
-from ui.research_panel import ResearchPanel
-from ui.content_monitor_panel import ContentMonitorPanel
-from ui.doc_lifecycle_panel import DocLifecyclePanel
-from ui.schedule_panel import SchedulePanel
-from ui.persona_skill_panel import PersonaSkillPanel
-from ui.p2p_search_proxy_panel import P2PSearchProxyPanel
+from client.src.presentation.panels.session_panel import SessionPanel
+from client.src.presentation.panels.chat_panel import ChatPanel
+from client.src.presentation.panels.workspace_panel import WorkspacePanel
+from client.src.presentation.panels.model_market import ModelMarketPanel
+from client.src.presentation.panels.model_pool_panel import ModelPoolPanel
+from client.src.presentation.panels.settings_dialog import SettingsDialog
+from client.src.presentation.panels.toast_notification import get_toast_manager, toast_success, toast_warning, toast_error
+from client.src.presentation.panels.user_auth_dialog import LoginDialog
+from client.src.presentation.panels.config_export_dialog import ConfigExportDialog
+from client.src.presentation.panels.writing_tab import WritingTab
+from client.src.presentation.panels.task_progress import TaskProgressManager
+from client.src.presentation.panels.research_panel import ResearchPanel
+from client.src.presentation.panels.content_monitor_panel import ContentMonitorPanel
+from client.src.presentation.panels.doc_lifecycle_panel import DocLifecyclePanel
+from client.src.presentation.panels.schedule_panel import SchedulePanel
+from client.src.presentation.panels.persona_skill_panel import PersonaSkillPanel
+from client.src.presentation.panels.p2p_search_proxy_panel import P2PSearchProxyPanel
 from core.wiki_compiler.compiler import get_wiki_compiler
 from core.wiki_compiler.ui.panel import WikiCompilerPanel
 # V2.1: 全源情报中心
@@ -62,130 +62,130 @@ from ui.intelligence.intelligence_panel import IntelligencePanel
 # V2.7: 伪域名系统 (去中心化域名 + DNS解析)
 # from ui.pseudodomain.domain_panel import DomainPanel
 # V2.8: 元宇宙UI (舰桥操作系统 - 时空引力场)
-# from ui.metaverse_ui_panel import MetaverseUIPanel
+# from client.src.presentation.panels.metaverse_ui_panel import MetaverseUIPanel
 
 # 需求头脑风暴 (借鉴 obra/superpowers 设计思路)
-# from ui.idea_clarifier_panel import IdeaClarifierPanel
+# from client.src.presentation.panels.idea_clarifier_panel import IdeaClarifierPanel
 # 政府开放资料查询 (借鉴 gov_openapi_agent 设计思路)
-# from ui.gov_data_panel import GovDataPanel
+# from client.src.presentation.panels.gov_data_panel import GovDataPanel
 # 公司印章生成器 (借鉴 company-stamp 设计思路)
-# from ui.stamp_panel import StampPanel
+# from client.src.presentation.panels.stamp_panel import StampPanel
 # 中继链 - 分布式积分账本 (无币无挖矿类区块链)
-# from ui.relay_chain_panel import RelayChainPanel
+# from client.src.presentation.panels.relay_chain_panel import RelayChainPanel
 # V3.0: 根系同步 (Root Sync - Syncthing 风格去中心化文件同步)
-# from ui.root_sync_panel import RootSyncPanel
+# from client.src.presentation.panels.root_sync_panel import RootSyncPanel
 # V3.1: GitHub Store (桌面代码仓库 - 发现安装 GitHub Release 桌面应用)
-# from ui.github_store_panel import GitHubStorePanel
+# from client.src.presentation.panels.github_store_panel import GitHubStorePanel
 # V3.2: Database Browser (桌面数据库管理 - onetcli 风格多数据库管理)
-# from ui.database_browser_panel import DatabaseBrowserPanel
+# from client.src.presentation.panels.database_browser_panel import DatabaseBrowserPanel
 # V3.3: Preview Panel (Office 文档实时预览与编辑 - AionUi 风格)
-# from ui.preview_panel import PreviewPanel
+# from client.src.presentation.panels.preview_panel import PreviewPanel
 # V2.0: MCP Market 面板
-# from ui.mcp_market_panel import MCPMarketPanel
+# from client.src.presentation.panels.mcp_market_panel import MCPMarketPanel
 # V2.0: Skill Market 面板
-# from ui.skill_market_panel import SkillMarketPanel
+# from client.src.presentation.panels.skill_market_panel import SkillMarketPanel
 # V2.0: Digital Avatar 面板
-# from ui.avatar_panel import AvatarPanel
+# from client.src.presentation.panels.avatar_panel import AvatarPanel
 # 环保模型商店面板 (P2P模型分发 + API Key自动配置)
-# from ui.model_store_panel import ModelStorePanel
+# from client.src.presentation.panels.model_store_panel import ModelStorePanel
 # 🔐 IdentityPanel - 身份驱动的数据主权 UI
-# from ui.identity_panel import IdentityPanel
+# from client.src.presentation.panels.identity_panel import IdentityPanel
 # 📚 私有法规库检索面板 (Chroma/Milvus + all-MiniLM-L6-v2)
-# from ui.regulation_search_panel import RegulationSearchPanel
+# from client.src.presentation.panels.regulation_search_panel import RegulationSearchPanel
 # 🏛️ 社区共建者权益中心 (积分->权益转换 + 税务合规 + 基金透明)
-# from ui.community_rights_panel import CommunityRightsPanel
+# from client.src.presentation.panels.community_rights_panel import CommunityRightsPanel
 # 🤖 AI脚本生成器 (自然语言→可执行脚本 + 沙箱执行 + 脚本市场)
-# from ui.ai_script_panel import AIScriptPanel
+# from client.src.presentation.panels.ai_script_panel import AIScriptPanel
 # 🌐 P2P 去中心化更新系统面板
-# from ui.decentralized_update_panel import DecentralizedUpdatePanel
+# from client.src.presentation.panels.decentralized_update_panel import DecentralizedUpdatePanel
 # V2.0: LAN Chat 面板
-# from ui.lan_chat_panel import LANChatPanel
+# from client.src.presentation.panels.lan_chat_panel import LANChatPanel
 # V2.0: Smart IDE 面板
-# from ui.smart_ide_panel import SmartIDEPanel
+# from client.src.presentation.panels.smart_ide_panel import SmartIDEPanel
 # V2.0: Game Room 面板
-# from ui.game_room_panel import GameRoomPanel
+# from client.src.presentation.panels.game_room_panel import GameRoomPanel
 # 🎮 融合游戏系统 (暗黑地牢 + 狼人杀 + 密室逃脱)
-# from ui.dungeon_werewolf_escape_panel import FusionGamePanel
+# from client.src.presentation.panels.dungeon_werewolf_escape_panel import FusionGamePanel
 # 🎭 虚拟形象与社交广场系统
-# from ui.virtual_avatar_social_panel import VirtualAvatarSocialPanel
+# from client.src.presentation.panels.virtual_avatar_social_panel import VirtualAvatarSocialPanel
 # 🃏 斗地主游戏系统
-# from ui.dou_di_zhu_panel import DouDiZhuPanel
+# from client.src.presentation.panels.dou_di_zhu_panel import DouDiZhuPanel
 # 🌐 P2P网络自举协议
-# from ui.p2p_bootstrap_panel import P2PBootstrapPanel
+# from client.src.presentation.panels.p2p_bootstrap_panel import P2PBootstrapPanel
 # 🌌 通用数字永生系统 - Phoenix Protocol
-# from ui.phoenix_protocol_panel import PhoenixProtocolPanel
+# from client.src.presentation.panels.phoenix_protocol_panel import PhoenixProtocolPanel
 # 🎛️ 通用硬件智能集成系统 - Hardware Mind
-# from ui.hardware_mind_panel import HardwareMindPanel
+# from client.src.presentation.panels.hardware_mind_panel import HardwareMindPanel
 # 🐍 Python智能日志分析系统 - Python Mind
-# from ui.python_mind_panel import PythonMindPanel
+# from client.src.presentation.panels.python_mind_panel import PythonMindPanel
 # 🧹 智能临时文件清理系统 - Smart Cleanup
-# from ui.smart_cleanup_panel import SmartCleanupPanel
+# from client.src.presentation.panels.smart_cleanup_panel import SmartCleanupPanel
 # 🤖 AI驱动式界面自检与优化系统 - UI Self-Check
-# from ui.ui_self_check_panel import UISelfCheckPanel
+# from client.src.presentation.panels.ui_self_check_panel import UISelfCheckPanel
 # 🔐 智能授权与实名认证系统 - Activation License
-# from ui.activation_license_panel import ActivationLicensePanel
+# from client.src.presentation.panels.activation_license_panel import ActivationLicensePanel
 # V2.0: Knowledge Blockchain 面板
-# from ui.knowledge_blockchain_panel import KnowledgeBlockchainPanel
+# from client.src.presentation.panels.knowledge_blockchain_panel import KnowledgeBlockchainPanel
 # L4 执行层监控面板
-# from ui.l4_executor_panel import L4ExecutorPanel
+# from client.src.presentation.panels.l4_executor_panel import L4ExecutorPanel
 # SmolLM2 L0 快反大脑面板
-# from ui.smolllm2_panel import SmolLM2Panel
+# from client.src.presentation.panels.smolllm2_panel import SmolLM2Panel
 # 智能提示系统面板
-# from ui.intelligent_hints_panel import IntelligentHintsPanel
+# from client.src.presentation.panels.intelligent_hints_panel import IntelligentHintsPanel
 # 思维审核与自我进化面板
-# from ui.thought_audit_panel import ThoughtAuditPanel
+# from client.src.presentation.panels.thought_audit_panel import ThoughtAuditPanel
 # 聚合推荐首页面板
-# from ui.feed_home_panel import FeedHomePanel
+# from client.src.presentation.panels.feed_home_panel import FeedHomePanel
 # 认知框架协作者面板
-# from ui.cognitive_framework_panel import CognitiveFrameworkPanel
+# from client.src.presentation.panels.cognitive_framework_panel import CognitiveFrameworkPanel
 # 消息模式面板
-# from ui.message_pattern_panel import MessagePatternPanel
+# from client.src.presentation.panels.message_pattern_panel import MessagePatternPanel
 # 聚合推荐面板
-# from ui.aggregator_panel import AggregatorPanel
+# from client.src.presentation.panels.aggregator_panel import AggregatorPanel
 # 归档工具面板
-# from ui.archive_tool_panel import ArchiveToolPanel
+# from client.src.presentation.panels.archive_tool_panel import ArchiveToolPanel
 # 云盘面板
-# from ui.cloud_disk_panel import CloudDiskPanel
+# from client.src.presentation.panels.cloud_disk_panel import CloudDiskPanel
 # 提佣系统面板
-# from ui.commission_panel import CommissionPanel
+# from client.src.presentation.panels.commission_panel import CommissionPanel
 # 专业审核增强面板
-# from ui.creative_review_panel import CreativeReviewPanel
+# from client.src.presentation.panels.creative_review_panel import CreativeReviewPanel
 # 决策支持面板
-# from ui.decision_panel import DecisionSupportPanel
+# from client.src.presentation.panels.decision_panel import DecisionSupportPanel
 # 增强任务面板
-# from ui.enhanced_task_panel import EnhancedTaskPanel
+# from client.src.presentation.panels.enhanced_task_panel import EnhancedTaskPanel
 # Karpathy规则面板
-# from ui.karpathy_panel import KarpathyRulesPanel
+# from client.src.presentation.panels.karpathy_panel import KarpathyRulesPanel
 # 轻量级UI面板
-# from ui.lightweight_ui_panel import LightweightUIPanel
+# from client.src.presentation.panels.lightweight_ui_panel import LightweightUIPanel
 # Markdown转Doc面板
-# from ui.md_to_doc_panel import MarkdownToDocPanel
+# from client.src.presentation.panels.md_to_doc_panel import MarkdownToDocPanel
 # P2P广播面板
-# from ui.p2p_broadcast_panel import P2PBroadcastPanel
+# from client.src.presentation.panels.p2p_broadcast_panel import P2PBroadcastPanel
 # 用户画像面板
-# from ui.profile_panel import ProfilePanel
+# from client.src.presentation.panels.profile_panel import ProfilePanel
 # 模型提供商面板
-# from ui.provider_panel import ProviderPanel
+# from client.src.presentation.panels.provider_panel import ProviderPanel
 # 智能推荐面板
-# from ui.recommendation_panel import RecommendationPanel
+# from client.src.presentation.panels.recommendation_panel import RecommendationPanel
 # 中继面板
-# from ui.relay_panel import RelayPanel
+# from client.src.presentation.panels.relay_panel import RelayPanel
 # 安全诊断面板
-# from ui.security_diagnostic_panel import SecurityDiagnosticPanel
+# from client.src.presentation.panels.security_diagnostic_panel import SecurityDiagnosticPanel
 # 智能助手面板
-# from ui.smart_assistant_panel import SmartAssistantPanel
+# from client.src.presentation.panels.smart_assistant_panel import SmartAssistantPanel
 # 智能写作面板
-# from ui.smart_writing_panel import SmartWritingPanel
+# from client.src.presentation.panels.smart_writing_panel import SmartWritingPanel
 # 社交电商面板
-# from ui.social_commerce_panel import SocialCommercePanel
+# from client.src.presentation.panels.social_commerce_panel import SocialCommercePanel
 # 状态面板
-# from ui.status_panel import StatusPanel
+# from client.src.presentation.panels.status_panel import StatusPanel
 # Toonflow短剧面板
-# from ui.toonflow_panel import ToonflowPanel
+# from client.src.presentation.panels.toonflow_panel import ToonflowPanel
 # URL智能优化面板
-# from ui.url_intelligence_panel import URLIntelligencePanel
+# from client.src.presentation.panels.url_intelligence_panel import URLIntelligencePanel
 # 写作助手面板
-# from ui.writing_assistant_panel import WritingAssistantPanel
+# from client.src.presentation.panels.writing_assistant_panel import WritingAssistantPanel
 
 
 class MainWindow(QWidget):
@@ -492,7 +492,7 @@ class MainWindow(QWidget):
 
             # V2.1: Evolution Engine Dashboard - 智能IDE自我进化系统
             try:
-                from ui.evolution_dashboard import EvolutionDashboard
+                from client.src.presentation.panels.evolution_dashboard import EvolutionDashboard
                 self.evolution_dashboard_tab = EvolutionDashboard()
                 self.center_tabs.addTab(self.evolution_dashboard_tab, "🧬 进化引擎")
             except Exception as e:
@@ -567,7 +567,7 @@ class MainWindow(QWidget):
         if not toast_mgr.enabled:
             return
         
-        from ui.toast_notification import ToastType
+        from client.src.presentation.panels.toast_notification import ToastType
         type_map = {
             "success": ToastType.SUCCESS,
             "warning": ToastType.WARNING,

@@ -397,17 +397,49 @@ class WritingTab(QWidget):
         """加载项目列表"""
         self._project_list.clear()
         
-        # TODO: 从文件/数据库加载项目
-        # 暂时添加示例
-        example_projects = [
-            WritingProject("1", "AI技术发展趋势分析", "技术报告", "计算机/AI"),
-            WritingProject("2", "企业数字化转型方案", "商业计划书", "商业管理"),
-        ]
+        # 从项目目录加载项目
+        projects_dir = self._get_projects_dir()
+        if projects_dir and projects_dir.exists():
+            project_files = list(projects_dir.glob("*.json"))
+            if project_files:
+                for proj_file in sorted(project_files, key=lambda x: x.stat().st_mtime, reverse=True):
+                    try:
+                        with open(proj_file, 'r', encoding='utf-8') as f:
+                            proj_data = json.load(f)
+                        project = WritingProject(
+                            id=proj_data.get('id', proj_file.stem),
+                            title=proj_data.get('title', '未命名项目'),
+                            doc_type=proj_data.get('doc_type', '未知类型'),
+                            subject=proj_data.get('subject', '未分类')
+                        )
+                        item = QListWidgetItem(f"📄 {project.title}")
+                        item.setData(Qt.ItemDataRole.UserRole, project)
+                        self._project_list.addItem(item)
+                    except Exception as e:
+                        logger.warning(f"加载项目失败 {proj_file.name}: {e}")
         
-        for p in example_projects:
-            item = QListWidgetItem(f"📄 {p.title}")
-            item.setData(Qt.ItemDataRole.UserRole, p)
-            self._project_list.addItem(item)
+        # 如果没有项目，添加示例
+        if self._project_list.count() == 0:
+            example_projects = [
+                WritingProject("1", "AI技术发展趋势分析", "技术报告", "计算机/AI"),
+                WritingProject("2", "企业数字化转型方案", "商业计划书", "商业管理"),
+            ]
+            
+            for p in example_projects:
+                item = QListWidgetItem(f"📄 {p.title}")
+                item.setData(Qt.ItemDataRole.UserRole, p)
+                self._project_list.addItem(item)
+    
+    def _get_projects_dir(self) -> Optional[Path]:
+        """获取项目目录"""
+        try:
+            from client.src.business.config import get_projects_dir
+            return get_projects_dir()
+        except Exception:
+            # 如果配置模块不可用，使用默认目录
+            projects_dir = Path.home() / "LivingTreeAI" / "projects"
+            projects_dir.mkdir(parents=True, exist_ok=True)
+            return projects_dir
     
     def _new_project(self):
         """新建项目"""
@@ -428,15 +460,38 @@ class WritingTab(QWidget):
     
     def _save_project(self):
         """保存项目"""
-        if self._current_project:
-            self._current_project.title = self._title_input.text()
-            self._current_project.content = self._editor.toPlainText()
-            self._current_project.updated_at = "2024-01-01"  # TODO: 实际时间
-            
-            # TODO: 保存到数据库/文件
-            
-            self._set_status("✅ 项目已保存")
-            self._show_toast("项目已保存", "success")
+        if not self._current_project:
+            QMessageBox.warning(self, "提示", "没有可保存的项目")
+            return
+        
+        # 更新项目数据
+        self._current_project.title = self._title_input.text()
+        self._current_project.content = self._editor.toPlainText()
+        self._current_project.updated_at = datetime.now().isoformat()
+        
+        # 保存到项目目录
+        projects_dir = self._get_projects_dir()
+        if projects_dir:
+            proj_file = projects_dir / f"{self._current_project.id}.json"
+            try:
+                proj_data = {
+                    'id': self._current_project.id,
+                    'title': self._current_project.title,
+                    'doc_type': self._current_project.doc_type,
+                    'subject': self._current_project.subject,
+                    'content': self._current_project.content,
+                    'outline': self._current_project.outline or [],
+                    'created_at': self._current_project.created_at,
+                    'updated_at': self._current_project.updated_at,
+                }
+                with open(proj_file, 'w', encoding='utf-8') as f:
+                    json.dump(proj_data, f, ensure_ascii=False, indent=2)
+                
+                self._set_status("✅ 项目已保存")
+                self._show_toast("项目已保存", "success")
+            except Exception as e:
+                logger.error(f"保存项目失败: {e}")
+                QMessageBox.critical(self, "错误", f"保存项目失败:\n{str(e)}")
     
     def _export_project(self):
         """导出项目"""
@@ -753,7 +808,7 @@ class WritingTab(QWidget):
     
     def _show_toast(self, message: str, toast_type: str = "info"):
         """显示通知"""
-        from ui.toast_notification import show_toast, ToastType
+        from client.src.presentation.panels.toast_notification import show_toast, ToastType
         
         type_map = {
             "success": ToastType.SUCCESS,

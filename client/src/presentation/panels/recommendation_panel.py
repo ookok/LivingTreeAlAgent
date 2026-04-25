@@ -24,7 +24,7 @@ from core.recommendation import (
     UnifiedItem
 )
 from core.recommendation.user_profile import UserProfileManager
-from ui.recommendation_card import RecommendationCard, EmptyRecommendationCard
+from client.src.presentation.panels.recommendation_card import RecommendationCard, EmptyRecommendationCard
 
 
 class RecommendationWorker(QThread):

@@ -10,7 +10,7 @@ Air Prediction Panel - 大气预测UI面板
 
 使用示例：
 ```python
-from ui.air_prediction_panel import AirPredictionPanel
+from client.src.presentation.panels.air_prediction_panel import AirPredictionPanel
 
 # 创建面板
 panel = AirPredictionPanel(parent=self)
@@ -534,7 +534,7 @@ class AirPredictionPanel(QWidget if HAS_PYQT else object):
 
     使用示例：
     ```python
-    from ui.air_prediction_panel import AirPredictionPanel
+    from client.src.presentation.panels.air_prediction_panel import AirPredictionPanel
 
     panel = AirPredictionPanel()
     panel.show()

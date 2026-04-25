@@ -8,7 +8,7 @@
 3. 简洁的 UI 设计
 
 使用方式：
-    from ui.unified_proxy_panel import UnifiedProxyPanel
+    from client.src.presentation.panels.unified_proxy_panel import UnifiedProxyPanel
 
     panel = UnifiedProxyPanel()
     layout.addWidget(panel)

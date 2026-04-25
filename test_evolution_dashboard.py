@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication
-from ui.evolution_dashboard import create_evolution_dashboard
+from client.src.presentation.panels.evolution_dashboard import create_evolution_dashboard
 
 
 def test_dashboard():

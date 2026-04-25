@@ -483,3 +483,389 @@ def get_game_hub_panel() -> GameHubPanel:
         _global_panel = GameHubPanel()
     
     return _global_panel
+
+
+# ──────────────────────────────────────────────────────────────
+# PyQt6 UI 层
+# ──────────────────────────────────────────────────────────────
+
+try:
+    from PyQt6.QtWidgets import (
+        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+        QLabel, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem,
+        QHeaderView, QGroupBox, QFormLayout, QProgressBar,
+        QComboBox, QLineEdit, QSpinBox, QMessageBox,
+        QListWidget, QListWidgetItem, QSplitter, QFrame,
+    )
+    from PyQt6.QtCore import (
+        Qt, QTimer, pyqtSignal, QSize,
+    )
+    from PyQt6.QtGui import QFont, QIcon, QPalette, QColor
+    HAS_PYQT = True
+except ImportError:
+    HAS_PYQT = False
+
+
+if HAS_PYQT:
+    class GameHubPanelUI(QWidget):
+        """
+        GameHub 主面板 UI
+        
+        整合所有游戏模块的可视化界面。
+        """
+        
+        # 信号
+        game_started = pyqtSignal(str)
+        game_stopped = pyqtSignal(str)
+        achievement_unlocked = pyqtSignal(str)
+        
+        def __init__(self, parent: Optional[QWidget] = None):
+            super().__init__(parent)
+            self._panel = get_game_hub_panel()
+            self._init_ui()
+            self._init_mock_data()
+            self._update_ui()
+        
+        def _init_ui(self) -> None:
+            """初始化 UI"""
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(8, 8, 8, 8)
+            layout.setSpacing(8)
+            
+            # 标题
+            title = QLabel("🎮 游戏中心")
+            font = QFont()
+            font.setPointSize(16)
+            font.setBold(True)
+            title.setFont(font)
+            layout.addWidget(title)
+            
+            # 选项卡
+            self._tabs = QTabWidget()
+            self._tabs.currentChanged.connect(self._on_tab_changed)
+            
+            # 游戏库选项卡
+            self._library_widget = self._create_library_tab()
+            self._tabs.addTab(self._library_widget, "🎮 游戏库")
+            
+            # 会话选项卡
+            self._sessions_widget = self._create_sessions_tab()
+            self._tabs.addTab(self._sessions_widget, "⏱ 会话")
+            
+            # 成就选项卡
+            self._achievements_widget = self._create_achievements_tab()
+            self._tabs.addTab(self._achievements_widget, "🏆 成就")
+            
+            # 统计选项卡
+            self._stats_widget = self._create_stats_tab()
+            self._tabs.addTab(self._stats_widget, "📊 统计")
+            
+            layout.addWidget(self._tabs)
+            
+            # 状态栏
+            self._status_bar = QLabel("就绪")
+            self._status_bar.setStyleSheet("color: #666; font-size: 12px;")
+            layout.addWidget(self._status_bar)
+        
+        def _create_library_tab(self) -> QWidget:
+            """创建游戏库选项卡"""
+            widget = QWidget()
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(8, 8, 8, 8)
+            
+            # 游戏列表
+            list_group = QGroupBox("游戏列表")
+            list_layout = QVBoxLayout(list_group)
+            self._games_table = QTableWidget()
+            self._games_table.setColumnCount(6)
+            self._games_table.setHorizontalHeaderLabels(["ID", "名称", "类型", "平台", "状态", "游玩时间"])
+            self._games_table.horizontalHeader().setStretchLastSection(True)
+            self._games_table.cellDoubleClicked.connect(self._on_game_double_clicked)
+            list_layout.addWidget(self._games_table)
+            layout.addWidget(list_group)
+            
+            # 操作按钮
+            btn_layout = QHBoxLayout()
+            add_btn = QPushButton("添加游戏")
+            start_btn = QPushButton("开始游戏")
+            stop_btn = QPushButton("停止游戏")
+            refresh_btn = QPushButton("刷新")
+            btn_layout.addWidget(add_btn)
+            btn_layout.addWidget(start_btn)
+            btn_layout.addWidget(stop_btn)
+            btn_layout.addStretch()
+            btn_layout.addWidget(refresh_btn)
+            layout.addLayout(btn_layout)
+            
+            return widget
+        
+        def _create_sessions_tab(self) -> QWidget:
+            """创建会话选项卡"""
+            widget = QWidget()
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(8, 8, 8, 8)
+            
+            # 活跃会话
+            active_group = QGroupBox("活跃会话")
+            active_layout = QFormLayout(active_group)
+            self._active_session_label = QLabel("无")
+            active_layout.addRow("当前会话：", self._active_session_label)
+            self._session_duration_label = QLabel("0 分钟")
+            active_layout.addRow("时长：", self._session_duration_label)
+            layout.addWidget(active_group)
+            
+            # 会话历史
+            history_group = QGroupBox("会话历史")
+            history_layout = QVBoxLayout(history_group)
+            self._sessions_table = QTableWidget()
+            self._sessions_table.setColumnCount(4)
+            self._sessions_table.setHorizontalHeaderLabels(["ID", "游戏", "时长", "成就"])
+            self._sessions_table.horizontalHeader().setStretchLastSection(True)
+            history_layout.addWidget(self._sessions_table)
+            layout.addWidget(history_group)
+            
+            return widget
+        
+        def _create_achievements_tab(self) -> QWidget:
+            """创建成就选项卡"""
+            widget = QWidget()
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(8, 8, 8, 8)
+            
+            # 成就进度
+            progress_group = QGroupBox("成就进度")
+            progress_layout = QFormLayout(progress_group)
+            self._achievement_progress_bar = QProgressBar()
+            self._achievement_progress_bar.setRange(0, 100)
+            self._achievement_progress_bar.setValue(0)
+            progress_layout.addRow("总进度：", self._achievement_progress_bar)
+            self._achievement_count_label = QLabel("0/0")
+            progress_layout.addRow("解锁数：", self._achievement_count_label)
+            layout.addWidget(progress_group)
+            
+            # 成就列表
+            list_group = QGroupBox("成就列表")
+            list_layout = QVBoxLayout(list_group)
+            self._achievements_list = QListWidget()
+            list_layout.addWidget(self._achievements_list)
+            layout.addWidget(list_group)
+            
+            # 按类型统计
+            type_group = QGroupBox("按类型统计")
+            type_layout = QFormLayout(type_group)
+            self._achievement_type_labels = {}
+            for type_name in ["story", "skill", "exploration", "collection", "challenge"]:
+                label = QLabel("0/0")
+                self._achievement_type_labels[type_name] = label
+                type_layout.addRow(f"{type_name}：", label)
+            layout.addWidget(type_group)
+            
+            return widget
+        
+        def _create_stats_tab(self) -> QWidget:
+            """创建统计选项卡"""
+            widget = QWidget()
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(8, 8, 8, 8)
+            
+            # 玩家统计
+            stats_group = QGroupBox("玩家统计")
+            stats_layout = QFormLayout(stats_group)
+            self._total_games_label = QLabel("0")
+            stats_layout.addRow("总游戏数：", self._total_games_label)
+            self._completed_games_label = QLabel("0")
+            stats_layout.addRow("已完成：", self._completed_games_label)
+            self._total_playtime_label = QLabel("0 分钟")
+            stats_layout.addRow("总游玩时间：", self._total_playtime_label)
+            self._total_achievements_label = QLabel("0")
+            stats_layout.addRow("总成就数：", self._total_achievements_label)
+            self._unlocked_achievements_label = QLabel("0")
+            stats_layout.addRow("已解锁：", self._unlocked_achievements_label)
+            self._favorite_genre_label = QLabel("-")
+            stats_layout.addRow("最喜爱类型：", self._favorite_genre_label)
+            self._most_played_game_label = QLabel("-")
+            stats_layout.addRow("最常玩：", self._most_played_game_label)
+            layout.addWidget(stats_group)
+            
+            # 游戏推荐（占位）
+            recommend_group = QGroupBox("🎯 游戏推荐")
+            recommend_layout = QVBoxLayout(recommend_group)
+            recommend_layout.addWidget(QLabel("（推荐算法待集成）"))
+            layout.addWidget(recommend_group)
+            
+            layout.addStretch()
+            return widget
+        
+        def _init_mock_data(self) -> None:
+            """初始化模拟数据"""
+            # 添加示例游戏
+            from typing import cast
+            self._panel.add_game(Game(
+                id="game_001",
+                name="塞尔达传说",
+                genre="冒险",
+                platform="Switch",
+                status=GameStatus.COMPLETED,
+                total_playtime=1200.0,
+            ))
+            self._panel.add_game(Game(
+                id="game_002",
+                name="艾尔登法环",
+                genre="动作RPG",
+                platform="PC",
+                status=GameStatus.PLAYING,
+                total_playtime=800.0,
+            ))
+            self._panel.add_game(Game(
+                id="game_003",
+                name="星露谷物语",
+                genre="模拟",
+                platform="PC",
+                status=GameStatus.IDLE,
+                total_playtime=300.0,
+            ))
+            
+            # 添加示例成就
+            self._panel.achievements.add_achievement(Achievement(
+                id="ach_001",
+                name="初次冒险",
+                description="开始第一个游戏",
+                game_id="game_001",
+                achievement_type=AchievementType.STORY,
+                unlocked=True,
+                unlocked_at=time.time() - 86400 * 30,
+                rarity=0.8,
+            ))
+            self._panel.achievements.add_achievement(Achievement(
+                id="ach_002",
+                name="百小时大师",
+                description="累计游玩 100 小时",
+                game_id="game_001",
+                achievement_type=AchievementType.CHALLENGE,
+                unlocked=False,
+                rarity=0.1,
+            ))
+        
+        def _update_ui(self) -> None:
+            """更新 UI 显示"""
+            # 游戏库
+            self._update_games_table()
+            
+            # 会话
+            self._update_sessions_ui()
+            
+            # 成就
+            self._update_achievements_ui()
+            
+            # 统计
+            self._update_stats_ui()
+            
+            self._status_bar.setText(f"最后更新：{time.strftime('%H:%M:%S')}")
+        
+        def _update_games_table(self) -> None:
+            """更新游戏列表"""
+            games = list(self._panel.library.games.values())
+            self._games_table.setRowCount(len(games))
+            for row, game in enumerate(games):
+                self._games_table.setItem(row, 0, QTableWidgetItem(game.id))
+                self._games_table.setItem(row, 1, QTableWidgetItem(game.name))
+                self._games_table.setItem(row, 2, QTableWidgetItem(game.genre))
+                self._games_table.setItem(row, 3, QTableWidgetItem(game.platform))
+                status_item = QTableWidgetItem(game.status.value)
+                if game.status == GameStatus.PLAYING:
+                    status_item.setForeground(QColor("green"))
+                elif game.status == GameStatus.COMPLETED:
+                    status_item.setForeground(QColor("blue"))
+                self._games_table.setItem(row, 4, status_item)
+                self._games_table.setItem(row, 5, QTableWidgetItem(f"{game.total_playtime:.0f} 分钟"))
+        
+        def _update_sessions_ui(self) -> None:
+            """更新会话 UI"""
+            # 活跃会话
+            active = self._panel.sessions.active_session
+            if active:
+                game = self._panel.library.get_game(active.game_id)
+                game_name = game.name if game else active.game_id
+                self._active_session_label.setText(f"{game_name} (开始于 {time.strftime('%H:%M', time.localtime(active.start_time))})")
+                duration = (time.time() - active.start_time) / 60
+                self._session_duration_label.setText(f"{duration:.0f} 分钟")
+            else:
+                self._active_session_label.setText("无")
+                self._session_duration_label.setText("0 分钟")
+            
+            # 会话历史
+            sessions = self._panel.sessions.get_session_history(limit=50)
+            self._sessions_table.setRowCount(len(sessions))
+            for row, session in enumerate(sessions):
+                game = self._panel.library.get_game(session.game_id)
+                game_name = game.name if game else session.game_id
+                self._sessions_table.setItem(row, 0, QTableWidgetItem(session.id))
+                self._sessions_table.setItem(row, 1, QTableWidgetItem(game_name))
+                self._sessions_table.setItem(row, 2, QTableWidgetItem(f"{session.duration:.0f} 分钟"))
+                self._sessions_table.setItem(row, 3, QTableWidgetItem(f"{len(session.achievements)} 个"))
+        
+        def _update_achievements_ui(self) -> None:
+            """更新成就 UI"""
+            progress = self._panel.achievements.get_achievement_progress()
+            
+            # 进度条
+            self._achievement_progress_bar.setValue(int(progress["progress"]))
+            self._achievement_count_label.setText(f"{progress['unlocked']}/{progress['total']}")
+            
+            # 成就列表
+            self._achievements_list.clear()
+            for ach in self._panel.achievements.achievements.values():
+                item_text = f"{'✅' if ach.unlocked else '🔒'} {ach.name} ({ach.achievement_type.value})"
+                item = QListWidgetItem(item_text)
+                self._achievements_list.addItem(item)
+            
+            # 按类型统计
+            for type_name, data in progress.get("by_type", {}).items():
+                if type_name in self._achievement_type_labels:
+                    label = self._achievement_type_labels[type_name]
+                    label.setText(f"{data['unlocked']}/{data['total']}")
+        
+        def _update_stats_ui(self) -> None:
+            """更新统计 UI"""
+            stats = self._panel.get_overall_stats()
+            
+            self._total_games_label.setText(str(stats["library"]["total_games"]))
+            self._completed_games_label.setText(str(stats["library"].get("completed_games", 0)))
+            self._total_playtime_label.setText(f"{stats['library'].get('total_playtime', 0):.0f} 分钟")
+            self._total_achievements_label.setText(str(stats["achievements"]["total"]))
+            self._unlocked_achievements_label.setText(str(stats["achievements"]["unlocked"]))
+            
+            # 获取玩家统计
+            player_stats = self._panel.stats.get_player_stats(
+                self._panel.library,
+                self._panel.sessions,
+            )
+            self._favorite_genre_label.setText(player_stats.favorite_genre or "-")
+            self._most_played_game_label.setText(player_stats.most_played_game or "-")
+        
+        def _on_tab_changed(self, index: int) -> None:
+            """选项卡切换"""
+            self._update_ui()
+        
+        def _on_game_double_clicked(self, row: int, column: int) -> None:
+            """双击游戏"""
+            if row >= 0:
+                item = self._games_table.item(row, 0)
+                if item:
+                    game_id = item.text()
+                    self.game_started.emit(game_id)
+        
+        def refresh(self) -> None:
+            """刷新数据"""
+            self._update_ui()
+        
+        def get_panel(self) -> GameHubPanel:
+            """获取底层面板（用于数据操作）"""
+            return self._panel
+
+else:
+    # 无 PyQt6 时的占位
+    class GameHubPanelUI:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PyQt6 未安装，无法使用 GameHubPanelUI")
+

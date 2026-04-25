@@ -7,7 +7,7 @@ Intent Code Generator 测试
 import sys
 sys.path.insert(0, r'f:\mhzyapp\LivingTreeAlAgent')
 
-from core.ide.code_generator import IntentCodeGenerator
+from client.src.business.ide.code_generator import IntentCodeGenerator
 
 def test_basic_generation():
     """测试基础生成功能"""

@@ -14,6 +14,9 @@ Skill 自进化系统 - 自主执行循环
 [遇到新任务] → [搜索相似技能] → [有则复用/无则自主摸索] → [固化为 Skill] → [写入 L3]
 """
 
+from core.logger import get_logger
+logger = get_logger('skill_evolution.agent_loop')
+
 import json
 import re
 import time
@@ -762,8 +765,6 @@ def create_agent(
     """
     import os
     from pathlib import Path
-from core.logger import get_logger
-logger = get_logger('skill_evolution.agent_loop')
 
 
     # 默认路径

@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
 import json
 from core.logger import get_logger
+from core.config.unified_config import get_config
 logger = get_logger('relay_chain.node_manager')
 
 
@@ -50,9 +51,15 @@ class RelayNode:
     region: str = "unknown"  # 地区
     state: NodeState = NodeState.ONLINE
 
-    # 健康状态
+    # 健康状态 (从配置读取心跳间隔)
     last_heartbeat: float = field(default_factory=time.time)
-    heartbeat_interval: float = 30.0  # 心跳间隔（秒）
+    heartbeat_interval: float = None  # 心跳间隔（秒），初始化时从配置读取
+
+    def __post_init__(self):
+        if self.heartbeat_interval is None:
+            config = get_config()
+            self.heartbeat_interval = config.get("heartbeat.relay_interval", 30.0)
+            
     consecutive_failures: int = 0
 
     # 能力标签
@@ -366,13 +373,16 @@ class NodeManager:
 
     def _heartbeat_loop(self):
         """心跳循环"""
+        config = get_config()
+        heartbeat_interval = config.get("heartbeat.relay_interval", 30)
+        
         while self._running:
             try:
                 self._send_heartbeat()
             except Exception as e:
                 logger.info(f"Heartbeat failed: {e}")
 
-            time.sleep(30)  # 30秒心跳
+            time.sleep(heartbeat_interval)
 
     def _send_heartbeat(self):
         """发送心跳到注册中心"""

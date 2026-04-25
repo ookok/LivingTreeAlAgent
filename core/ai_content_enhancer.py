@@ -13,6 +13,9 @@ AI-Driven Proactive Content Enhancement System
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('ai_content_enhancer')
+
 import re
 import time
 import hashlib
@@ -482,8 +485,6 @@ def example_usage():
     ```python
     from django.urls import path
     from rest_framework.routers import DefaultRouter
-from core.logger import get_logger
-logger = get_logger('ai_content_enhancer')
 
 
     router = DefaultRouter()

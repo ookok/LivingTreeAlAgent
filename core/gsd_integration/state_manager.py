@@ -7,6 +7,9 @@
 - StateManager: 状态管理器
 """
 
+from core.logger import get_logger
+logger = get_logger('gsd_integration.state_manager')
+
 import json
 import time
 from pathlib import Path
@@ -476,8 +479,6 @@ class StateManager:
             Assumption: 创建的假设
         """
         import uuid
-from core.logger import get_logger
-logger = get_logger('gsd_integration.state_manager')
 
         assumption = Assumption(
             assumption_id=str(uuid.uuid4())[:8],

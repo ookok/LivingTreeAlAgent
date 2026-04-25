@@ -19,6 +19,9 @@ Auto Diagnosis System - 自动诊断系统
     logger.info(report)
 """
 
+from core.logger import get_logger
+logger = get_logger('error_management.auto_diagnosis')
+
 import os
 import json
 import re
@@ -485,8 +488,6 @@ class AutoDiagnoser:
         """获取系统信息"""
         import platform
         import sys
-from core.logger import get_logger
-logger = get_logger('error_management.auto_diagnosis')
 
         
         return {

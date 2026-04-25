@@ -14,6 +14,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.error_recovery')
+
 import time
 import json
 import threading
@@ -26,6 +29,15 @@ from abc import ABC, abstractmethod
 from functools import wraps
 import logging
 import random
+
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_er = _get_unified_config()
+except Exception:
+    _uconfig_er = None
+
+def _er_get(key: str, default):
+    return _uconfig_er.get(key, default) if _uconfig_er else default
 
 logger = logging.getLogger(__name__)
 
@@ -469,8 +481,6 @@ class RecoveryExecutor:
     
     def _save_checkpoint(self, context: RecoveryContext, result: Any):
         import hashlib
-from core.logger import get_logger
-logger = get_logger('smart_writing.error_recovery')
 
         cp_id = hashlib.md5(f"{context.task_id}:{context.operation_name}:{time.time()}".encode()).hexdigest()[:16]
         checkpoint = Checkpoint(

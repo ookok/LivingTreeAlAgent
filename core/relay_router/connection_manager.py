@@ -18,6 +18,12 @@ from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,27 +111,16 @@ class ConnectionStateMachine:
         ConnectionStage.OFFLINE_MODE,
     ]
 
-    # 各阶段超时（秒）
-    STAGE_TIMEOUTS = {
-        ConnectionStage.PRIVATE_SERVER: 5,
-        ConnectionStage.PUBLIC_SIGNALING: 10,
-        ConnectionStage.PUBLIC_STUN: 5,
-        ConnectionStage.P2P_DIRECT: 15,
-        ConnectionStage.PUBLIC_TURN: 10,
-        ConnectionStage.STORAGE_RELAY: 30,
-    }
-
-    # 重试次数
-    MAX_RETRIES = {
-        ConnectionStage.PRIVATE_SERVER: 2,
-        ConnectionStage.PUBLIC_SIGNALING: 3,
-        ConnectionStage.PUBLIC_STUN: 2,
-        ConnectionStage.P2P_DIRECT: 1,
-        ConnectionStage.PUBLIC_TURN: 2,
-        ConnectionStage.STORAGE_RELAY: 1,
-    }
+    # 各阶段超时（秒）- 从配置读取
+    STAGE_TIMEOUTS: Dict[ConnectionStage, int] = None
+    
+    # 重试次数 - 从配置读取
+    MAX_RETRIES: Dict[ConnectionStage, int] = None
 
     def __init__(self, relay_config, smart_router, health_monitor):
+        # 从配置读取超时和重试配置
+        self._load_config()
+        
         self.config = relay_config
         self.router = smart_router
         self.health_monitor = health_monitor
@@ -152,9 +147,56 @@ class ConnectionStateMachine:
         self._running = False
         self._connect_thread: Optional[threading.Thread] = None
 
-        # 升级检测
-        self._upgrade_check_interval = 60  # 每60秒检查是否可以升级
+        # 升级检测 - 从配置读取
+        self._upgrade_check_interval = self._get_config_value("relay.upgrade_check_interval", 60)
         self._last_upgrade_check = 0
+        
+    def _load_config(self):
+        """从配置加载超时和重试配置"""
+        if ConnectionStateMachine.STAGE_TIMEOUTS is None:
+            config = get_config() if get_config else None
+            
+            if config:
+                ConnectionStateMachine.STAGE_TIMEOUTS = {
+                    ConnectionStage.PRIVATE_SERVER: config.get("relay.stage_timeout.private_server", 5),
+                    ConnectionStage.PUBLIC_SIGNALING: config.get("relay.stage_timeout.public_signaling", 10),
+                    ConnectionStage.PUBLIC_STUN: config.get("relay.stage_timeout.public_stun", 5),
+                    ConnectionStage.P2P_DIRECT: config.get("relay.stage_timeout.p2p_direct", 15),
+                    ConnectionStage.PUBLIC_TURN: config.get("relay.stage_timeout.public_turn", 10),
+                    ConnectionStage.STORAGE_RELAY: config.get("relay.stage_timeout.storage_relay", 30),
+                }
+                ConnectionStateMachine.MAX_RETRIES = {
+                    ConnectionStage.PRIVATE_SERVER: config.get("relay.max_retries.private_server", 2),
+                    ConnectionStage.PUBLIC_SIGNALING: config.get("relay.max_retries.public_signaling", 3),
+                    ConnectionStage.PUBLIC_STUN: config.get("relay.max_retries.public_stun", 2),
+                    ConnectionStage.P2P_DIRECT: config.get("relay.max_retries.p2p_direct", 1),
+                    ConnectionStage.PUBLIC_TURN: config.get("relay.max_retries.public_turn", 2),
+                    ConnectionStage.STORAGE_RELAY: config.get("relay.max_retries.storage_relay", 1),
+                }
+            else:
+                # 默认值
+                ConnectionStateMachine.STAGE_TIMEOUTS = {
+                    ConnectionStage.PRIVATE_SERVER: 5,
+                    ConnectionStage.PUBLIC_SIGNALING: 10,
+                    ConnectionStage.PUBLIC_STUN: 5,
+                    ConnectionStage.P2P_DIRECT: 15,
+                    ConnectionStage.PUBLIC_TURN: 10,
+                    ConnectionStage.STORAGE_RELAY: 30,
+                }
+                ConnectionStateMachine.MAX_RETRIES = {
+                    ConnectionStage.PRIVATE_SERVER: 2,
+                    ConnectionStage.PUBLIC_SIGNALING: 3,
+                    ConnectionStage.PUBLIC_STUN: 2,
+                    ConnectionStage.P2P_DIRECT: 1,
+                    ConnectionStage.PUBLIC_TURN: 2,
+                    ConnectionStage.STORAGE_RELAY: 1,
+                }
+    
+    def _get_config_value(self, key: str, default: Any) -> Any:
+        """获取配置值"""
+        if get_config:
+            return get_config().get(key, default)
+        return default
 
     def start(self):
         """启动连接状态机"""
@@ -175,6 +217,12 @@ class ConnectionStateMachine:
 
     def _connect_loop(self):
         """连接循环"""
+        # 从配置读取间隔
+        health_check_interval = self._get_config_value("relay.health_check_interval", 5)
+        degraded_recover_interval = self._get_config_value("relay.degraded_recover_interval", 10)
+        offline_check_interval = self._get_config_value("relay.offline_check_interval", 30)
+        reconnect_wait = self._get_config_value("relay.reconnect_wait", 5)
+        
         while self._running:
             try:
                 if self.state in (ConnectionState.INIT, ConnectionState.DISCONNECTED):
@@ -183,26 +231,26 @@ class ConnectionStateMachine:
                 elif self.state == ConnectionState.CONNECTED:
                     # 保持连接，定期检查
                     self._check_connection_health()
-                    time.sleep(5)
+                    time.sleep(health_check_interval)
 
                 elif self.state == ConnectionState.DEGRADED:
                     # 尝试恢复
                     self._attempt_upgrade()
-                    time.sleep(10)
+                    time.sleep(degraded_recover_interval)
 
                 elif self.state in (ConnectionState.RECONNECTING, ConnectionState.FAILED):
                     # 等待后重试
-                    time.sleep(5)
+                    time.sleep(reconnect_wait)
                     self._start_connection()
 
                 elif self.state == ConnectionState.OFFLINE:
                     # 离线模式，定期检查恢复可能
                     self._check_offline_recovery()
-                    time.sleep(30)
+                    time.sleep(offline_check_interval)
 
             except Exception as e:
                 logger.error(f"Connection loop error: {e}")
-                time.sleep(5)
+                time.sleep(reconnect_wait)
 
     def _start_connection(self):
         """开始连接流程"""
@@ -364,7 +412,8 @@ class ConnectionStateMachine:
         logger.info("Attempting P2P direct connection (NAT traversal)")
 
         # 模拟NAT穿透尝试
-        time.sleep(1)
+        nat_traverse_delay = self._get_config_value("relay.nat_traverse_delay", 1)
+        time.sleep(nat_traverse_delay)
 
         # 返回失败，让状态机继续到TURN阶段
         return False, 0, "NAT traversal failed"

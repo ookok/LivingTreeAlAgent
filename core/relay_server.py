@@ -32,25 +32,25 @@ from enum import Enum
 from datetime import datetime, timedelta
 import argparse
 
-# WebSocket support
-try:
-    import websockets
-    from websockets.server import WebSocketServerProtocol, serve
-    from websockets.exceptions import ConnectionClosed, WebSocketException
 from core.logger import get_logger
-logger = get_logger('relay_server')
 
-    WEBSOCKETS_AVAILABLE = True
-except ImportError:
-    WEBSOCKETS_AVAILABLE = False
-    logger.info("Warning: websockets library not found. Install with: pip install websockets")
+logger = get_logger('relay_server')
 
 # Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+
+# WebSocket support
+try:
+    import websockets
+    from websockets.server import WebSocketServerProtocol, serve
+    from websockets.exceptions import ConnectionClosed, WebSocketException
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    logger.info("Warning: websockets library not found. Install with: pip install websockets")
 
 
 class MessageType(Enum):

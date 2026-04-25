@@ -23,6 +23,37 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_se = _get_unified_config()
+except Exception:
+    _uconfig_se = None
+
+def _se_get(key: str, default):
+    return _uconfig_se.get(key, default) if _uconfig_se else default
+
+# 从 relay_constants 导入沙箱默认值（如果可用）
+try:
+    from core.relay_router.relay_constants import (
+        SANDBOX_MAX_STEPS, SANDBOX_TIMEOUT_SECONDS,
+        SANDBOX_MEMORY_LIMIT_MB, SANDBOX_CPU_LIMIT,
+        SANDBOX_DISK_LIMIT_GB,
+        POLLING_SHORT_DELAY, DEPLOY_STEP_MAX,
+        TIMEOUT_QUICK, SANDBOX_DOCKER_EXEC_CAP,
+        SANDBOX_SIM_DURATION_MS,
+    )
+except ImportError:
+    SANDBOX_MAX_STEPS = 100
+    SANDBOX_TIMEOUT_SECONDS = 300
+    SANDBOX_MEMORY_LIMIT_MB = 512
+    SANDBOX_CPU_LIMIT = 1.0
+    SANDBOX_DISK_LIMIT_GB = 5
+    POLLING_SHORT_DELAY = 0.1
+    DEPLOY_STEP_MAX = 1
+    TIMEOUT_QUICK = 5
+    SANDBOX_DOCKER_EXEC_CAP = 60
+    SANDBOX_SIM_DURATION_MS = 100
+
 
 class SandboxStatus(Enum):
     """沙箱状态"""
@@ -48,12 +79,12 @@ class StepStatus(Enum):
 @dataclass
 class SandboxConfig:
     """沙箱配置"""
-    max_steps: int = 100
-    timeout_seconds: int = 300
-    memory_limit_mb: int = 512
-    cpu_limit: float = 1.0
+    max_steps: int = SANDBOX_MAX_STEPS
+    timeout_seconds: int = SANDBOX_TIMEOUT_SECONDS
+    memory_limit_mb: int = SANDBOX_MEMORY_LIMIT_MB
+    cpu_limit: float = SANDBOX_CPU_LIMIT
     network_enabled: bool = True
-    disk_limit_gb: int = 5
+    disk_limit_gb: int = SANDBOX_DISK_LIMIT_GB
     allow_sudo: bool = False
 
 
@@ -179,7 +210,7 @@ class SandboxExecutor:
                     if not self._running:
                         break
                     while self._paused:
-                        time.sleep(0.1)
+                        time.sleep(_se_get("delays.polling_short", 0.1))
                     result = self._simulate_step(step)
                     self._current_sandbox.step_results.append(result)
                     if result.status == StepStatus.SUCCESS:
@@ -350,7 +381,7 @@ class SandboxExecutor:
 
             # 模拟耗时
             if hasattr(step, 'estimated_time_seconds'):
-                time.sleep(min(step.estimated_time_seconds, 1))
+                time.sleep(min(step.estimated_time_seconds, _se_get("deploy.sim_step_max", 1)))
 
         except Exception as e:
             status = StepStatus.FAILED
@@ -409,7 +440,7 @@ class SandboxExecutor:
         """检查是否可以使用Docker沙箱"""
         try:
             result = subprocess.run(
-                ["docker", "info"], capture_output=True, timeout=5
+                ["docker", "info"], capture_output=True, timeout=_se_get("timeouts.quick", 5)
             )
             return result.returncode == 0
         except:
@@ -510,7 +541,7 @@ class SandboxExecutor:
             if not self._running:
                 break
             while self._paused:
-                time.sleep(0.1)
+                time.sleep(_se_get("delays.polling_short", 0.1))
 
             line = line.strip()
             if not line or line.startswith('#'):

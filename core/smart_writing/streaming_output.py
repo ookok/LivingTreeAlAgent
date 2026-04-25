@@ -30,7 +30,15 @@ from enum import Enum
 from abc import ABC, abstractmethod
 import logging
 from core.logger import get_logger
-logger = get_logger('smart_writing.streaming_output')
+
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_sw = _get_unified_config()
+except Exception:
+    _uconfig_sw = None
+
+def _sw_get(key: str, default):
+    return _uconfig_sw.get(key, default) if _uconfig_sw else default
 
 
 logger = logging.getLogger(__name__)
@@ -488,7 +496,7 @@ class StreamingOutput:
                 
                 # 等待（如暂停）
                 while self.state.is_paused and not self.state.is_cancelled:
-                    time.sleep(0.05)
+                    time.sleep(_sw_get("delays.pause_wait", 0.05))
                 
                 if self.state.is_cancelled:
                     break
@@ -617,7 +625,7 @@ class StreamingOutput:
                 return
             
             while self.state.is_paused and not self.state.is_cancelled:
-                time.sleep(0.05)
+                time.sleep(_sw_get("delays.pause_wait", 0.05))
             
             yield OutputChunk(
                 content=chunk_text,
@@ -878,7 +886,7 @@ class EnhancedStreamingOutput(StreamingOutput):
                 break
             
             while self.state.is_paused:
-                time.sleep(0.05)
+                time.sleep(_sw_get("delays.pause_wait", 0.05))
             
             self._output_chunk(sentence, "text")
             

@@ -220,8 +220,34 @@ class WebSocketChannel(Channel):
             return False
     
     async def receive(self, agent_id: str, timeout: Optional[float] = None) -> Optional[Dict[str, Any]]:
-        """接收 WebSocket 消息（需要子类实现）"""
-        raise NotImplementedError("Use subclass or InMemoryChannel for receiving")
+        """通过 WebSocket 接收消息"""
+        client = self._clients.get(agent_id)
+        if not client:
+            logger.warning(f"No WebSocket connection for {agent_id}")
+            return None
+
+        try:
+            if timeout:
+                # 带超时的接收
+                msg = await asyncio.wait_for(client.recv(), timeout=timeout)
+            else:
+                msg = await client.recv()
+
+            if isinstance(msg, bytes):
+                return json.loads(msg.decode("utf-8"))
+            elif isinstance(msg, str):
+                return json.loads(msg)
+            else:
+                return None
+        except asyncio.TimeoutError:
+            logger.debug(f"WebSocket receive timeout for {agent_id}")
+            return None
+        except Exception as e:
+            logger.error(f"WebSocket receive failed for {agent_id}: {e}")
+            # 连接可能断开，清理
+            with self._lock:
+                self._clients.pop(agent_id, None)
+            return None
     
     async def close(self):
         """关闭所有 WebSocket 连接"""

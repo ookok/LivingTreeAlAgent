@@ -7,7 +7,11 @@
 - 混合检索 (向量 + 关键词 + 元数据)
 - BGE-small-zh 向量嵌入
 - BM25 关键词排序
+- KV Cache 推理优化
 """
+
+from core.logger import get_logger
+logger = get_logger('fusion_rag.knowledge_base')
 
 import time
 import hashlib
@@ -15,6 +19,23 @@ import re
 from typing import Optional, Dict, Any, List
 from collections import defaultdict
 import threading
+
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url, get
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+    def get(key, default=None):
+        return default
+
+# 导入 KV Cache
+try:
+    from .kv_cache_optimizer import get_kv_cache_manager, FusionKVCacheManager
+except ImportError:
+    get_kv_cache_manager = None
+    FusionKVCacheManager = None
 
 
 class KnowledgeBaseLayer:
@@ -25,7 +46,8 @@ class KnowledgeBaseLayer:
         embedding_model: str = "BAAI/bge-small-zh",
         top_k: int = 10,
         chunk_size: int = 512,
-        chunk_overlap: int = 64
+        chunk_overlap: int = 64,
+        enable_kv_cache: bool = True
     ):
         """
         初始化知识库层
@@ -35,6 +57,7 @@ class KnowledgeBaseLayer:
             top_k: 默认返回数量
             chunk_size: 分块大小
             chunk_overlap: 分块重叠大小
+            enable_kv_cache: 是否启用 KV Cache
         """
         # 文档存储
         self.documents: Dict[str, Dict] = {}
@@ -64,17 +87,27 @@ class KnowledgeBaseLayer:
         self._embedding_model_name = "qwen2.5:1.5b"  # 备用嵌入模型（当 nomic-embed-text 不可用时）
         self._init_embedding_engine()
 
-    def _init_embedding_engine(self):
+        # ── KV Cache 集成 ──────────────────────────────────────────
+        self._kv_cache_enabled = enable_kv_cache
+        self._kv_cache = None
+        if enable_kv_cache and get_kv_cache_manager:
+            self._kv_cache = get_kv_cache_manager()
+            self._kv_cache.set_knowledge_base(self)
+            self._kv_cache.set_embedding_func(self._generate_simple_embedding)
+            logger.info("[KnowledgeBase] KV Cache 已启用")
+        elif enable_kv_cache:
+            logger.info("[KnowledgeBase] KV Cache 不可用（模块未找到）")
         """初始化嵌入引擎：优先 Ollama 嵌入模型（nomic-embed-text → qwen2.5:1.5b）"""
         try:
             import requests
-            r = requests.get("http://localhost:11434/api/tags", timeout=3)
+            ollama_url = get_ollama_url()
+            r = requests.get(f"{ollama_url}/api/tags", timeout=3)
             if r.status_code != 200:
                 raise RuntimeError("Ollama not responding")
 
             # ── 尝试 nomic-embed-text（最优） ────────────────────
             test_resp = requests.post(
-                "http://localhost:11434/api/embeddings",
+                f"{ollama_url}/api/embeddings",
                 json={"model": "nomic-embed-text", "prompt": "test"},
                 timeout=10
             )
@@ -90,7 +123,7 @@ class KnowledgeBaseLayer:
 
             # ── 尝试 qwen2.5:1.5b（备用，本地 LLM 可用） ─────────
             test_resp2 = requests.post(
-                "http://localhost:11434/api/embeddings",
+                f"{ollama_url}/api/embeddings",
                 json={"model": "qwen2.5:1.5b", "prompt": "test"},
                 timeout=15
             )
@@ -200,7 +233,7 @@ class KnowledgeBaseLayer:
                     # 方式1: requests 直接调用 /api/embeddings
                     import requests
                     resp = requests.post(
-                        "http://localhost:11434/api/embeddings",
+                        f"{get_ollama_url()}/api/embeddings",
                         json={"model": self._embedding_model_name, "prompt": text[:2048]},
                         timeout=15
                     )
@@ -344,6 +377,15 @@ class KnowledgeBaseLayer:
         Returns:
             搜索结果列表
         """
+        # ── KV Cache 检查 ────────────────────────────────────────────
+        if self._kv_cache_enabled and self._kv_cache:
+            cached = self._kv_cache.get_retrieval_cached(
+                query, top_k, {"doc_type": doc_type, "alpha": alpha}
+            )
+            if cached is not None:
+                logger.debug(f"[KnowledgeBase] 检索缓存命中: {query[:30]}...")
+                return cached
+        
         with self.lock:
             self.search_count += 1
             
@@ -422,6 +464,12 @@ class KnowledgeBaseLayer:
             if formatted:
                 self.hit_count += 1
             
+            # ── 写入 KV Cache ────────────────────────────────────────
+            if self._kv_cache_enabled and self._kv_cache:
+                self._kv_cache.set_retrieval_cache(
+                    query, formatted, top_k, {"doc_type": doc_type, "alpha": alpha}
+                )
+            
             return formatted
     
     def search_optimized(
@@ -450,8 +498,6 @@ class KnowledgeBaseLayer:
             搜索结果列表
         """
         import time as time_module
-from core.logger import get_logger
-logger = get_logger('fusion_rag.knowledge_base')
 
         
         with self.lock:
@@ -580,6 +626,12 @@ logger = get_logger('fusion_rag.knowledge_base')
             if formatted:
                 self.hit_count += 1
             
+            # ── 写入 KV Cache ────────────────────────────────────────
+            if self._kv_cache_enabled and self._kv_cache:
+                self._kv_cache.set_retrieval_cache(
+                    query, formatted, top_k, {"doc_type": doc_type, "alpha": alpha, "optimized": True}
+                )
+            
             return formatted
     
     def get_document(self, doc_id: str) -> Optional[Dict]:
@@ -588,11 +640,18 @@ logger = get_logger('fusion_rag.knowledge_base')
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
-        return {
+        stats = {
             "document_count": len(self.documents),
             "chunk_count": len(self.chunks),
             "search_count": self.search_count,
             "hit_rate": self.hit_count / max(self.search_count, 1),
             "vocabulary_size": len(self.bm25_index),
-            "avg_chunks_per_doc": len(self.chunks) / max(len(self.documents), 1)
+            "avg_chunks_per_doc": len(self.chunks) / max(len(self.documents), 1),
+            "kv_cache_enabled": self._kv_cache_enabled
         }
+        
+        # 添加 KV Cache 统计
+        if self._kv_cache_enabled and self._kv_cache:
+            stats["kv_cache_stats"] = self._kv_cache.get_stats()
+        
+        return stats

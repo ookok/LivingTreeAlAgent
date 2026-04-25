@@ -16,6 +16,22 @@ import traceback
 
 import httpx
 
+from core.logger import get_logger
+
+logger = get_logger('download_manager')
+
+# 导入统一配置
+try:
+    from core.config.unified_config import get_max_retries, get_retry_delay, get
+except ImportError:
+    # 兼容旧环境
+    def get_max_retries(category="default"):
+        return 3
+    def get_retry_delay(category="default"):
+        return 1.0
+    def get(key, default=None):
+        return default
+
 
 class DownloadStatus(Enum):
     """下载状态"""
@@ -97,8 +113,8 @@ class DownloadManager:
         download_dir: Optional[str] = None,
         max_concurrent: int = 3,
         chunk_size: int = 8192,
-        timeout: int = 60,
-        max_retries: int = 3,
+        timeout: int = None,
+        max_retries: int = None,
     ):
         """
         初始化下载管理器
@@ -115,8 +131,8 @@ class DownloadManager:
         
         self.max_concurrent = max_concurrent
         self.chunk_size = chunk_size
-        self.timeout = timeout
-        self.max_retries = max_retries
+        self.timeout = timeout if timeout is not None else get("timeouts.download", 120)
+        self.max_retries = max_retries if max_retries is not None else get_max_retries("download")
         
         # 下载任务存储
         self.tasks: dict[str, DownloadTask] = {}
@@ -484,9 +500,6 @@ class DownloadManager:
         """打开下载目录"""
         import platform
         import subprocess
-from core.logger import get_logger
-logger = get_logger('download_manager')
-
         
         path = str(self.download_dir)
         

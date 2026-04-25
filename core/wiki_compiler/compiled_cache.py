@@ -17,6 +17,9 @@
 - 好的答案被沉淀为新的 Wiki 页面
 """
 
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compiled_cache')
+
 import os
 import json
 import time
@@ -567,8 +570,6 @@ class CompiledCache:
     def _extract_tags(self, text: str) -> List[str]:
         """提取标签"""
         import re
-from core.logger import get_logger
-logger = get_logger('wiki_compiler.compiled_cache')
 
         tags = []
         # 提取 #标签

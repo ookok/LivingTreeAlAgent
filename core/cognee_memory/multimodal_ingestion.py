@@ -9,6 +9,9 @@
 - 网页
 """
 
+from core.logger import get_logger
+logger = get_logger('cognee_memory.multimodal_ingestion')
+
 import os
 import re
 import json
@@ -346,8 +349,6 @@ class MultimodalIngester:
     def _generate_id(self, *parts: str) -> str:
         """生成 ID"""
         import hashlib
-from core.logger import get_logger
-logger = get_logger('cognee_memory.multimodal_ingestion')
 
         raw = "|".join(str(p) for p in parts)
         return hashlib.md5(raw.encode()).hexdigest()[:16]

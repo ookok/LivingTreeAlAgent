@@ -22,6 +22,9 @@ Error Logger - 错误日志管理系统
         error_logger.log_error(e, component="main_window", context={"action": "initialize"})
 """
 
+from core.logger import get_logger
+logger = get_logger('error_management.error_logger')
+
 import os
 import sys
 import json
@@ -375,8 +378,6 @@ def get_error_logger() -> ErrorLogger:
 def setup_exception_handler():
     """设置异常处理器，捕获系统异常退出"""
     import sys
-from core.logger import get_logger
-logger = get_logger('error_management.error_logger')
 
     original_excepthook = sys.excepthook
     

@@ -31,6 +31,22 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+# 统一配置导入
+try:
+    from core.config.unified_config import get_api_gateway_config
+except ImportError:
+    get_api_gateway_config = None
+
+
+def _get_gateway_timeout() -> int:
+    """获取网关超时配置"""
+    if get_api_gateway_config:
+        try:
+            return get_api_gateway_config().get("timeout", 60)
+        except Exception:
+            pass
+    return 60
+
 
 class GatewayProvider(Enum):
     """支持的API提供商"""
@@ -345,7 +361,7 @@ class APIGateway:
         url = f"{key.endpoint}/chat/completions" if key.endpoint else "https://api.openai.com/v1/chat/completions"
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=_get_gateway_timeout()) as resp:
                 result = await resp.json()
 
         if resp.status != 200:
@@ -391,7 +407,7 @@ class APIGateway:
         url = f"{key.endpoint}/chat/completions?api-version=2024-02-01"
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=_get_gateway_timeout()) as resp:
                 result = await resp.json()
 
         if resp.status != 200:
@@ -449,7 +465,7 @@ class APIGateway:
         url = f"{key.endpoint}/v1/messages" if key.endpoint else "https://api.anthropic.com/v1/messages"
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=_get_gateway_timeout()) as resp:
                 result = await resp.json()
 
         if resp.status != 200:

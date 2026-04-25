@@ -9,8 +9,23 @@ from typing import Optional, List, Dict, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
+from core.logger import get_logger
 from core.model_layer_config import ModelTier, ServiceStatus, DeployMode
 from core.deployment_engine import DeploymentEngine, get_deployment_engine
+
+
+def _get_default_monitor_config() -> Dict[str, Any]:
+    """从统一配置获取默认值"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return config.get_polling_config("check")
+    except Exception:
+        return {"interval": 5.0, "max_wait": 60.0}
+
+
+# 获取默认值
+_default_monitor_config = _get_default_monitor_config()
 
 
 # ── 数据结构 ────────────────────────────────────────────────────────────────
@@ -66,10 +81,10 @@ class DeploymentMonitor:
     def __init__(
         self,
         engine: Optional[DeploymentEngine] = None,
-        check_interval: float = 5.0
+        check_interval: Optional[float] = None
     ):
         self.engine = engine or get_deployment_engine()
-        self.check_interval = check_interval
+        self.check_interval = check_interval or _default_monitor_config.get("interval", 5.0)
         self._monitoring = False
         self._monitor_thread: Optional[threading.Thread] = None
         self._callbacks: List[Callable[[SystemStatus], None]] = []
@@ -218,9 +233,6 @@ class DeploymentMonitor:
         """检查系统资源"""
         try:
             import psutil
-from core.logger import get_logger
-logger = get_logger('deployment_monitor')
-
             mem = psutil.virtual_memory()
             self._status.total_memory_gb = mem.total / (1024**3)
             self._status.used_memory_gb = mem.used / (1024**3)

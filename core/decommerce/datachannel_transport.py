@@ -13,7 +13,7 @@ DataChannel MessagePack Transport Layer
 5. 心跳检测 - 连接健康监控
 """
 
-from typing import Dict, Any, Optional, List, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 import asyncio
@@ -165,6 +165,20 @@ class TaskSpec:
     priority: Priority = Priority.HIGH
 
 
+def _get_default_datachannel_config() -> Dict[str, float]:
+    """从统一配置获取默认值"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return config.get_heartbeat_config("datachannel")
+    except Exception:
+        return {"interval": 5.0, "timeout": 30.0}
+
+
+# 获取默认值
+_default_dc_config = _get_default_datachannel_config()
+
+
 class DataChannelTransport:
     """
     DataChannel传输层
@@ -181,6 +195,8 @@ class DataChannelTransport:
         channel_label: str = "decommerce_datachannel",
         ordered: bool = True,
         max_retransmits: int = 3,
+        heartbeat_interval: Optional[float] = None,
+        heartbeat_timeout: Optional[float] = None,
     ):
         # WebRTC DataChannel
         self._channel: Optional[Any] = None
@@ -197,9 +213,9 @@ class DataChannelTransport:
         # 流式传输
         self._active_streams: Dict[str, asyncio.Queue] = {}
 
-        # 心跳
-        self._heartbeat_interval: float = 5.0  # 秒
-        self._heartbeat_timeout: float = 30.0  # 秒
+        # 心跳（从统一配置获取）
+        self._heartbeat_interval: float = heartbeat_interval or _default_dc_config.get("interval", 5.0)
+        self._heartbeat_timeout: float = heartbeat_timeout or _default_dc_config.get("timeout", 30.0)
         self._last_received: float = time.time()
         self._heartbeat_task: Optional[asyncio.Task] = None
 

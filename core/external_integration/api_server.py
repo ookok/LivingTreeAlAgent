@@ -19,6 +19,9 @@ API 端点:
 - GET  /api/v1/capabilities    - 能力列表
 """
 
+from core.logger import get_logger
+logger = get_logger('external_integration.api_server')
+
 import json
 import time
 import hashlib
@@ -427,8 +430,6 @@ class APIClient:
     async def _post(self, endpoint: str, data: Dict) -> Dict:
         """发送 POST 请求"""
         import aiohttp
-from core.logger import get_logger
-logger = get_logger('external_integration.api_server')
 
 
         async with aiohttp.ClientSession() as session:

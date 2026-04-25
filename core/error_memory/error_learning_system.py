@@ -15,6 +15,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('error_memory.error_learning_system')
+
 from __future__ import annotations
 
 import re
@@ -67,8 +70,6 @@ class ErrorLearningSystem:
     使用示例：
     ```python
     from core.error_memory import ErrorLearningSystem
-from core.logger import get_logger
-logger = get_logger('error_memory.error_learning_system')
 
     
     # 初始化

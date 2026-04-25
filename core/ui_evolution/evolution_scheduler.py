@@ -13,6 +13,9 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_evolution.evolution_scheduler')
+
 import json
 import threading
 import time
@@ -521,8 +524,6 @@ def trigger_learning(
     使用示例:
     ```python
     from core.ui_evolution import trigger_learning
-from core.logger import get_logger
-logger = get_logger('ui_evolution.evolution_scheduler')
 
     
     # 用户接受了建议

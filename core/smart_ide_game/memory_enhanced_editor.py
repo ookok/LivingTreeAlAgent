@@ -2,6 +2,9 @@
 记忆增强编辑器模块
 提供代码记忆、项目记忆、领域记忆等功能
 """
+
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.memory_enhanced_editor')
 import re
 import asyncio
 import hashlib
@@ -674,8 +677,6 @@ class SnippetManager:
     ) -> Snippet:
         """创建片段"""
         import uuid
-from core.logger import get_logger
-logger = get_logger('smart_ide_game.memory_enhanced_editor')
 
         snippet = Snippet(
             id=str(uuid.uuid4())[:8],

@@ -9,6 +9,9 @@ Model Deployer - 自动下载与部署管理器
 5. 许可证处理（如有）
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.model_deployer')
+
 import os
 import zipfile
 import tarfile
@@ -485,8 +488,6 @@ class ModelDeployer:
         # 检查Docker
         if tool.tool_type == ToolType.DOCKER:
             import subprocess
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.model_deployer')
 
             try:
                 result = subprocess.run(

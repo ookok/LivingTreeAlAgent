@@ -27,6 +27,15 @@ from typing import Dict, List, Optional, Any, Tuple, Callable
 from collections import defaultdict, deque
 from enum import Enum
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_pd = _get_unified_config()
+except Exception:
+    _uconfig_pd = None
+
+def _pd_get(key: str, default):
+    return _uconfig_pd.get(key, default) if _uconfig_pd else default
+
 
 # ============================================================================
 # 枚举定义
@@ -432,7 +441,7 @@ class ResourcePool:
                 if time.time() - start_time >= timeout:
                     return None
 
-            time.sleep(0.1)
+            time.sleep(_pd_get("delays.polling_short", 0.1))
 
     def release(self, resource_id: str):
         """释放资源"""

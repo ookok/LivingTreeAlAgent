@@ -19,6 +19,9 @@ Private Regulation Vector Database System
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('regulation_vector_db')
+
 import os
 import hashlib
 import json
@@ -731,8 +734,6 @@ class MilvusVectorDB(VectorDBInterface):
     def get_collection_info(self, name: str) -> Dict:
         try:
             from pymilvus import utility, Collection
-from core.logger import get_logger
-logger = get_logger('regulation_vector_db')
 
 
             if not utility.has_collection(name):

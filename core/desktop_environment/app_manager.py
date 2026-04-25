@@ -19,6 +19,9 @@ from enum import Enum
 
 class AppState(Enum):
     """应用状态"""
+
+from core.logger import get_logger
+logger = get_logger('desktop_environment.app_manager')
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -449,8 +452,6 @@ class AppManager:
     def _get_registered_apps_file(self) -> Path:
         """获取已注册应用文件"""
         from . import _DATA_DIR
-from core.logger import get_logger
-logger = get_logger('desktop_environment.app_manager')
 
         return _DATA_DIR / "registered_apps.json"
 

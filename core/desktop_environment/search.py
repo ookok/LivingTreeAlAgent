@@ -17,6 +17,9 @@ from enum import Enum
 
 class SearchCategory(Enum):
     """搜索类别"""
+
+from core.logger import get_logger
+logger = get_logger('desktop_environment.search')
     APP = "app"               # 应用
     FEATURE = "feature"      # 功能
     SETTING = "setting"       # 设置
@@ -283,8 +286,6 @@ class GlobalSearch:
             app_id = action.get("app_id")
             if app_id:
                 from .app_manager import get_app_manager
-from core.logger import get_logger
-logger = get_logger('desktop_environment.search')
 
                 app_manager = get_app_manager()
                 app_manager.start_app(app_id)

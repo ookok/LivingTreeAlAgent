@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from core.config import OllamaConfig
+from core.config import OllamaConfig  # noqa: F401
 from core.logger import get_logger
 logger = get_logger('ollama_client')
 

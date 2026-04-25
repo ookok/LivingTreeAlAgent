@@ -16,6 +16,20 @@ from langchain.prompts import PromptTemplate
 from .document_processor import DocumentProcessor, DocumentChunk
 
 
+def _get_openai_api_key() -> Optional[str]:
+    """获取 OpenAI API Key（兼容统一配置）"""
+    # 优先使用统一配置
+    try:
+        from core.config.unified_config import get_config
+        key = get_config().get_api_key("openai")
+        if key:
+            return key
+    except Exception:
+        pass
+    # 回退到环境变量
+    return os.getenv("OPENAI_API_KEY")
+
+
 @dataclass
 class DocumentQAConfig:
     """文档 QA 配置"""
@@ -191,8 +205,8 @@ class DocumentQA:
             LLM 实例
         """
         try:
-            # 优先使用 OpenAI
-            api_key = os.getenv("OPENAI_API_KEY")
+            # 优先使用 OpenAI（通过统一配置）
+            api_key = _get_openai_api_key()
             if api_key:
                 return OpenAI(
                     model=self.config.llm_model,

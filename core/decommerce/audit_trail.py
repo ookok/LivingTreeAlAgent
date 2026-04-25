@@ -26,6 +26,8 @@ from pathlib import Path
 import subprocess
 import shutil
 
+from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -231,10 +233,13 @@ class AuditTrailSystem:
 
         for path in common_paths:
             try:
+                config = UnifiedConfig.get_instance()
+                discovery_timeout = config.get("decommerce.discovery_timeout", 5)
+                
                 result = subprocess.run(
                     [path, "-version"],
                     capture_output=True,
-                    timeout=5
+                    timeout=discovery_timeout
                 )
                 if result.returncode == 0:
                     return path
@@ -389,7 +394,9 @@ class AuditTrailSystem:
         if self._ffmpeg_process:
             self._ffmpeg_process.terminate()
             try:
-                self._ffmpeg_process.wait(timeout=5)
+                config = UnifiedConfig.get_instance()
+                ffmpeg_timeout = config.get("decommerce.ffmpeg_process_timeout", 5)
+                self._ffmpeg_process.wait(timeout=ffmpeg_timeout)
             except subprocess.TimeoutExpired:
                 self._ffmpeg_process.kill()
 

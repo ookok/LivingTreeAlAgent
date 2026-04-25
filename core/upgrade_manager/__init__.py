@@ -9,6 +9,9 @@
 5. 回滚机制
 """
 
+from core.logger import get_logger
+logger = get_logger('upgrade_manager.__init__')
+
 import json
 import shutil
 import os
@@ -677,8 +680,6 @@ class SmartUpgradeManager:
     async def _simulate_delay(self, seconds: float):
         """模拟延迟"""
         import asyncio
-from core.logger import get_logger
-logger = get_logger('upgrade_manager.__init__')
 
         await asyncio.sleep(seconds)
 

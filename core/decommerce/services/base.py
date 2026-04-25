@@ -5,12 +5,26 @@ Base Service Handler
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Callable, Awaitable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get_default_heartbeat_config() -> Dict[str, float]:
+    """从统一配置获取默认心跳配置"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return config.get_heartbeat_config("service")
+    except Exception:
+        return {"interval": 10.0, "timeout": 30.0}
+
+
+# 获取默认值
+_default_hb = _get_default_heartbeat_config()
 
 
 class HandlerCapability(Enum):
@@ -27,8 +41,8 @@ class HandlerConfig:
     """处理器配置"""
     max_concurrent: int = 1
     session_timeout_seconds: int = 3600
-    heartbeat_interval_seconds: int = 10
-    heartbeat_timeout_seconds: int = 30
+    heartbeat_interval_seconds: float = field(default_factory=lambda: _default_hb.get("interval", 10.0))
+    heartbeat_timeout_seconds: float = field(default_factory=lambda: _default_hb.get("timeout", 30.0))
 
     # 能力
     capabilities: list = None

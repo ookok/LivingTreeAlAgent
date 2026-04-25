@@ -11,6 +11,9 @@ https://arxiv.org/abs/2601.04377
 3. 规划蓝图 (Planning Blueprint)
 """
 
+from core.logger import get_logger
+logger = get_logger('disco_rag.__init__')
+
 import re
 import json
 import sqlite3
@@ -357,8 +360,6 @@ class DiscourseRAG:
 
     def __init__(self, db_path: str | Path = None):
         from core.config import get_config_dir
-from core.logger import get_logger
-logger = get_logger('disco_rag.__init__')
 
 
         if db_path is None:

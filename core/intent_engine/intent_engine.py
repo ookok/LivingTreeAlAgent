@@ -202,8 +202,10 @@ class IntentEngine:
         """
         根据意图类型建议使用的模型
         
+        通过 config_provider 读取模型层级映射，不再硬编码模型名。
+        
         Returns:
-            模型名称（qwen2.5:1.5b / qwen3.5:4b / qwen3.5:9b）
+            模型名称
         """
         # 简单任务 → L1
         simple_intents = {
@@ -233,14 +235,25 @@ class IntentEngine:
             IntentType.MULTIPLE,
         }
         
-        if intent.intent_type in simple_intents:
-            return "qwen2.5:1.5b"
-        elif intent.intent_type in medium_intents:
-            return "qwen3.5:4b"
-        elif intent.intent_type in complex_intents:
-            return "qwen3.5:9b"
-        else:
-            return "qwen3.5:4b"  # 默认 L3
+        # 从系统配置读取对应层级的模型
+        try:
+            from core.config_provider import get_l1_model, get_l3_model, get_l4_model
+            if intent.intent_type in simple_intents:
+                return get_l1_model()
+            elif intent.intent_type in medium_intents:
+                return get_l3_model()
+            elif intent.intent_type in complex_intents:
+                return get_l4_model()
+            else:
+                return get_l3_model()
+        except Exception:
+            # 配置读取失败时回退
+            if intent.intent_type in simple_intents:
+                return "qwen2.5:1.5b"
+            elif intent.intent_type in complex_intents:
+                return "qwen3.5:9b"
+            else:
+                return "qwen3.5:4b"
     
     def explain(self, intent: Intent) -> str:
         """

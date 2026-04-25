@@ -21,6 +21,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_pipeline')
+
 from __future__ import annotations
 
 import logging
@@ -256,8 +259,6 @@ class UnifiedPipeline:
         """Ollama 客户端"""
         if self._ollama_client is None:
             from core.ollama_client import OllamaClient
-from core.logger import get_logger
-logger = get_logger('unified_pipeline')
 
             self._ollama_client = OllamaClient(base_url=self.ollama_url)
         return self._ollama_client

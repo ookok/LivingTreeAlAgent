@@ -331,9 +331,6 @@ def patch_hermes_agent():
     """
     try:
         from core import agent as agent_module
-from core.logger import get_logger
-logger = get_logger('knowledge_hooks')
-
 
         # 检查是否已经打过补丁
         if hasattr(agent_module.HermesAgent, "_knowledge_hooks_patched"):

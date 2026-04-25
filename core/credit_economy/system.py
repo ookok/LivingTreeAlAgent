@@ -5,6 +5,9 @@ Credit Economy System
 实现用户积分管理、养成系统和游戏系统的功能。
 """
 
+from core.logger import get_logger
+logger = get_logger('credit_economy.system')
+
 import json
 import uuid
 import time
@@ -205,8 +208,6 @@ class CreditEconomySystem:
 
     def __init__(self, storage_path: str = None):
         from pathlib import Path
-from core.logger import get_logger
-logger = get_logger('credit_economy.system')
 
         if storage_path is None:
             storage_path = Path("~/.hermes/credit_economy").expanduser()

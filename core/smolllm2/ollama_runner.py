@@ -19,8 +19,12 @@ from dataclasses import dataclass
 
 import httpx
 
+from core.logger import get_logger
+
 from .models import SmolLM2Config
 from .downloader import download_smolllm2
+
+logger = get_logger('smolllm2.ollama_runner')
 
 
 @dataclass
@@ -110,9 +114,6 @@ class OllamaRunner:
             ollama_gguf_path = ollama_models / gguf_path.name
             if not ollama_gguf_path.exists():
                 import shutil
-from core.logger import get_logger
-logger = get_logger('smolllm2.ollama_runner')
-
                 shutil.copy(gguf_path, ollama_gguf_path)
 
             # 创建或更新 Modelfile

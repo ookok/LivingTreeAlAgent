@@ -24,6 +24,18 @@ from .diarization import DiarizationResult, SpeakerDiarization
 from .recorder import AudioRecorder, RecordingConfig
 
 
+def _get_api_key(provider: str) -> str:
+    """获取 API Key（兼容统一配置）"""
+    try:
+        from core.config.unified_config import get_config
+        key = get_config().get_api_key(provider)
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.environ.get(f"{provider.upper()}_API_KEY", "")
+
+
 class MeetingStatus(Enum):
     """会议状态"""
     IDLE = "idle"               # 空闲
@@ -170,10 +182,10 @@ class MeetingManager:
             if provider == "ollama":
                 self.summarizer = MeetingSummarizer.create_ollama(model=model)
             elif provider == "groq":
-                api_key = os.environ.get("GROQ_API_KEY", "")
+                api_key = _get_api_key("groq")
                 self.summarizer = MeetingSummarizer.create_groq(api_key=api_key, model=model)
             elif provider == "openrouter":
-                api_key = os.environ.get("OPENROUTER_API_KEY", "")
+                api_key = _get_api_key("openrouter")
                 self.summarizer = MeetingSummarizer.create_openrouter(api_key=api_key, model=model)
             else:
                 self.summarizer = MeetingSummarizer.create_ollama(model=model)

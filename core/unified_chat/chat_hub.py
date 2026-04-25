@@ -10,6 +10,9 @@
 - 去中心化邮箱: 邮件通道 (复用)
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_chat.chat_hub')
+
 import asyncio
 import uuid
 import time
@@ -530,8 +533,6 @@ class ChatHub:
     def search_messages(self, query: str, session_id: str = "") -> List:
         """搜索消息"""
         from .session_manager import SearchScope
-from core.logger import get_logger
-logger = get_logger('unified_chat.chat_hub')
 
         if session_id:
             return self.session_manager.search_messages(query, SearchScope.CURRENT_SESSION, session_id)

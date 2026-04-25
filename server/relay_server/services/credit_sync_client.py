@@ -22,6 +22,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 import httpx
 
+from core.config.unified_config import UnifiedConfig
+
 
 # ============ 同步状态枚举 ============
 
@@ -110,8 +112,10 @@ class CreditSyncClient:
         # 同步锁
         self._sync_lock = asyncio.Lock()
 
-        # 同步间隔（秒）
-        self.sync_interval = 30  # 30秒同步一次
+        # 同步间隔（秒）- 从配置读取
+        config = UnifiedConfig.get_instance()
+        self.sync_interval = config.get("server.credit_sync_interval", 30)  # 30秒同步一次
+        self.api_timeout = config.get("server.credit_api_timeout", 30.0)  # API 超时（秒）
 
         # 最后同步时间
         self.last_sync_time = 0
@@ -297,7 +301,7 @@ class CreditSyncClient:
             return True
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=self.api_timeout) as client:
                 response = await client.post(
                     f"{self.relay_url}/api/credit/sync/push",
                     json={
@@ -331,7 +335,7 @@ class CreditSyncClient:
     async def _pull_remote_data(self) -> Tuple[bool, str]:
         """从服务器拉取最新数据"""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=self.api_timeout) as client:
                 response = await client.get(
                     f"{self.relay_url}/api/credit/sync/pull",
                     params={

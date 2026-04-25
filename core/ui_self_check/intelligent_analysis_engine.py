@@ -13,6 +13,9 @@
 4. 性能监控
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_self_check.intelligent_analysis_engine')
+
 import threading
 import time
 import logging
@@ -136,8 +139,6 @@ class IntelligentAnalysisEngine:
             ai_result = self._ai_service.diagnose(context)
             if ai_result:
                 from .reactive_error_analyzer import DiagnosisResult as DR, ErrorSeverity
-from core.logger import get_logger
-logger = get_logger('ui_self_check.intelligent_analysis_engine')
 
                 return DR(
                     error_context=context,

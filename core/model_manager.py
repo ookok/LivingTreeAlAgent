@@ -4,6 +4,9 @@
 负责模型的检测、选择、下载和管理
 """
 
+from core.logger import get_logger
+logger = get_logger('model_manager')
+
 import os
 import json
 import threading
@@ -14,6 +17,15 @@ from dataclasses import dataclass
 from core.config import AppConfig, OllamaConfig
 from core.ollama_client import OllamaClient
 from core.model_priority_loader import ModelBackend, LocalModelPriorityLoader
+
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_mm = _get_unified_config()
+except Exception:
+    _uconfig_mm = None
+
+def _mm_get(key: str, default):
+    return _uconfig_mm.get(key, default) if _uconfig_mm else default
 
 
 @dataclass
@@ -404,8 +416,8 @@ class ModelManager:
             import time
             start_time = time.time()
             while task.status not in [DownloadStatus.COMPLETED, DownloadStatus.FAILED, DownloadStatus.CANCELLED]:
-                time.sleep(1)
-                if time.time() - start_time > 600:  # 10分钟超时
+                time.sleep(_mm_get("delays.polling_medium", 1))
+                if time.time() - start_time > _mm_get("timeouts.long", 600):  # 下载超时
                     logger.info(f"[ModelManager] 下载超时")
                     break
             
@@ -473,7 +485,7 @@ class ModelManager:
                     ["ollama", "list"],
                     capture_output=True,
                     text=True,
-                    timeout=10
+                    timeout=_mm_get("timeouts.quick", 10)
                 )
                 if check_result.returncode != 0:
                     logger.info(f"[ModelManager] Ollama 服务未运行，跳过 ollama pull")
@@ -643,7 +655,5 @@ class ModelManager:
         """
         self.config.ollama.default_model = model_name
         from core.config import save_config
-from core.logger import get_logger
-logger = get_logger('model_manager')
 
         save_config(self.config)

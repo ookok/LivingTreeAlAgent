@@ -13,6 +13,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.streaming_processor')
+
 import logging
 import json
 import asyncio
@@ -560,8 +563,6 @@ class StreamingProcessor:
     def get_memory_usage(self) -> Dict[str, int]:
         """获取内存使用情况"""
         import sys
-from core.logger import get_logger
-logger = get_logger('smart_writing.streaming_processor')
 
         
         # 估算缓存大小

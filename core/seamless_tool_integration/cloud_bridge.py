@@ -11,6 +11,9 @@ Cloud Bridge - 云端计算备选
 5. 费用估算
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.cloud_bridge')
+
 import os
 import time
 import json
@@ -449,8 +452,6 @@ class CloudBridge:
 
         # 在后台模拟执行
         import threading
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.cloud_bridge')
 
 
         def simulate_execution():

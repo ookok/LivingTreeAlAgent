@@ -29,6 +29,9 @@ for chunk in agent.send_message("Python 异步编程"):
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('agent_pipeline_adapter')
+
 from __future__ import annotations
 
 import logging
@@ -249,8 +252,6 @@ def create_pipeline_agent(
     """
     if agent_class is None:
         from core.agent import HermesAgent
-from core.logger import get_logger
-logger = get_logger('agent_pipeline_adapter')
 
         agent_class = HermesAgent
     

@@ -19,6 +19,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List, Callable, Dict, Any
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 # ============ 中继同步配置 ============
@@ -225,12 +231,17 @@ class RelaySyncClient:
         if not self.config.relay_server_url:
             return
 
+        # 从配置读取超时
+        timeout = 30
+        if get_config:
+            timeout = get_config().get("timeouts.medium", 30)
+        
         # 构建请求
         url = f"{self.config.relay_server_url}/api/email/sync/status"
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=30) as resp:
+                async with session.get(url, timeout=timeout) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         await self._process_sync_data(data)

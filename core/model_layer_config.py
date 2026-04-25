@@ -12,6 +12,10 @@ from enum import Enum
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
+from core.logger import get_logger
+
+logger = get_logger('model_layer_config')
+
 
 # ── 枚举定义 ────────────────────────────────────────────────────────────────
 
@@ -308,9 +312,6 @@ def check_system_memory() -> Dict[str, float]:
     """获取系统内存信息"""
     try:
         import psutil
-from core.logger import get_logger
-logger = get_logger('model_layer_config')
-
         mem = psutil.virtual_memory()
         return {
             "total_gb": mem.total / (1024**3),

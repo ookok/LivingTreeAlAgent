@@ -19,6 +19,9 @@ class FeedSafetyFilter:
     4. 人工复核队列
     """
 
+from core.logger import get_logger
+logger = get_logger('feed_aggregator.safety_filter')
+
     def __init__(self, data_dir: Optional[Path] = None):
         self.data_dir = data_dir or Path.home() / ".hermes-desktop" / "feed_aggregator" / "safety"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -290,8 +293,6 @@ class FeedSafetyFilter:
         path = self.data_dir / "review_queue.json"
         try:
             import json
-from core.logger import get_logger
-logger = get_logger('feed_aggregator.safety_filter')
 
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._review_queue, f, ensure_ascii=False, indent=2)

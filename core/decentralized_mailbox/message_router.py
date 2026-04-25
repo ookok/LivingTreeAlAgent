@@ -16,6 +16,12 @@ from typing import Callable, Optional, Dict, List
 
 from .models import MailMessage, MailboxAddress, MessageStatus, DeliveryReceipt
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,10 +51,17 @@ class PendingMessage:
     message: MailMessage
     recipient: MailboxAddress
     attempts: int = 0
-    max_attempts: int = 3
+    max_attempts: int = None  # 从配置读取
     next_retry: float = 0
     status: DeliveryStatus = DeliveryStatus.PENDING
     receipts: list[DeliveryReceipt] = field(default_factory=list)
+    
+    def __post_init__(self):
+        if self.max_attempts is None:
+            if get_config:
+                self.max_attempts = get_config().get("message.max_delivery_attempts", 3)
+            else:
+                self.max_attempts = 3
 
 
 class MessageRouter:
@@ -368,9 +381,12 @@ class MessageRouter:
                         del self._pending_queue[key]
                         continue
                     
-                    # 重试
+                    # 重试 (指数退避)
                     pending.attempts += 1
-                    pending.next_retry = now + (2 ** pending.attempts) * 5  # 指数退避
+                    base_delay = 5
+                    if get_config:
+                        base_delay = get_config().get("message.retry_base_delay", 5)
+                    pending.next_retry = now + (2 ** pending.attempts) * base_delay
                     
                     result = await self.send_message(pending.message, pending.recipient)
                     

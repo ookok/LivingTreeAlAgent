@@ -20,6 +20,8 @@ import asyncio
 import hashlib
 import random
 
+from core.config.unified_config import UnifiedConfig
+
 
 class NodeRole(Enum):
     """节点角色"""
@@ -377,7 +379,10 @@ class TopologyPushService:
     def __init__(self, discovery_service: NodeDiscoveryService):
         self.discovery = discovery_service
         self.subscribed_clients: Set[str] = set()
-        self.push_interval = 30  # 秒
+        
+        # 从配置读取推送间隔
+        config = UnifiedConfig.get_instance()
+        self.push_interval = config.get("p2p_network.topology_push_interval", 30)  # 秒
 
         self._push_task: Optional[asyncio.Task] = None
 

@@ -24,6 +24,9 @@ class DebateEngine:
     4. 标记矛盾点，供人工审核
     """
 
+from core.logger import get_logger
+logger = get_logger('self_upgrade.debate_engine')
+
     def __init__(self, data_dir: Optional[Path] = None):
         self.data_dir = data_dir or Path.home() / ".hermes-desktop" / "self_upgrade"
         self.debates_dir = self.data_dir / "debates"
@@ -191,8 +194,6 @@ class DebateEngine:
         # 复用 system_brain 的本地模型
         try:
             from core.system_brain import get_system_brain
-from core.logger import get_logger
-logger = get_logger('self_upgrade.debate_engine')
 
             brain = get_system_brain()
             result = await brain.generate(prompt, max_tokens=500)

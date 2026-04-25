@@ -15,6 +15,12 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,6 +135,11 @@ class TurnClient:
 
     async def _stun_binding(self) -> Optional[Tuple[str, int]]:
         """发送 STUN Binding 请求"""
+        # 从配置读取超时
+        timeout = 5.0
+        if get_config:
+            timeout = get_config().get("relay.stun_timeout", 5.0)
+            
         # 构建 Binding Request
         msg = self._build_stun_header(self.STUN_BINDING_REQUEST)
         msg += self._encode_attr(self.ATTR_SOFTWARE, b"Hermes-TURN-Client")
@@ -137,7 +148,7 @@ class TurnClient:
         await loop.sock_sendto(self._sock, msg, (self.server, self.port))
 
         try:
-            data, addr = await asyncio.wait_for(loop.sock_recvfrom(self._sock, 1024), timeout=5.0)
+            data, addr = await asyncio.wait_for(loop.sock_recvfrom(self._sock, 1024), timeout=timeout)
             return self._parse_xor_address(data)
         except asyncio.TimeoutError:
             logger.warning("STUN Binding 超时")
@@ -159,8 +170,13 @@ class TurnClient:
         loop = asyncio.get_event_loop()
         await loop.sock_sendto(self._sock, msg, (self.server, self.port))
 
+        # 从配置读取超时
+        timeout = 5.0
+        if get_config:
+            timeout = get_config().get("relay.stun_timeout", 5.0)
+            
         try:
-            data, addr = await asyncio.wait_for(loop.sock_recvfrom(self._sock, 1024), timeout=5.0)
+            data, addr = await asyncio.wait_for(loop.sock_recvfrom(self._sock, 1024), timeout=timeout)
             return self._parse_xor_relayed_address(data)
         except asyncio.TimeoutError:
             logger.warning("TURN Allocate 超时")

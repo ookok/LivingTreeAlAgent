@@ -27,6 +27,19 @@ from enum import Enum
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url, get
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+    def get(key, default=None):
+        return default
+
+def _sar_get(key: str, default):
+    return get(key, default)
+
 logger = logging.getLogger(__name__)
 
 
@@ -328,15 +341,17 @@ class SmartAI Router:
 
     def _setup_edge_endpoints(self):
         """配置边缘端点"""
+        # 从统一配置获取默认 Ollama 地址
+        default_ollama_url = get_ollama_url()
         edge_configs = self.config.get("edge_servers", [
-            {"name": "ollama_local", "endpoint": "http://localhost:11434", "model": "qwen2:7b"}
+            {"name": "ollama_local", "endpoint": default_ollama_url, "model": "qwen2:7b"}
         ])
 
         for cfg in edge_configs:
             self.endpoints[ComputeTier.EDGE].append(TierEndpoint(
                 name=cfg.get("name", "edge"),
                 tier=ComputeTier.EDGE,
-                endpoint=cfg.get("endpoint", "http://localhost:11434"),
+                endpoint=cfg.get("endpoint", default_ollama_url),
                 api_key=cfg.get("api_key"),
                 max_tokens=4096,
                 cost_per_1k_input=0.0,
@@ -646,7 +661,7 @@ class SmartAI Router:
             }
 
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=30) as resp:
+                async with session.post(url, json=payload, timeout=_sar_get("ai_router.ollama_timeout", 30)) as resp:
                     result = await resp.json()
 
             return AIResponse(
@@ -684,7 +699,7 @@ class SmartAI Router:
                     str(endpoint.endpoint),
                     headers=headers,
                     json=payload,
-                    timeout=60
+                    timeout=_sar_get("ai_router.cloud_timeout", 60)
                 ) as resp:
                     result = await resp.json()
 

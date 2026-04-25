@@ -5,6 +5,9 @@ Cognee RAG 管道
 支持知识图谱、向量检索、混合搜索
 """
 
+from core.logger import get_logger
+logger = get_logger('cognee_memory.rag_pipeline')
+
 import asyncio
 import json
 import time
@@ -304,8 +307,6 @@ class RAGPipeline:
     def _extract_entities(self, text: str) -> List[Dict[str, str]]:
         """提取实体（简单实现）"""
         import re
-from core.logger import get_logger
-logger = get_logger('cognee_memory.rag_pipeline')
 
 
         entities = []

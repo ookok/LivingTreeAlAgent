@@ -2,6 +2,9 @@
 调试系统模块
 提供多语言调试、变量监视、性能分析等功能
 """
+
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.debugger')
 import asyncio
 import subprocess
 import sys
@@ -787,8 +790,6 @@ class DebugSession:
 def create_debug_session() -> DebugSession:
     """创建调试会话"""
     import uuid
-from core.logger import get_logger
-logger = get_logger('smart_ide_game.debugger')
 
     session_id = str(uuid.uuid4())[:8]
     return DebugSession(session_id)

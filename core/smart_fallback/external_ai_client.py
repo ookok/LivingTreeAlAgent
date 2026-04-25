@@ -23,6 +23,15 @@ from enum import Enum
 from typing import Optional, List, Dict, Any, Callable
 from pathlib import Path
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_ea = _get_unified_config()
+except Exception:
+    _uconfig_ea = None
+
+def _ea_get(key: str, default):
+    return _uconfig_ea.get(key, default) if _uconfig_ea else default
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,7 +154,7 @@ class ExternalAIClient:
                 callback(f"已打开 {app_name}")
 
             # 4. 等待用户操作
-            time.sleep(2)
+            time.sleep(_ea_get("delays.wait_short", 2))
 
             # 5. 尝试执行粘贴和发送（如果有自动化接口）
             # 注意：大多数应用不支持自动化，这里作为提示

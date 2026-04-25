@@ -16,6 +16,9 @@ Agent Chat 增强模块 (通用版)
 - 可扩展：易于添加新的意图类型和处理逻辑
 """
 
+from core.logger import get_logger
+logger = get_logger('agent_chat_enhancer')
+
 from typing import Optional, Callable, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -2348,8 +2351,6 @@ def enhance_agent_chat(
 def example_usage():
     """使用示例"""
     from core.agent_chat import create_agent_chat
-from core.logger import get_logger
-logger = get_logger('agent_chat_enhancer')
 
     
     # 1. 创建基础 AgentChat

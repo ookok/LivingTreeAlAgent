@@ -20,6 +20,10 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from core.logger import get_logger
+
+logger = get_logger('config_provider')
+
 # 默认配置（当配置文件不存在时使用）
 DEFAULT_OLLAMA_URL = "http://www.mogoo.com.cn:8899/v1"
 DEFAULT_MODELS = {
@@ -56,9 +60,6 @@ def _load_config() -> dict:
     if os.path.exists(config_path):
         try:
             import json
-from core.logger import get_logger
-logger = get_logger('config_provider')
-
             with open(config_path, encoding="utf-8") as f:
                 file_config = json.load(f)
                 if "ollama_url" in file_config:

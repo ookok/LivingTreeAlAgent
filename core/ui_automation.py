@@ -19,6 +19,8 @@ from typing import Optional, Callable, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
+from core.config.unified_config import UnifiedConfig
+
 # 屏幕截图依赖
 try:
     import mss
@@ -292,8 +294,10 @@ class UIAutomation:
 
         # 调用系统大脑理解 UI
         if self.system_brain:
+            config = UnifiedConfig.get_instance()
+            ui_config = config.get_ui_automation_config()
             prompt = self._build_ui_analysis_prompt(screenshot_path)
-            response = self.system_brain.generate(prompt, max_tokens=2048)
+            response = self.system_brain.generate(prompt, max_tokens=ui_config["ui_max_tokens"])
             return self._parse_ui_analysis(response)
         else:
             # 无系统大脑时返回基本信息
@@ -397,8 +401,10 @@ class UIAutomation:
 
         # 调用 AI 解析
         if self.system_brain:
+            config = UnifiedConfig.get_instance()
+            ui_config = config.get_ui_automation_config()
             prompt = self._build_operation_parse_prompt(instruction, screenshot_path)
-            response = self.system_brain.generate(prompt, max_tokens=512)
+            response = self.system_brain.generate(prompt, max_tokens=ui_config["parse_max_tokens"])
 
             try:
                 json_str = self._extract_json(response)
@@ -571,7 +577,9 @@ class UIAutomation:
 
 如果找不到，返回 {{"found": false}}。只返回 JSON。"""
 
-        response = self.system_brain.generate(prompt, max_tokens=512)
+        config = UnifiedConfig.get_instance()
+        ui_config = config.get_ui_automation_config()
+        response = self.system_brain.generate(prompt, max_tokens=ui_config["parse_max_tokens"])
 
         try:
             json_str = self._extract_json(response)
@@ -633,13 +641,17 @@ class UIAutomation:
         import pyautogui
         pyautogui.FAILSAFE = True
 
+        config = UnifiedConfig.get_instance()
+        ui_config = config.get_ui_automation_config()
+        type_interval = ui_config["type_interval"]
+
         # 先点击目标
         if action.element and action.element.x > 0:
             pyautogui.click(action.element.x, action.element.y)
         elif action.x > 0:
             pyautogui.click(action.x, action.y)
 
-        time.sleep(0.1)
+        time.sleep(type_interval)
 
         # 输入文本
         pyautogui.typewrite(action.value, interval=0.05)
@@ -714,6 +726,10 @@ class UIAutomation:
         Returns:
             每个步骤的执行结果
         """
+        config = UnifiedConfig.get_instance()
+        ui_config = config.get_ui_automation_config()
+        workflow_step_delay = ui_config["workflow_step_delay"]
+
         results = []
         for step in steps:
             result = self.execute_instruction(step)
@@ -723,7 +739,7 @@ class UIAutomation:
                 break
 
             # 步骤间等待
-            time.sleep(0.3)
+            time.sleep(workflow_step_delay)
 
         return results
 
@@ -742,20 +758,25 @@ class UIAutomation:
     def wait_for_element(
         self,
         target: str,
-        timeout: float = 10.0,
-        poll_interval: float = 0.5
+        timeout: Optional[float] = None,
+        poll_interval: Optional[float] = None
     ) -> Optional[UIElement]:
         """
         等待元素出现
 
         Args:
             target: 元素描述
-            timeout: 超时时间（秒）
-            poll_interval: 轮询间隔
+            timeout: 超时时间（秒），默认从配置读取
+            poll_interval: 轮询间隔，默认从配置读取
 
         Returns:
             找到的元素或 None
         """
+        config = UnifiedConfig.get_instance()
+        ui_config = config.get_ui_automation_config()
+        timeout = timeout if timeout is not None else ui_config["wait_timeout"]
+        poll_interval = poll_interval if poll_interval is not None else ui_config["poll_interval"]
+        
         start_time = time.time()
 
         while time.time() - start_time < timeout:

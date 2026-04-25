@@ -18,6 +18,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.intent_classifier')
+
 import json
 import logging
 import re
@@ -522,8 +525,6 @@ class DocumentIntentClassifier:
         if self._skill_evolution is None:
             try:
                 from core.skill_evolution.agent_loop import SkillEvolutionAgent
-from core.logger import get_logger
-logger = get_logger('smart_writing.intent_classifier')
 
                 self._skill_evolution = SkillEvolutionAgent()
             except ImportError:

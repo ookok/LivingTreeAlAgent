@@ -5,6 +5,7 @@ browser-use 适配器
 """
 
 import asyncio
+import os
 from typing import Optional, Dict, Any, List
 
 from browser_use import Agent, Browser
@@ -16,6 +17,20 @@ from .security_manager import get_security_manager
 from .extensions import get_extension_manager, get_plugin_system, get_user_script_manager
 from .config import get_config_manager, ConfigOption, ConfigType
 from .config.config_validator import RangeValidator, ChoicesValidator
+
+
+def _get_api_key(provider: str) -> Optional[str]:
+    """获取 API Key（兼容统一配置）"""
+    try:
+        from core.config.unified_config import get_config
+        key = get_config().get_api_key(provider)
+        if key:
+            return key
+    except Exception:
+        pass
+    # 回退到环境变量
+    env_var = f"{provider.upper()}_API_KEY"
+    return os.getenv(env_var)
 
 
 class BrowserUseAdapter:
@@ -135,10 +150,9 @@ class BrowserUseAdapter:
             from browser_use import ChatBrowserUse
             return ChatBrowserUse()
         except ImportError:
-            # 回退到 OpenAI
+            # 回退到 OpenAI（通过统一配置）
             try:
-                import os
-                api_key = os.getenv("OPENAI_API_KEY")
+                api_key = _get_api_key("openai")
                 if api_key:
                     return ChatOpenAI(model="gpt-4o", api_key=api_key)
             except Exception:
@@ -146,8 +160,7 @@ class BrowserUseAdapter:
         
         # 回退到 Google
         try:
-            import os
-            api_key = os.getenv("GOOGLE_API_KEY")
+            api_key = _get_api_key("google")
             if api_key:
                 return ChatGoogle(model="gemini-3-flash-preview", api_key=api_key)
         except Exception:
@@ -155,8 +168,7 @@ class BrowserUseAdapter:
         
         # 回退到 Anthropic
         try:
-            import os
-            api_key = os.getenv("ANTHROPIC_API_KEY")
+            api_key = _get_api_key("anthropic")
             if api_key:
                 return ChatAnthropic(model="claude-sonnet-4-6", api_key=api_key)
         except Exception:

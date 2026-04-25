@@ -48,6 +48,24 @@ import threading
 import requests
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass, field, asdict
+
+# 统一配置导入
+try:
+    from core.config.unified_config import get_config, get_timeout
+except ImportError:
+    get_config = get_timeout = None
+
+
+def _get_cache_timeout(name: str = "ollama") -> int:
+    """获取缓存超时配置"""
+    if get_timeout:
+        try:
+            return get_timeout(name)
+        except Exception:
+            pass
+    # 默认值
+    defaults = {"ollama_quick": 3, "ollama_normal": 5, "ollama_slow": 10}
+    return defaults.get(name, 5)
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
@@ -377,7 +395,7 @@ class QueryCompressor:
         if not self.enable_llm:
             return False
         try:
-            r = requests.get(f"{self.ollama_base}/api/tags", timeout=3)
+            r = requests.get(f"{self.ollama_base}/api/tags", timeout=_get_cache_timeout("ollama_quick"))
             if r.status_code == 200:
                 models = [m["name"] for m in r.json().get("models", [])]
                 # 优先选择非思考模型（qwen2.5 系列）
@@ -407,7 +425,7 @@ class QueryCompressor:
                     "stream": False,
                     "options": {"num_predict": 10}
                 },
-                timeout=5
+                timeout=_get_cache_timeout("ollama_normal")
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -855,7 +873,7 @@ class SemanticSimilarityCache:
     def _check_ollama(self) -> bool:
         """检测 Ollama 是否可用"""
         try:
-            r = requests.get(f"{self.ollama_base}/api/tags", timeout=3)
+            r = requests.get(f"{self.ollama_base}/api/tags", timeout=_get_cache_timeout("ollama_quick"))
             if r.status_code == 200:
                 models = [m["name"] for m in r.json().get("models", [])]
                 # 优先用专门的 embedding 模型
@@ -873,7 +891,7 @@ class SemanticSimilarityCache:
             resp = requests.post(
                 f"{self.ollama_base}/api/embed",
                 json={"model": self.EMBEDDING_MODEL, "input": text},
-                timeout=10,
+                timeout=_get_cache_timeout("ollama_slow"),
             )
             if resp.status_code == 200:
                 data = resp.json()

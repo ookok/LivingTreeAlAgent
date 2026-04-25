@@ -30,12 +30,17 @@ python -m core.relay_chain.event_ext.p2p_network.zero_config --web
 ```
 """
 
+from core.logger import get_logger
+logger = get_logger('relay_chain.event_ext.p2p_network.zero_config')
+
 import argparse
 import logging
 import sys
 import time
 import json
 from typing import Optional
+
+from core.config.unified_config import UnifiedConfig
 
 # 设置日志
 logging.basicConfig(
@@ -137,10 +142,13 @@ def start_node(
     logger.info(f"   模式: 零配置自发现")
     logger.info("=" * 60)
 
+    config = UnifiedConfig.get_instance()
+    status_interval = config.get("p2p_network.status_print_interval", 10)
+
     if block:
         try:
             while True:
-                time.sleep(10)
+                time.sleep(status_interval)
                 _print_status(node)
         except KeyboardInterrupt:
             logger.info("\n正在停止节点...")
@@ -427,15 +435,15 @@ def main():
         # 控制台模式
         if args.daemon:
             import threading
-from core.logger import get_logger
-logger = get_logger('relay_chain.event_ext.p2p_network.zero_config')
 
             thread = threading.Thread(target=node.start, daemon=True)
             thread.start()
             logger.info(f"节点在后台运行: {node.node_id}")
+            config = UnifiedConfig.get_instance()
+            status_interval = config.get("p2p_network.status_print_interval", 10)
             try:
                 while True:
-                    time.sleep(10)
+                    time.sleep(status_interval)
                     _print_status(node)
             except KeyboardInterrupt:
                 pass

@@ -8,6 +8,9 @@ Answer Monitor - 答案监控器
 4. 推送通知给用户
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_help_system.answer_monitor')
+
 import time
 import threading
 from dataclasses import dataclass, field
@@ -17,6 +20,23 @@ from enum import Enum
 import hashlib
 
 from .platform_selector import Platform
+
+
+def _get_default_monitoring_config() -> Dict[str, Any]:
+    """从统一配置获取默认值"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return {
+            "check_interval_seconds": config.get("polling.check_interval", 300),
+            "max_monitor_hours": 72,
+        }
+    except Exception:
+        return {"check_interval_seconds": 300, "max_monitor_hours": 72}
+
+
+# 获取默认值
+_default_monitor_config = _get_default_monitoring_config()
 
 
 class MonitorStatus(Enum):
@@ -76,7 +96,7 @@ class MonitoredPost:
 @dataclass
 class MonitoringConfig:
     """监控配置"""
-    check_interval_seconds: int = 300  # 默认5分钟检查一次
+    check_interval_seconds: int = field(default_factory=lambda: _default_monitor_config.get("check_interval_seconds", 300))
     max_monitor_hours: int = 72        # 最多监控72小时
     min_answers_for_quality: int = 3   # 计算质量所需的最低回答数
     auto_solve_threshold: float = 0.8  # 自动标记已解决的置信度阈值
@@ -212,8 +232,6 @@ class AnswerMonitor:
         """
         # 模拟：每次检查随机返回0-2个回答
         import random
-from core.logger import get_logger
-logger = get_logger('smart_help_system.answer_monitor')
 
         new_count = random.randint(0, 2)
 

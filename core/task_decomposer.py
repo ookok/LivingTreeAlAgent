@@ -19,6 +19,14 @@ from typing import Any, Callable, Iterator, List, Optional, Dict
 from threading import Event
 import asyncio
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_td = _get_unified_config()
+    _POLL_SHORT_TD = _uconfig_td.get("delays.polling_short", 0.1)
+except Exception:
+    _uconfig_td = None
+    _POLL_SHORT_TD = 0.1
+
 # ── 枚举定义 ────────────────────────────────────────────────────────────────
 
 
@@ -580,8 +588,6 @@ class SubTaskExecutor:
     ) -> Iterator[TaskDecomposition]:
         """并行执行（流式，返回当前状态）"""
         import concurrent.futures
-from core.logger import get_logger
-logger = get_logger('task_decomposer')
 
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -605,7 +611,7 @@ logger = get_logger('task_decomposer')
                 if not futures:
                     break
 
-                time.sleep(0.1)
+                time.sleep(_POLL_SHORT_TD)
 
     def _execute_dag(
         self,
@@ -730,7 +736,7 @@ logger = get_logger('task_decomposer')
         for i in range(1, 11):
             if self._interrupt_event.is_set():
                 break
-            time.sleep(0.1)
+            time.sleep(_POLL_SHORT_TD)
             subtask.progress = i * 10
 
             # 触发进度回调

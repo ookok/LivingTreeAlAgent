@@ -33,6 +33,15 @@ import queue
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_p2p = _get_unified_config()
+except Exception:
+    _uconfig_p2p = None
+
+def _p2p_get(key: str, default):
+    return _uconfig_p2p.get(key, default) if _uconfig_p2p else default
+
 
 class DiscoveryProtocol(Enum):
     """发现协议"""
@@ -223,10 +232,10 @@ class P2PModelDiscovery:
         self._running = False
 
         if self._listener_thread:
-            self._listener_thread.join(timeout=5)
+            self._listener_thread.join(timeout=_p2p_get("timeouts.short", 5))
 
         if self._broadcaster_thread:
-            self._broadcaster_thread.join(timeout=5)
+            self._broadcaster_thread.join(timeout=_p2p_get("timeouts.short", 5))
 
         # 断开中继连接
         self._disconnect_from_relays()
@@ -401,7 +410,7 @@ class P2PModelDiscovery:
             # 构造下载URL
             download_url = f"http://{source_node.address}:{source_node.port}/model/{package.model_id}"
 
-            response = requests.get(download_url, stream=True, timeout=300)
+            response = requests.get(download_url, stream=True, timeout=_p2p_get("timeouts.download", 300))
 
             target = Path(target_path) if target_path else self.download_dir / package.model_id
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -434,7 +443,7 @@ class P2PModelDiscovery:
 
         target = Path(target_path) if target_path else self.download_dir / f"{package.model_id}.pkg"
 
-        response = requests.get(url, stream=True, timeout=300)
+        response = requests.get(url, stream=True, timeout=_p2p_get("timeouts.download", 300))
 
         total_size = int(response.headers.get('content-length', 0))
         downloaded = 0
@@ -480,7 +489,7 @@ class P2PModelDiscovery:
             try:
                 # 发送到中继服务器
                 import requests
-                requests.post(f"{relay}/broadcast", json=message, timeout=5)
+                requests.post(f"{relay}/broadcast", json=message, timeout=_p2p_get("timeouts.quick", 5))
             except Exception as e:
                 logger.debug(f"中继广播失败: {relay} - {e}")
 
@@ -511,7 +520,7 @@ class P2PModelDiscovery:
             try:
                 # 从消息队列获取消息
                 try:
-                    message = self._message_queue.get(timeout=1)
+                    message = self._message_queue.get(timeout=_p2p_get("delays.polling_short", 1))
                     self._handle_message(message)
                 except queue.Empty:
                     continue
@@ -524,7 +533,7 @@ class P2PModelDiscovery:
         while self._running:
             try:
                 # 每60秒广播一次本地模型
-                time.sleep(60)
+                time.sleep(_p2p_get("p2p.broadcast_interval", 60))
 
                 for package in self.local_models.values():
                     self._broadcast_model_available(package)

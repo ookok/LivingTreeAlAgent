@@ -11,6 +11,9 @@ Broker只转发元数据，不建商品库，数据在卖买双方。
 3. 买家按需通过P2P拉取详情
 """
 
+from core.logger import get_logger
+logger = get_logger('decommerce.listing_broadcast')
+
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -343,8 +346,6 @@ class ListingDiscovery:
 
         try:
             import aiohttp
-from core.logger import get_logger
-logger = get_logger('decommerce.listing_broadcast')
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(

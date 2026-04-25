@@ -18,6 +18,10 @@ from collections import deque
 from enum import Enum
 import time
 
+from core.logger import get_logger
+
+logger = get_logger('task_router')
+
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -307,9 +311,6 @@ class TaskRouter:
             response = self.llm_callback(prompt)
             # 尝试解析 JSON
             import re
-from core.logger import get_logger
-logger = get_logger('task_router')
-
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())

@@ -15,6 +15,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('error_memory.pattern_matcher')
+
 from __future__ import annotations
 
 import re
@@ -315,8 +318,6 @@ class ErrorPatternMatcher:
             from .error_models import PRESET_PATTERNS, PRESET_TEMPLATES
         except ImportError:
             from error_models import PRESET_PATTERNS, PRESET_TEMPLATES
-from core.logger import get_logger
-logger = get_logger('error_memory.pattern_matcher')
 
         self._patterns.update(PRESET_PATTERNS)
         self._templates.update(PRESET_TEMPLATES)

@@ -8,6 +8,9 @@ Data Sync - 三端数据同步
 - P2PStorage (P2P网络同步)
 """
 
+from core.logger import get_logger
+logger = get_logger('cross_platform.data_sync')
+
 import asyncio
 import json
 import time
@@ -150,8 +153,6 @@ class LocalStorage:
     def _save_to_disk(self):
         """保存到磁盘"""
         import os
-from core.logger import get_logger
-logger = get_logger('cross_platform.data_sync')
 
         disk_path = self.db_path.replace('.db', '.json')
         os.makedirs(os.path.dirname(disk_path), exist_ok=True)

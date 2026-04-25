@@ -24,6 +24,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_sb = _get_unified_config()
+except Exception:
+    _uconfig_sb = None
+
+def _sb_get(key: str, default):
+    return _uconfig_sb.get(key, default) if _uconfig_sb else default
+
 
 class ModelStatus(Enum):
     """模型状态"""
@@ -184,7 +193,7 @@ class SystemBrain:
         try:
             resp = self._session.get(
                 f"{self.config.api_base}/api/tags",
-                timeout=5
+                timeout=_sb_get("timeouts.quick", 5)
             )
             if resp.status_code == 200:
                 self._is_available = True
@@ -248,7 +257,7 @@ class SystemBrain:
         try:
             resp = self._session.get(
                 f"{self.config.api_base}/api/tags",
-                timeout=5
+                timeout=_sb_get("timeouts.quick", 5)
             )
             if resp.status_code == 200:
                 models = resp.json().get("models", [])
@@ -303,8 +312,9 @@ class SystemBrain:
             
             # 等待Ollama启动
             import time
+            _wait_short = _sb_get("delays.wait_short", 1)
             for _ in range(10):
-                time.sleep(1)
+                time.sleep(_wait_short)
                 if self._check_ollama():
                     self._report_status("Ollama已启动", 0.1)
                     return
@@ -414,7 +424,7 @@ class SystemBrain:
                         "num_predict": 1
                     }
                 },
-                timeout=60
+                timeout=_sb_get("timeouts.long", 60)
             )
             
             if resp.status_code == 200:
@@ -492,7 +502,7 @@ class SystemBrain:
                     "num_ctx": self.config.num_ctx
                 }
             },
-            timeout=120
+            timeout=_sb_get("timeouts.llm_generate", 120)
         )
         
         if resp.status_code == 200:
@@ -521,7 +531,7 @@ class SystemBrain:
                 }
             },
             stream=True,
-            timeout=120
+            timeout=_sb_get("timeouts.llm_generate", 120)
         )
         
         full_response = ""
@@ -594,7 +604,7 @@ class SystemBrain:
         try:
             resp = self._session.get(
                 f"{self.config.api_base}/api/tags",
-                timeout=5
+                timeout=_sb_get("timeouts.quick", 5)
             )
             if resp.status_code == 200:
                 models = resp.json().get("models", [])
@@ -722,7 +732,7 @@ class SystemBrain:
                 model_name=model_name,
                 base_url=self.config.api_base,
                 timeout=self.config.max_tokens * 0.1,  # 粗略估计
-                connect_timeout=30.0,
+                connect_timeout=_sb_get("timeouts.default", 30.0),
                 track_connection_times=True
             )
 

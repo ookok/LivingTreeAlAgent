@@ -19,6 +19,9 @@ from enum import Enum
 @dataclass
 class ThemeColors:
     """主题颜色"""
+
+from core.logger import get_logger
+logger = get_logger('desktop_environment.theme_system')
     # 主色
     primary: str = "#4A90D9"
     primary_dark: str = "#357ABD"
@@ -481,8 +484,6 @@ class ThemeSystem:
     def save_settings(self):
         """保存主题设置"""
         from . import _DATA_DIR
-from core.logger import get_logger
-logger = get_logger('desktop_environment.theme_system')
 
         settings_file = _DATA_DIR / "theme_settings.json"
 

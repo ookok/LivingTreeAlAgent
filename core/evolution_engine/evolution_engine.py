@@ -30,6 +30,15 @@ from .executor.atomic_executor import AtomicExecutor
 from .executor.rollback_manager import RollbackManager, RollbackType
 from .executor.step_executor import StepExecutor, StepStatus
 
+# Phase 4: 进化记忆
+from .memory.evolution_log import get_evolution_log, EvolutionLog
+from .memory.learning_engine import get_learning_engine, LearningEngine
+from .memory.pattern_miner import get_pattern_miner, PatternMiner
+from .memory.decision_tracker import (
+    get_decision_tracker, DecisionTracker,
+    DecisionType, DecisionContext, DecisionFactor
+)
+
 logger = logging.getLogger('evolution.engine')
 
 
@@ -69,6 +78,12 @@ class EvolutionEngine:
         self._atomic_executor = AtomicExecutor(str(self.project_root))
         self._rollback_manager = RollbackManager(str(self.project_root))
         self._step_executor = StepExecutor(str(self.project_root))
+        
+        # Phase 4: 进化记忆层
+        self._evolution_log = get_evolution_log()
+        self._learning_engine = get_learning_engine(self._evolution_log)
+        self._pattern_miner = get_pattern_miner(self._evolution_log)
+        self._decision_tracker = get_decision_tracker(self._evolution_log)
         
         # 提案队列（使用 StructuredProposal）
         self._proposal_queue: List[StructuredProposal] = []
@@ -293,12 +308,13 @@ class EvolutionEngine:
                 return proposal.to_dict()
         return None
     
-    def approve_proposal(self, proposal_id: str) -> bool:
+    def approve_proposal(self, proposal_id: str, decision_maker: str = "user") -> bool:
         """
         批准提案
         
         Args:
             proposal_id: 提案ID
+            decision_maker: 决策者 (user/system/auto)
         
         Returns:
             是否成功
@@ -313,9 +329,16 @@ class EvolutionEngine:
                     return False
                 
                 proposal.status = ProposalStatus.APPROVED
-                proposal.approved_by = "user"
+                proposal.approved_by = decision_maker
                 proposal.updated_at = datetime.now()
                 self._stats['proposals_approved'] += 1
+                
+                # Phase 4: 记录决策
+                self._record_decision(
+                    DecisionType.APPROVE,
+                    proposal,
+                    decision_maker
+                )
                 
                 logger.info(f"[EvolutionEngine] 提案已批准: {proposal_id}")
                 return True
@@ -377,6 +400,201 @@ class EvolutionEngine:
             违规报告字符串
         """
         return self._safety_fence.get_violations_report()
+    
+    # ── Phase 4: 进化记忆 ──
+    
+    def _record_decision(
+        self,
+        decision_type: DecisionType,
+        proposal: StructuredProposal,
+        decision_maker: str
+    ):
+        """记录决策到追踪器"""
+        try:
+            # 创建决策链
+            chain_id = self._decision_tracker.create_chain(proposal.proposal_id)
+            
+            # 构建决策上下文
+            context = DecisionContext(
+                signals=[s.to_dict() for s in proposal.trigger_signals],
+                proposals=[proposal.to_dict()],
+                proposals_considered=1,
+                risk_tolerance=proposal.risk_level.value
+            )
+            
+            # 构建决策因素
+            factors = [
+                DecisionFactor(
+                    factor_type='priority',
+                    value={'low': 0.25, 'medium': 0.5, 'high': 0.75, 'critical': 1.0}.get(
+                        proposal.priority.value, 0.5
+                    ),
+                    weight=0.3,
+                    description=f'优先级: {proposal.priority.value}'
+                ),
+                DecisionFactor(
+                    factor_type='risk',
+                    value={'low': 0.25, 'medium': 0.5, 'high': 0.75, 'critical': 1.0}.get(
+                        proposal.risk_level.value, 0.5
+                    ),
+                    weight=0.3,
+                    description=f'风险等级: {proposal.risk_level.value}'
+                ),
+                DecisionFactor(
+                    factor_type='signal_strength',
+                    value=len(proposal.trigger_signals) / 10,
+                    weight=0.2,
+                    description=f'触发信号数: {len(proposal.trigger_signals)}'
+                ),
+                DecisionFactor(
+                    factor_type='steps_count',
+                    value=len(proposal.steps) / 20,
+                    weight=0.2,
+                    description=f'执行步骤数: {len(proposal.steps)}'
+                )
+            ]
+            
+            # 记录决策
+            self._decision_tracker.record_decision(
+                chain_id=chain_id,
+                decision_type=decision_type,
+                context=context,
+                factors=factors,
+                reasoning=f"批准提案: {proposal.title}",
+                decision_maker=decision_maker
+            )
+            
+            # 添加事件到模式挖掘器
+            self._pattern_miner.add_event({
+                'type': 'decision',
+                'timestamp': datetime.now().isoformat(),
+                'data': {
+                    'decision_type': decision_type.value,
+                    'proposal_id': proposal.proposal_id,
+                    'priority': proposal.priority.value
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"[EvolutionEngine] 记录决策失败: {e}")
+    
+    def get_learning_insights(self) -> List[Dict[str, Any]]:
+        """获取学习洞察"""
+        try:
+            return self._learning_engine.get_insights()
+        except Exception as e:
+            logger.error(f"[EvolutionEngine] 获取学习洞察失败: {e}")
+            return []
+    
+    def get_patterns_summary(self) -> Dict[str, Any]:
+        """获取模式挖掘摘要"""
+        try:
+            return self._pattern_miner.get_patterns_summary()
+        except Exception as e:
+            logger.error(f"[EvolutionEngine] 获取模式摘要失败: {e}")
+            return {}
+    
+    def get_micro_patterns(self) -> Dict[str, Any]:
+        """获取微模式"""
+        return self._pattern_miner.mine_patterns()
+    
+    def get_decision_audit(self, proposal_id: str) -> Dict[str, Any]:
+        """获取决策审计追踪"""
+        chain = self._decision_tracker.get_chain_by_proposal(proposal_id)
+        if not chain:
+            return {'error': 'Chain not found'}
+        return {
+            'chain': chain.to_dict(),
+            'audit_trail': self._decision_tracker.get_audit_trail(chain.chain_id)
+        }
+    
+    def analyze_root_cause(self, proposal_id: str) -> Dict[str, Any]:
+        """分析根因"""
+        return self._decision_tracker.analyze_root_cause(proposal_id)
+    
+    def get_evolution_summary(self) -> Dict[str, Any]:
+        """获取进化摘要（包含所有记忆层信息）"""
+        return {
+            'log_summary': self._evolution_log.get_summary(),
+            'learning_stats': self._learning_engine.get_statistics(),
+            'patterns_summary': self._pattern_miner.get_patterns_summary(),
+            'decision_stats': self._decision_tracker.get_statistics()
+        }
+    
+    def _learn_from_execution(
+        self,
+        proposal: StructuredProposal,
+        step_results: List[Dict],
+        success: bool
+    ):
+        """从执行结果中学习"""
+        try:
+            # 提取信号信息
+            signals = [s.to_dict() for s in proposal.trigger_signals]
+            
+            # 计算执行结果
+            execution_result = {
+                'proposal_id': proposal.proposal_id,
+                'status': 'success' if success else 'failed',
+                'steps_completed': sum(1 for r in step_results if r.get('status') == 'completed'),
+                'steps_total': len(step_results),
+                'duration_ms': 0  # 简化
+            }
+            
+            # 记录到学习引擎
+            self._learning_engine.learn_from_execution(
+                proposal_type=proposal.proposal_type.value,
+                proposal_id=proposal.proposal_id,
+                signals=signals,
+                execution_result=execution_result
+            )
+            
+            # 添加事件到模式挖掘器
+            self._pattern_miner.add_event({
+                'type': 'execution',
+                'timestamp': datetime.now().isoformat(),
+                'data': execution_result
+            })
+            
+        except Exception as e:
+            logger.error(f"[EvolutionEngine] 学习记录失败: {e}")
+    
+    def _log_execution_result(
+        self,
+        proposal: StructuredProposal,
+        step_results: List[Dict],
+        success: bool
+    ):
+        """记录执行结果到日志"""
+        try:
+            # 记录执行
+            self._evolution_log.log_execution({
+                'proposal_id': proposal.proposal_id,
+                'status': 'success' if success else 'failed',
+                'steps_completed': sum(1 for r in step_results if r.get('status') == 'completed'),
+                'steps_total': len(step_results),
+                'duration_ms': 0
+            })
+            
+            # 更新提案状态
+            self._evolution_log.update_proposal_status(
+                proposal.proposal_id,
+                'completed' if success else 'failed',
+                actual_impact=proposal.estimated_impact
+            )
+            
+            # 记录决策结果
+            chain = self._decision_tracker.get_chain_by_proposal(proposal.proposal_id)
+            if chain:
+                from .memory.decision_tracker import DecisionOutcome
+                self._decision_tracker.resolve_outcome(
+                    chain.chain_id,
+                    DecisionOutcome.SUCCESS if success else DecisionOutcome.FAILURE,
+                    reason=f"执行{'成功' if success else '失败'}"
+                )
+            
+        except Exception as e:
+            logger.error(f"[EvolutionEngine] 日志记录失败: {e}")
     
     # ── Phase 3: 执行提案 ──
     
@@ -506,6 +724,12 @@ class EvolutionEngine:
             )
             
             logger.warning(f"[EvolutionEngine] 提案执行失败: {proposal_id}")
+        
+        # Phase 4: 记录执行结果到学习引擎
+        self._learn_from_execution(proposal, step_results, all_success)
+        
+        # Phase 4: 记录到进化日志
+        self._log_execution_result(proposal, step_results, all_success)
         
         return {
             'success': all_success,

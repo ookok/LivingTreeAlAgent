@@ -15,6 +15,9 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_evolution.hints_integration')
+
 import json
 import threading
 from pathlib import Path
@@ -376,8 +379,6 @@ def create_ui_hints_integration(
     try:
         # 导入 SmartUISystem
         from .smart_ui_system import get_smart_ui_system
-from core.logger import get_logger
-logger = get_logger('ui_evolution.hints_integration')
 
         
         # 创建系统

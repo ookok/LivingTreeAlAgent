@@ -20,6 +20,8 @@ import asyncio
 import random
 import hashlib
 
+from core.config.unified_config import UnifiedConfig
+
 
 class GossipEventType(Enum):
     """Gossip事件类型"""
@@ -92,14 +94,16 @@ class GossipProtocol:
         self,
         node_id: str,
         fanout: int = 3,           # 每次传播的节点数
-        gossip_interval: int = 5,   # Gossip间隔（秒）
-        sync_interval: int = 30,     # 完整同步间隔（秒）
+        gossip_interval: Optional[int] = None,   # Gossip间隔（秒）
+        sync_interval: Optional[int] = None,     # 完整同步间隔（秒）
         ttl: int = 3                # 默认TTL
     ):
+        config = UnifiedConfig.get_instance()
+        
         self.node_id = node_id
         self.fanout = fanout
-        self.gossip_interval = gossip_interval
-        self.sync_interval = sync_interval
+        self.gossip_interval = gossip_interval if gossip_interval is not None else config.get("p2p_network.gossip_interval", 5)
+        self.sync_interval = sync_interval if sync_interval is not None else config.get("p2p_network.sync_interval", 30)
         self.default_ttl = ttl
 
         # 事件历史（用于去重和响应查询）
@@ -495,13 +499,15 @@ class SelfHealingManager:
         connection_pool: Any = None,
         node_registry: Any = None
     ):
+        config = UnifiedConfig.get_instance()
+        
         self.gossip = gossip_protocol
         self.connection_pool = connection_pool
         self.node_registry = node_registry
 
         # 自愈配置
         self.node_timeout_seconds = 120
-        self.health_check_interval = 30
+        self.health_check_interval = config.get("p2p_network.health_check_interval", 30)
 
         # 任务
         self._healing_task: Optional[asyncio.Task] = None

@@ -2,6 +2,7 @@
 L4 Relay 执行器
 四级缓存金字塔的最终执行层
 集成 RelayFreeLLM 网关，支持动态降级和零配置裸跑
+KV Cache 推理优化
 """
 
 import os
@@ -14,6 +15,22 @@ from typing import Dict, Any, List, Optional, AsyncIterator, Callable
 from datetime import datetime
 from enum import Enum
 import httpx
+
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url, get
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+    def get(key, default=None):
+        return default
+
+# 导入 KV Cache
+try:
+    from .kv_cache_optimizer import get_kv_cache_manager
+except ImportError:
+    get_kv_cache_manager = None
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +66,8 @@ class L4RelayExecutor:
         gateway_url: str = "http://localhost:8000/v1",
         relayfree_path: Optional[str] = None,
         enable_write_back: bool = True,
-        fallback_to_direct: bool = True
+        fallback_to_direct: bool = True,
+        enable_kv_cache: bool = True
     ):
         if self._initialized:
             return
@@ -76,9 +94,17 @@ class L4RelayExecutor:
             "direct_requests": 0,
             "write_back_count": 0,
             "failures": 0,
-            "last_provider": None
+            "last_provider": None,
+            "cache_hits": 0
         }
 
+        # ── KV Cache 集成 ──────────────────────────────────────────
+        self._kv_cache_enabled = enable_kv_cache
+        self._kv_cache = None
+        if enable_kv_cache and get_kv_cache_manager:
+            self._kv_cache = get_kv_cache_manager()
+            logger.info("[L4Executor] KV Cache 已启用")
+        
         # 初始化
         self._initialized = True
         self._init_sync()
@@ -112,7 +138,7 @@ class L4RelayExecutor:
         """检查直接 Ollama 是否可用"""
         try:
             import httpx
-            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            ollama_url = os.getenv("OLLAMA_BASE_URL") or get_ollama_url()
             resp = httpx.get(f"{ollama_url}/api/tags", timeout=3)
             return resp.status_code == 200
         except Exception:
@@ -141,7 +167,7 @@ class L4RelayExecutor:
         if self._direct_client is None:
             try:
                 from openai import AsyncOpenAI
-                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                ollama_url = os.getenv("OLLAMA_BASE_URL") or get_ollama_url()
                 self._direct_client = AsyncOpenAI(
                     base_url=f"{ollama_url}/v1",
                     api_key="ollama",  # Ollama 不需要真实 Key
@@ -204,7 +230,7 @@ class L4RelayExecutor:
                     async def create(self, model, messages, stream=False, **kwargs):
                         return await self.chat_completions_create(model, messages, stream, **kwargs)
                 
-                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                ollama_url = os.getenv("OLLAMA_BASE_URL") or get_ollama_url()
                 self._direct_client = HttpxOllamaClient(ollama_url)
             except Exception as e:
                 logger.error(f"[L4Executor] Direct 客户端初始化失败: {e}")
@@ -233,6 +259,16 @@ class L4RelayExecutor:
         Returns:
             标准 ChatCompletion 响应
         """
+        # 跳过流式请求的缓存（流式需要实时返回）
+        if not stream:
+            # ── KV Cache 检查 ──────────────────────────────────────
+            if self._kv_cache_enabled and self._kv_cache:
+                cached_result = self._kv_cache.get_llm_cached(messages)
+                if cached_result is not None:
+                    logger.debug(f"[L4Executor] LLM 缓存命中 (intent={intent})")
+                    self._stats["cache_hits"] += 1
+                    return cached_result
+
         self._stats["total_requests"] += 1
 
         # 1. 尝试 RelayFreeLLM 网关
@@ -302,8 +338,15 @@ class L4RelayExecutor:
             result = await self._relay_client.chat.completions.create(**request_kwargs)
             # 转换为 dict
             if hasattr(result, 'model_dump'):
-                return result.model_dump()
-            return dict(result)
+                result = result.model_dump()
+            else:
+                result = dict(result)
+            
+            # ── 写入 KV Cache ─────────────────────────────────────
+            if self._kv_cache_enabled and self._kv_cache:
+                self._kv_cache.set_llm_cache(messages, result)
+            
+            return result
 
     async def _execute_via_direct(
         self,
@@ -330,8 +373,15 @@ class L4RelayExecutor:
         else:
             result = await self._direct_client.chat.completions.create(**request_kwargs)
             if hasattr(result, 'model_dump'):
-                return result.model_dump()
-            return dict(result)
+                result = result.model_dump()
+            else:
+                result = dict(result)
+            
+            # ── 写入 KV Cache ─────────────────────────────────────
+            if self._kv_cache_enabled and self._kv_cache:
+                self._kv_cache.set_llm_cache(messages, result)
+            
+            return result
 
     def _hint_to_model(self, hint: str) -> str:
         """将意图提示转换为模型名"""
@@ -386,15 +436,22 @@ class L4RelayExecutor:
 
     def get_stats(self) -> Dict[str, Any]:
         """获取执行统计"""
-        return {
+        stats = {
             **self._stats,
             "relay_available": self._relay_available,
             "direct_available": self._direct_available,
             "success_rate": (
                 (self._stats["total_requests"] - self._stats["failures"])
                 / max(self._stats["total_requests"], 1)
-            )
+            ),
+            "kv_cache_enabled": self._kv_cache_enabled
         }
+        
+        # 添加 KV Cache 统计
+        if self._kv_cache_enabled and self._kv_cache:
+            stats["kv_cache_stats"] = self._kv_cache.get_stats()
+        
+        return stats
 
     async def health_check(self) -> Dict[str, Any]:
         """健康检查"""

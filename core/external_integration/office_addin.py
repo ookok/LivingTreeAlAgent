@@ -30,6 +30,9 @@ Web Add-in 架构：
 └─────────────────────────────────────────┘
 """
 
+from core.logger import get_logger
+logger = get_logger('external_integration.office_addin')
+
 # ============== Web Add-in 资源 ==============
 
 ADDIN_MANIFEST = """<?xml version="1.0" encoding="UTF-8"?>
@@ -341,8 +344,6 @@ def create_wordaddin_package(output_dir: str):
         output_dir: 输出目录
     """
     import os
-from core.logger import get_logger
-logger = get_logger('external_integration.office_addin')
 
 
     os.makedirs(output_dir, exist_ok=True)

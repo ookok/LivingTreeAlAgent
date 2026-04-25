@@ -17,6 +17,9 @@ Enterprise License Client - 企业许可证客户端
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('enterprise_license.__init__')
+
 import os
 import re
 import json
@@ -356,8 +359,6 @@ class EnterpriseLicenseClient:
 def main():
     """命令行工具"""
     import argparse
-from core.logger import get_logger
-logger = get_logger('enterprise_license.__init__')
 
     
     parser = argparse.ArgumentParser(description="企业许可证工具")

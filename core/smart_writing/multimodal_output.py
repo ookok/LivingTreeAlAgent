@@ -15,6 +15,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.multimodal_output')
+
 import time
 import threading
 import asyncio
@@ -29,8 +32,6 @@ if TYPE_CHECKING:
     from .streaming_output import StreamConfig, TextStreamer
     from .progress_visualizer import ProgressStage, ProgressTracker
     from .error_recovery import RecoveryContext, RecoverableError
-from core.logger import get_logger
-logger = get_logger('smart_writing.multimodal_output')
 
 
 logger = logging.getLogger(__name__)

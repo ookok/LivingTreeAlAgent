@@ -22,6 +22,9 @@ AI能力检测与算力注册中心 (AI Capability Detector & Registry)
 作者: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('ai_capability_detector')
+
 import json
 import sqlite3
 import hashlib
@@ -32,6 +35,15 @@ from dataclasses import dataclass, asdict, field
 from enum import Enum
 import asyncio
 import aiohttp
+
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_ai = _get_unified_config()
+except Exception:
+    _uconfig_ai = None
+
+def _ai_get(key: str, default):
+    return _uconfig_ai.get(key, default) if _uconfig_ai else default
 
 # =============================================================================
 # 数据模型
@@ -567,7 +579,7 @@ class AICapabilityDetector:
                     ["wmic", "cpu", "get", "name"],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=_ai_get("timeouts.quick", 5)
                 )
                 lines = result.stdout.strip().split("\n")
                 if len(lines) > 1:
@@ -590,7 +602,7 @@ class AICapabilityDetector:
                     ["wmic", "memorychip", "get", "SMBIOSMemoryType"],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=_ai_get("timeouts.quick", 5)
                 )
                 lines = result.stdout.strip().split("\n")
                 if len(lines) > 1:
@@ -620,8 +632,6 @@ class AICapabilityDetector:
             # 尝试pynvml (NVIDIA)
             try:
                 import pynvml
-from core.logger import get_logger
-logger = get_logger('ai_capability_detector')
 
                 pynvml.nvmlInit()
                 handle = pynvml.nvmlDeviceGetHandleByIndex(0)

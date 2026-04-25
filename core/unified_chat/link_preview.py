@@ -8,6 +8,9 @@
 3. 缓存机制避免重复抓取
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_chat.link_preview')
+
 import re
 import asyncio
 import hashlib
@@ -150,8 +153,6 @@ class LinkPreviewService:
         """同步抓取 (备选方案)"""
         try:
             import urllib.request
-from core.logger import get_logger
-logger = get_logger('unified_chat.link_preview')
 
             with urllib.request.urlopen(url, timeout=10) as resp:
                 if resp.status != 200:

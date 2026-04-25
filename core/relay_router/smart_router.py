@@ -22,6 +22,15 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+# 从统一常量导入
+try:
+    from .relay_constants import (
+        ROUTER_CACHE_TTL, ROUTER_MAX_FAILURE_HISTORY,
+    )
+except ImportError:
+    ROUTER_CACHE_TTL = 10
+    ROUTER_MAX_FAILURE_HISTORY = 10
+
 
 class PathStatus(Enum):
     """路径状态"""
@@ -162,11 +171,11 @@ class SmartRelayRouter:
 
         # 路由缓存
         self._path_cache: Dict[str, Tuple[RelayPath, float]] = {}
-        self._cache_ttl = 10  # 缓存有效期（秒）
+        self._cache_ttl = ROUTER_CACHE_TTL  # 缓存有效期（秒）
 
         # 失败历史（用于回避有问题的路径）
         self._failure_history: Dict[str, int] = {}
-        self._max_failure_history = 10
+        self._max_failure_history = ROUTER_MAX_FAILURE_HISTORY
 
     def get_best_path(
         self,

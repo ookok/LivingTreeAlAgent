@@ -15,6 +15,9 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_evolution.smart_ui_system')
+
 import time
 import threading
 from pathlib import Path
@@ -331,8 +334,6 @@ def smart_predict(
     使用示例:
     ```python
     from core.ui_evolution import smart_predict
-from core.logger import get_logger
-logger = get_logger('ui_evolution.smart_ui_system')
 
     
     # 用户点击了输入框

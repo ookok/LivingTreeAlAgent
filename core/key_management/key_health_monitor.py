@@ -14,12 +14,14 @@ Author: Hermes Desktop AI Assistant
 import os
 import logging
 import threading
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 import json
 from pathlib import Path
+
+from core.config.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +273,9 @@ class KeyHealthMonitor:
 
         # 监控历史
         self._history: List[SystemHealthReport] = []
-        self._max_history = self.config.get('max_history', 100)
+        config = UnifiedConfig.get_instance()
+        key_health_config = config.get_key_health_config()
+        self._max_history = self.config.get('max_history', key_health_config.get("max_history", 100))
 
         # 后台监控线程
         self._monitor_thread: Optional[threading.Thread] = None
@@ -454,16 +458,21 @@ class KeyHealthMonitor:
             score=max(0, min(100, score))
         )
 
-    def start(self, interval: int = 3600):
+    def start(self, interval: Optional[int] = None):
         """
         启动后台监控
 
         Args:
-            interval: 检查间隔（秒），默认1小时
+            interval: 检查间隔（秒），默认从配置读取
         """
         if self._monitor_thread and self._monitor_thread.is_alive():
             logger.warning("监控线程已在运行")
             return
+
+        # 从配置获取监控间隔
+        if interval is None:
+            config = UnifiedConfig.get_instance()
+            interval = config.get_key_health_config()["interval"]
 
         self._stop_event.clear()
         self._monitor_thread = threading.Thread(
@@ -482,7 +491,9 @@ class KeyHealthMonitor:
             return
 
         self._stop_event.set()
-        self._monitor_thread.join(timeout=10)
+        config = UnifiedConfig.get_instance()
+        timeout = config.get_timeout("quick")
+        self._monitor_thread.join(timeout=timeout)
         self._monitor_thread = None
 
         logger.info("健康监控已停止")

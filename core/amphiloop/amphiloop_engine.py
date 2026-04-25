@@ -4,6 +4,9 @@ AmphiLoop 容错回滚与检查点系统
 实现双向循环调度、状态持久化、动态终止判定、容错回滚
 """
 
+from core.logger import get_logger
+logger = get_logger('amphiloop.amphiloop_engine')
+
 import json
 import os
 import time
@@ -518,8 +521,6 @@ class BidirectionalScheduler:
         
         # 统计问题频率
         from collections import Counter
-from core.logger import get_logger
-logger = get_logger('amphiloop.amphiloop_engine')
 
         issue_counts = Counter(issues)
         

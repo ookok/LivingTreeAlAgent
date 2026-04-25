@@ -25,6 +25,14 @@ from .base import (
     UsageInfo,
 )
 
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +55,7 @@ class HardLoadDriver(ModelDriver):
         name: str = "hardload",
         backend: str = "llama_cpp",
         model_path: str = "",
-        ollama_base_url: str = "http://localhost:11434",
+        ollama_base_url: str = None,
         ollama_model: str = "",
         n_ctx: int = 4096,
         n_gpu_layers: int = -1,
@@ -59,7 +67,7 @@ class HardLoadDriver(ModelDriver):
         super().__init__(name, DriverMode.HARD_LOAD)
         self.backend = backend
         self.model_path = model_path
-        self.ollama_base_url = ollama_base_url.rstrip("/")
+        self.ollama_base_url = (ollama_base_url or get_ollama_url()).rstrip("/")
         self.ollama_model = ollama_model
         self.n_ctx = n_ctx
         self.n_gpu_layers = n_gpu_layers

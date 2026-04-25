@@ -5,6 +5,9 @@
 支持多种嵌入模型和向量存储
 """
 
+from core.logger import get_logger
+logger = get_logger('cognee_memory.embedding')
+
 import numpy as np
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -118,8 +121,6 @@ class EmbeddingEngine:
         """加载模型"""
         try:
             from sentence_transformers import SentenceTransformer
-from core.logger import get_logger
-logger = get_logger('cognee_memory.embedding')
 
             self.model = SentenceTransformer(self.config.model_name)
             self.config.dimension = self.model.get_sentence_embedding_dimension()

@@ -22,6 +22,8 @@ import uuid
 import hashlib
 import json
 
+from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -312,8 +314,11 @@ class LogisticsTracker:
                 "muti": "1",  # 返回多态
             }
 
+            config = UnifiedConfig.get_instance()
+            api_timeout = config.get("decommerce.logistics_api_timeout", 10)
+            
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=10) as resp:
+                async with session.get(url, params=params, timeout=api_timeout) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         return self._parse_kuaidi100_response(data)

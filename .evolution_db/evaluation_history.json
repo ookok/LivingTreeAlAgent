@@ -1,0 +1,117 @@
+{
+  "history": [
+    {
+      "evaluator_name": "evolution_evaluator",
+      "metrics": {
+        "dclm_overall": {
+          "name": "DCLM总分",
+          "value": 98.5,
+          "type": "quality",
+          "unit": "分",
+          "higher_is_better": true,
+          "description": "DCLM综合评分",
+          "metadata": {}
+        },
+        "dclm_correctness": {
+          "name": "正确性",
+          "value": 100.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "代码正确执行的比例",
+          "metadata": {}
+        },
+        "dclm_syntax": {
+          "name": "语法质量",
+          "value": 100.0,
+          "type": "quality",
+          "unit": "分",
+          "higher_is_better": true,
+          "description": "语法规范性评分",
+          "metadata": {}
+        },
+        "dclm_semantic": {
+          "name": "语义质量",
+          "value": 97.0,
+          "type": "quality",
+          "unit": "分",
+          "higher_is_better": true,
+          "description": "语义正确性评分",
+          "metadata": {}
+        },
+        "dclm_style": {
+          "name": "风格评分",
+          "value": 100.0,
+          "type": "quality",
+          "unit": "分",
+          "higher_is_better": true,
+          "description": "代码风格一致性",
+          "metadata": {}
+        },
+        "pass_rate": {
+          "name": "通过率",
+          "value": 100.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "测试用例通过率",
+          "metadata": {}
+        },
+        "benchmark_overall": {
+          "name": "Benchmark总分",
+          "value": 50.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "综合基准测试分数",
+          "metadata": {}
+        },
+        "arc_score": {
+          "name": "ARC分数",
+          "value": 60.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "AI2推理挑战",
+          "metadata": {}
+        },
+        "gsm8k_score": {
+          "name": "GSM8K分数",
+          "value": 40.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "数学推理",
+          "metadata": {}
+        },
+        "mmlu_score": {
+          "name": "MMLU分数",
+          "value": 20.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "多任务理解",
+          "metadata": {}
+        },
+        "humaneval_score": {
+          "name": "HumanEval分数",
+          "value": 80.0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "代码生成",
+          "metadata": {}
+        },
+        "mbpp_score": {
+          "name": "MBPP分数",
+          "value": 0,
+          "type": "accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "description": "Python编程",
+          "metadata": {}
+        }
+      },
+      "raw_data": {
+        "dclm": {
+          "dclm": 

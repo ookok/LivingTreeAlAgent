@@ -13,6 +13,9 @@ Private Regulation RAG Integration
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('fusion_rag.regulation_rag')
+
 import time
 import threading
 from typing import Optional, Dict, Any, List, Tuple
@@ -485,8 +488,6 @@ def create_regulation_rag(
     """创建法规 RAG 引擎（便捷工厂函数）"""
 
     from core.regulation_vector_db import create_regulation_db
-from core.logger import get_logger
-logger = get_logger('fusion_rag.regulation_rag')
 
 
     # 创建法规库

@@ -13,6 +13,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from core.logger import get_logger
+logger = get_logger('knowledge_vector_db')
+
 
 class VectorStoreType(Enum):
     """向量存储类型"""
@@ -212,9 +215,6 @@ class VectorDatabase:
 
         elif self.db_type == VectorStoreType.FAISS:
             import numpy as np
-from core.logger import get_logger
-logger = get_logger('knowledge_vector_db')
-
             D, I = self._faiss_index.search(
                 np.array([query_embedding], dtype=np.float32),
                 min(top_k * 2, len(self._documents))

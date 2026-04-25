@@ -25,6 +25,9 @@
         logger.info(result.link_text)     # "[配置 API Key]"
 """
 
+from core.logger import get_logger
+logger = get_logger('config_missing_detector')
+
 import re
 import os
 import subprocess
@@ -392,8 +395,6 @@ class ConfigMissingDetector:
             # 尝试获取 SystemBrain
             try:
                 from core.system_brain import get_system_brain
-from core.logger import get_logger
-logger = get_logger('config_missing_detector')
 
                 brain = get_system_brain()
                 self._reasoning_engine = AIReasoningEngine(system_brain=brain)

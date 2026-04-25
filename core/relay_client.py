@@ -43,6 +43,12 @@ try:
 except ImportError:
     PYQT6_AVAILABLE = False
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -365,11 +371,15 @@ class SyncRelayClient(RelayClientBase):
         self._thread.start()
         
         # 等待连接
+        poll_interval = 0.1
+        if get_config:
+            poll_interval = get_config().get("relay.connection_poll_interval", 0.1)
+            
         start = time.time()
         while self._async_client.state not in [ConnectionState.AUTHENTICATED, ConnectionState.ERROR]:
             if time.time() - start > timeout:
                 raise TimeoutError("Connection timeout")
-            time.sleep(0.1)
+            time.sleep(poll_interval)
         
         if self._async_client.state == ConnectionState.ERROR:
             raise RuntimeError("Connection failed")
@@ -384,12 +394,17 @@ class SyncRelayClient(RelayClientBase):
     
     def disconnect(self):
         """断开连接"""
+        # 从配置读取线程等待超时
+        join_timeout = 2.0
+        if get_config:
+            join_timeout = get_config().get("relay.thread_join_timeout", 2.0)
+            
         if self._async_client and self._loop:
             self._loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(self._async_client.disconnect())
             )
         if self._thread:
-            self._thread.join(timeout=2.0)
+            self._thread.join(timeout=join_timeout)
     
     def create_session(self, name: str = "", password: str = "", max_clients: int = 10):
         """创建会话"""

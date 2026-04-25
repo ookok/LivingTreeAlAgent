@@ -15,11 +15,12 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from dataclasses import dataclass
 
-try:
-    from huggingface_hub import hf_hub_download, list_files_info
 from core.logger import get_logger
+
 logger = get_logger('smolllm2.downloader')
 
+try:
+    from huggingface_hub import hf_hub_download, list_files_info
     HAS_HUGGINGFACE_HUB = True
 except ImportError:
     HAS_HUGGINGFACE_HUB = False

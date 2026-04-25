@@ -31,6 +31,11 @@ from core.memory_manager import MemoryManager
 from core.tools_registry import ToolRegistry, ToolDispatcher, SCHEMA
 from core.config import AppConfig
 from core.session_stats import SessionStats, get_stats_tracker
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig = _get_unified_config()
+except Exception:
+    _uconfig = None
 from core.model_priority_loader import (
     ModelBackend,
     LocalModelPriorityLoader,
@@ -883,12 +888,14 @@ class HermesAgent:
         if not self.ollama and not self.model:
             # 等待模型客户端初始化
             import time
+            _init_timeout = _uconfig.get("agent.init_timeout", 10) if _uconfig else 10
+            _init_poll = _uconfig.get("delays.polling_medium", 0.5) if _uconfig else 0.5
             start_time = time.time()
             while not self.ollama and not self.model:
-                if time.time() - start_time > 10:  # 10秒超时
+                if time.time() - start_time > _init_timeout:  # 可配置超时
                     yield StreamChunk(error="模型客户端初始化超时，请检查 Ollama 服务是否正在运行")
                     return
-                time.sleep(0.5)
+                time.sleep(_init_poll)
         
         # 尝试使用 Ollama 后端
         if self.ollama:
@@ -1167,8 +1174,8 @@ class HermesAgent:
         try:
             _, EmotionVector, _, _ = _lazy_emotion_imports()
             emotion_vec = EmotionVector.from_text_analysis(text)
-            logger.debug(f"情绪分析: {emotion_vec.dominant_emotion().value} ")
-                  f"(valence={emotion_vec.valence:.2f}, arousal={emotion_vec.arousal:.2f})")
+            logger.debug(f"情绪分析: {emotion_vec.dominant_emotion().value} "
+                         f"(valence={emotion_vec.valence:.2f}, arousal={emotion_vec.arousal:.2f})")
         except Exception as e:
             logger.warning(f"情绪分析出错: {e}")
             emotion_vec = None
@@ -1217,8 +1224,8 @@ class HermesAgent:
             decomposition = self._decomposer.decompose(text)
             self._current_decomposition = decomposition
 
-            logger.info(f"任务分解: {decomposition.total_tasks} 个子任务 ")
-                  f"(策略: {decomposition.strategy.value})")
+            logger.info(f"任务分解: {decomposition.total_tasks} 个子任务 "
+                        f"(策略: {decomposition.strategy.value})")
 
             # 触发 UI 回调 - 分解完成
             if self.callbacks.task_decomposition:
@@ -1705,7 +1712,8 @@ class HermesAgent:
             }
             
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as response:
+            _search_timeout = _uconfig.get("timeouts.search", 15) if _uconfig else 15
+            with urllib.request.urlopen(req, timeout=_search_timeout) as response:
                 html = response.read().decode('utf-8', errors='ignore')
             
             # 解析搜索结果

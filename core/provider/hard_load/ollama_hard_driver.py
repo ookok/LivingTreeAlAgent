@@ -21,6 +21,14 @@ from ..base import (
     UsageInfo, HealthReport,
 )
 
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,13 +44,13 @@ class OllamaHardDriver(ModelDriver):
         self,
         name: str = "ollama-hard",
         model: str = "",
-        base_url: str = "http://localhost:11434",
+        base_url: str = None,
         keep_alive: str = "5m",
         **kwargs,
     ):
         super().__init__(name, DriverMode.HARD_LOAD)
         self._model_id = model
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or get_ollama_url()).rstrip("/")
         self._keep_alive = keep_alive
         self._extra = kwargs
 

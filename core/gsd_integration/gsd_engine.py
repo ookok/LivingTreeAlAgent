@@ -9,6 +9,9 @@ GSD 核心引擎
 - 工作区（Workspace）管理
 """
 
+from core.logger import get_logger
+logger = get_logger('gsd_integration.gsd_engine')
+
 import json
 import time
 import asyncio
@@ -787,8 +790,6 @@ def get_gsd_engine(workspace_path: Optional[str] = None) -> GSDEngine:
     global _global_engine
     if _global_engine is None:
         import os
-from core.logger import get_logger
-logger = get_logger('gsd_integration.gsd_engine')
 
         if workspace_path is None:
             workspace_path = os.getcwd()

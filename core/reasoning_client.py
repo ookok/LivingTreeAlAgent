@@ -24,6 +24,15 @@ import requests
 from core.config import OllamaConfig
 from core.ollama_client import ChatMessage, StreamChunk
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_rc = _get_unified_config()
+except Exception:
+    _uconfig_rc = None
+
+def _rc_get(key: str, default):
+    return _uconfig_rc.get(key, default) if _uconfig_rc else default
+
 
 class ReasoningModelType(Enum):
     """推理模型类型"""
@@ -38,10 +47,10 @@ class ReasoningConfig:
     """推理模型配置"""
     model_name: str = "deepseek-r1:7b"
     base_url: str = "http://localhost:11434"
-    timeout: float = 120.0
-    connect_timeout: float = 10.0
-    max_retries: int = 3
-    retry_delay: float = 2.0
+    timeout: float = field(default_factory=lambda: _rc_get("timeouts.llm_generate", 120.0))
+    connect_timeout: float = field(default_factory=lambda: _rc_get("timeouts.default", 10.0))
+    max_retries: int = field(default_factory=lambda: _rc_get("retries.default", 3))
+    retry_delay: float = field(default_factory=lambda: _rc_get("delays.wait_medium", 2.0))
     reasoning_enabled: bool = True
     max_reasoning_tokens: int = 2048
     temperature: float = 0.6
@@ -701,7 +710,7 @@ class ReasoningModelClient:
         try:
             response = self._session.get(
                 f"{self.config.base_url}/api/tags",
-                timeout=5
+                timeout=_rc_get("timeouts.quick", 5)
             )
 
             if response.status_code == 200:

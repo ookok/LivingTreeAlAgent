@@ -32,6 +32,14 @@ from .base import (
     UsageInfo,
 )
 
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +53,7 @@ class LocalServiceDriver(ModelDriver):
     def __init__(
         self,
         name: str = "local_service",
-        base_url: str = "http://localhost:11434",
+        base_url: str = None,
         api_key: str = "",
         default_model: str = "",
         timeout: float = 120.0,
@@ -53,7 +61,7 @@ class LocalServiceDriver(ModelDriver):
         keep_alive: str = "5m",
     ):
         super().__init__(name, DriverMode.LOCAL_SERVICE)
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or get_ollama_url()).rstrip("/")
         self.api_key = api_key
         self.default_model = default_model
         self.timeout = timeout

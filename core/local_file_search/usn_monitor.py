@@ -16,6 +16,16 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_um = _get_unified_config()
+except Exception:
+    _uconfig_um = None
+
+def _um_get(key: str, default):
+    return _uconfig_um.get(key, default) if _uconfig_um else default
+
+
 # Windows API 常量
 FSCTL_QUERY_USN_JOURNAL = 0x900a4
 FSCTL_CREATE_USN_JOURNAL = 0x900e4
@@ -262,7 +272,7 @@ class USNJournalMonitor:
         self._reader: Optional[USNJournalReader] = None
         self._running = False
         self._last_usn = 0
-        self._poll_interval = 1.0
+        self._poll_interval = _um_get("delays.polling_medium", 1.0)
         
         self._stats = {
             "total_changes": 0,

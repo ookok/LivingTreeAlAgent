@@ -4,6 +4,9 @@
 核心能力：执行-反思-改进的迭代循环
 """
 
+from core.logger import get_logger
+logger = get_logger('reflective_agent.reflective_loop')
+
 import asyncio
 import uuid
 import time
@@ -302,8 +305,6 @@ class ReflectiveAgentLoop:
 
         # 创建指标对象
         from .execution_result import ExecutionMetrics
-from core.logger import get_logger
-logger = get_logger('reflective_agent.reflective_loop')
 
         metrics = ExecutionMetrics()
 

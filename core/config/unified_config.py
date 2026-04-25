@@ -242,6 +242,24 @@ class UnifiedConfig:
                 "broadcast_interval": 60,    # 模型广播间隔 (秒)
             },
             
+            # ── 部署引擎配置 ──
+            "deployment": {
+                "ollama_startup_attempts": 10,  # Ollama启动等待次数
+                "ollama_status_check_timeout": 5.0,  # Ollama状态检查超时
+                "model_list_timeout": 10.0,     # 模型列表获取超时
+                "model_info_timeout": 10.0,    # 模型信息获取超时
+                "model_load_timeout": 30.0,    # 模型加载超时
+                "model_unload_timeout": 30.0,  # 模型卸载超时
+                "process_kill_timeout": 5,     # 进程终止超时
+            },
+            
+            # ── 智能代理网关配置 ──
+            "smart_proxy": {
+                "api_fetch_timeout": 10,       # API源获取超时
+                "web_fetch_timeout": 15,      # 网页源获取超时
+                "default_timeout": 15,         # 默认请求超时
+            },
+            
             # ── Vheer API 配置 ──
             "vheer": {
                 "timeout": 120,          # API 请求超时
@@ -1059,6 +1077,21 @@ class UnifiedConfig:
             "notification": self.get("email.notification", {}),
         }
     
+    def get_api_gateway_config(self) -> Dict[str, Any]:
+        """
+        获取API网关配置
+        
+        Returns:
+            API网关配置字典
+        """
+        return {
+            "enabled": self.get("api_gateway.enabled", True),
+            "timeout": self.get("api_gateway.timeout", 60),
+            "rate_limit": self.get("api_gateway.rate_limit", 60),
+            "cache": self.get("api_gateway.cache", {}),
+            "providers": self.get("api_gateway.providers", {}),
+        }
+    
     def get_browser_gateway_config(self) -> Dict[str, Any]:
         """
         获取浏览器网关配置
@@ -1653,6 +1686,11 @@ def get_provider_config(slot: Optional[str] = None) -> Dict[str, Any]:
 def get_email_config() -> Dict[str, Any]:
     """获取邮件通知配置"""
     return get_config().get_email_config()
+
+
+def get_api_gateway_config() -> Dict[str, Any]:
+    """获取API网关配置"""
+    return get_config().get_api_gateway_config()
 
 
 def get_browser_gateway_config() -> Dict[str, Any]:

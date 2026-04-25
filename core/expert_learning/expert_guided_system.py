@@ -21,6 +21,9 @@
 - Unified Cache (缓存)
 """
 
+from core.logger import get_logger
+logger = get_logger('expert_learning.expert_guided_system')
+
 from __future__ import annotations
 
 import json
@@ -48,6 +51,14 @@ def _get_knowledge_graph():
 def _get_unified_cache():
     from core.unified_cache import UnifiedCache
     return UnifiedCache
+
+def _get_ollama_url():
+    """获取 Ollama URL，支持统一配置"""
+    try:
+        from core.config.unified_config import get_ollama_url
+        return get_ollama_url()
+    except ImportError:
+        return "http://localhost:11434"
 
 def _get_industry_distiller():
     try:
@@ -597,7 +608,7 @@ class ExpertGuidedLearningSystem:
             # 使用 L4 模型（qwen3.5:9b）
             from core.ollama_client import OllamaClient, OllamaConfig, ChatMessage
             config = OllamaConfig(
-                base_url=self.config.get("ollama_url", "http://localhost:11434")
+                base_url=self.config.get("ollama_url") or _get_ollama_url()
             )
             client = OllamaClient(config)
             messages = [ChatMessage(role="user", content=query)]
@@ -953,8 +964,6 @@ class ExpertGuidedLearningSystem:
 
         try:
             from core.expert_learning.external_provider_config import ProviderType, CostType
-from core.logger import get_logger
-logger = get_logger('expert_learning.expert_guided_system')
 
 
             p_type = ProviderType(provider_type.lower())

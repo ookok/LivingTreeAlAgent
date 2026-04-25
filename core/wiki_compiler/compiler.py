@@ -16,6 +16,9 @@ Wiki 编译器核心 - Wiki Compiler
 └─────────────────────────────────────────────────┘
 """
 
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compiler')
+
 import os
 import json
 import time
@@ -451,8 +454,6 @@ class WikiCompiler:
     def _search_relevant_pages(self, query: str) -> List[WikiPage]:
         """搜索相关页面"""
         import re
-from core.logger import get_logger
-logger = get_logger('wiki_compiler.compiler')
 
         query_lower = query.lower()
         query_keywords = set(re.findall(r'[\w]+', query_lower))

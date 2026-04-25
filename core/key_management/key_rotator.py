@@ -22,6 +22,8 @@ from enum import Enum
 from queue import Queue, Empty
 import hashlib
 
+from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,6 +52,19 @@ class RotationConfig:
     retry_delay_seconds: int = 300 # 重试间隔（5分钟）
     notify_before_days: int = 7   # 提前多少天通知
     auto_rotate: bool = True       # 是否自动轮转
+
+    @classmethod
+    def from_config(cls, provider: str = None, strategy: RotationStrategy = RotationStrategy.MANUAL) -> "RotationConfig":
+        """从统一配置创建 RotationConfig"""
+        config = UnifiedConfig.get_instance()
+        key_config = config.get_key_rotation_config()
+        return cls(
+            strategy=strategy,
+            threshold_days=key_config.get("threshold_days", 30),
+            retry_delay_seconds=key_config.get("retry_delay", 300),
+            notify_before_days=key_config.get("notify_before_days", 7),
+            auto_rotate=False if strategy == RotationStrategy.MANUAL else True
+        )
 
 
 @dataclass
@@ -164,7 +179,9 @@ class SlackNotification(NotificationChannel):
                 headers={'Content-Type': 'application/json'}
             )
 
-            urllib.request.urlopen(req, timeout=10)
+            config = UnifiedConfig.get_instance()
+            timeout = config.get_timeout("quick")
+            urllib.request.urlopen(req, timeout=timeout)
             return True
 
         except Exception as e:
@@ -233,7 +250,9 @@ class WebhookNotification(NotificationChannel):
                 headers=headers
             )
 
-            urllib.request.urlopen(req, timeout=10)
+            config = UnifiedConfig.get_instance()
+            timeout = config.get_timeout("quick")
+            urllib.request.urlopen(req, timeout=timeout)
             return True
 
         except Exception as e:
@@ -299,11 +318,9 @@ class KeyRotator:
         default_config = RotationConfig()
 
         for provider in ProviderRotationSupport.MANUAL_ROTATE_ONLY:
-            self.rotation_config[provider] = RotationConfig(
-                strategy=RotationStrategy.MANUAL,
-                threshold_days=30,
-                notify_before_days=7,
-                auto_rotate=False
+            self.rotation_config[provider] = RotationConfig.from_config(
+                provider=provider,
+                strategy=RotationStrategy.MANUAL
             )
 
     def _init_notification_channels(self):
@@ -330,16 +347,21 @@ class KeyRotator:
             'aws_secret': self._rotate_aws_key,
         }
 
-    def start(self, check_interval: int = 3600):
+    def start(self, check_interval: Optional[int] = None):
         """
         启动自动轮转守护进程
 
         Args:
-            check_interval: 检查间隔（秒），默认1小时
+            check_interval: 检查间隔（秒），默认从配置读取
         """
         if self._daemon_thread and self._daemon_thread.is_alive():
             logger.warning("轮转守护进程已在运行")
             return
+
+        # 从配置获取检查间隔
+        if check_interval is None:
+            config = UnifiedConfig.get_instance()
+            check_interval = config.get_key_rotation_config()["check_interval"]
 
         self._stop_event.clear()
         self._daemon_thread = threading.Thread(
@@ -358,7 +380,9 @@ class KeyRotator:
             return
 
         self._stop_event.set()
-        self._daemon_thread.join(timeout=10)
+        config = UnifiedConfig.get_instance()
+        timeout = config.get_timeout("quick")
+        self._daemon_thread.join(timeout=timeout)
         self._daemon_thread = None
 
         logger.info("轮转守护进程已停止")

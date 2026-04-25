@@ -17,6 +17,9 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_evolution.feedback_collector')
+
 import json
 import threading
 from pathlib import Path
@@ -470,8 +473,6 @@ def record_prediction_feedback(
     使用示例:
     ```python
     from core.ui_evolution import record_prediction_feedback
-from core.logger import get_logger
-logger = get_logger('ui_evolution.feedback_collector')
 
     
     # 预测

@@ -22,6 +22,9 @@ SkillClusterer - 技能语义聚类系统
     suggestions = clusterer.get_merge_suggestions()
 """
 
+from core.logger import get_logger
+logger = get_logger('skill_clusterer')
+
 import json
 import sqlite3
 import threading
@@ -585,8 +588,6 @@ class SkillClusterer:
             return []
 
         import numpy as np
-from core.logger import get_logger
-logger = get_logger('skill_clusterer')
 
 
         # 搜索

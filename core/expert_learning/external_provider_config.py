@@ -15,6 +15,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('expert_learning.external_provider_config')
+
 import json
 import os
 import uuid
@@ -946,8 +949,6 @@ class ExternalProviderManager:
                 # 尝试从环境变量获取完整Key
                 if config.endpoint and config.endpoint.key_env_var:
                     import os
-from core.logger import get_logger
-logger = get_logger('expert_learning.external_provider_config')
 
                     full_key = os.environ.get(config.endpoint.key_env_var, "")
                     if full_key:

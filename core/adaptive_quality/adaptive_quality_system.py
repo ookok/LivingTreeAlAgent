@@ -15,6 +15,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('adaptive_quality.adaptive_quality_system')
+
 from __future__ import annotations
 
 import time
@@ -410,8 +413,6 @@ class SyncAdaptiveQualitySystem:
     def execute(self, query: str, task_func: Callable, **kwargs) -> ExecutionResult:
         """同步执行"""
         import asyncio
-from core.logger import get_logger
-logger = get_logger('adaptive_quality.adaptive_quality_system')
 
         
         async def wrapper():

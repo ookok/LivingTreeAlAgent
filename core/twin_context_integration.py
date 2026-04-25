@@ -12,6 +12,9 @@ Author: AI Native OS Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('twin_context_integration')
+
 import json
 import time
 import uuid
@@ -49,8 +52,6 @@ except ImportError:
 # 语义索引
 try:
     from core.semantic_index import (
-from core.logger import get_logger
-logger = get_logger('twin_context_integration')
 
         SemanticIndexer, VirtualFileSystem, SemanticChunk,
         LazySemanticLoader

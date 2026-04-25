@@ -28,6 +28,18 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 
 
+def _get_openai_api_key() -> Optional[str]:
+    """获取 OpenAI API Key（兼容统一配置）"""
+    try:
+        from core.config.unified_config import get_config
+        key = get_config().get_api_key("openai")
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.getenv("OPENAI_API_KEY")
+
+
 @dataclass
 class DocumentChunk:
     """文档块"""
@@ -76,8 +88,8 @@ class DocumentProcessor:
         from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
         
         try:
-            # 优先使用 OpenAI 嵌入
-            api_key = os.getenv("OPENAI_API_KEY")
+            # 优先使用 OpenAI 嵌入（通过统一配置）
+            api_key = _get_openai_api_key()
             if api_key:
                 self.embeddings = OpenAIEmbeddings(
                     model=self.embedding_model,

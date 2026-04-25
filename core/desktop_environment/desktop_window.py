@@ -50,6 +50,9 @@ if PYQT_AVAILABLE:
         6. 右键菜单
         """
 
+from core.logger import get_logger
+logger = get_logger('desktop_environment.desktop_window')
+
         # 信号
         icon_double_clicked = pyqtSignal(str)  # icon_id
         icon_right_clicked = pyqtSignal(str, QPoint)  # icon_id, position
@@ -435,8 +438,6 @@ class MobileDesktop:
         """添加应用到桌面"""
         # 创建图标按钮
         from kivy.uix.button import Button
-from core.logger import get_logger
-logger = get_logger('desktop_environment.desktop_window')
 
         btn = Button(
             text=name,

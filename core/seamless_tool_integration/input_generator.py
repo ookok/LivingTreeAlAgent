@@ -8,6 +8,9 @@ Input Generator - 输入文件自动生成器
 4. 处理土地利用和地形数据
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.input_generator')
+
 import os
 import json
 from typing import Optional, Dict, List, Any, Tuple
@@ -457,8 +460,6 @@ REGRID    CARTESIAN  GRID1  {grid.x_count}  {grid.y_count}
         """生成批处理脚本"""
         # 使用默认安装路径
         from .model_deployer import ModelDeployer
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.input_generator')
 
         exe_path = os.path.join(
             ModelDeployer.DEFAULT_TOOLS_DIR,

@@ -59,6 +59,9 @@ DEFAULT_INTERNAL_EMAILS = [
 
 class UpdateType(Enum):
     """更新类型"""
+
+from core.logger import get_logger
+logger = get_logger('decentralized_update.update_notifier')
     STABLE = "stable"           # 稳定版
     BETA = "beta"                # 测试版
     DEV = "dev"                  # 开发版
@@ -778,8 +781,6 @@ async def generate_and_sync_update(
 
 if __name__ == "__main__":
     import argparse
-from core.logger import get_logger
-logger = get_logger('decentralized_update.update_notifier')
 
 
     parser = argparse.ArgumentParser(description="Hermes Desktop 更新说明生成器")

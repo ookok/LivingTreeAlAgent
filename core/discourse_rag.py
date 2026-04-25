@@ -300,7 +300,7 @@ class DiscourseAwareRAG:
 
         return sum(coherence_scores) / len(coherence_scores) if coherence_scores else 0.5
 
-    def generate_bluelogger.info(
+    def generate_blueprint_info(
         self,
         query: str,
         retrieval_results: List[RetrievalResult],

@@ -18,9 +18,13 @@ import asyncio
 from typing import Dict, Any, List, Optional, Callable
 from enum import Enum
 
+from core.logger import get_logger
+
 from .models import RouteDecision, RouteType, IntentType, SmolLM2Config
 from .router import L0Router
 from .ollama_runner import get_runner_manager
+
+logger = get_logger('smolllm2.l0_integration')
 
 
 class L0L4Config:
@@ -129,9 +133,6 @@ class L0L4IntegratedExecutor:
             # 懒加载 L4 执行器
             try:
                 from core.fusion_rag.l4_executor import L4RelayExecutor
-from core.logger import get_logger
-logger = get_logger('smolllm2.l0_integration')
-
                 self._l4_executor = L4RelayExecutor()
             except ImportError:
                 raise RuntimeError("L4 执行器不可用，请检查 fusion_rag 模块")

@@ -20,6 +20,12 @@ from enum import Enum
 from collections import defaultdict, deque
 from decimal import Decimal
 
+# 导入配置
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -158,11 +164,16 @@ class MonitoringService:
 
     def check_node_health(self):
         """检查节点健康状态"""
+        config = get_config() if get_config else None
+        heartbeat_timeout = 60
+        if config:
+            heartbeat_timeout = config.get("relay.heartbeat_timeout", 60)
+            
         now = time.time()
 
         for relay_id, metrics in self._node_metrics.items():
             # 检查心跳超时
-            if now - metrics.updated_at > 60:  # 60秒无心跳
+            if now - metrics.updated_at > heartbeat_timeout:
                 self.create_alert(
                     AlertLevel.WARNING,
                     "node_health",
@@ -371,6 +382,11 @@ class MonitoringService:
 
     def _monitor_loop(self, interval: int):
         """监控循环"""
+        # 如果未指定间隔，从配置读取
+        if interval is None and get_config:
+            config = get_config()
+            interval = config.get("polling.monitor_interval", 30)
+        
         while self._running:
             try:
                 self.check_node_health()

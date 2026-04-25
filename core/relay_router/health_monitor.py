@@ -29,6 +29,47 @@ import urllib.error
 logger = logging.getLogger(__name__)
 
 
+def _get_default_health_monitor_config() -> Dict[str, Any]:
+    """从统一配置获取默认值"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return {
+            "default_interval": config.get("heartbeat.default_interval", 30),
+            "fast_interval": config.get("heartbeat.default_interval", 30) // 6 or 5,
+        }
+    except Exception:
+        return {"default_interval": 30, "fast_interval": 5}
+
+
+# 获取默认值
+_default_health_config = _get_default_health_monitor_config()
+
+# 从统一常量导入（优先使用 relay_constants）
+try:
+    from .relay_constants import (
+        LATENCY_THRESHOLD_MS, SUCCESS_RATE_THRESHOLD,
+        CONSECUTIVE_FAILURE_THRESHOLD, RECOVERY_CHECK_COUNT,
+        MAX_HISTORY_SIZE, ALERT_COOLDOWN_SECONDS,
+        SOCKET_TIMEOUT_STUN, SOCKET_TIMEOUT_TURN, SOCKET_TIMEOUT_TCP,
+        HTTP_TIMEOUT_SIGNALING, HTTP_TIMEOUT_STORAGE,
+        MONITOR_STOP_TIMEOUT,
+    )
+except ImportError:
+    LATENCY_THRESHOLD_MS = 500
+    SUCCESS_RATE_THRESHOLD = 0.8
+    CONSECUTIVE_FAILURE_THRESHOLD = 3
+    RECOVERY_CHECK_COUNT = 3
+    MAX_HISTORY_SIZE = 100
+    ALERT_COOLDOWN_SECONDS = 300
+    SOCKET_TIMEOUT_STUN = 5
+    SOCKET_TIMEOUT_TURN = 5
+    SOCKET_TIMEOUT_TCP = 5
+    HTTP_TIMEOUT_SIGNALING = 5
+    HTTP_TIMEOUT_STORAGE = 10
+    MONITOR_STOP_TIMEOUT = 5
+
+
 class HealthStatus(Enum):
     """健康状态"""
     HEALTHY = "healthy"
@@ -83,17 +124,17 @@ class RelayHealthMonitor:
     5. 历史数据维护
     """
 
-    # 检查间隔
-    DEFAULT_CHECK_INTERVAL = 30  # 秒
-    FAST_CHECK_INTERVAL = 5    # 故障后快速检查间隔
+    # 检查间隔（从统一配置获取）
+    DEFAULT_CHECK_INTERVAL = _default_health_config.get("default_interval", 30)
+    FAST_CHECK_INTERVAL = _default_health_config.get("fast_interval", 5)
 
-    # 阈值
-    LATENCY_THRESHOLD_MS = 500     # 延迟告警阈值
-    SUCCESS_RATE_THRESHOLD = 0.8   # 成功率告警阈值
-    CONSECUTIVE_FAILURE_THRESHOLD = 3  # 连续失败告警阈值
-    RECOVERY_CHECK_COUNT = 3        # 恢复检查次数
+    # 阈值（从 relay_constants 导入）
+    LATENCY_THRESHOLD_MS = LATENCY_THRESHOLD_MS       # 延迟告警阈值
+    SUCCESS_RATE_THRESHOLD = SUCCESS_RATE_THRESHOLD   # 成功率告警阈值
+    CONSECUTIVE_FAILURE_THRESHOLD = CONSECUTIVE_FAILURE_THRESHOLD  # 连续失败告警阈值
+    RECOVERY_CHECK_COUNT = RECOVERY_CHECK_COUNT        # 恢复检查次数
 
-    MAX_HISTORY_SIZE = 100  # 历史数据保留条数
+    MAX_HISTORY_SIZE = MAX_HISTORY_SIZE  # 历史数据保留条数
 
     def __init__(self, relay_config):
         self.config = relay_config
@@ -110,7 +151,7 @@ class RelayHealthMonitor:
         self._check_interval = self.DEFAULT_CHECK_INTERVAL
 
         # 告警历史（防止重复告警）
-        self._alert_cooldown = 300  # 5分钟内不重复告警
+        self._alert_cooldown = ALERT_COOLDOWN_SECONDS  # 告警冷却时间
         self._last_alert_time: Dict[str, float] = {}
 
     def start(self):
@@ -127,7 +168,7 @@ class RelayHealthMonitor:
         """停止监控"""
         self._running = False
         if self._monitor_thread:
-            self._monitor_thread.join(timeout=5)
+            self._monitor_thread.join(timeout=MONITOR_STOP_TIMEOUT)
         logger.info("Relay health monitor stopped")
 
     def _monitor_loop(self):
@@ -249,7 +290,7 @@ class RelayHealthMonitor:
 
             start = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(SOCKET_TIMEOUT_STUN)  # STUN TCP 探测超时
             sock.connect((host, port))
             sock.close()
             latency = (time.time() - start) * 1000
@@ -268,7 +309,7 @@ class RelayHealthMonitor:
 
             start = time.time()
             req = urllib.request.Request(url, method="HEAD")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SIGNALING) as resp:
                 latency = (time.time() - start) * 1000
                 return latency, resp.status < 400
         except Exception:
@@ -287,7 +328,7 @@ class RelayHealthMonitor:
 
             start = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(SOCKET_TIMEOUT_TURN)  # TURN TCP 探测超时
             sock.connect((host, port))
             sock.close()
             latency = (time.time() - start) * 1000
@@ -306,7 +347,7 @@ class RelayHealthMonitor:
 
             start = time.time()
             req = urllib.request.Request(url, method="HEAD")
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_STORAGE) as resp:
                 latency = (time.time() - start) * 1000
                 return latency, resp.status < 400
         except Exception:
@@ -328,7 +369,7 @@ class RelayHealthMonitor:
 
             start = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(SOCKET_TIMEOUT_TCP)  # 通用 TCP 探测超时
             sock.connect((host, port))
             sock.close()
             latency = (time.time() - start) * 1000

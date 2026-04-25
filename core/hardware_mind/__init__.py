@@ -14,6 +14,9 @@ Author: Hermes Desktop Team
 Version: 1.0.0
 """
 
+from core.logger import get_logger
+logger = get_logger('hardware_mind.__init__')
+
 import json
 import hashlib
 import asyncio
@@ -1426,8 +1429,6 @@ class AutoTestEngine:
 
             # 模拟结果 (90%通过率)
             import random
-from core.logger import get_logger
-logger = get_logger('hardware_mind.__init__')
 
             passed = random.random() > 0.1
 

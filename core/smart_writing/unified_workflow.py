@@ -23,6 +23,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.unified_workflow')
+
 import asyncio
 import json
 import logging
@@ -1231,8 +1234,6 @@ class SmartWritingWorkflow:
         try:
             from docx import Document
             from docx.shared import Pt
-from core.logger import get_logger
-logger = get_logger('smart_writing.unified_workflow')
 
             
             path = f"{output_dir}/{filename}.docx"

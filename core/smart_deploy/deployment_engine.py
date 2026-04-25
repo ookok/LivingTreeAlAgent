@@ -27,6 +27,15 @@ from .obstacle_resolver import ObstacleResolver, Obstacle, Solution, ResolutionR
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_de = _get_unified_config()
+except Exception:
+    _uconfig_de = None
+
+def _de_get(key: str, default):
+    return _uconfig_de.get(key, default) if _uconfig_de else default
+
 
 class DeploymentStatus(Enum):
     """部署状态"""
@@ -265,7 +274,7 @@ class DeploymentEngine:
                             server_deployment.error = output
 
                 self._notify_update(server_deployment, progress_callback)
-                time.sleep(0.5)  # 模拟步骤间延迟
+                time.sleep(_de_get("deploy.step_delay", 0.5))  # 模拟步骤间延迟
 
             # 验证
             if server_deployment.status == DeploymentStatus.DEPLOYING:
@@ -275,7 +284,7 @@ class DeploymentEngine:
                 )
                 self._notify_update(server_deployment, progress_callback)
 
-                time.sleep(1)  # 模拟验证
+                time.sleep(_de_get("deploy.verify_delay", 1))  # 模拟验证
 
                 server_deployment.status = DeploymentStatus.SUCCESS
                 server_deployment.progress = 100.0
@@ -418,7 +427,7 @@ class DeploymentEngine:
                     f"[{datetime.now().strftime('%H:%M:%S')}] 回滚: {step.name}"
                 )
                 # 模拟回滚
-                time.sleep(0.5)
+                time.sleep(_de_get("deploy.rollback_delay", 0.5))
 
         server_deployment.status = DeploymentStatus.ROLLED_BACK
         server_deployment.completed_at = datetime.now()

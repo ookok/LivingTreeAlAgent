@@ -20,7 +20,7 @@ import threading
 import queue
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Dict, List, Optional, Any
+from typing import Any, Callable, Dict, List, Optional
 from .data_types import (
     SyncData, SyncRecord, SyncStatus, SyncDataType,
     SyncConflict, SyncStatistics, ConflictStrategy
@@ -29,19 +29,46 @@ from .data_types import (
 logger = logging.getLogger(__name__)
 
 
+def _get_default_sync_config() -> Dict[str, Any]:
+    """从统一配置获取默认值"""
+    try:
+        from core.config.unified_config import get_config
+        return get_config().get_sync_config()
+    except Exception:
+        return {}
+
+
+def _get_default_cloud_sync_config() -> Dict[str, Any]:
+    """从统一配置获取云同步默认值"""
+    try:
+        from core.config.unified_config import get_config
+        config = get_config()
+        return {
+            "url": config.get("endpoints.cloud_sync.url", "ws://localhost:8765/sync"),
+            "timeout": config.get("endpoints.cloud_sync.timeout", 30),
+        }
+    except Exception:
+        return {"url": "ws://localhost:8765/sync", "timeout": 30}
+
+
+# 获取默认值
+_default_config = _get_default_sync_config()
+_default_cloud = _get_default_cloud_sync_config()
+
+
 @dataclass
 class SyncConfig:
     """同步配置"""
-    server_url: str = "ws://localhost:8765/sync"
+    server_url: str = field(default_factory=lambda: _default_cloud.get("url", "ws://localhost:8765/sync"))
     user_id: str = ""
     device_id: str = ""
     api_key: str = ""
     auto_sync: bool = True
-    sync_interval: int = 30  # 秒
-    batch_size: int = 100
-    timeout: int = 30
-    retry_count: int = 3
-    retry_delay: int = 5
+    sync_interval: int = field(default_factory=lambda: _default_config.get("interval", 30))  # 秒
+    batch_size: int = field(default_factory=lambda: _default_config.get("batch_size", 100))
+    timeout: int = field(default_factory=lambda: _default_config.get("timeout", 30))
+    retry_count: int = field(default_factory=lambda: _default_config.get("retry_count", 3))
+    retry_delay: int = field(default_factory=lambda: _default_config.get("retry_delay", 5))
 
 
 class SyncClient:

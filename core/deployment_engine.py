@@ -16,14 +16,27 @@ from dataclasses import dataclass, field
 import httpx
 
 from core.model_layer_config import (
-from core.logger import get_logger
-logger = get_logger('deployment_engine')
-
     ModelTier, ServiceStatus, DeployMode,
     ModelDefinition, LayerConfig, LayerDeploymentConfig,
     L0_L4_MODELS, get_default_model_for_tier,
     check_ollama_installed, check_system_memory
 )
+
+# 导入配置获取函数
+try:
+    from core.config.unified_config import get_config
+except ImportError:
+    get_config = None
+
+from core.logger import get_logger
+logger = get_logger('deployment_engine')
+
+
+def _get_config(key: str, default=None):
+    """获取配置值"""
+    if get_config:
+        return get_config(key, default=default)
+    return default
 
 
 # ── 数据结构 ────────────────────────────────────────────────────────────────
@@ -96,7 +109,7 @@ class DeploymentEngine:
         try:
             response = httpx.get(
                 f"{self.config.ollama_base_url}/api/tags",
-                timeout=5.0
+                timeout=_get_config("timeouts.quick", 5.0)
             )
             self._ollama_running = response.status_code == 200
             return self._ollama_running
@@ -134,8 +147,9 @@ class DeploymentEngine:
                 )
             
             # 等待服务启动
-            for _ in range(10):
-                time.sleep(1)
+            max_wait_attempts = _get_config("deploy.ollama_startup_attempts", 10)
+            for _ in range(max_wait_attempts):
+                time.sleep(_get_config("delays.wait_short", 1))
                 if self._check_ollama_status():
                     return True
             
@@ -150,13 +164,13 @@ class DeploymentEngine:
                 subprocess.run(
                     ["taskkill", "/F", "/IM", "ollama.exe"],
                     capture_output=True,
-                    timeout=5
+                    timeout=_get_config("timeouts.quick", 5)
                 )
             else:
                 subprocess.run(
                     ["pkill", "-f", "ollama serve"],
                     capture_output=True,
-                    timeout=5
+                    timeout=_get_config("timeouts.quick", 5)
                 )
             self._ollama_running = False
             return True
@@ -173,7 +187,7 @@ class DeploymentEngine:
         try:
             response = httpx.get(
                 f"{self.config.ollama_base_url}/api/tags",
-                timeout=10.0
+                timeout=_get_config("timeouts.default", 10.0)
             )
             if response.status_code == 200:
                 data = response.json()
@@ -196,7 +210,7 @@ class DeploymentEngine:
             response = httpx.post(
                 f"{self.config.ollama_base_url}/api/show",
                 json={"name": model_name},
-                timeout=10.0
+                timeout=_get_config("timeouts.default", 10.0)
             )
             if response.status_code == 200:
                 return response.json()
@@ -376,7 +390,7 @@ class DeploymentEngine:
                     "prompt": "",
                     "stream": False
                 },
-                timeout=30.0
+                timeout=_get_config("timeouts.long", 30.0)
             )
             
             if response.status_code == 200:
@@ -413,7 +427,7 @@ class DeploymentEngine:
             response = httpx.delete(
                 f"{self.config.ollama_base_url}/api/delete",
                 json={"name": model_name},
-                timeout=30.0
+                timeout=_get_config("timeouts.long", 30.0)
             )
             
             return DeploymentResult(

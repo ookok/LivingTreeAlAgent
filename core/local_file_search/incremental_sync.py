@@ -25,6 +25,15 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_is = _get_unified_config()
+except Exception:
+    _uconfig_is = None
+
+def _is_get(key: str, default):
+    return _uconfig_is.get(key, default) if _uconfig_is else default
+
 
 class SyncStrategy(Enum):
     """同步策略"""
@@ -190,7 +199,7 @@ class IncrementalSync:
         while self._running:
             try:
                 monitor.poll()
-                time.sleep(0.5)  # 500ms 轮询间隔
+                time.sleep(_is_get("delays.polling_short", 0.5))  # 轮询间隔
             except Exception as e:
                 logger.error(f"[IncrementalSync] USN 监控异常: {e}")
                 break
@@ -214,12 +223,12 @@ class IncrementalSync:
                 if current_time - last_poll_time >= self.poll_interval:
                     self._do_full_sync()
                     last_poll_time = current_time
-                
-                time.sleep(1)
-                
+
+                time.sleep(_is_get("delays.polling_medium", 1))
+
             except Exception as e:
                 logger.error(f"[IncrementalSync] 轮询异常: {e}")
-                time.sleep(5)
+                time.sleep(_is_get("delays.wait_short", 5))
     
     def _handle_changes(self, changes):
         """处理 USN 变更"""
@@ -332,7 +341,7 @@ class IncrementalSync:
             
             # 等待线程结束
             for thread in self._monitor_threads.values():
-                thread.join(timeout=2)
+                thread.join(timeout=_is_get("timeouts.thread_join", 2))
             
             self._monitor_threads.clear()
             

@@ -35,11 +35,11 @@ from .tier3_engines import (
     DuckDuckGoEngine, WikipediaEngine, OpenLibraryEngine,
 )
 from .tier4_engines import (
-from core.logger import get_logger
-logger = get_logger('search.tier_router')
-
     LocalCacheEngine, KnowledgeBaseEngine, SemanticsCacheEngine,
 )
+
+from core.logger import get_logger
+logger = get_logger('search.tier_router')
 
 
 class TierRouter:

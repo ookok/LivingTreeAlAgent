@@ -10,6 +10,9 @@
 5. 硬件状态 (CPU/内存/电池)
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_chat.status_monitor')
+
 import time
 import asyncio
 from typing import Optional, Dict, List, Callable
@@ -281,8 +284,6 @@ class StatusMonitor:
         jitter = 0
         if len(self._rtt_history) >= 2:
             import statistics
-from core.logger import get_logger
-logger = get_logger('unified_chat.status_monitor')
 
             jitter = statistics.stdev(self._rtt_history) if len(self._rtt_history) > 1 else 0
 

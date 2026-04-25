@@ -21,6 +21,9 @@ import aiohttp
 
 class PluginState(Enum):
     """插件状态"""
+
+from core.logger import get_logger
+logger = get_logger('desktop_environment.plugin_manager')
     DISCOVERED = "discovered"       # 已发现
     DOWNLOADING = "downloading"    # 下载中
     INSTALLED = "installed"         # 已安装
@@ -409,8 +412,6 @@ class PluginManager:
         try:
             import sys
             import importlib.util
-from core.logger import get_logger
-logger = get_logger('desktop_environment.plugin_manager')
 
 
             # 添加到 Python 路径

@@ -13,6 +13,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_context')
+
 from __future__ import annotations
 
 import logging
@@ -213,8 +216,6 @@ class UnifiedContextProvider:
         if self._memory_palace is None:
             try:
                 from core.memory_palace import MemoryPalace
-from core.logger import get_logger
-logger = get_logger('unified_context')
 
                 self._memory_palace = MemoryPalace()
             except ImportError:

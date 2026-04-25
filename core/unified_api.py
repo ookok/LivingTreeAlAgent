@@ -10,6 +10,9 @@
 - SSE (服务端推送)
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_api')
+
 import json
 import time
 import asyncio
@@ -17,6 +20,18 @@ from typing import Optional, Dict, Any, List, Callable, Awaitable
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
+
+# 导入统一配置
+try:
+    from core.config.unified_config import get_max_retries, get_retry_delay, get
+except ImportError:
+    # 兼容旧环境
+    def get_max_retries(category="default"):
+        return 3
+    def get_retry_delay(category="default"):
+        return 1.0
+    def get(key, default=None):
+        return default
 
 
 class ClientType(Enum):
@@ -32,8 +47,8 @@ class APIConfig:
     base_url: str = "http://localhost:8000"
     ws_url: str = "ws://localhost:8000"
     timeout: int = 30
-    max_retries: int = 3
-    retry_delay: float = 1.0
+    max_retries: int = field(default_factory=lambda: get_max_retries("http"))
+    retry_delay: float = field(default_factory=lambda: get_retry_delay("http"))
     client_type: ClientType = ClientType.DESKTOP
 
 
@@ -437,8 +452,6 @@ class HermesAPI(UnifiedAPIClient):
         if response.success and response.data:
             with open(save_path, "wb") as f:
                 import base64
-from core.logger import get_logger
-logger = get_logger('unified_api')
 
                 f.write(base64.b64decode(response.data["content"]))
         return response

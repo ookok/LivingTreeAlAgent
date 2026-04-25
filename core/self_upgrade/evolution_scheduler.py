@@ -9,6 +9,7 @@ from typing import Optional, Callable, List, Dict, Any
 from pathlib import Path
 
 from .models import EvolutionTask
+from core.config.unified_config import UnifiedConfig
 
 
 class EvolutionScheduler:
@@ -22,10 +23,15 @@ class EvolutionScheduler:
     4. 手动触发 — 用户主动启动
     """
 
-    def __init__(self, idle_minutes: int = 5):
-        self.idle_minutes = idle_minutes
+from core.logger import get_logger
+logger = get_logger('self_upgrade.evolution_scheduler')
+
+    def __init__(self, idle_minutes: Optional[int] = None):
+        config = UnifiedConfig.get_instance()
+        evo_config = config.get_evolution_config()
+        self.idle_minutes = idle_minutes if idle_minutes is not None else evo_config["idle_minutes"]
         self._last_activity = time.time()
-        self._idle_check_interval = 30  # 秒
+        self._idle_check_interval = evo_config["check_interval"]  # 秒
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -58,7 +64,9 @@ class EvolutionScheduler:
         """停止调度器"""
         self._running = False
         if self._thread:
-            self._thread.join(timeout=2)
+            config = UnifiedConfig.get_instance()
+            timeout = config.get_timeout("quick")
+            self._thread.join(timeout=timeout)
         logger.info("[EvolutionScheduler] Stopped")
 
     def _idle_loop(self):
@@ -278,8 +286,6 @@ class EvolutionScheduler:
         """选择空闲辩论主题"""
         # 从知识库中选择待审核或争议性主题
         from .knowledge_base import get_knowledge_base
-from core.logger import get_logger
-logger = get_logger('self_upgrade.evolution_scheduler')
 
         kb = get_knowledge_base()
 

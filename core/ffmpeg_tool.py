@@ -8,6 +8,9 @@ FFmpeg 工具封装 - 音视频录制、转码、推流引擎
 - 屏幕录制
 """
 
+from core.logger import get_logger
+logger = get_logger('ffmpeg_tool')
+
 import asyncio
 import json
 import subprocess
@@ -164,8 +167,6 @@ class FFmpegTool:
     def _find_ffprobe(self) -> str:
         """自动查找 ffprobe 路径"""
         import shutil
-from core.logger import get_logger
-logger = get_logger('ffmpeg_tool')
 
 
         # 1. 项目本地 bin

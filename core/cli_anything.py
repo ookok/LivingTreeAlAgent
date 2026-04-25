@@ -9,6 +9,9 @@ CLI-Anything 集成系统
 4. 异步任务管理 - 长时间生成任务的后台处理与进度反馈
 """
 
+from core.logger import get_logger
+logger = get_logger('cli_anything')
+
 import asyncio
 import json
 import re
@@ -801,8 +804,6 @@ class CLIGeneratorPipeline:
     def _slugify(self, text: str) -> str:
         """生成slug格式的名称（ASCII安全）"""
         import unicodedata
-from core.logger import get_logger
-logger = get_logger('cli_anything')
 
         # Unicode normalization and ASCII conversion
         text = unicodedata.normalize('NFKD', text)

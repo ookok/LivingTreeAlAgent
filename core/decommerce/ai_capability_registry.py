@@ -21,6 +21,8 @@ import time
 import uuid
 import json
 
+from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -207,8 +209,11 @@ class AICapabilityRegistry:
         caps = []
         try:
             import aiohttp
+            config = UnifiedConfig.get_instance()
+            discovery_timeout = config.get("decommerce.discovery_timeout", 5)
+            
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:11434/api/tags", timeout=5) as resp:
+                async with session.get("http://localhost:11434/api/tags", timeout=discovery_timeout) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         models = data.get("models", [])

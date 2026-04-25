@@ -31,6 +31,15 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_ocd = _get_unified_config()
+except Exception:
+    _uconfig_ocd = None
+
+def _ocd_get(key: str, default):
+    return _uconfig_ocd.get(key, default) if _uconfig_ocd else default
+
 
 class OpenAICompatibleDriver(ModelDriver):
     """
@@ -46,10 +55,10 @@ class OpenAICompatibleDriver(ModelDriver):
         api_key: str = "",
         api_key_env: str = "",
         default_model: str = "",
-        timeout: float = 120.0,
-        connect_timeout: float = 10.0,
-        max_retries: int = 2,
-        retry_delay: float = 1.0,
+        timeout: float = None,
+        connect_timeout: float = None,
+        max_retries: int = None,
+        retry_delay: float = None,
         extra_params: Dict[str, Any] | None = None,
         **kwargs,
     ):
@@ -60,10 +69,10 @@ class OpenAICompatibleDriver(ModelDriver):
         self._api_key = api_key
         self.api_key_env = api_key_env
         self.default_model = default_model
-        self.timeout = timeout
-        self.connect_timeout = connect_timeout
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+        self.timeout = timeout if timeout is not None else _ocd_get("cloud_driver.timeout", 120.0)
+        self.connect_timeout = connect_timeout if connect_timeout is not None else _ocd_get("cloud_driver.connect_timeout", 10.0)
+        self.max_retries = max_retries if max_retries is not None else _ocd_get("cloud_driver.max_retries", 2)
+        self.retry_delay = retry_delay if retry_delay is not None else _ocd_get("cloud_driver.retry_delay", 1.0)
         self.extra_params = extra_params or {}
 
     def _get_api_key(self) -> str:
@@ -113,7 +122,7 @@ class OpenAICompatibleDriver(ModelDriver):
             "default_model": self.default_model,
         }
         try:
-            with self._build_client(timeout=5.0) as c:
+            with self._build_client(timeout=_ocd_get("cloud_driver.list_models_timeout", 5.0)) as c:
                 r = c.get("/models")
                 details["status_code"] = r.status_code
                 if r.status_code == 200:
@@ -282,7 +291,7 @@ class OpenAICompatibleDriver(ModelDriver):
         model = request.model or self.default_model
         payload = {"model": model, "input": request.texts, "encoding_format": request.encoding_format}
         try:
-            with self._build_client(timeout=60.0) as c:
+            with self._build_client(timeout=_ocd_get("cloud_driver.embed_timeout", 60.0)) as c:
                 r = c.post("/embeddings", json=payload)
                 r.raise_for_status()
                 data = r.json()
@@ -303,7 +312,7 @@ class OpenAICompatibleDriver(ModelDriver):
 
     def list_models(self) -> List[Dict[str, Any]]:
         try:
-            with self._build_client(timeout=5.0) as c:
+            with self._build_client(timeout=_ocd_get("cloud_driver.list_models_timeout", 5.0)) as c:
                 r = c.get("/models")
                 if r.status_code == 200:
                     return r.json().get("data", [])

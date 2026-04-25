@@ -33,6 +33,16 @@ except ImportError:
     PYQT6_AVAILABLE = False
     QObject = object
 
+# 导入统一配置
+try:
+    from core.config.unified_config import get_ollama_url, get
+except ImportError:
+    # 兼容旧环境
+    def get_ollama_url():
+        return "http://localhost:11434"
+    def get(key, default=None):
+        return default
+
 
 # ============== 配置枚举 ==============
 
@@ -69,9 +79,14 @@ class LLMGuidanceConfig:
     # 模型配置
     source: LLMSource = LLMSource.OLLAMA_LOCAL
     model: str = "qwen2.5:1.5b"       # 默认模型
-    api_base: str = "http://localhost:11434"
+    api_base: str = ""                # 默认从统一配置获取
     api_key: str = ""                 # 可选
     timeout: float = 30.0             # 超时时间
+    
+    def __post_init__(self):
+        # 默认值从统一配置获取
+        if not self.api_base:
+            self.api_base = get_ollama_url()
     
     # 生成配置
     max_questions: int = 3            # 最大追问数
@@ -132,15 +147,15 @@ class OllamaClient:
     
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
+        base_url: str = None,
         timeout: float = 30.0,
     ):
         """
         Args:
-            base_url: Ollama API 地址
+            base_url: Ollama API 地址，默认从统一配置获取
             timeout: 超时时间（秒）
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = (base_url or get_ollama_url()).rstrip('/')
         self.timeout = timeout
         self._session = None
     
@@ -787,7 +802,7 @@ class HybridGuidanceGenerator:
 
 def create_llm_generator(
     model: str = "qwen2.5:1.5b",
-    api_base: str = "http://localhost:11434",
+    api_base: str = None,
     strategy: GuidanceStrategy = GuidanceStrategy.HYBRID,
 ) -> LLMGuidanceGenerator:
     """
@@ -795,7 +810,7 @@ def create_llm_generator(
     
     Args:
         model: 模型名称
-        api_base: API 地址
+        api_base: API 地址，默认从统一配置获取
         strategy: 策略
         
     Returns:
@@ -804,7 +819,7 @@ def create_llm_generator(
     config = LLMGuidanceConfig(
         source=LLMSource.OLLAMA_LOCAL,
         model=model,
-        api_base=api_base,
+        api_base=api_base or get_ollama_url(),
         strategy=strategy,
     )
     return LLMGuidanceGenerator(config)
@@ -812,7 +827,7 @@ def create_llm_generator(
 
 def create_hybrid_generator(
     model: str = "qwen2.5:1.5b",
-    api_base: str = "http://localhost:11434",
+    api_base: str = None,
     trigger_condition: TriggerCondition = TriggerCondition.LOW_CONFIDENCE,
 ) -> HybridGuidanceGenerator:
     """
@@ -820,7 +835,7 @@ def create_hybrid_generator(
     
     Args:
         model: 模型名称
-        api_base: API 地址
+        api_base: API 地址，默认从统一配置获取
         trigger_condition: 触发条件
         
     Returns:
@@ -828,7 +843,7 @@ def create_hybrid_generator(
     """
     llm_config = LLMGuidanceConfig(
         model=model,
-        api_base=api_base,
+        api_base=api_base or get_ollama_url(),
         strategy=GuidanceStrategy.HYBRID,
     )
     trigger = GuidanceTrigger(condition=trigger_condition)
@@ -841,7 +856,7 @@ def quick_llm_guidance(
     intent: str = "",
     content_type: str = "general",
     model: str = "qwen2.5:1.5b",
-    api_base: str = "http://localhost:11434",
+    api_base: str = None,
 ) -> List[str]:
     """
     快速 LLM 追问生成
@@ -852,7 +867,7 @@ def quick_llm_guidance(
         intent: 意图类型
         content_type: 内容类型
         model: 模型
-        api_base: API 地址
+        api_base: API 地址，默认从统一配置获取
         
     Returns:
         List[str]: 追问列表

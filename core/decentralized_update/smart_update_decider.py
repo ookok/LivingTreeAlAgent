@@ -37,6 +37,9 @@ from enum import Enum
 
 class UpdateStrategy(Enum):
     """更新策略"""
+
+from core.logger import get_logger
+logger = get_logger('decentralized_update.smart_update_decider')
     MIRROR_FIRST = "mirror_first"           # 镜像优先 (中国大陆)
     BACKGROUND_SILENT = "background_silent"  # 工作时段静默
     NOTIFY_AND_APPLY = "notify_and_apply" # 立即提示并应用
@@ -482,8 +485,6 @@ class SmartUpdateDecider:
     def _has_server_characteristics(self) -> bool:
         """检测服务器特征"""
         import psutil
-from core.logger import get_logger
-logger = get_logger('decentralized_update.smart_update_decider')
 
 
         # 内存大于 16GB

@@ -195,9 +195,6 @@ class SemanticDeduplicator:
         try:
             # 使用 Ollama 获取嵌入
             from core.ollama_client import OllamaClient
-from core.logger import get_logger
-logger = get_logger('knowledge_innovation')
-
             client = OllamaClient()
 
             # Ollama 的 embeddings API

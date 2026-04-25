@@ -34,6 +34,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('expert_learning.intelligent_learning_system')
+
 from __future__ import annotations
 
 import json
@@ -71,8 +74,6 @@ def _import_modules():
             MultiModelComparison
         )
         from core.expert_learning.enhanced_performance_monitor import (
-from core.logger import get_logger
-logger = get_logger('expert_learning.intelligent_learning_system')
 
             EnhancedPerformanceMonitor, MetricType
         )

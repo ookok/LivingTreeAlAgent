@@ -9,6 +9,9 @@
 - Ollama 本地模型
 """
 
+from core.logger import get_logger
+logger = get_logger('fusion_rag.small_model_optimizer')
+
 import time
 import hashlib
 from typing import Dict, Any, List, Optional
@@ -83,8 +86,6 @@ class SmallModelOptimizer:
         # 模拟 Ollama 调用 (实际使用 requests 库)
         try:
             import requests
-from core.logger import get_logger
-logger = get_logger('fusion_rag.small_model_optimizer')
 
             
             url = f"{self.ollama_url}/api/generate"

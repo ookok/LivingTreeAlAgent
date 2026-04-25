@@ -7,18 +7,26 @@
 - 基于置信度加权融合
 - RRF/MRR 等融合算法
 - 答案生成与优化
+- KV Cache 推理优化
 """
+
+from core.logger import get_logger
+logger = get_logger('fusion_rag.fusion_engine')
 
 import time
 import hashlib
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from collections import defaultdict
 
+# 导入 KV Cache
+try:
+    from .kv_cache_optimizer import get_kv_cache_manager
+except ImportError:
+    get_kv_cache_manager = None
+
 if TYPE_CHECKING:
     from .l4_executor import L4RelayExecutor
     from .write_back_cache import WriteBackCache
-from core.logger import get_logger
-logger = get_logger('fusion_rag.fusion_engine')
 
 
 
@@ -29,7 +37,8 @@ class FusionEngine:
         self,
         top_k: int = 10,
         l4_executor: Optional[Any] = None,
-        write_back_cache: Optional[Any] = None
+        write_back_cache: Optional[Any] = None,
+        enable_llm_cache: bool = True
     ):
         """
         初始化融合引擎
@@ -38,6 +47,7 @@ class FusionEngine:
             top_k: 返回的最终结果数量
             l4_executor: L4 执行器 (L4RelayExecutor)
             write_back_cache: L4 回填缓存
+            enable_llm_cache: 是否启用 LLM 响应缓存
         """
         self.top_k = top_k
         self.l4_executor = l4_executor
@@ -59,6 +69,14 @@ class FusionEngine:
         self.avg_results_count = 0
         self.l4_execution_count = 0
         self.write_back_count = 0
+        self.llm_cache_hits = 0
+        
+        # ── KV Cache 集成 ──────────────────────────────────────────
+        self._llm_cache_enabled = enable_llm_cache
+        self._kv_cache = None
+        if enable_llm_cache and get_kv_cache_manager:
+            self._kv_cache = get_kv_cache_manager()
+            logger.info("[FusionEngine] LLM KV Cache 已启用")
         
         logger.info(f"[FusionEngine] 初始化完成，默认算法: {self.default_algorithm}")
     
@@ -333,15 +351,23 @@ class FusionEngine:
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
-        return {
+        stats = {
             "fusion_count": self.fusion_count,
             "avg_results_count": self.avg_results_count,
             "available_algorithms": list(self.algorithms.keys()),
             "default_algorithm": self.default_algorithm,
             "l4_enabled": self.l4_executor is not None,
             "l4_execution_count": self.l4_execution_count,
-            "write_back_count": self.write_back_count
+            "write_back_count": self.write_back_count,
+            "llm_cache_enabled": self._llm_cache_enabled,
+            "llm_cache_hits": self.llm_cache_hits
         }
+        
+        # 添加 KV Cache 统计
+        if self._llm_cache_enabled and self._kv_cache:
+            stats["kv_cache_stats"] = self._kv_cache.get_stats()
+        
+        return stats
 
     # ==================== L4 穿透支持 ====================
 
@@ -365,12 +391,24 @@ class FusionEngine:
         if self.l4_executor is None:
             raise FusionEngineError("L4 执行器未配置")
 
+        # ── LLM KV Cache 检查 ──────────────────────────────────────
+        if self._llm_cache_enabled and self._kv_cache:
+            cached_result = self._kv_cache.get_llm_cached(messages)
+            if cached_result is not None:
+                logger.debug(f"[FusionEngine] LLM 缓存命中 (intent={intent})")
+                self.llm_cache_hits += 1
+                return cached_result
+
         self.l4_execution_count += 1
         result = await self.l4_executor.execute(
             messages=messages,
             model=model,
             intent=intent
         )
+
+        # ── 写入 LLM KV Cache ─────────────────────────────────────
+        if self._llm_cache_enabled and self._kv_cache and result:
+            self._kv_cache.set_llm_cache(messages, result)
 
         # 异步回填缓存
         if self.write_back_cache:

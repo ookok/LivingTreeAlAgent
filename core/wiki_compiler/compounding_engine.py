@@ -14,6 +14,9 @@
 4. Dream Cycle - 夜间循环
 """
 
+from core.logger import get_logger
+logger = get_logger('wiki_compiler.compounding_engine')
+
 import os
 import json
 import time
@@ -226,8 +229,6 @@ class CompoundingEngine:
     def _extract_keywords(self, text: str) -> List[str]:
         """提取关键词"""
         import re
-from core.logger import get_logger
-logger = get_logger('wiki_compiler.compounding_engine')
 
         # 简单分词
         words = re.findall(r'[\w]+', text.lower())

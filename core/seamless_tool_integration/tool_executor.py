@@ -9,6 +9,9 @@ Tool Executor - 工具执行封装
 5. 资源管理
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.tool_executor')
+
 import os
 import sys
 import subprocess
@@ -418,8 +421,6 @@ class ToolExecutor:
 
             # 监控输出
             import select
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.tool_executor')
 
 
             while True:

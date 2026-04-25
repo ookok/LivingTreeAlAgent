@@ -11,6 +11,9 @@ AI-Driven Network Optimization System
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('ai_network_optimizer')
+
 import asyncio
 import time
 import socket
@@ -476,7 +479,5 @@ async def example_usage():
 
 if __name__ == "__main__":
     from datetime import datetime
-from core.logger import get_logger
-logger = get_logger('ai_network_optimizer')
 
     asyncio.run(example_usage())

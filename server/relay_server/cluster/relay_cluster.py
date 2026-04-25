@@ -54,6 +54,8 @@ from typing import Dict, List, Optional, Set, Any
 from collections import defaultdict
 import logging
 
+from core.config.unified_config import UnifiedConfig
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("RelayCluster")
@@ -173,7 +175,16 @@ class GossipState:
 
     VERSION = 1
     FANOUT = 3          # 每轮传播节点数
-    INTERVAL = 2.0      # 传播间隔（秒）
+    
+    # 传播间隔（秒）- 从配置读取
+    @staticmethod
+    def get_interval() -> float:
+        try:
+            config = UnifiedConfig.get_instance()
+            return config.get("server.gossip_interval", 2.0)
+        except Exception:
+            return 2.0
+    
     TTL = 10            # 消息 TTL
 
 
@@ -516,7 +527,7 @@ class RelayNode:
     async def _gossip_loop(self):
         """Gossip 传播循环"""
         while self._running:
-            await asyncio.sleep(GossipState.INTERVAL)
+            await asyncio.sleep(GossipState.get_interval())
             count = await self.gossip.spread()
             if count > 0:
                 logger.debug(f"Gossip: 传播了 {count} 条消息")

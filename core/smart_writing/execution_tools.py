@@ -36,18 +36,23 @@ from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from .tool_definition import (
-from core.logger import get_logger
-logger = get_logger('smart_writing.execution_tools')
-
     Tool, ToolParameter, ToolResult, ToolStatus,
     ToolRegistry, ToolCategory
 )
+from core.logger import get_logger
+from core.config.unified_config import UnifiedConfig
+
+logger = get_logger('smart_writing.execution_tools')
 
 
 # ============== 配置 ==============
 
-# 默认超时（秒）
-DEFAULT_TIMEOUT = 60
+# 默认超时（秒）- 从配置读取
+try:
+    _config = UnifiedConfig.get_instance()
+    DEFAULT_TIMEOUT = _config.get("smart_writing.default_timeout", 60)
+except Exception:
+    DEFAULT_TIMEOUT = 60
 
 # 最大输出大小（1MB）
 MAX_OUTPUT_SIZE = 1024 * 1024

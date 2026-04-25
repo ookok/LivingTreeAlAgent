@@ -17,6 +17,9 @@ Hermes AI-Driven Intelligent Client
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('hermes_ai_client')
+
 import asyncio
 import time
 import hashlib
@@ -553,8 +556,6 @@ class ContentEnhancementCapability(AICapability):
                 enhancements.append("Code examples extracted")
 
             import re
-from core.logger import get_logger
-logger = get_logger('hermes_ai_client')
 
             urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', content)
             if len(urls) > 5:

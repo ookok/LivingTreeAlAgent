@@ -12,17 +12,17 @@ from datetime import datetime
 # 尝试导入分层搜索模块
 try:
     from core.search import (
-from core.logger import get_logger
-logger = get_logger('search.tiered_adapter')
-
         SearchScheduler,
         TierRouter,
         TierLevel,
         QueryType,
     )
+    from core.logger import get_logger
+    logger = get_logger('search.tiered_adapter')
     TIERED_SEARCH_AVAILABLE = True
 except ImportError:
     TIERED_SEARCH_AVAILABLE = False
+    logger = None
 
 
 class TieredSearchAdapter:

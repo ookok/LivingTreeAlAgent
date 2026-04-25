@@ -414,9 +414,16 @@ class TaskOrchestrator:
 class A2AServer:
     """
     A2A 服务器
-    提供 HTTP/WebSocket 接口接收外部请求
+    提供 HTTP + WebSocket 接口接收外部 Agent 请求
+
+    HTTP 端点：
+    - POST /a2a/message        — 发送 JSON-RPC 消息
+    - GET  /a2a/status         — 获取服务器状态
+    - GET  /a2a/agents         — 获取已注册智能体列表
+    - GET  /a2a/tasks          — 获取任务列表
+    - WebSocket /a2a/ws        — 双向实时通信
     """
-    
+
     def __init__(self, agent_info: AgentInfo, host: str = "0.0.0.0", port: int = 8080):
         self.agent_info = agent_info
         self.protocol = A2AProtocol(agent_info)
@@ -425,79 +432,247 @@ class A2AServer:
         self.host = host
         self.port = port
         self._running = False
-    
+        self._app = None       # aiohttp web.Application
+        self._runner = None    # aiohttp web.AppRunner
+        self._site = None      # aiohttp web.TCPSite
+        self._ws_clients: set = set()  # WebSocket 连接集合
+
     async def start(self):
-        """启动服务器"""
+        """启动 HTTP + WebSocket 服务器"""
+        from aiohttp import web
+
+        self._app = web.Application()
+        self._app.router.add_post('/a2a/message', self._handle_http_message)
+        self._app.router.add_get('/a2a/status', self._handle_status)
+        self._app.router.add_get('/a2a/agents', self._handle_agents)
+        self._app.router.add_get('/a2a/tasks', self._handle_tasks)
+        self._app.router.add_get('/a2a/ws', self._handle_websocket)
+
+        self._runner = web.AppRunner(self._app)
+        await self._runner.setup()
+        self._site = web.TCPSite(self._runner, self.host, self.port)
+        await self._site.start()
+
         self._running = True
-        logger.info(f"A2A Server starting on {self.host}:{self.port}")
-        # TODO: 启动 HTTP/WebSocket 服务器
-        # 实际使用 asyncio 和 aiohttp/websockets 实现
-    
+        self.agent_info.status = "online"
+        logger.info(f"A2A Server started on http://{self.host}:{self.port}")
+        logger.info(f"  HTTP:  http://{self.host}:{self.port}/a2a/message")
+        logger.info(f"  WS:    ws://{self.host}:{self.port}/a2a/ws")
+        logger.info(f"  Agent: {self.agent_info.name} ({self.agent_info.agent_id})")
+
     async def stop(self):
         """停止服务器"""
         self._running = False
+        self.agent_info.status = "offline"
+
+        # 关闭所有 WebSocket 连接
+        for ws in list(self._ws_clients):
+            try:
+                await ws.close()
+            except Exception:
+                pass
+        self._ws_clients.clear()
+
+        if self._runner:
+            await self._runner.cleanup()
+            self._runner = None
+
         logger.info("A2A Server stopped")
-    
+
     def is_running(self) -> bool:
         """检查服务器状态"""
         return self._running
+
+    # ── HTTP 处理器 ──────────────────────────────────────────────────
+
+    async def _handle_http_message(self, request) -> 'web.Response':
+        """处理 HTTP JSON-RPC 消息"""
+        from aiohttp import web
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({
+                "jsonrpc": "2.0",
+                "error": {"code": -32700, "message": "Parse error: invalid JSON"}
+            })
+
+        # 处理消息
+        response_msg = await self.protocol.receive_message(data)
+        return web.json_response(response_msg.to_dict())
+
+    async def _handle_status(self, request) -> 'web.Response':
+        """获取服务器状态"""
+        from aiohttp import web
+        return web.json_response({
+            "agent_id": self.agent_info.agent_id,
+            "name": self.agent_info.name,
+            "status": self.agent_info.status,
+            "version": self.agent_info.version,
+            "capabilities": [c.value for c in self.agent_info.capabilities],
+            "running": self._running,
+            "active_tasks": len([t for t in self.protocol.tasks.values() if t.status == "running"]),
+            "total_tasks": len(self.protocol.tasks),
+            "registered_agents": len(self.registry.agents),
+            "ws_clients": len(self._ws_clients),
+        })
+
+    async def _handle_agents(self, request) -> 'web.Response':
+        """获取已注册智能体列表"""
+        from aiohttp import web
+        return web.json_response({
+            "agents": [a.to_dict() for a in self.registry.get_all_agents()]
+        })
+
+    async def _handle_tasks(self, request) -> 'web.Response':
+        """获取任务列表"""
+        from aiohttp import web
+        return web.json_response({
+            "tasks": [t.to_dict() for t in self.protocol.tasks.values()]
+        })
+
+    # ── WebSocket 处理器 ─────────────────────────────────────────────
+
+    async def _handle_websocket(self, request) -> 'web.Response':
+        """处理 WebSocket 连接"""
+        from aiohttp import web as aiohttp_web
+
+        ws = aiohttp_web.WebSocketResponse()
+        await ws.prepare(request)
+        self._ws_clients.add(ws)
+        logger.info(f"WebSocket client connected: {request.remote}")
+
+        try:
+            async for msg in ws:
+                if msg.type == aiohttp_web.WSMsgType.TEXT:
+                    try:
+                        data = json.loads(msg.data)
+                        response_msg = await self.protocol.receive_message(data)
+                        await ws.send_json(response_msg.to_dict())
+                    except json.JSONDecodeError:
+                        await ws.send_json({
+                            "jsonrpc": "2.0",
+                            "error": {"code": -32700, "message": "Parse error"}
+                        })
+                elif msg.type == aiohttp_web.WSMsgType.ERROR:
+                    logger.warning(f"WebSocket error: {ws.exception()}")
+        finally:
+            self._ws_clients.discard(ws)
+            logger.info(f"WebSocket client disconnected: {request.remote}")
+
+        return ws
 
 
 class A2AClient:
     """
     A2A 客户端
-    用于向其他智能体发送请求
+    用于向其他智能体发送 HTTP/WebSocket 请求
+
+    支持两种通信模式：
+    - HTTP: POST/GET 请求（简单、无状态）
+    - WebSocket: 双向实时通信（持续连接）
     """
-    
-    def __init__(self, agent_info: AgentInfo):
+
+    def __init__(self, agent_info: AgentInfo, timeout: float = 30.0):
         self.agent_info = agent_info
         self.protocol = A2AProtocol(agent_info)
-        self.endpoints: Dict[str, str] = {}  # agent_id -> endpoint
-    
+        self.endpoints: Dict[str, str] = {}  # agent_id -> endpoint (http://host:port)
+        self.timeout = timeout
+        self._session = None  # aiohttp ClientSession
+
     def add_endpoint(self, agent_id: str, endpoint: str):
-        """添加端点"""
-        self.endpoints[agent_id] = endpoint
-    
+        """添加端点（完整 URL，如 http://localhost:8081）"""
+        self.endpoints[agent_id] = endpoint.rstrip("/")
+
+    async def _get_session(self):
+        """获取/创建 aiohttp 会话"""
+        if self._session is None or self._session.closed:
+            import aiohttp
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout),
+                headers={"Content-Type": "application/json"},
+            )
+        return self._session
+
+    async def close(self):
+        """关闭客户端"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+
     async def send_task_request(self, agent_id: str, task: Task) -> Optional[A2AMessage]:
-        """发送任务请求"""
+        """发送任务请求到目标 Agent"""
         if agent_id not in self.endpoints:
             logger.error(f"Unknown agent: {agent_id}")
             return None
-        
+
         message = A2AMessage(
             method=MessageType.TASK_REQUEST,
             params={
                 "task_type": task.task_type,
                 "description": task.description,
                 "params": task.params,
-                "priority": task.priority
+                "priority": task.priority,
             }
         )
-        
-        # TODO: 实现实际的网络请求
-        # return await self.protocol.send_message(message, self.endpoints[agent_id])
-        return None
-    
+
+        return await self._send_http(agent_id, message)
+
     async def get_agent_status(self, agent_id: str) -> Optional[Dict]:
-        """获取智能体状态"""
+        """获取目标 Agent 的状态"""
         if agent_id not in self.endpoints:
+            logger.error(f"Unknown agent: {agent_id}")
             return None
-        
-        message = A2AMessage(method=MessageType.HEART_BEAT)
-        # TODO: 发送请求并返回结果
-        return None
-    
+
+        session = await self._get_session()
+        url = f"{self.endpoints[agent_id]}/a2a/status"
+
+        try:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    logger.error(f"Status request failed: HTTP {resp.status}")
+                    return None
+        except Exception as e:
+            logger.error(f"Status request error: {e}")
+            return None
+
     async def cancel_task(self, agent_id: str, task_id: str) -> bool:
-        """取消任务"""
+        """取消目标 Agent 上的任务"""
         if agent_id not in self.endpoints:
+            logger.error(f"Unknown agent: {agent_id}")
             return False
-        
+
         message = A2AMessage(
             method=MessageType.TASK_CANCEL,
-            params={"task_id": task_id}
+            params={"task_id": task_id},
         )
-        # TODO: 发送请求
-        return True
+
+        response = await self._send_http(agent_id, message)
+        if response and response.result:
+            return response.result.get("status") == "cancelled"
+        return False
+
+    async def send_message(self, message: A2AMessage, endpoint: str) -> Optional[A2AMessage]:
+        """发送通用 JSON-RPC 消息到指定端点"""
+        session = await self._get_session()
+        url = f"{endpoint.rstrip('/')}/a2a/message"
+
+        try:
+            async with session.post(url, json=message.to_dict()) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return A2AMessage.from_dict(data)
+                else:
+                    error_text = await resp.text()
+                    logger.error(f"Message send failed: HTTP {resp.status} - {error_text[:200]}")
+                    return None
+        except Exception as e:
+            logger.error(f"Message send error: {e}")
+            return None
+
+    async def _send_http(self, agent_id: str, message: A2AMessage) -> Optional[A2AMessage]:
+        """通过 HTTP 发送消息"""
+        return await self.send_message(message, self.endpoints[agent_id])
 
 
 __all__ = [

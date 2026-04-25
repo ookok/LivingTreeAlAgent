@@ -9,6 +9,9 @@
 4. 与搜索/情报系统集成
 """
 
+from core.logger import get_logger
+logger = get_logger('translation.translation_hub')
+
 import time
 import asyncio
 import hashlib
@@ -462,8 +465,6 @@ class TranslationHub:
     def _detect_language_regex(self, text: str) -> str:
         """使用正则表达式检测语言（降级方案）"""
         import re
-from core.logger import get_logger
-logger = get_logger('translation.translation_hub')
 
         
         # 中文检测

@@ -15,6 +15,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('error_memory.error_knowledge_base')
+
 from __future__ import annotations
 
 import json
@@ -571,8 +574,6 @@ class ErrorKnowledgeBase:
         """反序列化模板"""
         try:
             from .error_models import ErrorCategory, FixStep
-from core.logger import get_logger
-logger = get_logger('error_memory.error_knowledge_base')
 
             
             steps = [

@@ -8,6 +8,9 @@ Seamless Integration Manager - 无缝集成管理器
 - 可视化
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.manager')
+
 import os
 import tempfile
 import shutil
@@ -466,8 +469,6 @@ class SeamlessIntegrationManager:
             执行方案
         """
         from .cloud_bridge import CloudExecutionPlanner
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.manager')
 
 
         planner = CloudExecutionPlanner()

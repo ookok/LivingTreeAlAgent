@@ -17,6 +17,9 @@ from enum import Enum
 
 class WindowState(Enum):
     """窗口状态"""
+
+from core.logger import get_logger
+logger = get_logger('desktop_environment.window_manager')
     NORMAL = "normal"
     MINIMIZED = "minimized"
     MAXIMIZED = "maximized"
@@ -557,8 +560,6 @@ class WindowManager:
             return
 
         from screeninfo import get_monitors
-from core.logger import get_logger
-logger = get_logger('desktop_environment.window_manager')
 
         monitors = get_monitors()
         if not monitors:

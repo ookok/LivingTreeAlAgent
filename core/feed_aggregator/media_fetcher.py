@@ -23,6 +23,9 @@ class MediaFetcher:
     4. 内容安全初筛
     """
 
+from core.logger import get_logger
+logger = get_logger('feed_aggregator.media_fetcher')
+
     def __init__(self, data_dir: Optional[Path] = None, max_workers: int = 4):
         self.data_dir = data_dir or Path.home() / ".hermes-desktop" / "feed_aggregator"
         self.cache_dir = self.data_dir / "cache"
@@ -265,8 +268,6 @@ class MediaFetcher:
         """抓取 GitHub Trending"""
         try:
             import aiohttp
-from core.logger import get_logger
-logger = get_logger('feed_aggregator.media_fetcher')
 
             async with aiohttp.ClientSession() as session:
                 url = "https://api.github.com/search/repositories?q=stars:>1000+pushed:>2024-01-01&sort=stars&per_page=50"

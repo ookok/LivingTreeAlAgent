@@ -20,6 +20,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_writing.smart_review_brain')
+
 import logging
 import json
 import re
@@ -846,8 +849,6 @@ class SmartReviewBrain:
     def _check_standards(self, content: Dict) -> Dict:
         """检查标准时效性"""
         import re
-from core.logger import get_logger
-logger = get_logger('smart_writing.smart_review_brain')
 
         outdated = []
         

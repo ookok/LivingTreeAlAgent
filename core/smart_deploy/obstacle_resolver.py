@@ -21,6 +21,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_or = _get_unified_config()
+except Exception:
+    _uconfig_or = None
+
+def _or_get(key: str, default):
+    return _uconfig_or.get(key, default) if _uconfig_or else default
+
 
 class ObstacleType(Enum):
     """障碍类型"""
@@ -408,7 +417,7 @@ class ObstacleResolver:
         for cmd in solution.commands:
             try:
                 result = subprocess.run(
-                    cmd, shell=True, capture_output=True, text=True, timeout=60
+                    cmd, shell=True, capture_output=True, text=True, timeout=_or_get("timeouts.long", 60)
                 )
                 if result.returncode == 0:
                     outputs.append(result.stdout)

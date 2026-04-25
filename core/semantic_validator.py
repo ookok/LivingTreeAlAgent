@@ -20,6 +20,10 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable, Iterator, TypedDict
 from enum import Enum
 
+from core.logger import get_logger
+
+logger = get_logger('semantic_validator')
+
 # 可选依赖
 SPACY_AVAILABLE = False
 try:
@@ -548,9 +552,6 @@ class ChonkieValidator:
         # 尝试导入 Chonkie
         try:
             from chonkie import RecursiveChunker
-from core.logger import get_logger
-logger = get_logger('semantic_validator')
-
             self._chunker = RecursiveChunker()
         except ImportError:
             logger.info("⚠️ chonkie 未安装，使用简单分块")

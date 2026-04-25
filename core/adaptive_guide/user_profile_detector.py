@@ -18,6 +18,9 @@
     logger.info(f"推荐引导: {guide.guide_type}")
 """
 
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.user_profile_detector')
+
 import os
 import json
 import platform
@@ -639,8 +642,6 @@ class UserProfileDetector:
         """测量网络速度"""
         try:
             import socket
-from core.logger import get_logger
-logger = get_logger('adaptive_guide.user_profile_detector')
 
             socket.create_connection(("8.8.8.8", 53), timeout=3)
             return "fast"

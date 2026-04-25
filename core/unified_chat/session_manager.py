@@ -10,6 +10,9 @@
 5. 消息搜索
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_chat.session_manager')
+
 import uuid
 import time
 import sqlite3
@@ -564,8 +567,6 @@ class SessionManager:
     def _row_to_message(self, row: tuple) -> UnifiedMessage:
         """数据库行转 UnifiedMessage"""
         import json
-from core.logger import get_logger
-logger = get_logger('unified_chat.session_manager')
 
         metadata = None
         if row[14]:

@@ -9,6 +9,9 @@ Result Visualizer - 结果可视化
 5. 地图叠加显示
 """
 
+from core.logger import get_logger
+logger = get_logger('seamless_tool_integration.result_visualizer')
+
 import os
 import io
 from typing import Optional, Dict, List, Tuple, Any
@@ -380,8 +383,6 @@ class MaxValueVisualizer(BaseVisualizer):
 
         # 添加图例
         from matplotlib.patches import Patch
-from core.logger import get_logger
-logger = get_logger('seamless_tool_integration.result_visualizer')
 
         legend_elements = [
             Patch(facecolor='#4CAF50', label='达标'),

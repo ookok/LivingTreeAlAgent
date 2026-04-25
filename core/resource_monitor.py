@@ -23,6 +23,10 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Callable, Optional, TypedDict
 from enum import Enum
+
+from core.logger import get_logger
+
+logger = get_logger('resource_monitor')
 from datetime import datetime
 
 # psutil 依赖
@@ -173,9 +177,6 @@ class ResourceMonitor:
         except ImportError:
             try:
                 import pynvml
-from core.logger import get_logger
-logger = get_logger('resource_monitor')
-
                 pynvml.nvmlInit()
                 self._gpu_available = True
                 logger.info("✓ NVIDIA GPU 监控已启用")

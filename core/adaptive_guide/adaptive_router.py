@@ -21,6 +21,9 @@
         guide = router.start_guide(result["feature_id"])
 """
 
+from core.logger import get_logger
+logger = get_logger('adaptive_guide.adaptive_router')
+
 import os
 import logging
 from typing import Dict, Any, Optional, List, Callable, Awaitable
@@ -455,8 +458,6 @@ class AdaptiveRouter:
         内部使用 asyncio 但不等待完成
         """
         import asyncio
-from core.logger import get_logger
-logger = get_logger('adaptive_guide.adaptive_router')
 
         return await self.execute_feature(feature_id, input_data, config, strategy)
     

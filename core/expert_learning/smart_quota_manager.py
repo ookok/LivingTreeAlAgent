@@ -13,6 +13,9 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('expert_learning.smart_quota_manager')
+
 import time
 import threading
 from typing import Dict, Any, Optional, List, Callable
@@ -884,8 +887,6 @@ class SmartQuotaManager:
 
         try:
             from core.expert_learning.external_provider_config import ProviderType, CostType
-from core.logger import get_logger
-logger = get_logger('expert_learning.smart_quota_manager')
 
 
             # 转换类型

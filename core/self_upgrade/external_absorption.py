@@ -22,6 +22,9 @@ class ExternalAbsorption:
     4. 安全审查后入库
     """
 
+from core.logger import get_logger
+logger = get_logger('self_upgrade.external_absorption')
+
     def __init__(self, data_dir: Optional[Path] = None):
         self.data_dir = data_dir or Path.home() / ".hermes-desktop" / "self_upgrade"
         self.insights_dir = self.data_dir / "external_insights"
@@ -152,8 +155,6 @@ class ExternalAbsorption:
 
         # 安全审查
         from .safety_pipeline import check_safety
-from core.logger import get_logger
-logger = get_logger('self_upgrade.external_absorption')
 
         safety_result = check_safety(
             insight.content_summary + " " + " ".join(insight.key_points)

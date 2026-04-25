@@ -6,6 +6,9 @@ Schedule Command Executor
 与 WorkBuddy automation_update 工具集成
 """
 
+from core.logger import get_logger
+logger = get_logger('smart_fallback.schedule_command')
+
 import json
 import re
 import sqlite3
@@ -517,8 +520,6 @@ def execute_schedule_command(text: str) -> Dict[str, Any]:
 if __name__ == "__main__":
     # 测试用例
     import sys
-from core.logger import get_logger
-logger = get_logger('smart_fallback.schedule_command')
 
 
     test_cases = [

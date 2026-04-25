@@ -48,7 +48,7 @@ from ui.p2p_search_proxy_panel import P2PSearchProxyPanel
 from core.wiki_compiler.compiler import get_wiki_compiler
 from core.wiki_compiler.ui.panel import WikiCompilerPanel
 # V2.1: 全源情报中心
-# from ui.intelligence.intelligence_panel import IntelligencePanel
+from ui.intelligence.intelligence_panel import IntelligencePanel
 # V2.2: 去中心化邮箱
 # from ui.mailbox.mailbox_panel import MailboxPanel
 # V2.3: P2P连接器 (短ID寻址 + 多通道通信)
@@ -321,6 +321,10 @@ class MainWindow(QWidget):
         self.research_tab = ResearchPanel()
         self.center_tabs.addTab(self.research_tab, "🔍 研究助手")
 
+        # V2.1: 全源情报中心
+        self.intelligence_tab = IntelligencePanel()
+        self.center_tabs.addTab(self.intelligence_tab, "🕵️ 情报中心")
+
         self.splitter.addWidget(self.center_tabs)
 
         # 右侧：工作区 + 模型池（快速加载）
@@ -485,6 +489,14 @@ class MainWindow(QWidget):
             from core.page_index.ui.panel import PageIndexPanel
             self.page_index_tab = PageIndexPanel()
             self.center_tabs.addTab(self.page_index_tab, "📑 文档索引")
+
+            # V2.1: Evolution Engine Dashboard - 智能IDE自我进化系统
+            try:
+                from ui.evolution_dashboard import EvolutionDashboard
+                self.evolution_dashboard_tab = EvolutionDashboard()
+                self.center_tabs.addTab(self.evolution_dashboard_tab, "🧬 进化引擎")
+            except Exception as e:
+                logger.debug(f"跳过 进化引擎: {e}")
 
             # 其他面板（按需加载）
             self._load_optional_tabs()

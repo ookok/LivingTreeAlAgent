@@ -14,6 +14,15 @@ from .unified_model_client import (
     Message,
 )
 
+try:
+    from core.config.unified_config import get_config as _get_unified_config
+    _uconfig_rac = _get_unified_config()
+except Exception:
+    _uconfig_rac = None
+
+def _rac_get(key: str, default):
+    return _uconfig_rac.get(key, default) if _uconfig_rac else default
+
 
 class RemoteApiClient(UnifiedModelClient):
     """
@@ -36,14 +45,14 @@ class RemoteApiClient(UnifiedModelClient):
         api_url: str,
         api_key: Optional[str] = None,
         model_name: str = "gpt-4",
-        timeout: float = 60.0,
-        max_retries: int = 3,
+        timeout: float = None,
+        max_retries: int = None,
     ):
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key or ""
         self.model_name = model_name
-        self.timeout = timeout
-        self.max_retries = max_retries
+        self.timeout = timeout if timeout is not None else _rac_get("timeouts.long", 60.0)
+        self.max_retries = max_retries if max_retries is not None else _rac_get("retries.default", 3)
         self._session = requests.Session()
         self._api_type = self._detect_api_type()
 
@@ -98,7 +107,7 @@ class RemoteApiClient(UnifiedModelClient):
             except requests.exceptions.RequestException as e:
                 if attempt == self.max_retries - 1:
                     raise
-                time.sleep(1 * (attempt + 1))
+                time.sleep(_rac_get("delays.wait_short", 1) * (attempt + 1))
 
     def _stream_response(self, response: requests.Response) -> Iterator[str]:
         for line in response.iter_lines():

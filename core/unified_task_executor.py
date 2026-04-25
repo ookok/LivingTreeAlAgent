@@ -17,6 +17,9 @@
 Author: Hermes Desktop Team
 """
 
+from core.logger import get_logger
+logger = get_logger('unified_task_executor')
+
 from __future__ import annotations
 
 import logging
@@ -479,8 +482,6 @@ if __name__ == "__main__":
 
     # 从配置获取 Ollama URL
     from core.config_provider import get_ollama_url
-from core.logger import get_logger
-logger = get_logger('unified_task_executor')
 
 
     executor = UnifiedTaskExecutor(

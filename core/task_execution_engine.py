@@ -21,6 +21,25 @@ from typing import Any, Callable, Iterator, List, Optional, Dict
 from threading import Event, Lock
 import random
 
+from core.logger import get_logger
+
+logger = get_logger('task_execution_engine')
+
+# 导入统一配置
+try:
+    from core.config.unified_config import get_max_retries, get_retry_delay, get_config as _get_unified_config
+    _uconfig = _get_unified_config()
+except ImportError:
+    _uconfig = None
+    # 兼容旧环境
+    def get_max_retries(category="default"):
+        return 3
+    def get_retry_delay(category="default"):
+        return 1.0
+
+# 配置快捷变量
+_POLL_SHORT = _uconfig.get("delays.polling_short", 0.1) if _uconfig else 0.1
+
 
 # ── 枚举定义 ────────────────────────────────────────────────────────────────
 
@@ -152,7 +171,7 @@ class TaskNode:
     parent_id: Optional[str] = None
     children: List[TaskNode] = field(default_factory=list)
     retry_count: int = 0
-    max_retries: int = 3
+    max_retries: int = field(default_factory=lambda: get_max_retries("default"))
     execution_time: float = 0.0
     result: Optional[Any] = None
     error: Optional[str] = None
@@ -587,13 +606,13 @@ class SmartTaskExecutor:
         self,
         task_handler: Callable[[TaskNode, TaskContext], Any] = None,
         max_depth: int = 3,
-        default_retries: int = 3,
-        retry_delay: float = 1.0,
+        default_retries: int = None,
+        retry_delay: float = None,
     ):
         self.task_handler = task_handler or self._default_handler
         self.max_depth = max_depth
-        self.default_retries = default_retries
-        self.retry_delay = retry_delay
+        self.default_retries = default_retries if default_retries is not None else get_max_retries("default")
+        self.retry_delay = retry_delay if retry_delay is not None else get_retry_delay("default")
 
         self._interrupt_event = Event()
         self._context: Optional[TaskContext] = None
@@ -743,9 +762,6 @@ class SmartTaskExecutor:
     def _execute_parallel_stream(self, nodes: List[TaskNode]) -> Iterator[TaskContext]:
         """并行执行（流式）"""
         import concurrent.futures
-from core.logger import get_logger
-logger = get_logger('task_execution_engine')
-
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {
@@ -763,7 +779,7 @@ logger = get_logger('task_execution_engine')
                 if not futures:
                     break
 
-                time.sleep(0.1)
+                time.sleep(_POLL_SHORT)
 
     def _execute_dag(self, nodes: List[TaskNode]):
         """依赖图执行"""
@@ -897,7 +913,7 @@ logger = get_logger('task_execution_engine')
             if self.on_node_progress:
                 self.on_node_progress(node, i * 10)
 
-            time.sleep(0.05)
+            time.sleep(_POLL_SHORT)
 
         return {"status": "success", "node": node.title}
 

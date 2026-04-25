@@ -2,6 +2,9 @@
 游戏分享系统模块
 提供游戏分享、二维码、短链接、邀请码等功能
 """
+
+from core.logger import get_logger
+logger = get_logger('smart_ide_game.game_share')
 import asyncio
 import json
 import hashlib
@@ -119,8 +122,6 @@ class QRCodeGenerator:
             # 尝试使用qrcode库
             import qrcode
             import qrcode.constants
-from core.logger import get_logger
-logger = get_logger('smart_ide_game.game_share')
 
 
             error_levels = {

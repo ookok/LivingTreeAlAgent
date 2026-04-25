@@ -15,6 +15,9 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
+from core.logger import get_logger
+logger = get_logger('ui_evolution.tfidf_predictor')
+
 import json
 import re
 import math
@@ -468,8 +471,6 @@ def predict_next(sequence: List[str]) -> PredictionResult:
     使用示例:
     ```python
     from core.ui_evolution import predict_next
-from core.logger import get_logger
-logger = get_logger('ui_evolution.tfidf_predictor')
 
     
     # 预测

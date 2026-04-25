@@ -79,7 +79,7 @@ class AdaptiveQualitySystem:
     
     使用方式：
     ```python
-    from core.adaptive_quality import AdaptiveQualitySystem
+    from client.src.business.adaptive_quality import AdaptiveQualitySystem
     
     # 初始化
     aqs = AdaptiveQualitySystem()

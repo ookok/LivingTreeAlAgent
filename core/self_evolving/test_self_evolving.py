@@ -133,7 +133,7 @@ def test_module_integration():
         # 1. 导入所有模块
         print("\n[1] 导入模块检查...")
         
-        from core.adaptive_quality import AdaptiveQualitySystem, quick_evaluate
+        from client.src.business.adaptive_quality import AdaptiveQualitySystem, quick_evaluate
         print("  [OK] AdaptiveQualitySystem")
         
         from core.error_memory import ErrorLearningSystem, quick_fix_from_message

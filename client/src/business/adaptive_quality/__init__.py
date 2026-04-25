@@ -12,7 +12,7 @@ Adaptive Quality Assurance Module - 自适应质量保障模块
 
 使用示例：
 ```python
-from core.adaptive_quality import (
+from client.src.business.adaptive_quality import (
     AdaptiveQualitySystem,
     EnhancedQualityEvaluator,
     UpgradeDecisionEngine,

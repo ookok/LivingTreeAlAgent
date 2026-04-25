@@ -140,7 +140,7 @@ class EvolutionMiddleware:
         """延迟加载质量系统"""
         if self._quality_system is None and self._enabled['quality']:
             try:
-                from core.adaptive_quality import AdaptiveQualitySystem
+                from client.src.business.adaptive_quality import AdaptiveQualitySystem
                 self._quality_system = AdaptiveQualitySystem()
             except ImportError as e:
                 logger.warning(f"Quality system not available: {e}")
@@ -273,7 +273,7 @@ class EvolutionMiddleware:
     def _check_quality(self, response: str, query: str) -> Optional[Intervention]:
         """检查质量"""
         try:
-            from core.adaptive_quality import quick_evaluate
+            from client.src.business.adaptive_quality import quick_evaluate
             
             score, needs_upgrade, level = quick_evaluate(response, query)
             

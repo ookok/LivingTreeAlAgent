@@ -173,7 +173,7 @@ class SelfEvolvingSystem:
         """延迟加载质量系统"""
         if self._quality_system is None and self._enabled['quality']:
             try:
-                from core.adaptive_quality import AdaptiveQualitySystem
+                from client.src.business.adaptive_quality import AdaptiveQualitySystem
                 self._quality_system = AdaptiveQualitySystem()
                 logger.info("Quality system loaded")
             except ImportError as e:
@@ -413,7 +413,7 @@ class SelfEvolvingSystem:
     ) -> Tuple[float, bool, int]:
         """评估质量"""
         try:
-            from core.adaptive_quality import quick_evaluate
+            from client.src.business.adaptive_quality import quick_evaluate
             score, needs_upgrade, level = quick_evaluate(ctx.response, ctx.task)
             return score, needs_upgrade, level
         except Exception:

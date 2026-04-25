@@ -294,6 +294,86 @@ class EventBus:
             total += self.publish(event)
         return total
 
+    def publish_batch(self, events: list) -> int:
+        """
+        批量发布事件（性能优化）
+
+        减少函数调用开销，适合高频事件发布场景。
+        例如：批量文件变更通知、批量网络请求完成通知。
+
+        Args:
+            events: Event 对象列表
+
+        Returns:
+            总共被接收的次数（所有事件的接收数之和）
+        """
+        total = 0
+        with self._lock:
+            for event in events:
+                # 直接调用内部发布逻辑，避免重复加锁
+                total += self._publish_internal(event)
+        return total
+
+    def _publish_internal(self, event: Event) -> int:
+        """
+        内部发布实现（无锁，由调用者保证线程安全）
+
+        Args:
+            event: 事件对象
+
+        Returns:
+            接收事件的订阅者数量
+        """
+        if event.propagation <= 0:
+            self._logger.warning(f"Event propagation limit reached: {event.type}")
+            return 0
+
+        # 记录历史
+        self._event_history.append(event)
+        if len(self._event_history) > self._max_history:
+            self._event_history.pop(0)
+
+        self._logger.debug(f"Publishing event: {event.type} from {event.source}")
+
+        received = 0
+        processed_targets: Set[str] = set()
+
+        # 处理精确匹配的订阅者
+        if event.type in self._subscribers:
+            for subscriber in self._subscribers[event.type]:
+                if not subscriber.is_active:
+                    continue
+                if subscriber.plugin_id == event.source and not subscriber.is_recursive:
+                    continue
+                if subscriber.plugin_id in processed_targets:
+                    continue
+
+                try:
+                    subscriber.callback(event)
+                    received += 1
+                    processed_targets.add(subscriber.plugin_id)
+                except Exception as e:
+                    self._logger.error(f"Event handler error: {e}")
+
+        # 处理通配符匹配的订阅者
+        for subscriber in self._wildcard_subscribers:
+            if not subscriber.is_active:
+                continue
+            if subscriber.plugin_id == event.source and not subscriber.is_recursive:
+                continue
+            if subscriber.plugin_id in processed_targets:
+                continue
+
+            if self._matches_wildcard(event.type, subscriber.plugin_id):
+                try:
+                    subscriber.callback(event)
+                    received += 1
+                    processed_targets.add(subscriber.plugin_id)
+                except Exception as e:
+                    self._logger.error(f"Wildcard event handler error: {e}")
+
+        return received
+
     def _matches_wildcard(self, event_type: str, subscriber_id: str) -> bool:
         """
         检查通配符匹配（简化实现，实际应该用正则或fnmatch）

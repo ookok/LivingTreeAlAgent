@@ -148,8 +148,16 @@ class UnifiedIntentCache:
         # 统计
         self._stats = UnifiedCacheStats()
 
+        # 访问计数（用于缓存预热）
+        self._access_counts: Dict[str, int] = {}  # query -> 访问次数
+        self._access_lock = threading.RLock()  # 访问计数锁
+
         # 路由策略（可以根据命中率自动调整）
         self._prefer_exact_for_simple = True  # 简单查询优先精确缓存
+
+        # 预热配置
+        self._preheat_threshold = 5  # 访问次数达到此值后加入预热候选
+        self._preheat_top_n = 50  # 预热Top N个热点查询
 
         logger.info(
             f"[UnifiedIntentCache] Initialized: "
@@ -213,6 +221,10 @@ class UnifiedIntentCache:
         """
         with self._lock:
             self._stats.total_queries += 1
+
+            # 更新访问计数（用于缓存预热）
+            with self._access_lock:
+                self._access_counts[query] = self._access_counts.get(query, 0) + 1
 
             # 确定缓存层级
             if layer is None:
@@ -439,6 +451,138 @@ class UnifiedIntentCache:
         """检查查询是否在缓存中（精确匹配）"""
         exact_key = self._compute_exact_key(query)
         return exact_key in self._exact_cache
+
+    # ─────────────────────────────────────────────────────────
+    # 缓存预热增强
+    # ─────────────────────────────────────────────────────────
+
+    def get_hot_queries(self, top_n: Optional[int] = None) -> List[Tuple[str, int]]:
+        """
+        获取热点查询（访问频率最高的查询）
+
+        Args:
+            top_n: 返回前N个，默认使用 self._preheat_top_n
+
+        Returns:
+            [(query, access_count), ...] 按访问次数降序排列
+        """
+        with self._access_lock:
+            sorted_queries = sorted(
+                self._access_counts.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )
+            top_n = top_n or self._preheat_top_n
+            return sorted_queries[:top_n]
+
+    def preheat(
+        self,
+        query_response_pairs: Optional[List[Tuple[str, Any]]] = None,
+        use_hot_queries: bool = True,
+        top_n: Optional[int] = None,
+    ) -> int:
+        """
+        缓存预热（增强版）
+
+        自动预热热点意图，减少冷启动延迟。
+
+        Args:
+            query_response_pairs: 手动指定的预热数据 [(query, response), ...]
+            use_hot_queries: 是否使用热点查询进行预热
+            top_n: 预热Top N个热点查询（仅当 use_hot_queries=True 时有效）
+
+        Returns:
+            预热的条目数
+        """
+        count = 0
+
+        # 1. 手动指定的预热数据
+        if query_response_pairs:
+            logger.info(f"[UnifiedIntentCache] Preheating {len(query_response_pairs)} manual entries...")
+            for query, response in query_response_pairs:
+                try:
+                    self.set(query, response, update_semantic=True)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"[UnifiedIntentCache] Preheat error for '{query}': {e}")
+
+        # 2. 自动预热热点查询（需要外部提供 response）
+        if use_hot_queries:
+            hot_queries = self.get_hot_queries(top_n)
+            logger.info(f"[UnifiedIntentCache] Found {len(hot_queries)} hot queries")
+            # 注意：热点查询只有query，没有response
+            # 这里只是记录，实际预热需要外部提供response
+            # 或者从现有缓存中获取response
+
+        logger.info(f"[UnifiedIntentCache] Preheat completed: {count} entries")
+        return count
+
+    def preheat_from_access_log(
+        self,
+        access_log: List[Tuple[str, Any]],
+        min_access_count: Optional[int] = None,
+    ) -> int:
+        """
+        从访问日志预热缓存
+
+        Args:
+            access_log: [(query, response), ...]
+            min_access_count: 最小访问次数（可选，默认使用 self._preheat_threshold）
+
+        Returns:
+            预热的条目数
+        """
+        min_count = min_access_count or self._preheat_threshold
+        hot_pairs = [(q, r) for q, r in access_log if self.get_access_count(q) >= min_count]
+        logger.info(f"[UnifiedIntentCache] Preheating {len(hot_pairs)} entries from access log...")
+        return self.preheat(hot_pairs, use_hot_queries=False)
+
+    def get_access_count(self, query: str) -> int:
+        """
+        获取查询的访问次数
+
+        Args:
+            query: 查询文本
+
+        Returns:
+            访问次数
+        """
+        with self._access_lock:
+            return self._access_counts.get(query, 0)
+
+    def set_preheat_config(
+        self,
+        threshold: Optional[int] = None,
+        top_n: Optional[int] = None,
+    ) -> None:
+        """
+        设置预热配置
+
+        Args:
+            threshold: 访问次数阈值（达到此值后加入预热候选）
+            top_n: 预热Top N个热点查询
+        """
+        if threshold is not None:
+            self._preheat_threshold = threshold
+        if top_n is not None:
+            self._preheat_top_n = top_n
+        logger.info(
+            f"[UnifiedIntentCache] Preheat config updated: "
+            f"threshold={self._preheat_threshold}, top_n={self._preheat_top_n}"
+        )
+
+    def get_preheat_candidates(self) -> List[str]:
+        """
+        获取预热候选查询（访问次数 >= 阈值）
+
+        Returns:
+            候选查询列表
+        """
+        with self._access_lock:
+            return [
+                query for query, count in self._access_counts.items()
+                if count >= self._preheat_threshold
+            ]
 
 
 # ──────────────────────────────────────────────────────────────

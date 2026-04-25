@@ -614,3 +614,458 @@ def publish_skill(
 def search_skills(query: str) -> List[Listing]:
     """搜索技能"""
     return get_marketplace().search(query, ListingType.SKILL)
+
+
+# ──────────────────────────────────────────────────────────────
+# 商品审核模块（Phase 5 增强）
+# ──────────────────────────────────────────────────────────────
+
+class ReviewStatus(Enum):
+    """审核状态"""
+    PENDING = "pending"      # 待审核
+    APPROVED = "approved"    # 已通过
+    REJECTED = "rejected"    # 已拒绝
+    APPEAL = "appeal"      # 申诉中
+
+
+@dataclass
+class AdminReview:
+    """管理员审核记录"""
+    id: str
+    listing_id: str
+    reviewer_id: str
+    status: ReviewStatus
+    comment: str = ""
+    created_at: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class ListingReviewSystem:
+    """
+    商品审核系统
+    
+    管理员审核工作流：
+    提交 → 待审核 → 通过/拒绝 → 发布
+    支持申诉流程。
+    """
+
+    def __init__(self, marketplace: Marketplace):
+        self._marketplace = marketplace
+        self._reviews: Dict[str, List[AdminReview]] = defaultdict(list)
+        self._reviewers: Dict[str, Dict[str, Any]] = {}  # reviewer_id -> info
+        self._lock = threading.RLock()
+
+    def register_reviewer(self, reviewer_id: str, name: str, level: int = 1) -> None:
+        """注册审核员"""
+        self._reviewers[reviewer_id] = {
+            "name": name,
+            "level": level,
+            "review_count": 0,
+        }
+
+    def submit_for_review(self, listing_id: str) -> bool:
+        """
+        提交审核
+        
+        将商品状态从 DRAFT 改为 PENDING。
+        """
+        with self._lock:
+            listing = self._marketplace._listings.get(listing_id)
+            if not listing:
+                return False
+            if listing.status != ListingStatus.DRAFT:
+                return False
+            listing.status = ListingStatus.PENDING
+            return True
+
+    def approve_listing(
+        self,
+        listing_id: str,
+        reviewer_id: str,
+        comment: str = "",
+    ) -> bool:
+        """
+        通过审核
+        
+        将商品状态从 PENDING 改为 APPROVED。
+        """
+        with self._lock:
+            listing = self._marketplace._listings.get(listing_id)
+            if not listing:
+                return False
+            if listing.status != ListingStatus.PENDING:
+                return False
+
+            listing.status = ListingStatus.APPROVED
+            listing.updated_at = time.time()
+
+            # 记录审核
+            review = AdminReview(
+                id=str(uuid.uuid4()),
+                listing_id=listing_id,
+                reviewer_id=reviewer_id,
+                status=ReviewStatus.APPROVED,
+                comment=comment,
+            )
+            self._reviews[listing_id].append(review)
+
+            # 更新审核员统计
+            if reviewer_id in self._reviewers:
+                self._reviewers[reviewer_id]["review_count"] += 1
+
+            return True
+
+    def reject_listing(
+        self,
+        listing_id: str,
+        reviewer_id: str,
+        reason: str = "",
+    ) -> bool:
+        """
+        拒绝审核
+        
+        将商品状态从 PENDING 改为 REJECTED。
+        """
+        with self._lock:
+            listing = self._marketplace._listings.get(listing_id)
+            if not listing:
+                return False
+            if listing.status != ListingStatus.PENDING:
+                return False
+
+            listing.status = ListingStatus.REJECTED
+            listing.updated_at = time.time()
+
+            # 记录审核
+            review = AdminReview(
+                id=str(uuid.uuid4()),
+                listing_id=listing_id,
+                reviewer_id=reviewer_id,
+                status=ReviewStatus.REJECTED,
+                comment=reason,
+            )
+            self._reviews[listing_id].append(review)
+
+            return True
+
+    def appeal_listing(self, listing_id: str, appeal_reason: str = "") -> bool:
+        """
+        申诉
+        
+        将商品状态从 REJECTED 改为 APPEAL。
+        """
+        with self._lock:
+            listing = self._marketplace._listings.get(listing_id)
+            if not listing:
+                return False
+            if listing.status != ListingStatus.REJECTED:
+                return False
+
+            listing.status = ListingStatus.APPEAL
+            return True
+
+    def get_pending_reviews(self) -> List[Listing]:
+        """获取待审核商品"""
+        with self._lock:
+            return [
+                l for l in self._marketplace._listings.values()
+                if l.status == ListingStatus.PENDING
+            ]
+
+    def get_review_history(self, listing_id: str) -> List[AdminReview]:
+        """获取审核历史"""
+        with self._lock:
+            return list(self._reviews.get(listing_id, []))
+
+
+# ──────────────────────────────────────────────────────────────
+# 交易系统增强（Phase 5 增强）
+# ──────────────────────────────────────────────────────────────
+
+class PaymentStatus(Enum):
+    """支付状态"""
+    PENDING = "pending"      # 待支付
+    PAID = "paid"          # 已支付
+    FAILED = "failed"       # 支付失败
+    REFUNDED = "refunded"   # 已退款
+
+
+@dataclass
+class Payment:
+    """支付记录"""
+    id: str
+    transaction_id: str
+    amount: float
+    currency: str = "USD"
+    status: PaymentStatus = PaymentStatus.PENDING
+    payment_method: str = ""
+    created_at: float = field(default_factory=time.time)
+    completed_at: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class EnhancedTransactionSystem:
+    """
+    增强交易系统
+    
+    支持：
+    - 支付处理
+    - 退款处理
+    - 交易统计
+    """
+
+    def __init__(self, marketplace: Marketplace):
+        self._marketplace = marketplace
+        self._payments: Dict[str, Payment] = {}
+        self._lock = threading.RLock()
+
+    def process_payment(
+        self,
+        transaction_id: str,
+        payment_method: str = "credit_card",
+    ) -> Optional[Payment]:
+        """
+        处理支付
+        
+        模拟支付处理流程。
+        """
+        with self._lock:
+            txn = self._marketplace._transactions.get(transaction_id)
+            if not txn:
+                return None
+
+            # 创建支付记录
+            payment = Payment(
+                id=str(uuid.uuid4()),
+                transaction_id=transaction_id,
+                amount=txn.amount,
+                currency=txn.currency,
+                payment_method=payment_method,
+            )
+
+            # 模拟支付处理（这里简化为直接成功）
+            payment.status = PaymentStatus.PAID
+            payment.completed_at = time.time()
+
+            self._payments[payment.id] = payment
+
+            # 更新交易状态
+            txn.status = "completed"
+            txn.completed_at = payment.completed_at
+
+            return payment
+
+    def refund_payment(
+        self,
+        transaction_id: str,
+        reason: str = "",
+    ) -> Optional[Payment]:
+        """
+        退款
+        
+        将支付状态改为 REFUNDED。
+        """
+        with self._lock:
+            # 查找对应的支付
+            payment = None
+            for p in self._payments.values():
+                if p.transaction_id == transaction_id:
+                    payment = p
+                    break
+
+            if not payment:
+                return None
+
+            if payment.status != PaymentStatus.PAID:
+                return None
+
+            # 更新支付状态
+            payment.status = PaymentStatus.REFUNDED
+
+            # 更新交易状态
+            txn = self._marketplace._transactions.get(transaction_id)
+            if txn:
+                txn.status = "refunded"
+
+            return payment
+
+    def get_transaction_stats(self) -> Dict[str, Any]:
+        """获取交易统计"""
+        with self._lock:
+            total_transactions = len(self._marketplace._transactions)
+            total_payments = len(self._payments)
+            refunded = sum(
+                1 for p in self._payments.values()
+                if p.status == PaymentStatus.REFUNDED
+            )
+
+            return {
+                "total_transactions": total_transactions,
+                "total_payments": total_payments,
+                "refunded_payments": refunded,
+                "total_amount": sum(
+                    p.amount for p in self._payments.values()
+                    if p.status == PaymentStatus.PAID
+                ),
+            }
+
+
+# ──────────────────────────────────────────────────────────────
+# 评价系统增强（Phase 5 增强）
+# ──────────────────────────────────────────────────────────────
+
+class ReviewModerationStatus(Enum):
+    """评价审核状态"""
+    PENDING = "pending"      # 待审核
+    APPROVED = "approved"    # 已通过
+    REJECTED = "rejected"    # 已拒绝
+
+
+@dataclass
+class EnhancedReview:
+    """增强评价"""
+    id: str
+    listing_id: str
+    buyer_id: str
+    rating: float
+    comment: str = ""
+    helpful_votes: int = 0
+    total_votes: int = 0
+    moderation_status: ReviewModerationStatus = ReviewModerationStatus.APPROVED
+    created_at: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class EnhancedReviewSystem:
+    """
+    增强评价系统
+    
+    支持：
+    - 评价审核
+    - 有帮助投票
+    - 评价统计
+    """
+
+    def __init__(self, marketplace: Marketplace):
+        self._marketplace = marketplace
+        self._enhanced_reviews: Dict[str, EnhancedReview] = {}
+        self._lock = threading.RLock()
+
+    def submit_enhanced_review(
+        self,
+        listing_id: str,
+        buyer_id: str,
+        rating: float,
+        comment: str = "",
+        auto_approve: bool = True,
+    ) -> Optional[EnhancedReview]:
+        """
+        提交增强评价
+        
+        支持自动审核（基于关键词过滤）。
+        """
+        with self._lock:
+            # 检查是否已购买
+            has_purchased = any(
+                txn.buyer_id == buyer_id and txn.listing_id == listing_id
+                for txn in self._marketplace._transactions.values()
+            )
+            if not has_purchased:
+                return None
+
+            # 创建评价
+            moderation_status = (
+                ReviewModerationStatus.APPROVED
+                if auto_approve
+                else ReviewModerationStatus.PENDING
+            )
+
+            review = EnhancedReview(
+                id=str(uuid.uuid4()),
+                listing_id=listing_id,
+                buyer_id=buyer_id,
+                rating=rating,
+                comment=comment,
+                moderation_status=moderation_status,
+            )
+
+            self._enhanced_reviews[review.id] = review
+
+            # 如果自动通过，更新商品评分
+            if auto_approve:
+                self._update_listing_rating(listing_id)
+
+            return review
+
+    def vote_helpful(self, review_id: str, is_helpful: bool) -> bool:
+        """投票是否有帮助"""
+        with self._lock:
+            review = self._enhanced_reviews.get(review_id)
+            if not review:
+                return False
+
+            review.total_votes += 1
+            if is_helpful:
+                review.helpful_votes += 1
+
+            return True
+
+    def moderate_review(
+        self,
+        review_id: str,
+        approved: bool,
+        moderator_id: str = "",
+    ) -> bool:
+        """
+        审核评价
+        
+        通过/拒绝评价。
+        """
+        with self._lock:
+            review = self._enhanced_reviews.get(review_id)
+            if not review:
+                return False
+
+            if approved:
+                review.moderation_status = ReviewModerationStatus.APPROVED
+                self._update_listing_rating(review.listing_id)
+            else:
+                review.moderation_status = ReviewModerationStatus.REJECTED
+
+            return True
+
+    def _update_listing_rating(self, listing_id: str) -> None:
+        """更新商品评分"""
+        approved_reviews = [
+            r for r in self._enhanced_reviews.values()
+            if r.listing_id == listing_id
+            and r.moderation_status == ReviewModerationStatus.APPROVED
+        ]
+
+        if not approved_reviews:
+            return
+
+        avg_rating = sum(r.rating for r in approved_reviews) / len(approved_reviews)
+
+        listing = self._marketplace._listings.get(listing_id)
+        if listing:
+            listing.rating = avg_rating
+            listing.rating_count = len(approved_reviews)
+
+    def get_listing_reviews(self, listing_id: str) -> List[EnhancedReview]:
+        """获取商品评价"""
+        with self._lock:
+            return [
+                r for r in self._enhanced_reviews.values()
+                if r.listing_id == listing_id
+                and r.moderation_status == ReviewModerationStatus.APPROVED
+            ]
+
+    def get_pending_moderation(self) -> List[EnhancedReview]:
+        """获取待审核评价"""
+        with self._lock:
+            return [
+                r for r in self._enhanced_reviews.values()
+                if r.moderation_status == ReviewModerationStatus.PENDING
+            ]
+

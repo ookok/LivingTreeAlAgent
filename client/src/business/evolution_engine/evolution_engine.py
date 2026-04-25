@@ -842,6 +842,153 @@ class EvolutionEngine:
             }
         return status
 
+    # ── Phase 5: 自我学习能力 ──
+
+    def enable_self_learning(self, enable: bool = True):
+        """
+        启用/禁用自我学习能力
+
+        Args:
+            enable: 是否启用
+        """
+        if enable:
+            # 初始化自我学习模块
+            from client.src.business.self_learning import (
+                CodeEvolutionEnv, PPOAgent, RLTrainer, TrainingConfig,
+                AutoKnowledgeGraphBuilder,
+                DomainAdapter, TransferLearningPipeline
+            )
+
+            # 1. 强化学习
+            self._rl_env = CodeEvolutionEnv(project_root=str(self.project_root))
+            self._rl_agent = PPOAgent(observation_space=self._rl_env.observation_space, action_space=self._rl_env.action_space)
+            training_config = TrainingConfig()
+            self._rl_trainer = RLTrainer(self._rl_env, self._rl_agent, training_config)
+
+            # 2. 知识图谱
+            self._kg_builder = AutoKnowledgeGraphBuilder(str(self.project_root))
+
+            # 3. 迁移学习
+            self._transfer_pipeline = TransferLearningPipeline()
+
+            self._self_learning_enabled = True
+            logger.info("[EvolutionEngine] 自我学习能力已启用")
+
+        else:
+            self._self_learning_enabled = False
+            logger.info("[EvolutionEngine] 自我学习能力已禁用")
+
+    def train_reinforcement_learning(self, total_timesteps: Optional[int] = None):
+        """
+        训练强化学习模型
+
+        Args:
+            total_timesteps: 总训练步数（None 使用配置值）
+
+        Returns:
+            训练结果
+        """
+        if not hasattr(self, '_self_learning_enabled') or not self._self_learning_enabled:
+            raise ValueError("自我学习能力未启用，请先调用 enable_self_learning()")
+
+        if total_timesteps:
+            self._rl_trainer.config.total_timesteps = total_timesteps
+
+        # 启动训练
+        logger.info(f"[EvolutionEngine] 开始训练强化学习模型，总步数: {self._rl_trainer.config.total_timesteps}")
+        self._rl_trainer.train_loop()
+
+        return {
+            'status': 'completed',
+            'total_timesteps': self._rl_trainer.training_info['timesteps'],
+            'best_reward': self._rl_trainer.training_info['best_reward'],
+        }
+
+    def build_knowledge_graph(self, force_rebuild: bool = False):
+        """
+        构建知识图谱
+
+        Args:
+            force_rebuild: 是否强制重建
+
+        Returns:
+            知识图谱统计
+        """
+        if not hasattr(self, '_self_learning_enabled') or not self._self_learning_enabled:
+            raise ValueError("自我学习能力未启用，请先调用 enable_self_learning()")
+
+        logger.info(f"[EvolutionEngine] 开始构建知识图谱，强制重建: {force_rebuild}")
+        kg = self._kg_builder.build_or_update(force_rebuild=force_rebuild)
+
+        return {
+            'status': 'completed',
+            'entities_count': len(kg.entities),
+            'relations_count': len(kg.relations),
+        }
+
+    def transfer_knowledge(self, source_domain_name: str, target_domain_name: str, data: Any):
+        """
+        迁移知识
+
+        Args:
+            source_domain_name: 源领域名称
+            target_domain_name: 目标领域名称
+            data: 要迁移的数据
+
+        Returns:
+            迁移结果
+        """
+        if not hasattr(self, '_self_learning_enabled') or not self._self_learning_enabled:
+            raise ValueError("自我学习能力未启用，请先调用 enable_self_learning()")
+
+        logger.info(f"[EvolutionEngine] 开始迁移知识: {source_domain_name} -> {target_domain_name}")
+        result = self._transfer_pipeline.transfer_knowledge(
+            source_domain_name, target_domain_name, data
+        )
+
+        return {
+            'status': 'completed',
+            'result': result,
+        }
+
+    def get_self_learning_status(self) -> Dict[str, Any]:
+        """
+        获取自我学习状态
+
+        Returns:
+            自我学习状态字典
+        """
+        if not hasattr(self, '_self_learning_enabled'):
+            return {'enabled': False}
+
+        if not self._self_learning_enabled:
+            return {'enabled': False}
+
+        status = {'enabled': True}
+
+        # 强化学习状态
+        if hasattr(self, '_rl_trainer'):
+            status['reinforcement_learning'] = {
+                'timesteps': self._rl_trainer.training_info['timesteps'],
+                'episodes': self._rl_trainer.training_info['episodes'],
+                'best_reward': self._rl_trainer.training_info['best_reward'],
+            }
+
+        # 知识图谱状态
+        if hasattr(self, '_kg_builder') and self._kg_builder.kg is not None:
+            status['knowledge_graph'] = {
+                'entities_count': len(self._kg_builder.kg.entities),
+                'relations_count': len(self._kg_builder.kg.relations),
+            }
+
+        # 迁移学习状态
+        if hasattr(self, '_transfer_pipeline'):
+            status['transfer_learning'] = {
+                'adapters_count': len(self._transfer_pipeline.adapters),
+            }
+
+        return status
+
 
 # 便捷函数
 def create_evolution_engine(

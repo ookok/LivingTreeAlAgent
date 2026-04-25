@@ -110,12 +110,27 @@ class VectorStore:
 
 
 class EmbeddingEngine:
-    """嵌入引擎"""
+    """嵌入引擎（支持懒加载）"""
 
     def __init__(self, config: Optional[EmbeddingConfig] = None):
         self.config = config or EmbeddingConfig()
         self.model = None
+        self._model_loaded = False  # 懒加载标志
+        # 注意：不在 __init__ 中加载模型，改为懒加载
+        logger.info(f"[EmbeddingEngine] 已初始化，模型将在首次使用时加载")
+
+    def _ensure_model_loaded(self) -> None:
+        """
+        确保模型已加载（懒加载）
+
+        在第一次调用 encode() 时自动加载模型。
+        """
+        if self._model_loaded:
+            return
+
+        logger.info("[EmbeddingEngine] 首次使用，开始加载模型...")
         self._load_model()
+        self._model_loaded = True
 
     def _load_model(self):
         """加载模型"""
@@ -139,8 +154,12 @@ class EmbeddingEngine:
         Returns:
             np.ndarray: 向量数组
         """
+        # 懒加载：确保模型已加载
+        self._ensure_model_loaded()
+
         if self.model is None:
-            # 模拟嵌入
+            # 模拟嵌入（sentence-transformers 未安装）
+            logger.warning("[EmbeddingEngine] 使用模拟嵌入（sentence-transformers 未安装）")
             return self._mock_encode(texts)
 
         vectors = self.model.encode(

@@ -9,11 +9,11 @@ import time
 from datetime import datetime
 
 # 导入模块
-from core.visual_evolution_engine.system_monitor import SystemMonitor, get_system_monitor
-from core.visual_evolution_engine.model_manager import ModelManager, UpgradeProposal, RiskLevel
-from core.visual_evolution_engine.decision_engine import EvolutionDecisionEngine, UpgradeRecommendation
-from core.visual_evolution_engine.progress_tracker import ProgressTracker, ProgressStage
-from core.visual_evolution_engine.dashboard import EvolutionDashboard, StateMachineVisualizer, PanelType
+from client.src.business.visual_evolution_engine.system_monitor import SystemMonitor, get_system_monitor
+from client.src.business.visual_evolution_engine.model_manager import ModelManager, UpgradeProposal, RiskLevel
+from client.src.business.visual_evolution_engine.decision_engine import EvolutionDecisionEngine, UpgradeRecommendation
+from client.src.business.visual_evolution_engine.progress_tracker import ProgressTracker, ProgressStage
+from client.src.business.visual_evolution_engine.dashboard import EvolutionDashboard, StateMachineVisualizer, PanelType
 
 
 def test_system_monitor():

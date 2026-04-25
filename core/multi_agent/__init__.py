@@ -18,7 +18,41 @@ from .workflow_engine import (
     get_lifecycle_manager,
 )
 
+from .agent_memory import (
+    AgentMemoryStore,
+    SharedMemorySpace,
+    AgentMemoryBridge,
+    AgentMemory,
+    MemoryType,
+    get_memory_bridge,
+)
+
+from .collaboration import (
+    TaskScheduler,
+    ResultAggregator,
+    ConflictResolver,
+)
+
+from .protocol import (
+    AgentProtocol,
+    AgentMessage,
+    MessageType,
+    ProtocolRegistry,
+    get_protocol_registry,
+)
+
+from .performance import (
+    MetricsCollector,
+    PerformanceMonitor,
+    PerformanceDashboard,
+    MetricType,
+    get_metrics_collector,
+    get_performance_monitor,
+    get_performance_dashboard,
+)
+
 __all__ = [
+    # Workflow
     'MultiAgentWorkflow',
     'DynamicTaskDecomposer',
     'AgentLifecycleManager',
@@ -30,4 +64,29 @@ __all__ = [
     'get_multi_agent_workflow',
     'get_task_decomposer',
     'get_lifecycle_manager',
+    # Memory
+    'AgentMemoryStore',
+    'SharedMemorySpace',
+    'AgentMemoryBridge',
+    'AgentMemory',
+    'MemoryType',
+    'get_memory_bridge',
+    # Collaboration
+    'TaskScheduler',
+    'ResultAggregator',
+    'ConflictResolver',
+    # Protocol
+    'AgentProtocol',
+    'AgentMessage',
+    'MessageType',
+    'ProtocolRegistry',
+    'get_protocol_registry',
+    # Performance
+    'MetricsCollector',
+    'PerformanceMonitor',
+    'PerformanceDashboard',
+    'MetricType',
+    'get_metrics_collector',
+    'get_performance_monitor',
+    'get_performance_dashboard',
 ]

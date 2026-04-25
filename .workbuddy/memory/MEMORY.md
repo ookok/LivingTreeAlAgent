@@ -174,6 +174,238 @@ Workspace Panel 新增 **代理源** 选项卡：
 
 ---
 
+## Evolution Engine 架构设计（2026-04-25）
+
+### 核心理念
+从"执行工具"进化为"设计伙伴"——构建"感知-诊断-规划-执行"闭环自治系统。
+
+### 架构模块
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 进化传感器层 | `core/evolution_engine/sensors/` | PerformanceSensor/ArchitectureSmellSensor等8种传感器 |
+| 信号聚合器 | `core/evolution_engine/aggregator/` | RRF融合+权重排序 |
+| 提案生成器 | `core/evolution_engine/proposal/` | 结构化提案(信号→收益→路径→风险) |
+| 自治执行引擎 | `core/evolution_engine/executor/` | Git沙箱+原子操作+验证关卡+回滚 |
+| 进化记忆层 | `core/evolution_engine/memory/` | EvolutionLog SQLite + 强化学习 |
+| 安全围栏 | `core/evolution_engine/safety/` | 风险评估+伦理边界+用户确认 |
+
+### 现有可复用模块
+- IntentEngine → 用户行为传感器数据源
+- CodeAnalyzer → 架构异味传感器（需增强）
+- ResourceMonitor → 性能传感器数据源
+- StructuredLogger → 错误模式传感器数据源
+- GitHubTrendingAPI → 竞品监测传感器数据源
+- FusionRAG → 提案生成时检索历史案例
+- ExperienceOptimizer → UI痛点数据来源
+
+### 设计文档
+`docs/EVOLUTION_ENGINE_ARCHITECTURE.md` - 完整架构设计（含代码示例）
+
+---
+
+## P1 配置迁移进度（2026-04-25 更新）
+
+### 已完成迁移
+
+**1. 重试配置 (2026-04-24)**
+| 模块 | 配置键 | 文件 |
+|------|--------|------|
+| `task_execution_engine.py` | retries.default | core/ |
+| `unified_api.py` | retries.http | core/ |
+| `download_manager.py` | retries.download | core/ |
+
+**2. Sleep/Heartbeat 配置 (2026-04-25)**
+| 模块 | 原硬编码值 | 配置方法 |
+|------|-----------|----------|
+| `sync_client.py` | sync_interval=30, retry_delay=5 | `get_sync_config()` |
+| `decommerce/services/base.py` | heartbeat_interval=10, timeout=30 | `get_heartbeat_config("service")` |
+
+**3. API Keys 配置 (2026-04-25)**
+| 模块 | Provider | 迁移方式 |
+|------|----------|----------|
+| `document_qa.py` | openai | `_get_openai_api_key()` |
+| `document_processor.py` | openai | `_get_openai_api_key()` |
+| `meeting_manager.py` | groq, openrouter | `_get_api_key(provider)` |
+| `browser_use_adapter.py` | openai, google, anthropic | `_get_api_key(provider)` |
+
+**4. 监控/检查间隔配置 (2026-04-25 下午)**
+| 模块 | 原硬编码值 | 配置方法 |
+|------|-----------|----------|
+| `deployment_monitor.py` | check_interval=5.0 | `get_polling_config("check")` |
+| `datachannel_transport.py` | heartbeat_interval=5, timeout=30 | `get_heartbeat_config("datachannel")` |
+| `health_monitor.py` | DEFAULT_INTERVAL=30, FAST=5 | `heartbeat.default_interval` |
+| `answer_monitor.py` | check_interval=300 | `polling.check_interval` |
+
+**5. P1-A 核心网络/同步模块 (2026-04-25)**
+| 模块 | 迁移内容 |
+|------|----------|
+| `vheer_client.py` | timeout/download_timeout/rate_limit/polling |
+| `relay_chain/node_manager.py` | heartbeat_interval |
+| `relay_chain/monitor.py` | heartbeat_timeout, monitor_interval |
+| `relay_router/connection_manager.py` | STAGE_TIMEOUTS, MAX_RETRIES, 7个sleep |
+| `decentralized_mailbox/relay_sync.py` | timeout |
+| `decentralized_mailbox/message_router.py` | max_attempts, retry_base_delay |
+| `webrtc/turn_client.py` | stun_timeout |
+| `relay_client.py` | connection_poll_interval, thread_join_timeout |
+
+**6. P1-B Agent/任务执行模块 (2026-04-25)**
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `agent.py` | 初始化等待timeout=10, sleep(0.5), search=15 | `agent.init_timeout`, `delays.polling_medium`, `timeouts.search` |
+| `task_execution_engine.py` | sleep(0.1)×2, sleep(0.05) | `delays.polling_short` |
+| `task_decomposer.py` | sleep(0.1)×2 | `delays.polling_short` |
+| `system_brain.py` | timeout=5×3, sleep(1), timeout=60, timeout=120×2, timeout=30 | `timeouts.quick`, `timeouts.long`, `timeouts.llm_generate`, `timeouts.default`, `delays.wait_short` |
+| `reasoning_client.py` | ReasoningConfig默认值 timeout/retry/delay | field(default_factory)读取配置 |
+| `remote_api_client.py` | timeout=60, max_retries=3, sleep(1×attempt) | `timeouts.long`, `retries.default`, `delays.wait_short` |
+
+### unified_config.py 新增方法
+```python
+get_heartbeat_config(category: str)  # 心跳配置
+get_polling_config(category: str)     # 轮询配置
+get_sync_config()                    # 同步配置
+```
+
+### unified.yaml 新增配置（累计）
+```yaml
+timeouts:
+  search: 15
+  llm_generate: 120   # LLM推理超时
+
+agent:
+  init_timeout: 10
+  task_poll_interval: 0.1
+
+heartbeat:
+  default_interval: 10
+  service_interval: 10
+  
+polling:
+  default_interval: 5
+  sync_interval: 30
+  
+sync:
+  interval: 30
+  batch_size: 100
+```
+
+**7. P1-C 部署/沙箱模块 (2026-04-25)**
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `sandbox_executor.py` | sleep(0.1)×2, sleep(min(est,1)), timeout=5 | `delays.polling_short`, `deploy.sim_step_max`, `timeouts.quick` |
+| `deployment_engine.py` | sleep(0.5)步骤/sleep(1)验证/sleep(0.5)回滚 | `deploy.step_delay`, `deploy.verify_delay`, `deploy.rollback_delay` |
+| `obstacle_resolver.py` | timeout=60 | `timeouts.long` |
+| `performance_deployment.py` | sleep(0.1) 资源轮询 | `delays.polling_short` |
+
+**新增 unified_config.py deploy节**:
+```yaml
+deploy:
+  step_delay: 0.5; verify_delay: 1.0; rollback_delay: 0.5; sim_step_max: 1.0
+```
+
+**8. P1-E 本地文件/同步模块 (2026-04-25)**
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `incremental_sync.py` | sleep(0.5)轮询/sleep(1)批处理/sleep(5)异常/join(timeout=2) | `delays.*`, `timeouts.thread_join` |
+| `usn_monitor.py` | `_poll_interval = 1.0` | `delays.polling_medium` |
+| `model_manager.py` | sleep(1)下载轮询/600超时/timeout=10 ollama检查 | `delays.polling_medium`, `timeouts.long`, `timeouts.quick` |
+| `p2p_discovery.py` | join(5)×2/timeout=300下载×2/timeout=5广播/get(timeout=1)/sleep(60) | `timeouts.short`, `timeouts.download`, `timeouts.quick`, `delays.polling_short`, `p2p.broadcast_interval` |
+
+**新增 unified_config.py p2p节**:
+```yaml
+p2p:
+  broadcast_interval: 60
+```
+
+**9. P1-F 智能写作/AI模块 (2026-04-25)**
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `smart_writing/streaming_output.py` | sleep(0.05) pause_wait ×3 | `delays.pause_wait` |
+| `smart_writing/error_recovery.py` | 无需迁移（已用policy.get_delay()） | - |
+| `smart_fallback/external_ai_client.py` | sleep(2) 用户等待 | `delays.wait_short` |
+| `smart_ai_router.py` | timeout=30 ollama, timeout=60 cloud | `ai_router.ollama_timeout`, `ai_router.cloud_timeout` |
+| `ai_capability_detector.py` | timeout=5 subprocess×2 | `timeouts.quick` |
+
+**P0-A 配置系统统一（2026-04-25 完成）**
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| 阶段一 | 扩展 UnifiedConfig | ✅ |
+| 阶段二 | 重构业务配置管理器 | ✅ |
+| 阶段三 | 合并 SmartConfig | ✅ |
+| 阶段四 | 统一导入导出 | ✅ |
+
+**阶段四新增功能**：
+- `UnifiedConfig.import_config()` - 从文件导入配置
+- `UnifiedConfig.from_yaml()` - 从 YAML 字符串导入
+- `UnifiedConfig.from_json()` - 从 JSON 字符串导入
+- 支持 merge/replace/validate 三种合并策略
+- 自动格式检测 (YAML/JSON)
+- 配置验证机制
+- SmartConfig 集成 UnifiedConfig 导入
+- 便捷函数: `import_config()`, `export_config()`, `save_config()`, `load_config()`
+
+**P1-G 安全/加密模块（2026-04-25）**
+
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `key_health_monitor.py` | monitor_interval=3600 | `security.key_health.interval` |
+| `key_consumer.py` | timeout=5 SIEM请求 | `security.api_keys.request_timeout` |
+| `key_injector.py` | timeout=2 AWS元数据 | `security.api_keys.inject_timeout` |
+| `key_injector.py` | timeout=1 元数据检测 | `security.api_keys.metadata_timeout` |
+
+**新增配置节 security**：
+```yaml
+security:
+  key_rotation:
+    threshold_days: 30
+    retry_delay: 300
+    notify_before_days: 7
+    auto_rotate: True
+  key_health:
+    interval: 3600
+    health_check_timeout: 10
+    critical_threshold: 7
+    warning_threshold: 30
+  api_keys:
+    request_timeout: 5
+    inject_timeout: 2
+    metadata_timeout: 1
+  storage:
+    encrypted: True
+    backup_enabled: True
+    backup_interval: 86400
+```
+
+### 下一步
+- **P1-D** → Provider/云驱动模块 ✅ 已完成（2026-04-25）
+- **P1-E** → 本地文件/同步模块 ✅ 已完成（2026-04-25）
+- **P1-F** → 智能写作/AI模块 ✅ 已完成（2026-04-25）
+- **P1-G** → 安全/加密模块 ✅ 已完成（2026-04-25）
+- **P1-H** → UI/自动化模块 ✅ 已完成（2026-04-25）
+
+**P1-H UI/自动化模块（2026-04-25）**:
+
+| 模块 | 迁移内容 | 配置键 |
+|------|----------|--------|
+| `ui_automation.py` | wait_timeout=10.0, poll_interval=0.5 | `ui_automation.wait_timeout`, `ui_automation.poll_interval` |
+| `ui_automation.py` | type_interval=0.1 | `ui_automation.type_interval` |
+| `ui_automation.py` | workflow_step_delay=0.3 | `ui_automation.workflow_step_delay` |
+| `async_task_queue.py` | max_workers=2, default_debounce=3.0 | `task_queue.max_workers`, `task_queue.default_debounce` |
+| `async_task_queue.py` | pause_timeout=5.0, task_timeout=30 | `task_queue.pause_timeout`, `task_queue.task_timeout` |
+| `evolution_scheduler.py` | idle_minutes=5, check_interval=30 | `evolution.idle_minutes`, `evolution.check_interval` |
+| `evolution_scheduler.py` | thread_join_timeout=2.0 | `evolution.thread_join_timeout` |
+
+**新增配置节 evolution**:
+```yaml
+evolution:
+  idle_minutes: 5
+  check_interval: 30
+  thread_join_timeout: 2.0
+```
+
+---
+
 ## 专家训练模块设计（2026-04-24 新增）
 
 ### 核心组件

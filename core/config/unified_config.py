@@ -385,6 +385,7 @@ class UnifiedConfig:
             "evolution": {
                 "idle_minutes": 5,          # 空闲触发分钟数
                 "check_interval": 30,        # 空闲检查间隔（秒）
+                "thread_join_timeout": 2.0,   # 线程 join 超时（秒）
             },
             
             # ── P2P 网络配置 ──

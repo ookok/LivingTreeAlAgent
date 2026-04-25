@@ -20,6 +20,8 @@ from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, Future
 import uuid
 
+from core.config.unified_config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,15 +127,18 @@ class AsyncTaskQueue:
         return cls._instance
 
     def _init(self):
+        # 从配置获取参数
+        task_config = UnifiedConfig.get_instance().get_task_queue_config()
+        self._max_workers = task_config.get("max_workers", 2)
+        self._default_debounce_delay = task_config.get("default_debounce", 3.0)
+
         self._task_queue: queue.PriorityQueue = queue.PriorityQueue()
         self._worker_thread: Optional[threading.Thread] = None
         self._running = False
         self._pause_event = threading.Event()
         self._pause_event.set()  # 默认不暂停
-        self._max_workers = 2  # 最多2个并发
         self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
         self._debouncers: Dict[str, Debouncer] = {}  # 按组件名的防抖器
-        self._default_debounce_delay = 3.0  # 默认3秒防抖
         self._active_tasks: Dict[str, Future] = {}  # 活跃任务
         self._cancelled_tasks: set = set()  # 被抢占的任务ID集合
         self._task_lock = threading.Lock()
@@ -170,9 +175,11 @@ class AsyncTaskQueue:
     def _execute_task(self, task: AnalysisTask):
         """执行任务"""
         task_id = task.task_id
+        task_config = UnifiedConfig.get_instance().get_task_queue_config()
 
         # 等待暂停恢复（阻塞直到resume或超时）
-        if not self._pause_event.wait(timeout=5.0):
+        pause_timeout = task_config.get("pause_timeout", 5.0)
+        if not self._pause_event.wait(timeout=pause_timeout):
             # 超时了，说明暂停时间过长，将任务重新放回队列
             self._task_queue.put(task)
             return
@@ -188,7 +195,7 @@ class AsyncTaskQueue:
         if task.execute_after > time.time():
             # 重新放回队列等待
             self._task_queue.put(task)
-            time.sleep(0.1)
+            time.sleep(task_config.get("polling_short", 0.1))
             return
 
         # 使用线程池执行
@@ -197,7 +204,8 @@ class AsyncTaskQueue:
             self._active_tasks[task_id] = future
 
         try:
-            result = future.result(timeout=30)  # 30秒超时
+            task_timeout = task_config.get("task_timeout", 30)
+            result = future.result(timeout=task_timeout)
             task.callback(result)
             self._stats["completed"] += 1
         except Exception as e:
@@ -237,7 +245,7 @@ class AsyncTaskQueue:
 
         # 防抖处理
         if debounce_key:
-            delay = debounce_delay or self._default_debounce_delay
+            delay = debounce_delay if debounce_delay is not None else self._default_debounce_delay
             if debounce_key not in self._debouncers:
                 self._debouncers[debounce_key] = Debouncer(delay)
 
@@ -301,10 +309,15 @@ class AsyncTaskQueue:
         callback: Callable,
         handler: Callable,
         component_key: str,
-        debounce_delay: float = 3.0,
+        debounce_delay: float = None,
         metadata: Optional[Dict] = None
     ) -> str:
         """提交静默分析任务（低优先级，带防抖）"""
+        # 从配置获取默认值
+        if debounce_delay is None:
+            task_config = UnifiedConfig.get_instance().get_task_queue_config()
+            debounce_delay = task_config.get("debounce_delay", 3.0)
+
         meta = metadata or {}
         meta["handler"] = handler
         execute_after = time.time() + debounce_delay

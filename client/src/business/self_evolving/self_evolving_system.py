@@ -103,7 +103,7 @@ class SelfEvolvingSystem:
     
     使用方式：
     ```python
-    from core.self_evolving import SelfEvolvingSystem, get_evolution_system
+    from client.src.business.self_evolving import SelfEvolvingSystem, get_evolution_system
     
     # 获取全局实例
     system = get_evolution_system()

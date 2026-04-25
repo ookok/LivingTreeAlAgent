@@ -11,7 +11,7 @@
 
 使用方式：
 ```python
-from core.self_evolving import EvolutionMiddleware
+from client.src.business.self_evolving import EvolutionMiddleware
 
 # 创建中间件
 middleware = EvolutionMiddleware(agent_chat)

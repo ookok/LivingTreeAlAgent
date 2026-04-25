@@ -1,3 +1,0 @@
-"""
-PageIndex UI Package
-"""

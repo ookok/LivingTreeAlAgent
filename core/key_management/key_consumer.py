@@ -268,6 +268,11 @@ class AuditLogger:
                 if not self.siem_endpoint:
                     return
 
+                # 获取超时配置
+                from core.config.unified_config import get_config
+                config = get_config()
+                timeout = config.get("security.api_keys.request_timeout", 5)
+
                 payload = json.dumps(entry.to_dict()).encode()
 
                 req = urllib.request.Request(
@@ -280,7 +285,7 @@ class AuditLogger:
                     method='POST'
                 )
 
-                urllib.request.urlopen(req, timeout=5)
+                urllib.request.urlopen(req, timeout=timeout)
 
             except Exception as e:
                 logger.debug(f"SIEM发送失败: {e}")

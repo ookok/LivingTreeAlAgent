@@ -551,6 +551,38 @@ class UnifiedConfig:
                 },
             },
             
+            # ── 安全/密钥管理配置 ──
+            "security": {
+                # 密钥轮转配置
+                "key_rotation": {
+                    "enabled": True,
+                    "threshold_days": 30,              # 提前多少天开始轮转
+                    "retry_delay": 300,                # 重试间隔（秒）
+                    "notify_before_days": 7,           # 提前多少天通知
+                    "auto_rotate": True,              # 是否自动轮转
+                },
+                # 密钥健康监控配置
+                "key_health": {
+                    "interval": 3600,                   # 监控检查间隔（秒）
+                    "monitor_interval": 3600,          # 监控检查间隔（秒）- 别名
+                    "health_check_timeout": 10,        # 健康检查超时（秒）
+                    "critical_threshold": 7,           # 严重警告阈值（天数）
+                    "warning_threshold": 30,          # 警告阈值（天数）
+                },
+                # API 密钥配置
+                "api_keys": {
+                    "request_timeout": 5,              # API 请求超时（秒）
+                    "inject_timeout": 2,              # 密钥注入超时（秒）
+                    "metadata_timeout": 1,            # 元数据服务超时（秒）
+                },
+                # 密钥存储配置
+                "storage": {
+                    "encrypted": True,                # 是否加密存储
+                    "backup_enabled": True,           # 是否启用备份
+                    "backup_interval": 86400,         # 备份间隔（秒）
+                },
+            },
+            
             # ── Smart Config 智能配置 ──
             "smart_config": {
                 "profile": "auto",             # auto/default/high_performance/low_memory/portable
@@ -1008,6 +1040,53 @@ class UnifiedConfig:
             "proxy": self.get("browser_gateway.proxy", {}),
             "navigation": self.get("browser_gateway.navigation", {}),
         }
+    
+    def get_security_config(self, category: str = None) -> Dict[str, Any]:
+        """
+        获取安全/密钥管理配置
+        
+        Args:
+            category: 可选，指定配置类别 (key_rotation/key_health/api_keys/storage)
+        
+        Returns:
+            安全配置字典或指定类别配置
+        """
+        if category:
+            return self.get(f"security.{category}", {})
+        
+        return {
+            "key_rotation": self.get("security.key_rotation", {}),
+            "key_health": self.get("security.key_health", {}),
+            "api_keys": self.get("security.api_keys", {}),
+            "storage": self.get("security.storage", {}),
+        }
+    
+    def get_key_rotation_config(self) -> Dict[str, Any]:
+        """
+        获取密钥轮转配置
+        
+        Returns:
+            密钥轮转配置字典
+        """
+        return self.get("security.key_rotation", {})
+    
+    def get_key_health_config(self) -> Dict[str, Any]:
+        """
+        获取密钥健康监控配置
+        
+        Returns:
+            密钥健康监控配置字典
+        """
+        return self.get("security.key_health", {})
+    
+    def get_api_key_timeout(self) -> int:
+        """
+        获取 API 密钥请求超时
+        
+        Returns:
+            超时秒数
+        """
+        return self.get("security.api_keys.request_timeout", 5)
     
     # ── Smart Config 智能配置 API ──────────────────────────────────
     
@@ -1547,6 +1626,29 @@ def get_email_config() -> Dict[str, Any]:
 def get_browser_gateway_config() -> Dict[str, Any]:
     """获取浏览器网关配置"""
     return get_config().get_browser_gateway_config()
+
+
+def get_security_config(category: str = None) -> Dict[str, Any]:
+    """
+    获取安全/密钥管理配置
+    
+    Args:
+        category: 可选，指定配置类别
+    
+    Returns:
+        安全配置字典
+    """
+    return get_config().get_security_config(category)
+
+
+def get_key_rotation_config() -> Dict[str, Any]:
+    """获取密钥轮转配置"""
+    return get_config().get_key_rotation_config()
+
+
+def get_key_health_config() -> Dict[str, Any]:
+    """获取密钥健康监控配置"""
+    return get_config().get_key_health_config()
 
 
 # ── Smart Config 便捷函数 ───────────────────────────────────────────

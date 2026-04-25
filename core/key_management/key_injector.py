@@ -320,6 +320,11 @@ class KeyInjector:
 
         aws_keys: Dict[str, str] = {}
 
+        # 获取超时配置
+        from core.config.unified_config import get_config
+        config = get_config()
+        inject_timeout = config.get("security.api_keys.inject_timeout", 2)
+
         try:
             # IMDSv2 需要 token
             token_req = urllib.request.Request(
@@ -327,20 +332,20 @@ class KeyInjector:
                 headers={'X-aws-ec2-metadata-token-ttl-seconds': '300'},
                 method='PUT'
             )
-            token = urllib.request.urlopen(token_req, timeout=2).read().decode()
+            token = urllib.request.urlopen(token_req, timeout=inject_timeout).read().decode()
 
             # 获取 IAM 角色的临时凭证
             iam_req = urllib.request.Request(
                 'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
                 headers={'X-aws-ec2-metadata-token': token}
             )
-            iam_role = urllib.request.urlopen(iam_req, timeout=2).read().decode()
+            iam_role = urllib.request.urlopen(iam_req, timeout=inject_timeout).read().decode()
 
             creds_req = urllib.request.Request(
                 f'http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role}',
                 headers={'X-aws-ec2-metadata-token': token}
             )
-            creds = json.loads(urllib.request.urlopen(creds_req, timeout=2).read())
+            creds = json.loads(urllib.request.urlopen(creds_req, timeout=inject_timeout).read())
 
             aws_keys['aws_access_key'] = creds.get('AccessKeyId', '')
             aws_keys['aws_secret_key'] = creds.get('SecretAccessKey', '')
@@ -593,7 +598,11 @@ class KeyInjector:
         # 尝试元数据服务
         try:
             import urllib.request
-            urllib.request.urlopen('http://169.254.169.254/', timeout=1)
+            # 获取超时配置
+            from core.config.unified_config import get_config
+            config = get_config()
+            metadata_timeout = config.get("security.api_keys.metadata_timeout", 1)
+            urllib.request.urlopen('http://169.254.169.254/', timeout=metadata_timeout)
             return 'aws'  # AWS, Azure, GCP 都使用相同的169.254地址
         except Exception:
             pass

@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton
 
 # 导入建议组件
-from core.search_suggestion import SuggestionController, SearchSuggestionPopup
+from client.src.business.search_suggestion import SuggestionController, SearchSuggestionPopup
 
 
 def integrate_with_deep_search_panel(panel):
@@ -44,7 +44,7 @@ class IntegrationMixin:
     
     def _init_suggestion(self):
         """初始化搜索建议"""
-        from core.search_suggestion import SuggestionController, SearchSuggestionPopup
+        from client.src.business.search_suggestion import SuggestionController, SearchSuggestionPopup
         
         # 创建建议弹窗
         self._suggestion_popup = SearchSuggestionPopup()

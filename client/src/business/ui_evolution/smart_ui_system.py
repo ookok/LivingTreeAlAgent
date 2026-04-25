@@ -333,7 +333,7 @@ def smart_predict(
     
     使用示例:
     ```python
-    from core.ui_evolution import smart_predict
+    from client.src.business.ui_evolution import smart_predict
 
     
     # 用户点击了输入框

@@ -470,7 +470,7 @@ def predict_next(sequence: List[str]) -> PredictionResult:
     
     使用示例:
     ```python
-    from core.ui_evolution import predict_next
+    from client.src.business.ui_evolution import predict_next
 
     
     # 预测

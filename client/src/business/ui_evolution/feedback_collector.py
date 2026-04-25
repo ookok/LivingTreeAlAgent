@@ -472,7 +472,7 @@ def record_prediction_feedback(
     
     使用示例:
     ```python
-    from core.ui_evolution import record_prediction_feedback
+    from client.src.business.ui_evolution import record_prediction_feedback
 
     
     # 预测

@@ -357,7 +357,7 @@ def create_ui_hints_integration(
     
     使用示例:
     ```python
-    from core.ui_evolution import create_ui_hints_integration
+    from client.src.business.ui_evolution import create_ui_hints_integration
     
     # 创建集成
     interceptor = create_ui_hints_integration(

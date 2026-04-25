@@ -523,7 +523,7 @@ def trigger_learning(
     
     使用示例:
     ```python
-    from core.ui_evolution import trigger_learning
+    from client.src.business.ui_evolution import trigger_learning
 
     
     # 用户接受了建议

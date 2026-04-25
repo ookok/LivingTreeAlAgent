@@ -29,7 +29,12 @@
 ## 核心模块列表
 
 ### Phase 1: 核心引擎 (10个模块)
-- IntentEngine MVP - 意图驱动引擎
+- IntentEngine MVP - 意图驱动引擎（规则版）
+- **AIIntentEngine - AI意图引擎（Ollama驱动）**
+  - 服务: http://www.mogoo.com.cn:8899/v1
+  - 模型: qwen3.5:4b
+  - 支持13种意图类型识别
+  - 技术栈检测、推理过程分析
 - EvolutionEngine - 进化引擎
 - 自我意识系统 - 五层架构
 - PyQt6测试指挥官 - AI测试GUI

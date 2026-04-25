@@ -74,7 +74,7 @@ ui/
 
 ```python
 import asyncio
-from core.project_matcher import analyze_projects
+from client.src.business.project_matcher import analyze_projects
 
 async def main():
     result = await analyze_projects(

@@ -20,7 +20,7 @@ def test_file_classifier():
     print("测试 1: 文件分类器")
     print("="*60)
     
-    from core.local_file_search import FileClassifier
+    from client.src.business.local_file_search import FileClassifier
     
     classifier = FileClassifier()
     
@@ -50,7 +50,7 @@ def test_indexer_basic():
     print("测试 2: 索引器基本功能")
     print("="*60)
     
-    from core.local_file_search import FastFileIndexer
+    from client.src.business.local_file_search import FastFileIndexer
     
     db_path = os.path.join(tempfile.gettempdir(), "test_file_index.db")
     if os.path.exists(db_path):
@@ -96,7 +96,7 @@ def test_router_intent():
     print("测试 3: 路由意图解析")
     print("="*60)
     
-    from core.local_file_search import LocalFileSearchRouter
+    from client.src.business.local_file_search import LocalFileSearchRouter
     
     router = LocalFileSearchRouter()
     
@@ -136,7 +136,7 @@ def test_usn_monitor():
     print(f"  USN Journal 可用: {available}")
     
     if available:
-        from core.local_file_search import USNJournalMonitor
+        from client.src.business.local_file_search import USNJournalMonitor
         changes = []
         
         def on_change(ch):

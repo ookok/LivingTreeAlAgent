@@ -1,21 +1,24 @@
 """
-ScraplingEngine - Scrapling 核心封装
+ScraplingEngine - Scrapling 核心封装（修正版，基于真实 API）
 
-基于 Scrapling 框架的高性能网页内容提取引擎。
-比 BeautifulSoup 快 774 倍，内置反爬绕过能力。
-
-特性：
-- 自适应解析（网站改版后自动修复选择器）
-- 反爬绕过（Cloudflare、随机 UA、指纹伪装）
-- 极速解析（基于 lxml + 异步）
-- 支持动态页面（可选 JS 渲染）
+基于 Scrapling 0.4.7 真实 API：
+- Fetcher.configure(adaptive=True)  # 类方法，配置类本身
+- f = Fetcher()                      # 创建实例
+- r = f.get(url, timeout=10)        # 返回 Response
+- r.status                          # HTTP 状态码（不是 status_code）
+- r.find(selector)                  # 直接在 Response 上查找
+- r.find_all(selector)
+- r.text                            # 文本内容
+- r.prettify                        # 格式化的 HTML
+- r.body                            # 原始字节
+- r.url, r.encoding, r.headers, r.cookies
 
 文档：https://scrapling.readthedocs.io/
 """
 
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -34,70 +37,80 @@ except ImportError:
 class CrawlResult:
     """爬取结果"""
     url: str
-    content: str = ""               # 提取的文本内容（Markdown 格式）
-    html: str = ""                  # 原始 HTML
+    content: str = ""               # 提取的文本内容
+    html: str = ""                  # 格式化 HTML（prettify）
+    raw_html: bytes = b""          # 原始 HTML 字节
     title: str = ""                # 页面标题
-    status_code: int = 0          # HTTP 状态码
+    status: int = 0               # HTTP 状态码
     success: bool = False
     error: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class ScraplingEngine:
-    """Scrapling 引擎封装
-
-    高性能网页内容提取，支持反爬绕过。
-    自动降级到 requests + lxml（如果 Scrapling 不可用）。
+    """Scrapling 引擎封装（基于真实 API）
 
     用法：
+        # 配置（类方法，只需调用一次）
+        from scrapling import Fetcher
+        Fetcher.configure(adaptive=True)
+
+        # 创建实例并使用
         engine = ScraplingEngine()
         result = await engine.extract("https://example.com")
-
-        # 批量提取
-        results = await engine.batch_extract([url1, url2])
     """
+
+    # 类级别配置（所有实例共享）
+    _configured = False
+
+    @classmethod
+    def configure_class(cls, adaptive: bool = True, **kwargs):
+        """配置 Scrapling 类级别参数（只需调用一次）"""
+        if not _SCRAPLING_AVAILABLE:
+            logger.warning("Scrapling 未安装，无法配置")
+            return
+        valid_keys = {'huge_tree', 'adaptive', 'storage',
+                      'keep_cdata', 'keep_comments', 'adaptive_domain'}
+        filtered = {k: v for k, v in kwargs.items() if k in valid_keys}
+        if adaptive:
+            filtered['adaptive'] = True
+        Fetcher.configure(**filtered)
+        cls._configured = True
+        logger.info(f"Scrapling Fetcher 类已配置: {filtered}")
 
     def __init__(
         self,
         timeout: int = 30,
-        use_proxies: bool = False,
-        proxies: Optional[List[str]] = None,
+        adaptive: bool = True,
+        proxy: Optional[str] = None,
     ):
         """
         Args:
-            timeout: 请求超时（秒）
-            use_proxies: 是否使用代理
-            proxies: 代理列表（格式：["http://proxy1:port", ...]）
+            timeout: 请求超时（秒），传给 f.get(timeout=...)
+            adaptive: 是否启用自适应模式
+            proxy: 代理地址，如 "http://127.0.0.1:7890"
         """
         self.timeout = timeout
-        self.use_proxies = use_proxies
-        self.proxies = proxies or []
-        self._fetcher: Optional[Fetcher] = None
+        self.adaptive = adaptive
+        self.proxy = proxy
 
-    def _get_fetcher(self) -> Optional[Fetcher]:
-        """获取或创建 Fetcher 实例"""
-        if not _SCRAPLING_AVAILABLE:
-            return None
-
-        if self._fetcher is None:
-            self._fetcher = Fetcher(
-                auto_adapt=True,        # 自适应模式
-                timeout=self.timeout,
-            )
-        return self._fetcher
+        # 确保类已配置
+        if adaptive and not self.__class__._configured:
+            self.__class__.configure_class(adaptive=True)
+            self.__class__._configured = True
 
     async def extract(
         self,
         url: str,
         selector: Optional[str] = None,
-        output_format: str = "markdown",
+        output_format: str = "text",
     ) -> CrawlResult:
         """提取网页内容
 
         Args:
             url: 目标 URL
             selector: CSS 选择器（可选，指定提取区域）
-            output_format: 输出格式（"markdown" / "text" / "html"）
+            output_format: 输出格式（"text" / "html" / "prettify"）
 
         Returns:
             CrawlResult: 提取结果
@@ -106,91 +119,101 @@ class ScraplingEngine:
             logger.warning("Scrapling 未安装，使用降级方案")
             return await self._extract_fallback(url, selector)
 
-        fetcher = self._get_fetcher()
-        if fetcher is None:
-            return CrawlResult(url=url, success=False, error="Fetcher 初始化失败")
-
         try:
-            # 使用 Scrapling 的 Fetcher 获取页面
-            # Fetcher 是 Scrapling 的核心，比 requests + BeautifulSoup 快很多
-            response = fetcher.get(
-                url,
-                timeout=self.timeout,
-                allow_redirects=True,
-            )
+            f = Fetcher()
+            # 传入代理（Scrapling 支持 proxy 参数）
+            get_kwargs = {"timeout": self.timeout}
+            if self.proxy:
+                get_kwargs["proxy"] = self.proxy
+            response = f.get(url, **get_kwargs)
 
-            if response.status_code != 200:
+            if response.status != 200:
                 return CrawlResult(
                     url=url,
-                    status_code=response.status_code,
+                    status=response.status,
                     success=False,
-                    error=f"HTTP {response.status_code}",
+                    error=f"HTTP {response.status}",
                 )
-
-            # 用 response.page 获取 Page 对象（Scrapling 的智能解析器）
-            page = response.page
 
             # 提取标题
             title = ""
-            title_elem = page.find("title")
+            title_elem = response.find("title")
             if title_elem:
                 title = title_elem.text.strip()
 
-            # 提取正文内容
-            content = self._extract_content(page, selector, output_format)
+            # 提取正文
+            content, html = self._extract_content(response, selector, output_format)
 
             return CrawlResult(
-                url=url,
+                url=str(response.url),
                 content=content,
-                html=response.text[:5000],   # 限制原始 HTML 大小
+                html=html,
+                raw_html=response.body if hasattr(response, 'body') else b"",
                 title=title,
-                status_code=response.status_code,
+                status=response.status,
                 success=True,
                 metadata={
-                    "url": str(response.url),
-                    "encoding": response.encoding,
+                    "encoding": getattr(response, 'encoding', None),
+                    "headers": dict(getattr(response, 'headers', {})),
                 }
             )
 
         except Exception as e:
             logger.error(f"Scrapling 提取失败: {url} - {e}")
-            # 降级到简单方案
             logger.info(f"降级到内置方案: {url}")
             return await self._extract_fallback(url, selector)
 
     def _extract_content(
         self,
-        page: "Page",
+        response,
         selector: Optional[str],
         output_format: str,
-    ) -> str:
-        """使用 Scrapling Page 提取内容
+    ) -> tuple:
+        """从 Response 提取内容（Scrapling 0.4.7 真实 API）
 
-        Page 是 Scrapling 的智能解析器，比 BeautifulSoup 快 774 倍。
-        支持自适应选择器（网站改版后自动适配）。
+        注意：response.text 可能为空，应使用 get_all_text() 获取全文。
         """
-        # 如果指定了选择器，只提取该区域
+        # 如果指定了选择器，限定范围
+        target = response
         if selector:
-            elem = page.find(selector)
+            elem = response.find(selector)
             if elem:
-                page = elem  # 限定范围
+                target = elem
 
-        if output_format == "markdown":
-            # 使用 Scrapling 的内置 Markdown 转换
-            return page.markdown
+        # 提取文本：优先用 get_all_text()，再用 text
+        def _get_text(obj) -> str:
+            """安全获取对象文本"""
+            if hasattr(obj, 'get_all_text'):
+                result = obj.get_all_text()
+                if result:
+                    return result
+            if hasattr(obj, 'text'):
+                result = obj.text
+                if result:
+                    return result
+            # 降级：拼接所有 <p> 的文本
+            if hasattr(obj, 'find_all'):
+                paragraphs = obj.find_all("p")
+                if paragraphs:
+                    texts = [p.get_all_text() if hasattr(p, 'get_all_text')
+                             else p.text for p in paragraphs]
+                    return "\n\n".join(t for t in texts if t and t.strip())
+            return ""
 
-        elif output_format == "text":
-            # 纯文本
-            return page.text
+        content = _get_text(target)
+        html = response.prettify if hasattr(response, 'prettify') else ""
+
+        if output_format == "text":
+            return content, html
 
         elif output_format == "html":
-            # HTML 片段
-            return page.html
+            return content, html
+
+        elif output_format == "prettify":
+            return html, html
 
         else:
-            # 默认：尝试提取文章正文
-            # Scrapling 有内置的智能正文提取
-            return page.markdown
+            return content, ""
 
     async def _extract_fallback(
         self,
@@ -206,34 +229,46 @@ class ScraplingEngine:
             if resp.status_code != 200:
                 return CrawlResult(
                     url=url,
-                    status_code=resp.status_code,
+                    status=resp.status_code,
                     success=False,
                     error=f"HTTP {resp.status_code}",
                 )
 
-            # 使用 lxml 解析（也比 BeautifulSoup 快很多）
             doc = lxml_html.fromstring(resp.content)
-            
+
             # 提取标题
             title_elem = doc.find(".//title")
             title = title_elem.text_content().strip() if title_elem is not None else ""
 
-            # 提取正文（简单策略：去掉 script/style，取 body 文本）
+            # 去掉 script/style
             for tag in doc.xpath("//script | //style"):
                 tag.getparent().remove(tag)
-            
-            body = doc.find(".//body")
-            content = body.text_content() if body is not None else doc.text_content()
-            
-            # 清理空白
-            import re
-            content = re.sub(r'\s+', ' ', content).strip()
+
+            # 提取正文
+            content = ""
+            if selector:
+                if selector.startswith("."):
+                    cls = selector[1:]
+                    elem = doc.find(f'.//*[contains(@class, "{cls}")]')
+                elif selector.startswith("#"):
+                    id_ = selector[1:]
+                    elem = doc.find(f'.//*[@id="{id_}"]')
+                else:
+                    elem = doc.find(f".//{selector}")
+                if elem is not None:
+                    content = elem.text_content().strip()
+
+            if not content:
+                body = doc.find(".//body")
+                content = body.text_content() if body is not None else doc.text_content()
+                import re
+                content = re.sub(r'\s+', ' ', content).strip()
 
             return CrawlResult(
                 url=url,
                 content=content,
                 title=title,
-                status_code=resp.status_code,
+                status=resp.status_code,
                 success=True,
                 metadata={"method": "fallback_lxml"},
             )
@@ -251,15 +286,8 @@ class ScraplingEngine:
         urls: List[str],
         max_concurrent: int = 5,
     ) -> Dict[str, CrawlResult]:
-        """批量提取（并发）
+        """批量提取（并发）"""
 
-        Args:
-            urls: URL 列表
-            max_concurrent: 最大并发数
-
-        Returns:
-            Dict[str, CrawlResult]: URL -> 结果的映射
-        """
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def _extract_one(url: str) -> tuple:
@@ -267,8 +295,19 @@ class ScraplingEngine:
                 result = await self.extract(url)
                 return (url, result)
 
-        results = await asyncio.gather(*[_extract_one(url) for url in urls])
-        return dict(results)
+        results = await asyncio.gather(
+            *[_extract_one(url) for url in urls],
+            return_exceptions=True
+        )
+
+        output = {}
+        for item in results:
+            if isinstance(item, Exception):
+                logger.warning(f"批量提取异常: {item}")
+                continue
+            url, result = item
+            output[url] = result
+        return output
 
     def extract_sync(self, url: str, **kwargs) -> CrawlResult:
         """同步提取（便捷方法）"""
@@ -276,17 +315,8 @@ class ScraplingEngine:
 
 
 # 便捷函数
-
 async def extract_with_scrapling(url: str, **kwargs) -> str:
-    """便捷函数：使用 Scrapling 提取网页内容
-
-    Args:
-        url: 目标 URL
-        **kwargs: 传递给 ScraplingEngine.extract()
-
-    Returns:
-        str: 提取的 Markdown 内容
-    """
+    """便捷函数：使用 Scrapling 提取网页内容"""
     engine = ScraplingEngine()
     result = await engine.extract(url, **kwargs)
     if result.success:

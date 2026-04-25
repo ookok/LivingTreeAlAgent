@@ -38,6 +38,7 @@ class ExtractionConfig:
     use_jina: bool = True              # L1: 是否使用 Jina Reader
     jina_api_key: Optional[str] = None  # Jina API Key
     jina_timeout: int = 30           # Jina 请求超时
+    proxy: Optional[str] = None        # 代理地址（L1 和 L2 共用）
     use_scrapling: bool = True        # L2: 是否使用 Scrapling
     scrapling_timeout: int = 30      # Scrapling 请求超时
     fallback_to_builtin: bool = True  # L3: 是否降级到内置提取
@@ -70,6 +71,7 @@ class ContentExtractor:
             self._jina_reader = JinaReader(
                 api_key=self.config.jina_api_key,
                 timeout=self.config.jina_timeout,
+                proxy=self.config.proxy,
             )
         return self._jina_reader
 
@@ -80,6 +82,7 @@ class ContentExtractor:
                 from client.src.business.web_crawler.engine import ScraplingEngine
                 self._scrapling_engine = ScraplingEngine(
                     timeout=self.config.scrapling_timeout,
+                    proxy=self.config.proxy,
                 )
             except ImportError:
                 self._scrapling_engine = None

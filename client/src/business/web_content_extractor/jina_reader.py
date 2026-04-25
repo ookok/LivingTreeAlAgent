@@ -49,14 +49,22 @@ class JinaReader:
         result = reader.extract_sync("https://example.com")
     """
 
-    def __init__(self, api_key: Optional[str] = None, timeout: int = 30):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        timeout: int = 30,
+        proxy: Optional[str] = None,
+    ):
         """
         Args:
             api_key: Jina AI API Key（可选，不提供则使用免费版）
             timeout: 请求超时时间（秒）
+            proxy: 代理地址，如 "http://127.0.0.1:7890"
+                    也支持从项目 SmartProxyGateway 自动获取
         """
         self.api_key = api_key
         self.timeout = timeout
+        self.proxy = proxy
         self._session = None  # aiohttp session（延迟创建）
 
     async def _get_session(self):
@@ -104,7 +112,12 @@ class JinaReader:
 
         try:
             session = await self._get_session()
-            async with session.get(jina_url, headers=headers) as resp:
+            # 传入代理（如有）
+            get_kwargs = {}
+            if self.proxy:
+                get_kwargs["proxy"] = self.proxy
+
+            async with session.get(jina_url, headers=headers, **get_kwargs) as resp:
                 if resp.status != 200:
                     return ExtractResult(
                         url=url,

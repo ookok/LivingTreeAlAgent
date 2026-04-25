@@ -18,14 +18,16 @@ Web Content Extractor - 网页内容提取模块
 
 from .jina_reader import JinaReader
 from .extractor import (
+    ExtractionConfig,
+    ContentExtractor,
     extract_content,
     batch_extract,
-    ContentExtractor,
 )
 
 __all__ = [
     "JinaReader",
+    "ExtractionConfig",
+    "ContentExtractor",
     "extract_content",
     "batch_extract",
-    "ContentExtractor",
 ]

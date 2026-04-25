@@ -2,9 +2,9 @@
 统一内容提取接口
 
 提供多层降级策略：
-1. Jina Reader（最高质量）
-2. 内置简单提取（备选）
-3. 可扩展其他提取器（Readability、Trafilatura 等）
+1. Jina Reader（最高质量，需代理）
+2. Scrapling（高速+反爬，本地运行）
+3. 内置简单提取（备选）
 """
 
 import asyncio
@@ -17,14 +17,30 @@ from .jina_reader import JinaReader, ExtractResult
 
 logger = logging.getLogger(__name__)
 
+# Scrapling 可选依赖
+try:
+    from scrapling import Fetcher
+    _SCRAPLING_AVAILABLE = True
+except ImportError:
+    _SCRAPLING_AVAILABLE = False
+    logger.warning("Scrapling 未安装，L2 策略不可用")
+
 
 @dataclass
 class ExtractionConfig:
-    """提取配置"""
-    use_jina: bool = True              # 是否使用 Jina Reader
+    """提取配置
+
+    三层提取策略：
+    L1: Jina Reader（最高质量，需代理）
+    L2: Scrapling（高速+反爬，本地运行）
+    L3: 内置简单提取（降级方案）
+    """
+    use_jina: bool = True              # L1: 是否使用 Jina Reader
     jina_api_key: Optional[str] = None  # Jina API Key
     jina_timeout: int = 30           # Jina 请求超时
-    fallback_to_builtin: bool = True  # Jina 失败时是否降级到内置提取
+    use_scrapling: bool = True        # L2: 是否使用 Scrapling
+    scrapling_timeout: int = 30      # Scrapling 请求超时
+    fallback_to_builtin: bool = True  # L3: 是否降级到内置提取
     max_content_length: int = 50000   # 最大内容长度（字符）
     remove_boilerplate: bool = True   # 是否移除样板内容
 
@@ -46,6 +62,7 @@ class ContentExtractor:
     def __init__(self, config: Optional[ExtractionConfig] = None):
         self.config = config or ExtractionConfig()
         self._jina_reader: Optional[JinaReader] = None
+        self._scrapling_engine: Optional[Any] = None  # ScraplingEngine
 
     def _get_jina_reader(self) -> JinaReader:
         """获取或创建 JinaReader 实例"""
@@ -56,18 +73,34 @@ class ContentExtractor:
             )
         return self._jina_reader
 
+    def _get_scrapling_engine(self):
+        """获取或创建 ScraplingEngine 实例"""
+        if self._scrapling_engine is None:
+            try:
+                from client.src.business.web_crawler.engine import ScraplingEngine
+                self._scrapling_engine = ScraplingEngine(
+                    timeout=self.config.scrapling_timeout,
+                )
+            except ImportError:
+                self._scrapling_engine = None
+                logger.warning("ScraplingEngine 导入失败，L2 策略不可用")
+        return self._scrapling_engine
+
     async def close(self):
         """关闭资源"""
         if self._jina_reader:
             await self._jina_reader.close()
+        if self._scrapling_engine:
+            # ScraplingEngine doesn't have close(), but clean up anyway
+            self._scrapling_engine = None
 
     async def extract(self, url: str) -> str:
         """提取网页内容（自动选择策略）
 
-        策略：
-        1. 如果配置了 use_jina，先尝试 Jina Reader
-        2. 如果 Jina 失败且允许降级，使用内置提取
-        3. 如果都不行，返回空字符串
+        三层策略：
+        L1: Jina Reader（最高质量，需代理）
+        L2: Scrapling（高速+反爬，本地运行）
+        L3: 内置提取（降级方案）
 
         Args:
             url: 目标网页 URL
@@ -75,7 +108,7 @@ class ContentExtractor:
         Returns:
             str: 提取的文本内容（Markdown 或纯文本）
         """
-        # 策略1：Jina Reader
+        # L1: Jina Reader
         if self.config.use_jina:
             try:
                 result = await self._get_jina_reader().extract(url)
@@ -83,16 +116,34 @@ class ContentExtractor:
                     content = result.content
                     if self.config.max_content_length > 0:
                         content = content[:self.config.max_content_length]
-                    logger.info(f"Jina Reader 提取成功: {url} ({len(content)} chars)")
+                    logger.info(f"L1 Jina Reader 提取成功: {url} ({len(content)} chars)")
                     return content
                 else:
-                    logger.warning(f"Jina Reader 提取失败: {url} - {result.error}")
+                    logger.warning(f"L1 Jina Reader 提取失败: {url} - {result.error}")
             except Exception as e:
-                logger.warning(f"Jina Reader 异常: {url} - {e}")
+                logger.warning(f"L1 Jina Reader 异常: {url} - {e}")
 
-        # 策略2：内置提取（降级）
+        # L2: Scrapling
+        if self.config.use_scrapling and _SCRAPLING_AVAILABLE:
+            try:
+                engine = self._get_scrapling_engine()
+                if engine:
+                    from client.src.business.web_crawler.engine import CrawlResult
+                    result: CrawlResult = await engine.extract(url)
+                    if result.success and result.content:
+                        content = result.content
+                        if self.config.max_content_length > 0:
+                            content = content[:self.config.max_content_length]
+                        logger.info(f"L2 Scrapling 提取成功: {url} ({len(content)} chars)")
+                        return content
+                    else:
+                        logger.warning(f"L2 Scrapling 提取失败: {url} - {result.error}")
+            except Exception as e:
+                logger.warning(f"L2 Scrapling 异常: {url} - {e}")
+
+        # L3: 内置提取（降级）
         if self.config.fallback_to_builtin:
-            logger.info(f"降级到内置提取: {url}")
+            logger.info(f"L3 降级到内置提取: {url}")
             return await self.extract_builtin(url)
 
         return ""
@@ -111,6 +162,29 @@ class ContentExtractor:
             return result.content
         else:
             raise RuntimeError(f"Jina Reader 提取失败: {result.error}")
+
+    async def extract_with_scrapling(self, url: str) -> str:
+        """使用 Scrapling 提取（不降级）
+
+        Args:
+            url: 目标网页 URL
+
+        Returns:
+            str: Markdown 格式内容
+        """
+        if not _SCRAPLING_AVAILABLE:
+            raise RuntimeError("Scrapling 未安装，请先运行: pip install scrapling")
+
+        engine = self._get_scrapling_engine()
+        if engine is None:
+            raise RuntimeError("ScraplingEngine 初始化失败")
+
+        from client.src.business.web_crawler.engine import CrawlResult
+        result: CrawlResult = await engine.extract(url)
+        if result.success:
+            return result.content
+        else:
+            raise RuntimeError(f"Scrapling 提取失败: {result.error}")
 
     async def extract_builtin(self, url: str) -> str:
         """使用内置方法提取（无需外部 API）

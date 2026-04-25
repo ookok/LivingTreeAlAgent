@@ -113,8 +113,8 @@ class DeepSearchProxyIntegration:
             return
 
         try:
-            from core.proxy_search.config import get_config
-            from core.proxy_search.url_router import get_router
+            from client.src.business.proxy_search.config import get_config
+            from client.src.business.proxy_search.url_router import get_router
 
             self._config = get_config()
             self._router = get_router()
@@ -171,7 +171,7 @@ class DeepSearchProxyIntegration:
         self._lazy_init()
         if self._router:
             try:
-                from core.proxy_search.config import should_use_proxy
+                from client.src.business.proxy_search.config import should_use_proxy
                 result = should_use_proxy(url)
                 return result is None  # None 表示被阻止
             except Exception:
@@ -247,7 +247,7 @@ class DeepSearchProxyIntegration:
         """判断URL是否应使用代理"""
         self._lazy_init()
         try:
-            from core.proxy_search.config import should_use_proxy
+            from client.src.business.proxy_search.config import should_use_proxy
             result = should_use_proxy(url)
             return result is True
         except Exception:
@@ -310,7 +310,7 @@ class DeepSearchProxyIntegration:
     async def _proxy_request(self, url: str) -> SearchResult:
         """使用代理请求"""
         try:
-            from core.proxy_search.proxy_middleware import get_middleware
+            from client.src.business.proxy_search.proxy_middleware import get_middleware
             middleware = get_middleware()
             response = middleware.get(url, timeout=30)
             return SearchResult(

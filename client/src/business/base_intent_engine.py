@@ -97,19 +97,21 @@ class IntentResult:
 
 class BaseIntentEngine:
     """
-    基础意图引擎
+    基础意图引擎（模板方法模式）
     
     提供通用功能：
     1. 文本预处理（清洗、分词）
-    2. 关键词提取
-    3. 意图分类（通用算法）
-    4. 参数提取（通用算法）
-    5. 置信度计算
+    2. 缓存管理（LRU）
+    3. 统计信息
+    4. 模板方法：parse() 调用 do_parse()
     
-    子类应实现：
-    1. `parse(text)` - 具体的意图解析逻辑
-    2. `classify(text)` - 具体的意图分类逻辑
-    3. `extract_params(text, intent_type)` - 具体的参数提取逻辑
+    子类只需实现 do_parse(text) -> IntentResult
+    
+    使用方式：
+    class MyEngine(BaseIntentEngine):
+        def do_parse(self, text: str) -> IntentResult:
+            # 实现具体的意图解析逻辑
+            return IntentResult(...)
     """
     
     def __init__(self, enable_cache: bool = True, cache_size: int = 100):
@@ -131,7 +133,13 @@ class BaseIntentEngine:
         
     def parse(self, text: str) -> IntentResult:
         """
-        解析意图（主入口，子类应重写此方法）
+        解析意图（主入口，模板方法）
+        
+        流程：
+        1. 检查缓存
+        2. 调用 do_parse()（子类实现）
+        3. 存入缓存
+        4. 更新统计
         
         Args:
             text: 用户输入文本
@@ -139,7 +147,36 @@ class BaseIntentEngine:
         Returns:
             IntentResult: 意图识别结果
         """
-        raise NotImplementedError("Subclasses must implement parse()")
+        # 1. 检查缓存
+        if self.enable_cache:
+            cached = self._get_from_cache(text)
+            if cached is not None:
+                self.cache_hits += 1
+                return cached
+        
+        # 2. 调用子类实现
+        result = self.do_parse(text)
+        
+        # 3. 存入缓存
+        if self.enable_cache and result is not None:
+            self._save_to_cache(text, result)
+        
+        # 4. 更新统计
+        self.total_parsed += 1
+        
+        return result
+    
+    def do_parse(self, text: str) -> IntentResult:
+        """
+        解析意图（钩子方法，子类必须实现）
+        
+        Args:
+            text: 用户输入文本
+            
+        Returns:
+            IntentResult: 意图识别结果
+        """
+        raise NotImplementedError("Subclasses must implement do_parse()")
     
     def classify(self, text: str) -> Tuple[IntentType, float]:
         """

@@ -38,12 +38,49 @@ class ExtractionConfig:
     use_jina: bool = True              # L1: 是否使用 Jina Reader
     jina_api_key: Optional[str] = None  # Jina API Key
     jina_timeout: int = 30           # Jina 请求超时
-    proxy: Optional[str] = None        # 代理地址（L1 和 L2 共用）
+    proxy: Optional[str] = None        # 手动指定代理地址（优先级最高）
+    proxy_auto: bool = True           # 是否自动从项目代理池获取代理
     use_scrapling: bool = True        # L2: 是否使用 Scrapling
     scrapling_timeout: int = 30      # Scrapling 请求超时
     fallback_to_builtin: bool = True  # L3: 是否降级到内置提取
     max_content_length: int = 50000   # 最大内容长度（字符）
     remove_boilerplate: bool = True   # 是否移除样板内容
+
+    def get_proxy(self) -> Optional[str]:
+        """获取代理地址（自动 + 手动）
+
+        优先级：
+        1. 手动指定 proxy
+        2. 自动从代理池获取（proxy_auto=True）
+        3. None（不使用代理）
+
+        注意：如果 proxy_auto=True 但代理池为空，返回 None，
+        此时 Jina Reader 可能无法访问 r.jina.ai（国内网络）。
+        """
+        # 1. 手动指定优先
+        if self.proxy:
+            logger.debug(f"使用手动指定代理: {self.proxy}")
+            return self.proxy
+
+        # 2. 自动从代理池获取
+        if self.proxy_auto:
+            try:
+                from client.src.business.proxy_search.proxy_pool import get_proxy_pool
+                pooled = get_proxy_pool().get_proxy()
+                if pooled:
+                    addr = pooled.proxy.full_address
+                    logger.info(f"从代理池获取代理: {addr}")
+                    return addr
+                else:
+                    logger.warning(
+                        "代理池为空！Jina Reader 可能无法访问 r.jina.ai（国内网络）。"
+                        "请检查代理源配置，或手动指定 proxy。"
+                    )
+            except Exception as e:
+                logger.warning(f"从代理池获取代理失败: {e}")
+
+        # 3. 无代理
+        return None
 
 
 class ContentExtractor:
@@ -111,10 +148,13 @@ class ContentExtractor:
         Returns:
             str: 提取的文本内容（Markdown 或纯文本）
         """
+        # 动态获取代理（从配置：手动 > 自动代理池 > None）
+        proxy = self.config.get_proxy()
+
         # L1: Jina Reader
         if self.config.use_jina:
             try:
-                result = await self._get_jina_reader().extract(url)
+                result = await self._get_jina_reader().extract(url, proxy=proxy)
                 if result.success and result.content:
                     content = result.content
                     if self.config.max_content_length > 0:
@@ -132,7 +172,7 @@ class ContentExtractor:
                 engine = self._get_scrapling_engine()
                 if engine:
                     from client.src.business.web_crawler.engine import CrawlResult
-                    result: CrawlResult = await engine.extract(url)
+                    result: CrawlResult = await engine.extract(url, proxy=proxy)
                     if result.success and result.content:
                         content = result.content
                         if self.config.max_content_length > 0:
@@ -151,26 +191,32 @@ class ContentExtractor:
 
         return ""
 
-    async def extract_with_jina(self, url: str) -> str:
+    async def extract_with_jina(self, url: str, proxy: Optional[str] = None) -> str:
         """使用 Jina Reader 提取（不降级）
 
         Args:
             url: 目标网页 URL
+            proxy: 动态传入代理（可选，覆盖配置）
 
         Returns:
             str: Markdown 格式内容
         """
-        result = await self._get_jina_reader().extract(url)
+        # 自动获取代理（如果未手动指定）
+        if proxy is None:
+            proxy = self.config.get_proxy()
+
+        result = await self._get_jina_reader().extract(url, proxy=proxy)
         if result.success:
             return result.content
         else:
             raise RuntimeError(f"Jina Reader 提取失败: {result.error}")
 
-    async def extract_with_scrapling(self, url: str) -> str:
+    async def extract_with_scrapling(self, url: str, proxy: Optional[str] = None) -> str:
         """使用 Scrapling 提取（不降级）
 
         Args:
             url: 目标网页 URL
+            proxy: 动态传入代理（可选，覆盖配置）
 
         Returns:
             str: Markdown 格式内容
@@ -178,12 +224,16 @@ class ContentExtractor:
         if not _SCRAPLING_AVAILABLE:
             raise RuntimeError("Scrapling 未安装，请先运行: pip install scrapling")
 
+        # 自动获取代理（如果未手动指定）
+        if proxy is None:
+            proxy = self.config.get_proxy()
+
         engine = self._get_scrapling_engine()
         if engine is None:
             raise RuntimeError("ScraplingEngine 初始化失败")
 
         from client.src.business.web_crawler.engine import CrawlResult
-        result: CrawlResult = await engine.extract(url)
+        result: CrawlResult = await engine.extract(url, proxy=proxy)
         if result.success:
             return result.content
         else:

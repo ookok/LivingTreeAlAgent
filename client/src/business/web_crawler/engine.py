@@ -104,6 +104,7 @@ class ScraplingEngine:
         url: str,
         selector: Optional[str] = None,
         output_format: str = "text",
+        proxy: Optional[str] = None,
     ) -> CrawlResult:
         """提取网页内容
 
@@ -111,6 +112,7 @@ class ScraplingEngine:
             url: 目标 URL
             selector: CSS 选择器（可选，指定提取区域）
             output_format: 输出格式（"text" / "html" / "prettify"）
+            proxy: 动态传入代理地址（优先级高于 self.proxy）
 
         Returns:
             CrawlResult: 提取结果
@@ -119,12 +121,15 @@ class ScraplingEngine:
             logger.warning("Scrapling 未安装，使用降级方案")
             return await self._extract_fallback(url, selector)
 
+        # 代理优先级：动态传入 > self.proxy
+        effective_proxy = proxy or self.proxy
+
         try:
             f = Fetcher()
             # 传入代理（Scrapling 支持 proxy 参数）
             get_kwargs = {"timeout": self.timeout}
-            if self.proxy:
-                get_kwargs["proxy"] = self.proxy
+            if effective_proxy:
+                get_kwargs["proxy"] = effective_proxy
             response = f.get(url, **get_kwargs)
 
             if response.status != 200:

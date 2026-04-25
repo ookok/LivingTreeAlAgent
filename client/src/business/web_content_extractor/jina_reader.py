@@ -97,12 +97,18 @@ class JinaReader:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
-    async def extract(self, url: str, **kwargs) -> ExtractResult:
+    async def extract(
+        self,
+        url: str,
+        proxy: Optional[str] = None,
+        **kwargs,
+    ) -> ExtractResult:
         """异步提取网页内容
 
         Args:
             url: 目标网页 URL
-            **kwargs: 额外参数（目前未使用，保留扩展）
+            proxy: 动态传入代理地址（优先级高于 self.proxy）
+            **kwargs: 额外参数（保留扩展）
 
         Returns:
             ExtractResult: 提取结果
@@ -110,12 +116,15 @@ class JinaReader:
         jina_url = self._build_url(url)
         headers = self._build_headers()
 
+        # 代理优先级：动态传入 > self.proxy
+        effective_proxy = proxy or self.proxy
+
         try:
             session = await self._get_session()
             # 传入代理（如有）
             get_kwargs = {}
-            if self.proxy:
-                get_kwargs["proxy"] = self.proxy
+            if effective_proxy:
+                get_kwargs["proxy"] = effective_proxy
 
             async with session.get(jina_url, headers=headers, **get_kwargs) as resp:
                 if resp.status != 200:

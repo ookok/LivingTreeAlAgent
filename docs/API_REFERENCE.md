@@ -99,7 +99,7 @@ workflow.create_task("task1", requirements)
 编排可视化。
 
 ```python
-from core.agent.orchestration_viewer import AgentOrchestrationViewer, get_orchestration_viewer
+from client.src.business.agent.orchestration_viewer import AgentOrchestrationViewer, get_orchestration_viewer
 
 viewer = get_orchestration_viewer()
 viewer.initialize_workflow("workflow1")

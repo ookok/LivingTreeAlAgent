@@ -532,7 +532,7 @@ class IndustryAwareCrawler:
 行业实施规划器 - 整合 expert_training_pipeline 扩展
 """
 
-from core.expert_distillation import ExpertTrainingPipeline
+from client.src.business.expert_distillation import ExpertTrainingPipeline
 
 class IndustryImplementationPlanner:
     """行业实施规划器"""

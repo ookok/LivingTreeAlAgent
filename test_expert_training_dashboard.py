@@ -365,7 +365,7 @@ def test_integration_with_existing_system():
         print("\n[INFO] 检查 ExpertTrainingPipeline...")
 
         try:
-            from core.expert_distillation.expert_training_pipeline import (
+            from client.src.business.expert_distillation.expert_training_pipeline import (
                 ExpertTrainingPipeline,
                 PipelineStage,
             )

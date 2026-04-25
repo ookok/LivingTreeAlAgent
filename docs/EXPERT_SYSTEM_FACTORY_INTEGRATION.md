@@ -255,7 +255,7 @@ class DomainAdapter:
         self.domain = domain_name
         from expert_system.persona_dispatcher import PersonaDispatcher
         self.persona_dispatcher = PersonaDispatcher()
-        from core.expert_distillation.template_library import ExpertTemplateLibrary
+        from client.src.business.expert_distillation.template_library import ExpertTemplateLibrary
         self.template_library = ExpertTemplateLibrary()
     
     def adapt_base_expert(
@@ -475,11 +475,11 @@ class ExpertTrainingFactory:
         self.domain = domain
         
         # 复用现有训练流水线
-        from core.expert_distillation import ExpertTrainingPipeline
+        from client.src.business.expert_distillation import ExpertTrainingPipeline
         self.training_pipeline = ExpertTrainingPipeline()
         
         # 复用现有查询收集
-        from core.expert_distillation import QueryCollector
+        from client.src.business.expert_distillation import QueryCollector
         self.query_collector = QueryCollector()
     
     def train_expert(
@@ -516,7 +516,7 @@ class ExpertTrainingFactory:
         queries = self.query_collector.collect_queries()
         
         # 使用 LLM 提取知识
-        from core.expert_distillation import DistillationPipeline
+        from client.src.business.expert_distillation import DistillationPipeline
         distillation = DistillationPipeline()
         
         # 知识提取
@@ -531,7 +531,7 @@ class ExpertTrainingFactory:
         """阶段2: 推理能力培养"""
         
         # 复用 TemplateLibrary 创建领域推理模板
-        from core.expert_distillation.template_library import ExpertTemplateLibrary
+        from client.src.business.expert_distillation.template_library import ExpertTemplateLibrary
         templates = ExpertTemplateLibrary()
         
         for rtype in reasoning_types:

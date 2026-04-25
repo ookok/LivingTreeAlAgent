@@ -11,15 +11,15 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent / "core"))
 
-from core.expert_distillation import (
+from client.src.business.expert_distillation import (
     DistillationDataGenerator,
     ExpertTemplateLibrary,
     ExpertRouter,
     L4EnhancedCaller,
     ExpertDistillationPipeline,
 )
-from core.expert_distillation.router import QueryDomain, ComplexityLevel, RouteStrategy
-from core.expert_distillation.data_generator import QATriple
+from client.src.business.expert_distillation.router import QueryDomain, ComplexityLevel, RouteStrategy
+from client.src.business.expert_distillation.data_generator import QATriple
 
 
 def test_data_generator():

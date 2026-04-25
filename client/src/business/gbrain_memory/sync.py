@@ -573,7 +573,7 @@ backups/
         result = SyncResult(status=SyncStatus.SYNCING, message="迁移中...")
 
         try:
-            from core.memory_manager import MemoryManager
+            from client.src.business.memory_manager import MemoryManager
 
             memory = MemoryManager()
 

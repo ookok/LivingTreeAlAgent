@@ -10,7 +10,7 @@ SmartProxyWidget - 智能代理管理UI组件
 5. 健康监测与状态显示
 
 使用方式：
-    from core.smart_proxy_widget import SmartProxyWidget
+    from client.src.business.smart_proxy_widget import SmartProxyWidget
 
     widget = SmartProxyWidget()
     layout.addWidget(widget)

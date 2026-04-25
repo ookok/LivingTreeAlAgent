@@ -440,7 +440,7 @@ class UpgradeScannerSystem:
     def _get_patch_manager(self):
         """获取补丁管理器 (如果可用)"""
         try:
-            from core.evolution import get_evolution_system
+            from client.src.business.evolution import get_evolution_system
             evo = get_evolution_system()
             return evo.get_patch_manager()
         except Exception:

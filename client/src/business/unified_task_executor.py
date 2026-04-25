@@ -171,7 +171,7 @@ class UnifiedTaskExecutor:
     def tool_registry(self):
         """工具注册表（延迟加载）"""
         try:
-            from core.tools_registry import ToolRegistry
+            from client.src.business.tools_registry import ToolRegistry
             return ToolRegistry
         except ImportError:
             return None

@@ -120,7 +120,7 @@ class HintIntentEngine:
         """获取本地模型客户端（延迟加载）"""
         if self._local_client is None:
             try:
-                from core.smolllm2 import get_l0_router
+                from client.src.business.smolllm2 import get_l0_router
                 self._local_client = get_l0_router()
             except ImportError:
                 try:

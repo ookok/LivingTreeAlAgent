@@ -12,7 +12,7 @@ Auto Diagnosis System - 自动诊断系统
 5. 生成诊断报告
 
 使用方式：
-    from core.error_management import get_auto_diagnoser
+    from client.src.business.error_management import get_auto_diagnoser
     
     diagnoser = get_auto_diagnoser()
     report = diagnoser.diagnose_recent_errors()

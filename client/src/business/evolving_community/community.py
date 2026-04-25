@@ -105,7 +105,7 @@ class EvolvingCommunity:
 
     使用示例：
     ```python
-    from core.evolving_community import EvolvingCommunity, CommunityStage
+    from client.src.business.evolving_community import EvolvingCommunity, CommunityStage
 
     # 创建社区
     community = EvolvingCommunity(name="AIThinkTank")

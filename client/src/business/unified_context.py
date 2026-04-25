@@ -191,7 +191,7 @@ class UnifiedContextProvider:
         """会话数据库"""
         if self._session_db is None:
             try:
-                from core.session_db import SessionDB
+                from client.src.business.session_db import SessionDB
                 self._session_db = SessionDB()
             except ImportError:
                 logger.warning("SessionDB 不可用")
@@ -203,7 +203,7 @@ class UnifiedContextProvider:
         """记忆管理器"""
         if self._memory_manager is None:
             try:
-                from core.memory_manager import MemoryManager
+                from client.src.business.memory_manager import MemoryManager
                 self._memory_manager = MemoryManager()
             except ImportError:
                 logger.warning("MemoryManager 不可用")
@@ -215,7 +215,7 @@ class UnifiedContextProvider:
         """记忆宫殿"""
         if self._memory_palace is None:
             try:
-                from core.memory_palace import MemoryPalace
+                from client.src.business.memory_palace import MemoryPalace
 
                 self._memory_palace = MemoryPalace()
             except ImportError:

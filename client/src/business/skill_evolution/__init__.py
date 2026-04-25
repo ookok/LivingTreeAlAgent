@@ -18,7 +18,7 @@ Skill 自进化系统 - 统一入口
 [遇到新任务] → [自主摸索] → [将执行路径固化为 Skill] → [写入 L3] → [下次直接调用]
 
 使用示例：
-    from core.skill_evolution import create_agent
+    from client.src.business.skill_evolution import create_agent
 
     agent = create_agent(
         db_path="~/.hermes-desktop/evolution/evolution.db",

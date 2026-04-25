@@ -122,7 +122,7 @@ def test_smart_assistant():
     """测试智能助手"""
     print("\n=== 测试智能助手 ===")
     
-    from core.smart_assistant import get_smart_assistant
+    from client.src.business.smart_assistant import get_smart_assistant
     
     assistant = get_smart_assistant()
     

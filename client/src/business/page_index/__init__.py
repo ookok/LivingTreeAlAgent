@@ -13,7 +13,7 @@ PageIndex - 结构化文档索引系统
 3. Answer: 上下文 + LLM → 精确答案
 
 使用示例:
-    from core.page_index import get_pageindex_tool
+    from client.src.business.page_index import get_pageindex_tool
 
     tool = get_pageindex_tool()
 

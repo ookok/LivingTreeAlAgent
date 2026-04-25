@@ -71,7 +71,7 @@ from client.src.business.long_context.progressive_understanding_impl import (
 )
 
 # Agent Chat 组件
-from core.agent_chat_enhancer import (
+from client.src.business.agent_chat_enhancer import (
     EnhancedAgentChat,
     ChatIntentClassifier,
     ChatContextManager,
@@ -84,21 +84,21 @@ from core.agent_chat_enhancer import (
 # 知识库组件
 try:
     from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
-    from core.knowledge_vector_db import KnowledgeBaseVectorStore
+    from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
     KB_AVAILABLE = True
 except ImportError:
     KB_AVAILABLE = False
 
 # 深度搜索组件
 try:
-    from core.deep_search_wiki import DeepSearchWikiSystem, WikiPage
+    from client.src.business.deep_search_wiki import DeepSearchWikiSystem, WikiPage
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
 
 # 技能进化组件
 try:
-    from core.skill_evolution import (
+    from client.src.business.skill_evolution import (
         SkillEvolutionAgent,
         EvolutionEngine,
         TaskContext,

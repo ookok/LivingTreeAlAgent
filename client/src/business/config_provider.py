@@ -7,7 +7,7 @@
 
 使用示例：
 ```python
-from core.config_provider import get_ollama_url, get_ollama_config, get_default_model
+from client.src.business.config_provider import get_ollama_url, get_ollama_config, get_default_model
 
 url = get_ollama_url()  # http://www.mogoo.com.cn:8899/v1
 config = get_ollama_config()

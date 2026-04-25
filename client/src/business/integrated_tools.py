@@ -73,7 +73,7 @@ class IntegratedTools:
             logger.info(f"OfficeCLI 已就绪: {self.officecli_path}")
 
             # 2. 初始化 PageIndex
-            from core.page_index import get_pageindex_tool
+            from client.src.business.page_index import get_pageindex_tool
             self.pageindex = get_pageindex_tool()
             logger.info("PageIndex 已就绪")
 
@@ -364,7 +364,7 @@ def register_integrated_tools_to_hermes(hermes_agent):
     注册集成工具到 Hermes Agent
 
     在 Hermes 的 agent.py 或 tools.py 中调用:
-        from core.integrated_tools import register_integrated_tools_to_hermes
+        from client.src.business.integrated_tools import register_integrated_tools_to_hermes
         register_integrated_tools_to_hermes(hermes_agent)
     """
     from hermes.tool import tool

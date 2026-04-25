@@ -8,7 +8,7 @@ import asyncio
 from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass
 
-from core.skill_evolution import (
+from client.src.business.skill_evolution import (
     SkillEvolutionAgent,
     TaskSkill,
     TaskStatus as EvolutionTaskStatus,

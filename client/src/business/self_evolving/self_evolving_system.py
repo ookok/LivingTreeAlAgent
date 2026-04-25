@@ -216,7 +216,7 @@ class SelfEvolvingSystem:
         """延迟加载技能进化"""
         if self._skill_evolution is None and self._enabled['skill_evolution']:
             try:
-                from core.skill_evolution import SkillEvolutionAgent
+                from client.src.business.skill_evolution import SkillEvolutionAgent
                 self._skill_evolution = SkillEvolutionAgent()
                 logger.info("Skill evolution loaded")
             except ImportError as e:

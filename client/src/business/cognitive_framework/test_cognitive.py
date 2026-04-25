@@ -5,7 +5,7 @@
 import sys
 sys.path.insert(0, '.')
 
-from core.cognitive_framework import (
+from client.src.business.cognitive_framework import (
     CognitiveFrameworkCollaborator,
     collaborate,
     CognitiveFrameworkAnalyzer,

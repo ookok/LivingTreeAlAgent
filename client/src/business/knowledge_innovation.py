@@ -194,7 +194,7 @@ class SemanticDeduplicator:
         """LLM向量化（精确方法）"""
         try:
             # 使用 Ollama 获取嵌入
-            from core.ollama_client import OllamaClient
+            from client.src.business.ollama_client import OllamaClient
             client = OllamaClient()
 
             # Ollama 的 embeddings API

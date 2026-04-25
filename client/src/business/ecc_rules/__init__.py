@@ -400,12 +400,12 @@ class RuleEngine:
     async def _execute_action(self, action: RuleAction,
                              event_data: Dict[str, Any]) -> Any:
         if action.action_type == ActionType.RUN_SKILL:
-            from core.ecc_skills import get_skill_registry
+            from client.src.business.ecc_skills import get_skill_registry
             skill_registry = get_skill_registry()
             return await skill_registry.execute(action.skill_id, action.skill_parameters, event_data)
 
         elif action.action_type == ActionType.SWITCH_AGENT:
-            from core.ecc_agents import get_agent_manager
+            from client.src.business.ecc_agents import get_agent_manager
             agent_manager = get_agent_manager()
             return agent_manager.switch_to(action.target_agent_id)
 

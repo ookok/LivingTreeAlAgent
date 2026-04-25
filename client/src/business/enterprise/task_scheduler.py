@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from core.enterprise.node_manager import EnterpriseNodeManager, get_enterprise_manager, EnterpriseNode
-from core.task_queue import TaskQueue, get_task_queue, QueuedTask, QueuePriority
+from client.src.business.task_queue import TaskQueue, get_task_queue, QueuedTask, QueuePriority
 from .intelligent_router import get_intelligent_router, get_cost_optimizer
 
 logger = logging.getLogger(__name__)

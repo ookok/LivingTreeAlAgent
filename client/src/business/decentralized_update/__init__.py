@@ -36,7 +36,7 @@ Living Tree AI P2P Decentralized Update System
 
 使用示例：
 ```python
-from core.decentralized_update import get_update_manager, initialize_update_system
+from client.src.business.decentralized_update import get_update_manager, initialize_update_system
 
 # 初始化
 manager = await initialize_update_system()

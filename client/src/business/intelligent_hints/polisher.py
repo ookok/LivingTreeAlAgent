@@ -88,7 +88,7 @@ class LightweightPolisher:
             return None
 
         try:
-            from core.smolllm2 import get_l0_router
+            from client.src.business.smolllm2 import get_l0_router
             return get_l0_router()
         except ImportError:
             try:
@@ -317,7 +317,7 @@ class HermesPolisher:
             return self._client
 
         try:
-            from core.smolllm2 import get_l0_router
+            from client.src.business.smolllm2 import get_l0_router
             return get_l0_router()
         except ImportError:
             try:

@@ -27,7 +27,7 @@ from datetime import datetime
 
 # 导入 intelligent_hints 模块
 try:
-    from core.intelligent_hints import (
+    from client.src.business.intelligent_hints import (
         ContextSniffer,
         ContextInfo,
         HintIntentEngine,

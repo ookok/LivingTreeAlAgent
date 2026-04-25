@@ -242,7 +242,7 @@ class UnifiedPipeline:
     def clarifier(self):
         """需求澄清器"""
         if self._clarifier is None:
-            from core.conversational_clarifier import ConversationalClarifier
+            from client.src.business.conversational_clarifier import ConversationalClarifier
             self._clarifier = ConversationalClarifier()
         return self._clarifier
     
@@ -258,7 +258,7 @@ class UnifiedPipeline:
     def ollama_client(self):
         """Ollama 客户端"""
         if self._ollama_client is None:
-            from core.ollama_client import OllamaClient
+            from client.src.business.ollama_client import OllamaClient
 
             self._ollama_client = OllamaClient(base_url=self.ollama_url)
         return self._ollama_client

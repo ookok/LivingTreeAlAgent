@@ -12,7 +12,7 @@ sys.stderr.reconfigure(encoding='utf-8')
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.message_patterns import (
+from client.src.business.message_patterns import (
     MessagePattern, PatternManager, get_pattern_manager,
     VariableResolver, ResolverContext, ContextBuilder, get_variable_resolver,
     PatternMatcher, IntentClassifier, get_pattern_matcher, get_intent_classifier,
@@ -207,7 +207,7 @@ def test_effectiveness_evaluator():
     evaluator = get_effectiveness_evaluator()
 
     # 创建模拟评估
-    from core.message_patterns import PatternUsageRecord
+    from client.src.business.message_patterns import PatternUsageRecord
 
     test_output = """## 分析结果
 

@@ -12,8 +12,8 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from client.src.business.config import AppConfig, OllamaConfig
-from core.ollama_client import OllamaClient
-from core.model_priority_loader import ModelBackend, LocalModelPriorityLoader
+from client.src.business.ollama_client import OllamaClient
+from client.src.business.model_priority_loader import ModelBackend, LocalModelPriorityLoader
 
 
 @dataclass
@@ -361,8 +361,8 @@ class ModelManager:
             is_ollama_fallback: 是否为Ollama模型的备用下载，如果是则在HTTP下载失败后尝试Ollama pull
         """
         try:
-            from core.unified_downloader import get_download_center
-            from core.unified_downloader import DownloadStatus, SourceType
+            from client.src.business.unified_downloader import get_download_center
+            from client.src.business.unified_downloader import DownloadStatus, SourceType
             
             # 构建下载URL
             model_url = f"https://modelscope.cn/models/{model_info['modelscope_repo']}/resolve/master/{model_info['gguf_file']}"

@@ -450,7 +450,7 @@ def quick_store(content: str, memory_type: str = "session") -> bool:
     
     用法：
     ```python
-    from core.unified_memory_integration import quick_store
+    from client.src.business.unified_memory_integration import quick_store
     quick_store("用户偏好深色主题", "semantic")
     ```
     """
@@ -488,7 +488,7 @@ def quick_retrieve(query: str, memory_type: str = None) -> List[Dict]:
     
     用法：
     ```python
-    from core.unified_memory_integration import quick_retrieve
+    from client.src.business.unified_memory_integration import quick_retrieve
     results = quick_retrieve("用户偏好", "semantic")
     ```
     """

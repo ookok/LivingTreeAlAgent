@@ -12,7 +12,7 @@ Error Logger - 错误日志管理系统
 5. 与智能诊断引擎集成
 
 使用方式：
-    from core.error_management import get_error_logger
+    from client.src.business.error_management import get_error_logger
     
     error_logger = get_error_logger()
     try:

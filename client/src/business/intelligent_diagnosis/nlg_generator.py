@@ -15,7 +15,7 @@ NLG Generator - 自然语言生成系统
 3. 技术描述（面向开发者）
 
 Usage:
-    from core.intelligent_diagnosis import NLGGenerator, UserLevel
+    from client.src.business.intelligent_diagnosis import NLGGenerator, UserLevel
 
     nlg = NLGGenerator()
     desc = nlg.generate(error_entry, UserLevel.NOVICE)

@@ -611,7 +611,7 @@ class SmartAI Router:
                             context: Dict) -> AIResponse:
         """执行本地模型"""
         try:
-            from core.ollama_client import OllamaClient
+            from client.src.business.ollama_client import OllamaClient
 
             client = OllamaClient(base_url="http://localhost:11434")
             model = endpoint.endpoint if endpoint else "qwen2:1.5b"

@@ -652,7 +652,7 @@ class SystemBrain:
         """
         if self._ui_automation is None:
             try:
-                from core.ui_automation import UIAutomation
+                from client.src.business.ui_automation import UIAutomation
                 self._ui_automation = UIAutomation(system_brain=self)
             except ImportError as e:
                 raise ImportError(
@@ -714,7 +714,7 @@ class SystemBrain:
             ReasoningModelClient 实例
         """
         if self._reasoning_client is None:
-            from core.reasoning_client import ReasoningModelClient, ReasoningConfig
+            from client.src.business.reasoning_client import ReasoningModelClient, ReasoningConfig
 
             model_name = self.current_model or "deepseek-r1:1.5b"
 

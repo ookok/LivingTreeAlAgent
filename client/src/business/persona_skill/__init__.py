@@ -12,7 +12,7 @@ Persona Skill 系统 - 角色智库
 - persona_engine.py: 人格化引擎（集成 RelayFreeLLM + 记忆宫殿）
 
 使用示例：
->>> from core.persona_skill import PersonaEngine, PersonaRegistry
+>>> from client.src.business.persona_skill import PersonaEngine, PersonaRegistry
 >>> 
 >>> # 创建引擎
 >>> engine = PersonaEngine()

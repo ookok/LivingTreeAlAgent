@@ -19,7 +19,7 @@ from typing import Optional, Callable, Dict, List, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.tools_registry import ToolRegistry, ToolDef
+from client.src.business.tools_registry import ToolRegistry, ToolDef
 
 
 class ToolCapability(Enum):

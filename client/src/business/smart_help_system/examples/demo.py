@@ -17,7 +17,7 @@ from datetime import datetime
 # 添加项目根目录到路径
 sys.path.insert(0, 'd:/mhzyapp/hermes-desktop')
 
-from core.smart_help_system import (
+from client.src.business.smart_help_system import (
     SmartHelpController,
     QuestionSanitizer,
     PlatformSelector,

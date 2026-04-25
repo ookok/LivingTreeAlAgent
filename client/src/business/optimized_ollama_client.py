@@ -17,7 +17,7 @@ Date: 2026-04-22
 import logging
 from typing import Callable, Iterator, Optional, List, Dict, Any
 
-from core.ollama_client import OllamaClient, ChatMessage, StreamChunk
+from client.src.business.ollama_client import OllamaClient, ChatMessage, StreamChunk
 from client.src.business.config import OllamaConfig
 from client.src.business.context_preprocessor import ContextPreprocessor, ProcessingStats
 

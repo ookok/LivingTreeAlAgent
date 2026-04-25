@@ -349,7 +349,7 @@ class ConnectorHub:
                         body: str, attachments: List[str] = None):
         """发送邮件 (通过邮箱通道)"""
         # 复用去中心化邮箱
-        from core.decentralized_mailbox import get_mailbox_hub
+        from client.src.business.decentralized_mailbox import get_mailbox_hub
         
         hub = await get_mailbox_hub()
         

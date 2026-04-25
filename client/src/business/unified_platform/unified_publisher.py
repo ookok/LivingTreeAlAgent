@@ -194,7 +194,7 @@ class UnifiedPublisher:
         # 尝试导入并初始化各平台
         try:
             # 导入邮箱模块
-            from core.decentralized_mailbox import MailboxHub
+            from client.src.business.decentralized_mailbox import MailboxHub
             self.mailbox = MailboxHub.get_instance()
             logger.info("Mailbox module initialized")
         except Exception as e:
@@ -203,7 +203,7 @@ class UnifiedPublisher:
 
         try:
             # 导入论坛模块
-            from core.forum import ForumHub
+            from client.src.business.forum import ForumHub
             self.forum = ForumHub()
             logger.info("Forum module initialized")
         except Exception as e:

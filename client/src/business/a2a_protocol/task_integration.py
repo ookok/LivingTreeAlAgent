@@ -88,7 +88,7 @@ class TaskConverter:
     @staticmethod
     def to_task_node(a2a_task, depth: int = 0) -> 'TaskNode':
         """从 A2A Task 转换为 TaskNode"""
-        from core.task_router import TaskNode, TaskStatus as RouterTaskStatus
+        from client.src.business.task_router import TaskNode, TaskStatus as RouterTaskStatus
         
         input_data = a2a_task.input_data
         

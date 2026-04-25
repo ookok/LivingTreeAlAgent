@@ -45,11 +45,11 @@ def _get_skill_evolution():
     return SkillEvolutionAgent
 
 def _get_knowledge_graph():
-    from core.knowledge_graph import KnowledgeGraph
+    from client.src.business.knowledge_graph import KnowledgeGraph
     return KnowledgeGraph
 
 def _get_unified_cache():
-    from core.unified_cache import UnifiedCache
+    from client.src.business.unified_cache import UnifiedCache
     return UnifiedCache
 
 def _get_ollama_url():
@@ -606,7 +606,7 @@ class ExpertGuidedLearningSystem:
         """专家模型生成（使用 L4）"""
         try:
             # 使用 L4 模型（qwen3.5:9b）
-            from core.ollama_client import OllamaClient, OllamaConfig, ChatMessage
+            from client.src.business.ollama_client import OllamaClient, OllamaConfig, ChatMessage
             config = OllamaConfig(
                 base_url=self.config.get("ollama_url") or _get_ollama_url()
             )

@@ -68,7 +68,7 @@ async def task_dispatch_example():
     from client.src.business.a2a_protocol.gateway import create_a2a_gateway
     from client.src.business.a2a_protocol import Task
     from client.src.business.a2a_protocol.task_integration import create_a2a_task_manager, AgentType
-    from core.task_router import TaskNode, TaskStatus as RouterStatus
+    from client.src.business.task_router import TaskNode, TaskStatus as RouterStatus
     
     # 创建任务管理器
     manager = create_a2a_task_manager()
@@ -276,7 +276,7 @@ async def integrate_with_task_system():
         AgentType
     )
     from client.src.business.task_execution_engine import TaskContext, TaskNode as ExecTaskNode, TaskStatus as ExecStatus
-    from core.task_router import TaskNode, TaskStatus as RouterStatus
+    from client.src.business.task_router import TaskNode, TaskStatus as RouterStatus
     
     # 1. 创建 A2A 任务管理器
     manager = create_a2a_task_manager(

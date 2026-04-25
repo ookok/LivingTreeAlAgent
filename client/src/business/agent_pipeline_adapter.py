@@ -13,7 +13,7 @@ HermesAgent Pipeline Integration Adapter
 
 使用方法：
 ```python
-from core.agent_pipeline_adapter import HermesAgentPipelineAdapter
+from client.src.business.agent_pipeline_adapter import HermesAgentPipelineAdapter
 
 # 方式 1: 直接使用流水线
 adapter = HermesAgentPipelineAdapter()
@@ -42,7 +42,7 @@ from client.src.business.unified_pipeline import (
     PipelineContext,
     IntentType,
 )
-from core.ollama_client import StreamChunk
+from client.src.business.ollama_client import StreamChunk
 
 logger = logging.getLogger(__name__)
 

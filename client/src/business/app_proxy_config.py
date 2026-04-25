@@ -14,7 +14,7 @@ AppProxyConfig - 应用代理配置模块
 - 不再分散设置多个环境变量
 
 使用方式：
-    from core.app_proxy_config import AppProxyConfig
+    from client.src.business.app_proxy_config import AppProxyConfig
 
     # 获取统一配置实例（单例）
     config = AppProxyConfig.get_instance()

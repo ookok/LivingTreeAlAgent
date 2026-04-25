@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # 导入 FFmpeg 模块
 try:
-    from core.ffmpeg_tool import (
+    from client.src.business.ffmpeg_tool import (
         FFmpegTool, FFmpegRecorder, FFmpegPipeline,
         get_ffmpeg, PRESET_BALANCED
     )

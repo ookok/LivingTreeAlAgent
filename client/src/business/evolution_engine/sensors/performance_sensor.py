@@ -57,7 +57,7 @@ class PerformanceSensor(BaseSensor):
         """延迟获取 ResourceMonitor"""
         if self._resource_monitor is None:
             try:
-                from core.resource_monitor import ResourceMonitor
+                from client.src.business.resource_monitor import ResourceMonitor
                 self._resource_monitor = ResourceMonitor()
             except ImportError:
                 logger.warning("[PerformanceSensor] ResourceMonitor 不可用")

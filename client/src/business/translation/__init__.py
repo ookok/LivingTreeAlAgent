@@ -11,7 +11,7 @@ Translation - 翻译核心模块
 - translation_hub: 核心调度器 (缓存/历史/统计/搜索集成)
 
 使用方式:
-    from core.translation import get_translation_hub
+    from client.src.business.translation import get_translation_hub
 
     hub = get_translation_hub()
 

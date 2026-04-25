@@ -204,7 +204,7 @@ class IntelligentMemoryAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.intelligent_memory import get_memory_system
+        from client.src.business.intelligent_memory import get_memory_system
         self._system = get_memory_system()
         self._type_map = {
             MemoryType.SESSION: "qa",
@@ -237,7 +237,7 @@ class IntelligentMemoryAdapter(IMemorySystem):
         
         # 存储实体
         if item.entities:
-            from core.intelligent_memory import Entity
+            from client.src.business.intelligent_memory import Entity
             for entity_name in item.entities[:5]:
                 entity = Entity(
                     name=entity_name,
@@ -296,7 +296,7 @@ class EnhancedMemoryAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.enhanced_memory import get_enhanced_memory_system
+        from client.src.business.enhanced_memory import get_enhanced_memory_system
         self._system = get_enhanced_memory_system()
     
     @property
@@ -359,7 +359,7 @@ class CogneeMemoryAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.cognee_memory import get_cognee_memory
+        from client.src.business.cognee_memory import get_cognee_memory
         import asyncio
         self._system = get_cognee_memory()
         self._loop = asyncio.new_event_loop()
@@ -378,7 +378,7 @@ class CogneeMemoryAdapter(IMemorySystem):
     
     def store(self, item: MemoryItem) -> str:
         """存储到Cognee记忆系统"""
-        from core.cognee_memory import MemoryType as CogneeType
+        from client.src.business.cognee_memory import MemoryType as CogneeType
         
         cognee_type = {
             MemoryType.SEMANTIC: CogneeType.PERMANENT,
@@ -431,7 +431,7 @@ class GBrainMemoryAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.gbrain_memory import get_brain_agent, PageManager
+        from client.src.business.gbrain_memory import get_brain_agent, PageManager
         self._agent = get_brain_agent()
         self._manager = PageManager()
     
@@ -589,7 +589,7 @@ class MemoryPalaceAdapter(IMemorySystem):
     """
     
     def __init__(self):
-        from core.memory_palace import get_memory_palace, MemoryLevel
+        from client.src.business.memory_palace import get_memory_palace, MemoryLevel
         self._system = get_memory_palace()
         self._level_map = {
             MemoryType.WORKING: MemoryLevel.DRAWER,
@@ -611,7 +611,7 @@ class MemoryPalaceAdapter(IMemorySystem):
     
     def store(self, item: MemoryItem) -> str:
         """存储到记忆宫殿"""
-        from core.memory_palace import MemoryLevel
+        from client.src.business.memory_palace import MemoryLevel
         
         level = self._level_map.get(item.memory_type, MemoryLevel.ROOM)
         

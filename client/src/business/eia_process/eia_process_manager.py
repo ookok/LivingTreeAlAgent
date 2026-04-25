@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from core.eia_process import (
+from client.src.business.eia_process import (
     ProcessType, EIAReport, ProcessStep, Pollutant, EIAMitigation
 )
 from core.eia_process.agents.process_parser import ProcessParser

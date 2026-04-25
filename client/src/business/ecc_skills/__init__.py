@@ -695,12 +695,12 @@ class SkillRegistry:
     async def _execute_tool(self, step: SkillStep, parameters: Dict[str, Any]) -> Any:
         """执行工具"""
         # 获取工具执行器
-        from core.tools_registry import ToolRegistry
+        from client.src.business.tools_registry import ToolRegistry
         
         tool = ToolRegistry.get(step.tool_name)
         if not tool:
             # 尝试通过 ToolDispatcher
-            from core.tools_registry import ToolDispatcher
+            from client.src.business.tools_registry import ToolDispatcher
             dispatcher = ToolDispatcher({})
             result = dispatcher.dispatch(step.tool_name, parameters)
             return result

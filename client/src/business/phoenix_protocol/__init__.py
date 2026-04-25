@@ -913,7 +913,7 @@ class CarrierAdapterManager:
 
     async def store_dna(self, dna: PhoenixDNA, carriers: Optional[List[CarrierType]] = None) -> List[ShardLocation]:
         """在多个载体上存储DNA"""
-        from core.phoenix_protocol import DNAManager
+        from client.src.business.phoenix_protocol import DNAManager
 
         dna_manager = DNAManager(self.config)
         shards = dna_manager.split_dna(dna)

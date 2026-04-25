@@ -20,7 +20,7 @@ import time
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
-from core.tools_registry import ToolRegistry, tool
+from client.src.business.tools_registry import ToolRegistry, tool
 
 logger = logging.getLogger(__name__)
 

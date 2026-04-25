@@ -171,12 +171,12 @@ class TestProxyGateway(unittest.TestCase):
     
     def test_import(self):
         """测试导入"""
-        from core.proxy import SmartProxyGateway
+        from client.src.business.proxy import SmartProxyGateway
         self.assertIsNotNone(SmartProxyGateway)
     
     def test_gateway_creation(self):
         """测试网关创建"""
-        from core.proxy import SmartProxyGateway
+        from client.src.business.proxy import SmartProxyGateway
         gateway = SmartProxyGateway()
         self.assertIsNotNone(gateway)
 

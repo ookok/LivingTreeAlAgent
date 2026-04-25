@@ -8,7 +8,7 @@ import pytest
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from core.proxy import (
+from client.src.business.proxy import (
     ProxyType, RequestPriority, ProxyConfig, EndpointConfig,
     SmartProxyGateway
 )
@@ -216,7 +216,7 @@ class TestProxyGatewaySingleton:
     
     def test_get_proxy_gateway(self):
         """测试获取全局实例"""
-        from core.proxy import get_proxy_gateway
+        from client.src.business.proxy import get_proxy_gateway
         
         # 重置单例
         SmartProxyGateway._instance = None

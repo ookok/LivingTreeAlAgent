@@ -19,6 +19,7 @@ from .code_handler import CodeDebugHandler
 from .knowledge_handler import KnowledgeQueryHandler
 from .knowledge_handler import ConceptExplainerHandler
 from .file_handler import FileOperationHandler
+from .websearch_handler import WebSearchHandler
 
 __all__ = [
     'BaseActionHandler',
@@ -33,4 +34,5 @@ __all__ = [
     'KnowledgeQueryHandler',
     'ConceptExplainerHandler',
     'FileOperationHandler',
+    'WebSearchHandler',
 ]

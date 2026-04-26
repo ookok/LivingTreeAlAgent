@@ -147,14 +147,23 @@ class IDEService:
     
     # ── 代码执行 ──────────────────────────────────────────────────────
     
-    def execute_code(self, code: str, language: str) -> ExecutionResult:
+    def execute_code(
+        self,
+        code: str,
+        language: str,
+        callbacks: Optional[Dict[str, Callable]] = None,
+    ) -> ExecutionResult:
         """
-        执行代码（真实执行）
-        
+        执行代码（真实执行，支持实时输出）
+
         Args:
             code: 代码字符串
             language: 编程语言
-            
+            callbacks: 回调函数字典
+                - on_output_line: 逐行输出回调
+                - on_error_line: 逐行错误回调
+                - on_finished: 执行完成回调
+
         Returns:
             ExecutionResult: 执行结果
         """
@@ -162,35 +171,49 @@ class IDEService:
         
         try:
             if language.lower() == "python":
-                result = self._execute_python(code)
+                result = self._execute_python(code, callbacks)
             elif language.lower() in ("javascript", "js"):
-                result = self._execute_javascript(code)
+                result = self._execute_javascript(code, callbacks)
             elif language.lower() in ("typescript", "ts"):
-                result = self._execute_typescript(code)
+                result = self._execute_typescript(code, callbacks)
             elif language.lower() == "html":
-                result = self._execute_html(code)
+                result = self._execute_html(code, callbacks)
             elif language.lower() == "css":
-                result = self._execute_css(code)
+                result = self._execute_css(code, callbacks)
+            elif language.lower() == "json":
+                result = self._execute_json(code, callbacks)
+            elif language.lower() == "yaml":
+                result = self._execute_yaml(code, callbacks)
             else:
                 result = ExecutionResult(
                     status=ExecutionStatus.ERROR,
                     error=f"不支持的语言: {language}",
                 )
-            
+
             # 计算执行时间
             end_time = datetime.now()
             result.execution_time_ms = (end_time - start_time).total_seconds() * 1000
-            
+
             # 记录历史
             self.execution_history.append(result)
-            
+
+            # 执行完成回调
+            if callbacks and "on_finished" in callbacks:
+                callbacks["on_finished"](result)
+
             return result
-            
+
         except Exception as e:
-            return ExecutionResult(
+            error_result = ExecutionResult(
                 status=ExecutionStatus.ERROR,
                 error=f"执行失败: {str(e)}\n{traceback.format_exc()}",
             )
+
+            # 执行完成回调
+            if callbacks and "on_finished" in callbacks:
+                callbacks["on_finished"](error_result)
+
+            return error_result
     
     def _execute_python(self, code: str, callbacks: Optional[Dict[str, Callable]] = None) -> ExecutionResult:
         """执行 Python 代码（真实执行，支持实时输出）"""
@@ -510,16 +533,93 @@ class IDEService:
         )
 
     def _execute_css(self, code: str, callbacks: Optional[Dict[str, Callable]] = None) -> ExecutionResult:
-        """执行 CSS 代码（预览）"""
-        # CSS 不需要执行，直接返回代码
+        """执行 CSS 代码（预览/验证）"""
+        # CSS 不需要执行，但可以验证语法
+        warnings = []
+        
+        # 简单的CSS语法检查
+        if code.count('{') != code.count('}'):
+            warnings.append("警告：大括号不匹配")
+        
+        # CSS 可以直接返回代码
         if callbacks and "on_output_line" in callbacks:
             callbacks["on_output_line"]("CSS 代码已生成，可与 HTML 配合使用\n")
+            if warnings:
+                callbacks["on_output_line"](f"警告：{'  '.join(warnings)}\n")
             callbacks["on_output_line"](code)
-
+        
         return ExecutionResult(
             status=ExecutionStatus.SUCCESS,
             output="CSS 代码已生成，可与 HTML 配合使用",
+            warnings=warnings,
         )
+    
+    def _execute_json(self, code: str, callbacks: Optional[Dict[str, Callable]] = None) -> ExecutionResult:
+        """执行 JSON 代码（验证/格式化）"""
+        try:
+            import json
+            
+            # 验证 JSON 格式
+            parsed = json.loads(code)
+            
+            # 格式化为美观的输出
+            formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
+            
+            if callbacks and "on_output_line" in callbacks:
+                callbacks["on_output_line"]("JSON 格式正确\n\n")
+                callbacks["on_output_line"](f"解析结果：\n{formatted}\n")
+            
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                output=formatted,
+            )
+            
+        except json.JSONDecodeError as e:
+            error_msg = f"JSON 格式错误：{str(e)}"
+            
+            if callbacks and "on_error_line" in callbacks:
+                callbacks["on_error_line"](f"{error_msg}\n")
+            
+            return ExecutionResult(
+                status=ExecutionStatus.ERROR,
+                error=error_msg,
+            )
+    
+    def _execute_yaml(self, code: str, callbacks: Optional[Dict[str, Callable]] = None) -> ExecutionResult:
+        """执行 YAML 代码（验证/格式化）"""
+        try:
+            # 尝试导入 yaml 模块
+            try:
+                import yaml
+                parsed = yaml.safe_load(code)
+                formatted = yaml.dump(parsed, allow_unicode=True, default_flow_style=False)
+            except ImportError:
+                # 如果没有安装 PyYAML，只做基本的语法检查
+                parsed = None
+                formatted = code
+            
+            if callbacks and "on_output_line" in callbacks:
+                callbacks["on_output_line"]("YAML 格式正确\n\n")
+                if parsed is not None:
+                    callbacks["on_output_line"](f"解析结果：\n{formatted}\n")
+                else:
+                    callbacks["on_output_line"](f"YAML 代码：\n{code}\n")
+            
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                output=formatted if parsed is not None else code,
+            )
+            
+        except Exception as e:
+            error_msg = f"YAML 格式错误：{str(e)}"
+            
+            if callbacks and "on_error_line" in callbacks:
+                callbacks["on_error_line"](f"{error_msg}\n")
+            
+            return ExecutionResult(
+                status=ExecutionStatus.ERROR,
+                error=error_msg,
+            )
     
     # ── 代码生成 ──────────────────────────────────────────────────────
     

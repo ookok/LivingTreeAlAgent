@@ -111,6 +111,85 @@ class ErrorChunk:
 
 
 
+# ============= 置信度评估引擎 =============
+
+class ConfidenceEngine:
+    """
+    置信度评估引擎
+    对思考片段、动作、结果进行置信度评分（0-1）
+    """
+    
+    def evaluate_thought(
+        self,
+        thought: str,
+        context: Optional[Dict[str, Any]] = None,
+        history: Optional[List[str]] = None,
+    ) -> float:
+        """
+        评估思考片段的置信度（0-1）
+        
+        评分因素：
+        - 长度（越长越自信）
+        - 确定性关键词（"确定"/"一定" vs "可能"/"也许"）
+        - 历史一致性（与历史对话的关键词重叠度）
+        """
+        score = 0.5  # 基础分
+        
+        # 长度加分
+        if len(thought) > 200:
+            score += 0.2
+        elif len(thought) > 80:
+            score += 0.1
+        
+        # 确定性关键词
+        high_conf = ["确定", "一定", "必然", "毫无疑问", "显然"]
+        mid_conf = ["应该", "可能", "也许", "大概", "估计"]
+        low_conf = ["不确定", "不清楚", "不知道", "可能不对"]
+        
+        if any(k in thought for k in high_conf):
+            score += 0.2
+        elif any(k in thought for k in mid_conf):
+            score += 0.05
+        elif any(k in thought for k in low_conf):
+            score -= 0.3
+        
+        # 历史一致性（简单重叠检查）
+        if history and len(history) > 0:
+            history_text = " ".join(history[-3:])  # 只看最近 3 轮
+            tokens = set(thought.split())
+            history_tokens = set(history_text.split())
+            overlap = len(tokens & history_tokens)
+            if overlap > 5:
+                score += 0.1
+            elif overlap == 0 and len(thought) > 50:
+                score -= 0.1  # 与历史完全无关，稍微降分
+        
+        return min(max(score, 0.0), 1.0)
+    
+    def evaluate_action(
+        self,
+        action_type: str,
+        params: Dict[str, Any],
+    ) -> float:
+        """
+        评估动作的置信度（0-1）
+        
+        评分因素：
+        - 参数完整性
+        - 动作类型是否常见
+        """
+        score = 0.5
+        
+        if params and len(params) > 0:
+            score += 0.3
+        
+        common_actions = ["search", "calculate", "read_file", "write_file", "translate", "summarize"]
+        if action_type in common_actions:
+            score += 0.2
+        
+        return min(max(score, 0.0), 1.0)
+    
+
 # ============= 思考解析器 =============
 
 class ThoughtParser:
@@ -123,11 +202,21 @@ class ThoughtParser:
     3. 最终答案
     """
     
-    # 动作标记模式
+    # 动作标记模式（扩展版）
     ACTION_PATTERNS = [
-        r"ACTION:\s*(\w+)\s*\((.*?)\)",  # ACTION: search(query="xxx")
-        r"执行动作:\s*(\w+)\s*(.*)",      # 执行动作: search query="xxx"
-        r"```action\s*\n(.*?)\n```",     # ```action\nsearch(...)\n```
+        # 原有模式
+        r"ACTION:\s*(\w+)\s*\((.*?)\)",          # ACTION: search(query="xxx")
+        r"执行动作:\s*(\w+)\s*\((.*?)\)",      # 执行动作: search(query="xxx")
+        r"```action\s*\n(.*?)\n```",               # ```action\nsearch(...)\n```
+        # 新增模式（中文/简洁风格）
+        r"执行[:：]\s*(\w+)\s*\((.*?)\)",        # 执行：search(query="xxx") / 执行:search(...)
+        r"动作[:：]\s*(\w+)\s*\((.*?)\)",          # 动作：search(...) / 动作:search(...)
+        r"调用[:：]\s*(\w+)\s*\((.*?)\)",          # 调用：search(...) / 调用:search(...)
+        r"→\s*(\w+)\s*\((.*?)\)",                    # → search(query="xxx")
+        r"➡️\s*(\w+)\s*\((.*?)\)",                  # ➡️ search(...)
+        # 自然语言动作标记
+        r"我需要(调用|执行|查询|计算|搜索|查看)\s*[:：]?\s*(.+)",  # 我需要调用: search ...
+        r"应该(调用|执行|查询|计算|搜索)\s*[:：]?\s*(.+)", # 应该执行：search ...
     ]
     
     def __init__(self):
@@ -223,7 +312,8 @@ class StreamingThoughtExecutor:
         self.model_router = model_router
         self.action_executor = action_executor
         self.thought_parser = ThoughtParser()
-        
+        self.confidence_engine = ConfidenceEngine()
+
         logger.info("StreamingThoughtExecutor 初始化完成")
     
     async def execute_stream(self, intent: str, context: Dict[str, Any] = None) -> AsyncIterator[Dict]:

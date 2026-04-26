@@ -174,7 +174,6 @@ class UnifiedPipeline:
         self._skill_agent = None
         self._clarifier = None
         self._memory_palace = None
-        self._ollama_client = None
 
         logger.info(f"UnifiedPipeline 初始化完成 (ollama_url={self.ollama_url})")
 
@@ -253,15 +252,6 @@ class UnifiedPipeline:
             from core.memory_palace.models import MemoryPalace
             self._memory_palace = MemoryPalace()
         return self._memory_palace
-    
-    @property
-    def ollama_client(self):
-        """Ollama 客户端"""
-        if self._ollama_client is None:
-            from client.src.business.ollama_client import OllamaClient
-
-            self._ollama_client = OllamaClient(base_url=self.ollama_url)
-        return self._ollama_client
     
     # ── 核心处理流程 ────────────────────────────────────────────────────────
     
@@ -676,14 +666,23 @@ class UnifiedPipeline:
         model: str = None,
         stream: bool = False
     ) -> str:
-        """调用 LLM"""
+        """调用 LLM（使用全局模型路由器）"""
         model = model or self.l4_model
         
         try:
-            response = self.ollama_client.generate(
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            
+            # 根据是否流式选择能力
+            if stream:
+                capability = ModelCapability.STREAMING
+            else:
+                capability = ModelCapability.CHAT
+            
+            response = call_model_sync(
+                capability=capability,
                 prompt=prompt,
-                model=model,
-                stream=stream
+                system_prompt="你是一个有用的AI助手。"
             )
             
             if isinstance(response, dict):

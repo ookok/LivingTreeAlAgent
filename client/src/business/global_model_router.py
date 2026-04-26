@@ -757,3 +757,52 @@ def set_global_router(router: GlobalModelRouter):
     """设置全局路由器实例"""
     global _global_router
     _global_router = router
+
+
+# ============= 同步调用辅助函数 =============
+
+def call_model_sync(capability: ModelCapability,
+                    prompt: str,
+                    system_prompt: str = "",
+                    strategy: RoutingStrategy = RoutingStrategy.AUTO,
+                    context_length: int = 0,
+                    use_cache: bool = True) -> str:
+    """
+    同步调用模型（供非异步函数使用）
+    
+    内部使用 asyncio.run() 调用异步的 call_model()
+    注意：如果已有事件循环运行，此方法会失败
+    
+    Args:
+        capability: 需要的能力
+        prompt: 用户提示
+        system_prompt: 系统提示
+        strategy: 路由策略
+        context_length: 需要的上下文长度
+        use_cache: 是否使用缓存
+    
+    Returns:
+        模型输出文本
+    """
+    router = get_global_router()
+    
+    try:
+        # 尝试获取当前事件循环
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 已有运行中的事件循环，使用 run_until_complete
+            # 注意：在某些环境中可能不支持
+            return asyncio.run_coroutine_threadsafe(
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache),
+                loop
+            ).result(timeout=120)
+        else:
+            # 没有运行中的循环，使用 asyncio.run()
+            return asyncio.run(
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache)
+            )
+    except RuntimeError:
+        # 没有事件循环，创建新的
+        return asyncio.run(
+            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache)
+        )

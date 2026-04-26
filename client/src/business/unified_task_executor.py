@@ -112,7 +112,6 @@ class UnifiedTaskExecutor:
         self._max_workers = max_workers
         self._default_strategy = default_strategy
         self._default_model = default_model or get_l1_model()
-        self._ollama_client = None
         self._smart_executor = None
         self._skill_registry = {}
         self._executor = None
@@ -122,45 +121,14 @@ class UnifiedTaskExecutor:
     # ── 属性懒加载 ────────────────────────────────────────────────────────────
 
     @property
-    def ollama_client(self):
-        """Ollama 客户端（使用 requests 直接调用）"""
-        if self._ollama_client is None:
-            self._ollama_client = self._create_simple_client()
-        return self._ollama_client
-
-    def _create_simple_client(self):
-        """创建简化的 Ollama 客户端"""
-        import requests
-
-        class SimpleOllamaClient:
-            def __init__(self, base_url):
-                self.base_url = base_url
-
-            def chat_sync(self, messages, model=None, **kwargs):
-                from client.src.business.config_provider import get_l1_model
-                model = model or get_l1_model()
-                content = messages[0]["content"] if isinstance(messages[0], dict) else messages[0].content
-                resp = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    json={"model": model, "messages": [{"role": "user", "content": content}]},
-                    timeout=kwargs.get("timeout", 60)
-                )
-                return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-
-        return SimpleOllamaClient(self._ollama_url)
-
-        return SimpleOllamaClient(self._ollama_url)
-
-    @property
     def smart_executor(self):
         """智能任务执行器（延迟加载）"""
         if self._smart_executor is None:
             try:
                 from client.src.business.task_execution_engine import SmartTaskExecutor
+                # SmartTaskExecutor 不接受 llm_client 和 max_subtasks_per_node 参数
                 self._smart_executor = SmartTaskExecutor(
-                    llm_client=self.ollama_client,
                     max_depth=3,
-                    max_subtasks_per_node=8
                 )
             except ImportError:
                 logger.warning("SmartTaskExecutor 不可用，使用简化执行器")
@@ -272,9 +240,14 @@ class UnifiedTaskExecutor:
         """执行单个任务"""
         # 调用 LLM 生成结果
         prompt = self._build_prompt(task, context)
-        model = kwargs.get("model", self._default_model)
-
-        output = self.ollama_client.chat_sync([{"role": "user", "content": prompt}], model=model, **kwargs)
+        
+        # 使用全局模型路由器（同步调用）
+        from client.src.business.global_model_router import call_model_sync, ModelCapability
+        output = call_model_sync(
+            capability=ModelCapability.CHAT,
+            prompt=prompt,
+            system_prompt="你是一个任务执行助手。"
+        )
 
         return ExecutionResult(
             task_id=context.task_id,
@@ -382,10 +355,12 @@ class UnifiedTaskExecutor:
 """
 
         try:
-            response = self.ollama_client.chat_sync(
-                [{"role": "user", "content": prompt}],
-                model=self._default_model,
-                max_tokens=500
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            response = call_model_sync(
+                capability=ModelCapability.REASONING,
+                prompt=prompt,
+                system_prompt="你是一个任务分解助手。将复杂任务分解为简单的子任务。"
             )
             # 解析子任务
             subtasks = []
@@ -417,10 +392,12 @@ class UnifiedTaskExecutor:
 """
 
         try:
-            return self.ollama_client.chat_sync(
-                [{"role": "user", "content": prompt}],
-                model=self._default_model,
-                max_tokens=2000
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            return call_model_sync(
+                capability=ModelCapability.CHAT,
+                prompt=prompt,
+                system_prompt="你是一个结果合并助手。将多个子任务的输出合并为一个连贯的答案。"
             )
         except Exception as e:
             logger.warning(f"结果合并失败: {e}")

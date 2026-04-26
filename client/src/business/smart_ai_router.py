@@ -609,20 +609,25 @@ class SmartAI Router:
 
     async def _execute_local(self, prompt: str, endpoint: Optional[TierEndpoint],
                             context: Dict) -> AIResponse:
-        """执行本地模型"""
+        """执行本地模型（使用全局模型路由器）"""
         try:
-            from client.src.business.ollama_client import OllamaClient
-
-            client = OllamaClient(base_url="http://localhost:11434")
+            # 使用全局模型路由器（异步调用）
+            from client.src.business.global_model_router import get_global_router, ModelCapability
+            router = get_global_router()
+            
             model = endpoint.endpoint if endpoint else "qwen2:1.5b"
-
-            result = await client.generate(model, prompt)
-
+            
+            result = await router.call_model(
+                capability=ModelCapability.CHAT,
+                prompt=prompt,
+                system_prompt="你是一个AI助手。"
+            )
+            
             return AIResponse(
-                content=result.get("response", ""),
+                content=result if isinstance(result, str) else result.get("response", ""),
                 tier_used=ComputeTier.LOCAL,
                 model_used=model,
-                tokens_used=result.get("eval_count", 0),
+                tokens_used=0,  # 无法准确获取
                 cost=0.0
             )
         except Exception as e:

@@ -190,19 +190,20 @@ class ExploratoryExecutor:
     async def _generate_candidates(
         self, goal: str, constraints: List[str], context: Dict[str, Any],
     ) -> List[CandidateSolution]:
-        """生成候选方案
-
-        使用 AI 生成多个候选解决方案。
-        """
-        from client.src.business.ollama_client import OllamaClient, OllamaConfig
-
+        """生成候选方案（使用全局模型路由器）"""
+        
         prompt = self._build_candidate_generation_prompt(goal, constraints, context)
 
         try:
-            from client.src.business.ollama_client import OllamaClient, OllamaConfig
-            config = OllamaConfig()
-            client = OllamaClient(config)
-            response = client.generate(prompt, config)
+            # 使用全局模型路由器（异步调用）
+            from client.src.business.global_model_router import get_global_router, ModelCapability
+            router = get_global_router()
+            
+            response = await router.call_model(
+                capability=ModelCapability.REASONING,
+                prompt=prompt,
+                system_prompt="你是一个探索性解决方案生成器。生成多个创新的候选方案。"
+            )
 
             candidates = self._parse_candidates_response(response)
             return candidates
@@ -464,9 +465,8 @@ class ExploratoryExecutor:
     async def _get_ai_feedback(
         self, result: ExplorationResult, goal: str, constraints: Optional[List[str]],
     ) -> Dict[str, Any]:
-        """获取 AI 对探索结果的反馈"""
-        from client.src.business.ollama_client import OllamaClient, OllamaConfig
-
+        """获取 AI 对探索结果的反馈（使用全局模型路由器）"""
+        
         if not result.best_solution:
             return {"should_stop": True}
 
@@ -494,10 +494,16 @@ class ExploratoryExecutor:
         """
 
         try:
-            from client.src.business.ollama_client import OllamaClient, OllamaConfig
-            config = OllamaConfig()
-            client = OllamaClient(config)
-            response = client.generate(prompt, config)
+            # 使用全局模型路由器（异步调用）
+            from client.src.business.global_model_router import get_global_router, ModelCapability
+            router = get_global_router()
+            
+            response = await router.call_model(
+                capability=ModelCapability.REASONING,
+                prompt=prompt,
+                system_prompt="你是一个方案评估专家。"
+            )
+            
             return self._parse_feedback_response(response)
         except Exception as e:
             logger.error(f"[ExploratoryExecutor] 获取 AI 反馈失败: {e}")

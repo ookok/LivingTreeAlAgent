@@ -603,21 +603,19 @@ class ExpertGuidedLearningSystem:
             return ""
 
     def _generate_expert(self, query: str) -> Optional[str]:
-        """专家模型生成（使用 L4）"""
+        """专家模型生成（使用 L4，已迁移到GlobalModelRouter）"""
         try:
-            # 使用 L4 模型（qwen3.5:9b）
-            from client.src.business.ollama_client import OllamaClient, OllamaConfig, ChatMessage
-            config = OllamaConfig(
-                base_url=self.config.get("ollama_url") or _get_ollama_url()
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            
+            # 使用 REASONING 能力（专家模型需要推理能力）
+            content = call_model_sync(
+                capability=ModelCapability.REASONING,
+                prompt=query,
+                system_prompt="你是一个专家级的AI助手，请提供深入、准确的回答。"
             )
-            client = OllamaClient(config)
-            messages = [ChatMessage(role="user", content=query)]
-            # 使用 chat_sync 同步获取完整响应
-            content, reasoning, _ = client.chat_sync(
-                messages,
-                model=self.config.get("expert_model", "qwen3.5:9b")
-            )
-            return content
+            
+            return content if isinstance(content, str) else content.get("response", "")
         except Exception as e:
             logger.info(f"[ExpertLearning] Expert generation failed: {e}")
             return None

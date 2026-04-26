@@ -271,20 +271,23 @@ class IntentEvolutionEngine:
         将当前模糊意图 + 已收集的上下文 发送给 AI，
         让 AI 输出澄清后的意图。
         """
-        from client.src.business.ollama_client import OllamaClient, OllamaConfig
-
+        from client.src.business.global_model_router import get_global_router, ModelCapability
+        
         current_intent = graph.get_latest_intent() or graph.root_intent
         context = graph.get_context()
-
+        
         # 构建提示词
         prompt = self._build_clarification_prompt(current_intent, context, graph)
-
+        
         try:
-            from client.src.business.ollama_client import OllamaClient, OllamaConfig
-            config = OllamaConfig()
-            client = OllamaClient(config)
-            response = client.generate(prompt, config)
-
+            # 使用全局模型路由器
+            router = get_global_router()
+            response = await router.call_model(
+                capability=ModelCapability.REASONING,
+                prompt=prompt,
+                system_prompt="你是一个意图澄清助手。将模糊的用户请求澄清为具体可执行的意图。",
+            )
+            
             # 解析 AI 响应
             return self._parse_clarification_response(response)
         except Exception as e:

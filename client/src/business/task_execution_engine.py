@@ -456,9 +456,13 @@ class SmartDecomposer:
     "strategy": "sequential/parallel/dag"
 }}"""
 
-            response = self.llm_client.chat([
-                {"role": "user", "content": prompt}
-            ])
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            response = call_model_sync(
+                capability=ModelCapability.REASONING,
+                prompt=prompt,
+                system_prompt="你是一个任务分解决策助手。"
+            )
 
             # 解析响应
             text = response if isinstance(response, str) else response.get("content", "")

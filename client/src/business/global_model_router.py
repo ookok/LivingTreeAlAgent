@@ -19,7 +19,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, List, Callable, Iterator, AsyncIterator, Tuple
+from typing import Optional, Dict, List, Callable, Iterator, AsyncIterator, Tuple, Union
 from pathlib import Path
 from collections import defaultdict, OrderedDict
 from functools import lru_cache
@@ -67,6 +67,7 @@ class ModelCapability(Enum):
     STREAMING = "streaming"                 # 流式输出
     FUNCTION_CALLING = "function_calling"   # 函数调用
     JSON_MODE = "json_mode"                 # JSON模式
+    EMBEDDING = "embedding"                 # 文本向量化
 
 
 class ModelBackend(Enum):
@@ -1259,6 +1260,109 @@ class GlobalModelRouter:
         # 注意：当前实现使用 daemon=True 线程，程序退出时自动停止
         # 如果需要手动停止，需要添加标志位
         logger.info("心跳任务将在程序退出时自动停止")
+
+    # ============= 向量化接口 =============
+
+    async def embeddings(
+        self,
+        texts: Union[str, List[str]],
+        model_id: str = "",
+        capability: ModelCapability = ModelCapability.EMBEDDING,
+    ) -> List[List[float]]:
+        """
+        文本向量化（异步）
+
+        Args:
+            texts: 单个文本或文本列表
+            model_id: 直接指定模型 ID（可选，不走路由）
+            capability: 能力类型（默认 EMBEDDING）
+
+        Returns:
+            向量列表（每个文本对应一个向量）
+        """
+        # 标准化为列表
+        if isinstance(texts, str):
+            texts = [texts]
+
+        # 路由到支持 EMBEDDING 的模型
+        if model_id:
+            if model_id not in self.models:
+                logger.error(f"模型不存在: {model_id}")
+                return []
+            model = self.models[model_id]
+        else:
+            model = self.route(capability, RoutingStrategy.AUTO)
+            if not model:
+                logger.error("无可用模型支持 embedding")
+                return []
+
+        # 根据后端调用不同 API
+        try:
+            if model.backend == ModelBackend.OLLAMA:
+                return await self._ollama_embeddings(model, texts)
+            elif model.backend == ModelBackend.OPENAI:
+                return await self._openai_embeddings(model, texts)
+            else:
+                logger.error(f"不支持的后端用于 embedding: {model.backend}")
+                return []
+        except Exception as e:
+            logger.error(f"embedding 调用异常: {e}")
+            return []
+
+    async def _ollama_embeddings(
+        self, model: ModelInfo, texts: List[str]
+    ) -> List[List[float]]:
+        """Ollama 向量化（/api/embeddings）"""
+        import aiohttp
+
+        url = model.config.get("url", "http://localhost:11434")
+        model_name = model.config.get("model", "qwen2.5")
+
+        results = []
+        for text in texts:
+            payload = {"model": model_name, "prompt": text}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{url}/api/embeddings", json=payload
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        embedding = data.get("embedding", [])
+                        results.append(embedding)
+                    else:
+                        logger.warning(f"Ollama embeddings 失败: {resp.status}")
+                        results.append([])
+        return results
+
+    async def _openai_embeddings(
+        self, model: ModelInfo, texts: List[str]
+    ) -> List[List[float]]:
+        """OpenAI 兼容向量化（/v1/embeddings）"""
+        try:
+            import openai
+
+            base_url = model.config.get("base_url")
+            api_key = model.config.get("api_key", "dummy")
+            model_name = model.config.get("model", "text-embedding-ada-002")
+            timeout = model.config.get("timeout", 60)
+
+            client = openai.AsyncOpenAI(
+                base_url=base_url if base_url else None,
+                api_key=api_key,
+                timeout=timeout,
+            )
+
+            response = await client.embeddings.create(
+                model=model_name,
+                input=texts,
+            )
+            return [item.embedding for item in response.data]
+        except ImportError:
+            logger.error("openai 包未安装，无法使用 OpenAI embeddings")
+            return []
+        except Exception as e:
+            logger.error(f"OpenAI embeddings 调用异常: {e}")
+            return []
 
 
 # ============= 全局实例 =============

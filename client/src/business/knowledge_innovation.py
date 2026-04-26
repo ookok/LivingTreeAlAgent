@@ -28,6 +28,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from client.src.business.global_model_router import get_global_router
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,7 +113,7 @@ class SemanticDeduplicator:
         """计算文本哈希（快速预检）"""
         return hashlib.sha256(text.strip().encode()).hexdigest()[:16]
 
-    def _get_embedding(self, text: str) -> Optional[List[float]]:
+    async def _get_embedding(self, text: str) -> Optional[List[float]]:
         """
         获取文本向量
 
@@ -129,7 +131,7 @@ class SemanticDeduplicator:
             vector = self._keyword_hash_vector(text)
         else:
             # 长文本：使用 LLM 向量化
-            vector = self._llm_embedding(text)
+            vector = await self._llm_embedding(text)
 
         if vector:
             with self._embedding_lock:
@@ -190,21 +192,13 @@ class SemanticDeduplicator:
         words = re.findall(r"[\w]+", text)
         return words
 
-    def _llm_embedding(self, text: str) -> Optional[List[float]]:
+    async def _llm_embedding(self, text: str) -> Optional[List[float]]:
         """LLM向量化（精确方法）"""
         try:
-            # 使用 Ollama 获取嵌入
-            from client.src.business.ollama_client import OllamaClient
-            client = OllamaClient()
-
-            # Ollama 的 embeddings API
-            response = client._session.post(
-                f"{client._base_url}/api/embeddings",
-                json={"model": self.embedding_model, "prompt": text[:1000]}
-            )
-
-            if response.status_code == 200:
-                return response.json().get("embedding")
+            router = get_global_router()
+            vectors = await router.embeddings(text)
+            if vectors and vectors[0]:
+                return vectors[0]
 
         except Exception as e:
             logger.warning(f"[SemanticDedup] LLM向量化失败: {e}")
@@ -226,7 +220,7 @@ class SemanticDeduplicator:
 
         return dot / (norm1 * norm2)
 
-    def is_duplicate(
+    async def is_duplicate(
         self,
         new_text: str,
         existing_texts: List[Tuple[str, str]],  # [(doc_id, text)]
@@ -247,7 +241,7 @@ class SemanticDeduplicator:
             return False, None, 0.0
 
         threshold = threshold or self.config["similarity_threshold"]
-        new_vector = self._get_embedding(new_text)
+        new_vector = await self._get_embedding(new_text)
 
         if not new_vector:
             return False, None, 0.0
@@ -258,7 +252,7 @@ class SemanticDeduplicator:
             if len(text) < self.config["min_text_length"]:
                 continue
 
-            existing_vector = self._get_embedding(text)
+            existing_vector = await self._get_embedding(text)
             if not existing_vector:
                 continue
 
@@ -1888,7 +1882,7 @@ class KnowledgeInnovationEngine:
         self.kg = get_kg_enhancer()
         self.forgetting = get_forgetting_mechanism()
 
-    def process_knowledge(
+    async def process_knowledge(
         self,
         doc_id: str,
         content: str,
@@ -1907,7 +1901,7 @@ class KnowledgeInnovationEngine:
         results = {}
 
         # 1. 语义去重
-        is_dup, dup_id, similarity = self.dedup.is_duplicate(
+        is_dup, dup_id, similarity = await self.dedup.is_duplicate(
             content,
             [(doc_id, c) for doc_id, c in [(doc_id, content)]]  # TODO: 从KB获取全部
         )
@@ -1963,7 +1957,7 @@ class KnowledgeInnovationEngine:
 # 测试
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_innovation_modules():
+async def test_innovation_modules():
     """测试创新模块"""
     logger.info("=" * 60)
     logger.info("测试知识库创新模块")
@@ -1979,7 +1973,7 @@ def test_innovation_modules():
         "JavaScript是脚本语言",
     ]
 
-    is_dup, dup_id, sim = dedup.is_duplicate(texts[1], [(f"doc_{i}", t) for i, t in enumerate(texts)])
+    is_dup, dup_id, sim = await dedup.is_duplicate(texts[1], [(f"doc_{i}", t) for i, t in enumerate(texts)])
     logger.info(f"   '{texts[1]}' 与已有文本重复: {is_dup}, 相似度: {sim:.3f}")
 
     # 2. 测试价值评估
@@ -2021,4 +2015,4 @@ def test_innovation_modules():
 
 
 if __name__ == "__main__":
-    test_innovation_modules()
+    asyncio.run(test_innovation_modules())

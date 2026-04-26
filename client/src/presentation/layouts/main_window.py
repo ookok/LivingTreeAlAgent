@@ -105,10 +105,12 @@ class MainWindow(QWidget):
         from .routes import register_default_routes
         register_default_routes(self._router)
 
-        # 注册主模块到侧边栏
-        main_routes = self._router.get_routes_by_category("main")
-        for route in main_routes:
-            self.sidebar.add_route(route)
+        # 注册所有类别的路由到侧边栏
+        categories = ["main", "domain", "tool"]
+        for category in categories:
+            routes = self._router.get_routes_by_category(category)
+            for route in routes:
+                self.sidebar.add_route(route)
 
     def _on_route_selected(self, route_id: str):
         """路由选择回调"""

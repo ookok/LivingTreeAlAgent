@@ -15,9 +15,19 @@ import os
 import subprocess
 
 
+def safe_print(msg):
+    """安全打印 - 处理 Windows 控制台编码问题"""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        # 移除 emoji，使用 ASCII 替代
+        ascii_msg = msg.encode('ascii', errors='ignore').decode('ascii')
+        print(ascii_msg)
+
+
 def start_client():
     """Start desktop client"""
-    print("🌳 Starting LivingTree AI Agent Client...")
+    safe_print("🌳 Starting LivingTree AI Agent Client...")
     client_main = os.path.join(os.path.dirname(__file__), 'client', 'src', 'main.py')
     os.execv(sys.executable, [sys.executable, client_main])
 

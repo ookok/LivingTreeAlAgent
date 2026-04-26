@@ -1,12 +1,12 @@
 """
 布局系统 - 侧边栏
 
-左侧固定栏：显示主模块导航。
+左侧固定栏：显示所有模块导航（按分类组织）。
 """
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QLabel, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame,
 )
 from typing import Optional
 
@@ -19,7 +19,7 @@ class SidebarWidget(QWidget):
     侧边栏 - 新版
 
     原有 ModuleBar 有1034行，逻辑混乱。
-    新版只负责：显示路由 + 发送选择信号。
+    新版只负责：显示路由（按分类组织） + 发送选择信号。
     """
 
     route_selected = pyqtSignal(str)  # route_id
@@ -28,6 +28,7 @@ class SidebarWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._buttons: dict[str, QPushButton] = {}
+        self._categories: dict[str, QWidget] = {}  # 分类容器
         self._current_route: Optional[str] = None
         self._setup_ui()
         self._apply_theme()
@@ -60,6 +61,13 @@ class SidebarWidget(QWidget):
         self._nav_layout = QVBoxLayout(nav_container)
         self._nav_layout.setContentsMargins(8, 8, 8, 8)
         self._nav_layout.setSpacing(2)
+
+        # 分类容器
+        self._category_layouts = {}
+        self._add_category("main", "核心功能")
+        self._add_category("domain", "专业领域")
+        self._add_category("tool", "工具")
+
         self._nav_layout.addStretch()
 
         from PyQt6.QtWidgets import QScrollArea
@@ -85,6 +93,23 @@ class SidebarWidget(QWidget):
 
         layout.addWidget(footer)
 
+    def _add_category(self, category_id: str, title: str):
+        """添加分类区域"""
+        # 分类标题
+        title_label = QLabel(title)
+        title_label.setObjectName("CategoryTitle")
+        title_label.setFixedHeight(32)
+        self._nav_layout.addWidget(title_label)
+
+        # 分类容器
+        category_container = QWidget()
+        category_layout = QVBoxLayout(category_container)
+        category_layout.setContentsMargins(0, 0, 0, 8)
+        category_layout.setSpacing(2)
+
+        self._nav_layout.addWidget(category_container)
+        self._category_layouts[category_id] = category_layout
+
     def add_route(self, route: Route):
         """添加路由按钮"""
         btn = QPushButton(f"{route.emoji}  {route.name}")
@@ -94,8 +119,14 @@ class SidebarWidget(QWidget):
         btn.clicked.connect(lambda checked, rid=route.route_id: self._on_button_clicked(rid))
 
         self._buttons[route.route_id] = btn
-        # 插入到倒数第二个位置（在stretch之前）
-        self._nav_layout.insertWidget(self._nav_layout.count() - 1, btn)
+
+        # 根据分类添加到对应的容器
+        category_layout = self._category_layouts.get(route.category)
+        if category_layout:
+            category_layout.addWidget(btn)
+        else:
+            # 如果没有对应的分类，添加到主布局
+            self._nav_layout.addWidget(btn)
 
         # 默认选中第一个
         if len(self._buttons) == 1:
@@ -124,6 +155,13 @@ class SidebarWidget(QWidget):
                 color: #FFFFFF;
                 font-size: 14px;
                 font-weight: bold;
+            }}
+            QLabel#CategoryTitle {{
+                color: {c.TEXT_SECONDARY};
+                font-size: 11px;
+                font-weight: bold;
+                padding: 8px 12px 4px 12px;
+                text-transform: uppercase;
             }}
             QPushButton#SidebarButton {{
                 background: transparent;

@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any, List
 import os
 
 
-# ── 子配置 dataclass ─────────────────────────────────────────────────────────────
+# ── 子配置 dataclass ─────────────────────────────────────────────────────────
 
 @dataclass
 class EndpointConfig:
@@ -147,21 +147,30 @@ class NanochatConfig:
         3. 直接访问（config.ollama.url）
         4. 不需要单例模式（直接导入 config）
         5. 不需要热重载（重启即可）
+        6. 同时支持属性访问和字典式访问
     
     使用示例:
         from client.src.business.nanochat_config import config
         
-        # 读取配置
+        # 读取配置（推荐：属性访问，最快）
         url = config.ollama.url
         timeout = config.timeouts.default
         max_retries = config.retries.default
         
+        # 读取配置（兼容：字典式访问）
+        url = config["ollama.url"]
+        
         # 修改配置（运行时）
         config.ollama.url = "http://new-host:11434"
+        config["ollama.url"] = "http://new-host:11434"
         
         # 检查 API Key
         if config.api_keys.openai:
             print("OpenAI API Key 已配置")
+        
+        # 包含检查
+        if "ollama.url" in config:
+            print("ollama.url 已配置")
     """
     
     # 服务端点
@@ -231,14 +240,14 @@ class NanochatConfig:
         """获取默认重试次数（快捷属性）"""
         return self.retries.default
     
-    # ── 兼容旧 API（可选，为了渐进迁移）────────────────────────────────────
+    # ── 字典式访问（支持 config["ollama.url"]）────────────────────────────
     
-    def get(self, key: str, default: Any = None) -> Any:
+    def __getitem__(self, key: str) -> Any:
         """
-        兼容旧 API: config.get("endpoints.ollama.url")
+        支持字典式读取: config["ollama.url"]
         
-        注意: 新代码应该使用 config.ollama.url（直接属性访问）
-        这个方法只是为了向后兼容，性能较慢
+        推荐使用: config.ollama.url（更快）
+        此方法为了兼容从 UnifiedConfig 迁移过来的代码
         """
         keys = key.split('.')
         obj = self
@@ -250,15 +259,13 @@ class NanochatConfig:
                 obj = getattr(obj, k, None)
             
             if obj is None:
-                return default
+                raise KeyError(key)
         
         return obj
     
-    def set(self, key: str, value: Any) -> None:
+    def __setitem__(self, key: str, value: Any) -> None:
         """
-        兼容旧 API: config.set("endpoints.ollama.url", "http://...")
-        
-        注意: 新代码应该直接赋值: config.ollama.url = "..."
+        支持字典式写入: config["ollama.url"] = "..."
         """
         keys = key.split('.')
         obj = self
@@ -275,7 +282,46 @@ class NanochatConfig:
         else:
             setattr(obj, last_key, value)
     
-    # ── 导出为字典（用于调试/序列化）───────────────────────────────────────
+    def __contains__(self, key: str) -> bool:
+        """支持 'ollama.url' in config"""
+        try:
+            self[key]
+            return True
+        except (KeyError, AttributeError):
+            return False
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        ⚠️ 已废弃: 请使用 config.ollama.url 或 config["ollama.url"]
+        
+        兼容旧 API: config.get("endpoints.ollama.url")
+        """
+        import warnings
+        warnings.warn(
+            f"NanochatConfig.get() 已废弃，请使用 config.{key.replace('.', '.')}",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        try:
+            return self[key]
+        except KeyError:
+            return default
+    
+    def set(self, key: str, value: Any) -> None:
+        """
+        ⚠️ 已废弃: 请使用 config.ollama.url = "..." 或 config["ollama.url"] = "..."
+        
+        兼容旧 API: config.set("endpoints.ollama.url", "...")
+        """
+        import warnings
+        warnings.warn(
+            f"NanochatConfig.set() 已废弃，请使用直接赋值",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self[key] = value
+    
+    # ── 导出为字典（用于调试/序列化）─────────────────────────────────────
     
     def to_dict(self) -> Dict[str, Any]:
         """导出为字典（用于调试或序列化）"""
@@ -308,8 +354,6 @@ class NanochatConfig:
             - 云平台部署
             - 测试环境配置
         """
-        import re
-        
         for key, value in os.environ.items():
             if not key.startswith(prefix):
                 continue
@@ -351,7 +395,93 @@ config = NanochatConfig()
 # 可选：从环境变量加载覆盖（部署时使用）
 # config.load_from_env()
 
+
+# ── 兼容层：UnifiedConfig（已废弃，请直接使用 config）──────────────────
+
+class UnifiedConfig:
+    """
+    ⚠️ 已废弃: 请直接使用 `from client.src.business.nanochat_config import config`
+    
+    兼容层: UnifiedConfig → NanochatConfig
+    
+    旧代码（仍然工作，但会显示弃用警告）:
+        from client.src.business.config import UnifiedConfig
+        config = UnifiedConfig.get_instance()
+        url = config.get("endpoints.ollama.url")
+    
+    新代码（推荐）:
+        from client.src.business.nanochat_config import config
+        url = config.ollama.url
+        # 或字典式访问
+        url = config["ollama.url"]
+    """
+    
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls) -> "UnifiedConfig":
+        """获取单例实例（兼容旧 API）"""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    def __init__(self):
+        """初始化（实际上只是包装新配置）"""
+        self._config = config
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """⚠️ 已废弃: 请使用 config.ollama.url 或 config["ollama.url"]"""
+        import warnings
+        warnings.warn(
+            f"UnifiedConfig.get() 已废弃，请使用 config.{key.replace('.', '.')}",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        try:
+            return self._config[key]
+        except KeyError:
+            return default
+    
+    def set(self, key: str, value: Any) -> None:
+        """已废弃: 请使用 config.ollama.url = ... 或 config["ollama.url"] = ..."""
+        import warnings
+        warnings.warn(
+            "UnifiedConfig.set() 已废弃，请使用直接赋值",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self._config[key] = value
+    
+    def __getattr__(self, name: str) -> Any:
+        """代理属性访问到新配置"""
+        return getattr(self._config, name)
+    
+    def __setattr__(self, name: str, value: Any) -> None:
+        """代理属性设置到新配置"""
+        if name == "_config":
+            super().__setattr__(name, value)
+        else:
+            setattr(self._config, name, value)
+    
+    @property
+    def new_config(self) -> NanochatConfig:
+        """直接访问新的 Nanochat 配置（推荐）"""
+        return self._config
+
+
+def get_unified_config() -> UnifiedConfig:
+    """兼容旧 API: 获取全局配置实例"""
+    return UnifiedConfig.get_instance()
+
+
+def set_unified_config(config: UnifiedConfig):
+    """兼容旧 API: 设置全局配置实例"""
+    UnifiedConfig._instance = config
+
+
 # 导出
 __all__ = ['config', 'NanochatConfig', 'EndpointConfig', 'RetryConfig', 
            'TimeoutConfig', 'DelayConfig', 'AgentConfig', 'LLMConfig', 
-           'ApiKeysConfig', 'PathsConfig', 'LimitsConfig']
+           'ApiKeysConfig', 'PathsConfig', 'LimitsConfig',
+           # 兼容层（已废弃）
+           'UnifiedConfig', 'get_unified_config', 'set_unified_config']

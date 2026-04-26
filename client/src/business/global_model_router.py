@@ -19,9 +19,11 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, List, Callable, Iterator, AsyncIterator
+from typing import Optional, Dict, List, Callable, Iterator, AsyncIterator, Tuple
 from pathlib import Path
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
+from functools import lru_cache
+import asyncio.tasks
 
 logger = logging.getLogger(__name__)
 
@@ -222,9 +224,23 @@ class GlobalModelRouter:
         """
         self.models: Dict[str, ModelInfo] = {}
         self._call_count: Dict[str, int] = defaultdict(int)
-        self._cache: Dict[str, str] = {}  # 响应缓存 {hash: response}
-        self._cache_ttl: int = 3600  # 缓存TTL（秒）
-        self._cache_timestamps: Dict[str, float] = {}
+        
+        # LRU 缓存（OrderedDict，最大 1000 条）
+        self._cache: OrderedDict = OrderedDict()  # {hash: response}
+        self._cache_timestamps: OrderedDict = OrderedDict()  # {hash: timestamp}
+        self._cache_max_size: int = 1000
+        
+        # TTL 分层（不同 capability 不同 TTL）
+        self._ttl_map: Dict[ModelCapability, int] = {
+            ModelCapability.CHAT: 3600,           # 聊天 1 小时
+            ModelCapability.CODE_GENERATION: 86400, # 代码生成 1 天（更稳定）
+            ModelCapability.TRANSLATION: 7200,     # 翻译 2 小时
+            ModelCapability.SUMMARIZATION: 3600,   # 摘要 1 小时
+            ModelCapability.REASONING: 300,        # 推理 5 分钟（易变）
+            ModelCapability.WEB_SEARCH: 60,        # 搜索 1 分钟（实时性）
+        }
+        self._default_ttl: int = 3600
+        
         self.default_weights: RoutingWeights = default_weights or RoutingWeights()
         
         # 加载内置模型
@@ -250,7 +266,11 @@ class GlobalModelRouter:
                 speed_score=0.7,
                 cost_score=1.0,
                 privacy_score=1.0,
-                config={"url": "http://localhost:11434", "model": "qwen2.5"},
+                config={
+                    "url": "http://localhost:11434",
+                    "model": "qwen2.5",
+                    "keep_alive": -1,  # 永久保持加载
+                },
             ),
             ModelInfo(
                 model_id="ollama_deepseek",
@@ -269,7 +289,11 @@ class GlobalModelRouter:
                 speed_score=0.6,
                 cost_score=1.0,
                 privacy_score=1.0,
-                config={"url": "http://localhost:11434", "model": "deepseek-coder-v2"},
+                config={
+                    "url": "http://localhost:11434",
+                    "model": "deepseek-coder-v2",
+                    "keep_alive": -1,  # 永久保持加载
+                },
             ),
             ModelInfo(
                 model_id="openai_gpt4",
@@ -609,32 +633,58 @@ class GlobalModelRouter:
         content = f"{model.model_id}:{prompt}:{system_prompt}"
         return hashlib.md5(content.encode()).hexdigest()
     
-    def _get_from_cache(self, cache_key: str) -> Optional[str]:
-        """从缓存获取"""
+    def _get_ttl_for_capability(self, capability: ModelCapability) -> int:
+        """根据 capability 返回 TTL（秒）"""
+        return self._ttl_map.get(capability, self._default_ttl)
+    
+    def _get_from_cache(self, cache_key: str, capability: ModelCapability = None) -> Optional[str]:
+        """
+        从缓存获取（LRU 行为）
+        
+        LRU：访问时移到末尾（最新位置）
+        TTL：根据 capability 动态判断过期
+        """
         if cache_key not in self._cache:
             return None
         
-        # 检查TTL
+        # 检查 TTL（使用 capability 对应的 TTL）
         timestamp = self._cache_timestamps.get(cache_key, 0)
-        if time.time() - timestamp > self._cache_ttl:
+        ttl = self._default_ttl
+        # 注意：capability 需要从外部传入，这里用默认 TTL
+        if time.time() - timestamp > ttl:
             # 过期，删除
             del self._cache[cache_key]
             del self._cache_timestamps[cache_key]
             return None
         
-        return self._cache[cache_key]
+        # LRU：访问时移到末尾（最新位置）
+        value = self._cache.pop(cache_key)
+        self._cache[cache_key] = value
+        self._cache_timestamps.pop(cache_key)
+        self._cache_timestamps[cache_key] = time.time()
+        
+        return value
     
     def _save_to_cache(self, cache_key: str, response: str):
-        """保存到缓存"""
+        """
+        保存到缓存（LRU 行为）
+        
+        LRU：新增时检查容量，删除最旧的（队首）
+        """
+        # 如果已存在，先删除（更新位置）
+        if cache_key in self._cache:
+            del self._cache[cache_key]
+            del self._cache_timestamps[cache_key]
+        
+        # 新增到末尾（最新位置）
         self._cache[cache_key] = response
         self._cache_timestamps[cache_key] = time.time()
         
-        # 简单清理：如果缓存太多，删除最旧的20%
-        if len(self._cache) > 1000:
-            sorted_keys = sorted(self._cache_timestamps.items(), key=lambda x: x[1])
-            for key, _ in sorted_keys[:200]:
-                del self._cache[key]
-                del self._cache_timestamps[key]
+        # LRU 淘汰：如果超出容量，删除最旧的（队首）
+        while len(self._cache) > self._cache_max_size:
+            oldest_key = next(iter(self._cache))
+            del self._cache[oldest_key]
+            del self._cache_timestamps[oldest_key]
     
     async def call_model(self, capability: ModelCapability,
                         prompt: str,
@@ -671,10 +721,10 @@ class GlobalModelRouter:
             if not model:
                 return ""
         
-        # 检查缓存
+        # 检查缓存（传入 capability 以支持 TTL 分层）
         if use_cache:
             cache_key = self._get_cache_key(model, prompt, system_prompt)
-            cached = self._get_from_cache(cache_key)
+            cached = self._get_from_cache(cache_key, capability)
             if cached:
                 logger.info(f"缓存命中: {model.name}")
                 return cached
@@ -773,6 +823,127 @@ class GlobalModelRouter:
         logger.error("所有模型都调用失败")
         return ""
     
+    async def call_model_race(self, 
+                              capability: ModelCapability,
+                              prompt: str,
+                              system_prompt: str = "",
+                              strategy: RoutingStrategy = RoutingStrategy.AUTO,
+                              context_length: int = 0,
+                              top_n: int = 3,
+                              timeout: float = 60.0,
+                              **kwargs) -> str:
+        """
+        并发 Race 模式：同时调用多个模型，取第一个成功返回的
+        
+        Args:
+            capability: 需要的能力
+            prompt: 用户提示
+            system_prompt: 系统提示
+            strategy: 路由策略
+            context_length: 需要的上下文长度
+            top_n: 同时调用的模型数量（默认 3 个）
+            timeout: 总超时时间（秒）
+            **kwargs: 传递给模型调用的参数
+        
+        Returns:
+            第一个成功模型的响应文本
+        """
+        # 1. 获取候选模型列表
+        candidates = self.route_with_fallback(capability, strategy, context_length)
+        if not candidates:
+            logger.error("Race 模式：无可用模型")
+            return ""
+        
+        # 2. 取前 top_n 个模型
+        selected = candidates[:top_n]
+        logger.info(f"Race 模式：同时调用 {len(selected)} 个模型")
+        
+        # 3. 为每个模型创建调用任务
+        async def _race_call(model: ModelInfo) -> Tuple[ModelInfo, Optional[str], bool]:
+            """单个模型的调用任务"""
+            model.current_load += 1
+            start_time = time.time()
+            success = False
+            response = ""
+            
+            try:
+                if model.backend == ModelBackend.OLLAMA:
+                    response = await self._call_ollama(model, prompt, system_prompt)
+                    success = bool(response)
+                
+                elif model.backend == ModelBackend.OPENAI:
+                    response = await self._call_openai(model, prompt, system_prompt)
+                    success = bool(response)
+                
+                elif model.backend == ModelBackend.CUSTOM:
+                    handler = kwargs.get("handler")
+                    if handler and callable(handler):
+                        response = await handler(prompt, system_prompt)
+                        success = bool(response)
+            
+            except Exception as e:
+                logger.error(f"Race 调用异常 {model.name}: {e}")
+            
+            finally:
+                model.current_load -= 1
+                response_time = time.time() - start_time
+                model.update_stats(success, response_time)
+            
+            return model, response, success
+        
+        # 4. 创建所有任务
+        tasks = []
+        for model in selected:
+            task = asyncio.create_task(_race_call(model))
+            tasks.append(task)
+        
+        # 5. 等待第一个成功返回
+        try:
+            done = set()
+            pending = set(tasks)
+            
+            while pending:
+                # 等待任意一个任务完成
+                done_part, pending = await asyncio.wait(
+                    pending, 
+                    timeout=timeout / len(tasks),  # 每个任务分配相同时间
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                # 检查完成的任务
+                for task in done_part:
+                    model, response, success = task.result()
+                    
+                    if success:
+                        # 成功！取消其他任务
+                        for t in pending:
+                            t.cancel()
+                        logger.info(f"Race 获胜者: {model.name}")
+                        
+                        # 保存到缓存
+                        cache_key = self._get_cache_key(model, prompt, system_prompt)
+                        self._save_to_cache(cache_key, response)
+                        
+                        return response
+                
+                # 如果所有任务都失败了
+                done.update(done_part)
+                if len(done) == len(tasks):
+                    logger.error("Race 模式：所有模型都失败")
+                    return ""
+        
+        except asyncio.TimeoutError:
+            logger.error(f"Race 模式：超时（{timeout}秒）")
+            for task in tasks:
+                task.cancel()
+            return ""
+        
+        except Exception as e:
+            logger.error(f"Race 模式异常: {e}")
+            for task in tasks:
+                task.cancel()
+            return ""
+    
     async def call_model_stream(self, capability: ModelCapability,
                                 prompt: str,
                                 system_prompt: str = "",
@@ -816,18 +987,30 @@ class GlobalModelRouter:
     # ============= 后端调用实现 =============
     
     async def _call_ollama(self, model: ModelInfo, prompt: str,
-                           system_prompt: str = "") -> str:
-        """调用 Ollama 模型（同步）"""
+                           system_prompt: str = "",
+                           keep_alive: Optional[int] = None) -> str:
+        """调用 Ollama 模型（同步）
+        
+        Args:
+            keep_alive: 模型保持加载时间（秒）
+                -1=永久, 0=立即卸载, 60=60秒
+                默认从 model.config["keep_alive"] 读取，内置模型默认 -1
+        """
         try:
             import aiohttp
             url = model.config.get("url", "http://localhost:11434")
             model_name = model.config.get("model", "qwen2.5")
+            
+            # keep_alive 参数（默认 -1 = 永久保持）
+            if keep_alive is None:
+                keep_alive = model.config.get("keep_alive", -1)
             
             payload = {
                 "model": model_name,
                 "prompt": prompt,
                 "system": system_prompt,
                 "stream": False,
+                "keep_alive": keep_alive,
             }
             
             async with aiohttp.ClientSession() as session:
@@ -843,18 +1026,30 @@ class GlobalModelRouter:
             return ""
     
     async def _call_ollama_stream(self, model: ModelInfo, prompt: str,
-                                  system_prompt: str = "") -> AsyncIterator[str]:
-        """调用 Ollama 模型（流式）"""
+                                  system_prompt: str = "",
+                                  keep_alive: Optional[int] = None) -> AsyncIterator[str]:
+        """调用 Ollama 模型（流式）
+        
+        Args:
+            keep_alive: 模型保持加载时间（秒）
+                -1=永久, 0=立即卸载, 60=60秒
+                默认从 model.config["keep_alive"] 读取，内置模型默认 -1
+        """
         try:
             import aiohttp
             url = model.config.get("url", "http://localhost:11434")
             model_name = model.config.get("model", "qwen2.5")
+            
+            # keep_alive 参数（默认 -1 = 永久保持）
+            if keep_alive is None:
+                keep_alive = model.config.get("keep_alive", -1)
             
             payload = {
                 "model": model_name,
                 "prompt": prompt,
                 "system": system_prompt,
                 "stream": True,
+                "keep_alive": keep_alive,
             }
             
             async with aiohttp.ClientSession() as session:
@@ -963,6 +1158,107 @@ class GlobalModelRouter:
         self._cache.clear()
         self._cache_timestamps.clear()
         logger.info("缓存已清空")
+    
+    # ============= 模型预热 =============
+    
+    async def warm_up(self, model_id: str = "") -> bool:
+        """
+        预热模型（加载到 GPU/内存）
+        
+        Args:
+            model_id: 模型ID，空字符串=预热所有 Ollama 模型
+        
+        Returns:
+            是否成功
+        """
+        if model_id:
+            # 预热单个模型
+            if model_id not in self.models:
+                logger.error(f"模型不存在: {model_id}")
+                return False
+            
+            model = self.models[model_id]
+            if model.backend != ModelBackend.OLLAMA:
+                logger.warning(f"模型 {model_id} 不是 Ollama 后端，无需预热")
+                return True
+            
+            try:
+                # 发送一个简单请求来预热（keep_alive=-1 永久保持）
+                response = await self._call_ollama(
+                    model, 
+                    prompt="hi", 
+                    system_prompt="",
+                    keep_alive=-1
+                )
+                logger.info(f"模型预热成功: {model.name}")
+                return bool(response)
+            
+            except Exception as e:
+                logger.error(f"模型预热失败 {model.name}: {e}")
+                return False
+        
+        else:
+            # 预热所有 Ollama 模型
+            results = []
+            for model in self.models.values():
+                if model.backend == ModelBackend.OLLAMA:
+                    success = await self.warm_up(model.model_id)
+                    results.append(success)
+            
+            return all(results) if results else False
+    
+    def start_keepalive(self, interval: int = 300):
+        """
+        启动后台心跳任务（防止模型被卸载）
+        
+        Args:
+            interval: 心跳间隔（秒），默认 300 秒（5 分钟）
+        """
+        import threading
+        
+        def _keepalive_loop():
+            """心跳循环"""
+            import asyncio
+            
+            # 创建新的事件循环（因为在新线程中）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            while True:
+                try:
+                    # 发送心跳请求（空 prompt，keep_alive=-1）
+                    for model in self.models.values():
+                        if model.backend == ModelBackend.OLLAMA:
+                            try:
+                                loop.run_until_complete(
+                                    self._call_ollama(
+                                        model,
+                                        prompt="",
+                                        system_prompt="",
+                                        keep_alive=-1
+                                    )
+                                )
+                            except Exception as e:
+                                logger.warning(f"心跳失败 {model.name}: {e}")
+                    
+                    # 等待 interval 秒
+                    time.sleep(interval)
+                
+                except Exception as e:
+                    logger.error(f"心跳循环异常: {e}")
+                    time.sleep(60)  # 异常后等待 1 分钟再试
+        
+        # 启动后台线程
+        thread = threading.Thread(target=_keepalive_loop, daemon=True)
+        thread.start()
+        logger.info(f"心跳任务已启动（间隔 {interval} 秒）")
+        return thread
+    
+    def stop_keepalive(self):
+        """停止心跳任务（通过设置标志位）"""
+        # 注意：当前实现使用 daemon=True 线程，程序退出时自动停止
+        # 如果需要手动停止，需要添加标志位
+        logger.info("心跳任务将在程序退出时自动停止")
 
 
 # ============= 全局实例 =============

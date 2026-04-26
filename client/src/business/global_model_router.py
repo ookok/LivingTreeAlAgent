@@ -806,3 +806,364 @@ def call_model_sync(capability: ModelCapability,
         return asyncio.run(
             router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache)
         )
+
+
+# ============= Handler 体系 =============
+
+class BaseHandler(ABC):
+    """处理器基类（Strategy模式）"""
+    
+    @abstractmethod
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        """处理请求"""
+        pass
+    
+    @abstractmethod
+    def get_capability(self) -> ModelCapability:
+        """返回此处理器处理的能力"""
+        pass
+    
+    def preprocess(self, prompt: str) -> str:
+        """预处理（可选覆盖）"""
+        return prompt
+    
+    def postprocess(self, response: str) -> str:
+        """后处理（可选覆盖）"""
+        return response
+
+
+class ChatHandler(BaseHandler):
+    """通用聊天处理器"""
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.CHAT,
+            prompt=prompt,
+            system_prompt=system_prompt or "你是一个有用的AI助手。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.CHAT
+
+
+class CodeGenerationHandler(BaseHandler):
+    """代码生成处理器"""
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 增强：自动添加代码生成提示
+        enhanced_prompt = f"请生成代码，只输出代码本身（不含解释）：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.CODE_GENERATION,
+            prompt=enhanced_prompt,
+            system_prompt=system_prompt or "你是一个代码生成助手。只输出代码，不要解释。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.CODE_GENERATION
+
+
+class ReasoningHandler(BaseHandler):
+    """推理处理器（复杂问题）"""
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 增强：要求分步推理
+        enhanced_prompt = f"请分步思考并给出答案：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.REASONING,
+            prompt=enhanced_prompt,
+            system_prompt=system_prompt or "你是一个推理助手。请分步思考，给出详细推理过程。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.REASONING
+
+
+class TranslationHandler(BaseHandler):
+    """翻译处理器"""
+    
+    def __init__(self, source_lang: str = "auto", target_lang: str = "zh"):
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 构建翻译提示
+        if self.source_lang == "auto":
+            translate_prompt = f"翻译成{self.target_lang}：\n{prompt}"
+        else:
+            translate_prompt = f"从{self.source_lang}翻译成{self.target_lang}：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.TRANSLATION,
+            prompt=translate_prompt,
+            system_prompt=system_prompt or f"你是一个翻译助手。只输出翻译结果，不要解释。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.TRANSLATION
+
+
+class SummarizationHandler(BaseHandler):
+    """摘要处理器"""
+    
+    def __init__(self, max_length: int = 100):
+        self.max_length = max_length
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 构建摘要提示
+        summary_prompt = f"请总结以下内容（不超过{self.max_length}字）：\n\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.SUMMARIZATION,
+            prompt=summary_prompt,
+            system_prompt=system_prompt or f"你是一个文本摘要助手。总结要简洁准确，不超过{self.max_length}字。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.SUMMARIZATION
+
+
+class CodeReviewHandler(BaseHandler):
+    """代码审查处理器"""
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 构建代码审查提示
+        review_prompt = f"请审查以下代码，指出问题并给出改进建议：\n\n```\n{prompt}\n```"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.CODE_REVIEW,
+            prompt=review_prompt,
+            system_prompt=system_prompt or "你是一个代码审查专家。关注：bug、性能、安全性、可读性、最佳实践。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.CODE_REVIEW
+
+
+class DocumentGenerationHandler(BaseHandler):
+    """文档生成处理器"""
+    
+    def __init__(self, doc_type: str = "report"):
+        self.doc_type = doc_type  # report, manual, spec, etc.
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 构建文档生成提示
+        doc_prompt = f"请生成{self.doc_type}文档：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.DOCUMENT_PLANNING,
+            prompt=doc_prompt,
+            system_prompt=system_prompt or f"你是一个{self.doc_type}文档生成助手。生成结构清晰、内容完整的文档。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.DOCUMENT_PLANNING
+
+
+class DataAnalysisHandler(BaseHandler):
+    """数据分析处理器"""
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        # 构建数据分析提示
+        analysis_prompt = f"请分析以下数据或问题：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.DATA_ANALYSIS,
+            prompt=analysis_prompt,
+            system_prompt=system_prompt or "你是一个数据分析助手。提供清晰的分析和可行的建议。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.DATA_ANALYSIS
+
+
+class CreativeWritingHandler(BaseHandler):
+    """创意写作处理器"""
+    
+    def __init__(self, style: str = "general"):
+        self.style = style  # general, poetry, story, marketing, etc.
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        write_prompt = f"请进行创意写作（风格：{self.style}）：\n{prompt}"
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.CONTENT_GENERATION,
+            prompt=write_prompt,
+            system_prompt=system_prompt or f"你是一个创意写作助手。风格：{self.style}。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.CONTENT_GENERATION
+
+
+class QuestionAnsweringHandler(BaseHandler):
+    """问答处理器（基于上下文）"""
+    
+    def __init__(self, context: str = ""):
+        self.context = context
+    
+    async def handle(self, prompt: str, system_prompt: str = "", **kwargs) -> str:
+        if self.context:
+            qa_prompt = f"基于以下上下文回答问题：\n\n上下文：{self.context}\n\n问题：{prompt}"
+        else:
+            qa_prompt = prompt
+        
+        router = get_global_router()
+        return await router.call_model(
+            capability=ModelCapability.KNOWLEDGE_QUERY,
+            prompt=qa_prompt,
+            system_prompt=system_prompt or "你是一个问答助手。基于上下文回答，不知道就说不知道。"
+        )
+    
+    def get_capability(self) -> ModelCapability:
+        return ModelCapability.KNOWLEDGE_QUERY
+
+
+# ============= Handler 工厂 =============
+
+class HandlerFactory:
+    """处理器工厂（Factory模式）"""
+    
+    _handlers = {
+        ModelCapability.CHAT: ChatHandler,
+        ModelCapability.CODE_GENERATION: CodeGenerationHandler,
+        ModelCapability.REASONING: ReasoningHandler,
+        ModelCapability.TRANSLATION: TranslationHandler,
+        ModelCapability.SUMMARIZATION: SummarizationHandler,
+        ModelCapability.CODE_REVIEW: CodeReviewHandler,
+        ModelCapability.DOCUMENT_PLANNING: DocumentGenerationHandler,
+        ModelCapability.DATA_ANALYSIS: DataAnalysisHandler,
+        ModelCapability.CONTENT_GENERATION: CreativeWritingHandler,
+        ModelCapability.KNOWLEDGE_QUERY: QuestionAnsweringHandler,
+    }
+    
+    @classmethod
+    def create_handler(cls, capability: ModelCapability, **kwargs) -> BaseHandler:
+        """
+        创建处理器
+        
+        Args:
+            capability: 能力
+            **kwargs: 传递给处理器构造函数的参数
+        
+        Returns:
+            BaseHandler 处理器实例
+        """
+        handler_class = cls._handlers.get(capability)
+        if not handler_class:
+            # 默认使用ChatHandler
+            logger.warning(f"未知能力 {capability}，使用ChatHandler")
+            return ChatHandler()
+        
+        return handler_class(**kwargs)
+    
+    @classmethod
+    def register_handler(cls, capability: ModelCapability, handler_class: type):
+        """注册自定义处理器"""
+        if not issubclass(handler_class, BaseHandler):
+            raise ValueError(f"{handler_class} 必须继承 BaseHandler")
+        
+        cls._handlers[capability] = handler_class
+        logger.info(f"注册处理器：{capability.value} → {handler_class.__name__}")
+
+
+# ============= 便捷函数 =============
+
+async def handle_with_handler(capability: ModelCapability, 
+                             prompt: str, 
+                             system_prompt: str = "",
+                             **kwargs) -> str:
+    """
+    使用Handler处理请求（便捷函数）
+    
+    Args:
+        capability: 能力
+        prompt: 提示
+        system_prompt: 系统提示
+        **kwargs: 传递给处理器的参数
+    
+    Returns:
+        str: 处理结果
+    """
+    handler = HandlerFactory.create_handler(capability, **kwargs)
+    return await handler.handle(prompt, system_prompt)
+
+
+# ============= 同步便捷函数 =============
+
+def translate(text: str, source_lang: str = "auto", target_lang: str = "zh") -> str:
+    """翻译（同步）"""
+    import asyncio
+    handler = TranslationHandler(source_lang=source_lang, target_lang=target_lang)
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                handler.handle(text), loop
+            ).result(timeout=60)
+        else:
+            return asyncio.run(handler.handle(text))
+    except RuntimeError:
+        return asyncio.run(handler.handle(text))
+
+
+def summarize(text: str, max_length: int = 100) -> str:
+    """摘要（同步）"""
+    import asyncio
+    handler = SummarizationHandler(max_length=max_length)
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                handler.handle(text), loop
+            ).result(timeout=60)
+        else:
+            return asyncio.run(handler.handle(text))
+    except RuntimeError:
+        return asyncio.run(handler.handle(text))
+
+
+def review_code(code: str) -> str:
+    """代码审查（同步）"""
+    import asyncio
+    handler = CodeReviewHandler()
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                handler.handle(code), loop
+            ).result(timeout=60)
+        else:
+            return asyncio.run(handler.handle(code))
+    except RuntimeError:
+        return asyncio.run(handler.handle(code))
+
+
+def analyze_data(question: str) -> str:
+    """数据分析（同步）"""
+    import asyncio
+    handler = DataAnalysisHandler()
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                handler.handle(question), loop
+            ).result(timeout=60)
+        else:
+            return asyncio.run(handler.handle(question))
+    except RuntimeError:
+        return asyncio.run(handler.handle(question))

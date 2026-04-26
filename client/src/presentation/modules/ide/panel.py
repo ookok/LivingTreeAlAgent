@@ -43,6 +43,75 @@ class ChatMessageThread(QThread):
         self.message = message
         self.context = context or {}
         self._stop_requested = False
+
+
+class CodeExecutionThread(QThread):
+    """后台线程执行代码（支持实时输出）"""
+    output_line = pyqtSignal(str)           # 逐行输出
+    error_line = pyqtSignal(str)            # 逐行错误
+    finished = pyqtSignal(dict)             # 执行完成（结果字典）
+    error_occurred = pyqtSignal(str)        # 错误
+    
+    def __init__(self, agent, code, language):
+        super().__init__()
+        self.agent = agent
+        self.code = code
+        self.language = language
+        self._stop_requested = False
+    
+    def run(self):
+        """执行代码"""
+        try:
+            # 定义回调函数
+            def on_output_line(line: str):
+                if self._stop_requested:
+                    return
+                self.output_line.emit(line)
+            
+            def on_error_line(line: str):
+                if self._stop_requested:
+                    return
+                self.error_line.emit(line)
+            
+            def on_finished(result):
+                if self._stop_requested:
+                    return
+                # 转换 ExecutionResult 为字典
+                result_dict = {
+                    "status": result.status.value,
+                    "output": result.output,
+                    "error": result.error,
+                    "exit_code": result.exit_code,
+                    "execution_time_ms": result.execution_time_ms,
+                    "memory_usage_mb": result.memory_usage_mb,
+                }
+                self.finished.emit(result_dict)
+            
+            # 调用 agent.execute_code（传递回调）
+            callbacks = {
+                'on_output_line': on_output_line,
+                'on_error_line': on_error_line,
+                'on_finished': on_finished,
+            }
+            
+            result = self.agent.execute_code(
+                self.code,
+                self.language,
+                callbacks=callbacks,
+            )
+            
+            # 如果没有触发回调，手动触发
+            if result:
+                self.finished.emit(result)
+                
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            self.error_occurred.emit(f"{str(e)}\n\n{error_detail}")
+    
+    def stop(self):
+        """停止执行"""
+        self._stop_requested = True
     
     def run(self):
         try:

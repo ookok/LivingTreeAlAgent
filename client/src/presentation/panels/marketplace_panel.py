@@ -199,14 +199,49 @@ class MarketplacePanel(QWidget):
             return
 
         try:
-            # TODO: 从 Marketplace 获取我的购买
-            # 目前使用模拟数据
-            for product in self._products:
-                if product["purchased"]:
-                    self.my_product_list.addItem(product["name"])
+            # 获取当前用户 ID
+            buyer_id = self._get_current_user_id()
+
+            # 从 Marketplace 获取购买记录
+            transactions = self._marketplace.get_purchases(buyer_id=buyer_id)
+
+            # 加载所有商品（用于查找商品信息）
+            all_listings = {l.id: l for l in self._marketplace.list_listings()}
+
+            # 显示购买的商品
+            for txn in transactions:
+                listing = all_listings.get(txn.listing_id)
+                if listing:
+                    self.my_product_list.addItem(f"{listing.name} - ¥{txn.amount}")
+
+                    # 更新商品状态（标记为已购买）
+                    for product in self._products:
+                        if product["id"] == txn.listing_id:
+                            product["purchased"] = True
+                            break
 
         except Exception as e:
             QMessageBox.warning(self, "警告", f"加载我的购买失败: {e}")
+
+    def _get_current_user_id(self) -> str:
+        """获取当前用户 ID"""
+        # TODO: 从配置或登录系统获取用户 ID
+        # 目前从用户资料文件读取
+        try:
+            from pathlib import Path
+            import json
+
+            profile_file = Path.home() / ".living.tree" / "user_profile.json"
+            if profile_file.exists():
+                with open(profile_file, 'r', encoding='utf-8') as f:
+                    profile = json.load(f)
+                    return profile.get("user_id", "default_user")
+
+            # 默认用户 ID
+            return "default_user"
+
+        except Exception:
+            return "default_user"
 
     def _filter_products(self):
         """过滤商品列表"""
@@ -262,14 +297,25 @@ class MarketplacePanel(QWidget):
                 return
 
             try:
-                # 调用真实的 Marketplace API
-                # TODO: 获取当前用户 ID
-                buyer_id = "current_user"
+                # 获取当前用户 ID
+                buyer_id = self._get_current_user_id()
 
-                transaction = self._marketplace.purchase(
-                    listing_id=product["id"],
+                # 正确流程：添加到购物车 + 结账
+                success = self._marketplace.add_to_cart(
                     buyer_id=buyer_id,
+                    listing_id=product["id"],
                 )
+
+                if not success:
+                    QMessageBox.warning(self, "警告", "商品已在购物车或已购买")
+                    return
+
+                # 结账
+                transactions = self._marketplace.checkout(buyer_id=buyer_id)
+
+                if not transactions:
+                    QMessageBox.warning(self, "警告", "结账失败")
+                    return
 
                 # 更新状态
                 product["purchased"] = True
@@ -350,10 +396,9 @@ class MarketplacePanel(QWidget):
 
             try:
                 # 调用真实的 Marketplace API
-                # TODO: 获取当前用户 ID
-                buyer_id = "current_user"
+                buyer_id = self._get_current_user_id()
 
-                self._marketplace.review(
+                review = self._marketplace.submit_review(
                     listing_id=product["id"],
                     buyer_id=buyer_id,
                     rating=rating,

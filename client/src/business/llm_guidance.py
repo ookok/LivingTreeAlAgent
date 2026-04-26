@@ -18,6 +18,7 @@ LLM 增强追问模块 (Phase 4)
 """
 
 from typing import Optional, Callable, List, Dict, Any, Tuple
+from client.src.business.global_model_router import get_global_router, ModelCapability
 from dataclasses import dataclass, field
 from enum import Enum
 import time
@@ -374,18 +375,13 @@ class LLMGuidanceGenerator:
             config: LLM 配置
         """
         self.config = config or LLMGuidanceConfig()
-        self._client = None
+        self._router = get_global_router()
         self._cache: Dict[str, Tuple[str, float]] = {}  # key -> (questions, timestamp)
     
     @property
-    def client(self) -> OllamaClient:
-        """获取客户端"""
-        if self._client is None:
-            self._client = OllamaClient(
-                base_url=self.config.api_base,
-                timeout=self.config.timeout,
-            )
-        return self._client
+    def client(self):
+        """获取客户端（GlobalModelRouter）"""
+        return self._router
     
     def _get_cache_key(
         self,
@@ -421,7 +417,7 @@ class LLMGuidanceGenerator:
                 oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k][1])
                 del self._cache[oldest_key]
     
-    def generate(
+    async def generate(
         self,
         user_message: str,
         response: str,
@@ -430,20 +426,10 @@ class LLMGuidanceGenerator:
         context: Dict[str, Any] = None,
     ) -> LLMGuidanceResult:
         """
-        生成 LLM 追问
-        
-        Args:
-            user_message: 用户原始消息
-            response: AI 回答
-            intent: 意图类型
-            content_type: 内容类型
-            context: 上下文信息
-            
-        Returns:
-            LLMGuidanceResult: 追问结果
+        生成 LLM 追问（通过 GlobalModelRouter）
         """
         start_time = time.time()
-        
+
         # 检查缓存
         cache_key = self._get_cache_key(user_message, response, intent, content_type)
         cached = self._get_cached(cache_key)
@@ -456,36 +442,31 @@ class LLMGuidanceGenerator:
                 cached=True,
                 confidence=0.8,
             )
-        
+
         # 构建提示词
         system_prompt = self.DOMAIN_PROMPTS.get(
-            content_type, 
+            content_type,
             self.DEFAULT_SYSTEM_PROMPT
         )
-        
+
         user_prompt = self._build_prompt(user_message, response, intent, context)
-        
-        # 调用 LLM
+
+        # 调用 LLM（通过 GlobalModelRouter）
         try:
-            if self.config.source in [LLMSource.OLLAMA_LOCAL, LLMSource.OLLAMA_REMOTE]:
-                result = self.client.generate(
-                    model=self.config.model,
-                    prompt=user_prompt,
-                    system=system_prompt,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                )
-            else:
-                raise Exception(f"Unsupported source: {self.config.source}")
-            
+            result = await self._router.call_model(
+                capability=ModelCapability.CHAT,
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+            )
+
             # 解析结果
             questions = self._parse_questions(result)
-            
+
             # 缓存
             self._set_cache(cache_key, questions)
-            
+
             latency = time.time() - start_time
-            
+
             return LLMGuidanceResult(
                 questions=questions,
                 reasoning="LLM 生成",
@@ -494,7 +475,7 @@ class LLMGuidanceGenerator:
                 cached=False,
                 confidence=0.7,
             )
-            
+
         except Exception as e:
             # LLM 调用失败，返回空
             return LLMGuidanceResult(
@@ -558,8 +539,8 @@ class LLMGuidanceGenerator:
         return questions[:self.config.max_questions]
     
     def is_available(self) -> bool:
-        """检查 LLM 是否可用"""
-        return self.client.is_available()
+        """检查 LLM 是否可用（通过 GlobalModelRouter）"""
+        return self._router.route(ModelCapability.CHAT) is not None
     
     def clear_cache(self):
         """清除缓存"""

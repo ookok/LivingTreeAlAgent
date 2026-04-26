@@ -1,684 +1,508 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-智能 IDE 面板 - 完整自动化开发功能
-======================================
-
-集成功能：
-1. 项目浏览器（文件树）
-2. 代码编辑器（多标签）
-3. 全局搜索/替换
-4. 测试集成（pytest）
-5. 重构引擎
-6. 部署管理
-7. Git 集成
-8. AI 辅助编程
-
-Author: LivingTreeAI Agent
-Date: 2026-04-26
+Intelligent IDE Panel - Chat-Driven Development Environment
+默认显示聊天框，AI根据用户输入生成/修改代码，代码编辑器作为tab页
 """
-
 import os
-import sys
-from typing import Optional, Dict
-from pathlib import Path
-
+import json
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit,
-    QPushButton, QLabel, QFrame, QFileDialog, QMessageBox,
-    QTabWidget, QComboBox, QSplitter, QTextEdit
+    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QTextEdit, QLineEdit, QPushButton, QLabel,
+    QTabWidget, QTreeWidget, QTreeWidgetItem,
+    QFileDialog, QMessageBox, QComboBox,
+    QListWidget, QListWidgetItem, QInputDialog,
+    QProgressBar, QStatusBar
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
-from PyQt6.QtGui import QFont, QTextCursor
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QTimer
+from PyQt6.QtGui import QFont, QTextCursor, QKeySequence, QShortcut
 
-from client.src.business.nanochat_config import config
-from client.src.business.ide_agent import get_ide_agent
-
-# 导入新创建的组件
+from client.src.business.ide_agent import IntelligentIDEAagent
+from client.src.business.ide_service import IntelligentIDEService
 from client.src.presentation.widgets.project_browser import ProjectBrowser
-from client.src.presentation.widgets.global_search import GlobalSearchPanel
-from client.src.presentation.widgets.test_integration import TestIntegrationPanel
-from client.src.presentation.widgets.git_integration import GitIntegrationPanel
+from client.src.presentation.widgets.global_search import GlobalSearchWidget
+from client.src.presentation.widgets.test_integration import TestIntegrationWidget
+from client.src.presentation.widgets.git_integration import GitIntegrationWidget
+from client.src.presentation.widgets.syntax_highlighter import get_highlighter
+from client.src.presentation.widgets.code_completer import get_completer
 
 
-# ── 代码执行工作线程 ────────────────────────────────────────────────
-
-class CodeExecutionWorker(QThread):
-    """代码执行工作线程（真实执行）"""
+class ChatMessageThread(QThread):
+    """后台线程处理AI聊天请求"""
+    message_received = pyqtSignal(str, str)  # (role, content)
+    code_generated = pyqtSignal(str, str)   # (file_path, code)
+    error_occurred = pyqtSignal(str)
     
-    output = pyqtSignal(str)          # 输出
-    error = pyqtSignal(str)           # 错误
-    finished = pyqtSignal(int)        # 完成（退出码）
-    status = pyqtSignal(str)          # 状态更新
-    
-    def __init__(self, agent, code: str, language: str, parent=None):
-        super().__init__(parent)
+    def __init__(self, agent, message, context=None):
+        super().__init__()
         self.agent = agent
-        self.code = code
-        self.language = language
-        self._stop_requested = False
+        self.message = message
+        self.context = context or {}
     
     def run(self):
         try:
-            self.status.emit(f"正在执行 {self.language} 代码...")
+            # 调用AI agent处理用户请求
+            response = self.agent.process_chat_message(self.message, self.context)
             
-            # 通过 Agent 执行代码（真实执行）
-            result = self.agent.execute_code(self.code, self.language)
+            # 检查是否需要生成/修改代码
+            if response.get('type') == 'code_generation':
+                file_path = response.get('file_path', '')
+                code = response.get('code', '')
+                self.code_generated.emit(file_path, code)
             
-            # 发送输出
-            if result['output']:
-                self.output.emit(result['output'])
-            
-            # 发送错误
-            if result['error']:
-                self.error.emit(result['error'])
-            
-            # 发送完成信号
-            self.finished.emit(result['exit_code'])
-            self.status.emit(f"执行完成（退出码: {result['exit_code']}）")
-            
+            self.message_received.emit('assistant', response.get('message', ''))
         except Exception as e:
-            import traceback
-            error_msg = f"执行失败: {str(e)}\n{traceback.format_exc()}"
-            self.error.emit(error_msg)
-            self.finished.emit(1)
-            self.status.emit("执行失败")
-    
-    def stop(self):
-        self._stop_requested = True
+            self.error_occurred.emit(str(e))
 
 
-# ── AI 辅助工作线程 ────────────────────────────────────────────────
-
-class AIAssistWorker(QThread):
-    """AI 辅助工作线程"""
-    
-    result_ready = pyqtSignal(str)     # 结果就绪
-    error = pyqtSignal(str)           # 错误
-    finished = pyqtSignal()            # 完成
-    
-    def __init__(self, agent, code: str, language: str, assist_type: str, parent=None):
-        super().__init__(parent)
-        self.agent = agent
-        self.code = code
-        self.language = language
-        self.assist_type = assist_type
-    
-    def run(self):
-        try:
-            if self.assist_type == "explain":
-                explanation = self.agent.explain_code(self.code, self.language)
-                self.result_ready.emit(explanation)
-            
-            elif self.assist_type == "debug":
-                debug_info = self.agent.debug_code(self.code, self.language)
-                self.result_ready.emit(debug_info)
-            
-            elif self.assist_type == "optimize":
-                optimization = self.agent.optimize_code(self.code, self.language)
-                self.result_ready.emit(optimization)
-            
-            elif self.assist_type == "generate":
-                intent = self.code
-                result = self.agent.generate_code(intent, self.language)
-                if result['success']:
-                    self.result_ready.emit(result['code'])
-                else:
-                    self.error.emit(result['error'])
-            
-            else:
-                self.error.emit(f"未知的辅助类型: {self.assist_type}")
-            
-            self.finished.emit()
-            
-        except Exception as e:
-            import traceback
-            error_msg = f"AI 辅助失败: {str(e)}\n{traceback.format_exc()}"
-            self.error.emit(error_msg)
-            self.finished.emit()
-
-
-# ── 代码编辑器 ─────────────────────────────────────────────────────
-
-class CodeEditor(QPlainTextEdit):
-    """代码编辑器"""
+class CodeEditorWidget(QWidget):
+    """增强的代码编辑器组件（带语法高亮和代码补全）"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._setup_ui()
+        self.current_file = None
+        self.init_ui()
     
-    def _setup_ui(self):
-        # 设置字体
-        font = QFont("Consolas", 13)
-        self.setFont(font)
-        
-        # 设置样式
-        self.setStyleSheet("""
-            QPlainTextEdit {
-                background: #1E1E1E;
-                color: #D4D4D4;
-                border: none;
-                padding: 12px;
-                font-family: Consolas, 'Courier New', monospace;
-            }
-        """)
-    
-    def set_content(self, content: str):
-        """设置内容"""
-        self.setPlainText(content)
-    
-    def get_content(self) -> str:
-        """获取内容"""
-        return self.toPlainText()
-    
-    def set_language(self, language: str):
-        """设置语言（用于语法高亮，暂未实现）"""
-        pass
-
-
-# ── 主智能 IDE 面板 ────────────────────────────────────────────────
-
-class Panel(QWidget):
-    """
-    智能 IDE 面板 - 完整自动化开发功能
-    
-    架构：UI → Agent → Service
-    """
-    
-    code_executed = pyqtSignal(str, str)  # 代码, 语言
-    ai_requested = pyqtSignal(str)        # 请求 AI 辅助
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        
-        # 架构修正：使用 Agent，不是直接调用 Service
-        self.agent = get_ide_agent()
-        self.current_file: Optional[str] = None
-        self.worker: Optional[CodeExecutionWorker] = None
-        self.ai_worker: Optional[AIAssistWorker] = None
-        
-        self._setup_ui()
-        self._connect_signals()
-        self._load_sample()
-    
-    def _setup_ui(self):
-        """初始化 UI"""
-        layout = QVBoxLayout(self)
+    def init_ui(self):
+        layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
         
-        # 标题栏
-        title_bar = self._create_title_bar()
-        layout.addWidget(title_bar)
+        # 编辑器工具栏
+        toolbar = QHBoxLayout()
         
-        # 主分割器（水平）
-        main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_splitter.setStyleSheet("QSplitter::handle { background: #3E3E42; }")
-        
-        # 左侧：项目浏览器
-        self.project_browser = ProjectBrowser()
-        self.project_browser.setFixedWidth(250)
-        self.project_browser.set_project_root(os.getcwd())
-        main_splitter.addWidget(self.project_browser)
-        
-        # 中间：编辑器区域
-        editor_widget = self._create_editor_area()
-        main_splitter.addWidget(editor_widget)
-        
-        # 右侧：输出面板
-        output_widget = self._create_output_area()
-        main_splitter.addWidget(output_widget)
-        
-        # 设置分割比例
-        main_splitter.setStretchFactor(0, 0)  # 项目浏览器固定宽度
-        main_splitter.setStretchFactor(1, 2)  # 编辑器占 2/3
-        main_splitter.setStretchFactor(2, 1)  # 输出占 1/3
-        
-        layout.addWidget(main_splitter, 1)
-        
-        # 底部：工具面板（搜索/测试/Git/部署）
-        self.tool_tabs = self._create_tool_tabs()
-        layout.addWidget(self.tool_tabs, 0)
-        
-        # 状态栏
-        status_bar = self._create_status_bar()
-        layout.addWidget(status_bar)
-    
-    def _create_title_bar(self) -> QFrame:
-        """创建标题栏"""
-        title_bar = QFrame()
-        title_bar.setFixedHeight(52)
-        title_bar.setStyleSheet("background: #252526; border-bottom: 1px solid #3E3E42;")
-        title_layout = QHBoxLayout(title_bar)
-        title_layout.setContentsMargins(16, 0, 16, 0)
-        
-        title_label = QLabel("💻 智能 IDE - 自动化开发平台")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
-        title_layout.addWidget(title_label)
-        
-        title_layout.addStretch()
-        
-        # 语言选择
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItem("Python", "python")
-        self.lang_combo.addItem("JavaScript", "javascript")
-        self.lang_combo.addItem("TypeScript", "typescript")
-        self.lang_combo.addItem("HTML", "html")
-        self.lang_combo.addItem("CSS", "css")
-        self.lang_combo.setStyleSheet("""
-            QComboBox {
-                background: #3E3E42;
-                color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                padding: 4px 8px;
-            }
-            QComboBox::dropDown {
-                border: none;
-            }
-        """)
-        title_layout.addWidget(self.lang_combo)
-        
-        # 运行按钮
-        self.run_btn = QPushButton("▶️ 运行")
-        self.run_btn.setFixedSize(100, 36)
-        self.run_btn.setStyleSheet("""
-            QPushButton {
-                background: #0E639C;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #1177BB; }
-            QPushButton:disabled { background: #555555; }
-        """)
-        title_layout.addWidget(self.run_btn)
-        
-        # AI 辅助按钮
-        self.ai_btn = QPushButton("🤖 AI 辅助")
-        self.ai_btn.setFixedSize(120, 36)
-        self.ai_btn.setStyleSheet("""
-            QPushButton {
-                background: #4B0082;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #5A0099; }
-        """)
-        title_layout.addWidget(self.ai_btn)
-        
-        # 保存按钮
-        self.save_btn = QPushButton("💾 保存")
-        self.save_btn.setFixedSize(100, 36)
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background: #0E639C;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #1177BB; }
-        """)
-        title_layout.addWidget(self.save_btn)
-        
-        # 打开按钮
-        self.open_btn = QPushButton("📂 打开")
-        self.open_btn.setFixedSize(100, 36)
-        self.open_btn.setStyleSheet("""
-            QPushButton {
-                background: #0E639C;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #1177BB; }
-        """)
-        title_layout.addWidget(self.open_btn)
-        
-        return title_bar
-    
-    def _create_editor_area(self) -> QWidget:
-        """创建编辑器区域"""
-        editor_frame = QFrame()
-        editor_frame.setStyleSheet("background: #1E1E1E;")
-        editor_layout = QVBoxLayout(editor_frame)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 编辑器
-        self.editor = CodeEditor()
-        editor_layout.addWidget(self.editor)
-        
-        return editor_frame
-    
-    def _create_output_area(self) -> QWidget:
-        """创建输出区域"""
-        output_frame = QFrame()
-        output_frame.setStyleSheet("background: #252526; border-left: 1px solid #3E3E42;")
-        output_layout = QVBoxLayout(output_frame)
-        output_layout.setContentsMargins(0, 0, 0, 0)
-        output_layout.setSpacing(0)
-        
-        # 输出标题
-        output_title = QLabel("📤 输出")
-        output_title.setStyleSheet("color: #FFFFFF; font-size: 12px; padding: 8px 12px; background: #2D2D30;")
-        output_layout.addWidget(output_title)
-        
-        # 输出内容
-        self.output_text = QTextEdit()
-        self.output_text.setReadOnly(True)
-        self.output_text.setStyleSheet("""
-            QTextEdit {
-                background: #252526;
-                color: #D4D4D4;
-                border: none;
-                padding: 8px;
-                font-family: Consolas, monospace;
-                font-size: 12px;
-            }
-        """)
-        output_layout.addWidget(self.output_text, 1)
-        
-        return output_frame
-    
-    def _create_tool_tabs(self) -> QTabWidget:
-        """创建工具面板标签"""
-        tool_tabs = QTabWidget()
-        tool_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #3E3E42;
-                background: #1E1E1E;
-            }
-            QTabBar::tab {
-                background: #2D2D30;
-                color: #D4D4D4;
-                padding: 6px 12px;
-                border: none;
-            }
-            QTabBar::tab:selected {
-                background: #1E1E1E;
-                color: #FFFFFF;
-            }
-        """)
-        tool_tabs.setFixedHeight(300)
-        
-        # 搜索/替换面板
-        self.search_panel = GlobalSearchPanel()
-        self.search_panel.set_search_path(os.getcwd())
-        tool_tabs.addTab(self.search_panel, "🔍 搜索")
-        
-        # 测试集成面板
-        self.test_panel = TestIntegrationPanel()
-        self.test_panel.set_test_path(os.getcwd())
-        tool_tabs.addTab(self.test_panel, "🧪 测试")
-        
-        # Git 集成面板
-        self.git_panel = GitIntegrationPanel()
-        self.git_panel.set_repo_path(os.getcwd())
-        tool_tabs.addTab(self.git_panel, "🔧 Git")
-        
-        return tool_tabs
-    
-    def _create_status_bar(self) -> QFrame:
-        """创建状态栏"""
-        status_bar = QFrame()
-        status_bar.setFixedHeight(28)
-        status_bar.setStyleSheet("background: #007ACC;")
-        status_layout = QHBoxLayout(status_bar)
-        status_layout.setContentsMargins(12, 0, 12, 0)
-        
-        self.status_label = QLabel("就绪")
-        self.status_label.setStyleSheet("color: #FFFFFF; font-size: 11px;")
-        status_layout.addWidget(self.status_label)
-        
-        status_layout.addStretch()
+        self.language_combo = QComboBox()
+        self.language_combo.addItems(['Python', 'JavaScript', 'TypeScript', 'HTML', 'CSS', 'Markdown', 'JSON', 'YAML'])
+        self.language_combo.currentTextChanged.connect(self.change_language)
+        toolbar.addWidget(QLabel("语言:"))
+        toolbar.addWidget(self.language_combo)
+        toolbar.addStretch()
         
         self.cursor_label = QLabel("行 1, 列 1")
-        self.cursor_label.setStyleSheet("color: #FFFFFF; font-size: 11px;")
-        status_layout.addWidget(self.cursor_label)
+        toolbar.addWidget(self.cursor_label)
         
-        return status_bar
-    
-    def _connect_signals(self):
-        """连接信号"""
-        self.run_btn.clicked.connect(self._run_code)
-        self.ai_btn.clicked.connect(self._request_ai_help)
-        self.save_btn.clicked.connect(self._save_file)
-        self.open_btn.clicked.connect(self._open_file)
+        layout.addLayout(toolbar)
         
-        # 项目浏览器信号
-        self.project_browser.file_double_clicked.connect(self._on_file_double_clicked)
+        # 代码编辑器（使用QTextEdit + 语法高亮 + 代码补全）
+        self.editor = QTextEdit()
+        self.editor.setFont(QFont('Consolas', 12))
+        self.editor.setAcceptRichText(False)
+        self.editor.cursorPositionChanged.connect(self.update_cursor_position)
+        
+        # 语法高亮器
+        self.highlighter = None
+        self.update_highlighter('Python')
+        
+        # 代码补全器
+        self.completer = None
+        self.update_completer('Python')
+        
+        layout.addWidget(self.editor)
+        
+        # 按钮栏
+        btn_layout = QHBoxLayout()
+        
+        self.run_btn = QPushButton("▶ 运行")
+        self.run_btn.clicked.connect(self.run_code)
+        btn_layout.addWidget(self.run_btn)
+        
+        self.ai_explain_btn = QPushButton("🤖 解释")
+        self.ai_explain_btn.clicked.connect(self.ai_explain)
+        btn_layout.addWidget(self.ai_explain_btn)
+        
+        self.ai_debug_btn = QPushButton("🔧 调试")
+        self.ai_debug_btn.clicked.connect(self.ai_debug)
+        btn_layout.addWidget(self.ai_debug_btn)
+        
+        self.ai_optimize_btn = QPushButton("⚡ 优化")
+        self.ai_optimize_btn.clicked.connect(self.ai_optimize)
+        btn_layout.addWidget(self.ai_optimize_btn)
+        
+        btn_layout.addStretch()
+        
+        self.save_btn = QPushButton("💾 保存")
+        self.save_btn.clicked.connect(self.save_file)
+        btn_layout.addWidget(self.save_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        self.setLayout(layout)
     
-    def _load_sample(self):
-        """加载示例代码"""
-        sample_code = '''#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+    def change_language(self, language):
+        """切换语言（触发语法高亮更新）"""
+        self.update_highlighter(language)
+        self.update_completer(language)
+    
+    def update_highlighter(self, language):
+        """更新语法高亮器"""
+        if self.highlighter:
+            # 移除旧的高亮器
+            self.highlighter.setDocument(None)
+        
+        # 获取新的高亮器
+        self.highlighter = get_highlighter(language, self.editor)
+        if self.highlighter:
+            self.highlighter.setDocument(self.editor.document())
+    
+    def update_completer(self, language):
+        """更新代码补全器"""
+        self.completer = get_completer(language, self.editor)
+        if self.completer:
+            self.completer.setWidget(self.editor)
+    
+    def update_cursor_position(self):
+        """更新光标位置显示"""
+        cursor = self.editor.textCursor()
+        line = cursor.blockNumber() + 1
+        column = cursor.columnNumber() + 1
+        self.cursor_label.setText(f"行 {line}, 列 {column}")
+    
+    def set_content(self, content):
+        """设置编辑器内容"""
+        self.editor.setPlainText(content)
+    
+    def get_content(self):
+        """获取编辑器内容"""
+        return self.editor.toPlainText()
+    
+    def run_code(self):
+        """运行代码"""
+        code = self.get_content()
+        # TODO: 调用 ide_service 执行代码
+        print(f"运行代码:\n{code}")
+    
+    def ai_explain(self):
+        """AI解释代码"""
+        code = self.get_content()
+        # TODO: 调用 ide_agent 解释代码
+        print(f"AI解释代码")
+    
+    def ai_debug(self):
+        """AI调试代码"""
+        code = self.get_content()
+        # TODO: 调用 ide_agent 调试代码
+        print(f"AI调试代码")
+    
+    def ai_optimize(self):
+        """AI优化代码"""
+        code = self.get_content()
+        # TODO: 调用 ide_agent 优化代码
+        print(f"AI优化代码")
+    
+    def save_file(self):
+        """保存文件"""
+        if not self.current_file:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "保存文件", "", "All Files (*)"
+            )
+            if file_path:
+                self.current_file = file_path
+            else:
+                return
+        
+        try:
+            with open(self.current_file, 'w', encoding='utf-8') as f:
+                f.write(self.get_content())
+            QMessageBox.information(self, "成功", f"文件已保存: {self.current_file}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存失败: {str(e)}")
+    
+    def open_file(self, file_path):
+        """打开文件"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.set_content(content)
+            self.current_file = file_path
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"打开失败: {str(e)}")
 
-def greet(name: str) -> str:
-    """问候函数"""
-    return f"Hello, {name}!"
 
-if __name__ == "__main__":
-    # 测试代码
-    print(greet("World"))
-    print("智能 IDE 测试成功！")
-'''
-        self.editor.set_content(sample_code)
-        self.status_label.setText("已加载示例代码")
+class ChatWidget(QWidget):
+    """聊天界面组件"""
     
-    def _run_code(self):
-        """运行代码（通过 Agent 真实执行）"""
-        code = self.editor.get_content()
-        language = self.lang_combo.currentData()
+    message_sent = pyqtSignal(str)  # 发送消息信号
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.message_history = []
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
         
-        if not code.strip():
-            self.output_text.append("⚠️ 没有代码可运行\n")
+        # 聊天历史显示区域
+        self.chat_display = QTextEdit()
+        self.chat_display.setReadOnly(True)
+        self.chat_display.setFont(QFont('Microsoft YaHei', 11))
+        self.chat_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: none;
+                padding: 10px;
+            }
+        """)
+        layout.addWidget(self.chat_display, 1)
+        
+        # 输入区域
+        input_layout = QHBoxLayout()
+        
+        self.message_input = QTextEdit()
+        self.message_input.setMaximumHeight(100)
+        self.message_input.setPlaceholderText("输入你的需求，我会自动生成/修改代码...\n\n示例：\n- 创建一个用户登录模块\n- 修改homepage.py，添加深色模式切换按钮\n- 帮我优化这段代码的速度")
+        self.message_input.setStyleSheet("""
+            QTextEdit {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3e3e42;
+                border-radius: 5px;
+                padding: 8px;
+            }
+        """)
+        
+        # Ctrl+Enter 发送
+        shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.message_input)
+        shortcut.activated.connect(self.send_message)
+        
+        input_layout.addWidget(self.message_input, 1)
+        
+        self.send_btn = QPushButton("发送")
+        self.send_btn.setFixedSize(80, 40)
+        self.send_btn.clicked.connect(self.send_message)
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0e639c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1177bb;
+            }
+        """)
+        input_layout.addWidget(self.send_btn)
+        
+        layout.addLayout(input_layout)
+        
+        # 快捷提示
+        hint_label = QLabel("💡 提示：Ctrl+Enter 发送消息 | 输入具体需求，我会自动生成代码")
+        hint_label.setStyleSheet("color: #858585; font-size: 11px;")
+        layout.addWidget(hint_label)
+        
+        self.setLayout(layout)
+    
+    def send_message(self):
+        """发送消息"""
+        message = self.message_input.toPlainText().strip()
+        if not message:
             return
         
-        # 更新状态
-        self.status_label.setText(f"运行中 ({language})...")
-        self.run_btn.setEnabled(False)
-        self.run_btn.setText("运行中...")
+        # 显示用户消息
+        self.append_message('user', message)
         
-        # 清空输出
-        self.output_text.clear()
+        # 清空输入框
+        self.message_input.clear()
         
-        # 启动工作线程（通过 Agent 执行代码）
-        self.worker = CodeExecutionWorker(
-            agent=self.agent,
-            code=code,
-            language=language,
+        # 发送信号
+        self.message_sent.emit(message)
+    
+    def append_message(self, role, content):
+        """添加消息到聊天历史"""
+        self.message_history.append({'role': role, 'content': content})
+        
+        # 格式化显示
+        if role == 'user':
+            prefix = '<p style="color: #569cd6;"><b>👤 你：</b></p>'
+            color = '#d4d4d4'
+        else:
+            prefix = '<p style="color: #4ec9b0;"><b>🤖 助手：</b></p>'
+            color = '#d4d4d4'
+        
+        formatted_content = content.replace('\n', '<br>')
+        message_html = f'{prefix}<p style="color: {color}; margin-left: 20px;">{formatted_content}</p><hr style="border-color: #3e3e42;">'
+        
+        self.chat_display.append(message_html)
+        
+        # 滚动到底部
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+    
+    def append_code(self, file_path, code):
+        """添加生成的代码到聊天历史"""
+        code_html = f'''
+        <p style="color: #4ec9b0;"><b>🤖 助手：</b></p>
+        <p style="color: #d4d4d4; margin-left: 20px;">
+            已生成代码：<b>{file_path}</b>
+        </p>
+        <pre style="background-color: #252526; color: #d4d4d4; padding: 10px; border-radius: 5px; overflow-x: auto;">{code}</pre>
+        <hr style="border-color: #3e3e42;">
+        '''
+        self.chat_display.append(code_html)
+        
+        # 滚动到底部
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+
+class IntelligentIDEPanel(QWidget):
+    """
+    智能IDE面板 - 聊天驱动的开发环境
+    
+    布局：
+    - 默认显示：聊天框（左侧或全屏）
+    - 代码编辑器：作为tab页
+    - 其他工具：作为tab页（项目浏览器、搜索、测试、Git、部署）
+    """
+    
+    def __init__(self, parent=None, project_path=None):
+        super().__init__(parent)
+        self.project_path = project_path or os.getcwd()
+        self.ide_agent = IntelligentIDEAagent()
+        self.ide_service = IntelligentIDEService()
+        self.worker_thread = None
+        self.init_ui()
+    
+    def init_ui(self):
+        """初始化UI"""
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建主分割器
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # 左侧：聊天界面（默认显示）
+        self.chat_widget = ChatWidget()
+        self.chat_widget.message_sent.connect(self.handle_user_message)
+        self.main_splitter.addWidget(self.chat_widget)
+        
+        # 右侧：标签页界面（代码编辑器 + 其他工具）
+        self.right_tabs = QTabWidget()
+        self.right_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        
+        # Tab 1: 代码编辑器
+        self.code_editor = CodeEditorWidget()
+        self.right_tabs.addTab(self.code_editor, "📝 代码编辑器")
+        
+        # Tab 2: 项目浏览器
+        self.project_browser = ProjectBrowser(self.project_path)
+        self.project_browser.file_opened.connect(self.open_file_in_editor)
+        self.right_tabs.addTab(self.project_browser, "📂 项目浏览器")
+        
+        # Tab 3: 全局搜索
+        self.global_search = GlobalSearchWidget()
+        self.global_search.file_opened.connect(self.open_file_in_editor)
+        self.right_tabs.addTab(self.global_search, "🔍 全局搜索")
+        
+        # Tab 4: 测试集成
+        self.test_integration = TestIntegrationWidget()
+        self.right_tabs.addTab(self.test_integration, "🧪 测试")
+        
+        # Tab 5: Git集成
+        self.git_integration = GitIntegrationWidget(self.project_path)
+        self.right_tabs.addTab(self.git_integration, "🔧 Git")
+        
+        # Tab 6: 部署管理
+        # self.deployment_widget = DeploymentWidget()
+        # self.right_tabs.addTab(self.deployment_widget, "🚀 部署")
+        
+        self.main_splitter.addWidget(self.right_tabs)
+        
+        # 设置分割器比例（聊天框占2/3，右侧占1/3）
+        self.main_splitter.setStretchFactor(0, 2)
+        self.main_splitter.setStretchFactor(1, 1)
+        
+        layout.addWidget(self.main_splitter)
+        
+        # 状态栏
+        self.status_bar = QStatusBar()
+        self.status_bar.showMessage("就绪 - 输入需求，我会自动生成代码")
+        layout.addWidget(self.status_bar)
+        
+        self.setLayout(layout)
+        
+        # 添加欢迎消息
+        self.add_welcome_message()
+    
+    def add_welcome_message(self):
+        """添加欢迎消息"""
+        welcome_msg = """
+你好！我是你的 AI 编程助手。
+
+🎯 我可以帮你：
+• 生成新代码（输入：创建一个用户登录模块）
+• 修改现有代码（输入：修改 homepage.py，添加深色模式）
+• 优化代码性能（输入：优化这段代码的运行速度）
+• 解释代码逻辑（输入：解释一下这段代码的逻辑）
+• 调试代码错误（输入：这段代码报错了，帮我看看）
+
+💡 提示：
+• Ctrl+Enter 发送消息
+• 生成的代码会在右侧编辑器显示
+• 你可以直接在编辑器修改代码
+        """
+        self.chat_widget.append_message('assistant', welcome_msg.strip())
+    
+    def handle_user_message(self, message):
+        """处理用户发送的消息"""
+        self.status_bar.showMessage("正在处理...")
+        
+        # 后台线程处理AI请求
+        self.worker_thread = ChatMessageThread(
+            self.ide_agent,
+            message,
+            context={'project_path': self.project_path}
         )
-        self.worker.output.connect(self._on_output)
-        self.worker.error.connect(self._on_error)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.status.connect(self._on_status)
-        self.worker.start()
-        
-        self.code_executed.emit(code, language)
+        self.worker_thread.message_received.connect(self.handle_ai_response)
+        self.worker_thread.code_generated.connect(self.handle_code_generation)
+        self.worker_thread.error_occurred.connect(self.handle_error)
+        self.worker_thread.finished.connect(self.on_process_finished)
+        self.worker_thread.start()
     
-    def _request_ai_help(self):
-        """请求 AI 辅助（通过 Agent）"""
-        code = self.editor.get_content()
-        language = self.lang_combo.currentData()
-        
-        # 在输出面板显示
-        self.output_text.append("🤖 正在请求 AI 辅助...\n")
-        self.output_text.append("选择辅助类型：\n")
-        self.output_text.append("1. 解释代码 (explain)\n")
-        self.output_text.append("2. 调试代码 (debug)\n")
-        self.output_text.append("3. 优化代码 (optimize)\n")
-        self.output_text.append("4. 生成代码 (generate)\n")
-        
-        # TODO: 弹出对话框让用户选择辅助类型
-        # 目前默认使用"解释代码"
-        assist_type = "explain"
-        
-        # 启动 AI 辅助工作线程
-        self.ai_worker = AIAssistWorker(
-            agent=self.agent,
-            code=code,
-            language=language,
-            assist_type=assist_type,
-        )
-        self.ai_worker.result_ready.connect(self._on_ai_result)
-        self.ai_worker.error.connect(self._on_ai_error)
-        self.ai_worker.finished.connect(self._on_ai_finished)
-        self.ai_worker.start()
-        
-        self.ai_requested.emit(code)
+    def handle_ai_response(self, role, content):
+        """处理AI响应"""
+        self.chat_widget.append_message(role, content)
     
-    def _save_file(self):
-        """保存文件"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "保存文件",
-            "",
-            "Python Files (*.py);;JavaScript Files (*.js);;TypeScript Files (*.ts);;HTML Files (*.html);;CSS Files (*.css);;All Files (*)",
-        )
+    def handle_code_generation(self, file_path, code):
+        """处理代码生成"""
+        # 在聊天界面显示代码
+        self.chat_widget.append_code(file_path, code)
         
-        if file_path:
-            try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(self.editor.get_content())
-                self.current_file = file_path
-                self.status_label.setText(f"已保存: {file_path}")
-            except Exception as e:
-                QMessageBox.warning(self, "警告", f"保存失败: {e}")
-    
-    def _open_file(self):
-        """打开文件"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "打开文件",
-            "",
-            "Python Files (*.py);;JavaScript Files (*.js);;TypeScript Files (*.ts);;HTML Files (*.html);;CSS Files (*.css);;All Files (*)",
-        )
+        # 在代码编辑器中显示
+        self.code_editor.set_content(code)
+        self.code_editor.current_file = file_path
         
-        if file_path:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                self.editor.set_content(content)
-                self.current_file = file_path
-                self.status_label.setText(f"已打开: {file_path}")
-                
-                # 自动检测语言
-                if file_path.endswith(".py"):
-                    self.lang_combo.setCurrentIndex(0)
-                elif file_path.endswith(".js"):
-                    self.lang_combo.setCurrentIndex(1)
-                elif file_path.endswith(".ts"):
-                    self.lang_combo.setCurrentIndex(2)
-                elif file_path.endswith(".html"):
-                    self.lang_combo.setCurrentIndex(3)
-                elif file_path.endswith(".css"):
-                    self.lang_combo.setCurrentIndex(4)
-                
-                # 刷新项目浏览器
-                self.project_browser.refresh()
-                
-            except Exception as e:
-                QMessageBox.warning(self, "警告", f"打开失败: {e}")
+        # 切换到代码编辑器tab
+        self.right_tabs.setCurrentWidget(self.code_editor)
     
-    def _on_file_double_clicked(self, file_path: str):
-        """处理项目浏览器文件双击"""
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            self.editor.set_content(content)
-            self.current_file = file_path
-            self.status_label.setText(f"已打开: {file_path}")
-            
-            # 自动检测语言
-            if file_path.endswith(".py"):
-                self.lang_combo.setCurrentIndex(0)
-            elif file_path.endswith(".js"):
-                self.lang_combo.setCurrentIndex(1)
-            elif file_path.endswith(".ts"):
-                self.lang_combo.setCurrentIndex(2)
-            elif file_path.endswith(".html"):
-                self.lang_combo.setCurrentIndex(3)
-            elif file_path.endswith(".css"):
-                self.lang_combo.setCurrentIndex(4)
-            
-        except Exception as e:
-            QMessageBox.warning(self, "警告", f"打开文件失败: {e}")
-    
-    @pyqtSlot(str)
-    def _on_output(self, text: str):
-        """收到输出"""
-        self.output_text.append(text)
-    
-    @pyqtSlot(str)
-    def _on_error(self, error_msg: str):
+    def handle_error(self, error_msg):
         """处理错误"""
-        self.output_text.append(f"❌ 错误:\n{error_msg}\n")
-        self.status_label.setText("运行出错")
+        self.chat_widget.append_message('assistant', f"❌ 出错了：{error_msg}")
+        self.status_bar.showMessage("处理失败")
     
-    @pyqtSlot(int)
-    def _on_finished(self, exit_code: int):
-        """运行完成"""
-        self.status_label.setText(f"运行完成 (退出码: {exit_code})")
-        self.run_btn.setEnabled(True)
-        self.run_btn.setText("▶️ 运行")
-        self.worker = None
+    def on_process_finished(self):
+        """处理完成"""
+        self.status_bar.showMessage("就绪")
+        self.worker_thread = None
     
-    @pyqtSlot(str)
-    def _on_status(self, status: str):
-        """状态更新"""
-        self.status_label.setText(status)
+    def open_file_in_editor(self, file_path):
+        """在编辑器中打开文件"""
+        self.code_editor.open_file(file_path)
+        self.right_tabs.setCurrentWidget(self.code_editor)
     
-    @pyqtSlot(str)
-    def _on_ai_result(self, result: str):
-        """收到 AI 辅助结果"""
-        self.output_text.append("🤖 AI 辅助结果:\n")
-        self.output_text.append(result)
-        self.output_text.append("\n")
-    
-    @pyqtSlot(str)
-    def _on_ai_error(self, error_msg: str):
-        """AI 辅助错误"""
-        self.output_text.append(f"❌ AI 辅助失败:\n{error_msg}\n")
-    
-    @pyqtSlot()
-    def _on_ai_finished(self):
-        """AI 辅助完成"""
-        self.output_text.append("✅ AI 辅助完成\n")
-        self.ai_worker = None
-    
-    def closeEvent(self, event):
-        """关闭事件"""
-        if self.worker and self.worker.isRunning():
-            self.worker.wait()
-        if self.ai_worker and self.ai_worker.isRunning():
-            self.ai_worker.wait()
-        super().closeEvent(event)
+    def set_project_path(self, path):
+        """设置项目路径"""
+        self.project_path = path
+        self.project_browser.set_root_path(path)
+        self.git_integration.set_project_path(path)
 
 
-# ── 测试 ────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     import sys
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PyQt6.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
-    
-    window = QMainWindow()
-    window.setWindowTitle("智能 IDE - 自动化开发平台")
-    window.setGeometry(100, 100, 1400, 900)
-    
-    central_widget = QWidget()
-    window.setCentralWidget(central_widget)
-    
-    layout = QVBoxLayout(central_widget)
-    
-    ide_panel = Panel()
-    layout.addWidget(ide_panel)
-    
+    window = IntelligentIDEPanel()
+    window.setWindowTitle("LivingTree AI - 智能IDE")
+    window.resize(1400, 900)
     window.show()
     sys.exit(app.exec())

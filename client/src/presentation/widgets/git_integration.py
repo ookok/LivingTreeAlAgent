@@ -19,7 +19,7 @@ Date: 2026-04-26
 
 import os
 import subprocess
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass, field
 
 
@@ -683,6 +683,7 @@ class GitIntegrationPanel(QWidget):
 
 if __name__ == "__main__":
     import sys
+    from PyQt6.QtWidgets import QApplication, QMainWindow
     
     app = QApplication(sys.argv)
     

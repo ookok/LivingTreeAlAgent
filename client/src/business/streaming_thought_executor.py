@@ -316,19 +316,27 @@ class StreamingThoughtExecutor:
 
         logger.info("StreamingThoughtExecutor 初始化完成")
     
-    async def execute_stream(self, intent: str, context: Dict[str, Any] = None) -> AsyncIterator[Dict]:
+    async def execute_stream(
+        self,
+        intent: str,
+        context: Dict[str, Any] = None,
+        history: Optional[List[str]] = None,
+    ) -> AsyncIterator[Dict]:
         """
         流式执行：思考和执行并行
         
         Args:
             intent: 用户意图
             context: 上下文信息
+            history: 历史对话列表（用于置信度评估）
         
         Yields:
             各种Chunk的字典表示
         """
         context = context or {}
+        history = history or []
         self.thought_parser.reset()
+        thought_history: List[str] = []  # 收集本次思考历史
         
         logger.info(f"开始流式执行: intent='{intent}'")
         
@@ -353,8 +361,19 @@ class StreamingThoughtExecutor:
                 parsed = self.thought_parser.parse(text_chunk)
                 
                 # 1. 输出思考片段
+                thought_content = parsed["thought"]
+                thought_history.append(thought_content)
+                
+                # 评估置信度
+                confidence = self.confidence_engine.evaluate_thought(
+                    thought=thought_content,
+                    context=context,
+                    history=thought_history[:-1],  # 不含当前
+                )
+                
                 yield ThoughtChunk(
-                    content=parsed["thought"],
+                    content=thought_content,
+                    confidence=confidence,
                     is_final=parsed["is_final"],
                 ).to_dict()
                 

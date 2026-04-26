@@ -39,6 +39,8 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("evolution", "进化面板", "🧬", _lazy("evolution"), category="tool"),
         Route("finance", "金融面板", "💰", _lazy("finance"), category="tool"),
         Route("game", "游戏面板", "🎮", _lazy("game"), category="tool"),
+        # Model Router 监控
+        Route("model_router_monitor", "模型监控", "📊", _lazy_model_monitor(), category="tool"),
     ]
 
     all_routes = main_routes + tool_routes
@@ -134,3 +136,34 @@ def _lazy_shared_brain() -> type:
                 layout.addWidget(QLabel(f"❌ 共脑系统加载失败: {e}"))
 
     return SharedBrainPanel
+
+
+def _lazy_model_monitor() -> type:
+    """
+    延迟导入 Model Router 监控面板
+    """
+    class ModelMonitorPanel(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._load_real_panel()
+
+        def _load_real_panel(self):
+            """加载真实面板"""
+            try:
+                from client.src.presentation.panels.model_router_monitor_panel import ModelRouterMonitorPanel
+                
+                real_panel = ModelRouterMonitorPanel(self)
+                
+                # 设置布局
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(real_panel)
+                
+            except Exception as e:
+                print(f"[ModelMonitorPanel] Failed to load: {e}")
+                # 显示错误占位符
+                from PyQt6.QtWidgets import QLabel
+                error_layout = QVBoxLayout(self)
+                error_layout.addWidget(QLabel(f"❌ 监控面板加载失败: {e}"))
+
+    return ModelMonitorPanel

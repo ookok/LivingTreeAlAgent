@@ -28,6 +28,8 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("expert_training", "专家训练", "🎓", _lazy("expert_training"), category="main"),
         Route("smart_ide", "智能IDE", "💻", _lazy("smart_ide"), category="main"),
         Route("smart_writing", "智能写作", "✍️", _lazy("smart_writing"), category="main"),
+        # 共脑系统
+        Route("shared_brain", "共脑系统", "🧠", _lazy_shared_brain(), category="main"),
     ]
 
     # 工具模块（显示在工具菜单）
@@ -99,3 +101,36 @@ def _lazy(module_name: str) -> type:
             return self._real_instance
 
     return LazyPanel
+
+
+def _lazy_shared_brain() -> type:
+    """
+    延迟导入共脑系统面板
+    """
+    class SharedBrainPanel(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._load_real_panel()
+
+        def _load_real_panel(self):
+            """加载真实面板"""
+            try:
+                from client.src.business.global_model_router import get_global_router
+                from client.src.presentation.panels.streaming_thought_demo_panel import StreamingThoughtDemoPanel
+                
+                model_router = get_global_router()
+                real_panel = StreamingThoughtDemoPanel(model_router, self)
+                
+                # 设置布局
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(real_panel)
+                
+            except Exception as e:
+                print(f"[SharedBrainPanel] Failed to load: {e}")
+                # 显示错误占位符
+                from PyQt6.QtWidgets import QLabel
+                layout = QVBoxLayout(self)
+                layout.addWidget(QLabel(f"❌ 共脑系统加载失败: {e}"))
+
+    return SharedBrainPanel

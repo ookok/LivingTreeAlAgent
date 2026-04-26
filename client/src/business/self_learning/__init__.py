@@ -1,32 +1,56 @@
 """
-自我学习模块
-包含强化学习、知识图谱、迁移学习等子模块
+自我学习模块 (Self-Learning Module)
+======================================
+
+为 EvolutionEngine 提供强化学习、知识图谱和迁移学习能力。
+
+包含:
+1. reinforcement/ - 强化学习模块 (PPO算法)
+2. knowledge_graph/ - 代码知识图谱 (内存版本)
+3. transfer/ - 迁移学习模块 (领域适配)
 """
 
-from .reinforcement.rl_environment import CodeEvolutionEnv, CodeObservation, CodeAction
-from .reinforcement.rl_agent import PPOAgent
-from .reinforcement.rl_trainer import RLTrainer, TrainingConfig
-from .knowledge_graph.kg_builder import KnowledgeGraphBuilder, KnowledgeGraph, Entity, Relation
-from .knowledge_graph.kg_auto_builder import AutoKnowledgeGraphBuilder
-from .transfer.domain_adapter import DomainAdapter, TransferLearningPipeline, SourceDomain, TargetDomain
+from pathlib import Path
 
+# 版本信息
+__version__ = "1.0.0"
+__author__ = "LivingTreeAI Team"
+
+# 模块根目录
+MODULE_ROOT = Path(__file__).parent
+
+# 导入主要接口类
 __all__ = [
     # 强化学习
-    'CodeEvolutionEnv',
-    'CodeObservation',
-    'CodeAction',
-    'PPOAgent',
-    'RLTrainer',
-    'TrainingConfig',
+    "CodeEvolutionEnv",
+    "PPOAgent", 
+    "RLTrainer",
+    "TrainingConfig",
+    
     # 知识图谱
-    'KnowledgeGraphBuilder',
-    'KnowledgeGraph',
-    'Entity',
-    'Relation',
-    'AutoKnowledgeGraphBuilder',
+    "CodeKnowledgeGraph",
+    "ASTParser",
+    "ImpactAnalyzer",
+    
     # 迁移学习
-    'DomainAdapter',
-    'TransferLearningPipeline',
-    'SourceDomain',
-    'TargetDomain',
+    "DomainAdapter",
+    "TransferTrainer",
+    "CodeBERTAdapter",
 ]
+
+# 延迟导入，避免启动时的依赖问题
+def __getattr__(name):
+    """延迟导入模块"""
+    if name in ("CodeEvolutionEnv", "PPOAgent", "RLTrainer", "TrainingConfig"):
+        from .reinforcement import CodeEvolutionEnv, PPOAgent, RLTrainer, TrainingConfig
+        return locals()[name]
+    
+    elif name in ("CodeKnowledgeGraph", "ASTParser", "ImpactAnalyzer"):
+        from .knowledge_graph import CodeKnowledgeGraph, ASTParser, ImpactAnalyzer
+        return locals()[name]
+        
+    elif name in ("DomainAdapter", "TransferTrainer", "CodeBERTAdapter"):
+        from .transfer import DomainAdapter, TransferTrainer, CodeBERTAdapter
+        return locals()[name]
+        
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

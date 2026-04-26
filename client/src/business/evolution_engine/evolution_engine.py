@@ -847,33 +847,59 @@ class EvolutionEngine:
     def enable_self_learning(self, enable: bool = True):
         """
         启用/禁用自我学习能力
-
+        
         Args:
             enable: 是否启用
         """
         if enable:
-            # 初始化自我学习模块
-            from client.src.business.self_learning import (
-                CodeEvolutionEnv, PPOAgent, RLTrainer, TrainingConfig,
-                AutoKnowledgeGraphBuilder,
-                DomainAdapter, TransferLearningPipeline
-            )
-
-            # 1. 强化学习
-            self._rl_env = CodeEvolutionEnv(project_root=str(self.project_root))
-            self._rl_agent = PPOAgent(observation_space=self._rl_env.observation_space, action_space=self._rl_env.action_space)
-            training_config = TrainingConfig()
-            self._rl_trainer = RLTrainer(self._rl_env, self._rl_agent, training_config)
-
-            # 2. 知识图谱
-            self._kg_builder = AutoKnowledgeGraphBuilder(str(self.project_root))
-
-            # 3. 迁移学习
-            self._transfer_pipeline = TransferLearningPipeline()
-
-            self._self_learning_enabled = True
-            logger.info("[EvolutionEngine] 自我学习能力已启用")
-
+            # 初始化自我学习模块 (使用简化版实现)
+            try:
+                # 1. 强化学习
+                from client.src.business.self_learning.reinforcement import (
+                    CodeEvolutionEnv,
+                    PPOAgent,
+                    RLTrainer,
+                    TrainingConfig,
+                )
+                
+                self._rl_env = CodeEvolutionEnv(project_root=str(self.project_root))
+                self._rl_agent = PPOAgent(state_dim=6, action_dim=5)
+                training_config = TrainingConfig()
+                self._rl_trainer = RLTrainer(self._rl_env, self._rl_agent, training_config)
+                
+                # 2. 知识图谱
+                from client.src.business.self_learning.knowledge_graph import (
+                    CodeKnowledgeGraph,
+                    ASTParser,
+                    ImpactAnalyzer,
+                )
+                
+                self._kg = CodeKnowledgeGraph(name="evolution")
+                self._kg_parser = ASTParser(self._kg)
+                self._impact_analyzer = ImpactAnalyzer(self._kg)
+                
+                # 3. 迁移学习
+                from client.src.business.self_learning.transfer import (
+                    DomainAdapter,
+                    TransferTrainer,
+                    CodeBERTAdapter,
+                )
+                
+                self._domain_adapter = DomainAdapter(input_dim=64, hidden_dim=32)
+                self._transfer_trainer = TransferTrainer(
+                    model=self._domain_adapter,
+                    source_data=None,  # 需要用户提供
+                    target_data=None,  # 需要用户提供
+                )
+                self._codebert_adapter = CodeBERTAdapter()
+                
+                self._self_learning_enabled = True
+                logger.info("[EvolutionEngine] 自我学习能力已启用 (简化版)")
+                
+            except ImportError as e:
+                logger.error(f"[EvolutionEngine] 导入自我学习模块失败: {e}")
+                raise
+                
         else:
             self._self_learning_enabled = False
             logger.info("[EvolutionEngine] 自我学习能力已禁用")

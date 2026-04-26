@@ -196,7 +196,7 @@ class IDEAgent:
     ) -> Dict:
         """
         生成代码（意图驱动，复用 GlobalModelRouter）
-
+        
         Args:
             intent: 用户意图描述
             language: 目标语言
@@ -205,31 +205,48 @@ class IDEAgent:
             callbacks: 回调函数字典
                 - on_stream_delta: 流式输出回调
                 - on_thinking: 思考过程回调
-
+                
         Returns:
             Dict: 生成结果
         """
         # 使用 GlobalModelRouter 生成代码
         if self._use_model_router:
             try:
-                result = self._generate_code_with_router(
-                    intent, language, context, framework, callbacks
-                )
-
+                # _generate_code_with_router 是异步函数，需要正确处理
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # 在异步上下文中，创建任务
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(
+                            asyncio.run,
+                            self._generate_code_with_router(
+                                intent, language, context, framework, callbacks
+                            )
+                        )
+                        result = future.result(timeout=60)
+                else:
+                    # 不在异步上下文中
+                    result = asyncio.run(
+                        self._generate_code_with_router(
+                            intent, language, context, framework, callbacks
+                        )
+                    )
+                
                 self._stats["total_requests"] += 1
                 self._stats["code_generations"] += 1
-
+                
                 return result
             except Exception as e:
                 print(f"[IDEAgent] GlobalModelRouter 生成失败: {e}，回退到服务层")
-
+        
         # 回退到服务层
         service = self._ensure_service()
         result = service.generate_code(intent, language, context, framework)
-
+        
         self._stats["total_requests"] += 1
         self._stats["code_generations"] += 1
-
+        
         return {
             "success": result.success,
             "code": result.code,
@@ -242,7 +259,7 @@ class IDEAgent:
             "error": result.error,
         }
 
-    def _generate_code_with_router(
+    async def _generate_code_with_router(
         self,
         intent: str,
         language: str = "python",
@@ -250,73 +267,105 @@ class IDEAgent:
         framework: str = "",
         callbacks: Optional[Dict[str, Callable]] = None,
     ) -> Dict:
-        """使用 GlobalModelRouter 生成代码"""
+        """使用 GlobalModelRouter 生成代码（支持流式输出）"""
+        if not self._model_router:
+            return {
+                "success": False,
+                "code": "",
+                "language": language,
+                "file_path": "",
+                "description": intent,
+                "confidence": 0.0,
+                "warnings": ["GlobalModelRouter 未初始化"],
+                "suggestions": [],
+                "error": "GlobalModelRouter 未初始化",
+            }
+        
         # 构建提示
         prompt = self._build_code_generation_prompt(intent, language, context, framework)
-
-        # 调用 GlobalModelRouter
-        # 注意：这是同步调用，如果需要异步，应该使用 async
-        from client.src.business.global_model_router import RoutingStrategy
-
-        # 模拟流式输出
+        system_prompt = self._build_system_prompt(language, framework)
+        
         generated_code = ""
-        if callbacks and "on_stream_delta" in callbacks:
-            # TODO: 实际应该调用 GlobalModelRouter 的流式接口
-            # 这里简化，直接生成
-            pass
-
-        # 使用模型路由器生成代码
-        # 注意：GlobalModelRouter 的 call_model 是异步的
-        # 这里需要使用 asyncio.run 或在异步上下文中调用
+        
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 在异步上下文中
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._async_call_router(prompt))
-                    response = future.result(timeout=30)
-            else:
-                # 不在异步上下文中
-                response = asyncio.run(self._async_call_router(prompt))
+            # 使用流式调用
+            async for chunk in self._model_router.call_model_stream(
+                capability=ModelCapability.CODE_GENERATION,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                strategy=RoutingStrategy.QUALITY,
+            ):
+                generated_code += chunk
+                
+                # 流式输出回调
+                if callbacks and "on_stream_delta" in callbacks:
+                    callbacks["on_stream_delta"](chunk)
+            
+            # 解析响应，提取代码
+            code = self._extract_code_from_response(generated_code)
+            
+            return {
+                "success": True,
+                "code": code,
+                "language": language,
+                "file_path": "",
+                "description": intent,
+                "confidence": 0.9,
+                "warnings": [],
+                "suggestions": [],
+                "error": "",
+            }
+            
+        except Exception as e:
+            print(f"[IDEAgent] 流式调用 GlobalModelRouter 失败: {e}")
+            # 回退到非流式调用
+            try:
+                response = await self._async_call_router(prompt, system_prompt)
+                code = self._extract_code_from_response(response)
+                
+                return {
+                    "success": True,
+                    "code": code,
+                    "language": language,
+                    "file_path": "",
+                    "description": intent,
+                    "confidence": 0.8,
+                    "warnings": ["流式调用失败，使用非流式"],
+                    "suggestions": [],
+                    "error": "",
+                }
+            except Exception as e2:
+                print(f"[IDEAgent] 非流式调用也失败: {e2}")
+                return {
+                    "success": False,
+                    "code": "",
+                    "language": language,
+                    "file_path": "",
+                    "description": intent,
+                    "confidence": 0.0,
+                    "warnings": [],
+                    "suggestions": [],
+                    "error": str(e2),
+                }
+
+    async def _async_call_router(self, prompt: str, system_prompt: str = "") -> str:
+        """异步调用 GlobalModelRouter"""
+        if not self._model_router:
+            return ""
+        
+        try:
+            # 调用 GlobalModelRouter，使用 CODE_GENERATION 能力
+            response = await self._model_router.call_model(
+                capability=ModelCapability.CODE_GENERATION,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                strategy=RoutingStrategy.QUALITY,  # 代码生成使用质量优先
+                use_cache=True,
+            )
+            return response
         except Exception as e:
             print(f"[IDEAgent] 调用 GlobalModelRouter 失败: {e}")
-            # 回退到服务层
-            service = self._ensure_service()
-            result = service.generate_code(intent, language, context, framework)
-            return {
-                "success": result.success,
-                "code": result.code,
-                "language": result.language,
-                "file_path": result.file_path,
-                "description": result.description,
-                "confidence": result.confidence,
-                "warnings": result.warnings,
-                "suggestions": result.suggestions,
-                "error": result.error,
-            }
-
-        # 解析响应，提取代码
-        code = self._extract_code_from_response(response)
-
-        return {
-            "success": True,
-            "code": code,
-            "language": language,
-            "file_path": "",
-            "description": intent,
-            "confidence": 0.9,
-            "warnings": [],
-            "suggestions": [],
-            "error": "",
-        }
-
-    async def _async_call_router(self, prompt: str) -> str:
-        """异步调用 GlobalModelRouter"""
-        # TODO: 实现异步调用
-        # 这里应该调用 self._model_router.call_model()
-        # 但目前 GlobalModelRouter 的接口还不明确
-        return "print('Hello, World!')"  # 占位
+            return ""
 
     def _build_code_generation_prompt(
         self,
@@ -327,18 +376,34 @@ class IDEAgent:
     ) -> str:
         """构建代码生成提示"""
         parts = []
-
+        
         parts.append(f"请用{language}生成代码：")
         parts.append(f"需求：{intent}")
-
+        
         if framework:
             parts.append(f"框架：{framework}")
-
+        
         if context:
             parts.append(f"上下文：\n{context}")
-
+        
         parts.append("请只返回代码，不要解释。")
-
+        
+        return "\n".join(parts)
+    
+    def _build_system_prompt(self, language: str = "python", framework: str = "") -> str:
+        """构建系统提示"""
+        parts = []
+        
+        parts.append("你是一个专业的编程助手。")
+        parts.append(f"你擅长{language}编程。")
+        
+        if framework:
+            parts.append(f"你熟悉{framework}框架。")
+        
+        parts.append("你的任务是根据用户需求生成高质量、可运行的代码。")
+        parts.append("请只返回代码块，不要返回解释。")
+        parts.append("代码应该包含必要的注释。")
+        
         return "\n".join(parts)
 
     def _extract_code_from_response(self, response: str) -> str:

@@ -972,7 +972,7 @@ class IntelligentIDEPanel(QWidget):
         self.right_tabs.setCurrentWidget(self.code_editor)
     
     def run_current_code(self):
-        """运行当前编辑器中的代码"""
+        """运行当前编辑器中的代码（支持实时输出）"""
         # 获取代码
         code = self.code_editor.get_content()
         if not code:
@@ -985,32 +985,63 @@ class IntelligentIDEPanel(QWidget):
         # 显示运行中消息
         self.chat_widget.append_message('assistant', f"正在运行 {language} 代码...\n")
         
-        # 后台线程运行代码
+        # 后台线程运行代码（支持实时输出）
         self.status_bar.showMessage("正在运行代码...")
         
-        # TODO: 使用线程运行代码，实时显示结果
-        # 目前先简单运行
-        try:
-            result = self.ide_service.execute_code(code, language)
-            
-            # 显示结果
-            output = result.get('output', '')
-            error = result.get('error', '')
-            exit_code = result.get('exit_code', 0)
-            
-            result_text = ""
-            if output:
-                result_text += f"**输出：**\n```\n{output}\n```\n\n"
-            if error:
-                result_text += f"**错误：**\n```\n{error}\n```\n\n"
-            result_text += f"退出码：{exit_code}"
-            
-            self.chat_widget.append_code_result("运行结果", code, output if output else error)
-            
-            self.status_bar.showMessage("代码运行完成")
-        except Exception as e:
-            self.chat_widget.append_message('assistant', f"❌ 运行失败：{str(e)}")
-            self.status_bar.showMessage("代码运行失败")
+        # 创建并启动代码执行线程
+        self.worker_thread = CodeExecutionThread(
+            self.ide_agent,
+            code,
+            language,
+        )
+        self.worker_thread.output_line.connect(self.handle_code_output_line)
+        self.worker_thread.error_line.connect(self.handle_code_error_line)
+        self.worker_thread.finished.connect(self.handle_code_execution_finished)
+        self.worker_thread.error_occurred.connect(self.handle_code_error)
+        self.worker_thread.start()
+    
+    def handle_code_output_line(self, line: str):
+        """处理代码执行的逐行输出"""
+        # 实时追加输出到聊天界面
+        self.chat_widget.append_stream_chunk(line)
+    
+    def handle_code_error_line(self, line: str):
+        """处理代码执行的逐行错误输出"""
+        # 实时追加错误到聊天界面
+        self.chat_widget.append_stream_chunk(f"❌ {line}")
+    
+    def handle_code_execution_finished(self, result: dict):
+        """处理代码执行完成"""
+        # 显示完整结果
+        output = result.get('output', '')
+        error = result.get('error', '')
+        exit_code = result.get('exit_code', 0)
+        execution_time_ms = result.get('execution_time_ms', 0)
+        
+        result_text = ""
+        if output:
+            result_text += f"\n\n**输出：**\n```\n{output}\n```\n\n"
+        if error:
+            result_text += f"\n\n**错误：**\n```\n{error}\n```\n\n"
+        result_text += f"\n退出码：{exit_code}"
+        result_text += f"\n执行时间：{execution_time_ms:.2f} ms"
+        
+        self.chat_widget.append_stream_chunk(result_text)
+        self.chat_widget.finalize_message()
+        
+        self.status_bar.showMessage("就绪")
+        self.worker_thread = None
+        
+        # 切换到聊天tab
+        self.main_splitter.setSizes([1, 0])  # 显示聊天界面
+    
+    def handle_code_error(self, error_msg):
+        """处理代码执行错误"""
+        self.chat_widget.append_stream_chunk(f"\n\n❌ 运行失败：{error_msg}")
+        self.chat_widget.finalize_message()
+        
+        self.status_bar.showMessage("运行失败")
+        self.worker_thread = None
     
     def open_file_in_editor(self, file_path):
         """在编辑器中打开文件"""

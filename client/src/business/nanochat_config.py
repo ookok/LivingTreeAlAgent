@@ -175,8 +175,8 @@ class NanochatConfig:
     
     # 服务端点
     ollama: EndpointConfig = field(default_factory=lambda: EndpointConfig(
-        url="http://localhost:11434",
-        timeout=30,
+        url="http://www.mogoo.com.cn:8899/v1",
+        timeout=120,
         max_retries=3,
     ))
     

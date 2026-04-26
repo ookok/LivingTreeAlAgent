@@ -16,6 +16,7 @@ from typing import Optional
 
 from ..theme import theme_manager
 from ..router import get_router, Router
+from .sidebar import SidebarWidget
 
 
 class MainWindow(QWidget):

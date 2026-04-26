@@ -277,6 +277,53 @@ class GlobalModelRouter:
                 privacy_score=0.1,
                 config={"model": "gpt-3.5-turbo"},
             ),
+            # 自定义端点 (mogoo.com.cn 测试地址)
+            ModelInfo(
+                model_id="mogoo_qwen",
+                name="Qwen3.5 (mogoo.com.cn)",
+                backend=ModelBackend.OPENAI,  # OpenAI兼容格式
+                capabilities=[
+                    ModelCapability.CHAT,
+                    ModelCapability.CONTENT_GENERATION,
+                    ModelCapability.SUMMARIZATION,
+                    ModelCapability.TRANSLATION,
+                    ModelCapability.REASONING,
+                    ModelCapability.CODE_GENERATION,
+                ],
+                max_tokens=8192,
+                context_length=32768,
+                quality_score=0.85,
+                speed_score=0.7,
+                cost_score=1.0,  # 免费
+                privacy_score=0.3,  # 远程服务
+                config={
+                    "model": "qwen3.5:9b",
+                    "base_url": "http://www.mogoo.com.cn:8899/v1",
+                    "api_key": "dummy",  # 可能不需要认证
+                    "timeout": 120,  # 增加超时时间（秒）
+                },
+            ),
+            ModelInfo(
+                model_id="mogoo_smollm2",
+                name="SmollM2 Test (mogoo.com.cn)",
+                backend=ModelBackend.OPENAI,  # OpenAI兼容格式
+                capabilities=[
+                    ModelCapability.CHAT,
+                    ModelCapability.CODE_GENERATION,
+                    ModelCapability.SUMMARIZATION,
+                ],
+                max_tokens=4096,
+                context_length=8192,
+                quality_score=0.6,
+                speed_score=0.9,  # 小模型，速度快
+                cost_score=1.0,
+                privacy_score=0.3,
+                config={
+                    "model": "smollm2-test:latest",
+                    "base_url": "http://www.mogoo.com.cn:8899/v1",
+                    "api_key": "dummy",
+                },
+            ),
         ]
         
         for m in builtin_models:
@@ -447,6 +494,7 @@ class GlobalModelRouter:
                         strategy: RoutingStrategy = RoutingStrategy.AUTO,
                         context_length: int = 0,
                         use_cache: bool = True,
+                        model_id: str = "",  # 新增：直接指定模型ID
                         **kwargs) -> str:
         """
         调用模型（同步返回）
@@ -458,14 +506,22 @@ class GlobalModelRouter:
             strategy: 路由策略
             context_length: 需要的上下文长度
             use_cache: 是否使用缓存
+            model_id: 直接指定模型ID（不走路由）
         
         Returns:
             模型输出文本
         """
-        # 路由到模型
-        model = self.route(capability, strategy, context_length)
-        if not model:
-            return ""
+        # 如果指定了model_id，直接使用该模型
+        if model_id:
+            if model_id not in self.models:
+                logger.error(f"模型不存在: {model_id}")
+                return ""
+            model = self.models[model_id]
+        else:
+            # 路由到模型
+            model = self.route(capability, strategy, context_length)
+            if not model:
+                return ""
         
         # 检查缓存
         if use_cache:
@@ -670,12 +726,22 @@ class GlobalModelRouter:
     
     async def _call_openai(self, model: ModelInfo, prompt: str,
                            system_prompt: str = "") -> str:
-        """调用 OpenAI API（同步）"""
+        """调用 OpenAI API 或 OpenAI 兼容端点"""
         try:
             import openai
-            model_name = model.config.get("model", "gpt-3.5-turbo")
             
-            client = openai.AsyncOpenAI()
+            model_name = model.config.get("model", "gpt-3.5-turbo")
+            base_url = model.config.get("base_url")  # 支持自定义端点
+            api_key = model.config.get("api_key", "dummy")  # 支持自定义key
+            timeout = model.config.get("timeout", 60)  # 支持自定义超时（秒）
+            
+            # 创建客户端（支持自定义base_url和超时）
+            client = openai.AsyncOpenAI(
+                base_url=base_url if base_url else None,
+                api_key=api_key,
+                timeout=timeout,  # 设置超时
+            )
+            
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -690,12 +756,20 @@ class GlobalModelRouter:
     
     async def _call_openai_stream(self, model: ModelInfo, prompt: str,
                                   system_prompt: str = "") -> AsyncIterator[str]:
-        """调用 OpenAI API（流式）"""
+        """调用 OpenAI API 或兼容端点（流式）"""
         try:
             import openai
             model_name = model.config.get("model", "gpt-3.5-turbo")
+            base_url = model.config.get("base_url")
+            api_key = model.config.get("api_key", "dummy")
+            timeout = model.config.get("timeout", 60)  # 支持自定义超时
             
-            client = openai.AsyncOpenAI()
+            client = openai.AsyncOpenAI(
+                base_url=base_url if base_url else None,
+                api_key=api_key,
+                timeout=timeout,  # 设置超时
+            )
+            
             stream = await client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -711,6 +785,7 @@ class GlobalModelRouter:
         
         except Exception as e:
             logger.error(f"OpenAI 流式调用异常: {e}")
+            yield ""  # 流式函数需要yield
     
     @staticmethod
     def _mock_response(prompt: str) -> str:
@@ -766,7 +841,8 @@ def call_model_sync(capability: ModelCapability,
                     system_prompt: str = "",
                     strategy: RoutingStrategy = RoutingStrategy.AUTO,
                     context_length: int = 0,
-                    use_cache: bool = True) -> str:
+                    use_cache: bool = True,
+                    model_id: str = "") -> str:
     """
     同步调用模型（供非异步函数使用）
     
@@ -780,6 +856,7 @@ def call_model_sync(capability: ModelCapability,
         strategy: 路由策略
         context_length: 需要的上下文长度
         use_cache: 是否使用缓存
+        model_id: 直接指定模型ID（不走路由）
     
     Returns:
         模型输出文本
@@ -793,18 +870,18 @@ def call_model_sync(capability: ModelCapability,
             # 已有运行中的事件循环，使用 run_until_complete
             # 注意：在某些环境中可能不支持
             return asyncio.run_coroutine_threadsafe(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache),
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id),
                 loop
             ).result(timeout=120)
         else:
             # 没有运行中的循环，使用 asyncio.run()
             return asyncio.run(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache)
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id)
             )
     except RuntimeError:
         # 没有事件循环，创建新的
         return asyncio.run(
-            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache)
+            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id)
         )
 
 

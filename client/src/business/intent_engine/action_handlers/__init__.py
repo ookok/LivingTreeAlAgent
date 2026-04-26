@@ -20,6 +20,10 @@ from .knowledge_handler import KnowledgeQueryHandler
 from .knowledge_handler import ConceptExplainerHandler
 from .file_handler import FileOperationHandler
 from .websearch_handler import WebSearchHandler
+from .translation_handler import TranslationHandler
+from .summarization_handler import SummarizationHandler
+from .data_analysis_handler import DataAnalysisHandler
+from .image_generation_handler import ImageGenerationHandler
 
 __all__ = [
     'BaseActionHandler',
@@ -35,4 +39,8 @@ __all__ = [
     'ConceptExplainerHandler',
     'FileOperationHandler',
     'WebSearchHandler',
+    'TranslationHandler',
+    'SummarizationHandler',
+    'DataAnalysisHandler',
+    'ImageGenerationHandler',
 ]

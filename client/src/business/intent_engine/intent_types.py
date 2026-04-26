@@ -75,6 +75,19 @@ class IntentType(Enum):
     UNKNOWN = "unknown"                       # 未知意图
     MULTIPLE = "multiple"                     # 复合意图
 
+    # === 语言处理类 ===
+    TRANSLATION = "translation"               # 翻译
+    SUMMARIZATION = "summarization"           # 摘要
+    PARAPHRASE = "paraphrase"               # 改写
+
+    # === 数据分析类 ===
+    DATA_ANALYSIS = "data_analysis"           # 数据分析
+    DATA_VISUALIZATION = "data_visualization" # 数据可视化
+
+    # === 内容生成类 ===
+    IMAGE_GENERATION = "image_generation"     # 图像生成
+    VIDEO_GENERATION = "video_generation"     # 视频生成
+
 
 class IntentPriority(Enum):
     """意图优先级"""

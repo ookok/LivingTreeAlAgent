@@ -79,6 +79,38 @@ class ModelBackend(Enum):
 
 
 @dataclass
+class RoutingWeights:
+    """
+    路由三维权重配置
+    
+    三个维度：
+    - capability: 能力评分（质量/成功率/能力匹配度）
+    - cost:        成本评分（费用越低分越高）
+    - latency:     延迟评分（响应时间越短/负载越低分越高）
+    
+    权重和为1.0，自动归一化。
+    """
+    capability: float = 0.4
+    cost: float = 0.3
+    latency: float = 0.3
+
+    def normalize(self) -> "RoutingWeights":
+        """归一化权重（确保总和为1）"""
+        total = self.capability + self.cost + self.latency
+        if total == 0:
+            return RoutingWeights(0.34, 0.33, 0.33)
+        return RoutingWeights(
+            self.capability / total,
+            self.cost / total,
+            self.latency / total,
+        )
+
+    def to_dict(self) -> dict:
+        n = self.normalize()
+        return {"capability": round(n.capability, 2), "cost": round(n.cost, 2), "latency": round(n.latency, 2)}
+
+
+@dataclass
 class ModelInfo:
     """模型信息"""
     model_id: str
@@ -181,12 +213,19 @@ class GlobalModelRouter:
         ModelCapability.PLANNING: RoutingStrategy.QUALITY,
     }
     
-    def __init__(self):
+    def __init__(self, default_weights: RoutingWeights = None):
+        """
+        初始化路由器
+        
+        Args:
+            default_weights: 默认三维权重（BALANCED策略使用），默认 capability=0.4, cost=0.3, latency=0.3
+        """
         self.models: Dict[str, ModelInfo] = {}
         self._call_count: Dict[str, int] = defaultdict(int)
         self._cache: Dict[str, str] = {}  # 响应缓存 {hash: response}
         self._cache_ttl: int = 3600  # 缓存TTL（秒）
         self._cache_timestamps: Dict[str, float] = {}
+        self.default_weights: RoutingWeights = default_weights or RoutingWeights()
         
         # 加载内置模型
         self._load_builtin_models()
@@ -342,120 +381,229 @@ class GlobalModelRouter:
             del self.models[model_id]
             logger.info(f"注销模型: {model_name} ({model_id})")
     
+    # ============= 三维评分方法 =============
+
+    def _capability_score(self, model: ModelInfo, context_length: int = 0) -> float:
+        """
+        能力评分（0-1）
+        质量(50%) + 成功率(30%) + 上下文余量(20%)
+        """
+        quality = model.quality_score
+        success = model.success_rate
+        if context_length > 0 and model.context_length > 0:
+            ctx_ratio = model.context_length / context_length
+            ctx_score = min(ctx_ratio / 2.0, 1.0)  # 2倍余量得满分
+        else:
+            ctx_score = 1.0
+        return quality * 0.5 + success * 0.3 + ctx_score * 0.2
+
+    def _cost_score(self, model: ModelInfo) -> float:
+        """
+        成本评分（0-1，越高越便宜）
+        直接使用 model.cost_score（1.0=免费, 0.0=极贵）
+        """
+        return model.cost_score
+
+    def _latency_score(self, model: ModelInfo) -> float:
+        """
+        延迟评分（0-1，越高越快）
+        预设速度(30%) + 历史响应时间(40%) + 当前负载(30%)
+        """
+        speed = model.speed_score
+        rt = model.avg_response_time
+        time_score = 1.0 / (1.0 + rt * 0.5)  # rt=0→1.0, rt=2→0.5, rt=10→0.09
+        load = model.current_load
+        load_score = 1.0 / (1.0 + load * 0.2)  # load=0→1.0, load=5→0.5
+        return speed * 0.3 + time_score * 0.4 + load_score * 0.3
+
+    def _combined_score(self, model: ModelInfo, context_length: int,
+                       weights: RoutingWeights) -> float:
+        """三维综合评分 = cap*Wc + cost*Wcost + latency*Wlat"""
+        w = weights.normalize()
+        return (self._capability_score(model, context_length) * w.capability
+                + self._cost_score(model) * w.cost
+                + self._latency_score(model) * w.latency)
+
     def route(self, capability: ModelCapability,
               strategy: RoutingStrategy = RoutingStrategy.AUTO,
               context_length: int = 0,
-              exclude_models: List[str] = None) -> Optional[ModelInfo]:
+              exclude_models: List[str] = None,
+              weights: RoutingWeights = None) -> Optional[ModelInfo]:
         """
-        路由到最佳模型
-        
+        路由到最佳模型（三维评估）
+
         Args:
             capability: 需要的能力
             strategy: 路由策略
             context_length: 需要的上下文长度（0=不限制）
             exclude_models: 排除的模型ID列表
-        
+            weights: 自定义三维权重（仅BALANCED策略时使用）
+
         Returns:
             ModelInfo 最佳模型，如无则返回None
         """
-        # 确定策略
+        # 1. 确定策略
         if strategy == RoutingStrategy.AUTO:
             strategy = self.TASK_STRATEGY_MAP.get(capability, RoutingStrategy.BALANCED)
-        
-        # 筛选具备该能力的可用模型
+
+        # 2. 筛选候选模型
         exclude_set = set(exclude_models or [])
         candidates = [
             m for m in self.models.values()
-            if capability in m.capabilities 
+            if capability in m.capabilities
             and m.is_available
             and m.model_id not in exclude_set
             and (context_length == 0 or m.can_handle_context(context_length))
         ]
-        
+
         if not candidates:
             logger.warning(f"无可用模型支持 {capability.value}")
             return None
-        
-        # 按策略排序
+
+        # 3. 按策略评分排序
         if strategy == RoutingStrategy.QUALITY:
-            candidates.sort(key=lambda m: (
-                m.quality_score * 0.5 +
-                m.success_rate * 0.3 +
-                (1.0 / (m.current_load + 1)) * 0.2
-            ), reverse=True)
-        
+            candidates.sort(key=lambda m: self._capability_score(m, context_length), reverse=True)
+
         elif strategy == RoutingStrategy.SPEED:
-            candidates.sort(key=lambda m: (
-                m.speed_score * 0.4 +
-                (1.0 / (m.avg_response_time + 0.001)) * 0.3 +
-                (1.0 / (m.current_load + 1)) * 0.3
-            ), reverse=True)
-        
+            candidates.sort(key=lambda m: self._latency_score(m), reverse=True)
+
         elif strategy == RoutingStrategy.COST:
-            candidates.sort(key=lambda m: m.cost_score, reverse=True)
-        
+            candidates.sort(key=lambda m: self._cost_score(m), reverse=True)
+
         elif strategy == RoutingStrategy.PRIVACY:
             candidates.sort(key=lambda m: m.privacy_score, reverse=True)
-        
+
         else:  # BALANCED
-            candidates.sort(key=lambda m: (
-                m.quality_score * 0.3 +
-                m.speed_score * 0.2 +
-                m.cost_score * 0.2 +
-                m.privacy_score * 0.1 +
-                m.success_rate * 0.1 +
-                (1.0 / (m.current_load + 1)) * 0.1
-            ), reverse=True)
-        
+            w = (weights or self.default_weights)
+            candidates.sort(key=lambda m: self._combined_score(m, context_length, w), reverse=True)
+
+        # 4. 返回最佳模型
         selected = candidates[0]
         self._call_count[selected.model_id] = self._call_count.get(selected.model_id, 0) + 1
-        
+
         logger.info(f"模型路由: {capability.value} → {selected.name} (策略: {strategy.value})")
         return selected
     
     def route_with_fallback(self, capability: ModelCapability,
                            strategy: RoutingStrategy = RoutingStrategy.AUTO,
-                           context_length: int = 0) -> List[ModelInfo]:
+                           context_length: int = 0,
+                           weights: RoutingWeights = None) -> List[ModelInfo]:
         """
-        路由到模型列表（含fallback）
-        
+        路由到模型列表（含fallback，按优先级排序）
+
+        Args:
+            capability: 需要的能力
+            strategy: 路由策略
+            context_length: 需要的上下文长度
+            weights: 自定义三维权重（仅BALANCED策略时使用）
+
         Returns:
             按优先级排序的模型列表，第一个是最佳模型
         """
-        # 确定策略
+        # 1. 确定策略
+        if strategy == RoutingStrategy.AUTO:
+            strategy = self.TASK_STRATEGY_MAP.get(capability, RoutingStrategy.BALANCED)
+
+        # 2. 筛选候选模型
+        candidates = [
+            m for m in self.models.values()
+            if capability in m.capabilities
+            and m.is_available
+            and (context_length == 0 or m.can_handle_context(context_length))
+        ]
+
+        if not candidates:
+            return []
+
+        # 3. 按策略评分排序（与route()保持一致）
+        if strategy == RoutingStrategy.QUALITY:
+            candidates.sort(key=lambda m: self._capability_score(m, context_length), reverse=True)
+
+        elif strategy == RoutingStrategy.SPEED:
+            candidates.sort(key=lambda m: self._latency_score(m), reverse=True)
+
+        elif strategy == RoutingStrategy.COST:
+            candidates.sort(key=lambda m: self._cost_score(m), reverse=True)
+
+        elif strategy == RoutingStrategy.PRIVACY:
+            candidates.sort(key=lambda m: m.privacy_score, reverse=True)
+
+        else:  # BALANCED
+            w = (weights or self.default_weights)
+            candidates.sort(key=lambda m: self._combined_score(m, context_length, w), reverse=True)
+
+        return candidates
+
+    def explain_routing(self, capability: ModelCapability,
+                        strategy: RoutingStrategy = RoutingStrategy.AUTO,
+                        context_length: int = 0,
+                        weights: RoutingWeights = None) -> dict:
+        """
+        解释路由决策（调试用）
+        
+        返回各候选模型的三维评分详情，方便理解为什么选某个模型。
+        
+        Returns:
+            {
+                "strategy": ...,
+                "weights": {...},
+                "candidates": [
+                    {"model_id": ..., "capability": ..., "cost": ..., "latency": ..., "combined": ...},
+                    ...
+                ],
+                "selected": ...
+            }
+        """
+        # 1. 确定策略
         if strategy == RoutingStrategy.AUTO:
             strategy = self.TASK_STRATEGY_MAP.get(capability, RoutingStrategy.BALANCED)
         
-        # 筛选具备该能力的可用模型
+        # 2. 筛选候选
         candidates = [
             m for m in self.models.values()
-            if capability in m.capabilities 
+            if capability in m.capabilities
             and m.is_available
             and (context_length == 0 or m.can_handle_context(context_length))
         ]
         
         if not candidates:
-            return []
+            return {"error": f"无可用模型支持 {capability.value}"}
         
-        # 按策略排序
-        if strategy == RoutingStrategy.QUALITY:
-            candidates.sort(key=lambda m: m.quality_score, reverse=True)
-        elif strategy == RoutingStrategy.SPEED:
-            candidates.sort(key=lambda m: m.speed_score, reverse=True)
-        elif strategy == RoutingStrategy.COST:
-            candidates.sort(key=lambda m: m.cost_score, reverse=True)
-        elif strategy == RoutingStrategy.PRIVACY:
-            candidates.sort(key=lambda m: m.privacy_score, reverse=True)
-        else:  # BALANCED
-            candidates.sort(key=lambda m: (
-                m.quality_score * 0.4 +
-                m.speed_score * 0.2 +
-                m.cost_score * 0.2 +
-                m.privacy_score * 0.2
-            ), reverse=True)
+        # 3. 计算各维度评分
+        w = (weights or self.default_weights).normalize()
         
-        return candidates
-    
+        details = []
+        for m in candidates:
+            cap = self._capability_score(m, context_length)
+            cost = self._cost_score(m)
+            lat = self._latency_score(m)
+            combined = cap * w.capability + cost * w.cost + lat * w.latency
+            details.append({
+                "model_id": m.model_id,
+                "name": m.name,
+                "capability": round(cap, 3),
+                "cost": round(cost, 3),
+                "latency": round(lat, 3),
+                "combined": round(combined, 3),
+                "quality_score": m.quality_score,
+                "speed_score": m.speed_score,
+                "cost_score": m.cost_score,
+                "success_rate": round(m.success_rate, 3),
+                "avg_response_time": round(m.avg_response_time, 3),
+                "current_load": m.current_load,
+            })
+        
+        # 按综合分排序
+        details.sort(key=lambda x: x["combined"], reverse=True)
+        
+        return {
+            "capability": capability.value,
+            "strategy": strategy.value,
+            "weights": w.to_dict(),
+            "candidates": details,
+            "selected": details[0]["model_id"] if details else None,
+        }
+
     def _get_cache_key(self, model: ModelInfo, prompt: str, system_prompt: str = "") -> str:
         """生成缓存key"""
         content = f"{model.model_id}:{prompt}:{system_prompt}"

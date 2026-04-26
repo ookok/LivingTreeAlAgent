@@ -3,7 +3,9 @@ Intelligent IDE Panel - Chat-Driven Development Environment
 默认显示聊天框，AI根据用户输入生成/修改代码，代码编辑器作为tab页
 """
 import os
+import re
 import json
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTextEdit, QLineEdit, QPushButton, QLabel,
@@ -26,21 +28,63 @@ from client.src.presentation.widgets.code_completer import get_completer
 
 
 class ChatMessageThread(QThread):
-    """后台线程处理AI聊天请求"""
-    message_received = pyqtSignal(str, str)  # (role, content)
-    code_generated = pyqtSignal(str, str)   # (file_path, code)
-    error_occurred = pyqtSignal(str)
+    """后台线程处理AI聊天请求（支持流式输出）"""
+    chunk_received = pyqtSignal(str)           # 收到一个文本块
+    thinking_received = pyqtSignal(str)         # 收到推理内容
+    finished = pyqtSignal(str)                 # 完成（完整响应）
+    error_occurred = pyqtSignal(str)           # 错误
+    code_generated = pyqtSignal(str, str)      # (file_path, code)
+    tool_start = pyqtSignal(str, str)          # 工具开始（名称，参数）
+    tool_result = pyqtSignal(str, str, bool)   # 工具结果（名称，结果，成功）
     
     def __init__(self, agent, message, context=None):
         super().__init__()
         self.agent = agent
         self.message = message
         self.context = context or {}
+        self._stop_requested = False
     
     def run(self):
         try:
+            full_content = ""
+            thinking_content = ""
+            
+            # 定义回调函数
+            def on_stream_delta(delta: str):
+                nonlocal full_content
+                if self._stop_requested:
+                    return
+                full_content += delta
+                self.chunk_received.emit(delta)
+            
+            def on_thinking(delta: str):
+                nonlocal thinking_content
+                thinking_content += delta
+                self.thinking_received.emit(delta)
+            
+            def on_tool_start(name: str, params: str):
+                if self._stop_requested:
+                    return
+                self.tool_start.emit(name, params)
+            
+            def on_tool_result(name: str, result: str, success: bool):
+                if self._stop_requested:
+                    return
+                self.tool_result.emit(name, result, success)
+            
             # 调用AI agent处理用户请求
-            response = self.agent.process_chat_message(self.message, self.context)
+            callbacks = {
+                'on_stream_delta': on_stream_delta,
+                'on_thinking': on_thinking,
+                'on_tool_start': on_tool_start,
+                'on_tool_result': on_tool_result,
+            }
+            
+            response = self.agent.process_chat_message(
+                self.message,
+                self.context,
+                callbacks=callbacks,
+            )
             
             # 检查是否需要生成/修改代码
             if response.get('type') == 'code_generation':
@@ -48,9 +92,17 @@ class ChatMessageThread(QThread):
                 code = response.get('code', '')
                 self.code_generated.emit(file_path, code)
             
-            self.message_received.emit('assistant', response.get('message', ''))
+            # 完成
+            self.finished.emit(full_content or response.get('message', ''))
+            
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            import traceback
+            error_detail = traceback.format_exc()
+            self.error_occurred.emit(f"{str(e)}\n\n{error_detail}")
+    
+    def stop(self):
+        """停止处理"""
+        self._stop_requested = True
 
 
 class CodeEditorWidget(QWidget):
@@ -215,36 +267,328 @@ class CodeEditorWidget(QWidget):
             QMessageBox.critical(self, "错误", f"打开失败: {str(e)}")
 
 
+class ThinkingWidget(QFrame):
+    """推理过程显示组件（可折叠）"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._collapsed = True
+        self.thinking_text = ""
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(4)
+        
+        # 标题栏
+        self.header = QFrame()
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.toggle_btn = QPushButton("▶")
+        self.toggle_btn.setFixedSize(20, 20)
+        self.toggle_btn.setStyleSheet("border: none; font-size: 10px;")
+        self.toggle_btn.clicked.connect(self._toggle)
+        header_layout.addWidget(self.toggle_btn)
+        
+        label = QLabel("🤔 推理过程")
+        label.setStyleSheet("color: #FF9800; font-size: 12px; font-weight: bold;")
+        header_layout.addWidget(label)
+        
+        header_layout.addStretch()
+        layout.addWidget(self.header)
+        
+        # 内容区域
+        self.content_text = QTextEdit()
+        self.content_text.setReadOnly(True)
+        self.content_text.setMaximumHeight(200)
+        self.content_text.setStyleSheet("""
+            QTextEdit {
+                font-size: 12px;
+                background: #FFF8E1;
+                border: 1px solid #FFE082;
+                border-radius: 4px;
+            }
+        """)
+        self.content_text.setVisible(not self._collapsed)
+        layout.addWidget(self.content_text)
+    
+    def _toggle(self):
+        """切换折叠状态"""
+        self._collapsed = not self._collapsed
+        self.toggle_btn.setText("▼" if not self._collapsed else "▶")
+        self.content_text.setVisible(not self._collapsed)
+    
+    def append_text(self, text: str):
+        """追加推理文本"""
+        self.thinking_text += text
+        self.content_text.append(text)
+    
+    def set_text(self, text: str):
+        """设置推理文本"""
+        self.thinking_text = text
+        self.content_text.setPlainText(text)
+
+
+class ToolCallWidget(QFrame):
+    """工具调用显示组件（可折叠）"""
+    
+    def __init__(self, tool_name: str, parent=None):
+        super().__init__(parent)
+        self.tool_name = tool_name
+        self._collapsed = True
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(4)
+        
+        # 标题栏
+        self.header = QFrame()
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.toggle_btn = QPushButton("▶")
+        self.toggle_btn.setFixedSize(20, 20)
+        self.toggle_btn.setStyleSheet("border: none; font-size: 10px;")
+        self.toggle_btn.clicked.connect(self._toggle)
+        header_layout.addWidget(self.toggle_btn)
+        
+        self.label = QLabel(f"🔧 {self.tool_name}")
+        self.label.setStyleSheet("color: #4CAF50; font-size: 12px; font-weight: bold;")
+        header_layout.addWidget(self.label)
+        
+        header_layout.addStretch()
+        layout.addWidget(self.header)
+        
+        # 内容区域
+        self.content_text = QTextEdit()
+        self.content_text.setReadOnly(True)
+        self.content_text.setMaximumHeight(150)
+        self.content_text.setStyleSheet("""
+            QTextEdit {
+                font-size: 11px;
+                background: #f0f0f0;
+                border: 1px solid #eee;
+                border-radius: 4px;
+            }
+        """)
+        self.content_text.setVisible(not self._collapsed)
+        layout.addWidget(self.content_text)
+    
+    def _toggle(self):
+        """切换折叠状态"""
+        self._collapsed = not self._collapsed
+        self.toggle_btn.setText("▼" if not self._collapsed else "▶")
+        self.content_text.setVisible(not self._collapsed)
+    
+    def set_result(self, result: str, success: bool):
+        """设置工具执行结果"""
+        status_icon = "✓" if success else "✗"
+        status_color = "#4CAF50" if success else "#F44336"
+        self.label.setText(f"{status_icon} {self.tool_name}")
+        self.label.setStyleSheet(f"color: {status_color}; font-size: 12px; font-weight: bold;")
+        self.content_text.setPlainText(result[:500])
+
+
+class MessageBubble(QFrame):
+    """单条消息气泡（支持 Markdown 渲染和流式输出）"""
+    
+    def __init__(self, role: str, content: str = "", parent=None):
+        super().__init__(parent)
+        self.role = role
+        self.content = content
+        self.thinking_widget = None
+        self.tool_widgets = []
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(4)
+        
+        # 角色标签
+        role_label = QLabel("👤 用户" if self.role == "user" else "🤖 助手")
+        role_label.setStyleSheet("font-size: 11px; color: #666; font-weight: bold;")
+        layout.addWidget(role_label)
+        
+        # 内容显示
+        if self.role == "user":
+            self.content_label = QLabel(self.content)
+            self.content_label.setWordWrap(True)
+            self.content_label.setStyleSheet("font-size: 14px; padding: 4px 0;")
+            layout.addWidget(self.content_label)
+        else:
+            self.content_view = QTextEdit()
+            self.content_view.setReadOnly(True)
+            self.content_view.setMaximumHeight(600)
+            self.content_view.setMinimumHeight(50)
+            self._update_content_display()
+            layout.addWidget(self.content_view)
+        
+        # 推理过程容器
+        self.thinking_container = QWidget()
+        self.thinking_layout = QVBoxLayout(self.thinking_container)
+        self.thinking_layout.setContentsMargins(0, 4, 0, 4)
+        self.thinking_container.setVisible(False)
+        layout.addWidget(self.thinking_container)
+        
+        # 工具调用容器
+        self.tools_container = QWidget()
+        self.tools_layout = QVBoxLayout(self.tools_container)
+        self.tools_layout.setContentsMargins(0, 4, 0, 4)
+        self.tools_container.setVisible(False)
+        layout.addWidget(self.tools_container)
+        
+        # 时间戳
+        time_label = QLabel(datetime.now().strftime("%H:%M"))
+        time_label.setStyleSheet("font-size: 10px; color: #999;")
+        layout.addWidget(time_label)
+        
+        # 样式
+        if self.role == "user":
+            self.setStyleSheet("""
+                MessageBubble {
+                    background: #E3F2FD;
+                    border-radius: 12px;
+                    margin-left: 40px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                MessageBubble {
+                    background: #F5F5F5;
+                    border-radius: 12px;
+                    margin-right: 40px;
+                }
+            """)
+    
+    def _update_content_display(self):
+        """更新内容显示（渲染 Markdown）"""
+        if hasattr(self, 'content_view'):
+            html = self._render_markdown(self.content)
+            self.content_view.setHtml(html)
+            
+            # 自适应高度
+            document = self.content_view.document()
+            height = int(document.size().height()) + 20
+            self.content_view.setMaximumHeight(min(height, 600))
+    
+    def _render_markdown(self, text: str) -> str:
+        """简单的 Markdown 渲染（代码块高亮）"""
+        # 处理代码块
+        text = re.sub(
+            r'```(\w*)\n(.*?)```',
+            r'<pre style="background: #282c34; color: #abb2bf; padding: 12px; border-radius: 8px; overflow-x: auto;"><code>\2</code></pre>',
+            text,
+            flags=re.DOTALL
+        )
+        
+        # 处理行内代码
+        text = re.sub(r'`([^`]+)`', r'<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 4px;">\1</code>', text)
+        
+        # 处理加粗
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        
+        # 处理换行
+        text = text.replace('\n', '<br>')
+        
+        return text
+    
+    def update_content(self, new_content: str):
+        """更新消息内容（用于流式输出）"""
+        self.content = new_content
+        if hasattr(self, 'content_view'):
+            self._update_content_display()
+    
+    def append_thinking(self, text: str):
+        """追加推理过程"""
+        self.thinking_container.setVisible(True)
+        
+        if not self.thinking_widget:
+            self.thinking_widget = ThinkingWidget()
+            self.thinking_layout.addWidget(self.thinking_widget)
+        
+        self.thinking_widget.append_text(text)
+    
+    def set_thinking(self, text: str):
+        """设置推理过程"""
+        self.thinking_container.setVisible(True)
+        
+        if not self.thinking_widget:
+            self.thinking_widget = ThinkingWidget()
+            self.thinking_layout.addWidget(self.thinking_widget)
+        
+        self.thinking_widget.set_text(text)
+    
+    def add_tool_call(self, tool_name: str, result: str = "", success: bool = True):
+        """添加工具调用显示"""
+        self.tools_container.setVisible(True)
+        
+        tool_widget = ToolCallWidget(tool_name)
+        if result:
+            tool_widget.set_result(result, success)
+        
+        self.tool_widgets.append(tool_widget)
+        self.tools_layout.addWidget(tool_widget)
+
+
 class ChatWidget(QWidget):
-    """聊天界面组件"""
+    """聊天界面组件（支持流式输出、思考过程、工具调用）"""
     
     message_sent = pyqtSignal(str)  # 发送消息信号
+    run_code_requested = pyqtSignal(str, str)  # 请求运行代码（代码，语言）
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.message_history = []
+        self.current_assistant_bubble = None  # 当前助手消息气泡（用于流式输出）
         self.init_ui()
     
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # 聊天历史显示区域
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setFont(QFont('Microsoft YaHei', 11))
-        self.chat_display.setStyleSheet("""
-            QTextEdit {
+        # 聊天历史显示区域（使用 QScrollArea + 动态布局）
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
                 background-color: #1e1e1e;
-                color: #d4d4d4;
                 border: none;
-                padding: 10px;
             }
         """)
-        layout.addWidget(self.chat_display, 1)
+        
+        self.scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.scroll_layout.addStretch()
+        
+        self.scroll_area.setWidget(self.scroll_content)
+        layout.addWidget(self.scroll_area, 1)
         
         # 输入区域
         input_layout = QHBoxLayout()
+        
+        # 运行代码按钮（在输入区域左侧）
+        self.run_code_btn = QPushButton("▶ 运行代码")
+        self.run_code_btn.setFixedSize(100, 40)
+        self.run_code_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0e639c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1177bb;
+            }
+        """)
+        self.run_code_btn.clicked.connect(self.run_current_code)
+        input_layout.addWidget(self.run_code_btn)
         
         self.message_input = QTextEdit()
         self.message_input.setMaximumHeight(100)
@@ -282,6 +626,24 @@ class ChatWidget(QWidget):
         """)
         input_layout.addWidget(self.send_btn)
         
+        # 运行代码按钮（在发送按钮右侧）
+        self.run_code_btn = QPushButton("▶ 运行")
+        self.run_code_btn.setFixedSize(80, 40)
+        self.run_code_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0e639c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1177bb;
+            }
+        """)
+        self.run_code_btn.clicked.connect(self.run_current_code)
+        input_layout.addWidget(self.run_code_btn)
+        
         layout.addLayout(input_layout)
         
         # 快捷提示
@@ -306,42 +668,73 @@ class ChatWidget(QWidget):
         # 发送信号
         self.message_sent.emit(message)
     
-    def append_message(self, role, content):
+    def run_current_code(self):
+        """请求运行代码（发射信号，由 IntelligentIDEPanel 处理）"""
+        self.run_code_requested.emit("", "")  # 参数由 IntelligentIDEPanel 从编辑器获取
+    
+    def append_message(self, role: str, content: str = ""):
         """添加消息到聊天历史"""
         self.message_history.append({'role': role, 'content': content})
         
-        # 格式化显示
-        if role == 'user':
-            prefix = '<p style="color: #569cd6;"><b>👤 你：</b></p>'
-            color = '#d4d4d4'
-        else:
-            prefix = '<p style="color: #4ec9b0;"><b>🤖 助手：</b></p>'
-            color = '#d4d4d4'
+        # 创建消息气泡
+        bubble = MessageBubble(role, content)
+        self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, bubble)
         
-        formatted_content = content.replace('\n', '<br>')
-        message_html = f'{prefix}<p style="color: {color}; margin-left: 20px;">{formatted_content}</p><hr style="border-color: #3e3e42;">'
-        
-        self.chat_display.append(message_html)
+        # 如果是助手消息，保存引用（用于流式输出）
+        if role == 'assistant':
+            self.current_assistant_bubble = bubble
         
         # 滚动到底部
-        scrollbar = self.chat_display.verticalScrollBar()
+        self.scroll_to_bottom()
+    
+    def append_stream_chunk(self, chunk: str):
+        """追加流式输出内容"""
+        if not self.current_assistant_bubble:
+            # 创建新的助手消息
+            self.append_message('assistant', chunk)
+        else:
+            # 更新现有消息
+            current_content = self.current_assistant_bubble.content
+            self.current_assistant_bubble.update_content(current_content + chunk)
+    
+    def append_thinking(self, text: str):
+        """追加推理过程"""
+        if self.current_assistant_bubble:
+            self.current_assistant_bubble.append_thinking(text)
+            self.scroll_to_bottom()
+    
+    def set_thinking(self, text: str):
+        """设置推理过程"""
+        if self.current_assistant_bubble:
+            self.current_assistant_bubble.set_thinking(text)
+            self.scroll_to_bottom()
+    
+    def add_tool_call(self, tool_name: str, result: str = "", success: bool = True):
+        """添加工具调用显示"""
+        if self.current_assistant_bubble:
+            self.current_assistant_bubble.add_tool_call(tool_name, result, success)
+            self.scroll_to_bottom()
+    
+    def finalize_message(self):
+        """完成当前消息（重置 current_assistant_bubble）"""
+        self.current_assistant_bubble = None
+    
+    def scroll_to_bottom(self):
+        """滚动到底部"""
+        scrollbar = self.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
     
-    def append_code(self, file_path, code):
+    def append_code_result(self, file_path: str, code: str, execution_result: str = ""):
         """添加生成的代码到聊天历史"""
-        code_html = f'''
-        <p style="color: #4ec9b0;"><b>🤖 助手：</b></p>
-        <p style="color: #d4d4d4; margin-left: 20px;">
-            已生成代码：<b>{file_path}</b>
-        </p>
-        <pre style="background-color: #252526; color: #d4d4d4; padding: 10px; border-radius: 5px; overflow-x: auto;">{code}</pre>
-        <hr style="border-color: #3e3e42;">
-        '''
-        self.chat_display.append(code_html)
+        bubble = MessageBubble('assistant')
+        bubble.update_content(f"已生成代码：**{file_path}**\n\n```python\n{code}\n```")
         
-        # 滚动到底部
-        scrollbar = self.chat_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        if execution_result:
+            bubble.update_content(bubble.content + f"\n\n**执行结果：**\n```\n{execution_result}\n```")
+        
+        self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, bubble)
+        self.message_history.append({'role': 'assistant', 'content': bubble.content})
+        self.scroll_to_bottom()
 
 
 class IntelligentIDEPanel(QWidget):
@@ -420,6 +813,9 @@ class IntelligentIDEPanel(QWidget):
         
         self.setLayout(layout)
         
+        # 连接运行代码信号
+        self.chat_widget.run_code_requested.connect(self.run_current_code)
+        
         # 添加欢迎消息
         self.add_welcome_message()
     
@@ -446,26 +842,58 @@ class IntelligentIDEPanel(QWidget):
         """处理用户发送的消息"""
         self.status_bar.showMessage("正在处理...")
         
+        # 创建助手消息气泡（用于流式输出）
+        self.chat_widget.append_message('assistant')
+        
         # 后台线程处理AI请求
         self.worker_thread = ChatMessageThread(
             self.ide_agent,
             message,
             context={'project_path': self.project_path}
         )
-        self.worker_thread.message_received.connect(self.handle_ai_response)
-        self.worker_thread.code_generated.connect(self.handle_code_generation)
+        self.worker_thread.chunk_received.connect(self.handle_stream_chunk)
+        self.worker_thread.thinking_received.connect(self.handle_thinking)
+        self.worker_thread.tool_start.connect(self.handle_tool_start)
+        self.worker_thread.tool_result.connect(self.handle_tool_result)
+        self.worker_thread.finished.connect(self.handle_finished)
         self.worker_thread.error_occurred.connect(self.handle_error)
-        self.worker_thread.finished.connect(self.on_process_finished)
+        self.worker_thread.code_generated.connect(self.handle_code_generation)
         self.worker_thread.start()
     
-    def handle_ai_response(self, role, content):
-        """处理AI响应"""
-        self.chat_widget.append_message(role, content)
+    def handle_stream_chunk(self, chunk: str):
+        """处理流式输出块"""
+        self.chat_widget.append_stream_chunk(chunk)
+    
+    def handle_thinking(self, text: str):
+        """处理推理过程"""
+        self.chat_widget.append_thinking(text)
+    
+    def handle_tool_start(self, name: str, params: str):
+        """处理工具开始"""
+        self.chat_widget.add_tool_call(name, params, True)
+    
+    def handle_tool_result(self, name: str, result: str, success: bool):
+        """处理工具结果"""
+        # 找到最后一个工具调用，更新结果
+        if self.chat_widget.current_assistant_bubble and self.chat_widget.current_assistant_bubble.tool_widgets:
+            tool_widget = self.chat_widget.current_assistant_bubble.tool_widgets[-1]
+            tool_widget.set_result(result, success)
+    
+    def handle_finished(self, full_content: str):
+        """处理完成"""
+        self.chat_widget.finalize_message()
+        self.status_bar.showMessage("就绪")
+    
+    def handle_error(self, error_msg):
+        """处理错误"""
+        self.chat_widget.append_stream_chunk(f"\n\n❌ 出错了：{error_msg}")
+        self.status_bar.showMessage("处理失败")
+        self.worker_thread = None
     
     def handle_code_generation(self, file_path, code):
         """处理代码生成"""
         # 在聊天界面显示代码
-        self.chat_widget.append_code(file_path, code)
+        self.chat_widget.append_code_result(file_path, code)
         
         # 在代码编辑器中显示
         self.code_editor.set_content(code)
@@ -474,15 +902,46 @@ class IntelligentIDEPanel(QWidget):
         # 切换到代码编辑器tab
         self.right_tabs.setCurrentWidget(self.code_editor)
     
-    def handle_error(self, error_msg):
-        """处理错误"""
-        self.chat_widget.append_message('assistant', f"❌ 出错了：{error_msg}")
-        self.status_bar.showMessage("处理失败")
-    
-    def on_process_finished(self):
-        """处理完成"""
-        self.status_bar.showMessage("就绪")
-        self.worker_thread = None
+    def run_current_code(self):
+        """运行当前编辑器中的代码"""
+        # 获取代码
+        code = self.code_editor.get_content()
+        if not code:
+            QMessageBox.warning(self, "警告", "编辑器中没有代码！")
+            return
+        
+        # 获取语言
+        language = self.code_editor.language_combo.currentText()
+        
+        # 显示运行中消息
+        self.chat_widget.append_message('assistant', f"正在运行 {language} 代码...\n")
+        
+        # 后台线程运行代码
+        self.status_bar.showMessage("正在运行代码...")
+        
+        # TODO: 使用线程运行代码，实时显示结果
+        # 目前先简单运行
+        try:
+            result = self.ide_service.execute_code(code, language)
+            
+            # 显示结果
+            output = result.get('output', '')
+            error = result.get('error', '')
+            exit_code = result.get('exit_code', 0)
+            
+            result_text = ""
+            if output:
+                result_text += f"**输出：**\n```\n{output}\n```\n\n"
+            if error:
+                result_text += f"**错误：**\n```\n{error}\n```\n\n"
+            result_text += f"退出码：{exit_code}"
+            
+            self.chat_widget.append_code_result("运行结果", code, output if output else error)
+            
+            self.status_bar.showMessage("代码运行完成")
+        except Exception as e:
+            self.chat_widget.append_message('assistant', f"❌ 运行失败：{str(e)}")
+            self.status_bar.showMessage("代码运行失败")
     
     def open_file_in_editor(self, file_path):
         """在编辑器中打开文件"""

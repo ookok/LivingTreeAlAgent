@@ -225,5 +225,167 @@ def get_highlighter(language, parent=None):
         return JavaScriptSyntaxHighlighter(parent)
     elif language in ['html', 'htm']:
         return HTMLSyntaxHighlighter(parent)
+    elif language in ['css']:
+        return CSSSyntaxHighlighter(parent)
+    elif language in ['json']:
+        return JSONSyntaxHighlighter(parent)
+    elif language in ['yaml', 'yml']:
+        return YAMLSyntaxHighlighter(parent)
     else:
         return None
+
+
+class CSSSyntaxHighlighter(QSyntaxHighlighter):
+    """CSS 语法高亮器"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+        
+        # 选择器
+        selector_format = QTextCharFormat()
+        selector_format.setForeground(QColor("#d7ba7a"))
+        selector_format.setFontWeight(QFont.Weight.Bold)
+        
+        self.highlighting_rules.append((QRegExp("[a-zA-Z][a-zA-Z0-9]*"), selector_format))
+        
+        # 属性
+        property_format = QTextCharFormat()
+        property_format.setForeground(QColor("#9cdcfe"))
+        
+        self.highlighting_rules.append((QRegExp("[a-zA-Z-]+(?=\\s*:)"), property_format))
+        
+        # 值
+        value_format = QTextCharFormat()
+        value_format.setForeground(QColor("#ce9178"))
+        
+        self.highlighting_rules.append((QRegExp(":(.*?)(;|})"), value_format))
+        
+        # 注释
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("#6a9955"))
+        comment_format.setFontItalic(True)
+        
+        self.highlighting_rules.append((QRegExp("/\\*[^*]*\\*+([^/][^*]*\\*+)*/"), comment_format))
+        
+        # 数字
+        number_format = QTextCharFormat()
+        number_format.setForeground(QColor("#b5cea8"))
+        
+        self.highlighting_rules.append((QRegExp("\\b\\d+\\.?\\d*\\w*\\b"), number_format))
+    
+    def highlightBlock(self, text):
+        """高亮文本块"""
+        for pattern, format in self.highlighting_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+        
+        self.setCurrentBlockState(0)
+
+
+class JSONSyntaxHighlighter(QSyntaxHighlighter):
+    """JSON 语法高亮器"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+        
+        # 键
+        key_format = QTextCharFormat()
+        key_format.setForeground(QColor("#9cdcfe"))
+        
+        self.highlighting_rules.append((QRegExp("\"[^\"]+\":"), key_format))
+        
+        # 字符串值
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("#ce9178"))
+        
+        self.highlighting_rules.append((QRegExp(":\s*\"[^\"]+\""), string_format))
+        
+        # 数字
+        number_format = QTextCharFormat()
+        number_format.setForeground(QColor("#b5cea8"))
+        
+        self.highlighting_rules.append((QRegExp(":\\s*\\d+\\.?\\d*"), number_format))
+        
+        # 布尔值
+        boolean_format = QTextCharFormat()
+        boolean_format.setForeground(QColor("#569cd6"))
+        boolean_format.setFontWeight(QFont.Weight.Bold)
+        
+        self.highlighting_rules.append((QRegExp(":\\s*(true|false)"), boolean_format))
+        
+        # null
+        null_format = QTextCharFormat()
+        null_format.setForeground(QColor("#569cd6"))
+        null_format.setFontWeight(QFont.Weight.Bold)
+        
+        self.highlighting_rules.append((QRegExp(":\\s*null"), null_format))
+    
+    def highlightBlock(self, text):
+        """高亮文本块"""
+        for pattern, format in self.highlighting_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+        
+        self.setCurrentBlockState(0)
+
+
+class YAMLSyntaxHighlighter(QSyntaxHighlighter):
+    """YAML 语法高亮器"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+        
+        # 键
+        key_format = QTextCharFormat()
+        key_format.setForeground(QColor("#9cdcfe"))
+        
+        self.highlighting_rules.append((QRegExp("^[a-zA-Z_][a-zA-Z0-9_]*:")), key_format))
+        
+        # 值
+        value_format = QTextCharFormat()
+        value_format.setForeground(QColor("#ce9178"))
+        
+        self.highlighting_rules.append((QRegExp(":\\s+.+")), value_format))
+        
+        # 注释
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("#6a9955"))
+        comment_format.setFontItalic(True)
+        
+        self.highlighting_rules.append((QRegExp("#[^\n]*")), comment_format))
+        
+        # 数字
+        number_format = QTextCharFormat()
+        number_format.setForeground(QColor("#b5cea8"))
+        
+        self.highlighting_rules.append((QRegExp("\\b\\d+\\.?\\d*\\b")), number_format))
+        
+        # 布尔值
+        boolean_format = QTextCharFormat()
+        boolean_format.setForeground(QColor("#569cd6"))
+        boolean_format.setFontWeight(QFont.Weight.Bold)
+        
+        self.highlighting_rules.append((QRegExp(":\\s*(true|false|yes|no|on|off)")), boolean_format))
+    
+    def highlightBlock(self, text):
+        """高亮文本块"""
+        for pattern, format in self.highlighting_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+        
+        self.setCurrentBlockState(0)

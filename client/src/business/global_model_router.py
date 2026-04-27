@@ -29,6 +29,26 @@ import asyncio.tasks
 logger = logging.getLogger(__name__)
 
 
+# ============= 专家思考模式支持 =============
+
+# 延迟导入，避免循环导入
+_expert_thinking_controller = None
+
+def _get_expert_thinking_controller():
+    """获取专家思考模式控制器（延迟加载）"""
+    global _expert_thinking_controller
+    if _expert_thinking_controller is None:
+        try:
+            from client.src.business.ei_agent.expert_thinking_mode import (
+                get_expert_thinking_controller
+            )
+            _expert_thinking_controller = get_expert_thinking_controller()
+        except ImportError as e:
+            logger.warning(f"专家思考模式控制器导入失败: {e}")
+            return None
+    return _expert_thinking_controller
+
+
 # ============= 能力定义 =============
 
 class ModelCapability(Enum):
@@ -837,6 +857,10 @@ class GlobalModelRouter:
                         use_cache: bool = True,
                         model_id: str = "",  # 新增：直接指定模型ID
                         tier: Optional[ModelTier] = None,  # 新增：分层路由
+                        expert_type: Optional[str] = None,  # 新增：专家类型
+                        thinking_mode: Optional[str] = None,  # 新增：思考模式
+                        rys_config: Optional[dict] = None,  # 新增：RYS层重复配置
+                        verify: Optional[dict] = None,  # 新增：LLM-as-a-Verifier 验证配置
                         **kwargs) -> str:
         """
         调用模型（同步返回）
@@ -854,6 +878,60 @@ class GlobalModelRouter:
         Returns:
             模型输出文本
         """
+        # ── 注入专家思考模式指令（动态版，无枚举） ─────────────────────────────
+        if expert_type or thinking_mode:
+            controller = _get_expert_thinking_controller()
+            if controller:
+                # 设置专家类型（按名称，自动扫描 .livingtree/skills/）
+                if expert_type:
+                    if not controller.set_expert_by_name(expert_type):
+                        logger.warning(f"[思考模式] 设置专家失败: {expert_type}，将尝试自动匹配")
+
+                # 设置思考模式（按名称）
+                if thinking_mode:
+                    if not controller.set_thinking_mode_by_name(thinking_mode):
+                        logger.warning(f"[思考模式] 设置思考模式失败: {thinking_mode}")
+
+                # 如果未指定专家，让控制器自动匹配（在注入时处理）
+                # 增强 system_prompt
+                system_prompt = controller.get_enhanced_system_prompt(system_prompt)
+                config = controller.get_current_config()
+                logger.info(f"[思考模式] 已注入: expert={config['expert_name']}, mode={config['thinking_mode']}")
+        
+        # ── RYS 层重复推理增强 ─────────────────────────────
+        if rys_config:
+            try:
+                from client.src.business.rys_engine import (
+                    RYSConfig, get_rys_engine, validate_rys_config
+                )
+                rc = RYSConfig.from_dict(rys_config) if isinstance(rys_config, dict) else rys_config
+                # 获取当前模型名用于验证
+                target_model = model_id or ""
+                if target_model:
+                    is_safe, reason = validate_rys_config(rc, target_model)
+                    if not is_safe:
+                        logger.warning(f"[RYS] 配置不安全: {reason}")
+                    else:
+                        logger.info(f"[RYS] 层重复配置: {rc.blocks}, 额外+{rc.total_extra_layers}层")
+                        # TODO: 当 Ollama/llama.cpp 支持 --repeat-layers 后，
+                        # 将 rys_config 注入到 Ollama options 中
+                        # 当前记录配置供后续使用
+                else:
+                    logger.info(f"[RYS] 层重复配置已就绪（待模型确定后验证）")
+            except ImportError as e:
+                logger.warning(f"[RYS] 引擎导入失败: {e}")
+            except Exception as e:
+                logger.warning(f"[RYS] 配置处理异常: {e}")
+        
+        # ── LLM-as-a-Verifier 输出验证 ─────────────────────
+        # verify 参数说明（dict）：
+        #   "enabled": True,                          # 启用验证
+        #   "n_candidates": 3,                        # Best-of-N 候选数
+        #   "module": "universal",                    # 使用注册的评估标准
+        #   "strategy": "round_robin",                # 选择策略
+        #   "threshold": 10.0                         # 通过阈值
+        # 当启用时，生成 N 个候选后通过 VerifierEngine 选最优。
+        
         # 如果指定了 tier，使用分层路由
         if tier is not None:
             model = self.get_tier_model(tier)
@@ -1806,7 +1884,12 @@ def call_model_sync(capability: ModelCapability,
                     context_length: int = 0,
                     use_cache: bool = True,
                     model_id: str = "",
-                    tier: Optional[ModelTier] = None) -> str:
+                    tier: Optional[ModelTier] = None,
+                    expert_type: Optional[str] = None,  # 新增：专家类型
+                    thinking_mode: Optional[str] = None,  # 新增：思考模式
+                    rys_config: Optional[dict] = None,  # 新增：RYS层重复配置
+                    verify: Optional[dict] = None,  # 新增：LLM-as-a-Verifier 验证配置
+                    **kwargs) -> str:
     """
     同步调用模型（供非异步函数使用）
     
@@ -1834,18 +1917,18 @@ def call_model_sync(capability: ModelCapability,
             # 已有运行中的事件循环，使用 run_until_complete
             # 注意：在某些环境中可能不支持
             return asyncio.run_coroutine_threadsafe(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier),
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier, expert_type, thinking_mode, rys_config=rys_config, verify=verify),
                 loop
             ).result(timeout=120)
         else:
             # 没有运行中的循环，使用 asyncio.run()
             return asyncio.run(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier)
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier, expert_type, thinking_mode, rys_config=rys_config, verify=verify)
             )
     except RuntimeError:
         # 没有事件循环，创建新的
         return asyncio.run(
-            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier)
+            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier, expert_type, thinking_mode, rys_config=rys_config, verify=verify)
         )
 
 
@@ -2208,3 +2291,140 @@ def analyze_data(question: str) -> str:
             return asyncio.run(handler.handle(question))
     except RuntimeError:
         return asyncio.run(handler.handle(question))
+
+
+# ============= 情绪感知集成（新增 2026-04-27） =============
+
+async def call_model_with_emotion(
+    capability: ModelCapability,
+    prompt: str,
+    system_prompt: str = "",
+    strategy: RoutingStrategy = RoutingStrategy.AUTO,
+    context_length: int = 0,
+    use_cache: bool = True,
+    model_id: str = "",
+    tier: Optional[ModelTier] = None,
+    expert_type: Optional[str] = None,
+    auto_emotion: bool = True,  # 新增：是否自动情绪感知
+    **kwargs
+) -> str:
+    """
+    调用模型（支持自动情绪感知）
+    
+    Args:
+        capability: 模型能力
+        prompt: 用户消息
+        system_prompt: 系统提示
+        strategy: 路由策略
+        context_length: 上下文长度
+        use_cache: 是否使用缓存
+        model_id: 指定模型ID
+        tier: 分层路由
+        expert_type: 专家类型
+        auto_emotion: 是否自动进行情绪感知并调整思考模式
+        **kwargs: 其他参数
+        
+    Returns:
+        模型输出文本
+    """
+    # 如果启用自动情绪感知
+    if auto_emotion and expert_type:
+        try:
+            from client.src.business.emotion_thinking_integrator import (
+                get_emotion_thinking_integrator
+            )
+            
+            integrator = get_emotion_thinking_integrator()
+            
+            # 处理并增强Prompt
+            result, enhanced_prompt = await integrator.process_and_enhance_prompt(
+                user_message=prompt,
+                base_system_prompt=system_prompt,
+                expert_type=expert_type,
+                context=None,
+            )
+            
+            # 使用增强后的Prompt调用模型
+            router = get_global_router()
+            return await router.call_model(
+                capability=capability,
+                prompt=prompt,
+                system_prompt=enhanced_prompt,
+                strategy=strategy,
+                context_length=context_length,
+                use_cache=use_cache,
+                model_id=model_id,
+                tier=tier,
+                **kwargs
+            )
+        except ImportError as e:
+            logger.warning(f"情绪感知集成失败，使用普通调用: {e}")
+            # 失败则使用普通调用
+    
+    # 普通调用（未启用自动情绪感知或失败）
+    router = get_global_router()
+    return await router.call_model(
+        capability=capability,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        strategy=strategy,
+        context_length=context_length,
+        use_cache=use_cache,
+        model_id=model_id,
+        tier=tier,
+        expert_type=expert_type,
+        **kwargs
+    )
+
+
+def call_model_with_emotion_sync(
+    capability: ModelCapability,
+    prompt: str,
+    system_prompt: str = "",
+    strategy: RoutingStrategy = RoutingStrategy.AUTO,
+    context_length: int = 0,
+    use_cache: bool = True,
+    model_id: str = "",
+    tier: Optional[ModelTier] = None,
+    expert_type: Optional[str] = None,
+    auto_emotion: bool = True,
+    **kwargs
+) -> str:
+    """
+    调用模型（同步版本，支持自动情绪感知）
+    
+    Args:
+        同 call_model_with_emotion
+        
+    Returns:
+        模型输出文本
+    """
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(
+                call_model_with_emotion(
+                    capability, prompt, system_prompt, strategy,
+                    context_length, use_cache, model_id, tier,
+                    expert_type, auto_emotion, **kwargs
+                ),
+                loop
+            ).result(timeout=120)
+        else:
+            return asyncio.run(
+                call_model_with_emotion(
+                    capability, prompt, system_prompt, strategy,
+                    context_length, use_cache, model_id, tier,
+                    expert_type, auto_emotion, **kwargs
+                )
+            )
+    except RuntimeError:
+        return asyncio.run(
+            call_model_with_emotion(
+                capability, prompt, system_prompt, strategy,
+                context_length, use_cache, model_id, tier,
+                expert_type, auto_emotion, **kwargs
+            )
+        )

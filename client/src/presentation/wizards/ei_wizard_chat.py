@@ -52,6 +52,20 @@ except ImportError:
     patch_message_bubble = None
     logger.warning("消息操作模块导入失败，相关功能不可用")
 
+# 导入 TTS 语音朗读支持
+try:
+    import edge_tts
+    from client.src.business.living_tree_ai.voice.voice_adapter import (
+        MossTTSAdapter, VoiceConfig
+    )
+    TTS_AVAILABLE = True
+    _tts_adapter = MossTTSAdapter()
+    logger.info('[TTS] edge-tts 已安装，TTS 功能可用')
+except Exception as e:
+    TTS_AVAILABLE = False
+    _tts_adapter = None
+    logger.warning(f'[TTS] TTS 功能不可用：{e}')
+
 
 class MessageBubble(QWidget):
     """消息气泡组件"""
@@ -464,6 +478,30 @@ class EIWizardChat(QWidget):
         self.voice_btn.setCheckable(True)
         self.voice_btn.clicked.connect(self._toggle_voice_input)
         input_layout.addWidget(self.voice_btn)
+
+        # TTS 语音朗读按钮
+        self.tts_btn = QPushButton('🔊')
+        self.tts_btn.setFixedSize(40, 40)
+        self.tts_btn.setToolTip('语音朗读（点击开启/关闭）')
+        self.tts_btn.setCheckable(True)
+        self.tts_btn.setChecked(False)
+        self.tts_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:checked {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
+        self.tts_btn.clicked.connect(self._toggle_tts)
+        input_layout.addWidget(self.tts_btn)
         
         # 消息输入框
         self.message_input = QTextEdit()
@@ -736,6 +774,10 @@ class EIWizardChat(QWidget):
         # 如果是助手消息，保存引用（用于更新）
         if role == 'assistant':
             self.current_assistant_bubble = bubble
+
+        # TTS 语音朗读（如果已开启）
+        if hasattr(self, 'tts_btn') and self.tts_btn.isChecked():
+            self._speak_text(content)
         
         # 滚动到底部
         self._scroll_to_bottom()
@@ -1189,6 +1231,79 @@ class EIWizardChat(QWidget):
 # ============================================================
 # 主窗口（可选，用于独立运行）
 # ============================================================
+
+    
+    # ── TTS 语音朗读功能 ─────────────────────────────────────────
+    
+    def _toggle_tts(self, checked: bool):
+        """切换 TTS 语音朗读开关"""
+        if checked:
+            if not TTS_AVAILABLE:
+                self._add_message('assistant', '⚠️ TTS 语音库未安装，请运行：pip install edge-tts')
+                self.tts_btn.setChecked(False)
+                return
+            self.tts_btn.setText('🔇')
+            self.tts_btn.setToolTip('语音朗读（已开启，点击关闭）')
+            self._add_message('assistant', '🔊 语音朗读已开启，我将朗读回复。')
+        else:
+            self.tts_btn.setText('🔊')
+            self.tts_btn.setToolTip('语音朗读（点击开启/关闭）')
+            self._add_message('assistant', '🔇 语音朗读已关闭。')
+    
+    def _speak_text(self, text: str):
+        """语音朗读文本（在线程中执行，避免阻塞 UI）"""
+        if not TTS_AVAILABLE or not _tts_adapter:
+            return
+        import threading
+        import re
+        def _worker():
+            try:
+                import tempfile
+                from PySide6.QtCore import QMetaObject, Qt
+                # 清理文本（去掉 emoji 和特殊符号）
+                clean = re.sub(r'[^\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\w\s,.!?;:，。！？；：]', '', text)
+                clean = clean[:200]  # 限制长度
+                if not clean.strip():
+                    return
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                    tmp_path = f.name
+                result = _tts_adapter.synthesize_sync(clean, output_path=tmp_path)
+                if result.success:
+                    QMetaObject.invokeMethod(
+                        self, '_on_tts_audio_ready',
+                        Qt.ConnectionType.QueuedConnection,
+                        QMetaObject.Qt_string(tmp_path)
+                    )
+            except Exception as e:
+                logger.error(f'[TTS] 朗读失败: {e}')
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
+    
+    @Slot(str)
+    def _on_tts_audio_ready(self, audio_path: str):
+        """TTS 音频就绪，播放音频"""
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+            from PySide6.QtCore import QUrl, QTimer
+            if not hasattr(self, '_tts_player'):
+                self._tts_player = QMediaPlayer()
+                self._tts_audio_output = QAudioOutput()
+                self._tts_player.setAudioOutput(self._tts_audio_output)
+            self._tts_player.stop()
+            self._tts_player.setSource(QUrl.fromLocalFile(audio_path))
+            self._tts_player.play()
+            # 5秒后清理临时文件
+            QTimer.singleShot(5000, lambda: self._cleanup_tts_file(audio_path))
+        except Exception as e:
+            logger.error(f'[TTS] 播放失败: {e}')
+    
+    def _cleanup_tts_file(self, path: str):
+        """清理 TTS 临时音频文件"""
+        try:
+            import os
+            os.unlink(path)
+        except:
+            pass
 
 class EIWizardWindow(QWidget):
     """EIWizard 主窗口（极简设计）"""

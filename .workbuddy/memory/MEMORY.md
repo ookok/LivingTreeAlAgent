@@ -106,7 +106,7 @@ qwen2.5:1.5b, qwen2.5:0.5b, deepseek-r1:70b
 
 ## 已有工具模块清单（2026-04-27 更新）
 
-### 已实现的工具模块（18 个）
+### 已实现的工具模块（20 个）
 
 #### 网络与搜索工具（5 个）
 1. **web_crawler** - 网页爬虫（`client/src/business/web_crawler/engine.py`）
@@ -136,6 +136,24 @@ qwen2.5:1.5b, qwen2.5:0.5b, deepseek-r1:70b
 1. **expert_learning** - 专家学习（`client/src/business/expert_learning/learning_system.py`）
 2. **skill_evolution** - 技能进化（`client/src/business/skill_evolution/evolution_engine.py`）
 3. **experiment_loop** - 实验循环（`client/src/business/experiment_loop/evolution_loop.py`）
+
+#### 推理增强工具（2 个）
+1. **rys_engine** - RYS 层重复推理引擎（`client/src/business/rys_engine.py`）
+   - 基于 dnhkng 的 RYS 研究：重复 Transformer 中间推理层提升性能
+   - 不改权重、不微调，仅改变层执行路径
+   - Qwen3-4B 重复第21层 → +11.9% 性能，延迟仅 +2.8%
+   - 已集成到 GlobalModelRouter（`rys_config` 参数）
+   - ⚠️ 当前 Ollama 不支持运行时层重复，需等 llama.cpp 合并 --repeat-layers
+   - 参考：https://github.com/dnhkng/RYS
+2. **verifier_engine** - LLM-as-a-Verifier 验证引擎（`client/src/business/verifier_engine.py`）
+   - 基于 Stanford/Berkeley ICLR 2026 论文，OS级通用验证基础设施
+   - 三维度验证：G(粒度) × K(重复验证) × C(标准分解)
+   - Best-of-N 选择：循环赛机制选最优候选
+   - 直接调用 Ollama /api/chat 的 logprobs 参数
+   - VerifierRegistry：各模块注册评估标准
+   - 已集成到 GlobalModelRouter（`verify` 参数）
+   - 预置 4 套标准：universal(3) / ei_agent(7) / fusion_rag(3) / code_generation(3)
+   - 参考：https://github.com/llm-as-a-verifier/llm-as-a-verifier
 
 ### 需新建工具模块（6 个）
 

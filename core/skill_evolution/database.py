@@ -252,14 +252,23 @@ class EvolutionDatabase:
         keywords = query.lower().split()
         with self._lock:
             with self._get_conn() as conn:
-                placeholders = " OR ".join(["keywords LIKE ?" for _ in keywords])
-                sql = f"""
-                    SELECT * FROM insight_index
-                    WHERE {placeholders}
-                    ORDER BY access_count DESC
-                    LIMIT ?
-                """
-                params = [f"%{kw}%" for kw in keywords] + [limit]
+                if keywords:
+                    placeholders = " OR ".join(["keywords LIKE ?" for _ in keywords])
+                    sql = f"""
+                        SELECT * FROM insight_index
+                        WHERE {placeholders}
+                        ORDER BY access_count DESC
+                        LIMIT ?
+                    """
+                    params = [f"%{kw}%" for kw in keywords] + [limit]
+                else:
+                    # 空查询时返回最近访问的索引
+                    sql = """
+                        SELECT * FROM insight_index
+                        ORDER BY access_count DESC
+                        LIMIT ?
+                    """
+                    params = [limit]
                 rows = conn.execute(sql, params).fetchall()
                 results = []
                 for row in rows:

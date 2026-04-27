@@ -12,6 +12,9 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from enum import Enum
 
+# 导入常量
+from .user_profile import SOCIAL_ROLES
+
 
 # ── 数据模型 ─────────────────────────────────────────────────────────
 

@@ -16,6 +16,7 @@ from .security_manager import get_security_manager
 from .extensions import get_extension_manager, get_plugin_system, get_user_script_manager
 from .config import get_config_manager, ConfigOption, ConfigType
 from .config.config_validator import RangeValidator, ChoicesValidator
+from client.src.business.kachilu_integration import create_kachilu_integrator, KachiluConfig
 
 
 class BrowserUseAdapter:
@@ -39,6 +40,8 @@ class BrowserUseAdapter:
         self._user_script_manager = get_user_script_manager()
         self._config_manager = get_config_manager()
         self._init_config()
+        # 初始化 Kachilu 集成器
+        self._kachilu_integrator = self._init_kachilu_integrator()
     
     def _init_config(self):
         """
@@ -83,6 +86,39 @@ class BrowserUseAdapter:
                 default=True,
                 config_type=ConfigType.BOOL,
                 description="是否启用用户脚本"
+            ),
+            # Kachilu 配置
+            ConfigOption(
+                name="kachilu.anti_detection",
+                default=True,
+                config_type=ConfigType.BOOL,
+                description="是否启用反检测功能"
+            ),
+            ConfigOption(
+                name="kachilu.captcha_bypass",
+                default=True,
+                config_type=ConfigType.BOOL,
+                description="是否启用验证码绕过"
+            ),
+            ConfigOption(
+                name="kachilu.human_simulation",
+                default=True,
+                config_type=ConfigType.BOOL,
+                description="是否启用人类行为模拟"
+            ),
+            ConfigOption(
+                name="kachilu.min_delay",
+                default=0.5,
+                config_type=ConfigType.FLOAT,
+                description="最小延迟时间（秒）",
+                validator=RangeValidator(min_value=0.1, max_value=5.0)
+            ),
+            ConfigOption(
+                name="kachilu.max_delay",
+                default=2.0,
+                config_type=ConfigType.FLOAT,
+                description="最大延迟时间（秒）",
+                validator=RangeValidator(min_value=0.1, max_value=10.0)
             )
         ]
         self._config_manager.add_options(options)
@@ -122,6 +158,24 @@ class BrowserUseAdapter:
         except Exception as e:
             print(f"初始化 browser-use 失败: {e}")
             return False
+    
+    def _init_kachilu_integrator(self):
+        """
+        初始化 Kachilu 集成器
+        
+        Returns:
+            KachiluIntegrator: 集成器实例
+        """
+        kachilu_config = {
+            "anti_detection": self._config_manager.get("kachilu.anti_detection", True),
+            "captcha_bypass": self._config_manager.get("kachilu.captcha_bypass", True),
+            "human_simulation": self._config_manager.get("kachilu.human_simulation", True),
+            "min_delay": self._config_manager.get("kachilu.min_delay", 0.5),
+            "max_delay": self._config_manager.get("kachilu.max_delay", 2.0)
+        }
+        integrator = create_kachilu_integrator(kachilu_config)
+        integrator.set_security_manager(self._security_manager)
+        return integrator
     
     def _get_llm(self):
         """
@@ -193,6 +247,9 @@ class BrowserUseAdapter:
             # 从会话池获取浏览器会话
             session = await self._browser_pool.get_session()
             self._current_session = session
+            
+            # 应用 Kachilu 反检测功能
+            self._apply_kachilu_features(session.browser)
             
             # 加载扩展、插件和用户脚本
             self._load_extensions(session)
@@ -290,6 +347,20 @@ class BrowserUseAdapter:
             
             # 加载用户脚本
             self._user_script_manager.load_scripts(session)
+    
+    def _apply_kachilu_features(self, browser: Browser):
+        """
+        应用 Kachilu 功能
+        
+        Args:
+            browser: 浏览器实例
+        """
+        # 应用反检测
+        self._kachilu_integrator.apply_anti_detection(browser)
+        # 模拟人类行为
+        self._kachilu_integrator.simulate_human_behavior(browser)
+        # 尝试绕过验证码
+        self._kachilu_integrator.bypass_captcha(browser)
     
     def _extract_urls_from_task(self, task: str) -> List[str]:
         """

@@ -89,6 +89,27 @@ def register_browser_use_nodes(registry: NodeRegistry):
                         "type": "boolean",
                         "title": "使用云浏览器",
                         "default": false
+                    },
+                    "kachilu": {
+                        "type": "object",
+                        "title": "Kachilu 配置",
+                        "properties": {
+                            "anti_detection": {
+                                "type": "boolean",
+                                "title": "启用反检测",
+                                "default": true
+                            },
+                            "captcha_bypass": {
+                                "type": "boolean",
+                                "title": "启用验证码绕过",
+                                "default": true
+                            },
+                            "human_simulation": {
+                                "type": "boolean",
+                                "title": "启用人类行为模拟",
+                                "default": true
+                            }
+                        }
                     }
                 }
             }
@@ -100,7 +121,12 @@ def register_browser_use_nodes(registry: NodeRegistry):
             },
             "result_variable": "browser_result",
             "browser_config": {
-                "use_cloud": false
+                "use_cloud": false,
+                "kachilu": {
+                    "anti_detection": true,
+                    "captcha_bypass": true,
+                    "human_simulation": true
+                }
             }
         }
     )

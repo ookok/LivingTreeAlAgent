@@ -229,7 +229,7 @@ class TierRouter:
         query: str, 
         num_results: int = 10,
         max_tier: TierLevel = TierLevel.TIER_3_GLOBAL,
-        timeout: float = 10.0
+        timeout: float = 30.0  # 增加超时时间到 30 秒（原来 10 秒太短）
     ) -> List[SearchResult]:
         """
         执行分布式搜索

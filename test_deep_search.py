@@ -1,77 +1,107 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-测试系统深度搜索功能
+测试深度搜索功能
 """
 
-import sys
-from pathlib import Path
-
-# 添加项目根目录到路径
-_root = Path(__file__).parent
-sys.path.insert(0, str(_root))
-
-from core.fusion_rag.fusion_engine import FusionEngine
+import asyncio
+import time
+from core.smolllm2.l0_integration import smart_execute
+from core.smolllm2.router import L0Router
 
 
-def test_deep_search():
-    """测试深度搜索功能"""
-    print("=== 测试深度搜索功能 ===")
+async def test_deep_search():
+    """测试深度搜索"""
+    print("=== 测试深度搜索 ===")
+    
+    # 测试查询
+    queries = [
+        "南京溧水养猪场环评报告",
+        "北京海淀区科技园区规划",
+        "上海浦东新区商业中心建设",
+        "广州天河区交通规划",
+        "深圳南山区科技园发展"
+    ]
+    
+    # 连续测试多次，查看缓存命中情况
+    for i, query in enumerate(queries):
+        print(f"\n第 {i+1} 次测试:")
+        print(f"查询: {query}")
+        
+        # 测试 L0 路由
+        router = L0Router()
+        route_decision = await router.route(query)
+        print(f"L0 路由决策: {route_decision.route.value}, 意图: {route_decision.intent.value}")
+        print(f"原因: {route_decision.reason}, 置信度: {route_decision.confidence:.2f}")
+        print(f"延迟: {route_decision.latency_ms:.2f}ms")
+        
+        # 测试智能执行
+        start_time = time.time()
+        try:
+            result = await smart_execute(query)
+            latency = (time.time() - start_time) * 1000
+            
+            print(f"\n智能执行结果:")
+            print(f"内容: {result['content']}")
+            print(f"延迟: {latency:.2f}ms")
+            
+            if "l0_decision" in result:
+                l0_decision = result["l0_decision"]
+                print(f"L0 决策: {l0_decision['route']}, 意图: {l0_decision['intent']}")
+                print(f"置信度: {l0_decision['confidence']:.2f}")
+            
+            if "cache_hit" in result and result["cache_hit"]:
+                print("✅ 缓存命中")
+            elif "escalate_to_human" in result and result["escalate_to_human"]:
+                print("⚠️  转人工")
+        except Exception as e:
+            print(f"❌ 智能执行失败: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 等待 2 秒避免请求过于频繁
+        time.sleep(2)
+    
+    # 测试重复查询，查看缓存命中情况
+    print("\n=== 测试缓存命中 ===")
+    repeat_query = "南京溧水养猪场环评报告"
+    for i in range(3):
+        print(f"\n重复查询第 {i+1} 次:")
+        print(f"查询: {repeat_query}")
+        
+        start_time = time.time()
+        try:
+            result = await smart_execute(repeat_query)
+            latency = (time.time() - start_time) * 1000
+            
+            print(f"智能执行结果:")
+            print(f"内容: {result['content']}")
+            print(f"延迟: {latency:.2f}ms")
+            
+            if "cache_hit" in result and result["cache_hit"]:
+                print("✅ 缓存命中")
+            elif "escalate_to_human" in result and result["escalate_to_human"]:
+                print("⚠️  转人工")
+        except Exception as e:
+            print(f"❌ 智能执行失败: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 等待 2 秒避免请求过于频繁
+        time.sleep(2)
 
-    # 初始化融合引擎
-    fusion_engine = FusionEngine(top_k=5)
 
-    # 模拟各层检索结果
-    layer_results = {
-        "exact_cache": [
-            {"content": "Python 是一种高级编程语言，易学易用", "score": 0.95},
-            {"content": "Python 支持面向对象编程", "score": 0.85}
-        ],
-        "session_cache": [
-            {"content": "Python 有丰富的标准库", "score": 0.90},
-            {"content": "Python 适用于数据分析", "score": 0.80}
-        ],
-        "knowledge_base": [
-            {"content": "Python 是一种解释型语言", "score": 0.85},
-            {"content": "Python 由 Guido van Rossum 创造", "score": 0.75}
-        ],
-        "database": [
-            {"content": "Python 支持多种编程范式", "score": 0.80},
-            {"content": "Python 在人工智能领域广泛应用", "score": 0.92}
-        ]
-    }
-
-    print("\n1. 测试加权求和融合")
-    weighted_results = fusion_engine.fuse(layer_results, algorithm="weighted_sum")
-    for i, result in enumerate(weighted_results, 1):
-        print(f"  {i}. {result['content']} (分数: {result['score']:.3f}, 来源: {result['source']})")
-
-    print("\n2. 测试 RRF 融合")
-    rrf_results = fusion_engine.fuse(layer_results, algorithm="rrf")
-    for i, result in enumerate(rrf_results, 1):
-        print(f"  {i}. {result['content']} (RRF分数: {result['rrf_score']:.3f}, 来源: {result['source']})")
-
-    print("\n3. 测试混合融合")
-    hybrid_results = fusion_engine.fuse(layer_results, algorithm="hybrid")
-    for i, result in enumerate(hybrid_results, 1):
-        print(f"  {i}. {result['content']} (融合分数: {result['fused_score']:.3f}, 来源: {result['source']})")
-
-    print("\n4. 测试答案生成")
-    query = "Python 是什么"
-    answer = fusion_engine.generate_answer(query, hybrid_results)
-    print(f"  查询: {query}")
-    print(f"  答案: {answer['answer']}")
-    print(f"  置信度: {answer['confidence']:.3f}")
-    print(f"  来源: {len(answer['sources'])} 个")
-
-    print("\n5. 测试统计信息")
-    stats = fusion_engine.get_stats()
-    print(f"  融合次数: {stats['fusion_count']}")
-    print(f"  平均结果数: {stats['avg_results_count']:.1f}")
-    print(f"  可用算法: {', '.join(stats['available_algorithms'])}")
-    print(f"  默认算法: {stats['default_algorithm']}")
-
-    print("\n深度搜索功能测试完成！")
+async def main():
+    """主测试函数"""
+    print("🚀 开始测试深度搜索功能")
+    print("=" * 60)
+    
+    # 测试深度搜索
+    await test_deep_search()
+    
+    print("\n" + "=" * 60)
+    print("📋 测试完成")
 
 
 if __name__ == "__main__":
-    test_deep_search()
+    asyncio.run(main())

@@ -162,7 +162,7 @@ class ConversationalClarifier:
         """延迟初始化IdeaClarifier"""
         if self.clarifier is None:
             try:
-                from core.idea_clarifier import get_idea_clarifier
+                from client.src.business.idea_clarifier import get_idea_clarifier
                 self.clarifier = get_idea_clarifier()
             except ImportError:
                 self.clarifier = None

@@ -20,7 +20,7 @@ import time
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
-from core.tools_registry import ToolRegistry, tool
+from client.src.business.tools_registry import ToolRegistry, tool
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def _register_node_tools():
         """启动P2P节点"""
         try:
             # 导入P2P连接器
-            from core.p2p_connector import get_p2p_connector
+            from client.src.business.p2p_connector import get_p2p_connector
 
             connector = get_p2p_connector()
             success = connector.start()
@@ -114,7 +114,7 @@ def _register_node_tools():
     def p2p_stop_node(context: Dict) -> Dict:
         """停止P2P节点"""
         try:
-            from core.p2p_connector import get_p2p_connector
+            from client.src.business.p2p_connector import get_p2p_connector
 
             connector = get_p2p_connector()
             connector.stop()
@@ -142,7 +142,7 @@ def _register_node_tools():
     def p2p_get_status(context: Dict) -> Dict:
         """获取节点状态"""
         try:
-            from core.p2p_connector import get_p2p_connector
+            from client.src.business.p2p_connector import get_p2p_connector
 
             connector = get_p2p_connector()
 
@@ -175,7 +175,7 @@ def _register_node_tools():
     def p2p_get_peers(context: Dict) -> Dict:
         """获取邻居节点"""
         try:
-            from core.p2p_connector import get_p2p_connector
+            from client.src.business.p2p_connector import get_p2p_connector
 
             connector = get_p2p_connector()
             peers = connector.get_peers() if hasattr(connector, 'get_peers') else []
@@ -225,8 +225,8 @@ def _register_config_tools():
     def p2p_check_config(context: Dict, feature: Optional[str] = None) -> Dict:
         """检查配置"""
         try:
-            from core.config import load_config
-            from core.config_missing_detector import get_config_detector
+            from client.src.business.config import load_config
+            from client.src.business.config_missing_detector import get_config_detector
 
             cfg = load_config()
             detector = get_config_detector()
@@ -288,7 +288,7 @@ def _register_config_tools():
     def p2p_get_missing_config(context: Dict, category: str = "all") -> Dict:
         """获取缺失配置"""
         try:
-            from core.config_missing_detector import get_config_detector
+            from client.src.business.config_missing_detector import get_config_detector
 
             detector = get_config_detector()
             missing = detector.get_all_missing()
@@ -345,7 +345,7 @@ def _register_config_tools():
     def p2p_update_config(context: Dict, key: str, value: str) -> Dict:
         """更新配置"""
         try:
-            from core.config import load_config, save_config
+            from client.src.business.config import load_config, save_config
             import json
 
             cfg = load_config()
@@ -406,7 +406,7 @@ def _register_config_tools():
         try:
             if config_type == "api_key":
                 # 验证API Key
-                from core.key_management import get_key_manager
+                from client.src.business.key_management import get_key_manager
                 km = get_key_manager()
                 if km and km._initialized:
                     consumer = km.consumer
@@ -463,8 +463,8 @@ def _register_relay_tools():
     def p2p_connect_relay(context: Dict, relay_address: Optional[str] = None) -> Dict:
         """连接中继服务器"""
         try:
-            from core.model_store import get_store_manager
-            from core.config import load_config
+            from client.src.business.model_store import get_store_manager
+            from client.src.business.config import load_config
 
             cfg = load_config()
             relay_servers = cfg.model_store.relay_servers
@@ -507,7 +507,7 @@ def _register_relay_tools():
     def p2p_get_relay_status(context: Dict) -> Dict:
         """获取中继状态"""
         try:
-            from core.config import load_config
+            from client.src.business.config import load_config
 
             cfg = load_config()
             relay_servers = cfg.model_store.relay_servers
@@ -574,7 +574,7 @@ def _register_relay_tools():
     def p2p_broadcast(context: Dict, message: str, message_type: str = "text") -> Dict:
         """广播消息"""
         try:
-            from core.p2p_connector import get_p2p_connector
+            from client.src.business.p2p_connector import get_p2p_connector
 
             connector = get_p2p_connector()
             peer_count = len(connector.get_peers()) if hasattr(connector, 'get_peers') else 0
@@ -623,7 +623,7 @@ def _register_model_tools():
     def p2p_search_models(context: Dict, query: str, category: Optional[str] = None) -> Dict:
         """搜索模型"""
         try:
-            from core.model_store import get_store_manager
+            from client.src.business.model_store import get_store_manager
 
             store = get_store_manager()
             results = store.search_models(query) if hasattr(store, 'search_models') else []
@@ -670,7 +670,7 @@ def _register_model_tools():
     def p2p_download_model(context: Dict, model_id: str, priority: str = "normal") -> Dict:
         """下载模型"""
         try:
-            from core.model_store import get_store_manager
+            from client.src.business.model_store import get_store_manager
 
             store = get_store_manager()
 
@@ -712,7 +712,7 @@ def _register_model_tools():
     def p2p_get_download_progress(context: Dict, task_id: Optional[str] = None) -> Dict:
         """获取下载进度"""
         try:
-            from core.model_store import get_store_manager
+            from client.src.business.model_store import get_store_manager
 
             store = get_store_manager()
 
@@ -762,7 +762,7 @@ def _register_key_tools():
     def p2p_get_api_key(context: Dict, provider: str) -> Dict:
         """获取API密钥"""
         try:
-            from core.key_management import get_key_manager
+            from client.src.business.key_management import get_key_manager
 
             km = get_key_manager()
             if not km or not km._initialized:
@@ -816,7 +816,7 @@ def _register_key_tools():
     def p2p_check_key_health(context: Dict, provider: str) -> Dict:
         """检查密钥健康"""
         try:
-            from core.key_management import get_key_manager
+            from client.src.business.key_management import get_key_manager
 
             km = get_key_manager()
             if not km or not km._initialized:
@@ -854,7 +854,7 @@ def _register_key_tools():
     def p2p_list_providers(context: Dict) -> Dict:
         """列出提供商"""
         try:
-            from core.key_management import get_key_manager
+            from client.src.business.key_management import get_key_manager
 
             km = get_key_manager()
             if not km or not km._initialized:

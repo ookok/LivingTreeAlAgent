@@ -123,7 +123,7 @@ class LicenseAuth:
 
         # 导入激活码生成器
         try:
-            from core.activation_license import LicenseGenerator, LicenseVersion, get_license_generator
+            from client.src.business.activation_license import LicenseGenerator, LicenseVersion, get_license_generator
 
             version_map = {
                 'PER': LicenseVersion.PERSONAL,
@@ -202,7 +202,7 @@ class LicenseAuth:
             user = self._admin_auth.current_user
 
         try:
-            from core.activation_license import LicenseGenerator, LicenseVersion, get_license_generator
+            from client.src.business.activation_license import LicenseGenerator, LicenseVersion, get_license_generator
 
             version_map = {
                 'PER': LicenseVersion.PERSONAL,

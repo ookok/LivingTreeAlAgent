@@ -8,6 +8,7 @@ import json
 import yaml
 from pathlib import Path
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -45,7 +46,7 @@ class ModelMarketConfig(BaseModel):
 
 
 class ModelStoreConfig(BaseModel):
-    """模型商店配置 (P2P模型分发 + 中继链网络)"""
+    """模型商店配置 (P2P模型分发 + 中继链网络）"""
     enable_p2p: bool = True                  # 启用P2P模型发现
     relay_servers: list[str] = Field(default_factory=lambda: [
         "139.199.124.242:8888",  # 默认中继服务器
@@ -143,7 +144,7 @@ def _get_projects_dir(cfg: AppConfig) -> Path:
     return p
 
 
-# ── 公开 API ────────────────────────────────────────────────────────
+# ── 公开 API ──────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = AppConfig()
 
@@ -214,3 +215,25 @@ def get_projects_dir() -> Path:
 
 def get_config_dir() -> Path:
     return _get_config_dir()
+
+
+# ── UnifiedConfig 兼容层 ─────────────────────────────────────────────
+# 为了兼容从 core.config 迁移过来的代码
+# 现在从 nanochat_config 导入（已废弃，请直接使用 config）
+
+from .nanochat_config import (
+    UnifiedConfig,
+    get_unified_config,
+    set_unified_config,
+)
+
+
+# 更新 __all__ 导出
+__all__ = [
+    'AppConfig', 'OllamaConfig', 'ModelPathConfig', 'ModelMarketConfig',
+    'ModelStoreConfig', 'WritingConfig', 'SearchConfig', 'AgentConfig',
+    'load_config', 'save_config', 'get_hermes_home', 'get_env_value',
+    'get_models_dir', 'get_projects_dir', 'get_config_dir',
+    # 兼容层（已废弃）
+    'UnifiedConfig', 'get_unified_config', 'set_unified_config',
+]

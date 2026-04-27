@@ -92,8 +92,8 @@ class CLIAgentTool:
         Returns:
             生成结果字典
         """
-        from core.cli_anything import get_cli_anything, get_tools_registry
-        from core.cli_tool_installer import get_installer
+        from client.src.business.cli_anything import get_cli_anything, get_tools_registry
+        from client.src.business.cli_tool_installer import get_installer
 
         cli_anything = get_cli_anything()
         registry = get_tools_registry()
@@ -290,7 +290,7 @@ class CLIAgentIntegration:
     def register_to_agent(self):
         """注册到Agent"""
         if self.agent:
-            from core.tools_registry import ToolRegistry, tool
+            from client.src.business.tools_registry import ToolRegistry, tool
 
             # 注册工具
             ToolRegistry.register(

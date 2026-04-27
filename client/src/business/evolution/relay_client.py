@@ -10,9 +10,17 @@ from datetime import datetime
 import urllib.request
 import urllib.error
 
+from client.src.business.config import UnifiedConfig
 from .models import (
     WeeklyReport, ClientConfig, ReportStatus,
 )
+
+# 安全获取重试配置
+_config = UnifiedConfig.get_instance()
+
+def _get_max_retries(category: str = "http") -> int:
+    """安全获取重试次数"""
+    return _config.get_max_retries(category)
 
 
 class RelayClient:
@@ -28,7 +36,7 @@ class RelayClient:
 
     DEFAULT_SERVER_URL = "http://localhost:8766"
     DEFAULT_TIMEOUT = 10  # 秒
-    MAX_RETRIES = 3
+    # MAX_RETRIES = 3  # 已迁移到统一配置 (使用 _get_max_retries())
 
     def __init__(
         self,
@@ -70,7 +78,7 @@ class RelayClient:
 
         url = f"{self._server_url}{endpoint}"
 
-        for retry in range(self.MAX_RETRIES):
+        for retry in range(_get_max_retries("http")):
             try:
                 headers = {
                     "Content-Type": "application/json",
@@ -96,8 +104,9 @@ class RelayClient:
 
             except urllib.error.URLError as e:
                 self._logger.warning(f"请求失败 (retry {retry+1}): {e}")
-                if retry < self.MAX_RETRIES - 1:
-                    time.sleep(1 * (retry + 1))  # 指数退避
+                if retry < _get_max_retries("http") - 1:
+                    evo_config = UnifiedConfig.get_instance().get_evolution_config()
+                    time.sleep(evo_config.get("retry_delay", 1) * (retry + 1))  # 指数退避
                 else:
                     return None
 
@@ -152,6 +161,8 @@ class RelayClient:
             Dict[str, bool]: week_id -> 是否成功
         """
         results = {}
+        evo_config = UnifiedConfig.get_instance().get_evolution_config()
+        report_interval = evo_config.get("report_interval", 0.5)
 
         for report in reports:
             success = self.upload_report(report)
@@ -159,7 +170,7 @@ class RelayClient:
 
             # 上报间隔
             if success:
-                time.sleep(0.5)
+                time.sleep(report_interval)
 
         return results
 

@@ -23,6 +23,13 @@ from enum import Enum
 import urllib.request
 import urllib.error
 
+# 尝试导入配置（client 路径可能不同）
+try:
+    from client.src.business.config import get_config
+    _has_config = True
+except ImportError:
+    _has_config = False
+
 
 class VheerModel(Enum):
     """Vheer 支持的模型"""
@@ -104,15 +111,22 @@ class VheerClient:
         self,
         api_key: str = None,
         base_url: str = "https://api.vheer.com/v1",
-        timeout: int = 120
+        timeout: int = None
     ):
+        # 从配置读取或使用默认值
+        if _has_config:
+            config = get_config()
+            self.timeout = timeout or config.get("vheer.timeout", 120)
+            self._min_request_interval = config.get("vheer.rate_limit_interval", 1.0)
+        else:
+            self.timeout = timeout or 120
+            self._min_request_interval = 1.0
+            
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
 
         # 速率限制
         self._last_request_time = 0
-        self._min_request_interval = 1.0  # 秒
 
     def _wait_for_rate_limit(self):
         """速率限制等待"""
@@ -371,9 +385,13 @@ class VheerClient:
         Returns:
             是否下载成功
         """
+        download_timeout = 300
+        if _has_config:
+            config = get_config()
+            download_timeout = config.get("vheer.download_timeout", 300)
         try:
             req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=300) as response:
+            with urllib.request.urlopen(req, timeout=download_timeout) as response:
                 content = response.read()
                 save_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(save_path, "wb") as f:
@@ -451,9 +469,18 @@ class VheerService:
         if result.status == "completed":
             return result.result_url
 
-        # 轮询状态
-        for _ in range(60):  # 最多等待 60 次
-            await asyncio.sleep(2)
+        # 轮询状态 (从配置读取)
+        if _has_config:
+            config = get_config()
+            poll_interval = config.get("delays.polling_image", 2)
+            max_wait = config.get("polling.image_max_wait", 120)
+        else:
+            poll_interval = 2
+            max_wait = 120
+        max_attempts = int(max_wait / poll_interval)
+        
+        for _ in range(max_attempts):
+            await asyncio.sleep(poll_interval)
             status = self.client.get_task_status(result.task_id)
             if status.status == "completed":
                 return status.result_url
@@ -485,9 +512,18 @@ class VheerService:
         if result.status == "completed":
             return result.result_url
 
-        # 轮询状态
-        for _ in range(120):  # 视频生成需要更长时间
-            await asyncio.sleep(3)
+        # 轮询状态 (从配置读取)
+        if _has_config:
+            config = get_config()
+            poll_interval = config.get("delays.polling_video", 3)
+            max_wait = config.get("polling.video_max_wait", 360)
+        else:
+            poll_interval = 3
+            max_wait = 360
+        max_attempts = int(max_wait / poll_interval)
+        
+        for _ in range(max_attempts):
+            await asyncio.sleep(poll_interval)
             status = self.client.get_task_status(result.task_id)
             if status.status == "completed":
                 return status.result_url
@@ -519,9 +555,18 @@ class VheerService:
         if result.status == "completed":
             return result.result_url
 
-        # 轮询状态
-        for _ in range(120):
-            await asyncio.sleep(3)
+        # 轮询状态 (从配置读取)
+        if _has_config:
+            config = get_config()
+            poll_interval = config.get("delays.polling_video", 3)
+            max_wait = config.get("polling.video_max_wait", 360)
+        else:
+            poll_interval = 3
+            max_wait = 360
+        max_attempts = int(max_wait / poll_interval)
+        
+        for _ in range(max_attempts):
+            await asyncio.sleep(poll_interval)
             status = self.client.get_task_status(result.task_id)
             if status.status == "completed":
                 return status.result_url

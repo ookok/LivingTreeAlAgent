@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 # 导入核心模块
-from core.ai_capability_detector import (
+from client.src.business.ai_capability_detector import (
     AICapabilityRegistry,
     get_ai_capability_registry,
     get_local_capability,
@@ -210,7 +210,7 @@ def list_supported_models(
     try:
         registry = get_ai_capability_registry()
 
-        from core.ai_capability_detector import ModelType
+        from client.src.business.ai_capability_detector import ModelType
 
         mtype = None
         if model_type:

@@ -5,7 +5,7 @@ Admin Authorization System Usage Examples
 本文件展示如何使用管理员授权系统的各项功能。
 """
 
-from core.admin_license_system import (
+from client.src.business.admin_license_system import (
     get_author_config_manager,
     get_admin_auth,
     get_admin_manager,

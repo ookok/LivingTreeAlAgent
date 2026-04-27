@@ -11,7 +11,7 @@ Unified Chat - 统一聊天核心模块
 - chat_hub: 核心调度器 (单例, 整合所有模块)
 
 使用方式:
-    from core.unified_chat import get_chat_hub
+    from client.src.business.unified_chat import get_chat_hub
 
     hub = get_chat_hub()
     hub.set_my_identity(node_id, short_id, name)

@@ -377,7 +377,7 @@ class AdaptiveGuideManager:
 
             # 尝试从密钥管理系统获取
             try:
-                from core.key_management import get_key_manager
+                from client.src.business.key_management import get_key_manager
                 key_manager = get_key_manager()
 
                 if key_manager and key_manager._initialized:

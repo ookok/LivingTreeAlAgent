@@ -19,6 +19,9 @@ from typing import Optional, Callable, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
+# 配置管理
+from client.src.business.config import UnifiedConfig
+
 # 屏幕截图依赖
 try:
     import mss
@@ -639,7 +642,9 @@ class UIAutomation:
         elif action.x > 0:
             pyautogui.click(action.x, action.y)
 
-        time.sleep(0.1)
+        # 从配置获取延迟
+        ui_config = UnifiedConfig.get_instance().get_ui_automation_config()
+        time.sleep(ui_config.get("type_interval", 0.1))
 
         # 输入文本
         pyautogui.typewrite(action.value, interval=0.05)
@@ -722,8 +727,9 @@ class UIAutomation:
             if not result.success:
                 break
 
-            # 步骤间等待
-            time.sleep(0.3)
+            # 步骤间等待（从配置获取）
+            ui_config = UnifiedConfig.get_instance().get_ui_automation_config()
+            time.sleep(ui_config.get("workflow_step_delay", 0.3))
 
         return results
 
@@ -742,20 +748,27 @@ class UIAutomation:
     def wait_for_element(
         self,
         target: str,
-        timeout: float = 10.0,
-        poll_interval: float = 0.5
+        timeout: float = None,
+        poll_interval: float = None
     ) -> Optional[UIElement]:
         """
         等待元素出现
 
         Args:
             target: 元素描述
-            timeout: 超时时间（秒）
-            poll_interval: 轮询间隔
+            timeout: 超时时间（秒），默认从配置获取
+            poll_interval: 轮询间隔，默认从配置获取
 
         Returns:
             找到的元素或 None
         """
+        # 从配置获取默认值
+        ui_config = UnifiedConfig.get_instance().get_ui_automation_config()
+        if timeout is None:
+            timeout = ui_config.get("wait_timeout", 10.0)
+        if poll_interval is None:
+            poll_interval = ui_config.get("poll_interval", 0.5)
+
         start_time = time.time()
 
         while time.time() - start_time < timeout:

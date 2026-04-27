@@ -219,7 +219,7 @@ class DownloadCenter:
     >>> task = center.create_task(url, save_path)
     >>> center.start(task.id)
     >>> # 或使用快捷函数
-    >>> from core.unified_downloader import download_file
+    >>> from client.src.business.unified_downloader import download_file
     >>> download_file(url, save_path, on_progress=callback)
     """
 

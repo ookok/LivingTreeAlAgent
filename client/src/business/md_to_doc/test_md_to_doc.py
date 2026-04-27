@@ -14,7 +14,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # 添加项目根目录到路径
 sys.path.insert(0, 'd:/mhzyapp/hermes-desktop')
 
-from core.md_to_doc import (
+from client.src.business.md_to_doc import (
     ConversionConfig, TargetFormat, ImageMode, LinkMode, CodeHighlight,
     Task, TaskStatus, DocumentNode, DocumentElement, ElementType,
     parse_markdown, get_builtin_templates, create_progress_info,

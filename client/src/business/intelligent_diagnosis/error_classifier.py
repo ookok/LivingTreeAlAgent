@@ -36,7 +36,7 @@ E. AI相关错误
    - AI_CONTEXT: 上下文错误
 
 Usage:
-    from core.intelligent_diagnosis import classify_error
+    from client.src.business.intelligent_diagnosis import classify_error
 
     category = classify_error(exception_or_message)
 """

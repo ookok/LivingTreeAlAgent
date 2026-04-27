@@ -30,7 +30,7 @@ def run_client():
     theme_path = _root / "client" / "src" / "presentation" / "theme.py"
     if theme_path.exists():
         try:
-            from ui.theme import DARK_QSS
+            from client.src.presentation.panels.theme import DARK_QSS
             app.setStyleSheet(DARK_QSS)
         except ImportError:
             pass
@@ -45,7 +45,7 @@ def run_client():
     if not config_path.exists():
         print("首次运行，显示模型选择对话框...")
         try:
-            from ui.model_selector_dialog import ModelSelectorDialog
+            from client.src.presentation.panels.model_selector_dialog import ModelSelectorDialog
             dialog = ModelSelectorDialog(cfg)
             if dialog.exec() == dialog.DialogCode.Accepted:
                 # 标记为已运行

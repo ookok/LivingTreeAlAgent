@@ -375,7 +375,7 @@ class DistributedIM:
 
     使用示例：
     ```python
-    from core.relay_chain import DistributedIM
+    from client.src.business.relay_chain import DistributedIM
 
     # 初始化（使用现有账本）
     im = DistributedIM(existing_ledger)

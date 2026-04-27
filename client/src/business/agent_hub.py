@@ -10,7 +10,7 @@ AgentHub - Hermes 智能体控制面板
 5. ResourceMonitor - 自适应资源调度器
 
 使用方式：
-    from core.agent_hub import AgentHub
+    from client.src.business.agent_hub import AgentHub
     hub = AgentHub(parent=main_window)
     hub.show()
 """
@@ -50,11 +50,11 @@ except ImportError:
     except ImportError:
         raise ImportError("需要安装 PyQt6 或 PyQt5: pip install PyQt6")
 
-from core.task_router import TaskRouter, TaskNode, TaskStatus
-from core.permission_engine import PermissionEngine, RiskLevel
-from core.skill_clusterer import SkillClusterer
-from core.semantic_validator import SemanticValidator
-from core.resource_monitor import ResourceMonitor, LoadLevel, Alert
+from client.src.business.task_router import TaskRouter, TaskNode, TaskStatus
+from client.src.business.permission_engine import PermissionEngine, RiskLevel
+from client.src.business.skill_clusterer import SkillClusterer
+from client.src.business.semantic_validator import SemanticValidator
+from client.src.business.resource_monitor import ResourceMonitor, LoadLevel, Alert
 
 
 class ApprovalDialog(QDialog):

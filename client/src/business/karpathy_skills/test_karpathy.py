@@ -27,7 +27,7 @@ def test_imports():
     print("=" * 60)
 
     try:
-        from core.karpathy_skills import (
+        from client.src.business.karpathy_skills import (
             KARPATHY_RULES_TEXT,
             AmbiguitySignal,
             AmbiguityDetector,
@@ -48,7 +48,7 @@ def test_rules_text():
     print("Rules Text Test")
     print("=" * 60)
 
-    from core.karpathy_skills import KARPATHY_RULES_TEXT
+    from client.src.business.karpathy_skills import KARPATHY_RULES_TEXT
 
     # 检查五项准则
     required = ["不隐藏困惑", "极简实现", "最小接触", "目标驱动", "主动权衡"]
@@ -66,7 +66,7 @@ def test_ambiguity_detector():
     print("Ambiguity Detector Test")
     print("=" * 60)
 
-    from core.karpathy_skills import AmbiguityDetector, get_detector
+    from client.src.business.karpathy_skills import AmbiguityDetector, get_detector
 
     detector = get_detector()
 
@@ -109,7 +109,7 @@ def test_code_complexity():
     print("Code Complexity Test")
     print("=" * 60)
 
-    from core.karpathy_skills import get_detector
+    from client.src.business.karpathy_skills import get_detector
 
     detector = get_detector()
 
@@ -162,7 +162,7 @@ def test_prompt_builder():
     print("Prompt Builder Test")
     print("=" * 60)
 
-    from core.karpathy_skills import (
+    from client.src.business.karpathy_skills import (
         AgentPromptBuilder,
         build_karpathy_agent_prompt,
         get_code_architect_prompt,
@@ -201,7 +201,7 @@ def test_interaction_module():
     print("=" * 60)
 
     try:
-        from core.karpathy_skills import (
+        from client.src.business.karpathy_skills import (
             AmbiguityResolver,
             AmbiguityDialog,
             get_resolver_context,

@@ -1,0 +1,88 @@
+{
+  "description": "排污系数数据 - 用于环评报告生成",
+  "version": "1.0",
+  "last_updated": "2026-04-27",
+  "industries": [
+    {
+      "name": "机械制造",
+      "code": "C34",
+      "pollutants": [
+        {"name": "二氧化硫", "unit": "kg/万元", "coefficient": 0.85, "source": "第一次全国污染源普查"},
+        {"name": "氮氧化物", "unit": "kg/万元", "coefficient": 1.2, "source": "第一次全国污染源普查"},
+        {"name": "烟尘", "unit": "kg/万元", "coefficient": 0.65, "source": "第一次全国污染源普查"},
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 0.12, "source": "行业经验值"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.02, "source": "行业经验值"}
+      ]
+    },
+    {
+      "name": "化工行业",
+      "code": "C26",
+      "pollutants": [
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 2.5, "source": "第一次全国污染源普查"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.15, "source": "第一次全国污染源普查"},
+        {"name": "总磷", "unit": "kg/吨产品", "coefficient": 0.03, "source": "第一次全国污染源普查"},
+        {"name": "石油类", "unit": "kg/吨产品", "coefficient": 0.08, "source": "行业经验值"},
+        {"name": "二氧化硫", "unit": "kg/万元", "coefficient": 1.5, "source": "第一次全国污染源普查"},
+        {"name": "氮氧化物", "unit": "kg/万元", "coefficient": 1.8, "source": "第一次全国污染源普查"}
+      ]
+    },
+    {
+      "name": "印染行业",
+      "code": "C17",
+      "pollutants": [
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 3.2, "source": "第一次全国污染源普查"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.25, "source": "第一次全国污染源普查"},
+        {"name": "总磷", "unit": "kg/吨产品", "coefficient": 0.05, "source": "第一次全国污染源普查"},
+        {"name": "色度", "unit": "倍", "coefficient": 50, "source": "行业经验值"}
+      ]
+    },
+    {
+      "name": "食品制造",
+      "code": "C14",
+      "pollutants": [
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 1.8, "source": "第一次全国污染源普查"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.12, "source": "第一次全国污染源普查"},
+        {"name": "BOD5", "unit": "kg/吨产品", "coefficient": 0.9, "source": "行业经验值"},
+        {"name": "SS", "unit": "kg/吨产品", "coefficient": 0.6, "source": "行业经验值"}
+      ]
+    },
+    {
+      "name": "电子制造",
+      "code": "C39",
+      "pollutants": [
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 0.5, "source": "第一次全国污染源普查"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.03, "source": "第一次全国污染源普查"},
+        {"name": "重金属（铅）", "unit": "g/吨产品", "coefficient": 5.0, "source": "行业经验值"},
+        {"name": "重金属（汞）", "unit": "g/吨产品", "coefficient": 0.1, "source": "行业经验值"}
+      ]
+    },
+    {
+      "name": "火力发电",
+      "code": "D44",
+      "pollutants": [
+        {"name": "二氧化硫", "unit": "kg/万度", "coefficient": 1.6, "source": "第一次全国污染源普查"},
+        {"name": "氮氧化物", "unit": "kg/万度", "coefficient": 2.0, "source": "第一次全国污染源普查"},
+        {"name": "烟尘", "unit": "kg/万度", "coefficient": 0.4, "source": "第一次全国污染源普查"}
+      ]
+    },
+    {
+      "name": "造纸行业",
+      "code": "C22",
+      "pollutants": [
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 4.5, "source": "第一次全国污染源普查"},
+        {"name": "氨氮", "unit": "kg/吨产品", "coefficient": 0.3, "source": "第一次全国污染源普查"},
+        {"name": "悬浮物", "unit": "kg/吨产品", "coefficient": 2.0, "source": "行业经验值"}
+      ]
+    },
+    {
+      "name": "钢铁行业",
+      "code": "C31",
+      "pollutants": [
+        {"name": "二氧化硫", "unit": "kg/吨产品", "coefficient": 1.1, "source": "第一次全国污染源普查"},
+        {"name": "氮氧化物", "unit": "kg/吨产品", "coefficient": 0.8, "source": "第一次全国污染源普查"},
+        {"name": "烟尘", "unit": "kg/吨产品", "coefficient": 0.5, "source": "第一次全国污染源普查"},
+        {"name": "COD", "unit": "kg/吨产品", "coefficient": 0.15, "source": "行业经验值"}
+      ]
+    }
+  ]
+}

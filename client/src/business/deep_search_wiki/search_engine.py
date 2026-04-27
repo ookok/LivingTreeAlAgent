@@ -156,7 +156,7 @@ class SmartSearchEngine:
         return SourceType.UNKNOWN
     
     async def search(self, query: str, max_results: int = 10) -> List[SearchResult]:
-        """执行搜索"""
+        """执行搜索（返回搜索结果，不含全文）"""
         search_query = self.expand_query(query)
         
         # 使用缓存
@@ -186,6 +186,84 @@ class SmartSearchEngine:
         self._search_cache[cache_key] = unique_results
         
         return unique_results
+
+    async def search_and_fetch(
+        self,
+        query: str,
+        max_results: int = 5,
+        use_jina: bool = True,
+        use_scrapling: bool = True,
+        max_concurrent: int = 3,
+    ) -> List[SearchResult]:
+        """执行深度搜索：搜索 + 自动提取全文（L1→L2→L3）
+        
+        完整三层内容提取策略：
+        L1: Jina Reader（最高质量，需代理）
+        L2: Scrapling（高速+反爬，本地运行）
+        L3: 内置简单提取（降级方案）
+        
+        Args:
+            query: 搜索关键词
+            max_results: 最大结果数（建议 ≤10）
+            use_jina: 是否启用 L1 Jina Reader
+            use_scrapling: 是否启用 L2 Scrapling
+            max_concurrent: 最大并发提取数
+            
+        Returns:
+            List[SearchResult]: 搜索结果（包含全文内容）
+        """
+        # 1. 获取搜索结果
+        results = await self.search(query, max_results)
+        urls = [r.url for r in results if r.url]
+        
+        if not urls:
+            return results
+        
+        # 2. 并发提取全文（使用完整三层策略）
+        from client.src.business.web_content_extractor import ContentExtractor, ExtractionConfig
+        
+        config = ExtractionConfig(
+            use_jina=use_jina,
+            use_scrapling=use_scrapling,
+            fallback_to_builtin=True,
+        )
+        extractor = ContentExtractor(config=config)
+        
+        try:
+            # 批量提取
+            import asyncio
+            semaphore = asyncio.Semaphore(max_concurrent)
+            
+            async def _extract_one(url: str) -> tuple:
+                async with semaphore:
+                    content = await extractor.extract(url)
+                    return url, content
+            
+            tasks = [_extract_one(url) for url in urls]
+            extract_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 3. 将内容写回 SearchResult
+            url_content_map = {}
+            for item in extract_results:
+                if isinstance(item, Exception):
+                    logger.warning(f"提取异常: {item}")
+                    continue
+                url, content = item
+                url_content_map[url] = content
+            
+            for result in results:
+                if result.url in url_content_map:
+                    content = url_content_map[result.url]
+                    if content:
+                        result.content = content
+                        result.word_count = len(content.split())
+                        
+        except Exception as e:
+            logger.error(f"批量提取失败: {e}")
+        finally:
+            await extractor.close()
+        
+        return results
     
     def _generate_demo_results(self, query: str) -> List[SearchResult]:
         """生成演示搜索结果"""
@@ -246,20 +324,40 @@ class SmartSearchEngine:
         
         return results
     
-    async def fetch_content(self, url: str) -> Optional[str]:
-        """获取页面内容"""
+    async def fetch_content(
+        self,
+        url: str,
+        use_jina: bool = True,
+        use_scrapling: bool = True,
+    ) -> Optional[str]:
+        """获取页面内容（完整三层策略：L1→L2→L3）
+        
+        Args:
+            url: 目标网页 URL
+            use_jina: 是否使用 L1 Jina Reader
+            use_scrapling: 是否使用 L2 Scrapling
+            
+        Returns:
+            Optional[str]: 提取的文本内容（Markdown 格式）
+        """
+        from client.src.business.web_content_extractor import ContentExtractor, ExtractionConfig
+        
+        config = ExtractionConfig(
+            use_jina=use_jina,
+            use_scrapling=use_scrapling,
+            fallback_to_builtin=True,
+        )
+        extractor = ContentExtractor(config=config)
         try:
-            session = await self._get_session()
-            async with session.get(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    # 简单的正文提取
-                    return self._extract_main_content(content)
-        except Exception:
-            pass
-        return None
+            content = await extractor.extract(url)
+            if content:
+                logger.info(f"内容提取成功: {url} ({len(content)} chars)")
+                return content
+            else:
+                logger.warning(f"所有策略均未返回内容: {url}")
+                return None
+        finally:
+            await extractor.close()
     
     def _extract_main_content(self, html: str) -> str:
         """提取页面主要内容"""

@@ -22,7 +22,7 @@ def test_import():
     print("Digital Life Import Test")
     print("=" * 50)
     try:
-        from core.digital_life import (
+        from client.src.business.digital_life import (
             DigitalLifeCore,
             DigitalLifeCompanion,
             TreeRing,
@@ -44,7 +44,7 @@ def test_creation():
     print("Digital Life Creation Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松", owner_id="user_001")
     log(f"Created: {companion.core.name}")
@@ -59,7 +59,7 @@ def test_memory_rings():
     print("Memory Rings Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -112,7 +112,7 @@ def test_emotional_seasons():
     print("Emotional Seasons Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion, Season
+    from client.src.business.digital_life import DigitalLifeCompanion, Season
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -140,7 +140,7 @@ def test_vital_signs():
     print("Vital Signs Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -170,7 +170,7 @@ def test_evolution():
     print("Evolution Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -196,7 +196,7 @@ def test_social():
     print("Social System Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -234,7 +234,7 @@ def test_persona_prompt():
     print("Persona Prompt Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -253,7 +253,7 @@ async def test_interaction():
     print("Core Interaction Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 
@@ -288,7 +288,7 @@ def test_persona_switch():
     print("Persona Switch Test")
     print("=" * 50)
 
-    from core.digital_life import DigitalLifeCompanion
+    from client.src.business.digital_life import DigitalLifeCompanion
 
     companion = DigitalLifeCompanion(name="青松")
 

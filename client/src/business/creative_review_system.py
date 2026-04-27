@@ -9,17 +9,17 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 # 导入各子系统
-from core.professional_review import (
+from client.src.business.professional_review import (
     ProfessionalReviewSystem, ReviewDomain, ReviewLevel, ReviewStatus,
     Document as ReviewDocument, ReviewResult, ReviewOpinion
 )
-from core.creative_assistant import (
+from client.src.business.creative_assistant import (
     CreativeAssistantSystem, ContentType, WritingStyle,
     WritingContext, ContentAnalysis
 )
-from core.knowledge_graph import KnowledgeGraphSystem
-from core.collaboration import CollaborationSystem
-from core.quality_certification import (
+from client.src.business.knowledge_graph import KnowledgeGraphSystem
+from client.src.business.collaboration import CollaborationSystem
+from client.src.business.quality_certification import (
     QualitySystem, QualityReport, CertLevel
 )
 

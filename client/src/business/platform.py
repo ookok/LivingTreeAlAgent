@@ -5,7 +5,7 @@
 统一接口：进程管理、文件路径、环境变量、系统命令
 
 使用示例：
-    from core.platform import platform, run_async, get_temp_dir
+    from client.src.business.platform import platform, run_async, get_temp_dir
 
     # 获取平台信息
     print(platform.name)        # "windows" / "darwin" / "linux"

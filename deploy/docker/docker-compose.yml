@@ -1,0 +1,174 @@
+# LivingTreeAI Docker Compose - Phase 6 云原生部署
+version: '3.8'
+
+services:
+  # LivingTreeAI 主服务
+  livingtree:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: runtime
+    container_name: livingtree-ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - LIVINGTREE_ENV=production
+      - LOG_LEVEL=info
+      - DB_TYPE=sqlite
+      - DB_PATH=/data/livingtree.db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changeme-in-production}
+    volumes:
+      - livingtree-data:/data
+      - livingtree-logs:/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - livingtree-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: livingtree-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - livingtree-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # PostgreSQL 数据库 (可选)
+  postgres:
+    image: postgres:15-alpine
+    container_name: livingtree-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=livingtree
+      - POSTGRES_USER=livingtree
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - livingtree-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U livingtree"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    profiles:
+      - with-postgres
+
+  # Nginx 反向代理 (可选)
+  nginx:
+    image: nginx:alpine
+    container_name: livingtree-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - livingtree
+    networks:
+      - livingtree-network
+    profiles:
+      - with-proxy
+    profiles:
+      - with-nginx
+
+  # Prometheus 监控 (可选)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: livingtree-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - livingtree-network
+    profiles:
+      - with-monitoring
+
+  # Grafana 仪表板 (可选)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: livingtree-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - livingtree-network
+    profiles:
+      - with-monitoring
+
+# 网络定义
+networks:
+  livingtree-network:
+    driver: bridge
+    name: livingtree-network
+
+# 卷定义
+volumes:
+  livingtree-data:
+    name: livingtree-data
+  livingtree-logs:
+    name: livingtree-logs
+  redis-data:
+    name: redis-data
+  postgres-data:
+    name: postgres-data
+  prometheus-data:
+    name: prometheus-data
+  grafana-data:
+    name: grafana-data
+  nginx-logs:
+    name: nginx-logs

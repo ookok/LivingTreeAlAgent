@@ -9,7 +9,7 @@
 
 def ui_automation_example():
     """UI 自动化示例"""
-    from core.system_brain import get_system_brain
+    from client.src.business.system_brain import get_system_brain
 
     # 获取系统大脑
     brain = get_system_brain()
@@ -33,7 +33,7 @@ def ui_automation_example():
 
 def reasoning_model_example():
     """推理模型示例"""
-    from core.system_brain import get_system_brain
+    from client.src.business.system_brain import get_system_brain
 
     brain = get_system_brain()
 
@@ -130,7 +130,7 @@ def reasoning_analyzer_example():
 
 def system_brain_enhanced_example():
     """系统大脑增强功能示例"""
-    from core.system_brain import get_system_brain
+    from client.src.business.system_brain import get_system_brain
 
     brain = get_system_brain()
 

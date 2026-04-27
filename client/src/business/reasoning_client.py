@@ -21,8 +21,8 @@ from enum import Enum
 
 import requests
 
-from core.config import OllamaConfig
-from core.ollama_client import ChatMessage, StreamChunk
+from client.src.business.config import OllamaConfig
+from client.src.business.ollama_client import ChatMessage, StreamChunk
 
 
 class ReasoningModelType(Enum):

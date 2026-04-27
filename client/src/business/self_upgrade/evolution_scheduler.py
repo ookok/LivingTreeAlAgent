@@ -9,6 +9,7 @@ from typing import Optional, Callable, List, Dict, Any
 from pathlib import Path
 
 from .models import EvolutionTask
+from client.src.business.config import UnifiedConfig
 
 
 class EvolutionScheduler:
@@ -22,12 +23,17 @@ class EvolutionScheduler:
     4. 手动触发 — 用户主动启动
     """
 
-    def __init__(self, idle_minutes: int = 5):
+    def __init__(self, idle_minutes: int = None):
+        # 从配置获取参数
+        evo_config = UnifiedConfig.get_instance().get_evolution_config()
+        if idle_minutes is None:
+            idle_minutes = evo_config.get("idle_minutes", 5)
         self.idle_minutes = idle_minutes
         self._last_activity = time.time()
-        self._idle_check_interval = 30  # 秒
+        self._idle_check_interval = evo_config.get("check_interval", 30)  # 秒
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._thread_join_timeout = evo_config.get("thread_join_timeout", 2.0)  # 线程 join 超时（秒）
 
         # 回调函数
         self._on_idle_debate: Optional[Callable] = None
@@ -58,7 +64,7 @@ class EvolutionScheduler:
         """停止调度器"""
         self._running = False
         if self._thread:
-            self._thread.join(timeout=2)
+            self._thread.join(timeout=self._thread_join_timeout)
         print("[EvolutionScheduler] Stopped")
 
     def _idle_loop(self):

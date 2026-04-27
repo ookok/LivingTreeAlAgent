@@ -20,7 +20,7 @@ def test_import():
     print("Skill Package Import Test")
     print("=" * 50)
     try:
-        from core.zhangxuefeng_skill import (
+        from client.src.business.zhangxuefeng_skill import (
             SkillPackage,
             MentalModel,
             ExpressionDNA,
@@ -40,7 +40,7 @@ def test_skill_structure():
     print("Skill Structure Test")
     print("=" * 50)
 
-    from core.zhangxuefeng_skill import SkillPackage
+    from client.src.business.zhangxuefeng_skill import SkillPackage
 
     # 创建技能包
     skill = SkillPackage(
@@ -77,7 +77,7 @@ def test_zhang_agent():
     print("ZhangAgent Test")
     print("=" * 50)
 
-    from core.zhangxuefeng_skill import get_zhang_agent
+    from client.src.business.zhangxuefeng_skill import get_zhang_agent
 
     agent = get_zhang_agent()
 
@@ -94,7 +94,7 @@ def test_persona_building():
     print("Persona Building Test")
     print("=" * 50)
 
-    from core.zhangxuefeng_skill import build_persona_skill
+    from client.src.business.zhangxuefeng_skill import build_persona_skill
 
     # 构建销售顾问技能
     persona = build_persona_skill(
@@ -116,7 +116,7 @@ def test_decision_pattern():
     print("Decision Pattern Test")
     print("=" * 50)
 
-    from core.zhangxuefeng_skill import DecisionPattern
+    from client.src.business.zhangxuefeng_skill import DecisionPattern
 
     # 创建决策模式
     pattern = DecisionPattern(

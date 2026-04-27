@@ -137,7 +137,7 @@ class UserProfileParser:
     
     def _get_default_db_path(self) -> Path:
         """获取默认数据库路径"""
-        from core.config import get_config_dir
+        from client.src.business.config import get_config_dir
         return get_config_dir() / "user_profiles.json"
     
     def _load_profiles(self):

@@ -15,7 +15,7 @@ import json
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
-from core.p2p_cdn import P2PCDN, create_p2p_cdn
+from client.src.business.p2p_cdn import P2PCDN, create_p2p_cdn
 from .node_manager import EnterpriseNodeManager, EnterpriseNode, get_enterprise_manager
 from .virtual_filesystem import VirtualFileSystem, VirtualFile, VirtualFolder
 
@@ -102,7 +102,7 @@ class EnterpriseStorage:
     async def _register_current_node(self):
         """注册当前节点"""
         # 计算节点能力
-        from core.p2p_cdn import NodeCapability
+        from client.src.business.p2p_cdn import NodeCapability
         capability = NodeCapability(
             storage_available=1024 * 1024 * 1024 * 50,  # 50GB
             bandwidth=1000,  # 1Gbps

@@ -13,6 +13,8 @@ from typing import Dict, Set, Optional, Any, List
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from client.src.business.config import UnifiedConfig
+
 try:
     from fastapi import WebSocket, WebSocketDisconnect
     FASTAPI_AVAILABLE = True
@@ -122,10 +124,11 @@ class WebSocketRelayService:
         self.message_handlers: Dict[str, callable] = {}
         
         # 配置
+        config = UnifiedConfig.get_instance()
         self.max_channels = 100
         self.max_connections_per_channel = 1000
-        self.ping_interval = 30  # 秒
-        self.ping_timeout = 60  # 秒
+        self.ping_interval = config.get("server.ws_ping_interval", 30)  # 秒
+        self.ping_timeout = config.get("server.ws_ping_timeout", 60)  # 秒
     
     def generate_connection_id(self) -> str:
         """生成连接 ID"""

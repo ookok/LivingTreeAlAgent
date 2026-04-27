@@ -243,7 +243,7 @@ class HintMemory:
     def _remember_in_mempalace(self, scene_id: str) -> None:
         """在 MemPalace 中记忆"""
         try:
-            from core.memory_palace import get_memory_palace, MemoryLevel
+            from client.src.business.memory_palace import get_memory_palace, MemoryLevel
 
             palace = get_memory_palace()
 

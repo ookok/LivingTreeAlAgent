@@ -24,6 +24,8 @@ from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
+from client.src.business.config import UnifiedConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -536,11 +538,14 @@ class BrowserAutomationGuide:
                             if self._current_session:
                                 self._current_session.captured_keys[pattern] = current
 
-                time.sleep(1)
+                # 从配置获取延迟
+                browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+                time.sleep(browser_config.get("clipboard_poll_interval", 1))
 
             except Exception as e:
                 logger.debug(f"Clipboard check error: {e}")
-                time.sleep(5)
+                browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+                time.sleep(browser_config.get("error_recovery_delay", 5))
 
     def register_step_callback(self, callback: Callable):
         """注册步骤回调"""
@@ -570,7 +575,9 @@ class BrowserAutomationGuide:
             elif step.action == "input":
                 return self._execute_input(step)
             elif step.action == "wait":
-                time.sleep(int(step.value) if step.value else 3)
+                browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+                wait_seconds = int(step.value) if step.value else browser_config.get("default_wait_seconds", 3)
+                time.sleep(wait_seconds)
                 return {"success": True}
             elif step.action == "check_clipboard":
                 return self._execute_check_clipboard(step)
@@ -589,7 +596,8 @@ class BrowserAutomationGuide:
         import webbrowser
 
         webbrowser.open(step.target)
-        time.sleep(2)  # 等待浏览器启动
+        browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+        time.sleep(browser_config.get("browser_startup_delay", 2))
 
         return {"success": True, "url": step.target}
 
@@ -602,8 +610,8 @@ class BrowserAutomationGuide:
         # 可以使用 pyautogui 进行简单点击
         try:
             import pyautogui
-            # 这只是一个占位，实际需要更复杂的实现
-            time.sleep(0.5)
+            browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+            time.sleep(browser_config.get("click_delay", 0.5))
             return {"success": True}
         except ImportError:
             return {"success": True, "note": "pyautogui not available"}
@@ -618,6 +626,8 @@ class BrowserAutomationGuide:
         # 等待用户复制API Key
         timeout = step.timeout
         start = time.time()
+        browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+        poll_interval = browser_config.get("clipboard_poll_interval", 1)
 
         while time.time() - start < timeout:
             if self._current_session and self._current_session.captured_keys:
@@ -627,7 +637,7 @@ class BrowserAutomationGuide:
                     "api_key": key,
                     "result": "api_key_found"
                 }
-            time.sleep(1)
+            time.sleep(poll_interval)
 
         return {"success": False, "error": "Timeout waiting for API Key"}
 
@@ -802,7 +812,8 @@ class SimpleGuide:
                 except Exception:
                     pass
 
-                time.sleep(1)
+                browser_config = UnifiedConfig.get_instance().get_browser_automation_config()
+                time.sleep(browser_config.get("keyboard_poll_interval", 1))
 
         self._listener_thread = threading.Thread(target=listen, daemon=True)
         self._listener_thread.start()

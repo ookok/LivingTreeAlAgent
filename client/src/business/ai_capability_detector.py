@@ -12,7 +12,7 @@ AI能力检测与算力注册中心 (AI Capability Detector & Registry)
 - 为买家提供决策辅助
 
 使用方法:
-    from core.ai_capability_detector import (
+    from client.src.business.ai_capability_detector import (
         AICapabilityRegistry,
         get_ai_capability_registry,
         get_local_capability,

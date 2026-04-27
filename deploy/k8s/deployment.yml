@@ -1,0 +1,237 @@
+# LivingTreeAI Kubernetes 部署配置
+# Phase 6: 云原生部署（优化版）
+# API 版本: networking.k8s.io/v1
+
+# ========== Namespace ==========
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: livingtree
+  labels:
+    app: livingtree
+    version: "1.0.0"
+
+---
+# ========== ConfigMap ==========
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livingtree-config
+  namespace: livingtree
+data:
+  PYTHONPATH: "/app"
+  LIVINGTREE_ENV: "production"
+  LOG_LEVEL: "info"
+  DB_TYPE: "postgres"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+
+---
+# ========== Secret ==========
+apiVersion: v1
+kind: Secret
+metadata:
+  name: livingtree-secret
+  namespace: livingtree
+type: Opaque
+data:
+  # Base64 编码的密钥（实际使用时请替换）
+  SECRET_KEY: Y2hhbmdlbWUtaW4tcHJvZHVjdGlvbg==
+  POSTGRES_PASSWORD: Y2hhbmdlbWUtcWFncmU=
+  REDIS_PASSWORD: ""
+
+---
+# ========== Deployment ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livingtree-app
+  namespace: livingtree
+  labels:
+    app: livingtree
+    component: app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: livingtree
+      component: app
+  template:
+    metadata:
+      labels:
+        app: livingtree
+        component: app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: livingtree
+          image: ghcr.io/ookok/livingtreeai:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livingtree-secret
+                  key: SECRET_KEY
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: livingtree-secret
+                  key: POSTGRES_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: livingtree-config
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: logs
+              mountPath: /logs
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: livingtree-data-pvc
+        - name: logs
+          persistentVolumeClaim:
+            claimName: livingtree-logs-pvc
+
+---
+# ========== Service ==========
+apiVersion: v1
+kind: Service
+metadata:
+  name: livingtree-service
+  namespace: livingtree
+  labels:
+    app: livingtree
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: livingtree
+    component: app
+
+---
+# ========== Ingress ==========
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: livingtree-ingress
+  namespace: livingtree
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - api.livingtreeai.com
+      secretName: livingtree-tls
+  rules:
+    - host: api.livingtreeai.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: livingtree-service
+                port:
+                  number: 8000
+
+---
+# ========== HPA (水平自动扩缩容) ==========
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: livingtree-hpa
+  namespace: livingtree
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: livingtree-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# ========== PVC (持久卷声明) ==========
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: livingtree-data-pvc
+  namespace: livingtree
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: livingtree-logs-pvc
+  namespace: livingtree
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard

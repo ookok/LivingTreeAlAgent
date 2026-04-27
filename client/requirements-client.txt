@@ -7,3 +7,14 @@ llama-cpp-python>=0.2.0
 modelscope>=1.11.0
 numpy>=1.24.0
 pydantic>=2.0.0
+
+# Project Generation & Multi-format Export
+python-docx>=0.8.11
+openpyxl>=3.1.0
+python-pptx>=0.6.21
+reportlab>=4.0.0
+Pillow>=10.0.0
+ezdxf>=1.1.0
+
+# Knowledge Graph & Data
+networkx>=3.0

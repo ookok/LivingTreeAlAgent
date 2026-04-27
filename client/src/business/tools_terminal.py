@@ -5,7 +5,7 @@
 
 import subprocess
 from pathlib import Path
-from core.tools_registry import ToolRegistry, tool, SCHEMA
+from client.src.business.tools_registry import ToolRegistry, tool, SCHEMA
 
 
 def register_terminal_tools(agent):

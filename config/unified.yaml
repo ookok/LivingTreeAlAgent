@@ -1,0 +1,231 @@
+# LivingTree AI Agent 统一配置文件
+# ==================================
+# 此文件为运行时配置，会被代码中的默认值覆盖
+# 支持环境变量替换: ${VAR_NAME}
+
+# ── 服务端点配置 ──
+endpoints:
+  ollama:
+    url: "http://localhost:11434"
+    timeout: 30
+    max_retries: 3
+    
+  cloud_sync:
+    url: "ws://localhost:8765/sync"
+    timeout: 30
+    retry_delay: 5
+    
+  tracker:
+    url: "http://localhost:8765"
+    
+  relay:
+    default: "139.199.124.242:8888"
+    
+  webrtc:
+    signaling: "0.0.0.0:8080"
+    
+  market:
+    tools: "https://market.hermes-ai.cn/tools/manifest.json"
+
+# ── 网络超时配置 (秒) ──
+timeouts:
+  default: 30
+  long: 60
+  browser: 15
+  download: 120
+  quick: 5
+  search: 10
+
+# ── 重试配置 ──
+retries:
+  # 默认重试配置
+  default: 3
+  default_delay: 1.0
+  default_backoff: "exponential"  # linear/exponential/fixed
+  
+  # HTTP请求重试
+  http: 3
+  http_delay: 1.0
+  http_backoff: "exponential"
+  
+  # 文件操作重试
+  file: 2
+  file_delay: 0.5
+  file_backoff: "linear"
+  
+  # 云服务重试
+  cloud: 3
+  cloud_delay: 2.0
+  cloud_backoff: "exponential"
+  
+  # 同步服务重试
+  sync: 5
+  sync_delay: 5.0
+  sync_backoff: "exponential"
+  
+  # 消息队列重试
+  message: 5
+  message_delay: 30.0
+  message_backoff: "exponential"
+  
+  # 快速重试（用于实时操作）
+  quick: 2
+  quick_delay: 0.1
+  quick_backoff: "fixed"
+  
+  # 下载重试
+  download: 3
+  download_delay: 2.0
+  download_backoff: "exponential"
+  
+  # 指数退避基数
+  exponential_base: 2
+
+# ── 延迟配置 (秒) ──
+delays:
+  # 轮询间隔
+  polling_short: 0.1
+  polling_medium: 0.5
+  polling_long: 1.0
+  
+  # 周期任务
+  periodic_check: 5
+  heartbeat: 30
+  long_task: 60
+  
+  # 等待
+  wait_short: 1
+  wait_medium: 2
+  wait_long: 5
+  wait_extreme: 10
+
+# ── 心跳配置 (秒) ──
+heartbeat:
+  # 默认心跳
+  default_interval: 10
+  default_timeout: 30
+  
+  # 服务心跳 (远程协助/AI计算等)
+  service_interval: 10
+  service_timeout: 30
+  
+  # 支付心跳
+  payment_interval: 5
+  payment_timeout: 30
+  
+  # 流媒体心跳
+  stream_interval: 3
+  stream_timeout: 15
+  
+  # 数据通道心跳
+  datachannel_interval: 5
+  datachannel_timeout: 30
+
+# ── 轮询配置 (秒) ──
+polling:
+  default_interval: 5
+  default_max_wait: 60
+  
+  # 同步轮询
+  sync_interval: 30
+  sync_max_wait: 300
+  
+  # 检查轮询
+  check_interval: 5
+  check_max_wait: 60
+  
+  # 状态轮询
+  status_interval: 1
+  status_max_wait: 30
+
+# ── 同步配置 ──
+sync:
+  interval: 30
+  batch_size: 100
+  timeout: 30
+  retry_delay: 5
+
+# ── 批处理配置 ──
+batch:
+  default_size: 32
+  large_size: 100
+  small_size: 10
+  page_size: 100
+
+# ── 资源限制 ──
+limits:
+  max_file_size: 52428800      # 50MB
+  max_cache_size: 1073741824   # 1GB
+  max_tokens: 2048
+  max_context: 4096
+  max_level: 4
+
+# ── API Keys (使用环境变量) ──
+# 示例: 运行时设置 export OPENAI_API_KEY=sk-xxx
+api_keys:
+  openai: "${OPENAI_API_KEY}"
+  anthropic: "${ANTHROPIC_API_KEY}"
+  deepseek: "${DEEPSEEK_API_KEY}"
+  moonshot: "${MOONSHOT_API_KEY}"
+  dashscope: "${DASHSCOPE_API_KEY}"
+  modelscope: "${MODELSCOPE_TOKEN}"
+  huggingface: "${HF_TOKEN}"
+  groq: "${GROQ_API_KEY}"
+  openrouter: "${OPENROUTER_API_KEY}"
+  google: "${GOOGLE_API_KEY}"
+  browser_use: "${BROWSER_USE_API_KEY}"
+
+# ── 路径配置 ──
+paths:
+  data: "./data"
+  logs: "./logs"
+  cache: "./cache"
+  temp: "/tmp"
+  
+  # 特定数据目录
+  distillation: "./data/distillation"
+  templates: "./data/templates"
+  vector_db: "./data/vector_db"
+  regulations: "./data/regulations"
+
+# ── LLM 默认参数 ──
+llm:
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  max_tokens: 2048
+
+# ── 密钥轮转配置 ──
+key_rotation:
+  check_interval: 3600     # 检查间隔（秒），默认1小时
+  retry_delay: 300         # 重试延迟（秒），默认5分钟
+  threshold_days: 30       # 提前多少天开始轮转
+  notify_before_days: 7   # 提前多少天通知
+
+# ── 密钥健康监控配置 ──
+key_health:
+  interval: 3600           # 监控间隔（秒），默认1小时
+  max_history: 100         # 历史记录最大数量
+  expiry_warning_days: 7   # 过期前警告天数
+  expiry_critical_days: 3  # 过期前严重警告天数
+
+# ── UI 自动化配置 ──
+ui_automation:
+  ui_max_tokens: 2048      # UI分析时的最大Token数
+  parse_max_tokens: 512    # 操作解析时的最大Token数
+  wait_timeout: 10.0       # 等待元素超时（秒）
+  poll_interval: 0.5        # 元素轮询间隔（秒）
+
+# ── 异步任务队列配置 ──
+task_queue:
+  max_workers: 2           # 最大并发数
+  debounce_delay: 3.0      # 防抖延迟（秒）
+  default_debounce: 3.0    # 默认防抖延迟（秒）
+  pause_timeout: 5.0       # 暂停等待超时（秒）
+  task_timeout: 30         # 任务执行超时（秒）
+
+# ── 进化调度配置 ──
+evolution:
+  idle_minutes: 5          # 空闲触发分钟数
+  check_interval: 30       # 空闲检查间隔（秒）

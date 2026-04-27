@@ -145,6 +145,21 @@ class SyntaxHighlighter:
                  "impl", "trait", "type", "where", "pub", "mod", "use", "crate", "self",
                  "super", "unsafe", "async", "await", "move", "ref", "dyn", "as", "in",
                  "true", "false", "Some", "None", "Ok", "Err", "Self", "macro_rules"},
+        # CSS 关键词
+        "css": {"@import", "@media", "@font-face", "@keyframes", "@supports", "@page",
+                "@namespace", "@counter-style", "@font-feature-values", "@viewport",
+                "and", "or", "not", "only", "all", "print", "screen", "speech", "handheld",
+                "braille", "embossed", "projection", "tty", "tv", "print", "media",
+                "important", "inherit", "initial", "unset", "revert", "none", "auto",
+                "block", "inline", "inline-block", "flex", "grid", "none", "hidden",
+                "visible", "collapse", "contents", "list-item", "table", "table-cell"},
+        # JSON 关键词 (JSON 只有少数关键词)
+        "json": {"true", "false", "null"},
+        # YAML 关键词
+        "yaml": {"true", "false", "yes", "no", "on", "off", "null", "undefined",
+                 "map", "struct", "sequence", "set", "omap", "pairs", "set", "seq",
+                 "any", "empty", "void", "scalar", "collection", "mapping", "sequence",
+                 "import", "include", "extends", "override", "anchor", "alias"},
     }
 
     # 类型关键词
@@ -158,6 +173,20 @@ class SyntaxHighlighter:
         "java": {"String", "Integer", "Long", "Double", "Float", "Boolean", "Character",
                  "Object", "Class", "List", "ArrayList", "Map", "HashMap", "Set",
                  "HashSet", "Queue", "Stack", "Collection", "Iterable", "Serializable"},
+        # CSS 类型/属性值
+        "css": {"auto", "none", "block", "inline", "inline-block", "flex", "grid",
+                "absolute", "relative", "fixed", "sticky", "static",
+                "inherit", "initial", "unset", "revert",
+                "red", "blue", "green", "yellow", "black", "white", "transparent",
+                "solid", "dashed", "dotted", "double", "none",
+                "hidden", "visible", "collapse", "initial", "inherit",
+                "serif", "sans-serif", "monospace", "cursive", "fantasy",
+                "normal", "bold", "bolder", "lighter",
+                "left", "right", "center", "justify", "start", "end",
+                "nowrap", "pre", "pre-wrap", "pre-line", "break-spaces",
+                "uppercase", "lowercase", "capitalize", "full-width",
+                "row", "column", "row-reverse", "column-reverse",
+                "wrap", "nowrap", "wrap-reverse"},
     }
 
     # 字符串引号
@@ -165,6 +194,12 @@ class SyntaxHighlighter:
         "python": ['"', "'", '"""', "'''", 'f"', "f'", 'r"', "r'", 'b"', "b'"],
         "javascript": ['"', "'", '`', 'f"', "f'", 'b"', "b'", 'u"'],
         "java": ['"', "'", '`'],
+        # CSS 字符串引号
+        "css": ['"', "'"],
+        # JSON 字符串引号 (JSON 只允许双引号)
+        "json": ['"'],
+        # YAML 字符串引号 (YAML 支持单引号、双引号或无引号)
+        "yaml": ['"', "'"],
     }
 
     # 注释格式
@@ -175,6 +210,12 @@ class SyntaxHighlighter:
         "cpp": {"single": ("//", None), "multi": ("/*", "*/"), "doc": ("/*!", "*/")},
         "go": {"single": ("//", None), "multi": ("/*", "*/"), "doc": ("//", None)},
         "rust": {"single": ("//", None), "multi": ("/*", "*/"), "doc": ("///", None)},
+        # CSS 注释格式 (标准CSS只支持 /* */，但编辑器常支持 //)
+        "css": {"single": ("//", None), "multi": ("/*", "*/"), "doc": ("/**", "*/")},
+        # JSON 注释格式 (标准JSON不支持注释，但编辑器常支持 // 和 /* */)
+        "json": {"single": ("//", None), "multi": ("/*", "*/"), "doc": ("/**", "*/")},
+        # YAML 注释格式
+        "yaml": {"single": ("#", None), "multi": ("###", "###"), "doc": ("##", None)},
     }
 
     def __init__(self, language: str = "python"):
@@ -713,13 +754,13 @@ class CompletionEngine:
         language: str,
         context: Optional[str] = None
     ) -> List[CompletionItem]:
-        """获取补全项"""
+        """获取补全项（基于上下文）"""
         # 获取当前单词
         current_word = self._get_current_word(code, position)
         prefix = current_word.lower()
-
+        
         completions = []
-
+        
         # 添加内置补全
         builtins = self.builtins.get(language, [])
         for item in builtins:
@@ -727,25 +768,201 @@ class CompletionEngine:
                 item.prefix = current_word
                 item.score = len(prefix) / len(item.label) * 100
                 completions.append(item)
-
+        
         # 添加项目补全
         for item in self.project_items:
             if prefix in item.label.lower():
                 item.prefix = current_word
                 item.score = len(prefix) / len(item.label) * 80
                 completions.append(item)
-
+        
         # 添加代码片段
         for item in self.snippet_items:
             if prefix in item.label.lower():
                 item.prefix = current_word
                 item.score = len(prefix) / len(item.label) * 60
                 completions.append(item)
-
+        
+        # 添加上下文感知的补全（分析当前代码）
+        context_items = self._extract_context_symbols(code, language, prefix)
+        for item in context_items:
+            item.prefix = current_word
+            item.score = len(prefix) / len(item.label) * 120  # 上下文匹配优先级更高
+            completions.append(item)
+        
         # 按分数排序
-        completions.sort(key=lambda x: (-x.score, x.priority))
-
+        completions.sort(key=lambda x: (-x.score, -x.priority))
+        
         return completions[:20]  # 限制返回数量
+    
+    def _extract_context_symbols(self, code: str, language: str, prefix: str) -> List[CompletionItem]:
+        """从上下文中提取符号（函数、类、变量等）"""
+        symbols = []
+        lines = code.split('\n')
+        
+        if language == "python":
+            symbols = self._extract_python_symbols(lines)
+        elif language == "javascript":
+            symbols = self._extract_javascript_symbols(lines)
+        elif language == "css":
+            symbols = self._extract_css_symbols(lines)
+        elif language == "json":
+            symbols = self._extract_json_symbols(lines)
+        elif language == "yaml":
+            symbols = self._extract_yaml_symbols(lines)
+        
+        # 过滤出匹配前缀的符号
+        matched = []
+        for sym in symbols:
+            if prefix in sym.label.lower():
+                matched.append(sym)
+        
+        return matched
+    
+    def _extract_python_symbols(self, lines: List[str]) -> List[CompletionItem]:
+        """提取Python符号"""
+        symbols = []
+        for line in lines:
+            stripped = line.strip()
+            
+            # 函数定义
+            if match := re.match(r'def\s+(\w+)\s*\(', stripped):
+                func_name = match.group(1)
+                # 提取参数
+                params = re.search(r'\((.*?)\)', stripped)
+                params_str = params.group(1) if params else ""
+                symbols.append(CompletionItem(
+                    label=func_name,
+                    kind="function",
+                    detail=f"def {func_name}({params_str})",
+                    insert_text=f"{func_name}({params_str})",
+                    priority=10
+                ))
+            
+            # 类定义
+            elif match := re.match(r'class\s+(\w+)(?:\(.*?\))?:', stripped):
+                class_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=class_name,
+                    kind="class",
+                    detail=f"class {class_name}",
+                    priority=10
+                ))
+            
+            # 变量赋值 (简单检测)
+            elif match := re.match(r'(\w+)\s*=\s*[^=]', stripped):
+                var_name = match.group(1)
+                if var_name not in ["def", "class", "if", "for", "while", "return"]:
+                    symbols.append(CompletionItem(
+                        label=var_name,
+                        kind="variable",
+                        detail=f"变量: {var_name}",
+                        priority=5
+                    ))
+        
+        return symbols
+    
+    def _extract_javascript_symbols(self, lines: List[str]) -> List[CompletionItem]:
+        """提取JavaScript符号"""
+        symbols = []
+        for line in lines:
+            stripped = line.strip()
+            
+            # 函数定义
+            if match := re.match(r'(?:function|const|let|var)\s+(\w+)\s*\(', stripped):
+                func_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=func_name,
+                    kind="function",
+                    detail=f"function {func_name}()",
+                    priority=10
+                ))
+            
+            # 类定义
+            elif match := re.match(r'class\s+(\w+)', stripped):
+                class_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=class_name,
+                    kind="class",
+                    detail=f"class {class_name}",
+                    priority=10
+                ))
+            
+            # 变量定义
+            elif match := re.match(r'(?:const|let|var)\s+(\w+)\s*=', stripped):
+                var_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=var_name,
+                    kind="variable",
+                    detail=f"变量: {var_name}",
+                    priority=5
+                ))
+        
+        return symbols
+    
+    def _extract_css_symbols(self, lines: List[str]) -> List[CompletionItem]:
+        """提取CSS符号（选择器、属性）"""
+        symbols = []
+        for line in lines:
+            stripped = line.strip()
+            
+            # CSS选择器
+            if match := re.match(r'([^{]+)\s*\{', stripped):
+                selector = match.group(1).strip()
+                symbols.append(CompletionItem(
+                    label=selector,
+                    kind="class",
+                    detail=f"选择器: {selector}",
+                    priority=10
+                ))
+            
+            # CSS属性
+            elif match := re.match(r'([\w-]+)\s*:', stripped):
+                property_name = match.group(1).strip()
+                symbols.append(CompletionItem(
+                    label=property_name,
+                    kind="property",
+                    detail=f"属性: {property_name}",
+                    priority=5
+                ))
+        
+        return symbols
+    
+    def _extract_json_symbols(self, lines: List[str]) -> List[CompletionItem]:
+        """提取JSON符号（键名）"""
+        symbols = []
+        for line in lines:
+            stripped = line.strip()
+            
+            # JSON键名
+            if match := re.match(r'"(.+)"\s*:', stripped):
+                key_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=key_name,
+                    kind="property",
+                    detail=f"键: {key_name}",
+                    priority=10
+                ))
+        
+        return symbols
+    
+    def _extract_yaml_symbols(self, lines: List[str]) -> List[CompletionItem]:
+        """提取YAML符号（键名）"""
+        symbols = []
+        for line in lines:
+            stripped = line.strip()
+            
+            # YAML键名
+            if match := re.match(r'([\w_]+)\s*:', stripped):
+                key_name = match.group(1)
+                symbols.append(CompletionItem(
+                    label=key_name,
+                    kind="property",
+                    detail=f"键: {key_name}",
+                    priority=10
+                ))
+        
+        return symbols
 
     def _get_current_word(self, code: str, position: CodePosition) -> str:
         """获取当前单词"""

@@ -2,7 +2,7 @@
 Hermes Tool Integration
 将 PageIndex 集成到 Hermes Agent 作为 Tool
 
-使用方式:
+使用方式：
 1. 在 Agent prompt 中添加能力说明
 2. Agent 遇到文档问题时调用 query_manual tool
 3. Tool 返回候选上下文
@@ -13,10 +13,8 @@ import asyncio
 import os
 from typing import Optional
 
-from ..ollama_client import OllamaClient
 from .index_builder import PageIndexBuilder
 from .query_engine import QueryEngine
-
 
 # 全局单例
 _index_cache: dict[str, "PageIndexTool"] = {}
@@ -45,7 +43,7 @@ class PageIndexTool:
             tree_height=tree_height
         )
         self.query_engine = QueryEngine(self.builder)
-        self.ollama = OllamaClient()
+        # 不再需要 OllamaClient，使用 GlobalModelRouter
 
     def build_index(
         self,
@@ -72,7 +70,7 @@ class PageIndexTool:
             doc = self.builder.build_index(
                 file_path=file_path,
                 doc_key=doc_key,
-                use_llm_summaries=self.ollama.is_available()
+                use_llm_summaries=True  # 已迁移到 GlobalModelRouter
             )
 
             # 缓存到 query_engine
@@ -179,7 +177,7 @@ class PageIndexTool:
         system_prompt: Optional[str] = None
     ) -> str:
         """
-        使用 LLM 基于上下文生成答案
+        使用 LLM 基于上下文生成答案（已迁移到 GlobalModelRouter）
 
         Args:
             question: 问题
@@ -194,12 +192,12 @@ class PageIndexTool:
 
         default_prompt = f"""你是一个专业的文档助手。请根据以下上下文回答用户的问题。
 
-上下文:
+上下文：
 {context}
 
 问题: {question}
 
-要求:
+要求：
 1. 只基于上下文中的信息回答
 2. 如果上下文没有相关信息，诚实地说明"我没有找到相关信息"
 3. 回答要准确、简洁
@@ -208,11 +206,15 @@ class PageIndexTool:
 回答:"""
 
         try:
-            response = self.ollama.generate(
+            # 使用全局模型路由器（同步调用）
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+
+            response = call_model_sync(
+                capability=ModelCapability.CHAT,
                 prompt=system_prompt or default_prompt,
-                system="你是一个专业的文档助手，只基于提供的上下文回答问题。",
-                max_tokens=500
+                system_prompt="你是一个专业的文档助手，只基于提供的上下文回答问题。"
             )
+
             return response.strip()
 
         except Exception as e:

@@ -5,7 +5,7 @@
 演示如何使用积分经济模型进行智能调度。
 """
 
-from core.credit_economy import (
+from client.src.business.credit_economy import (
     CreditRegistry, CreditRegistry as CR,
     TaskEstimator, TaskSpec,
     Scheduler, SchedulingStrategy, SchedulingDecision,

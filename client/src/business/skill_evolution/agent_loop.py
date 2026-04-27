@@ -51,7 +51,7 @@ from ..deer_flow import (
     SubAgentType,
     TaskTool,
 )
-from core.amphiloop import (
+from client.src.business.amphiloop import (
     AmphiLoopEngine,
     CheckpointManager,
     BidirectionalScheduler,

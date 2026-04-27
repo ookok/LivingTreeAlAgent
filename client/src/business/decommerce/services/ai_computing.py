@@ -54,19 +54,11 @@ class AIComputingHandler(BaseServiceHandler):
         #       "last_heartbeat": {},
         #       "billing_start": float,
         #   }
-        # }
         self._sessions: Dict[str, Dict[str, Any]] = {}
-
-        # 卖家本地Ollama客户端 (由外部注入)
-        self._ollama_client = None
 
     @property
     def service_type(self) -> str:
         return "ai_computing"
-
-    def set_ollama_client(self, client) -> None:
-        """设置Ollama客户端"""
-        self._ollama_client = client
 
     async def create_session(
         self,
@@ -213,9 +205,8 @@ class AIComputingHandler(BaseServiceHandler):
 
         session["jobs"][job.id] = job
 
-        # 如果有Ollama客户端，异步执行
-        if self._ollama_client:
-            asyncio.create_task(self._execute_job(session_id, job.id))
+        # 异步执行任务（已迁移到GlobalModelRouter）
+        asyncio.create_task(self._execute_job(session_id, job.id))
 
         logger.info(f"[AIComputing] Submitted job {job.id} to session {session_id}")
         return job.id
@@ -234,22 +225,27 @@ class AIComputingHandler(BaseServiceHandler):
             job.status = "running"
             job.started_at = time.time()
 
-            if self._ollama_client:
-                # 调用Ollama
-                result = await self._ollama_client.generate(
-                    model=job.model,
-                    prompt=job.prompt,
-                    **job.parameters
-                )
-                job.result = result.get("response", "")
-                job.input_tokens = result.get("prompt_eval_count", 0)
-                job.output_tokens = result.get("eval_count", 0)
-            else:
-                # 无Ollama客户端时的模拟
-                job.result = f"[Simulated] Response to: {job.prompt[:50]}..."
-                job.input_tokens = len(job.prompt) // 4
-                job.output_tokens = len(job.result) // 4
-
+            # 使用全局模型路由器（异步调用）
+            from client.src.business.global_model_router import get_global_router, ModelCapability
+            router = get_global_router()
+            
+            result = await router.call_model(
+                capability=ModelCapability.CHAT,
+                prompt=job.prompt,
+                system_prompt="你是一个AI计算服务助手。"
+            )
+            
+            job.result = result if isinstance(result, str) else result.get("response", "")
+            # 注意：无法直接获取token数，使用估算
+            job.input_tokens = len(job.prompt) // 4
+            job.output_tokens = len(job.result) // 4
+            
+        except Exception as e:
+            logger.error(f"[AIComputing] 任务执行失败: {e}")
+            job.status = "failed"
+            job.result = f"执行失败: {str(e)}"
+            
+        else:
             job.status = "completed"
             job.completed_at = time.time()
 

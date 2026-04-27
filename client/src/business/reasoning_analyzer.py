@@ -13,7 +13,7 @@ import time
 from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass
 
-from core.reasoning_client import (
+from client.src.business.reasoning_client import (
     ReasoningModelClient,
     ReasoningConfig,
     GenerationResult

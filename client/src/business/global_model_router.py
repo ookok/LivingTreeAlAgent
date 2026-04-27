@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -190,6 +191,38 @@ class RoutingStrategy(Enum):
     PRIVACY = "privacy"       # 隐私优先
     BALANCED = "balanced"     # 均衡模式
     AUTO = "auto"             # 自动选择（根据能力）
+    TIER_BASED = "tier_based" # 分层路由（L0-L4）
+
+
+class ModelTier(Enum):
+    """模型分层（L0-L4）
+    
+    分层含义：
+    - L0: 快速路由/意图分类（最快、最轻量）
+    - L1: 基础理解（简单问答、关键词提取）
+    - L2: 中级推理（摘要、翻译、简单代码）
+    - L3: 高级推理/意图理解（复杂推理、代码生成）
+    - L4: 深度生成/思考模式（最高质量、最慢）
+    """
+    L0 = "L0"
+    L1 = "L1"
+    L2 = "L2"
+    L3 = "L3"
+    L4 = "L4"
+    
+    @classmethod
+    def from_string(cls, tier_str: str) -> "ModelTier":
+        """从字符串创建（如 "L0", "l1", "3"）"""
+        tier_str = tier_str.upper().strip()
+        if tier_str.startswith("L"):
+            tier_str = tier_str[1:]
+        try:
+            tier_num = int(tier_str)
+            if 0 <= tier_num <= 4:
+                return cls(f"L{tier_num}")
+        except ValueError:
+            pass
+        return cls.L0  # 默认 L0
 
 
 class GlobalModelRouter:
@@ -225,6 +258,7 @@ class GlobalModelRouter:
         """
         self.models: Dict[str, ModelInfo] = {}
         self._call_count: Dict[str, int] = defaultdict(int)
+        self._rr_index: Dict[str, int] = defaultdict(int)  # 负载均衡轮询索引 {capability_value: index}
         
         # LRU 缓存（OrderedDict，最大 1000 条）
         self._cache: OrderedDict = OrderedDict()  # {hash: response}
@@ -244,170 +278,231 @@ class GlobalModelRouter:
         
         self.default_weights: RoutingWeights = default_weights or RoutingWeights()
         
-        # 加载内置模型
-        self._load_builtin_models()
-    
-    def _load_builtin_models(self):
-        """加载内置模型配置"""
-        builtin_models = [
-            ModelInfo(
-                model_id="ollama_qwen2.5",
-                name="Qwen2.5 (Ollama)",
-                backend=ModelBackend.OLLAMA,
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.CONTENT_GENERATION,
-                    ModelCapability.SUMMARIZATION,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.TRANSLATION,
-                ],
-                max_tokens=8192,
-                context_length=32768,
-                quality_score=0.75,
-                speed_score=0.7,
-                cost_score=1.0,
-                privacy_score=1.0,
-                config={
-                    "url": "http://localhost:11434",
-                    "model": "qwen2.5",
-                    "keep_alive": -1,  # 永久保持加载
-                },
-            ),
-            ModelInfo(
-                model_id="ollama_deepseek",
-                name="DeepSeek Coder (Ollama)",
-                backend=ModelBackend.OLLAMA,
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.CODE_REVIEW,
-                    ModelCapability.CODE_DEBUG,
-                    ModelCapability.FUNCTION_CALLING,
-                ],
-                max_tokens=8192,
-                context_length=16384,
-                quality_score=0.8,
-                speed_score=0.6,
-                cost_score=1.0,
-                privacy_score=1.0,
-                config={
-                    "url": "http://localhost:11434",
-                    "model": "deepseek-coder-v2",
-                    "keep_alive": -1,  # 永久保持加载
-                },
-            ),
-            ModelInfo(
-                model_id="openai_gpt4",
-                name="GPT-4 (OpenAI)",
-                backend=ModelBackend.OPENAI,
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.DOCUMENT_PLANNING,
-                    ModelCapability.CONTENT_GENERATION,
-                    ModelCapability.FORMAT_UNDERSTANDING,
-                    ModelCapability.COMPLIANCE_CHECK,
-                    ModelCapability.OPTIMIZATION,
-                    ModelCapability.TRANSLATION,
-                    ModelCapability.SUMMARIZATION,
-                    ModelCapability.REASONING,
-                    ModelCapability.PLANNING,
-                    ModelCapability.FUNCTION_CALLING,
-                    ModelCapability.JSON_MODE,
-                ],
-                max_tokens=8192,
-                context_length=128000,
-                quality_score=0.95,
-                speed_score=0.4,
-                cost_score=0.2,
-                privacy_score=0.1,
-                config={"model": "gpt-4"},
-            ),
-            ModelInfo(
-                model_id="openai_gpt35",
-                name="GPT-3.5 Turbo (OpenAI)",
-                backend=ModelBackend.OPENAI,
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.CONTENT_GENERATION,
-                    ModelCapability.SUMMARIZATION,
-                    ModelCapability.TRANSLATION,
-                    ModelCapability.CODE_GENERATION,
-                ],
-                max_tokens=4096,
-                context_length=16384,
-                quality_score=0.7,
-                speed_score=0.8,
-                cost_score=0.5,
-                privacy_score=0.1,
-                config={"model": "gpt-3.5-turbo"},
-            ),
-            # 自定义端点 (mogoo.com.cn 测试地址)
-            ModelInfo(
-                model_id="mogoo_qwen",
-                name="Qwen3.5 (mogoo.com.cn)",
-                backend=ModelBackend.OPENAI,  # OpenAI兼容格式
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.CONTENT_GENERATION,
-                    ModelCapability.SUMMARIZATION,
-                    ModelCapability.TRANSLATION,
-                    ModelCapability.REASONING,
-                    ModelCapability.CODE_GENERATION,
-                ],
-                max_tokens=8192,
-                context_length=32768,
-                quality_score=0.85,
-                speed_score=0.7,
-                cost_score=1.0,  # 免费
-                privacy_score=0.3,  # 远程服务
-                config={
-                    "model": "qwen3.5:9b",
-                    "base_url": "http://www.mogoo.com.cn:8899/v1",
-                    "api_key": "dummy",  # 可能不需要认证
-                    "timeout": 120,  # 增加超时时间（秒）
-                },
-            ),
-            ModelInfo(
-                model_id="mogoo_smollm2",
-                name="SmollM2 Test (mogoo.com.cn)",
-                backend=ModelBackend.OPENAI,  # OpenAI兼容格式
-                capabilities=[
-                    ModelCapability.CHAT,
-                    ModelCapability.CODE_GENERATION,
-                    ModelCapability.SUMMARIZATION,
-                ],
-                max_tokens=4096,
-                context_length=8192,
-                quality_score=0.6,
-                speed_score=0.9,  # 小模型，速度快
-                cost_score=1.0,
-                privacy_score=0.3,
-                config={
-                    "model": "smollm2-test:latest",
-                    "base_url": "http://www.mogoo.com.cn:8899/v1",
-                    "api_key": "dummy",
-                },
-            ),
-        ]
+        # 分层路由配置（L0-L4）
+        self.tier_routing: Dict[ModelTier, str] = {}  # {tier: model_id}
         
-        for m in builtin_models:
-            self.models[m.model_id] = m
-            logger.info(f"加载内置模型: {m.name} ({m.model_id})")
-    
-    def register_model(self, model: ModelInfo):
-        """注册自定义模型"""
-        self.models[model.model_id] = model
-        logger.info(f"注册模型: {model.name} ({model.model_id})")
-    
-    def unregister_model(self, model_id: str):
-        """注销模型"""
-        if model_id in self.models:
-            model_name = self.models[model_id].name
-            del self.models[model_id]
-            logger.info(f"注销模型: {model_name} ({model_id})")
-    
-    # ============= 三维评分方法 =============
+        # 只从加密配置文件加载模型（不在代码中硬编码）
+        self._load_models_from_encrypted_config()
+        # 如果加密配置中没有模型，用默认配置初始化
+        if not self.models:
+            self._init_default_models()
+        
+        # 设置默认分层路由
+        self._setup_default_tier_routing()
+        
+        # 心跳检测相关字段
+        self._heartbeat_thread: Optional[threading.Thread] = None
+        self._heartbeat_stop_event = threading.Event()
+        self._heartbeat_interval: int = 30  # 心跳间隔（秒）
+        self._heartbeat_running: bool = False
+        
+        # 启动心跳检测
+        self.start_heartbeat()
 
+    # ------------------------------------------------------------------ #
+    #  _setup_default_tier_routing  <<  自动分配 L0-L4 层级  >>
+    # ------------------------------------------------------------------ #
+    def _setup_default_tier_routing(self):
+        """
+        根据已加载的模型，自动分配 L0-L4 分层路由。
+        匹配规则（按 model_id / name 关键词）：
+          L0  → 最快最轻量（qwen2.5:1.5b / smollm2 等）
+          L1  → 基础理解（qwen3.5:2b 等）
+          L2  → 中级推理（qwen3.5:4b 等）
+          L3  → 高级推理（qwen3.5:9b / qwen3.6:35b 等）
+          L4  → 深度生成（最大 / 思考模型）
+        """
+        # 清空旧配置
+        self.tier_routing.clear()
+
+        # 关键词 → 层级 映射（按优先级从高到低，后匹配的覆盖先匹配的）
+        tier_keywords = [
+            ("L0", ["smollm2", "qwen2.5:1.5b", "qwen2.5:0.5b", "1.5b", "0.5b"]),
+            ("L1", ["qwen3.5:2b", "2b"]),
+            ("L2", ["qwen3.5:4b", "4b"]),
+            ("L3", ["qwen3.5:9b", "qwen3.6:35b", "9b", "35b"]),
+            ("L4", ["qwen3.6", "deepseek-v4", "deepseek", "thinking"]),
+        ]
+
+        for model in self.models.values():
+            if not model.is_available:
+                continue
+            text = (model.model_id + " " + model.name).lower()
+            assigned_tier = None
+            for tier_str, keywords in tier_keywords:
+                if any(kw in text for kw in keywords):
+                    assigned_tier = tier_str
+                    break  # 命中即停止（按列表顺序 = 优先匹配 L0）
+            if assigned_tier and assigned_tier not in self.tier_routing:
+                self.tier_routing[assigned_tier] = model.model_id
+                logger.info(f"[分层路由] {assigned_tier} → {model.name}")
+
+        # 保底：如果有模型但没有匹配任何层级，把第一个可用模型分配给 L0
+        if not self.tier_routing and self.models:
+            first_id = next(iter(self.models))
+            self.tier_routing["L0"] = first_id
+            logger.warning(f"[分层路由] 保底分配 L0 → {first_id}")
+
+        logger.info(f"[分层路由] 当前配置: {self.tier_routing}")
+
+    def get_tier_model(self, tier: ModelTier) -> Optional[ModelInfo]:
+        """
+        获取指定层级的模型。
+        如果未配置该层级，返回 None。
+        """
+        tier_key = tier.value if isinstance(tier, ModelTier) else str(tier)
+        model_id = self.tier_routing.get(tier_key)
+        if not model_id:
+            return None
+        return self.models.get(model_id)
+
+    def set_tier_model(self, tier: ModelTier, model_id: str) -> bool:
+        """
+        手动设置指定层级的模型。
+        返回 True 表示设置成功。
+        """
+        if model_id not in self.models:
+            logger.error(f"[分层路由] 模型不存在: {model_id}")
+            return False
+        tier_key = tier.value if isinstance(tier, ModelTier) else str(tier)
+        self.tier_routing[tier_key] = model_id
+        name = self.models[model_id].name
+        logger.info(f"[分层路由] 手动设置 {tier_key} → {name}")
+        return True
+
+    # ------------------------------------------------------------------ #
+    #  _init_default_models  <<  当加密配置为空时，初始化默认配置  >>
+    # ------------------------------------------------------------------ #
+    def _init_default_models(self):
+        """
+        加密配置中没有模型时，调用 setup_default_configs()
+        初始化默认配置（所有敏感信息加密存储，不在代码中硬编码）。
+        """
+        logger.warning("加密配置中无模型，正在初始化默认配置...")
+        try:
+            from client.src.business.encrypted_config import setup_default_configs
+            setup_default_configs()
+            self._load_models_from_encrypted_config()
+            logger.info("✅ 默认配置初始化完成")
+        except Exception as e:
+            logger.error(f"初始化默认配置失败: {e}")
+
+    # ------------------------------------------------------------------ #
+    #  _load_models_from_encrypted_config  <<  唯一加载入口（无硬编码） >>
+    # ------------------------------------------------------------------ #
+    def _load_models_from_encrypted_config(self):
+        """
+        从加密配置加载所有模型。
+        支持 Ollama（多地址）、DeepSeek API、OpenAI API。
+        代码中无任何硬编码的模型/URL/Api_key。
+        """
+        try:
+            from client.src.business.encrypted_config import load_model_config
+
+            # ── 1. Ollama 配置（支持多地址）────────────────
+            ollama_cfg = load_model_config("ollama") or {}
+            servers = ollama_cfg.get("servers", [])
+            if not servers and ollama_cfg.get("base_url"):
+                # 向后兼容单地址格式
+                servers = [{
+                    "url": ollama_cfg.get("base_url", "http://localhost:11434"),
+                    "priority": 0,
+                    "models": ollama_cfg.get("models", []),
+                }]
+
+            for srv in servers:
+                url = srv.get("url", "http://localhost:11434")
+                priority = srv.get("priority", 999)
+                for mname in srv.get("models", []):
+                    model_id = f"ollama_{mname.replace(':', '_').replace('.', '_')}"
+                    if model_id in self.models:
+                        continue
+                    privacy = 1.0 if ("localhost" in url or "127.0.0.1" in url) else 0.5
+                    speed   = max(1.0 - priority * 0.1, 0.1)
+                    self.models[model_id] = ModelInfo(
+                        model_id=model_id,
+                        name=f"{mname} (Ollama)",
+                        backend=ModelBackend.OLLAMA,
+                        capabilities=[ModelCapability.CHAT,
+                                     ModelCapability.CONTENT_GENERATION,
+                                     ModelCapability.CODE_GENERATION],
+                        max_tokens=4096,
+                        context_length=8192,
+                        quality_score=0.7,
+                        speed_score=speed,
+                        cost_score=1.0,
+                        privacy_score=privacy,
+                        config={"url": url, "model": mname,
+                                 "keep_alive": -1, "priority": priority},
+                    )
+                    logger.info(f"[加载] Ollama {mname} @ {url} (priority={priority})")
+
+            # ── 2. DeepSeek API 配置 ───────────────────────
+            ds_cfg = load_model_config("deepseek") or {}
+            if ds_cfg.get("api_key"):
+                api_key  = ds_cfg["api_key"]
+                base_url = ds_cfg.get("base_url", "https://api.deepseek.com")
+                for key, mc in (ds_cfg.get("models") or {}).items():
+                    model_id = mc.get("model_id", f"deepseek_{key}")
+                    if model_id in self.models:
+                        continue
+                    caps = [
+                        getattr(ModelCapability, c.upper(), ModelCapability.CHAT)
+                        for c in mc.get("capabilities", [])
+                    ]
+                    self.models[model_id] = ModelInfo(
+                        model_id=model_id,
+                        name=f"{mc.get('model_name', key)} (API)",
+                        backend=ModelBackend.OPENAI,
+                        capabilities=caps,
+                        max_tokens=mc.get("max_tokens", 8192),
+                        context_length=mc.get("context_length", 32768),
+                        quality_score=mc.get("quality_score", 0.8),
+                        speed_score=mc.get("speed_score", 0.9),
+                        cost_score=mc.get("cost_score", 0.7),
+                        privacy_score=0.1,
+                        config={"model": mc.get("model_name", key),
+                                 "base_url": base_url,
+                                 "api_key": api_key,
+                                 "timeout": mc.get("timeout", 60)},
+                    )
+                    logger.info(f"[加载] DeepSeek {mc.get('model_name', key)}")
+
+            # ── 3. OpenAI API 配置（需要 enabled=True）───────
+            oai_cfg = load_model_config("openai") or {}
+            if oai_cfg.get("enabled") and oai_cfg.get("api_key"):
+                api_key  = oai_cfg["api_key"]
+                base_url = oai_cfg.get("base_url", "https://api.openai.com/v1")
+                for key, mc in (oai_cfg.get("models") or {}).items():
+                    model_id = mc.get("model_id", f"openai_{key}")
+                    if model_id in self.models:
+                        continue
+                    caps = [
+                        getattr(ModelCapability, c.upper(), ModelCapability.CHAT)
+                        for c in mc.get("capabilities", [])
+                    ]
+                    self.models[model_id] = ModelInfo(
+                        model_id=model_id,
+                        name=f"{mc.get('model_name', key)} (OpenAI)",
+                        backend=ModelBackend.OPENAI,
+                        capabilities=caps,
+                        max_tokens=mc.get("max_tokens", 4096),
+                        context_length=mc.get("context_length", 8192),
+                        quality_score=mc.get("quality_score", 0.7),
+                        speed_score=mc.get("speed_score", 0.8),
+                        cost_score=mc.get("cost_score", 0.5),
+                        is_available=oai_cfg.get("enabled", False),
+                        config={"model": mc.get("model_name", key),
+                                 "base_url": base_url,
+                                 "api_key": api_key,
+                                 "timeout": mc.get("timeout", 60)},
+                    )
+                    logger.info(f"[加载] OpenAI {mc.get('model_name', key)}")
+
+        except Exception as e:
+            logger.error(f"从加密配置加载模型失败: {e}")
+
+    # ------------------------------------------------------------------ #
     def _capability_score(self, model: ModelInfo, context_length: int = 0) -> float:
         """
         能力评分（0-1）
@@ -417,7 +512,7 @@ class GlobalModelRouter:
         success = model.success_rate
         if context_length > 0 and model.context_length > 0:
             ctx_ratio = model.context_length / context_length
-            ctx_score = min(ctx_ratio / 2.0, 1.0)  # 2倍余量得满分
+            ctx_score = min(ctx_ratio / 2.0, 1.0)
         else:
             ctx_score = 1.0
         return quality * 0.5 + success * 0.3 + ctx_score * 0.2
@@ -502,8 +597,55 @@ class GlobalModelRouter:
             w = (weights or self.default_weights)
             candidates.sort(key=lambda m: self._combined_score(m, context_length, w), reverse=True)
 
-        # 4. 返回最佳模型
-        selected = candidates[0]
+        # 4. 负载均衡：同分模型使用轮询（round-robin）
+        #    找出所有与第一名同分的模型，按轮询索引选一个
+        if candidates:
+            w = (weights or self.default_weights).normalize()
+            top_score = self._combined_score(candidates[0], context_length, w) if strategy == RoutingStrategy.BALANCED else None
+
+            # 收集所有与最高分相同的模型
+            if top_score is not None:
+                tied = [m for m in candidates if abs(
+                    self._combined_score(m, context_length, w) - top_score
+                ) < 1e-6]
+            else:
+                # 非 BALANCED 策略：用实际排序 key 判断同分
+                if strategy == RoutingStrategy.QUALITY:
+                    top = self._capability_score(candidates[0], context_length)
+                    tied = [m for m in candidates if abs(
+                        self._capability_score(m, context_length) - top
+                    ) < 1e-6]
+                elif strategy == RoutingStrategy.SPEED:
+                    top = self._latency_score(candidates[0])
+                    tied = [m for m in candidates if abs(
+                        self._latency_score(m) - top
+                    ) < 1e-6]
+                elif strategy == RoutingStrategy.COST:
+                    top = self._cost_score(candidates[0])
+                    tied = [m for m in candidates if abs(
+                        self._cost_score(m) - top
+                    ) < 1e-6]
+                elif strategy == RoutingStrategy.PRIVACY:
+                    top = candidates[0].privacy_score
+                    tied = [m for m in candidates if abs(
+                        m.privacy_score - top
+                    ) < 1e-6]
+                else:
+                    tied = [candidates[0]]
+
+            if len(tied) > 1:
+                # 轮询选择
+                cap_key = capability.value + "_" + strategy.value
+                idx = self._rr_index.get(cap_key, 0)
+                selected = tied[idx % len(tied)]
+                self._rr_index[cap_key] = (idx + 1) % len(tied)
+                logger.info(f"负载均衡: {len(tied)}个同分模型，轮询选择 {selected.name}")
+            else:
+                selected = candidates[0]
+        else:
+            return None
+
+        # 5. 返回最佳模型
         self._call_count[selected.model_id] = self._call_count.get(selected.model_id, 0) + 1
 
         logger.info(f"模型路由: {capability.value} → {selected.name} (策略: {strategy.value})")
@@ -694,6 +836,7 @@ class GlobalModelRouter:
                         context_length: int = 0,
                         use_cache: bool = True,
                         model_id: str = "",  # 新增：直接指定模型ID
+                        tier: Optional[ModelTier] = None,  # 新增：分层路由
                         **kwargs) -> str:
         """
         调用模型（同步返回）
@@ -706,12 +849,19 @@ class GlobalModelRouter:
             context_length: 需要的上下文长度
             use_cache: 是否使用缓存
             model_id: 直接指定模型ID（不走路由）
+            tier: 分层路由（L0-L4，指定后优先使用分层路由）
         
         Returns:
             模型输出文本
         """
-        # 如果指定了model_id，直接使用该模型
-        if model_id:
+        # 如果指定了 tier，使用分层路由
+        if tier is not None:
+            model = self.get_tier_model(tier)
+            if not model:
+                logger.error(f"分层路由未设置: {tier.value}")
+                return ""
+        elif model_id:
+            # 如果指定了model_id，直接使用该模型
             if model_id not in self.models:
                 logger.error(f"模型不存在: {model_id}")
                 return ""
@@ -735,40 +885,56 @@ class GlobalModelRouter:
         start_time = time.time()
         success = False
         response = ""
-        
+
         try:
             if model.backend == ModelBackend.MOCK:
                 response = self._mock_response(prompt)
                 success = True
-            
+
             elif model.backend == ModelBackend.OLLAMA:
                 response = await self._call_ollama(model, prompt, system_prompt)
                 success = bool(response)
-            
+
             elif model.backend == ModelBackend.OPENAI:
                 response = await self._call_openai(model, prompt, system_prompt)
                 success = bool(response)
-            
+
             elif model.backend == ModelBackend.CUSTOM:
                 handler = kwargs.get("handler")
                 if handler and callable(handler):
                     response = await handler(prompt, system_prompt)
                     success = bool(response)
-        
+
         except Exception as e:
             logger.error(f"模型调用异常: {e}")
             success = False
-        
+
         finally:
             model.current_load -= 1
             response_time = time.time() - start_time
             model.update_stats(success, response_time)
-        
+
+        # 故障转移：主模型失败时，自动尝试 fallback 列表（排除已失败的主模型）
+        if not success:
+            logger.warning(f"主模型 {model.name} 调用失败，启动故障转移...")
+            try:
+                fallback_response = await self.call_model_with_fallback(
+                    capability, prompt, system_prompt,
+                    strategy, context_length,
+                    exclude_model_ids=[model.model_id],
+                    **kwargs
+                )
+                if fallback_response:
+                    logger.info(f"故障转移成功，使用 fallback 模型")
+                    return fallback_response
+            except Exception as e:
+                logger.error(f"故障转移异常: {e}")
+
         # 保存到缓存
         if success and use_cache:
             cache_key = self._get_cache_key(model, prompt, system_prompt)
             self._save_to_cache(cache_key, response)
-        
+
         return response
     
     async def call_model_with_fallback(self, capability: ModelCapability,
@@ -776,14 +942,27 @@ class GlobalModelRouter:
                                       system_prompt: str = "",
                                       strategy: RoutingStrategy = RoutingStrategy.AUTO,
                                       context_length: int = 0,
+                                      exclude_model_ids: List[str] = None,
                                       **kwargs) -> str:
         """
         调用模型（带fallback）
-        
+
         如果最佳模型失败，自动尝试下一个
+
+        Args:
+            exclude_model_ids: 排除的模型ID列表（如已失败的模型）
         """
         models = self.route_with_fallback(capability, strategy, context_length)
-        
+
+        # 排除指定的模型（如已失败的）
+        exclude_set = set(exclude_model_ids or [])
+        if exclude_set:
+            models = [m for m in models if m.model_id not in exclude_set]
+
+        if not models:
+            logger.error("Fallback: 排除后无可用模型")
+            return ""
+
         for model in models:
             logger.info(f"尝试模型: {model.name}")
             
@@ -1070,65 +1249,162 @@ class GlobalModelRouter:
     
     async def _call_openai(self, model: ModelInfo, prompt: str,
                            system_prompt: str = "") -> str:
-        """调用 OpenAI API 或 OpenAI 兼容端点"""
+        """调用 OpenAI API 或 OpenAI 兼容端点（使用 requests 替代 openai SDK）"""
         try:
-            import openai
+            import requests
+            import json
             
             model_name = model.config.get("model", "gpt-3.5-turbo")
             base_url = model.config.get("base_url")  # 支持自定义端点
             api_key = model.config.get("api_key", "dummy")  # 支持自定义key
             timeout = model.config.get("timeout", 60)  # 支持自定义超时（秒）
             
-            # 创建客户端（支持自定义base_url和超时）
-            client = openai.AsyncOpenAI(
-                base_url=base_url if base_url else None,
-                api_key=api_key,
-                timeout=timeout,  # 设置超时
-            )
+            # 构建 URL（处理 base_url 可能包含 /v1 或不包含的情况）
+            if base_url:
+                if base_url.rstrip('/').endswith('/v1'):
+                    url = f"{base_url.rstrip('/')}/chat/completions"
+                else:
+                    url = f"{base_url.rstrip('/')}/v1/chat/completions"
+            else:
+                url = "https://api.openai.com/v1/chat/completions"
             
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=[
+            # 构建请求头
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            # 构建请求体
+            payload = {
+                "model": model_name,
+                "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": prompt}
                 ],
-            )
-            return response.choices[0].message.content
+                "stream": False
+            }
+            
+            # 发送请求
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # 提取回复文本（兼容 thinking 模型，如 DeepSeek-V4-Pro）
+            if "choices" in result and len(result["choices"]) > 0:
+                message = result["choices"][0]["message"]
+                content = message.get("content", "")
+                reasoning = message.get("reasoning_content", "")  # DeepSeek thinking 字段
+                
+                # 如果有 thinking 内容，拼接到回复中
+                if reasoning:
+                    # 格式：用 <think> 标签包裹 thinking 内容
+                    thinking_text = f"<think>\n{reasoning}\n</think>\n\n"
+                    return thinking_text + (content or "")
+                else:
+                    return content or ""
+            else:
+                logger.error(f"OpenAI 响应格式错误: {result}")
+                return ""
+                
         except Exception as e:
             logger.error(f"OpenAI 调用异常: {e}")
+            if 'response' in locals():
+                logger.error(f"响应内容: {response.text}")
             return ""
     
     async def _call_openai_stream(self, model: ModelInfo, prompt: str,
                                   system_prompt: str = "") -> AsyncIterator[str]:
-        """调用 OpenAI API 或兼容端点（流式）"""
+        """调用 OpenAI API 或兼容端点（流式，使用 requests 替代 openai SDK）"""
         try:
-            import openai
+            import requests
+            import json
+            
             model_name = model.config.get("model", "gpt-3.5-turbo")
             base_url = model.config.get("base_url")
             api_key = model.config.get("api_key", "dummy")
             timeout = model.config.get("timeout", 60)  # 支持自定义超时
             
-            client = openai.AsyncOpenAI(
-                base_url=base_url if base_url else None,
-                api_key=api_key,
-                timeout=timeout,  # 设置超时
-            )
+            # 构建 URL（处理 base_url 可能包含 /v1 或不包含的情况）
+            if base_url:
+                if base_url.rstrip('/').endswith('/v1'):
+                    url = f"{base_url.rstrip('/')}/chat/completions"
+                else:
+                    url = f"{base_url.rstrip('/')}/v1/chat/completions"
+            else:
+                url = "https://api.openai.com/v1/chat/completions"
             
-            stream = await client.chat.completions.create(
-                model=model_name,
-                messages=[
+            # 构建请求头
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            # 构建请求体（流式）
+            payload = {
+                "model": model_name,
+                "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": prompt}
                 ],
-                stream=True,
-            )
+                "stream": True
+            }
             
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+            # 发送流式请求
+            with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
+                response.raise_for_status()
+                
+                # 解析 SSE 流（兼容 thinking 模型，如 DeepSeek-V4-Pro）
+                in_thinking = False
+                thinking_ended = False
+                
+                for line in response.iter_lines():
+                    if line:
+                        # line 可能是 bytes
+                        if isinstance(line, bytes):
+                            line = line.decode('utf-8')
+                        line = line.strip()
+                        if line.startswith('data: '):
+                            data = line[6:]
+                            if data == '[DONE]':
+                                # 确保 thinking 标签闭合
+                                if in_thinking:
+                                    yield "\n</think>"
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                if "choices" in chunk and len(chunk["choices"]) > 0:
+                                    delta = chunk["choices"][0].get("delta", {})
+                                    
+                                    # 处理 thinking 内容（DeepSeek reasoning_content）
+                                    reasoning = delta.get("reasoning_content", "")
+                                    if reasoning:
+                                        if not in_thinking:
+                                            in_thinking = True
+                                            thinking_ended = False
+                                            yield "<think>\n"
+                                        yield reasoning
+                                    
+                                    # 处理正式回复内容
+                                    content = delta.get("content", "")
+                                    if content:
+                                        if in_thinking and not thinking_ended:
+                                            thinking_ended = True
+                                            yield "\n</think>\n\n"
+                                            in_thinking = False
+                                        yield content
+                            
+                            except json.JSONDecodeError:
+                                continue
+                
+                # 确保 thinking 标签闭合（防止未闭合）
+                if in_thinking:
+                    yield "\n</think>"
         
         except Exception as e:
             logger.error(f"OpenAI 流式调用异常: {e}")
+            if 'response' in locals():
+                logger.error(f"响应内容: {response.text}")
             yield ""  # 流式函数需要yield
     
     @staticmethod
@@ -1364,6 +1640,145 @@ class GlobalModelRouter:
             logger.error(f"OpenAI embeddings 调用异常: {e}")
             return []
 
+    # ============= 心跳检测 =============
+
+    def start_heartbeat(self, interval: int = 30):
+        """
+        启动心跳检测（后台线程）
+        
+        Args:
+            interval: 心跳间隔（秒），默认 30 秒
+        """
+        if self._heartbeat_running:
+            logger.warning("心跳检测已在运行")
+            return
+        
+        self._heartbeat_interval = interval
+        self._heartbeat_stop_event.clear()
+        self._heartbeat_running = True
+        
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            daemon=True,
+            name="ModelRouter-Heartbeat"
+        )
+        self._heartbeat_thread.start()
+        logger.info(f"🌐 心跳检测已启动（间隔: {interval}秒）")
+
+    def stop_heartbeat(self):
+        """停止心跳检测"""
+        if not self._heartbeat_running:
+            return
+        
+        self._heartbeat_stop_event.set()
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=5)
+        self._heartbeat_running = False
+        logger.info("⏹️ 心跳检测已停止")
+
+    def _heartbeat_loop(self):
+        """
+        心跳检测循环（后台线程运行）
+        定期 ping 所有 Ollama 服务器，更新模型可用性
+        """
+        logger.info("🔄 心跳检测线程已启动")
+        
+        while not self._heartbeat_stop_event.is_set():
+            try:
+                self._do_heartbeat()
+            except Exception as e:
+                logger.error(f"心跳检测异常: {e}")
+            
+            # 等待下一个周期
+            self._heartbeat_stop_event.wait(self._heartbeat_interval)
+        
+        logger.info("🔄 心跳检测线程已退出")
+
+    def _do_heartbeat(self):
+        """
+        执行一次心跳检测
+        1. 收集所有唯一的 Ollama 服务器地址
+        2. Ping 每个地址
+        3. 根据结果更新模型的 is_available
+        """
+        # 1. 收集所有唯一的 Ollama 服务器地址
+        server_urls = set()
+        model_server_map = {}  # {url: [model_id, ...]}
+        
+        for model_id, model_info in self.models.items():
+            if model_info.backend == ModelBackend.OLLAMA:
+                url = model_info.config.get("url", "")
+                if url:
+                    server_urls.add(url)
+                    if url not in model_server_map:
+                        model_server_map[url] = []
+                    model_server_map[url].append(model_id)
+        
+        if not server_urls:
+            return
+        
+        # 2. Ping 每个服务器
+        for url in server_urls:
+            is_alive = self._ping_ollama_server(url)
+            
+            # 3. 更新该服务器上所有模型的 is_available
+            model_ids = model_server_map.get(url, [])
+            for model_id in model_ids:
+                self.models[model_id].is_available = is_alive
+            
+            status = "✅ 可用" if is_alive else "❌ 不可用"
+            logger.debug(f"心跳检测: {url} → {status}")
+
+    def _ping_ollama_server(self, url: str) -> bool:
+        """
+        Ping 单个 Ollama 服务器
+        
+        Args:
+            url: Ollama 服务器地址（如 http://localhost:11434）
+            
+        Returns:
+            是否可用
+        """
+        try:
+            # 使用 /api/tags 端点检测（不需要模型名）
+            test_url = f"{url.rstrip('/')}/api/tags"
+            response = requests.get(test_url, timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.debug(f"Ping Ollama 服务器失败: {url}, 错误: {e}")
+            return False
+
+    def get_server_status(self) -> dict:
+        """
+        获取所有服务器状态（用于 UI 显示）
+        
+        Returns:
+            {url: {"available": bool, "models": [model_id, ...], "priority": int}}
+        """
+        status = {}
+        
+        for model_id, model_info in self.models.items():
+            if model_info.backend != ModelBackend.OLLAMA:
+                continue
+            
+            url = model_info.config.get("url", "")
+            priority = model_info.config.get("priority", 999)
+            
+            if url not in status:
+                status[url] = {
+                    "available": model_info.is_available,
+                    "models": [],
+                    "priority": priority,
+                }
+            else:
+                # 如果任一模型可用，则服务器可用
+                if model_info.is_available:
+                    status[url]["available"] = True
+            
+            status[url]["models"].append(model_id)
+        
+        return status
+
 
 # ============= 全局实例 =============
 
@@ -1390,7 +1805,8 @@ def call_model_sync(capability: ModelCapability,
                     strategy: RoutingStrategy = RoutingStrategy.AUTO,
                     context_length: int = 0,
                     use_cache: bool = True,
-                    model_id: str = "") -> str:
+                    model_id: str = "",
+                    tier: Optional[ModelTier] = None) -> str:
     """
     同步调用模型（供非异步函数使用）
     
@@ -1418,18 +1834,18 @@ def call_model_sync(capability: ModelCapability,
             # 已有运行中的事件循环，使用 run_until_complete
             # 注意：在某些环境中可能不支持
             return asyncio.run_coroutine_threadsafe(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id),
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier),
                 loop
             ).result(timeout=120)
         else:
             # 没有运行中的循环，使用 asyncio.run()
             return asyncio.run(
-                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id)
+                router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier)
             )
     except RuntimeError:
         # 没有事件循环，创建新的
         return asyncio.run(
-            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id)
+            router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier)
         )
 
 

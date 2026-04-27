@@ -136,6 +136,162 @@ class HermesAgent:
                 print(f"[HermesAgent] 后台初始化模型客户端时出错: {e}")
         
         threading.Thread(target=init_model, daemon=True).start()
+        
+        # 注册到 AgentRegistry（架构设计：技能/专家角色变化 → 通知智能体）
+        self._register_to_agent_registry()
+        
+        # 已加载的技能缓存
+        self._loaded_skills: Dict[str, str] = {}  # {skill_name: skill_content}
+        
+        # 已加载的专家角色缓存
+        self._loaded_agents: Dict[str, str] = {}  # {agent_name: agent_content}
+    
+    def _register_to_agent_registry(self):
+        """注册到 AgentRegistry，接收技能和专家角色变化通知"""
+        try:
+            from client.src.business.agent_registry import get_agent_registry
+            registry = get_agent_registry()
+            registry.register("hermes_agent", self, {
+                "type": "general",
+                "description": "Hermes 通用智能体"
+            })
+            print("[HermesAgent] 已注册到 AgentRegistry")
+        except Exception as e:
+            print(f"[HermesAgent] 注册到 AgentRegistry 失败: {e}")
+    
+    def on_skills_changed(self, active_skills: Set[str]):
+        """
+        响应技能变化（由 AgentRegistry 调用）
+        
+        Args:
+            active_skills: 新的已启用技能集合
+        """
+        print(f"[HermesAgent] 收到技能变化通知: {len(active_skills)} 个启用技能")
+        
+        # 计算变化
+        old_skills = set(self._loaded_skills.keys())
+        added = active_skills - old_skills
+        removed = old_skills - active_skills
+        
+        # 加载新增技能
+        for skill_name in added:
+            self._load_skill(skill_name)
+        
+        # 卸载移除的技能
+        for skill_name in removed:
+            if skill_name in self._loaded_skills:
+                del self._loaded_skills[skill_name]
+                print(f"[HermesAgent] 卸载技能: {skill_name}")
+        
+        print(f"[HermesAgent] 当前已加载技能: {list(self._loaded_skills.keys())}")
+    
+    def on_agents_changed(self, active_agents: Set[str]):
+        """
+        响应专家角色变化（由 AgentRegistry 调用）
+        
+        Args:
+            active_agents: 新的已启用专家角色集合
+        """
+        print(f"[HermesAgent] 收到专家角色变化通知: {len(active_agents)} 个启用专家角色")
+        
+        # 计算变化
+        old_agents = set(self._loaded_agents.keys())
+        added = active_agents - old_agents
+        removed = old_agents - active_agents
+        
+        # 加载新增专家角色
+        for agent_name in added:
+            self._load_agent(agent_name)
+        
+        # 卸载移除的专家角色
+        for agent_name in removed:
+            if agent_name in self._loaded_agents:
+                del self._loaded_agents[agent_name]
+                print(f"[HermesAgent] 卸载专家角色: {agent_name}")
+        
+        print(f"[HermesAgent] 当前已加载专家角色: {list(self._loaded_agents.keys())}")
+    
+    def _load_skill(self, skill_name: str) -> bool:
+        """
+        加载单个技能
+        
+        Args:
+            skill_name: 技能名称
+            
+        Returns:
+            是否成功加载
+        """
+        try:
+            from client.src.business.agent_registry import get_agent_registry
+            registry = get_agent_registry()
+            content = registry.load_skill_content(skill_name)
+            
+            if content:
+                self._loaded_skills[skill_name] = content
+                print(f"[HermesAgent] 加载技能成功: {skill_name}")
+                return True
+            else:
+                print(f"[HermesAgent] 找不到技能内容: {skill_name}")
+                return False
+        except Exception as e:
+            print(f"[HermesAgent] 加载技能失败 {skill_name}: {e}")
+            return False
+    
+    def _load_agent(self, agent_name: str) -> bool:
+        """
+        加载单个专家角色
+        
+        Args:
+            agent_name: 专家角色名称
+            
+        Returns:
+            是否成功加载
+        """
+        try:
+            from client.src.business.agent_registry import get_agent_registry
+            registry = get_agent_registry()
+            content = registry.load_content(agent_name, content_type="agent")
+            
+            if content:
+                self._loaded_agents[agent_name] = content
+                print(f"[HermesAgent] 加载专家角色成功: {agent_name}")
+                return True
+            else:
+                print(f"[HermesAgent] 找不到专家角色内容: {agent_name}")
+                return False
+        except Exception as e:
+            print(f"[HermesAgent] 加载专家角色失败 {agent_name}: {e}")
+            return False
+    
+    def get_loaded_skills_context(self) -> str:
+        """
+        获取已加载技能和专家角色的上下文（用于注入到对话提示词）
+        
+        Returns:
+            所有已加载技能和专家角色的内容拼接字符串
+        """
+        if not self._loaded_skills and not self._loaded_agents:
+            return ""
+        
+        context_parts = ["\n\n## 已启用技能与专家角色\n"]
+        
+        # 加载的技能
+        if self._loaded_skills:
+            context_parts.append("\n### 已启用技能\n")
+            for skill_name, content in self._loaded_skills.items():
+                context_parts.append(f"\n#### {skill_name}\n")
+                context_parts.append(content)
+                context_parts.append("\n")
+        
+        # 加载的专家角色
+        if self._loaded_agents:
+            context_parts.append("\n### 已启用专家角色\n")
+            for agent_name, content in self._loaded_agents.items():
+                context_parts.append(f"\n#### {agent_name}\n")
+                context_parts.append(content)
+                context_parts.append("\n")
+        
+        return "\n".join(context_parts)
 
     def _init_model_client(self, backend: str):
         """初始化模型客户端，优先使用 vLLM"""
@@ -788,11 +944,16 @@ class HermesAgent:
             return self._get_current_model_name()
 
     def _build_enhanced_prompt(self, query: str, kb_results: List[Dict], deep_results: List[Dict]) -> str:
-        """构建增强的提示"""
+        """构建增强的提示（包含已加载的技能上下文）"""
         prompt_parts = []
         
         # 系统提示
         prompt_parts.append("你是生命之树AI（LivingTreeAl），一款由 AI 驱动的桌面助手，运行在本地 Windows 环境中。")
+        
+        # 已加载的技能上下文（专家角色）
+        skills_context = self.get_loaded_skills_context()
+        if skills_context:
+            prompt_parts.append(skills_context)
         
         # 知识库结果
         if kb_results:
@@ -809,9 +970,9 @@ class HermesAgent:
                 content = result.get("content", "").strip()
                 if content:
                     prompt_parts.append(f"{i}. {content}")
-        
+            
         # 用户查询
         prompt_parts.append(f"\n## 用户问题\n{query}")
-        prompt_parts.append("\n请基于以上信息，提供详细、准确的回答。")
+        prompt_parts.append("\n请基于以上信息和你的专家角色设定，提供详细、准确、专业的回答。")
         
         return "\n".join(prompt_parts)

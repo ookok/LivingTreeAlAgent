@@ -24,6 +24,9 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# 导入基类
+from .base_engine import KnowledgeDiscovery, KnowledgeDiscoveryEngine
+
 
 class RiskLevel(Enum):
     """风险等级"""
@@ -136,20 +139,7 @@ class LiteratureReference:
     findings: List[str] = field(default_factory=list)
 
 
-@dataclass
-class KnowledgeDiscovery:
-    """知识发现"""
-    discovery_id: str
-    discovery_type: str          # pollutant/route/correlation
-    title: str
-    description: str
-    evidence: List[str] = field(default_factory=list)
-    confidence: float = 0.0      # 置信度 (0-1)
-    novelty: float = 0.0         # 创新性 (0-1)
-    implications: List[str] = field(default_factory=list)
-
-
-class EnvironmentalAIScientist:
+class EnvironmentalAIScientist(KnowledgeDiscoveryEngine):
     """
     环境AI科学家
 
@@ -181,6 +171,12 @@ class EnvironmentalAIScientist:
     """
 
     def __init__(self, knowledge_graph=None):
+        # 调用父类构造函数
+        super().__init__(
+            domain_name="environmental",
+            domain_keywords=["VOCs", "COD", "NH3-N", "重金属", "颗粒物", "喷漆", "印刷", "焊接", "电镀", "涂装", "废水", "废气", "RCO", "RTO", "活性炭"]
+        )
+        
         self.kg = knowledge_graph
 
         # 化学物质数据库
@@ -772,6 +768,51 @@ class EnvironmentalAIScientist:
 
         return [r[0] for r in results[:max_results]]
 
+    def _extract_domain_features(self, training_content: str) -> Dict:
+        """
+        提取环境领域特征（实现基类抽象方法）
+        
+        Args:
+            training_content: 训练内容
+            
+        Returns:
+            领域特征字典（包含污染物、工艺、技术等信息）
+        """
+        features = {
+            "pollutants": [],
+            "processes": [],
+            "technologies": [],
+            "regulations": []
+        }
+        
+        content_lower = training_content.lower()
+        
+        # 提取污染物
+        pollutant_keywords = ["VOCs", "COD", "NH3-N", "苯", "甲苯", "二甲苯", "重金属", "颗粒物", "SO2", "NOx"]
+        for kw in pollutant_keywords:
+            if kw.lower() in content_lower:
+                features["pollutants"].append(kw)
+        
+        # 提取工艺流程
+        process_keywords = ["喷漆", "印刷", "焊接", "电镀", "铸造", "涂装", "清洗", "打磨", "印刷", "烘干"]
+        for kw in process_keywords:
+            if kw in content_lower:
+                features["processes"].append(kw)
+        
+        # 提取治理技术
+        tech_keywords = ["RCO", "RTO", "活性炭", "光催化", "MBR", "Fenton", "膜分离", "催化燃烧"]
+        for kw in tech_keywords:
+            if kw.lower() in content_lower:
+                features["technologies"].append(kw)
+        
+        # 提取法规标准
+        regulation_keywords = ["排放标准", "环境质量标准", "GB", "HJ", "环发"]
+        for kw in regulation_keywords:
+            if kw in content_lower:
+                features["regulations"].append(kw)
+        
+        return features
+
     def discover_knowledge(self, project_data: Dict) -> List[KnowledgeDiscovery]:
         """
         从项目数据中发现新知识
@@ -936,16 +977,92 @@ class EnvironmentalAIScientist:
         }
 
 
-# 全局单例
+
+# 领域引擎注册表
+_DOMAIN_ENGINES = {}
+_DOMAIN_LOCK = threading.Lock()
+
+
+def register_domain_engine(domain: str, engine_class: type):
+    """
+    注册领域知识发现引擎
+    
+    Args:
+        domain: 领域名称（如："environmental", "medical", "finance"）
+        engine_class: 引擎类（继承自 KnowledgeDiscoveryEngine）
+    """
+    global _DOMAIN_ENGINES
+    with _DOMAIN_LOCK:
+        _DOMAIN_ENGINES[domain] = engine_class
+        logger.info(f"注册领域引擎：{domain} -> {engine_class.__name__}")
+
+
+def get_domain_engine(domain: str) -> Optional[KnowledgeDiscoveryEngine]:
+    """
+    获取指定领域的知识发现引擎
+    
+    Args:
+        domain: 领域名称
+        
+    Returns:
+        领域引擎实例，如果未找到则返回 None
+    """
+    global _DOMAIN_ENGINES
+    
+    engine_class = _DOMAIN_ENGINES.get(domain)
+    if engine_class:
+        return engine_class()
+    
+    return None
+
+
+def list_registered_domains() -> List[str]:
+    """列出所有已注册的领域"""
+    global _DOMAIN_ENGINES
+    return list(_DOMAIN_ENGINES.keys())
+
+
+# 自动注册环境领域引擎
+register_domain_engine("environmental", EnvironmentalAIScientist)
+
+# 注册通用领域引擎
+from .base_engine import GeneralKnowledgeDiscoveryEngine
+register_domain_engine("general", GeneralKnowledgeDiscoveryEngine)
+register_domain_engine("auto", GeneralKnowledgeDiscoveryEngine)  # auto 表示自动选择
+register_domain_engine("default", GeneralKnowledgeDiscoveryEngine)  # default 也使用通用引擎
+
+
+# 全局单例（保留向后兼容）
 _scientist_instance: Optional[EnvironmentalAIScientist] = None
 _scientist_lock = threading.Lock()
 
 
-def get_ai_scientist(knowledge_graph=None) -> EnvironmentalAIScientist:
-    """获取环境AI科学家实例"""
-    global _scientist_instance
-    if _scientist_instance is None:
-        with _scientist_lock:
-            if _scientist_instance is None:
-                _scientist_instance = EnvironmentalAIScientist(knowledge_graph)
-    return _scientist_instance
+def get_ai_scientist(knowledge_graph=None, domain: str = "environmental") -> KnowledgeDiscoveryEngine:
+    """
+    获取AI科学家实例（通用版本）
+    
+    Args:
+        knowledge_graph: 知识图谱（可选）
+        domain: 领域名称（默认："environmental"）
+        
+    Returns:
+        知识发现引擎实例
+    """
+    global _scientist_instance, _scientist_lock
+    
+    # 如果不指定领域，使用全局单例（向后兼容）
+    if domain == "environmental":
+        if _scientist_instance is None:
+            with _scientist_lock:
+                if _scientist_instance is None:
+                    _scientist_instance = EnvironmentalAIScientist(knowledge_graph)
+        return _scientist_instance
+    
+    # 否则，创建指定领域的引擎
+    engine = get_domain_engine(domain)
+    if engine is None:
+        logger.warning(f"未找到领域 {domain} 的引擎，使用环境领域引擎")
+        return get_ai_scientist(knowledge_graph=knowledge_graph, domain="environmental")
+    
+    return engine
+

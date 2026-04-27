@@ -1,20 +1,22 @@
 """
-Ollama API 客户端
+Ollama API 客户端（已迁移到 ModelRouter）
 基于 OpenAI-Compatible 接口，支持流式 SSE
 参考 hermes-agent 的模型调用架构
-"""
 
+现已集成 ModelRouter，支持多后端（Ollama/Shimmy/OpenAI）
+"""
 import json
 import time
 from typing import Callable, Iterator, Optional
 from dataclasses import dataclass, field
 
-import httpx
+import requests
 
 from client.src.business.config import OllamaConfig
+from client.src.business.model_router import ModelRouter, BackendType, BackendConfig, get_model_router
 
 
-# ── 数据模型 ────────────────────────────────────────────────────────
+# ── 数据模型 ────────────────────────────────────────────────
 
 @dataclass
 class OllamaModel:
@@ -58,9 +60,11 @@ class StreamChunk:
 class _SSEDecoder:
     """简单 SSE 解析器"""
     @staticmethod
-    def iter_sse(response: httpx.Response) -> Iterator[dict]:
+    def iter_sse(response: requests.Response) -> Iterator[dict]:
         """从 HTTP 响应迭代解析 SSE 事件"""
         for line in response.iter_lines():
+            if isinstance(line, bytes):
+                line = line.decode('utf-8')
             line = line.strip()
             if not line:
                 continue
@@ -74,7 +78,7 @@ class _SSEDecoder:
                     continue
 
 
-# ── Ollama 客户端 ───────────────────────────────────────────────────
+# ── Ollama 客户端（已迁移到 ModelRouter）──────────────────────────────────
 
 class OllamaClient:
     """
@@ -83,37 +87,51 @@ class OllamaClient:
     - 标准 chat completions（/v1/chat/completions）
     - SSE 流式响应
     - 模型列表 / 模型信息 / 加载 / 卸载
+    
+    已迁移到 ModelRouter，支持多后端（Ollama/Shimmy/OpenAI）
     """
 
-    def __init__(self, config: OllamaConfig):
+    def __init__(self, config: OllamaConfig, model_router: ModelRouter | None = None):
         self.config = config
         self.base_url = config.base_url.rstrip("/")
         self._num_ctx_cache: dict[str, int] = {}
 
-    def _client(self) -> httpx.Client:
-        return httpx.Client(
-            base_url=self.base_url,
-            timeout=httpx.Timeout(120.0, connect=10.0),
-            headers={"Content-Type": "application/json"},
-        )
+        # 使用 ModelRouter
+        self.model_router = model_router or get_model_router()
+        
+        # 确保 Ollama 后端已注册
+        if "ollama" not in self.model_router.backends:
+            ollama_config = BackendConfig(
+                backend_type=BackendType.OLLAMA,
+                base_url=self.base_url,
+                priority=1,
+                enabled=True
+            )
+            self.model_router.register_backend("ollama", ollama_config)
+        
+        # 获取 Ollama 后端实例
+        self.ollama_backend = self.model_router.get_backend("ollama")
+        
+        logger.info(f"OllamaClient 初始化完成，使用 ModelRouter，后端: ollama")
 
     # ── 模型管理 ────────────────────────────────────────────────
 
     def list_models(self) -> list[OllamaModel]:
         """列出 Ollama 已注册的模型"""
         try:
-            # 使用更短的超时时间，避免阻塞
-            client = httpx.Client(
-                base_url=self.base_url,
-                timeout=httpx.Timeout(3.0, connect=2.0),  # 减少超时时间
-                headers={"Content-Type": "application/json"},
-            )
-            with client:
-                r = client.get("/api/tags")
-                r.raise_for_status()
-                return [OllamaModel(**m) for m in r.json().get("models", [])]
+            models_info = self.ollama_backend.list_models()
+            # 转换为 OllamaModel
+            models = []
+            for m in models_info:
+                models.append(OllamaModel(
+                    name=m.name,
+                    size=m.size or 0,
+                    modified_at=m.modified_at or "",
+                    details=m.details
+                ))
+            return models
         except Exception as e:
-            # 快速失败，避免长时间阻塞
+            logger.error(f"列出模型失败: {e}")
             return []
 
     def get_model_info(self, name: str) -> ModelInfo:
@@ -122,65 +140,34 @@ class OllamaClient:
             return ModelInfo(name=name, num_ctx=self._num_ctx_cache[name])
 
         try:
-            with self._client() as c:
-                r = c.post("/api/show", json={"name": name})
-                r.raise_for_status()
-                d = r.json()
-                info = ModelInfo(
-                    name=name,
-                    num_ctx=d.get("context_length", self.config.num_ctx),
-                    num_gpu=d.get("num_gpu", self.config.num_gpu),
-                    num_params=d.get("parameters", ""),
-                    extra=d,
-                )
-                self._num_ctx_cache[name] = info.num_ctx
-                return info
+            info_dict = self.ollama_backend.get_model_info(name)
+            info = ModelInfo(
+                name=name,
+                num_ctx=info_dict.get("context_length", self.config.num_ctx),
+                num_gpu=info_dict.get("num_gpu", self.config.num_gpu),
+                num_params=info_dict.get("parameters", ""),
+                extra=info_dict
+            )
+            self._num_ctx_cache[name] = info.num_ctx
+            return info
         except Exception:
             return ModelInfo(name=name, num_ctx=self.config.num_ctx)
 
     def load_model(self, name: str, keep_alive: str | None = None) -> bool:
         """加载模型到内存"""
-        try:
-            with self._client() as c:
-                payload = {"model": name}
-                if keep_alive is not None:
-                    payload["keep_alive"] = keep_alive
-                elif self.config.keep_alive:
-                    payload["keep_alive"] = self.config.keep_alive
-                r = c.post("/api/generate", json=payload)
-                r.raise_for_status()
-                return True
-        except Exception:
-            return False
+        return self.ollama_backend.load_model(name, keep_alive)
 
     def unload_model(self, name: str) -> bool:
         """卸载模型（keep_alive=0）"""
-        try:
-            with self._client() as c:
-                r = c.post("/api/generate", json={"model": name, "keep_alive": 0})
-                r.raise_for_status()
-                return True
-        except Exception:
-            return False
+        return self.ollama_backend.unload_model(name)
 
     def is_loaded(self, name: str) -> bool:
         """检查模型是否在内存中"""
-        try:
-            with self._client() as c:
-                r = c.post("/api/show", json={"name": name})
-                return r.status_code == 200
-        except Exception:
-            return False
+        return self.ollama_backend.is_loaded(name)
 
     def delete_model(self, name: str) -> bool:
         """从 Ollama 删除模型"""
-        try:
-            with self._client() as c:
-                r = c.delete("/api/delete", json={"name": name})
-                r.raise_for_status()
-                return True
-        except Exception:
-            return False
+        return self.ollama_backend.delete_model(name)
 
     # ── Chat API ─────────────────────────────────────────────────
 
@@ -213,28 +200,23 @@ class OllamaClient:
             info = self.get_model_info(model)
             num_ctx = info.num_ctx
 
-        payload = {
-            "model": model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "stream": True,
-            "options": {"num_ctx": num_ctx},
-        }
+        # 构造 messages 列表
+        msgs = [{"role": m.role, "content": m.content} for m in messages]
+        
+        # 构造参数
+        kwargs = {}
         if temperature is not None:
-            payload["options"]["temperature"] = temperature
+            kwargs["temperature"] = temperature
         if tools:
-            payload["tools"] = tools
-
+            kwargs["tools"] = tools
+        
+        # 使用 ModelRouter 的 chat_stream
         try:
-            with self._client() as c:
-                with c.stream("POST", "/v1/chat/completions", json=payload) as r:
-                    r.raise_for_status()
-                    for data in _SSEDecoder.iter_sse(r):
-                        chunk = self._parse_chunk(data, reasoning_callback)
-                        yield chunk
-                        if chunk.done:
-                            break
-        except httpx.HTTPStatusError as e:
-            yield StreamChunk(error=f"HTTP {e.response.status_code}")
+            for chunk_dict in self.model_router.chat_stream(model, msgs, **kwargs):
+                chunk = self._parse_chunk(chunk_dict, reasoning_callback)
+                yield chunk
+                if chunk.done:
+                    break
         except Exception as e:
             yield StreamChunk(error=str(e))
 
@@ -258,7 +240,7 @@ class OllamaClient:
 
     @staticmethod
     def _parse_chunk(data: dict, reasoning_cb) -> StreamChunk:
-        """解析 SSE data"""
+        """解析 SSE data（OpenAI 格式）"""
         choices = data.get("choices", [])
         if not choices:
             return StreamChunk()
@@ -296,18 +278,84 @@ class OllamaClient:
 
     def ping(self) -> bool:
         """Ollama 服务是否在线"""
-        try:
-            with self._client() as c:
-                return c.get("/").status_code == 200
-        except Exception:
-            return False
+        return self.ollama_backend.ping()
 
     def version(self) -> str:
         """获取 Ollama 版本"""
-        try:
-            with self._client() as c:
-                r = c.get("/api/version")
-                r.raise_for_status()
-                return r.json().get("version", "unknown")
-        except Exception:
-            return "offline"
+        return self.ollama_backend.version()
+
+    def health_check(self) -> bool:
+        """健康检查（别名）"""
+        return self.ollama_backend.health_check()
+
+
+# ── 全局默认客户端 ────────────────────────────────────────────────
+
+_default_client: OllamaClient | None = None
+
+def get_ollama_client(config: OllamaConfig | None = None) -> OllamaClient:
+    """获取默认 OllamaClient 实例（单例）"""
+    global _default_client
+    if _default_client is None:
+        if config is None:
+            from client.src.business.config import UnifiedConfig
+            config = UnifiedConfig.get_instance().get_ollama_config()
+        _default_client = OllamaClient(config)
+    return _default_client
+
+
+if __name__ == "__main__":
+    # 测试代码
+    import sys
+    import os
+    
+    # 配置日志
+    try:
+        from loguru import logger
+        logger.remove()
+        logger.add(sys.stdout, format='{message}', colorize=False)
+    except ImportError:
+        import logging
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
+        logger = logging.getLogger(__name__)
+
+    logger.info("=" * 60)
+    logger.info("OllamaClient (ModelRouter) 测试")
+    logger.info("=" * 60)
+    
+    # 创建配置
+    from client.src.business.config import OllamaConfig
+    config = OllamaConfig(
+        base_url="http://localhost:11434",
+        default_model="qwen2.5:1.5b"
+    )
+    
+    # 创建客户端（会自动注册到 ModelRouter）
+    client = OllamaClient(config)
+    
+    # 健康检查
+    logger.info("\n[1] 健康检查:")
+    if client.ping():
+        logger.info("  Ollama 在线")
+    else:
+        logger.error("  Ollama 离线")
+        sys.exit(1)
+    
+    # 列出模型
+    logger.info("\n[2] 列出模型:")
+    models = client.list_models()
+    for m in models[:5]:
+        logger.info(f"  - {m.name}")
+    
+    # 同步对话测试
+    logger.info("\n[3] 同步对话测试:")
+    messages = [ChatMessage(role="user", content="你好，请介绍一下自己")]
+    try:
+        content, reasoning, tool_calls = client.chat_sync(messages, model="qwen2.5:1.5b")
+        logger.info(f"  回复: {content[:100]}...")
+    except Exception as e:
+        logger.error(f"  失败: {e}")
+    
+    logger.info("\n" + "=" * 60)
+    logger.info("测试完成")
+    logger.info("=" * 60)

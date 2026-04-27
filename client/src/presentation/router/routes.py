@@ -51,6 +51,7 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("model_router_monitor", "模型监控", "📊", _lazy_model_monitor(), category="tool"),
         Route("plugin_manager", "插件管理", "🔌", _create_plugin_manager_panel, category="tool"),
         Route("marketplace", "生态市场", "🛒", _create_marketplace_panel, category="tool"),
+        Route("skills", "技能中心", "🧠", _create_skills_panel, category="tool"),
     ]
 
     # =========================================================================
@@ -431,3 +432,16 @@ def _create_profile_panel() -> type:
     except Exception as e:
         print(f"[_create_profile_panel] Failed to import: {e}")
         return None
+
+
+def _create_skills_panel() -> type:
+    """
+    返回 SkillsPanel 类（技能与专家角色管理）
+    """
+    try:
+        from client.src.presentation.panels.skills_panel import SkillsPanel
+        return SkillsPanel
+    except Exception as e:
+        print(f"[_create_skills_panel] Failed to import: {e}")
+        return None
+

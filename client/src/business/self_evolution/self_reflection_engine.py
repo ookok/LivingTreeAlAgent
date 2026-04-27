@@ -1,14 +1,19 @@
 """
-SelfReflectionEngine - 自我反思引擎
+SelfReflectionEngine - 自我反思引擎（增强版）
 
 功能：智能体能够反思自己的表现，发现不足并改进。
+增强：集成 ToolSelfRepairer，实现工具自我修复。
 
 工作流程：
 1. 分析任务是否成功完成
 2. 如果失败，分析失败原因
-3. 如果发现能力缺失，触发工具创建流程
-4. 如果发现性能问题，触发优化流程
-5. 记录反思结果到日志
+3. 如果发现能力缺失，触发工具创建/安装流程
+4. 如果发现工具执行错误，触发自我修复流程
+5. 如果发现性能问题，触发优化流程
+6. 记录反思结果到日志
+
+Author: LivingTreeAI Agent
+Date: 2026-04-28（集成 ToolSelfRepairer）
 """
 
 import json
@@ -18,13 +23,18 @@ from loguru import logger
 
 from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
 from client.src.business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
+from client.src.business.self_evolution.tool_self_repairer import ToolSelfRepairer, RepairResult
 
 
 class SelfReflectionEngine:
     """
-    自我反思引擎
+    自我反思引擎（增强版）
     
-    功能：智能体能够反思自己的表现，发现不足并改进。
+    功能：
+    1. 反思任务执行情况
+    2. 检测缺失能力并自动创建/安装工具
+    3. 检测工具执行错误并自动修复
+    4. 记录反思历史
     
     用法：
         engine = SelfReflectionEngine()
@@ -36,13 +46,15 @@ class SelfReflectionEngine:
         初始化自我反思引擎
         
         Args:
-            llm_client: LLM 客户端
+            llm_client: LLM 客户端（可选，增强版使用 GlobalModelRouter）
         """
-        self._llm = llm_client
+        self._llm = llm_client  # 保留兼容性
         self._detector = ToolMissingDetector(llm_client)
         self._creator = AutonomousToolCreator(llm_client)
+        self._repairer = ToolSelfRepairer(llm_client)  # 新增：工具修复器
         self._logger = logger.bind(component="SelfReflectionEngine")
         self._reflection_history = []
+        self._auto_repair_enabled = True  # 是否启用自动修复
     
     async def reflect_on_task_execution(
         self,
@@ -56,9 +68,9 @@ class SelfReflectionEngine:
         执行流程：
         1. 分析任务是否成功完成
         2. 如果失败，分析失败原因
-        3. 如果发现能力缺失，触发工具创建流程
+        3. 如果发现能力缺失，触发工具创建/安装流程
         4. 如果发现性能问题，触发优化流程
-        5. 记录反思结果到日志
+        5. 记录反思结果
         
         Args:
             task: 任务描述
@@ -79,7 +91,7 @@ class SelfReflectionEngine:
             
             self._logger.info(f"反思结果: success={reflection_json.get('success')}")
             
-            # 2. 如果发现能力缺失，触发工具创建流程
+            # 2. 如果发现能力缺失，触发工具创建/安装流程
             if reflection_json.get("missing_capabilities"):
                 self._logger.info(f"发现能力缺失: {reflection_json['missing_capabilities']}")
                 await self._handle_missing_capabilities(
@@ -113,6 +125,8 @@ class SelfReflectionEngine:
     ) -> Dict[str, Any]:
         """
         反思工具执行情况
+        
+        增强：如果工具执行失败，自动触发修复流程。
         
         Args:
             tool_name: 工具名称
@@ -152,6 +166,16 @@ class SelfReflectionEngine:
             response = await self._call_llm(prompt)
             reflection = json.loads(response)
             
+            # 增强：如果工具执行失败，触发自动修复
+            if not reflection.get("success") and error and self._auto_repair_enabled:
+                self._logger.info(f"工具执行失败，触发自动修复: {tool_name}")
+                repair_result = await self._repairer.repair_tool(tool_name, error)
+                
+                reflection["auto_repair_attempted"] = True
+                reflection["auto_repair_result"] = repair_result.to_dict()
+                
+                self._logger.info(f"自动修复结果: success={repair_result.success}, msg={repair_result.message}")
+            
             # 如果有改进建议，触发工具优化流程
             if reflection.get("improvement_suggestions"):
                 await self._improve_tool(tool_name, reflection)
@@ -188,52 +212,24 @@ class SelfReflectionEngine:
         
         return results
     
-    def _build_reflection_prompt(
-        self,
-        task: str,
-        execution_result: Any,
-        context: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """构建反思提示词"""
-        prompt = f"""
-你是自我反思专家。
-
-请反思以下任务执行情况：
-
-任务：{task}
-执行结果：{execution_result}
-"""
-        
-        if context:
-            prompt += f"\n上下文：{json.dumps(context, ensure_ascii=False)}\n"
-        
-        prompt += """
-问题：
-1. 任务是否成功完成？
-2. 如果失败，失败原因是什么？
-3. 是否缺少必要的工具或能力？
-4. 是否有性能改进空间？
-5. 下次如何做得更好？
-
-请以 JSON 格式输出反思结果：
-{{
-    "success": true/false,
-    "failure_reason": "...",
-    "missing_capabilities": ["cap1", "cap2"],
-    "improvement_suggestions": ["sug1", "sug2"],
-    "next_time_how_to_do_better": "..."
-}}
-"""
-        
-        return prompt
-    
     async def _handle_missing_capabilities(self, task: str, missing_caps: List[str]):
         """处理缺失的能力"""
         self._logger.info(f"处理缺失能力: {missing_caps}")
         
         for cap in missing_caps:
             try:
-                self._logger.info(f"  创建工具: {cap}")
+                self._logger.info(f"  创建/安装工具: {cap}")
+                # 先尝试用 NaturalLanguageToolAdder 安装
+                try:
+                    from client.src.business.self_evolution.natural_language_tool_adder import add_tool_from_text
+                    result = await add_tool_from_text(f"帮我安装 {cap} 工具")
+                    if result.success:
+                        self._logger.info(f"  工具安装成功: {cap}")
+                        continue
+                except Exception as e:
+                    self._logger.warning(f"  工具安装失败，尝试创建: {e}")
+                
+                # 安装失败，尝试创建
                 success, file_path = await self._creator.create_tool(cap, f"自动创建的 {cap} 工具")
                 
                 if success:
@@ -253,12 +249,22 @@ class SelfReflectionEngine:
         pass
     
     async def _improve_tool(self, tool_name: str, reflection: Dict[str, Any]):
-        """改进工具"""
+        """改进工具（增强版：使用 ToolSelfRepairer）"""
         self._logger.info(f"改进工具: {tool_name}")
         
-        # 这里可以实现工具改进逻辑
-        # 例如：重新生成工具代码、优化性能等
-        pass
+        if not self._auto_repair_enabled:
+            self._logger.info("自动修复已禁用，跳过")
+            return
+        
+        # 使用 ToolSelfRepairer 改进工具
+        error = reflection.get("failure_reason", "")
+        if error:
+            repair_result = await self._repairer.repair_tool(tool_name, error)
+            
+            if repair_result.success:
+                self._logger.info(f"工具改进成功: {repair_result.message}")
+            else:
+                self._logger.warning(f"工具改进失败: {repair_result.message}")
     
     async def _log_reflection(
         self,
@@ -326,22 +332,76 @@ class SelfReflectionEngine:
         counter = Counter(improvements)
         return [item[0] for item in counter.most_common(3)]
     
+    def _build_reflection_prompt(
+        self,
+        task: str,
+        execution_result: Any,
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """构建反思提示词"""
+        prompt = f"""
+你是自我反思专家。
+
+请反思以下任务执行情况：
+
+任务：{task}
+执行结果：{execution_result}
+"""
+        
+        if context:
+            prompt += f"\n上下文：{json.dumps(context, ensure_ascii=False)}\n"
+        
+        prompt += """
+问题：
+1. 任务是否成功完成？
+2. 如果失败，失败原因是什么？
+3. 是否缺少必要的工具或能力？
+4. 是否有性能改进空间？
+5. 下次如何做得更好？
+
+请以 JSON 格式输出反思结果：
+{{
+    "success": true/false,
+    "failure_reason": "...",
+    "missing_capabilities": ["cap1", "cap2"],
+    "improvement_suggestions": ["sug1", "sug2"],
+    "next_time_how_to_do_better": "..."
+}}
+"""
+        
+        return prompt
+    
     async def _call_llm(self, prompt: str) -> str:
-        """调用 LLM"""
-        if self._llm is not None:
-            return await self._llm.chat(prompt, model="qwen3.5:4b")
-        else:
-            try:
-                from client.src.business.hermes_agent.llm_client import LLMClient
-                llm = LLMClient()
-                return await llm.chat(prompt, model="qwen3.5:4b")
-            except Exception as e:
-                self._logger.error(f"调用 LLM 失败: {e}")
-                raise
+        """
+        调用 LLM（使用 GlobalModelRouter）
+        
+        增强：改用 GlobalModelRouter，不再直接调用 LLM。
+        """
+        try:
+            from client.src.business.global_model_router import GlobalModelRouter
+            router = GlobalModelRouter.get_instance()
+            
+            response = await router.call_model_sync(
+                capability="reasoning",
+                prompt=prompt,
+                temperature=0.1,
+            )
+            
+            # 解析响应（qwen3.6 答案在 thinking 字段）
+            if hasattr(response, 'thinking') and response.thinking:
+                return response.thinking
+            elif hasattr(response, 'content') and response.content:
+                return response.content
+            else:
+                return str(response)
+                
+        except Exception as e:
+            self._logger.error(f"调用 LLM 失败: {e}")
+            raise
 
 
 async def test_self_reflection_engine():
-    """测试自我反思引擎"""
+    """测试自我反思引擎（增强版）"""
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -351,7 +411,7 @@ async def test_self_reflection_engine():
     logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
     
     print("=" * 60)
-    print("测试 SelfReflectionEngine")
+    print("测试 SelfReflectionEngine（增强版）")
     print("=" * 60)
     
     # 创建反思引擎
@@ -369,6 +429,24 @@ async def test_self_reflection_engine():
     print(f"  失败原因: {reflection.get('failure_reason', '无')}")
     print(f"  缺失能力: {reflection.get('missing_capabilities', [])}")
     print(f"  改进建议: {reflection.get('improvement_suggestions', [])}")
+    
+    # 测试反思工具执行
+    print("\n测试反思工具执行（带自动修复）...")
+    tool_name = "aermod_tool"
+    tool_input = {"model_path": "/path/to/model"}
+    tool_output = None
+    error = "ModuleNotFoundError: No module named 'flopy'"
+    
+    tool_reflection = await engine.reflect_on_tool_execution(
+        tool_name, tool_input, tool_output, error
+    )
+    
+    print(f"\n[结果] 工具反思完成:")
+    print(f"  成功: {tool_reflection.get('success')}")
+    print(f"  自动修复尝试: {tool_reflection.get('auto_repair_attempted', False)}")
+    if tool_reflection.get('auto_repair_result'):
+        repair = tool_reflection['auto_repair_result']
+        print(f"  修复结果: success={repair.get('success')}, msg={repair.get('message')}")
     
     print("\n" + "=" * 60)
     print("测试完成")

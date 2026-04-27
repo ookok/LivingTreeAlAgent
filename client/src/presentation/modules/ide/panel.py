@@ -722,6 +722,18 @@ class ChatWidget(QWidget):
         
         self.setLayout(layout)
     
+    def _on_corrections_found(self, corrections: list):
+        """
+        检测到错别字时的处理
+        
+        Args:
+            corrections: 错别字列表 [{"original":, "corrected":, ...}]
+        """
+        if corrections:
+            print(f"[IDE拼写检查] 发现 {len(corrections)} 个疑似错别字")
+        else:
+            print("[IDE拼写检查] 未发现错别字")
+    
     def send_message(self):
         """发送消息"""
         message = self.message_input.toPlainText().strip()

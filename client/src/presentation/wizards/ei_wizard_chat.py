@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer, QUrl, QPoint
 from PySide6.QtGui import QFont, QIcon, QTextCursor, QDesktopServices, QCursor, QAction, QClipboard
+from client.src.presentation.components.spell_check_edit import SpellCheckTextEdit
+from client.src.presentation.components.spell_check_edit import SpellCheckTextEdit
 
 import logging
 from typing import Dict, Any, Optional, List
@@ -503,10 +505,9 @@ class EIWizardChat(QWidget):
         self.tts_btn.clicked.connect(self._toggle_tts)
         input_layout.addWidget(self.tts_btn)
         
-        # 消息输入框
-        self.message_input = QTextEdit()
+        # 消息输入框（带实时错别字检查）
+        self.message_input = SpellCheckTextEdit("输入你的需求，我会帮你生成环评报告...")
         self.message_input.setMaximumHeight(80)
-        self.message_input.setPlaceholderText("输入你的需求，我会帮你生成环评报告...")
         self.message_input.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #e0e0e0;
@@ -519,6 +520,9 @@ class EIWizardChat(QWidget):
                 border: 1px solid #0078d4;
             }
         """)
+        
+        # 连接错别字检测信号
+        self.message_input.corrections_found.connect(self._on_corrections_found)
         
         # Ctrl+Enter 发送
         # 注意：PySide6 的快捷键设置需要额外处理
@@ -565,6 +569,36 @@ class EIWizardChat(QWidget):
 请告诉我你需要什么帮助？"""
         
         self._add_message('assistant', welcome_text)
+    
+    def _on_corrections_found(self, corrections: list):
+        """
+        检测到错别字时的处理
+        
+        Args:
+            corrections: 错别字列表 [{"original":, "corrected":, ...}]
+        """
+        if corrections:
+            print(f"[拼写检查] 发现 {len(corrections)} 个疑似错别字")
+            # 可以在这里添加 UI 提示（如状态栏显示）
+            for c in corrections:
+                print(f"  - {c.get('original', '')} → {c.get('corrected', '')} ({c.get('reason', '')})")
+        else:
+            print("[拼写检查] 未发现错别字")
+    
+    def _on_corrections_found(self, corrections: list):
+        """
+        检测到错别字时的处理
+        
+        Args:
+            corrections: 错别字列表 [{"original":, "corrected":, ...}]
+        """
+        if corrections:
+            print(f"[拼写检查] 发现 {len(corrections)} 个疑似错别字")
+            # 可以在这里添加 UI 提示（如状态栏显示）
+            for c in corrections:
+                print(f"  - {c.get('original', '')} → {c.get('corrected', '')} ({c.get('reason', '')})")
+        else:
+            print("[拼写检查] 未发现错别字")
     
     def _send_message(self):
         """发送消息"""

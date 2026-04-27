@@ -34,6 +34,12 @@ from client.src.business.model_priority_loader import (
     check_local_model_backends,
 )
 
+# 新增：主动工具发现、工具链编排、自我反思引擎
+from client.src.business.hermes_agent.proactive_discovery_agent import ProactiveDiscoveryAgent
+from client.src.business.tool_chain_orchestrator import ToolChainOrchestrator
+from client.src.business.self_evolution.self_reflection_engine import SelfReflectionEngine
+from client.src.business.self_evolution.tool_self_repairer import ToolSelfRepairer
+
 # 搜索相关导入
 import asyncio
 from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
@@ -152,6 +158,165 @@ class HermesAgent:
         
         # 已加载的专家角色缓存
         self._loaded_agents: Dict[str, str] = {}  # {agent_name: agent_content}
+        
+        # ========= 新增：三个核心能力初始化 =========
+        self._init_enhanced_capabilities()
+    
+    def _init_enhanced_capabilities(self):
+        """
+        初始化三个核心能力：
+        1. ProactiveDiscoveryAgent - 主动工具发现
+        2. ToolChainOrchestrator - 工具链编排
+        3. SelfReflectionEngine + ToolSelfRepairer - 自我反思与修复
+        """
+        # 1. 主动工具发现
+        try:
+            self._proactive_agent = ProactiveDiscoveryAgent(
+                enabled_toolsets=self.enabled_toolsets,
+                auto_install=True,
+            )
+            print("[HermesAgent] 已初始化 ProactiveDiscoveryAgent")
+        except Exception as e:
+            print(f"[HermesAgent] 初始化 ProactiveDiscoveryAgent 失败: {e}")
+            self._proactive_agent = None
+        
+        # 2. 工具链编排器
+        try:
+            self._tool_chain_orchestrator = ToolChainOrchestrator(
+                max_parallel_steps=3,
+                default_max_retries=3,
+            )
+            print("[HermesAgent] 已初始化 ToolChainOrchestrator")
+        except Exception as e:
+            print(f"[HermesAgent] 初始化 ToolChainOrchestrator 失败: {e}")
+            self._tool_chain_orchestrator = None
+        
+        # 3. 自我反思引擎（含工具自我修复）
+        try:
+            self._reflection_engine = SelfReflectionEngine()
+            self._tool_repairer = ToolSelfRepairer()
+            print("[HermesAgent] 已初始化 SelfReflectionEngine 和 ToolSelfRepairer")
+        except Exception as e:
+            print(f"[HermesAgent] 初始化自我反思引擎失败: {e}")
+            self._reflection_engine = None
+            self._tool_repairer = None
+    
+    def execute_complex_task(self, task: str) -> Dict[str, Any]:
+        """
+        执行复杂任务（使用 ToolChainOrchestrator）
+        
+        Args:
+            task: 任务描述
+            
+        Returns:
+            执行结果
+        """
+        if not self._tool_chain_orchestrator:
+            return {"success": False, "error": "ToolChainOrchestrator 未初始化"}
+        
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    self._tool_chain_orchestrator.execute_chain(task)
+                )
+                return {
+                    "success": True,
+                    "result": result,
+                }
+            finally:
+                loop.close()
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def _execute_tools_enhanced(self, tool_calls: list[dict]) -> list[dict]:
+        """
+        增强版 _execute_tools：
+        1. 执行工具
+        2. 使用 SelfReflectionEngine 反思
+        3. 如果失败，使用 ToolSelfRepairer 修复
+        """
+        results = []
+        
+        for tc in tool_calls:
+            func = tc.get("function", {})
+            name = func.get("name", "")
+            args_str = func.get("arguments", "{}")
+            
+            # 解析参数
+            try:
+                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+            except Exception:
+                args = {}
+            
+            if self.callbacks and self.callbacks.tool_start:
+                self.callbacks.tool_start(name, args_str)
+            
+            # 记录工具调用
+            if self._session_stats:
+                self._stats_tracker.record_tool_call(self.session_id, name, args_str)
+            
+            # 检测 URL 访问
+            if name in ("web_fetch", "browse_url", "fetch_url", "visit_url") and isinstance(args, dict):
+                url = args.get("url") or args.get("url") or args.get("link", "")
+                if url:
+                    if self._session_stats:
+                        self._stats_tracker.record_url_visit(self.session_id, url)
+            
+            # 记录过程消息
+            if self._session_stats:
+                self._stats_tracker.record_message(self.session_id, "tool")
+                self._notify_stats()
+            
+            # 执行
+            result = self.dispatcher.dispatch(name, args)
+            success = result.get("success", False)
+            result_text = json.dumps(result, ensure_ascii=False, indent=2)
+            
+            # 增强：使用 SelfReflectionEngine 反思
+            if self._reflection_engine:
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        reflection = loop.run_until_complete(
+                            self._reflection_engine.reflect_on_tool_execution(
+                                tool_name=name,
+                                tool_input=args,
+                                tool_output=result.get("data"),
+                                error=result.get("error") if not success else None,
+                            )
+                        )
+                        
+                        # 如果反思中触发了自动修复
+                        if reflection.get("auto_repair_attempted"):
+                            repair_result = reflection.get("auto_repair_result", {})
+                            print(f"[增强] 工具自动修复: {name}, 结果: {repair_result.get('message')}")
+                            
+                            # 如果修复成功，重新执行工具
+                            if repair_result.get("success"):
+                                print(f"[增强] 重新执行工具: {name}")
+                                result = self.dispatcher.dispatch(name, args)
+                    finally:
+                        loop.close()
+                except Exception as e:
+                    print(f"[增强] 反思工具执行失败: {e}")
+            
+            if self.callbacks and self.callbacks.tool_result:
+                self.callbacks.tool_result(name, result_text, success)
+            
+            results.append({
+                "tool_name": name,
+                "success": success,
+                "result": result_text,
+                "error": result.get("error", ""),
+            })
+        
+        return results
     
     def _register_to_agent_registry(self):
         """注册到 AgentRegistry，接收技能和专家角色变化通知"""

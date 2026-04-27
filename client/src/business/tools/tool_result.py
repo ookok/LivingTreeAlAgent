@@ -56,3 +56,15 @@ class ToolResult:
             message=d.get("message", ""),
             metadata=d.get("metadata", {})
         )
+
+
+# ── 兼容性别名（部分工具使用 SUCCESS()/ERROR() 风格） ──
+
+def SUCCESS(data: Any = None, message: str = "", metadata: dict = None) -> ToolResult:
+    """创建成功结果（SUCCESS 风格，兼容 mike21_tool 等）"""
+    return ToolResult(success=True, data=data, message=message, metadata=metadata or {})
+
+
+def ERROR(error: str, message: str = "", data: Any = None) -> ToolResult:
+    """创建失败结果（ERROR 风格，兼容 mike21_tool 等）"""
+    return ToolResult(success=False, error=error, message=message, data=data)

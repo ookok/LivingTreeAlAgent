@@ -59,7 +59,7 @@ class SmolLM2Config:
     # 路由配置
     fast_threshold_ms: int = 1000       # 快反阈值
     cache_threshold_chars: int = 500    # 缓存判定长度
-    heavy_threshold_chars: int = 2000   # 重型判定长度
+    heavy_threshold_chars: int = 1000   # 重型判定长度（调整为1000，确保长文本正确路由）
 
     # 系统提示词
     system_prompt: str = """你是一个轻量级意图分类器。

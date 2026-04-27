@@ -54,9 +54,16 @@ class OllamaRunner:
     def client(self) -> httpx.AsyncClient:
         """获取 HTTP 客户端"""
         if self._client is None:
+            # 增强超时处理，尤其是首次连接大模型时
             self._client = httpx.AsyncClient(
                 base_url=self.config.ollama_host,
-                timeout=30.0,
+                timeout=httpx.Timeout(
+                    connect=10.0,  # 连接超时
+                    read=60.0,    # 读取超时，首次加载大模型需要更长时间
+                    write=30.0,   # 写入超时
+                    pool=10.0     # 池超时
+                ),
+                follow_redirects=True
             )
         return self._client
 
@@ -141,7 +148,19 @@ class OllamaRunner:
 
     def _find_local_gguf(self) -> Optional[Path]:
         """查找本地 GGUF 文件"""
-        # 优先检查 Hermes 模型目录
+        # 优先检查项目根目录下的 models 目录
+        project_root = Path(__file__).parent.parent.parent
+        project_models_dir = project_root / "models"
+        if project_models_dir.exists():
+            # 检查 SmolLM2.gguf
+            smollm2_path = project_models_dir / "SmolLM2.gguf"
+            if smollm2_path.exists():
+                return smollm2_path
+            # 检查其他 smollm 相关的 gguf 文件
+            for gguf_file in project_models_dir.glob("*smollm*.gguf"):
+                return gguf_file
+
+        # 检查 Hermes 模型目录
         search_dirs = [
             Path.home() / ".hermes-desktop" / "models",
             Path.home() / ".ollama" / "models" / "file_context",
@@ -152,12 +171,12 @@ class OllamaRunner:
             if not search_dir.exists():
                 continue
 
-            for gguf_file in search_dir.glob("*smollm2*.gguf"):
+            for gguf_file in search_dir.glob("*smollm*.gguf"):
                 if "q4_k" in gguf_file.name.lower() or "q5" in gguf_file.name.lower():
                     return gguf_file
 
             # 任意 SmolLM2 GGUF
-            for gguf_file in search_dir.glob("*smollm2*.gguf"):
+            for gguf_file in search_dir.glob("*smollm*.gguf"):
                 return gguf_file
 
         return None
@@ -310,9 +329,43 @@ class OllamaRunnerManager:
         if not await runner.is_model_loaded():
             print("模型未加载，尝试创建...")
             if not await runner.create_model():
+                print("SmolLM2 模型创建失败，尝试使用可用的 Ollama 模型...")
+                # 检查可用的 Ollama 模型
+                available_models = status.models
+                if available_models:
+                    # 选择最合适的模型
+                    best_model = self._select_best_model(available_models)
+                    if best_model:
+                        print(f"使用可用模型: {best_model}")
+                        # 更新配置使用选择的模型
+                        runner.config.ollama_model_name = best_model
+                        return True
+                print("未找到可用的 Ollama 模型")
                 return False
 
         return True
+
+    def _select_best_model(self, models: list) -> Optional[str]:
+        """选择最合适的 Ollama 模型"""
+        # 模型优先级列表
+        model_priorities = [
+            # 轻量级模型优先
+            "smollm2",
+            "qwen2.5:0.5b",
+            "qwen3.5:2b",
+            "qwen3.5:4b",
+            "llama3:8b",
+            "qwen3.6:27b",
+        ]
+        
+        # 按优先级选择模型
+        for priority_model in model_priorities:
+            for available_model in models:
+                if priority_model in available_model.lower():
+                    return available_model
+        
+        # 如果没有匹配的优先级模型，返回第一个可用模型
+        return models[0] if models else None
 
     async def shutdown(self):
         """关闭 Runner"""

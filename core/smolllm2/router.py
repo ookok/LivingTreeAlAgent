@@ -60,6 +60,8 @@ HEAVY_PATTERNS = [
     (r"(推理|推导|证明|论证)", RouteType.HEAVY, IntentType.REASONING),
     (r"(代码.{5,})?(架构|设计|重构|系统)", RouteType.HEAVY, IntentType.CODE_COMPLEX),
     (r"(长度|超过|不少于|大于).{5,}(字|词|字符)", RouteType.HEAVY, IntentType.LONG_WRITING),
+    (r"(环评|环境影响评价|环境评估)", RouteType.HEAVY, IntentType.ANALYSIS),
+    (r"(深度搜索|详细信息|详细资料)", RouteType.HEAVY, IntentType.SEARCH_QUERY),
 ]
 
 
@@ -138,6 +140,32 @@ class L0Router:
 
         # 回调函数
         self._on_route_decision: Optional[Callable[[RouteDecision], None]] = None
+
+        # 动态调整阈值
+        self._adjust_thresholds()
+
+    def _adjust_thresholds(self):
+        """根据硬件配置和使用场景动态调整阈值"""
+        import psutil
+        import os
+
+        # 获取系统内存信息（GB）
+        memory_gb = psutil.virtual_memory().total / (1024 ** 3)
+        # 获取CPU核心数
+        cpu_cores = os.cpu_count() or 1
+
+        # 根据内存和CPU核心数调整阈值
+        if memory_gb < 4 or cpu_cores < 2:
+            # 低配置设备，使用较小的阈值
+            self.config.heavy_threshold_chars = 500
+        elif memory_gb < 8 or cpu_cores < 4:
+            # 中等配置设备，使用默认阈值
+            self.config.heavy_threshold_chars = 1000
+        else:
+            # 高配置设备，使用较大的阈值
+            self.config.heavy_threshold_chars = 2000
+
+        print(f"动态调整 heavy_threshold_chars 为: {self.config.heavy_threshold_chars}")
 
     # ==================== 核心路由 ====================
 
@@ -241,58 +269,150 @@ class L0Router:
             self._runner = await manager.get_runner()
 
             if not await manager.ensure_ready():
-                return None
+                # 模型未加载，使用备用的意图分类方法
+                print("SmolLM2 模型未加载，使用备用意图分类方法")
+                return self._fallback_classify(prompt, start_time)
 
-        # 构建提示词
-        classify_prompt = f"""{self.config.system_prompt}
+        # 构建简洁的提示词
+        classify_prompt = f"""请对以下用户输入进行分类，只输出JSON格式，不要其他内容：
 
 用户输入：{prompt}
+
+输出格式：{{"route": "local", "intent": "greeting", "reason": "问候语", "confidence": 0.9}}
 
 只输出JSON，不要其他内容。"""
 
         # 调用 SmolLM2
         try:
+            # 使用更简单的系统提示词
             response = await self._runner.generate(
                 prompt=classify_prompt,
+                system="你是一个轻量级意图分类器，只输出JSON格式的分类结果。",
                 stream=False
             )
 
+            # 清理响应
+            response = response.strip()
+            print(f"SmolLM2 响应: {response}")
+
             # 解析 JSON
-            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                route_str = data.get("route", "local")
-                intent_str = data.get("intent", "unknown")
-                reason = data.get("reason", "")
-                confidence = float(data.get("confidence", 0.7))
+            try:
+                # 尝试直接解析响应
+                data = json.loads(response)
+            except json.JSONDecodeError:
+                # 尝试提取 JSON 部分
+                json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+                if json_match:
+                    try:
+                        data = json.loads(json_match.group())
+                    except json.JSONDecodeError:
+                        # 解析失败，使用备用的意图分类方法
+                        print("SmolLM2 响应解析失败，使用备用意图分类方法")
+                        return self._fallback_classify(prompt, start_time)
+                else:
+                    # 没有找到 JSON，使用备用的意图分类方法
+                    print("SmolLM2 响应中没有找到 JSON，使用备用意图分类方法")
+                    return self._fallback_classify(prompt, start_time)
 
-                # 转换枚举
-                try:
-                    route = RouteType(route_str)
-                except ValueError:
-                    route = RouteType.LOCAL
+            route_str = data.get("route", "local")
+            intent_str = data.get("intent", "unknown")
+            reason = data.get("reason", "")
+            confidence = float(data.get("confidence", 0.7))
 
-                try:
-                    intent = IntentType(intent_str)
-                except ValueError:
-                    intent = IntentType.UNKNOWN
+            # 转换枚举
+            try:
+                route = RouteType(route_str)
+            except ValueError:
+                route = RouteType.LOCAL
 
-                # 更新统计
-                self._update_stats(route)
+            try:
+                intent = IntentType(intent_str)
+            except ValueError:
+                intent = IntentType.UNKNOWN
 
-                return RouteDecision(
-                    route=route,
-                    intent=intent,
-                    reason=reason or "SmolLM2 分类",
-                    confidence=confidence,
-                    latency_ms=(time.time() - start_time) * 1000,
-                    fallback=False,
-                )
+            # 更新统计
+            self._update_stats(route)
+
+            return RouteDecision(
+                route=route,
+                intent=intent,
+                reason=reason or "SmolLM2 分类",
+                confidence=confidence,
+                latency_ms=(time.time() - start_time) * 1000,
+                fallback=False,
+            )
 
         except Exception as e:
             print(f"SmolLM2 调用异常: {e}")
+            # 调用失败，使用备用的意图分类方法
+            return self._fallback_classify(prompt, start_time)
 
-        return None
+    def _fallback_classify(self, prompt: str, start_time: float) -> RouteDecision:
+        """备用意图分类方法"""
+        prompt_lower = prompt.lower().strip()
+        
+        # 检查重型模式
+        for pattern, route, intent in HEAVY_PATTERNS:
+            if re.search(pattern, prompt_lower):
+                return RouteDecision(
+                    route=route,
+                    intent=intent,
+                    reason="备用分类：命中重型规则",
+                    confidence=0.8,
+                    latency_ms=(time.time() - start_time) * 1000,
+                    fallback=True,
+                )
+        
+        # 检查快速模式
+        for pattern, (route, intent) in FAST_PATTERNS.items():
+            if re.match(pattern, prompt_lower):
+                return RouteDecision(
+                    route=route,
+                    intent=intent,
+                    reason="备用分类：命中简单规则",
+                    confidence=0.75,
+                    latency_ms=(time.time() - start_time) * 1000,
+                    fallback=True,
+                )
+        
+        # 检查深度搜索模式
+        depth_search_patterns = [
+            r"(深度搜索|详细信息|详细资料|详细介绍)",
+            r"(哪些地方|什么地方|哪里|哪些景点|什么景点)",
+            r"(值得玩|好玩|游玩|旅游|旅行)",
+            r"(五一|假期|周末|节假日)",
+        ]
+        for pattern in depth_search_patterns:
+            if re.search(pattern, prompt_lower):
+                return RouteDecision(
+                    route=RouteType.HEAVY,
+                    intent=IntentType.ANALYSIS,
+                    reason="备用分类：深度搜索",
+                    confidence=0.85,
+                    latency_ms=(time.time() - start_time) * 1000,
+                    fallback=True,
+                )
+        
+        # 长度检查
+        if len(prompt) > self.config.heavy_threshold_chars:
+            return RouteDecision(
+                route=RouteType.HEAVY,
+                intent=IntentType.UNKNOWN,
+                reason="备用分类：输入过长",
+                confidence=0.9,
+                latency_ms=(time.time() - start_time) * 1000,
+                fallback=True,
+            )
+        
+        # 兜底：默认走本地
+        return RouteDecision(
+            route=RouteType.LOCAL,
+            intent=IntentType.UNKNOWN,
+            reason="备用分类：默认本地执行",
+            confidence=0.5,
+            latency_ms=(time.time() - start_time) * 1000,
+            fallback=True,
+        )
 
     def _make_decision(
         self,

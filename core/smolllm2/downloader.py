@@ -15,11 +15,14 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from dataclasses import dataclass
 
-try:
-    from huggingface_hub import hf_hub_download, list_files_info
-    HAS_HUGGINGFACE_HUB = True
-except ImportError:
-    HAS_HUGGINGFACE_HUB = False
+# 延迟导入，在运行时检测
+def check_huggingface_hub():
+    """检查 huggingface_hub 是否安装"""
+    try:
+        from huggingface_hub import hf_hub_download, list_files_info
+        return True
+    except ImportError:
+        return False
 
 
 # 量化等级优先级（越小越好）
@@ -56,6 +59,7 @@ class HuggingFaceDownloader:
     2. 按量化类型和大小排序
     3. 自动选择最优版本
     4. 断点续传
+    5. 支持国内镜像
     """
 
     def __init__(
@@ -67,7 +71,10 @@ class HuggingFaceDownloader:
         self.hf_token = hf_token or os.getenv("HF_TOKEN")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        if not HAS_HUGGINGFACE_HUB:
+        # 设置国内镜像
+        os.environ["HF_ENDPOINT"] = os.environ.get("HF_ENDPOINT", "https://hf-mirror.com")
+
+        if not check_huggingface_hub():
             raise ImportError(
                 "huggingface_hub 未安装，请运行: pip install huggingface-hub"
             )
@@ -208,7 +215,7 @@ def find_smallest_gguf(repo_id: str) -> Optional[str]:
     >>> print(url)
     'https://huggingface.co/second-state/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf'
     """
-    if not HAS_HUGGINGFACE_HUB:
+    if not check_huggingface_hub():
         return None
 
     downloader = HuggingFaceDownloader()

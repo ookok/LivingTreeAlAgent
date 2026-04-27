@@ -173,14 +173,67 @@ class OllamaClient:
         except Exception:
             return False
 
-    def is_loaded(self, name: str) -> bool:
-        """检查模型是否在内存中"""
+    def get_loaded_models(self) -> list[str]:
+        """
+        获取当前 Ollama 中已加载的模型列表（通过 /api/ps）
+
+        Returns:
+            已加载模型名列表，如 ["qwen3.5:4b", "deepseek-r1:70b"]
+        """
         try:
             with self._client() as c:
-                r = c.post("/api/show", json={"name": name})
-                return r.status_code == 200
+                r = c.get("/api/ps")
+                if r.status_code == 200:
+                    data = r.json()
+                    models = data.get("models", [])
+                    return [m.get("name", "") for m in models if m.get("name")]
         except Exception:
+            pass
+        return []
+
+    def ensure_model_loaded(self, name: str, timeout: int = 60) -> bool:
+        """
+        确保模型已加载到内存（Ollama 空闲时模型会 auto-stop，需要时 auto-run）
+
+        策略：
+        1. 先查 /api/ps 确认模型是否已在内存中
+        2. 如果不在，发送 /api/generate 请求触发 Ollama 自动加载
+
+        Args:
+            name: 模型名
+            timeout: 等待模型加载的超时秒数（默认 60s）
+
+        Returns:
+            True=模型已加载或正在加载，False=失败
+        """
+        # 快速检查：是否已在内存
+        if name in self.get_loaded_models():
+            return True
+
+        # 触发加载：发送轻量请求让 Ollama 自动启动模型
+        # keep_alive=300s 保证至少活跃 5 分钟
+        try:
+            with self._client() as c:
+                r = c.post("/api/generate", json={
+                    "model": name,
+                    "prompt": "",  # 空 prompt，仅触发加载
+                    "keep_alive": 300,
+                    "stream": False,
+                }, timeout=timeout)
+                # 200=加载成功，404=模型不存在，5xx=服务问题
+                if r.status_code == 200:
+                    print(f"[OllamaClient] 模型 {name} 已加载（keep_alive=300s）")
+                    return True
+                else:
+                    print(f"[OllamaClient] 模型 {name} 加载失败: HTTP {r.status_code}")
+                    return False
+        except Exception as e:
+            print(f"[OllamaClient] 模型 {name} 加载异常: {e}")
             return False
+
+    def is_loaded(self, name: str) -> bool:
+        """检查模型是否在内存中（通过 /api/ps）"""
+        return name in self.get_loaded_models()
 
     def delete_model(self, name: str) -> bool:
         """从 Ollama 删除模型"""
@@ -212,11 +265,26 @@ class OllamaClient:
             num_ctx: 上下文大小（None=自动从模型获取）
             tools: 工具定义列表
             reasoning_callback: 推理内容回调
+
+        Note:
+            Ollama 空闲时会 auto-stop 模型。chat() 会在首次调用时
+            自动 ensure_model_loaded()，所以即使模型已停止也能正常工作。
         """
         model = model or self.config.default_model
         if not model:
             yield StreamChunk(error="未指定模型")
             return
+
+        # ── 确保模型已加载（Ollama auto-stop 恢复）─────────────────
+        if not hasattr(self, "_model_loaded_cache"):
+            self._model_loaded_cache: set[str] = set()
+
+        if model not in self._model_loaded_cache:
+            # 首次对话：确保模型已加载
+            if not self.ensure_model_loaded(model):
+                yield StreamChunk(error=f"模型 {model} 加载失败，请检查 Ollama 服务状态")
+                return
+            self._model_loaded_cache.add(model)
 
         # 自动获取 num_ctx
         if num_ctx is None:

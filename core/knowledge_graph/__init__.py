@@ -525,12 +525,66 @@ class KnowledgeGraph:
         self._type_index[entity.entity_type].append(entity.id)
 
     def get_entity_by_name(self, name: str) -> Optional[Entity]:
-        """按名称查找实体"""
+        """按名称查找实体（精确匹配，返回第一个）"""
         name_key = name.lower()
         entity_ids = self._name_index.get(name_key, [])
         if entity_ids:
             return self.entities.get(entity_ids[0])
         return None
+
+    def get_entities_by_name(self, name: str, top_k: int = 5) -> List[Entity]:
+        """
+        根据名称搜索实体（模糊匹配，支持前缀/包含匹配）
+
+        Args:
+            name: 搜索关键词
+            top_k: 返回最多 top_k 个结果
+
+        Returns:
+            匹配的实体列表，按相关性排序（精确 > 前缀 > 包含）
+        """
+        if not name:
+            return []
+
+        name_lower = name.lower()
+        results: List[Entity] = []
+        seen_ids: set[str] = set()
+
+        # 层级 1：精确匹配（最快）
+        if name_lower in self._name_index:
+            for eid in self._name_index[name_lower]:
+                entity = self.entities.get(eid)
+                if entity and eid not in seen_ids:
+                    results.append(entity)
+                    seen_ids.add(eid)
+                    if len(results) >= top_k:
+                        return results
+
+        # 层级 2：前缀匹配
+        for name_key, entity_ids in self._name_index.items():
+            if name_key.startswith(name_lower) and name_key != name_lower:
+                for eid in entity_ids:
+                    if eid not in seen_ids:
+                        entity = self.entities.get(eid)
+                        if entity:
+                            results.append(entity)
+                            seen_ids.add(eid)
+                            if len(results) >= top_k:
+                                return results
+
+        # 层级 3：包含匹配（模糊搜索）
+        for name_key, entity_ids in self._name_index.items():
+            if name_lower in name_key:
+                for eid in entity_ids:
+                    if eid not in seen_ids:
+                        entity = self.entities.get(eid)
+                        if entity:
+                            results.append(entity)
+                            seen_ids.add(eid)
+                            if len(results) >= top_k:
+                                return results
+
+        return results
 
     def get_entities_by_type(self, entity_type: EntityType) -> List[Entity]:
         """按类型查找实体"""

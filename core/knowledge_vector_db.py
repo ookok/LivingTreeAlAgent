@@ -377,6 +377,14 @@ class KnowledgeBaseVectorStore:
             for doc, score in results
         ]
 
+    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        搜索知识（兼容接口）
+        
+        这是 search_knowledge 的别名，确保与 agent.py 的调用兼容
+        """
+        return self.search_knowledge(query=query, top_k=top_k)
+
     def update_knowledge(
         self,
         doc_id: str,

@@ -168,6 +168,50 @@ class KnowledgeGraph:
         """获取实体"""
         return self._entities.get(entity_id)
 
+    def get_entities_by_name(self, name: str, top_k: int = 5) -> List[Entity]:
+        """
+        根据名称搜索实体（模糊匹配）
+
+        Args:
+            name: 搜索关键词
+            top_k: 返回最多 top_k 个结果
+
+        Returns:
+            匹配的实体列表，按相关性排序
+        """
+        if not name:
+            return []
+
+        name_lower = name.lower()
+        results = []
+
+        # 精确匹配（最快）
+        if name_lower in self._entity_names:
+            entity_id = self._entity_names[name_lower]
+            entity = self._entities.get(entity_id)
+            if entity:
+                results.append(entity)
+
+        # 前缀匹配
+        for entity_name_lower, entity_id in self._entity_names.items():
+            if entity_name_lower.startswith(name_lower) and entity_name_lower != name_lower:
+                entity = self._entities.get(entity_id)
+                if entity and entity not in results:
+                    results.append(entity)
+                    if len(results) >= top_k:
+                        return results
+
+        # 包含匹配（模糊搜索）
+        for entity_name_lower, entity_id in self._entity_names.items():
+            if name_lower in entity_name_lower and entity_name_lower not in [e.name.lower() for e in results]:
+                entity = self._entities.get(entity_id)
+                if entity:
+                    results.append(entity)
+                    if len(results) >= top_k:
+                        return results
+
+        return results
+
     def get_relations(
         self,
         entity_id: str,

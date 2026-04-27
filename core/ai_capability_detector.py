@@ -25,6 +25,7 @@ AI能力检测与算力注册中心 (AI Capability Detector & Registry)
 import json
 import sqlite3
 import hashlib
+import platform
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, Any, Tuple
@@ -602,36 +603,131 @@ class AICapabilityDetector:
         return "DDR4"  # 默认值
 
     def _detect_gpu(self) -> Dict[str, Any]:
-        """检测GPU信息"""
+        """
+        检测所有 GPU（支持多卡），返回聚合 VRAM
+
+        检测顺序：
+        1. nvidia-smi（最可靠，Windows/Linux 通用）
+        2. pynvml → NVIDIA GPU
+        3. PowerShell Get-CimInstance → 通用（Windows）
+        4. pygpu → 通用 GPU
+        """
         result = {
             "renderer": "Unknown",
-            "vram_gb": 0,
+            "vram_gb": 0.0,
             "vendor": "Unknown",
-            "has_gpu": False
+            "has_gpu": False,
+            "gpu_count": 0,
+            "gpu_names": [],
+            "gpu_vrams": [],
         }
 
+        # ── 方案 1: nvidia-smi（最可靠）─────────────────────────────
         try:
-            # 尝试使用pygpu
-            import pygpu
-            result["renderer"] = pygpu.renderer.get_renderer()
-            result["vram_gb"] = pygpu.device.get_memory() / (1024**3)
-            result["has_gpu"] = True
-        except ImportError:
-            # 尝试pynvml (NVIDIA)
-            try:
-                import pynvml
-                pynvml.nvmlInit()
-                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            import subprocess as _subprocess
+            r = _subprocess.run(
+                ["nvidia-smi", "--query-gpu=index,name,memory.total,memory.used",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                total_vram = 0.0
+                gpu_names = []
+                gpu_vrams = []
+                for line in r.stdout.strip().split("\n"):
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) >= 3:
+                        idx, name = parts[0], parts[1]
+                        vram_mb = int(parts[2])
+                        vram_gb = round(vram_mb / 1024, 1)
+                        gpu_names.append(name)
+                        gpu_vrams.append(vram_gb)
+                        total_vram += vram_gb
+
+                if gpu_names:
+                    result["gpu_count"] = len(gpu_names)
+                    result["gpu_names"] = gpu_names
+                    result["gpu_vrams"] = gpu_vrams
+                    result["vram_gb"] = round(total_vram, 1)
+                    result["renderer"] = ", ".join(gpu_names) if len(gpu_names) <= 2 \
+                        else f"{gpu_names[0]} 等{len(gpu_names)}卡"
+                    result["vendor"] = "NVIDIA"
+                    result["has_gpu"] = True
+                    return result
+        except Exception:
+            pass
+
+        # ── 方案 2: pynvml（NVIDIA，多卡）────────────────────────────
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            gpu_count = pynvml.nvmlDeviceGetCount()
+            total_vram = 0.0
+            gpu_names = []
+            gpu_vrams = []
+            for i in range(gpu_count):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
                 name = pynvml.nvmlDeviceGetName(handle)
                 mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                result["renderer"] = name or "NVIDIA GPU"
-                result["vram_gb"] = round(mem_info.total / (1024**3), 1)
+                vram_gb = round(mem_info.total / (1024**3), 1)
+                gpu_names.append(name or f"NVIDIA GPU #{i}")
+                gpu_vrams.append(vram_gb)
+                total_vram += vram_gb
+            if gpu_names:
+                result["gpu_count"] = len(gpu_names)
+                result["gpu_names"] = gpu_names
+                result["gpu_vrams"] = gpu_vrams
+                result["vram_gb"] = round(total_vram, 1)
+                result["renderer"] = ", ".join(gpu_names) if len(gpu_names) <= 2 \
+                    else f"{gpu_names[0]} 等{gpu_count}卡"
                 result["vendor"] = "NVIDIA"
                 result["has_gpu"] = True
-                pynvml.nvmlShutdown()
-            except ImportError:
-                # 降级: 基于系统信息估算
-                pass
+            pynvml.nvmlShutdown()
+            return result
+        except (ImportError, Exception):
+            pass
+
+        # ── 方案 3: PowerShell Get-CimInstance（Windows 通用）────────
+        try:
+            import subprocess as _subprocess
+            r = _subprocess.run(
+                ["powershell", "-Command",
+                 "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Csv -NoTypeInformation"],
+                capture_output=True, text=True, timeout=15
+            )
+            if r.returncode == 0:
+                lines = [l.strip() for l in r.stdout.strip().split("\n") if l.strip()]
+                for line in lines[1:]:  # 跳过 CSV 表头
+                    parts = line.split(",")
+                    if len(parts) >= 2:
+                        name = parts[0].strip('"')
+                        ram_str = parts[1].strip('"').strip()
+                        if ram_str.isdigit():
+                            vram_gb = max(round(int(ram_str) / (1024**3), 1), 0.5)
+                        else:
+                            vram_gb = 0.5  # 无法读取 VRAM 时保守估计
+                        result["gpu_names"].append(name)
+                        result["gpu_vrams"].append(vram_gb)
+                        result["vram_gb"] += vram_gb
+                if result["gpu_names"]:
+                    result["gpu_count"] = len(result["gpu_names"])
+                    result["renderer"] = ", ".join(result["gpu_names"])
+                    result["vendor"] = "GPU"
+                    result["has_gpu"] = True
+                    return result
+        except Exception:
+            pass
+
+        # ── 方案 4: pygpu ─────────────────────────────────────────────
+        try:
+            import pygpu
+            result["renderer"] = pygpu.renderer.get_renderer()
+            result["vram_gb"] = max(pygpu.device.get_memory() / (1024**3), 0.5)
+            result["has_gpu"] = True
+            result["gpu_count"] = 1
+            result["vendor"] = "GPU"
+        except (ImportError, Exception):
+            pass
 
         return result
 

@@ -26,7 +26,7 @@ from core.auth_system import get_auth_system
 from core.smart_config import get_smart_config
 from ui.task_progress import get_task_progress_manager
 from core.search_tool import AISearchTool
-from ui.a2ui import A2UIManager, A2UIPanel, UILoader, FallbackManager, ProgressManager, ConfigQuickEdit
+from ui.a2ui import A2UIManager, A2UIPanel, UILoader, UILoaderManager, FallbackManager, ProgressManager, ConfigQuickEdit, ConfigQuickEditManager
 
 from ui.session_panel import SessionPanel
 from ui.chat_panel import ChatPanel
@@ -212,10 +212,10 @@ class MainWindow(QWidget):
 
         # A2UI 相关
         self._a2ui_manager = A2UIManager()
-        self._ui_loader_manager = UILoader()
+        self._ui_loader_manager = UILoaderManager()
         self._fallback_manager = FallbackManager()
         self._progress_manager = ProgressManager()
-        self._config_quick_edit_manager = ConfigQuickEdit()
+        self._config_quick_edit_manager = ConfigQuickEditManager()
 
         # 延迟初始化标志
         self._ui_initialized = False
@@ -1072,3 +1072,19 @@ class MainWindow(QWidget):
                     sync_mgr.push_all_configs(configs)
             except Exception:
                 pass  # 静默失败，不影响主流程
+
+    def _switch_model(self, model_name: str):
+        """
+        切换模型
+        
+        Args:
+            model_name: 模型名称
+        """
+        try:
+            if self._agent:
+                self._agent.update_model(model_name)
+                self._show_toast(f"已切换到模型: {model_name}", "success")
+            else:
+                self._show_toast("Agent 尚未初始化", "warning")
+        except Exception as e:
+            self._show_toast(f"切换模型失败: {e}", "error")

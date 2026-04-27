@@ -10,17 +10,19 @@ A2UI 范式 - AI 增强的自适应用户界面
 """
 
 from .core import A2UIManager, A2UIPanel, A2UIConfig
-from .loader import UILoader
+from .loader import UILoader, UILoaderManager
 from .fallback import FallbackManager
 from .progress import ProgressManager
-from .config import ConfigQuickEdit
+from .config import ConfigQuickEdit, ConfigQuickEditManager
 
 __all__ = [
     "A2UIManager",
     "A2UIPanel",
     "A2UIConfig",
     "UILoader",
+    "UILoaderManager",
     "FallbackManager",
     "ProgressManager",
-    "ConfigQuickEdit"
+    "ConfigQuickEdit",
+    "ConfigQuickEditManager"
 ]

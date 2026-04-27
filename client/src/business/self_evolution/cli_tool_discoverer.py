@@ -26,6 +26,189 @@ from client.src.business.tools.base_tool import BaseTool
 from client.src.business.tools.tool_result import ToolResult
 
 
+# ── 预设 CLI 工具列表（高价值工具，优先注册） ──────────
+
+PRESET_CLI_TOOLS: Dict[str, Dict[str, Any]] = {
+    # ── P0: 必须注册（开发核心工具） ──
+    "gh": {
+        "name": "github_cli",
+        "category": "development",
+        "description": "GitHub 官方 CLI，支持仓库/PR/Issue/Actions/Release 管理",
+        "priority": "P0",
+        "install_hint": "winget install GitHub.cli / choco install gh",
+    },
+    "git": {
+        "name": "git",
+        "category": "development",
+        "description": "分布式版本控制系统，支持 commit/branch/merge/rebase 等操作",
+        "priority": "P0",
+        "install_hint": "系统通常已预装",
+    },
+    "lazygit": {
+        "name": "lazygit",
+        "category": "development",
+        "description": "终端 Git 图形界面，交互式暂存/提交/分支/冲突解决",
+        "priority": "P0",
+        "install_hint": "winget install jesseduffield.lazygit / choco install lazygit",
+    },
+
+    # ── P1: 搜索与文件工具 ──
+    "rg": {
+        "name": "ripgrep",
+        "category": "search",
+        "description": "超快速文本搜索工具，支持正则表达式和文件类型过滤",
+        "priority": "P1",
+        "install_hint": "winget install BurntSushi.ripgrep.MSVC / choco install ripgrep",
+    },
+    "fd": {
+        "name": "fd",
+        "category": "search",
+        "description": "现代化 find 替代，按名称/类型/正则搜索文件，速度极快",
+        "priority": "P1",
+        "install_hint": "winget install sharkdp.fd / choco install fd",
+    },
+    "fzf": {
+        "name": "fzf",
+        "category": "search",
+        "description": "通用模糊搜索器，支持文件/命令/历史记录交互式筛选",
+        "priority": "P1",
+        "install_hint": "winget install junegunn.fzf / choco install fzf",
+    },
+    "bat": {
+        "name": "bat",
+        "category": "document",
+        "description": "带语法高亮和行号的文件查看器，cat 的现代替代",
+        "priority": "P1",
+        "install_hint": "winget install sharkdp.bat / choco install bat",
+    },
+    "delta": {
+        "name": "delta",
+        "category": "development",
+        "description": "语法高亮的 diff 查看器，git diff 的现代替代",
+        "priority": "P1",
+        "install_hint": "winget install dandavison.delta / choco install delta",
+    },
+
+    # ── P1: 开发辅助 ──
+    "python": {
+        "name": "python",
+        "category": "development",
+        "description": "Python 解释器，执行 Python 脚本和包管理",
+        "priority": "P1",
+        "install_hint": "python.org 或 winget install Python.Python.3.12",
+    },
+    "node": {
+        "name": "node",
+        "category": "development",
+        "description": "Node.js 运行时，执行 JavaScript/TypeScript",
+        "priority": "P1",
+        "install_hint": "nodejs.org 或 winget install OpenJS.NodeJS.LTS",
+    },
+    "pip": {
+        "name": "pip",
+        "category": "development",
+        "description": "Python 包管理器，安装/卸载/管理 Python 包",
+        "priority": "P1",
+        "install_hint": "python -m ensurepip",
+    },
+    "npm": {
+        "name": "npm",
+        "category": "development",
+        "description": "Node.js 包管理器，安装/管理 JavaScript 包",
+        "priority": "P1",
+        "install_hint": "随 Node.js 安装",
+    },
+    "pytest": {
+        "name": "pytest",
+        "category": "development",
+        "description": "Python 测试框架，运行单元/集成测试",
+        "priority": "P1",
+        "install_hint": "pip install pytest",
+    },
+    "playwright": {
+        "name": "playwright",
+        "category": "automation",
+        "description": "浏览器自动化框架，支持录制/回放/截图/API测试",
+        "priority": "P1",
+        "install_hint": "pip install playwright && playwright install",
+    },
+
+    # ── P1: 系统与网络 ──
+    "curl": {
+        "name": "curl",
+        "category": "network",
+        "description": "命令行 HTTP 客户端，支持 GET/POST/PUT/DELETE 等请求",
+        "priority": "P1",
+        "install_hint": "Windows 10+ 已预装",
+    },
+    "wget": {
+        "name": "wget",
+        "category": "network",
+        "description": "文件下载工具，支持 HTTP/HTTPS/FTP 协议",
+        "priority": "P1",
+        "install_hint": "winget install wget / choco install wget",
+    },
+    "ssh": {
+        "name": "ssh",
+        "category": "network",
+        "description": "SSH 客户端，远程连接和文件传输",
+        "priority": "P1",
+        "install_hint": "Windows 10+ 已预装 OpenSSH",
+    },
+    "docker": {
+        "name": "docker",
+        "category": "system",
+        "description": "容器管理平台，构建/运行/管理容器化应用",
+        "priority": "P1",
+        "install_hint": "docker.com 或 winget install Docker.DockerDesktop",
+    },
+
+    # ── P2: 增强工具（可选） ──
+    "eza": {
+        "name": "eza",
+        "category": "system",
+        "description": "现代化 ls 替代，支持图标/颜色/Git状态/tree视图",
+        "priority": "P2",
+        "install_hint": "winget install eza-community.eza / choco install eza",
+    },
+    "zoxide": {
+        "name": "zoxide",
+        "category": "system",
+        "description": "智能 cd 工具，学习常用目录实现快速跳转",
+        "priority": "P2",
+        "install_hint": "winget install ajeetdsouza.zoxide / choco install zoxide",
+    },
+    "jq": {
+        "name": "jq",
+        "category": "document",
+        "description": "命令行 JSON 处理器，解析/过滤/转换 JSON 数据",
+        "priority": "P2",
+        "install_hint": "winget install jqlang.jq / choco install jq",
+    },
+    "tokei": {
+        "name": "tokei",
+        "category": "analysis",
+        "description": "代码行数统计工具，按语言分类统计项目代码量",
+        "priority": "P2",
+        "install_hint": "cargo install tokei / choco install tokei",
+    },
+    "hyperfine": {
+        "name": "hyperfine",
+        "category": "analysis",
+        "description": "命令行基准测试工具，精确测量命令执行时间",
+        "priority": "P2",
+        "install_hint": "cargo install hyperfine / choco install hyperfine",
+    },
+    "gh-explorer": {
+        "name": "gh_explorer",
+        "category": "development",
+        "description": "AI 命令行助手，发现和分析 GitHub 趋势项目",
+        "priority": "P2",
+        "install_hint": "pip install gh-explorer",
+    },
+}
+
+
 # ── 已知的系统工具黑名单（避免扫描噪音） ──────────────
 
 # Windows 内置命令（非 CLI 工具）
@@ -121,6 +304,11 @@ class CLIToolDiscoverer:
         self._blacklist.update(NOISE_BLACKLIST)
         if scan_blacklist:
             self._blacklist.update(scan_blacklist)
+
+        # 预设工具缓存（快速查找）
+        self._preset_name_map: Dict[str, str] = {}  # cli_name -> preset_name
+        for cli_name, preset in PRESET_CLI_TOOLS.items():
+            self._preset_name_map[cli_name] = preset["name"]
 
     # ── Phase 1: 发现 ────────────────────────────────────
 
@@ -248,6 +436,9 @@ class CLIToolDiscoverer:
         """快速探测一个可执行文件是否为 CLI 工具"""
         name = os.path.basename(exe_path)
 
+        # 检查是否为预设工具（跳过黑名单）
+        is_preset = name.lower() in PRESET_CLI_TOOLS
+
         try:
             # 尝试 --version（比 --help 更轻量）
             version = await self._get_version(exe_path)
@@ -259,6 +450,11 @@ class CLIToolDiscoverer:
                     version=version,
                     help_text=help_text,
                 )
+                # 预设工具自动填充分类和描述
+                if is_preset:
+                    preset = PRESET_CLI_TOOLS[name.lower()]
+                    info.category = preset["category"]
+                    info.description = preset["description"]
                 self._discovered[name] = info
                 return info
 
@@ -270,6 +466,10 @@ class CLIToolDiscoverer:
                     path=exe_path,
                     help_text=help_text,
                 )
+                if is_preset:
+                    preset = PRESET_CLI_TOOLS[name.lower()]
+                    info.category = preset["category"]
+                    info.description = preset["description"]
                 self._discovered[name] = info
                 return info
 
@@ -574,3 +774,356 @@ CLI 工具路径：{tool_info.path}
         """添加工具到黑名单"""
         self._blacklist.add(name.lower())
         self._discovered.pop(name.lower(), None)
+
+    # ── Phase 5: 预设工具自动注册 ──────────────────────
+
+    def get_preset_tools(self, min_priority: str = "P2") -> Dict[str, Dict[str, Any]]:
+        """
+        获取预设工具列表（按优先级过滤）
+
+        Args:
+            min_priority: 最低优先级 ("P0" / "P1" / "P2")
+
+        Returns:
+            过滤后的预设工具字典
+        """
+        priority_order = {"P0": 0, "P1": 1, "P2": 2}
+        min_level = priority_order.get(min_priority, 2)
+
+        return {
+            k: v for k, v in PRESET_CLI_TOOLS.items()
+            if priority_order.get(v.get("priority", "P2"), 2) <= min_level
+        }
+
+    async def auto_register_presets(
+        self,
+        min_priority: str = "P1",
+        use_llm: bool = True,
+        skip_installed: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        自动扫描并注册预设工具
+
+        流程：
+        1. 按优先级遍历预设工具
+        2. 检查是否在 PATH 中存在
+        3. 发现工具信息（--help / --version）
+        4. 生成 BaseTool 封装代码
+        5. 注册到 ToolRegistry
+
+        Args:
+            min_priority: 最低优先级（"P0"/"P1"/"P2"）
+            use_llm: 是否使用 LLM 生成封装（False 则用轻量模板）
+            skip_installed: 跳过已注册的工具
+
+        Returns:
+            注册结果报告
+        """
+        preset_tools = self.get_preset_tools(min_priority)
+        priority_order = {"P0": 0, "P1": 1, "P2": 2}
+
+        # 按优先级排序
+        sorted_tools = sorted(
+            preset_tools.items(),
+            key=lambda x: priority_order.get(x[1].get("priority", "P2"), 2)
+        )
+
+        results = {
+            "total": len(sorted_tools),
+            "registered": [],
+            "failed": [],
+            "skipped": [],
+            "not_found": [],
+        }
+
+        # 检查已注册的工具
+        registered_names = set()
+        if skip_installed:
+            try:
+                from client.src.business.tools.tool_registry import ToolRegistry
+                registry = ToolRegistry.get_instance()
+                for t in registry.list_tools():
+                    registered_names.add(t.name)
+            except Exception:
+                pass
+
+        for cli_name, preset in sorted_tools:
+            tool_name = preset["name"]
+
+            # 跳过已注册的
+            if tool_name in registered_names:
+                results["skipped"].append({
+                    "cli": cli_name,
+                    "name": tool_name,
+                    "reason": "already_registered",
+                })
+                self._logger.debug(f"跳过已注册工具: {tool_name}")
+                continue
+
+            # 检查是否在 PATH 中
+            tool_path = shutil.which(cli_name)
+            if not tool_path:
+                results["not_found"].append({
+                    "cli": cli_name,
+                    "name": tool_name,
+                    "priority": preset["priority"],
+                    "install_hint": preset.get("install_hint", ""),
+                })
+                self._logger.debug(f"未安装预设工具: {cli_name}")
+                continue
+
+            # 发现工具信息
+            try:
+                info = await self.discover_one(cli_name)
+                if not info:
+                    info = CLIToolInfo(
+                        name=cli_name,
+                        path=tool_path,
+                        category=preset["category"],
+                        description=preset["description"],
+                    )
+
+                # 用预设信息覆盖（更准确）
+                info.category = preset["category"]
+                info.description = preset["description"]
+
+                # 生成封装并注册
+                if use_llm and info.help_text:
+                    code = await self.generate_wrapper(info)
+                else:
+                    code = self._generate_template_wrapper(info)
+
+                if code:
+                    success, file_path = await self.wrap_and_register(
+                        info, code, auto_analyze=False
+                    )
+                    if success:
+                        results["registered"].append({
+                            "cli": cli_name,
+                            "name": tool_name,
+                            "path": file_path,
+                            "priority": preset["priority"],
+                        })
+                        registered_names.add(tool_name)
+                        self._logger.info(
+                            f"✅ 预设工具已注册: {tool_name} ({preset['priority']})"
+                        )
+                    else:
+                        results["failed"].append({
+                            "cli": cli_name,
+                            "name": tool_name,
+                            "reason": "wrap_or_register_failed",
+                        })
+                        self._logger.warning(f"注册失败: {tool_name}")
+                else:
+                    results["failed"].append({
+                        "cli": cli_name,
+                        "name": tool_name,
+                        "reason": "code_generation_failed",
+                    })
+
+            except Exception as e:
+                results["failed"].append({
+                    "cli": cli_name,
+                    "name": tool_name,
+                    "reason": str(e),
+                })
+                self._logger.error(f"注册预设工具异常: {cli_name}: {e}")
+
+        self._logger.info(
+            f"预设工具注册完成: {len(results['registered'])} 注册, "
+            f"{len(results['not_found'])} 未安装, "
+            f"{len(results['skipped'])} 跳过, "
+            f"{len(results['failed'])} 失败"
+        )
+
+        return results
+
+    def _generate_template_wrapper(self, tool_info: CLIToolInfo) -> str:
+        """
+        为预设工具生成轻量模板封装（不使用 LLM）
+
+        当 LLM 不可用或帮助文档不足时使用。
+        生成一个通用的 subprocess 调用封装。
+        """
+        safe_class = "".join(
+            c.title() for c in re.sub(r'[^\w]', '_', tool_info.name).split("_")
+            if c
+        )
+        if not safe_class:
+            safe_class = "CliTool"
+
+        return f'''"""
+BaseTool 封装 - {tool_info.name}
+
+由 CLIToolDiscoverer 自动生成（模板模式）
+CLI 路径: {tool_info.path}
+"""
+
+import subprocess
+from typing import Any, Dict
+from loguru import logger
+
+from client.src.business.tools.base_tool import BaseTool
+from client.src.business.tools.tool_result import ToolResult
+
+
+class {safe_class}Tool(BaseTool):
+    """{tool_info.description}"""
+
+    def __init__(self):
+        super().__init__(
+            name="{tool_info.name}",
+            description="{tool_info.description}",
+            category="{tool_info.category}",
+        )
+        self._cli_path = r"{tool_info.path}"
+        self._logger = logger.bind(tool="{tool_info.name}")
+
+    def execute(self, **kwargs) -> ToolResult:
+        """
+        执行 CLI 命令
+
+        支持参数:
+            args: list[str] - CLI 位置参数
+            timeout: int - 超时秒数（默认 30）
+            其他 kwargs 将转为 --key value 格式的 CLI 参数
+        """
+        try:
+            timeout = kwargs.pop("timeout", 30)
+            args = kwargs.pop("args", [])
+
+            cmd = [self._cli_path]
+
+            # 添加位置参数
+            if args:
+                cmd.extend(str(a) for a in args)
+
+            # 将 kwargs 转为 CLI 参数
+            for key, value in kwargs.items():
+                # 下划线转连字符
+                cli_key = key.replace("_", "-")
+                if value is True:
+                    cmd.append(f"--{{cli_key}}")
+                elif value is not False and value is not None:
+                    cmd.extend([f"--{{cli_key}}", str(value)])
+
+            self._logger.info(f"执行: {{' '.join(cmd[:5])}}...")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            output = result.stdout or ""
+            error = result.stderr or ""
+
+            if result.returncode == 0:
+                return ToolResult(
+                    success=True,
+                    data={{
+                        "output": output,
+                        "returncode": result.returncode,
+                    }}
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    error=f"命令执行失败 (code={{result.returncode}}): {{error[:500]}}",
+                    data={{"output": output, "returncode": result.returncode}},
+                )
+
+        except subprocess.TimeoutExpired:
+            return ToolResult(
+                success=False,
+                error=f"命令执行超时 ({{timeout}}s)",
+            )
+        except FileNotFoundError:
+            return ToolResult(
+                success=False,
+                error=f"CLI 工具未找到: {{self._cli_path}}",
+            )
+        except Exception as e:
+            self._logger.exception("执行异常")
+            return ToolResult(
+                success=False,
+                error=str(e),
+            )
+'''
+
+    def get_install_commands(self, not_found: List[Dict]) -> str:
+        """
+        根据未安装工具列表生成一键安装命令
+
+        Args:
+            not_found: auto_register_presets() 返回的 not_found 列表
+
+        Returns:
+            格式化的安装建议
+        """
+        if not not_found:
+            return "所有预设工具已安装。"
+
+        lines = ["# 未安装的预设工具安装建议\n"]
+
+        # 按优先级分组
+        by_priority: Dict[str, List[Dict]] = {}
+        for item in not_found:
+            p = item.get("priority", "P2")
+            by_priority.setdefault(p, []).append(item)
+
+        for priority in ["P0", "P1", "P2"]:
+            items = by_priority.get(priority)
+            if not items:
+                continue
+
+            lines.append(f"\n## {priority}")
+            for item in items:
+                lines.append(
+                    f"- **{item['name']}** (`{item['cli']}`): {item.get('install_hint', '未知')}"
+                )
+
+        return "\n".join(lines)
+
+    def get_status_report(self) -> Dict[str, Any]:
+        """
+        获取预设工具状态报告
+
+        Returns:
+            包含已安装/未安装/已注册状态的报告
+        """
+        report = {
+            "preset_total": len(PRESET_CLI_TOOLS),
+            "by_priority": {},
+            "installed": [],
+            "not_installed": [],
+        }
+
+        for cli_name, preset in PRESET_CLI_TOOLS.items():
+            tool_path = shutil.which(cli_name)
+            entry = {
+                "cli": cli_name,
+                "name": preset["name"],
+                "priority": preset["priority"],
+                "installed": bool(tool_path),
+                "path": tool_path or None,
+                "install_hint": preset.get("install_hint", ""),
+            }
+
+            if tool_path:
+                report["installed"].append(entry)
+            else:
+                report["not_installed"].append(entry)
+
+            # 按优先级分组
+            p = preset["priority"]
+            report["by_priority"].setdefault(p, {"total": 0, "installed": 0})
+            report["by_priority"][p]["total"] += 1
+            if tool_path:
+                report["by_priority"][p]["installed"] += 1
+
+        return report

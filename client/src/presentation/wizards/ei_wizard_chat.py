@@ -16,16 +16,41 @@ Date: 2026-04-27
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QScrollArea, QWidget, QLabel, QTextEdit, QPushButton,
-    QFileDialog, QMessageBox,
+    QFileDialog, QMessageBox, QMenu,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QUrl
-from PySide6.QtGui import QFont, QIcon, QTextCursor, QDesktopServices
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QUrl, QPoint
+from PySide6.QtGui import QFont, QIcon, QTextCursor, QDesktopServices, QCursor, QAction, QClipboard
 
 import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# 导入多媒体消息支持（P2 新增）
+try:
+    from client.src.presentation.wizards.ei_wizard_media import (
+        VideoBubble, AudioBubble, MediaMessageHandler
+    )
+    MEDIA_SUPPORT = True
+except ImportError:
+    MEDIA_SUPPORT = False
+    VideoBubble = None
+    AudioBubble = None
+    MediaMessageHandler = None
+    logger.warning("多媒体消息模块导入失败，相关功能不可用")
+
+# 导入消息操作支持（P2 新增）
+try:
+    from client.src.presentation.wizards.ei_wizard_msg_actions import (
+        MessageActions, patch_message_bubble
+    )
+    MSG_ACTIONS_SUPPORT = True
+except ImportError:
+    MSG_ACTIONS_SUPPORT = False
+    MessageActions = None
+    patch_message_bubble = None
+    logger.warning("消息操作模块导入失败，相关功能不可用")
 
 
 class MessageBubble(QWidget):
@@ -44,6 +69,21 @@ class MessageBubble(QWidget):
         self.role = role
         self.content = content
         self.init_ui()
+        
+        # P2 新增：启用右键菜单（消息操作）
+        if MSG_ACTIONS_SUPPORT:
+            self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.customContextMenuRequested.connect(self._on_context_menu)
+            self._message_data = {}  # 存储消息数据
+    
+    def set_message_data(self, data: dict):
+        """设置消息数据（用于右键菜单）"""
+        self._message_data = data
+    
+    def _on_context_menu(self, pos):
+        """显示右键菜单"""
+        if hasattr(self, '_message_data') and self._message_data:
+            MessageActions.show_context_menu(self, None, self._message_data)
     
     def init_ui(self):
         layout = QHBoxLayout()
@@ -111,6 +151,22 @@ class ImageBubble(QWidget):
         self.image_path = image_path
         self.role = role
         self.init_ui()
+        
+        # P2 新增：启用右键菜单（消息操作）
+        if MSG_ACTIONS_SUPPORT:
+            self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.customContextMenuRequested.connect(self._on_context_menu)
+            self._message_data = {
+                'role': role,
+                'content': f"[图片: {Path(image_path).name}]",
+                'type': 'image',
+                'path': image_path
+            }
+    
+    def _on_context_menu(self, pos):
+        """显示右键菜单"""
+        if hasattr(self, '_message_data') and self._message_data:
+            MessageActions.show_context_menu(self, None, self._message_data)
     
     def init_ui(self):
         layout = QHBoxLayout()
@@ -153,7 +209,6 @@ class ImageBubble(QWidget):
     
     def _open_image(self, event):
         """点击图片打开原图"""
-        from PySide6.QtGui import QDesktopServices
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.image_path))
 
 
@@ -173,6 +228,22 @@ class FileBubble(QWidget):
         self.file_path = file_path
         self.role = role
         self.init_ui()
+        
+        # P2 新增：启用右键菜单（消息操作）
+        if MSG_ACTIONS_SUPPORT:
+            self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.customContextMenuRequested.connect(self._on_context_menu)
+            self._message_data = {
+                'role': role,
+                'content': f"[文件: {Path(file_path).name}]",
+                'type': 'file',
+                'path': file_path
+            }
+    
+    def _on_context_menu(self, pos):
+        """显示右键菜单"""
+        if hasattr(self, '_message_data') and self._message_data:
+            MessageActions.show_context_menu(self, None, self._message_data)
     
     def init_ui(self):
         from PySide6.QtGui import QFont
@@ -283,6 +354,42 @@ class EIWizardChat(QWidget):
             self.adapter = None
             self.submit_task = None
     
+    # ── P2 功能：语音输入 ─────────────────────────────────────────────
+    
+    # 语音识别库可用性检测（在 __init__ 中初始化）
+    def _init_voice_libs(self):
+        """检测语音识别库是否可用"""
+        self.voice_libs_available = {
+            "speech_recognition": False,
+            "whisper": False,
+            "sounddevice": False,
+        }
+        
+        try:
+            import speech_recognition as sr
+            self.voice_libs_available["speech_recognition"] = True
+            self._sr = sr
+        except ImportError:
+            pass
+        
+        try:
+            import whisper
+            self.voice_libs_available["whisper"] = True
+            self._whisper = whisper
+        except ImportError:
+            pass
+        
+        try:
+            import sounddevice as sd
+            import numpy as np
+            self.voice_libs_available["sounddevice"] = True
+            self._sd = sd
+            self._np = np
+        except ImportError:
+            pass
+        
+        logger.info(f"[语音输入] 库可用性: {self.voice_libs_available}")
+    
     def init_ui(self):
         """初始化 UI（极简设计）"""
         layout = QVBoxLayout()
@@ -320,7 +427,7 @@ class EIWizardChat(QWidget):
         # 文件上传按钮（P2 新增）
         self.upload_btn = QPushButton("📎")
         self.upload_btn.setFixedSize(40, 40)
-        self.upload_btn.setToolTip("上传文件（图片、文档等）")
+        self.upload_btn.setToolTip("上传文件（图片、视频、音频、文档等）")
         self.upload_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -338,7 +445,7 @@ class EIWizardChat(QWidget):
         # 语音输入按钮（P2 新增）
         self.voice_btn = QPushButton("🎤")
         self.voice_btn.setFixedSize(40, 40)
-        self.voice_btn.setToolTip("语音输入（开发中）")
+        self.voice_btn.setToolTip("语音输入（需要安装语音识别库）")
         self.voice_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -409,7 +516,7 @@ class EIWizardChat(QWidget):
     def _show_welcome(self):
         """显示欢迎消息"""
         welcome_text = """👋 你好！我是环评助手。
-
+        
 我可以帮你：
 - 📄 生成环评报告
 - 🔍 查询环保法规
@@ -615,6 +722,15 @@ class EIWizardChat(QWidget):
         
         # 创建消息气泡
         bubble = MessageBubble(role, content)
+        
+        # 设置消息数据（用于右键菜单）
+        if MSG_ACTIONS_SUPPORT:
+            bubble.set_message_data({
+                'role': role,
+                'content': content,
+                'type': 'text'
+            })
+        
         self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, bubble)
         
         # 如果是助手消息，保存引用（用于更新）
@@ -639,7 +755,7 @@ class EIWizardChat(QWidget):
     def append_stream_chunk(self, chunk: str):
         """追加流式输出内容"""
         if not self.current_assistant_bubble:
-            self._add_message('assistant', chunk)
+            self._add_message('assitant', chunk)
         else:
             current_content = self.current_assistant_bubble.content
             self.current_assistant_bubble.update_content(current_content + chunk)
@@ -658,15 +774,20 @@ class EIWizardChat(QWidget):
         # 显示欢迎消息
         self._show_welcome()
     
-    # ── P2 功能：文件上传 ────────────────────────────────────────────────────
+    # ── P2 功能：文件上传 ────────────────────────────────────────────────
     
     def _upload_file(self):
-        """上传文件（图片、文档等）"""
+        """上传文件（图片、视频、音频、文档等）"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择文件",
             "",
-            "所有文件 (*);;图片文件 (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;文档文件 (*.pdf *.doc *.docx *.xls *.xlsx);;文本文件 (*.txt *.md *.csv)"
+            "所有文件 (*);;"
+            "图片文件 (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
+            "视频文件 (*.mp4 *.avi *.mov *.mkv *.flv *.webm);;"
+            "音频文件 (*.mp3 *.wav *.ogg *.flac *.aac *.wma *.m4a);;"
+            "文档文件 (*.pdf *.doc *.docx *.xls *.xlsx);;"
+            "文本文件 (*.txt *.md *.csv)"
         )
         
         if not file_path:
@@ -678,6 +799,14 @@ class EIWizardChat(QWidget):
         # 图片文件
         if file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
             self._add_image_message(file_path)
+            
+        # 视频文件（P2 新增）
+        elif MEDIA_SUPPORT and MediaMessageHandler and MediaMessageHandler.is_video_file(file_path):
+            self._add_video_message(file_path)
+            
+        # 音频文件（P2 新增）
+        elif MEDIA_SUPPORT and MediaMessageHandler and MediaMessageHandler.is_audio_file(file_path):
+            self._add_audio_message(file_path)
             
         # 文档文件
         elif file_ext in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.md', '.csv']:
@@ -707,6 +836,54 @@ class EIWizardChat(QWidget):
         # TODO: 将图片发送给 Agent 处理
         self._process_image(image_path)
     
+    def _add_video_message(self, video_path: str):
+        """添加视频消息（P2 新增）"""
+        if not MEDIA_SUPPORT or not VideoBubble:
+            self._add_message('assitant', "⚠️ 视频消息功能不可用，请安装依赖库。")
+            return
+        
+        # 创建视频气泡
+        bubble = VideoBubble(video_path, role='user')
+        self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, bubble)
+        
+        # 记录到历史
+        self.message_history.append({
+            'role': 'user',
+            'content': f"[视频: {Path(video_path).name}]",
+            'type': 'video',
+            'path': video_path
+        })
+        
+        # 滚动到底部
+        self._scroll_to_bottom()
+        
+        # 提示用户视频处理功能开发中
+        self._add_message('assitant', f"🎬 已收到视频: {Path(video_path).name}\n\n（视频处理功能开发中，请手动描述视频内容。）")
+    
+    def _add_audio_message(self, audio_path: str):
+        """添加音频消息（P2 新增）"""
+        if not MEDIA_SUPPORT or not AudioBubble:
+            self._add_message('assitant', "⚠️ 音频消息功能不可用，请安装依赖库。")
+            return
+        
+        # 创建音频气泡
+        bubble = AudioBubble(audio_path, role='user')
+        self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, bubble)
+        
+        # 记录到历史
+        self.message_history.append({
+            'role': 'user',
+            'content': f"[音频: {Path(audio_path).name}]",
+            'type': 'audio',
+            'path': audio_path
+        })
+        
+        # 滚动到底部
+        self._scroll_to_bottom()
+        
+        # 提示用户音频处理功能开发中
+        self._add_message('assitant', f"🎵 已收到音频: {Path(audio_path).name}\n\n（音频处理功能开发中，请手动描述音频内容。）")
+    
     def _add_file_message(self, file_path: str):
         """添加文件消息（用户上传的文件）"""
         # 创建文件气泡
@@ -730,34 +907,122 @@ class EIWizardChat(QWidget):
     def _process_image(self, image_path: str):
         """处理图片（发送给 Agent）"""
         # 显示"正在处理"消息
-        self._add_message('assistant', f"🖼️ 正在分析图片: {Path(image_path).name}...")
+        self._add_message('assitant', f"🖼️ 正在分析图片: {Path(image_path).name}...")
         
-        # TODO: 调用 Agent 处理图片（OCR、图像识别等）
-        # 这里可以调用 intelligent_ocr 工具或视觉模型
-        
-        # 模拟处理完成
-        QTimer.singleShot(2000, lambda: self._update_last_assistant_message(
-            f"🖼️ 图片分析完成: {Path(image_path).name}\n\n（图片识别功能开发中...）"
-        ))
+        try:
+            # 尝试调用 Agent 处理图片（如果 Agent 支持）
+            if self.agent_available and hasattr(self.adapter, 'process_image'):
+                result = self.adapter.process_image(image_path)
+                self._update_last_assistant_message(
+                    f"🖼️ 图片分析完成: {Path(image_path).name}\n\n{result}"
+                )
+            else:
+                # 提示用户图片识别功能开发中
+                self._update_last_assistant_message(
+                    f"🖼️ 已收到图片: {Path(image_path).name}\n\n"
+                    "（图片识别功能开发中，请手动描述图片内容。）\n"
+                    "支持的图片格式：PNG, JPG, JPEG, GIF, BMP, WEBP"
+                )
+        except Exception as e:
+            logger.error(f"处理图片失败: {e}")
+            self._update_last_assistant_message(
+                f"❌ 处理图片失败: {str(e)}"
+            )
     
     def _process_file(self, file_path: str):
         """处理文件（发送给 Agent）"""
         # 显示"正在处理"消息
-        self._add_message('assistant', f"📄 正在解析文件: {Path(file_path).name}...")
+        self._add_message('assitant', f"📄 正在解析文件: {Path(file_path).name}...")
         
-        # TODO: 调用 Agent 处理文件（OCR、文档解析等）
-        # 这里可以调用 intelligent_ocr 工具
-        
-        # 模拟处理完成
-        QTimer.singleShot(2000, lambda: self._update_last_assistant_message(
-            f"📄 文件解析完成: {Path(file_path).name}\n\n（文档解析功能开发中...）"
-        ))
+        try:
+            # 根据文件类型处理
+            file_ext = Path(file_path).suffix.lower()
+            
+            if file_ext in ['.txt', '.md', '.csv', '.log', '.json']:
+                # 文本文件：直接读取内容
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        file_content = f.read(5000)  # 最多读取 5000 字符
+                    
+                    if len(file_content) >= 5000:
+                        file_content += "\n\n[文件内容过长，已截断...]"
+                    
+                    # 将文件内容发送给 Agent
+                    if self.agent_available:
+                        # 构造消息：文件内容 + 用户问题
+                        message = f"[用户上传了文件: {Path(file_path).name}]\n\n文件内容：\n{file_content}\n\n请分析以上文件内容。"
+                        self.adapter.process_message(message)
+                        self._update_last_assistant_message(
+                            f"📄 文件解析完成: {Path(file_path).name}\n\n正在分析文件内容..."
+                        )
+                    else:
+                        self._update_last_assistant_message(
+                            f"📄 文件解析完成: {Path(file_path).name}\n\n"
+                            f"文件内容预览：\n{file_content[:500]}..."  # 预览前 500 字符
+                        )
+                        
+                except Exception as e:
+                    logger.error(f"读取文本文件失败: {e}")
+                    self._update_last_assistant_message(
+                        f"❌ 读取文件失败: {str(e)}"
+                    )
+                    
+            elif file_ext in ['.pdf']:
+                # PDF 文件：提示用户 PDF 解析功能开发中
+                self._update_last_assistant_message(
+                    f"📄 已收到 PDF 文件: {Path(file_path).name}\n\n"
+                    "（PDF 解析功能开发中，请手动描述文件内容。）"
+                )
+                
+            elif file_ext in ['.docx', '.doc']:
+                # Word 文件：提示用户 Word 解析功能开发中
+                self._update_last_assistant_message(
+                    f"📄 已收到 Word 文件: {Path(file_path).name}\n\n"
+                    "（Word 解析功能开发中，请手动描述文件内容。）"
+                )
+                
+            else:
+                # 其他文件：提示用户
+                self._update_last_assistant_message(
+                    f"📄 已收到文件: {Path(file_path).name}\n\n"
+                    "（文件解析功能开发中，请手动描述文件内容。）"
+                )
+                
+        except Exception as e:
+            logger.error(f"处理文件失败: {e}")
+            self._update_last_assistant_message(
+                f"❌ 处理文件失败: {str(e)}"
+            )
     
-    # ── P2 功能：语音输入 ────────────────────────────────────────────────────
+    # ── P2 功能：语音输入 ─────────────────────────────────────────────
     
     def _toggle_voice_input(self, checked: bool):
         """切换语音输入状态"""
+        # 初始化语音库检测（延迟初始化）
+        if not hasattr(self, 'voice_libs_available'):
+            self._init_voice_libs()
+        
         if checked:
+            # 检查语音识别库是否可用
+            if not any(self.voice_libs_available.values()):
+                self._add_message('assitant', 
+                    "⚠️ 语音识别库未安装\n\n"
+                    "请安装以下库之一：\n"
+                    "1. `pip install SpeechRecognition` （在线识别，需要联网）\n"
+                    "2. `pip install -U openai-whisper` （离线识别，需要下载模型）\n\n"
+                    "安装后重启应用即可使用语音输入功能。"
+                )
+                self.voice_btn.setChecked(False)
+                return
+            
+            if not self.voice_libs_available["sounddevice"]:
+                self._add_message('assitant', 
+                    "⚠️ sounddevice 未安装，无法录音。\n\n"
+                    "请安装：`pip install sounddevice numpy`"
+                )
+                self.voice_btn.setChecked(False)
+                return
+            
             # 开始录音
             self.voice_btn.setText("⏺️")  # 录音中图标
             self.voice_btn.setToolTip("点击停止录音")
@@ -765,32 +1030,160 @@ class EIWizardChat(QWidget):
         else:
             # 停止录音
             self.voice_btn.setText("🎤")
-            self.voice_btn.setToolTip("语音输入（开发中）")
+            self.voice_btn.setToolTip("语音输入（需要安装语音识别库）")
             self._stop_voice_recording()
     
     def _start_voice_recording(self):
         """开始语音录音"""
-        # TODO: 实现语音录音功能
-        # 可以使用 sounddevice、pyaudio 等库录音
-        # 然后使用 speech_recognition 或 Whisper 进行语音识别
+        # 录音参数
+        self._recording_fs = 16000  # 采样率
+        self._recording_channels = 1  # 单声道
+        self._recording_data = []  # 存储录音数据
         
-        self._add_message('assistant', "🎤 语音输入功能开发中...\n\n（需要安装语音识别库）")
-        
-        # 模拟录音 3 秒后自动停止
-        QTimer.singleShot(3000, lambda: self.voice_btn.setChecked(False))
+        try:
+            if self.voice_libs_available["sounddevice"]:
+                # 使用 sounddevice 录音
+                def callback(indata, frames, time, status):
+                    """录音回调函数"""
+                    if status:
+                        logger.warning(f"录音状态异常: {status}")
+                    self._recording_data.append(indata.copy())
+                
+                # 开始录音（最多 10 秒）
+                self._recording_stream = self._sd.InputStream(
+                    samplerate=self._recording_fs,
+                    channels=self._recording_channels,
+                    callback=callback
+                )
+                self._recording_stream.start()
+                
+                # 10 秒后自动停止
+                QTimer.singleShot(10000, lambda: self.voice_btn.setChecked(False) if self.voice_btn.isChecked() else None)
+                
+                self._add_message('assitant', "🎤 正在录音...（最多 10 秒，点击停止按钮结束）")
+                
+            else:
+                self._add_message('assitant', "⚠️ sounddevice 未安装，无法录音。")
+                self.voice_btn.setChecked(False)
+                
+        except Exception as e:
+            logger.error(f"开始录音失败: {e}")
+            self._add_message('assitant', f"❌ 开始录音失败：{str(e)}")
+            self.voice_btn.setChecked(False)
     
     def _stop_voice_recording(self):
-        """停止语音录音"""
-        # TODO: 停止录音，并进行语音识别
-        pass
+        """停止语音录音并进行识别"""
+        try:
+            if not hasattr(self, '_recording_data') or not self._recording_data:
+                self._add_message('assitant', "⚠️ 没有录音数据")
+                return
+            
+            # 停止录音流
+            if hasattr(self, '_recording_stream'):
+                self._recording_stream.stop()
+                self._recording_stream.close()
+            
+            # 合并录音数据
+            recording = self._np.concatenate(self._recording_data, axis=0)
+            
+            # 保存为临时 WAV 文件
+            import tempfile
+            import wave
+            
+            temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            with wave.open(temp_path, 'wb') as wf:
+                wf.setnchannels(self._recording_channels)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(self._recording_fs)
+                wf.writeframes(recording.tobytes())
+            
+            self._add_message('assitant', "🎤 录音完成，正在进行语音识别...")
+            
+            # 在新线程中进行语音识别（避免阻塞 UI）
+            import threading
+            thread = threading.Thread(target=self._recognize_voice, args=(temp_path,))
+            thread.daemon = True
+            thread.start()
+            
+        except Exception as e:
+            logger.error(f"停止录音失败: {e}")
+            self._add_message('assitant', f"❌ 停止录音失败：{str(e)}")
     
-    def _on_voice_recognized(self, text: str):
-        """语音识别完成"""
-        # 将识别结果填入输入框
+    def _recognize_voice(self, audio_path: str):
+        """语音识别（在新线程中执行）"""
+        try:
+            text = None
+            
+            # 优先使用 speech_recognition（在线识别，免费）
+            if self.voice_libs_available["speech_recognition"]:
+                sr = self._sr
+                
+                r = sr.Recognizer()
+                with sr.AudioFile(audio_path) as source:
+                    audio = r.record(source)
+                
+                # 使用 Google Web Speech API（免费，需要联网）
+                try:
+                    text = r.recognize_google(audio, language='zh-CN')
+                except sr.UnknownValueError:
+                    text = None
+                except sr.RequestError as e:
+                    logger.error(f"Google Speech API 请求失败: {e}")
+                    text = None
+            
+            # 如果 speech_recognition 失败，尝试使用 whisper（离线识别）
+            if not text and self.voice_libs_available["whisper"]:
+                model = self._whisper.load_model("base")
+                result = model.transcribe(audio_path, language="zh")
+                text = result["text"]
+            
+            # 识别完成，更新 UI（需要在主线程中执行）
+            if text:
+                # 使用 QMetaObject.invokeMethod 在主线程中执行
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(self, "_on_voice_recognized_cb", 
+                    Qt.ConnectionType.QueuedConnection,
+                    QMetaObject.Qt_string(text)
+                )
+            else:
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(self, "_on_voice_recognize_failed",
+                    Qt.ConnectionType.QueuedConnection
+                )
+            
+            # 删除临时文件
+            import os
+            try:
+                os.unlink(audio_path)
+            except:
+                pass
+                
+        except Exception as e:
+            logger.error(f"语音识别失败: {e}")
+            from PySide6.QtCore import QMetaObject, Qt
+            QMetaObject.invokeMethod(self, "_on_voice_recognize_error", 
+                Qt.ConnectionType.QueuedConnection,
+                QMetaObject.Qt_string(str(e))
+            )
+    
+    @Slot(str)
+    def _on_voice_recognized_cb(self, text: str):
+        """语音识别成功（主线程回调）"""
         self.message_input.setText(text)
-        
-        # 可选：自动发送
-        # self._send_message()
+        self._add_message('assitant', f"✅ 语音识别完成：{text}")
+    
+    @Slot()
+    def _on_voice_recognize_failed(self):
+        """语音识别失败（主线程回调）"""
+        self._add_message('assitant', "⚠️ 语音识别失败，请手动输入。")
+    
+    @Slot(str)
+    def _on_voice_recognize_error(self, error: str):
+        """语音识别异常（主线程回调）"""
+        self._add_message('assitant', f"❌ 语音识别异常：{error}")
 
 
 # ============================================================

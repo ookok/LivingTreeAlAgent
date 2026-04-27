@@ -11,7 +11,7 @@ import json
 import threading
 import traceback
 from pathlib import Path
-from typing import Callable, Iterator, Optional, List, Dict, Any
+from typing import Callable, Iterator, Optional, List, Dict, Any, Set
 from dataclasses import dataclass
 
 from client.src.business.ollama_client import OllamaClient, ChatMessage, StreamChunk
@@ -24,6 +24,7 @@ from client.src.business.unified_model_client import (
 from client.src.business.session_db import SessionDB
 from client.src.business.memory_manager import MemoryManager
 from client.src.business.tools_registry import ToolRegistry, ToolDispatcher, SCHEMA
+from client.src.business.base_agents.base_agent import BaseToolAgent
 from client.src.business.config import AppConfig
 from client.src.business.session_stats import SessionStats, get_stats_tracker
 from client.src.business.model_priority_loader import (
@@ -37,7 +38,7 @@ from client.src.business.model_priority_loader import (
 import asyncio
 from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
 from client.src.business.knowledge_graph import KnowledgeGraph
-from core.search.tier_router import TierRouter
+from client.src.business.search.tier_router import TierRouter
 from client.src.business.linkmind_router import LinkMindRouter, RouteRequest, ModelCapability
 from client.src.business.discourse_rag import DiscourseAwareRAG
 
@@ -114,6 +115,12 @@ class HermesAgent:
         self._register_tools()
         self.dispatcher = ToolDispatcher({})
         self.enabled_toolsets = config.agent.enabled_toolsets
+        
+        # 统一工具层（Phase 3 新增）
+        # BaseToolAgent 提供 discover_tools() 和 execute_tool() 方法
+        # 必须在 _build_tool_schema() 之前初始化
+        self._tool_agent = BaseToolAgent(enabled_toolsets=self.enabled_toolsets)
+        
         self._tool_schema = self._build_tool_schema()
 
         # 搜索系统
@@ -444,7 +451,18 @@ class HermesAgent:
         register_model_tools(self)
 
     def _build_tool_schema(self) -> list[dict]:
-        """构建 OpenAI tools schema"""
+        """
+        构建 OpenAI tools schema。
+        
+        优先使用 BaseToolAgent 的 schema 生成（统一工具层），
+        如果结果为空则 fallback 到旧系统。
+        """
+        # 优先尝试新的 BaseToolAgent schema
+        new_schema = self._tool_agent.build_tool_schema()
+        if new_schema:
+            return new_schema
+        
+        # Fallback 到旧系统
         tools = ToolRegistry.get_all_tools(self.enabled_toolsets)
         return ToolRegistry.to_openai_schema(tools)
 
@@ -787,7 +805,17 @@ class HermesAgent:
         return "\n\n".join(parts)
 
     def _describe_tools(self) -> str:
-        """生成工具描述文本（供系统提示使用）"""
+        """
+        生成工具描述文本（供系统提示使用）。
+        
+        优先使用 BaseToolAgent 的统一工具层，兼容旧系统。
+        """
+        # 优先尝试新的 BaseToolAgent
+        new_desc = self._tool_agent.get_tool_descriptions()
+        if new_desc:
+            return new_desc
+        
+        # Fallback 到旧系统
         lines = []
         for t in ToolRegistry.get_all_tools(self.enabled_toolsets):
             lines.append(f"- **{t.name}**: {t.description}")
@@ -842,6 +870,54 @@ class HermesAgent:
             })
 
         return results
+
+    # ── 统一工具层接口 (Phase 3) ─────────────────────────────────
+
+    def discover_tools(self, task: str, max_results: int = 5) -> list[dict]:
+        """
+        语义搜索发现适合任务的工具。
+        
+        使用新的 ToolRegistry 做语义 + 关键词双重匹配。
+        这是 HermesAgent 的统一工具层入口。
+        
+        Args:
+            task: 任务描述文本
+            max_results: 最大返回数量
+            
+        Returns:
+            工具定义列表
+        """
+        return self._tool_agent.discover_tools(task, max_results=max_results)
+    
+    def execute_tool(self, name: str, **kwargs) -> dict:
+        """
+        通过统一 ToolRegistry 执行工具。
+        
+        优先使用新系统，失败时 fallback 到旧 dispatcher。
+        
+        Args:
+            name: 工具名称
+            **kwargs: 工具参数
+            
+        Returns:
+            执行结果 dict {success, data, error}
+        """
+        # 先尝试新的 BaseToolAgent
+        result = self._tool_agent.execute_tool(name, **kwargs)
+        
+        # 如果新系统失败，fall back 到旧 dispatcher
+        if not result.success:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[HermesAgent] 新系统工具 {name} 执行失败，fallback 到旧 dispatcher")
+            legacy_result = self.dispatcher.dispatch(name, kwargs)
+            if legacy_result.get("success"):
+                return legacy_result
+        
+        return result.to_dict()
+    
+    def get_unified_tool_stats(self) -> dict:
+        """获取工具使用统计（包含新旧系统）"""
+        return self._tool_agent.get_tool_stats()
 
     # ── 控制 ────────────────────────────────────────────────────
 

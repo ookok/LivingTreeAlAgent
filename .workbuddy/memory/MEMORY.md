@@ -173,4 +173,13 @@
 - 输出: JSON Schema 参数定义 + 子命令映射
 
 ---
+
+## 文档Skill自动提炼系统（2026-04-28 新增）
+- 路径: `client/src/business/document_skill_extractor.py`, `semantic_skill_matcher.py`, `tools/document_skill_tool.py`, `presentation/components/document_skill_panel.py`
+- 功能: 通用文档→Skill自动提炼，支持任意文体（通知/通报/专家意见等），通过语义分析（Embedding）自动匹配触发
+- 核心类: `DocumentSkillExtractor`, `SemanticSkillMatcher`, `DocumentSkillTool`, `DocumentSkillPanel`
+- 工作流程: 文档输入 → LLM语义分析（自动识别类型）→ 生成SKILL.md + embedding.json → 保存 → 下次语义匹配自动触发
+- 匹配阈值: `SIMILARITY_THRESHOLD = 0.75`（余弦相似度）
+- 语法检查: ✅ 4个文件全部通过
+
 **最后更新**: 2026-04-28

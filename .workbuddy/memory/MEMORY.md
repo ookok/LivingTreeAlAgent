@@ -112,19 +112,39 @@
 - SelfReflectionEngine 增强: 集成 ToolSelfRepairer，工具执行失败时自动触发修复
 - `_call_llm()` 修复: 改用 GlobalModelRouter ✅
 
-## TextCorrectionTool（2026-04-28 新增）
+## TextCorrectionTool（2026-04-28 增强）
 - 路径: `client/src/business/tools/text_correction_tool.py`
-- 功能: 上下文感知的错别字纠正工具
+- 功能: 上下文感知的错别字纠正工具（支持六类错别字）
 - 核心类: `TextCorrectionTool(BaseTool)`
-- 功能特性:
-  - 识别同音、形近、语法错别字
-  - 从上下文推理正确用词
-  - 支持批量处理
-  - 结果缓存避免重复纠正
-- 核心方法: `execute()`, `_correct_text_with_llm()`, `_build_correction_prompt()`
-- LLM 调用: 通过 GlobalModelRouter（`capability=ModelCapability.REASONING`）
+- 六类错别字: 同音、形近、语法、多字、少字、乱序 ⭐
+- 新增常量: `ERROR_TYPE_EXTRA`, `ERROR_TYPE_MISSING`, `ERROR_TYPE_SHUFFLE`
+- 提示词优化: 明确六类定义+示例，返回 `error_type` + `start_pos/end_pos`
+- 核心方法: `execute()`, `_correct_text_with_llm()`, `_build_correction_prompt()`, `_infer_error_type()`
+- LLM 调用: 通过 GlobalModelRouter（`capability=ModelCapability.REASONING`, temperature=0.2）
 - 自动注册: `auto_register()` 函数自动注册到 ToolRegistry
-- 语法检查: ✅ 通过
+- 语法检查: ✅ 通过（2026-04-28 重写）
+
+## SpellCheckTextEdit（2026-04-28 重构）
+- 路径: `client/src/presentation/components/spell_check_edit.py`
+- 功能: 实时错别字检查输入框（真正异步）
+- 核心类: `SpellCheckTextEdit(QTextEdit)`, `SpellCheckWorker(QThread)`
+- 异步模型: QThread + signal/slot（非 threading.Thread）
+- 信号: `finished(result)`, `error(msg)`, `progress(pct, msg)`
+- 零 UI 阻塞: 工作线程通过 QueuedConnection 回传结果
+- 线程清理: `_cleanup_worker()` → quit() + wait() + deleteLater()
+- 集成位置: `ei_wizard_chat.py`, `ide/panel.py`
+- 语法检查: ✅ 通过（2026-04-28 重写）
+
+## CI/CD 配置（2026-04-28 完善）
+- 路径: `.github/workflows/ci.yml`
+- 多平台矩阵: ubuntu-latest, windows-latest, macos-latest
+- PyQt6 支持: 添加 `pip install PyQt6 PyQt6-Qt6`
+- 新增任务: `text-correction-test`（专项测试六类错别字）
+- 语法检查: `python -m py_compile` 检查新文件
+- YAML 语法: ✅ 通过验证
+- 部署增强: 添加企业微信 Webhook 通知
+
+## CI/CD 完善（2026-04-28 新增）
 
 ## GlobalModelRouter 调用规范（2026-04-27 修复）
 - ⚠️ **禁止**直接调用 `localhost:11434` 或使用 `requests`/`aiohttp` 直连 Ollama

@@ -54,6 +54,14 @@ class AgentType(Enum):
     DEPLOYER = "deployer"                 # 部署
     ORCHESTRATOR = "orchestrator"         # 编排器
     ANALYZER = "analyzer"                 # 分析
+    # ── 面板智能体（2026-04-26 新增）──────────
+    WRITING = "writing"                   # 智能写作
+    SEARCH = "search"                     # 智能搜索
+    TRAINING = "training"                 # 专家训练
+    KNOWLEDGE = "knowledge"               # 知识库
+    IDE = "ide"                           # 智能IDE
+    # ── 环评智能体（2026-04-27 新增）──────────
+    EIA = "eia"                           # 环评报告生成
 
 
 class AgentCapability(Enum):
@@ -70,6 +78,24 @@ class AgentCapability(Enum):
     MONITORING = "monitoring"
     DATA_ANALYSIS = "data_analysis"
     DOCUMENTATION = "documentation"
+    # ── 面板智能体能力（2026-04-26 新增）──────────
+    DOCUMENT_GENERATION = "document_generation"     # 文档生成
+    KNOWLEDGE_SEARCH = "knowledge_search"         # 知识库搜索
+    EXPERT_TRAINING = "expert_training"           # 专家训练
+    KNOWLEDGE_MANAGEMENT = "knowledge_management" # 知识库管理
+    CODE_GENERATION_IDE = "code_generation_ide"   # IDE代码生成
+    WEB_SEARCH = "web_search"                   # 网页搜索
+    ACADEMIC_SEARCH = "academic_search"           # 学术搜索
+    CODE_SEARCH = "code_search"                   # 代码搜索
+    SEMANTIC_COMPRESSION = "semantic_compression" # 语义压缩
+    MULTIMODAL_INPUT = "multimodal_input"         # 多模态输入
+    # ── 环评智能体能力（2026-04-27 新增）──────────
+    EIA_REPORT_GENERATION = "eia_report_generation"       # 环评报告生成
+    POLLUTION_COEFFICIENT_QUERY = "pollution_coefficient_query"  # 排污系数查询
+    REGULATION_RETRIEVAL = "regulation_retrieval"         # 法规检索
+    ATTACHMENT_PARSING = "attachment_parsing"           # 附件解析
+    ENVIRONMENTAL_IMPACT_ASSESSMENT = "environmental_impact_assessment"  # 环境影响评估
+    RISK_ASSESSMENT = "risk_assessment"                 # 风险评估
 
 
 class TaskStatus(Enum):
@@ -354,6 +380,59 @@ class AgentFactory:
             "capabilities": [
                 AgentCapability.DATA_ANALYSIS,
                 AgentCapability.REQUIREMENT_ANALYSIS
+            ],
+            "max_concurrent": 2
+        },
+        # ── 面板智能体模板（2026-04-26 新增）──────────
+        AgentType.WRITING: {
+            "capabilities": [
+                AgentCapability.DOCUMENT_GENERATION,
+                AgentCapability.KNOWLEDGE_SEARCH
+            ],
+            "max_concurrent": 2
+        },
+        AgentType.SEARCH: {
+            "capabilities": [
+                AgentCapability.WEB_SEARCH,
+                AgentCapability.ACADEMIC_SEARCH,
+                AgentCapability.CODE_SEARCH,
+                AgentCapability.KNOWLEDGE_SEARCH,
+                AgentCapability.SEMANTIC_COMPRESSION,
+                AgentCapability.MULTIMODAL_INPUT
+            ],
+            "max_concurrent": 3
+        },
+        AgentType.TRAINING: {
+            "capabilities": [
+                AgentCapability.EXPERT_TRAINING,
+                AgentCapability.DOCUMENT_GENERATION
+            ],
+            "max_concurrent": 1
+        },
+        AgentType.KNOWLEDGE: {
+            "capabilities": [
+                AgentCapability.KNOWLEDGE_MANAGEMENT,
+                AgentCapability.KNOWLEDGE_SEARCH
+            ],
+            "max_concurrent": 2
+        },
+        AgentType.IDE: {
+            "capabilities": [
+                AgentCapability.CODE_GENERATION_IDE,
+                AgentCapability.CODE_REVIEW,
+                AgentCapability.CODE_DEBUGGING
+            ],
+            "max_concurrent": 2
+        },
+        # ── 环评智能体模板（2026-04-27 新增）──────────
+        AgentType.EIA: {
+            "capabilities": [
+                AgentCapability.EIA_REPORT_GENERATION,
+                AgentCapability.POLLUTION_COEFFICIENT_QUERY,
+                AgentCapability.REGULATION_RETRIEVAL,
+                AgentCapability.ATTACHMENT_PARSING,
+                AgentCapability.ENVIRONMENTAL_IMPACT_ASSESSMENT,
+                AgentCapability.RISK_ASSESSMENT
             ],
             "max_concurrent": 2
         }

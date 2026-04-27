@@ -31,6 +31,8 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("expert_training", "专家训练", "🎓", _lazy("training"), category="main"),
         Route("smart_ide", "智能IDE", "💻", _lazy("ide"), category="main"),
         Route("smart_writing", "智能写作", "✍️", _lazy("writing"), category="main"),
+        # 环评助手（P0 新增）
+        Route("ei_wizard", "环评助手", "📋", _lazy_ei_wizard(), category="main"),
         # 共脑系统
         Route("shared_brain", "共脑系统", "🧠", _lazy_shared_brain(), category="main"),
     ]
@@ -444,4 +446,35 @@ def _create_skills_panel() -> type:
     except Exception as e:
         print(f"[_create_skills_panel] Failed to import: {e}")
         return None
+
+
+def _lazy_ei_wizard() -> type:
+    """
+    延迟导入环评助手面板（EIWizardChat）
+    """
+    class EIWizardPanel(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._load_real_panel()
+
+        def _load_real_panel(self):
+            """加载真实面板"""
+            try:
+                from client.src.presentation.wizards.ei_wizard_chat import EIWizardChat
+
+                real_panel = EIWizardChat(self)
+
+                # 设置布局
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(real_panel)
+
+            except Exception as e:
+                print(f"[EIWizardPanel] Failed to load: {e}")
+                # 显示错误占位符
+                from PyQt6.QtWidgets import QLabel
+                layout = QVBoxLayout(self)
+                layout.addWidget(QLabel(f"❌ 环评助手加载失败: {e}"))
+
+    return EIWizardPanel
 

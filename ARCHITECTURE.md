@@ -1,6 +1,22 @@
 # LivingTreeAI 架构文档
 
-> 版本：v2.0 | 更新时间：2026-04-26 | 架构师：LivingTreeAI Team
+> 版本：v2.1 | 更新时间：2026-04-28 | 架构师：LivingTreeAI Team
+
+---
+
+## 📚 核心文档索引
+
+| 文档 | 用途 | 路径 |
+|------|------|------|
+| **LIVINGTREE_ARCHITECTURE_GUIDE.md** | 完整架构指南 | `docs/LIVINGTREE_ARCHITECTURE_GUIDE.md` |
+| **LIVINGTREE_DEVELOPMENT_GUIDE.md** | 功能开发指南 | `docs/LIVINGTREE_DEVELOPMENT_GUIDE.md` |
+| **AGENTS.md** | AI开发规范 | `AGENTS.md` |
+
+### 快速导航
+
+- **架构设计** → `docs/LIVINGTREE_ARCHITECTURE_GUIDE.md`
+- **功能开发** → `docs/LIVINGTREE_DEVELOPMENT_GUIDE.md`
+- **技术细节** → 本文档 (`ARCHITECTURE.md`)
 
 ---
 

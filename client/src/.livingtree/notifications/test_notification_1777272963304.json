@@ -1,0 +1,10 @@
+{
+  "notification_id": "NOTIF_1777272963304",
+  "timestamp": "2026-04-27T14:56:03.304142",
+  "source": "expert_training_system",
+  "payload": {
+    "type": "test_notification",
+    "message": "这是一条测试通知",
+    "timestamp": "2026-04-27T15:00:00"
+  }
+}

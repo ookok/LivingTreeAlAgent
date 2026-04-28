@@ -1,0 +1,46 @@
+------------------------------------------------------------
+LLMCoreAdapter Inference Pipeline Test
+------------------------------------------------------------
+[OK] Found checkpoint: D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\cells\table_cell_v1.pt
+
+[1/3] Creating LLMCoreAdapter...
+number of parameters: 10.63M
+[OK] Adapter created successfully
+
+[2/3] Testing non-streaming generation...
+   Prompt: 'First Citizen:'
+   Generating...
+   Chunk 1: 'F'
+   Chunk 2: 'i'
+   Chunk 3: 'r'
+   Chunk 4: 's'
+   Chunk 5: 't'
+   Chunk 6: 'r'
+   Chunk 7: 's'
+   Chunk 8: 't'
+   Chunk 9: 'i'
+   Chunk 10: 't'
+
+[OK] Generation complete, 100 tokens total
+   Generated content: 'Firstrstit Citizen:
+Before we proced any further, hear me speak.
+
+First Citititizen:
+You are al reso'
+
+[3/3] Testing StreamChunk streaming interface...
+   StreamChunk: 'F'
+   StreamChunk: 'i'
+   StreamChunk: 'r'
+   StreamChunk: 's'
+   StreamChunk: 't'
+
+[OK] Streaming generation complete, 50 chunks total
+   Content: 'Firstrst Cititizen:
+Before we proceeed any further'
+
+============================================================
+All tests passed! LLMCoreAdapter inference pipeline is working.
+============================================================
+
+[OK] Ready to integrate with GlobalModelRouter for routing tests

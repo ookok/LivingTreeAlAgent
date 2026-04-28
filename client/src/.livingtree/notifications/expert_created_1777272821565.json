@@ -1,0 +1,16 @@
+{
+  "notification_id": "NOTIF_1777272821565",
+  "timestamp": "2026-04-27T14:53:41.565631",
+  "source": "expert_training_system",
+  "payload": {
+    "type": "expert_created",
+    "timestamp": "2026-04-27T14:53:41.565611",
+    "message": "专家角色「测试专家」已创建",
+    "expert_name": "测试专家",
+    "expert_path": ".livingtree/skills/agency-agents-zh/test-expert",
+    "action": "created",
+    "details": {
+      "test": true
+    }
+  }
+}

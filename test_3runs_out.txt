@@ -1,0 +1,85 @@
+18:01:44 [INFO] httpx - HTTP Request: GET http://localhost:11434/api/tags "HTTP/1.1 200 OK"
+18:01:44 [INFO] deep_search_benchmark - L0 SmolLM2 就绪（Ollama）: ['smollm2-test:latest', 'gemma4:26b', 'qwen3.6:35b-a3b', 'qwen3.5:4b', 'qwen3.5:2b', 'qwen3.6:latest', 'qwen3.5:9b', 'qwen3.5:0.8b', 'qwen2.5:1.5b', 'qwen2.5:0.5b', 'deepseek-r1:70b']
+18:01:45 [INFO] httpx - HTTP Request: GET http://localhost:11434/api/tags "HTTP/1.1 200 OK"
+18:01:45 [INFO] deep_search_benchmark - L4 qwen3.6:latest 就绪
+18:01:45 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:01:47 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:02:19 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:02:19 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 353 字
+18:02:21 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:02:23 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:02:55 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:02:55 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 78 字
+18:02:58 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:02:59 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:03:31 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:03:31 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 34 字
+
+╔══════════════════════════════════════════════════════════╗
+║     连续3次深度搜索性能对比测试                                 ║
+║     问题：「五一杭州有哪些玩的」                               ║
+╚══════════════════════════════════════════════════════════╝
+
+[初始化] L0 SmolLM2 路由...
+[初始化] L4 qwen3.6:latest...
+
+============================================================
+  第 1 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 604ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 33501ms | 生成 353 字
+  预览: **🎯 核心玩法推荐**    1. **西湖经典漫步 + 实景演艺**：断桥、苏堤等经典景点正常开放。五一期间特别推出《遇见西湖》实景演出，每日3场，建议通过官方渠道关注场次并提前占位。    2. **宋城沉浸体验**：《宋源千古情》加演至每日6场，适合全天游玩。提前在携程等平台预约可享8折优惠，避开现场排队高峰。    3. **良渚古城遗址探源**：打卡5000年世界文化遗产，五一推出考古...
+[总计] 34105ms (34.1s)
+
+[冷却] 等待 2 秒后执行下一轮...
+
+============================================================
+  第 2 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 598ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 33919ms | 生成 78 字
+  预览: 4.  **Final Output Generation (Mental to Text):**    Structure:    - 一、必玩亮点推荐（...
+[总计] 34517ms (34.5s)
+
+[冷却] 等待 2 秒后执行下一轮...
+
+============================================================
+  第 3 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 624ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 33588ms | 生成 34 字
+  预览: *Draft Structure:*    **📍 五一杭州游玩推荐...
+[总计] 34213ms (34.2s)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          3 轮 测 试 结 果 对 比                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ 轮次  |  L0路由   | DeepSearch |  L4增强   |   总耗时   |  结果数  |  生成字数   |  route   |    intent   
+-------------------------------------------------------------------------------------------
+ 1   |   604  ms |     0    ms |  33502 ms |  34.1  s |   5   |   353   |  search  | search_query
+ 2   |   598  ms |     0    ms |  33919 ms |  34.5  s |   5   |   78    |  search  | search_query
+ 3   |   624  ms |     0    ms |  33588 ms |  34.2  s |   5   |   34    |  search  | search_query
+-------------------------------------------------------------------------------------------
+
+【性能统计】
+  L0 路由     : 平均 609ms  | 最小 598ms  | 最大 624ms
+  DeepSearch  : 平均 0ms  | 最小 0ms  | 最大 0ms
+  L4 增强     : 平均 33670ms  | 最小 33502ms  | 最大 33919ms
+  全链路总耗时 : 平均 34.3s  | 最小 34.1s  | 最大 34.5s
+  L4 耗时占比 : 98%  (主要耗时在 L4 推理)
+  L0+Search   : 2%
+
+
+【第 3 轮 L4 完整回答】（34 字）
+────────────────────────────────────────────────────────────
+*Draft Structure:*
+   **📍 五一杭州游玩推荐
+────────────────────────────────────────────────────────────
+

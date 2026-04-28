@@ -1,0 +1,70 @@
+{
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "default_model": "qwen3.6:27b",
+    "num_ctx": 8192,
+    "num_gpu": 0,
+    "keep_alive": "5m"
+  },
+  "model_path": {
+    "models_dir": "",
+    "ollama_home": "",
+    "auto_import": true
+  },
+  "model_market": {
+    "sources": [
+      "modelscope",
+      "huggingface"
+    ],
+    "default_source": "modelscope",
+    "modelscope_token": "",
+    "modelscope_cache_dir": "",
+    "hf_token": "",
+    "hf_cache_dir": "",
+    "max_concurrent_downloads": 2,
+    "download_timeout": 3600
+  },
+  "writing": {
+    "default_project_dir": "",
+    "auto_save_interval": 30,
+    "enable_file_watch": true
+  },
+  "search": {
+    "serper_key": "",
+    "brave_key": "",
+    "cache_ttl_minutes": 60,
+    "cn_sites": [
+      "zhihu.com",
+      "juejin.cn",
+      "weixin.qq.com",
+      "bilibili.com"
+    ]
+  },
+  "agent": {
+    "max_iterations": 90,
+    "max_tokens": 4096,
+    "temperature": 0.7,
+    "enabled_toolsets": [
+      "file",
+      "writing",
+      "project",
+      "ollama"
+    ],
+    "streaming": true,
+    "show_reasoning": false
+  },
+  "model_store": {
+    "enable_p2p": true,
+    "relay_servers": [
+      "139.199.124.242:8888"
+    ],
+    "enable_monitoring": true,
+    "storage_dir": "",
+    "max_concurrent_downloads": 3
+  },
+  "window_width": 1400,
+  "window_height": 900,
+  "left_panel_width": 240,
+  "right_panel_width": 300,
+  "theme": "dark"
+}

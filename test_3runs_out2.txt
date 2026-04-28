@@ -1,0 +1,100 @@
+18:04:22 [INFO] httpx - HTTP Request: GET http://localhost:11434/api/tags "HTTP/1.1 200 OK"
+18:04:22 [INFO] deep_search_benchmark - L0 SmolLM2 就绪（Ollama）: ['smollm2-test:latest', 'gemma4:26b', 'qwen3.6:35b-a3b', 'qwen3.5:4b', 'qwen3.5:2b', 'qwen3.6:latest', 'qwen3.5:9b', 'qwen3.5:0.8b', 'qwen2.5:1.5b', 'qwen2.5:0.5b', 'deepseek-r1:70b']
+18:04:22 [INFO] httpx - HTTP Request: GET http://localhost:11434/api/tags "HTTP/1.1 200 OK"
+18:04:22 [INFO] deep_search_benchmark - L4 qwen3.5:4b 就绪
+18:04:23 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:04:32 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:04:54 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:04:54 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 576 字
+18:04:57 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:04:58 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:05:20 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:05:20 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 1043 字
+18:05:23 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+18:05:24 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:05:46 [INFO] httpx - HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+18:05:46 [INFO] deep_search_benchmark - L4 从 thinking 字段提取 1003 字
+
+╔══════════════════════════════════════════════════════════╗
+║     连续3次深度搜索性能对比测试（qwen3.5:4b 非思考模型）                   ║
+║     问题：「五一杭州有哪些玩的」                               ║
+╚══════════════════════════════════════════════════════════╝
+
+[初始化] L0 SmolLM2 路由...
+[初始化] L4 qwen3.6:latest...
+
+============================================================
+  第 1 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 643ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 31157ms | 生成 576 字
+  预览: *   *Introduction:* Acknowledge the user's question about May Day Hangzhou.     *   *Category 1: Classic Must-Visits (West Lake).* Emphasize official guide. Mention "Meet West Lake" show (3 shows/day)...
+[总计] 31801ms (31.8s)
+
+[冷却] 等待 2 秒后执行下一轮...
+
+============================================================
+  第 2 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 622ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 23347ms | 生成 1043 字
+  预览: *   *Intro:* Hello, I'm your Hangzhou travel guide for May Day. Based on the latest info.     *   *Section 1: Classic Scenery (West Lake)*         *   Must-visit: Qiancheng Bridge (Duanqiao), Su Di (S...
+[总计] 23968ms (24.0s)
+
+[冷却] 等待 2 秒后执行下一轮...
+
+============================================================
+  第 3 轮测试  |  问题：「五一杭州有哪些玩的」
+============================================================
+[L0 路由] 耗时 596ms | route=search intent=search_query confidence=0.90 via=smollm2_ollama
+[DeepSearch] 耗时 0ms | 找到 5 条 | 平均相关度=86% 可信度=78%
+[L4 降级] 流式无内容，切换非流式...
+[L4 增强] 耗时 23234ms | 生成 1003 字
+  预览: *   *Introduction:* Welcome to Hangzhou for May Day 2026. Mention the variety of experiences.     *   *Category 1: Classic Scenic & Water (West Lake)*         *   Mention Broken Bridge, Su Causeway.  ...
+[总计] 23830ms (23.8s)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          3 轮 测 试 结 果 对 比                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ 轮次  |  L0路由   | DeepSearch |  L4增强   |   总耗时   |  结果数  |  生成字数   |  route   |    intent   
+-------------------------------------------------------------------------------------------
+ 1   |   643  ms |     0    ms |  31158 ms |  31.8  s |   5   |   576   |  search  | search_query
+ 2   |   622  ms |     0    ms |  23346 ms |  24.0  s |   5   |  1043   |  search  | search_query
+ 3   |   596  ms |     0    ms |  23234 ms |  23.8  s |   5   |  1003   |  search  | search_query
+-------------------------------------------------------------------------------------------
+
+【性能统计】
+  L0 路由     : 平均 620ms  | 最小 596ms  | 最大 643ms
+  DeepSearch  : 平均 0ms  | 最小 0ms  | 最大 0ms
+  L4 增强     : 平均 25913ms  | 最小 23234ms  | 最大 31158ms
+  全链路总耗时 : 平均 26.5s  | 最小 23.8s  | 最大 31.8s
+  L4 耗时占比 : 98%  (主要耗时在 L4 推理)
+  L0+Search   : 2%
+
+
+【第 3 轮 L4 完整回答】（1003 字）
+────────────────────────────────────────────────────────────
+*   *Introduction:* Welcome to Hangzhou for May Day 2026. Mention the variety of experiences.
+    *   *Category 1: Classic Scenic & Water (West Lake)*
+        *   Mention Broken Bridge, Su Causeway.
+        *   Highlight "Encounter West Lake" show (3 times/day).
+        *   Source: hangzhou.gov.cn.
+    *   *Category 2: Cultural & Historical (Liangzhu & Lingyin)*
+        *   Liangzhu: Archaeology experience, 5000 years history.
+        *   Lingyin: Crowd control warning (reserve early).
+        *   Food option at Lingyin (Yongfu Temple).
+        *   Source: liangzhu.org, aldlf.com.
+    *   *Category 3: Entertainment & Immersion (Songcheng & Anime)*
+        *   Songcheng: "Eternal Emotion" show (6 times/day, 20% discount early booking).
+        *   Baima Lake Anime Festival: Cosplay, voice sign-in.
+        *   Source: ctrip.com, bilibili.com.
+    *   *Category 4: Practical Tips (General Advice)*
+        *   Reservations are key (especially for West Lake and Lingyin).
+        *   Discount on
+────────────────────────────────────────────────────────────
+

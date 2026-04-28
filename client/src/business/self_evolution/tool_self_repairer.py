@@ -73,11 +73,15 @@ class ToolSelfRepairer:
     2. 确定修复策略
     3. 执行修复
     4. 验证修复结果
+    5. 记录失败案例（用于双数据飞轮训练）
     
     用法：
         repairer = ToolSelfRepairer()
         result = await repairer.repair_tool("aermod_tool", error_message)
     """
+    
+    # 错题记录文件路径
+    FAILED_CASES_FILE = "d:/mhzyapp/LivingTreeAlAgent/.workbuddy/memory/failed_cases.json"
     
     def __init__(self, llm_client=None):
         """
@@ -90,6 +94,120 @@ class ToolSelfRepairer:
         self._router = GlobalModelRouter.get_instance()
         self._installer = PackageManagerInstaller()
         self._logger = logger.bind(component="ToolSelfRepairer")
+        self._ensure_failed_cases_file()
+    
+    def _ensure_failed_cases_file(self):
+        """确保错题记录文件存在"""
+        import os
+        os.makedirs(os.path.dirname(self.FAILED_CASES_FILE), exist_ok=True)
+        if not os.path.exists(self.FAILED_CASES_FILE):
+            with open(self.FAILED_CASES_FILE, 'w', encoding='utf-8') as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+    
+    def _save_failed_case(
+        self,
+        tool_name: str,
+        error: str,
+        tool_input: Optional[Dict] = None,
+        repair_strategy: Optional[RepairStrategy] = None,
+        repair_result: Optional[RepairResult] = None
+    ):
+        """
+        保存失败案例（错题记录）
+        
+        这是"双数据飞轮"的第一环：记录错题，用于后续生成更难变体
+        
+        Args:
+            tool_name: 工具名称
+            error: 错误信息
+            tool_input: 工具输入参数
+            repair_strategy: 尝试的修复策略
+            repair_result: 修复结果
+        """
+        try:
+            import os
+            from datetime import datetime
+            
+            # 读取现有错题
+            with open(self.FAILED_CASES_FILE, 'r', encoding='utf-8') as f:
+                failed_cases = json.load(f)
+            
+            # 构造错题记录
+            case = {
+                "id": len(failed_cases) + 1,
+                "timestamp": datetime.now().isoformat(),
+                "tool_name": tool_name,
+                "error_message": error[:500],  # 限制长度
+                "tool_input": tool_input or {},
+                "repair_strategy": repair_strategy.value if repair_strategy else None,
+                "repair_success": repair_result.success if repair_result else False,
+                "repair_message": repair_result.message[:200] if repair_result else None,
+                "used_for_training": False  # 是否已用于生成变体
+            }
+            
+            # 去重：检查是否已存在相似案例
+            for existing in failed_cases:
+                if (existing["tool_name"] == tool_name and 
+                    existing["error_message"] == case["error_message"]):
+                    self._logger.info(f"错题已存在，跳过: {tool_name}")
+                    return
+            
+            # 添加新案例
+            failed_cases.append(case)
+            
+            # 保存
+            with open(self.FAILED_CASES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(failed_cases, f, ensure_ascii=False, indent=2)
+            
+            self._logger.info(f"错题已记录: {tool_name} (ID: {case['id']})")
+            
+        except Exception as e:
+            self._logger.error(f"保存错题失败: {e}")
+    
+    def get_failed_cases(self, unused_only: bool = False) -> List[Dict]:
+        """
+        获取失败案例
+        
+        Args:
+            unused_only: 是否只返回未用于训练的案例
+            
+        Returns:
+            失败案例列表
+        """
+        try:
+            with open(self.FAILED_CASES_FILE, 'r', encoding='utf-8') as f:
+                cases = json.load(f)
+            
+            if unused_only:
+                cases = [c for c in cases if not c.get("used_for_training", False)]
+            
+            return cases
+        except Exception as e:
+            self._logger.error(f"读取错题失败: {e}")
+            return []
+    
+    def mark_case_used(self, case_id: int):
+        """
+        标记案例已用于训练
+        
+        Args:
+            case_id: 案例 ID
+        """
+        try:
+            with open(self.FAILED_CASES_FILE, 'r', encoding='utf-8') as f:
+                cases = json.load(f)
+            
+            for case in cases:
+                if case["id"] == case_id:
+                    case["used_for_training"] = True
+                    break
+            
+            with open(self.FAILED_CASES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cases, f, ensure_ascii=False, indent=2)
+            
+            self._logger.info(f"已标记案例 {case_id} 为已使用")
+        except Exception as e:
+            self._logger.error(f"标记案例失败: {e}")
     
     async def repair_tool(
         self,
@@ -117,28 +235,42 @@ class ToolSelfRepairer:
         strategy = self._analyze_error(error)
         self._logger.info(f"修复策略: {strategy.value}")
         
+        result = None
+        
         # 2. 执行修复
         if strategy == RepairStrategy.INSTALL_DEPENDENCY:
-            return await self._repair_dependency(tool_name, error)
+            result = await self._repair_dependency(tool_name, error)
         
         elif strategy == RepairStrategy.FIX_CODE:
-            return await self._repair_code(tool_name, error)
+            result = await self._repair_code(tool_name, error)
         
         elif strategy == RepairStrategy.FIX_CONFIG:
-            return await self._repair_config(tool_name, error)
+            result = await self._repair_config(tool_name, error)
         
         elif strategy == RepairStrategy.REINSTALL_TOOL:
-            return await self._repair_reinstall(tool_name, error)
+            result = await self._repair_reinstall(tool_name, error)
         
         elif strategy == RepairStrategy.UPDATE_REGISTRY:
-            return await self._repair_registry(tool_name, error)
+            result = await self._repair_registry(tool_name, error)
         
         else:
-            return RepairResult(
+            result = RepairResult(
                 success=False,
                 strategy=RepairStrategy.UNKNOWN,
                 message=f"无法识别的修复策略，错误: {error[:200]}",
             )
+        
+        # 3. 记录失败案例（双数据飞轮 - 推理飞轮）
+        if not result.success:
+            self._save_failed_case(
+                tool_name=tool_name,
+                error=error,
+                tool_input=tool_input,
+                repair_strategy=strategy,
+                repair_result=result
+            )
+        
+        return result
     
     def _analyze_error(self, error: str) -> RepairStrategy:
         """

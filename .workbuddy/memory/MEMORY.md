@@ -66,13 +66,14 @@
 - Ollama 空闲时模型被 stop → `ensure_model_loaded()` + `/api/ps`
 - `__pycache__` 缓存旧代码，修改后需清理
 - Windows 用 `;` 不用 `&&`
+- GlobalModelRouter 调用：禁止直连 Ollama，必须通过 `call_model_sync()`
 
 ## 外部技能集成
 - **mattpocock/skills**: 21 个工程技能，`.workbuddy/skills/mattpocock/`
 - **agency-agents-zh**: 199 个专家角色，`.workbuddy/skills/agency-agents-zh/`
 - 总计 220 个技能，SkillsPanel 管理
 
-## .livingtree/skills 专家角色（2026-04-27 新增）
+## .livingtree/skills 专家角色
 - **已有**: chemical-expert, emergency-management, environmental-engineering-expert, equipment-expert, mechanical-expert, production-process-expert, safety-expert（7个）
 - **新增**: office-document-expert, wps-document-expert, linguistics-expert, writing-expert（4个）
 - **总计**: 12 个专家角色，存放在 `.livingtree/skills/` 目录
@@ -90,21 +91,23 @@
 - **PRESET_CLI_TOOLS 扩展**: +6 个环评 CLI 工具（mf6/swmm5/mike21/hydrus/delft3d/map）
 - **EIA_PACKAGE_PRESETS**: 12 个 Python 包（flopy/pyswmm/swmmio/wntr/mikeio 等）
 
-## 主动工具发现（2026-04-28 新增）
+## 新增功能模块（2026-04-28）
+
+### 主动工具发现
 - 路径: `client/src/business/hermes_agent/proactive_discovery_agent.py`
 - 功能: HermesAgent 增强版，主动发现并安装缺失工具
 - 核心类: `ProactiveDiscoveryAgent(BaseToolAgent)`
 - 流程: 分析任务所需工具 → 检查 ToolRegistry → 缺失时调用 NaturalLanguageToolAdder 安装 → 刷新注册表 → 执行任务
 - LLM 调用: 通过 GlobalModelRouter ✅
 
-## 工具链自动编排（2026-04-28 新增）
+### 工具链自动编排
 - 路径: `client/src/business/tool_chain_orchestrator.py`
 - 功能: 基于 TaskDecomposer 的工具链自动编排系统
 - 核心类: `ToolChainOrchestrator`, `ToolChainStep`, `ToolChainResult`
 - 特性: 支持步骤依赖、并行执行、失败重试、步骤间数据传递
 - LLM 调用: 通过 GlobalModelRouter ✅
 
-## 工具自我修复（2026-04-28 新增）
+### 工具自我修复
 - 路径: `client/src/business/self_evolution/tool_self_repairer.py`
 - 功能: 分析工具执行错误，自动修复
 - 修复策略: INSTALL_DEPENDENCY / FIX_CODE / FIX_CONFIG / REINSTALL_TOOL / UPDATE_REGISTRY
@@ -112,39 +115,49 @@
 - SelfReflectionEngine 增强: 集成 ToolSelfRepairer，工具执行失败时自动触发修复
 - `_call_llm()` 修复: 改用 GlobalModelRouter ✅
 
-## TextCorrectionTool（2026-04-28 增强）
+### TextCorrectionTool（增强）
 - 路径: `client/src/business/tools/text_correction_tool.py`
 - 功能: 上下文感知的错别字纠正工具（支持六类错别字）
 - 核心类: `TextCorrectionTool(BaseTool)`
 - 六类错别字: 同音、形近、语法、多字、少字、乱序 ⭐
-- 新增常量: `ERROR_TYPE_EXTRA`, `ERROR_TYPE_MISSING`, `ERROR_TYPE_SHUFFLE`
-- 提示词优化: 明确六类定义+示例，返回 `error_type` + `start_pos/end_pos`
-- 核心方法: `execute()`, `_correct_text_with_llm()`, `_build_correction_prompt()`, `_infer_error_type()`
 - LLM 调用: 通过 GlobalModelRouter（`capability=ModelCapability.REASONING`, temperature=0.2）
 - 自动注册: `auto_register()` 函数自动注册到 ToolRegistry
 - 语法检查: ✅ 通过（2026-04-28 重写）
 
-## SpellCheckTextEdit（2026-04-28 重构）
+### SpellCheckTextEdit（重构）
 - 路径: `client/src/presentation/components/spell_check_edit.py`
 - 功能: 实时错别字检查输入框（真正异步）
 - 核心类: `SpellCheckTextEdit(QTextEdit)`, `SpellCheckWorker(QThread)`
 - 异步模型: QThread + signal/slot（非 threading.Thread）
-- 信号: `finished(result)`, `error(msg)`, `progress(pct, msg)`
-- 零 UI 阻塞: 工作线程通过 QueuedConnection 回传结果
 - 线程清理: `_cleanup_worker()` → quit() + wait() + deleteLater()
 - 集成位置: `ei_wizard_chat.py`, `ide/panel.py`
 - 语法检查: ✅ 通过（2026-04-28 重写）
 
-## CI/CD 配置（2026-04-28 完善）
+### CI/CD 配置（完善）
 - 路径: `.github/workflows/ci.yml`
 - 多平台矩阵: ubuntu-latest, windows-latest, macos-latest
 - PyQt6 支持: 添加 `pip install PyQt6 PyQt6-Qt6`
 - 新增任务: `text-correction-test`（专项测试六类错别字）
-- 语法检查: `python -m py_compile` 检查新文件
 - YAML 语法: ✅ 通过验证
 - 部署增强: 添加企业微信 Webhook 通知
 
-## CI/CD 完善（2026-04-28 新增）
+### 双数据飞轮 MVP
+- 路径: `client/src/business/self_evolution/`
+- 灵感来源: 阿里 PAI AgenticQwen（双数据飞轮训练法）
+- 实现文件:
+  - `tool_self_repairer.py`（修改）：添加错题记录功能 → `failed_cases.json`
+  - `hard_variant_generator.py`（新建）：推理飞轮，从错题生成更难变体 → `training_pool.json`
+  - `train_with_variants.py`（新建）：使用变体测试工具选择准确率
+  - `test_dual_flywheel.py`（新建）：集成测试脚本
+- 工作流程: 工具修复失败 → 记录错题 → 生成变体 → 训练测试 → 提升准确率
+
+### 文档Skill自动提炼系统
+- 路径: `client/src/business/document_skill_extractor.py`, `semantic_skill_matcher.py`, `tools/document_skill_tool.py`, `presentation/components/document_skill_panel.py`
+- 功能: 通用文档→Skill自动提炼，支持任意文体（通知/通报/专家意见等），通过语义分析（Embedding）自动匹配触发
+- 核心类: `DocumentSkillExtractor`, `SemanticSkillMatcher`, `DocumentSkillTool`, `DocumentSkillPanel`
+- 工作流程: 文档输入 → LLM语义分析（自动识别类型）→ 生成SKILL.md + embedding.json → 保存 → 下次语义匹配自动触发
+- 匹配阈值: `SIMILARITY_THRESHOLD = 0.75`（余弦相似度）
+- 语法检查: ✅ 4个文件全部通过
 
 ## GlobalModelRouter 调用规范（2026-04-27 修复）
 - ⚠️ **禁止**直接调用 `localhost:11434` 或使用 `requests`/`aiohttp` 直连 Ollama
@@ -173,13 +186,5 @@
 - 输出: JSON Schema 参数定义 + 子命令映射
 
 ---
-
-## 文档Skill自动提炼系统（2026-04-28 新增）
-- 路径: `client/src/business/document_skill_extractor.py`, `semantic_skill_matcher.py`, `tools/document_skill_tool.py`, `presentation/components/document_skill_panel.py`
-- 功能: 通用文档→Skill自动提炼，支持任意文体（通知/通报/专家意见等），通过语义分析（Embedding）自动匹配触发
-- 核心类: `DocumentSkillExtractor`, `SemanticSkillMatcher`, `DocumentSkillTool`, `DocumentSkillPanel`
-- 工作流程: 文档输入 → LLM语义分析（自动识别类型）→ 生成SKILL.md + embedding.json → 保存 → 下次语义匹配自动触发
-- 匹配阈值: `SIMILARITY_THRESHOLD = 0.75`（余弦相似度）
-- 语法检查: ✅ 4个文件全部通过
 
 **最后更新**: 2026-04-28

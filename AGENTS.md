@@ -200,3 +200,36 @@ url = config.get("endpoints.ollama.url")
 ```
 
 **Migration**: New code should use `NanochatConfig` (dataclass-based, type-safe, 10x faster).
+
+## EXTERNAL INTEGRATION OPPORTUNITIES
+
+### caveman — Token Compression Plugin
+
+**Project**: https://github.com/JuliusBrussee/caveman ⭐48,311
+**Purpose**: Reduce LLM output tokens by ~75% while preserving technical accuracy.
+**Match Score**: 3/5 — medium compatibility; high complementarity for token cost optimization.
+
+**Integration Suggestions**:
+
+1. **GlobalModelRouter layer**: Integrate caveman's token compression into `client/src/business/global_model_router.py` to reduce LLM response size before processing.
+2. **Python adapter**: Wrap caveman's CLI (`npx skills add JuliusBrussee/caveman`) as a Python subprocess adapter in `client/src/business/self_evolution/` or a new `client/src/business/token_optimization/` module.
+3. **Target modules**: Enable output compression in LLM-heavy modules — `fusion_rag/`, `hermes_agent/`, `rys_engine/`, `verifier_engine/`.
+4. **Modes**: Expose caveman's four compression levels (Lite / Full / Ultra / 文言文) as a config option in `NanochatConfig`.
+
+**Integration Caveats**:
+- caveman is a CLI tool; a Python adapter (subprocess) is needed to call it from LivingTreeAlAgent.
+- Output compression should be optional / per-module to avoid losing nuance in tasks requiring detailed output.
+
+---
+
+### Agent Reach — Multi-Platform Search
+
+**Project**: https://github.com/Panniantong/Agent-Reach ⭐18,153
+**Purpose**: Unified CLI to read & search 14 platforms (Twitter, Reddit, YouTube, GitHub, Bilibili, etc.) with zero API fees.
+**Match Score**: 4/5 — high complementarity; search capability can be integrated into `fusion_rag/`.
+
+**Integration Suggestions**:
+
+1. **fusion_rag module**: Add Agent Reach as a new search source in `client/src/business/fusion_rag/`.
+2. **CLI adapter**: Develop a Python wrapper in `client/src/business/tools/agent_reach_tool.py` following the existing `BaseTool` pattern.
+3. **MCP ToolAdapter**: Alternatively, integrate via `client/src/business/tools/mcp_tool_adapter.py` using Agent Reach's CLI as an MCP-compatible tool.

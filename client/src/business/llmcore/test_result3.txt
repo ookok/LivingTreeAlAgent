@@ -1,0 +1,39 @@
+------------------------------------------------------------
+LLMCoreAdapter Inference Pipeline Test
+------------------------------------------------------------
+[OK] Found checkpoint: D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\cells\table_cell_v1.pt
+
+[1/3] Creating LLMCoreAdapter...
+number of parameters: 10.63M
+[OK] Adapter created successfully
+
+[2/3] Testing non-streaming generation...
+   Prompt: 'First Citizen:'
+   Generating...
+
+[FAIL] Test failed: Cannot forward sequence of length 38, block size is only 32
+Traceback (most recent call last):
+  File "D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\test_adapter.py", line 89, in <module>
+    success = test_adapter()
+  File "D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\test_adapter.py", line 46, in test_adapter
+    for chunk in adapter.chat_stream(
+                 ~~~~~~~~~~~~~~~~~~~^
+        messages,
+        ^^^^^^^^^
+    ...<2 lines>...
+        max_new_tokens=100,
+        ^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\adapter.py", line 149, in chat_stream
+    logits = self.model(input_ids)[0, -1, :]  # (vocab_size,)
+             ~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\nn\modules\module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\nn\modules\module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\mhzyapp\LivingTreeAlAgent\client\src\business\llmcore\_nanogpt_src\model.py", line 173, in forward
+    assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Cannot forward sequence of length 38, block size is only 32

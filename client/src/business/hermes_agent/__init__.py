@@ -455,3 +455,61 @@ def get_current_user_context(max_history: int = 10) -> str:
     if manager.current_user_id:
         return manager.get_context_for_llm(manager.current_user_id, max_history)
     return ""
+
+
+# ==================== 意图识别与澄清 ====================
+# 从架构指南 Phase A 新增 (2026-04-28)
+
+from client.src.business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
+from client.src.business.hermes_agent.intent_clarifier import AdaptiveClarifier, ClarificationResult, ClarificationStrategy
+from client.src.business.hermes_agent.progressive_ui_renderer import ProgressiveUIRenderer, UIRenderState, RenderPriority
+
+# ==================== 自适应学习循环 ====================
+# 从架构指南 Phase C 新增 (2026-04-28)
+
+from client.src.business.hermes_agent.adaptive_learning_loop import (
+    AdaptiveLearningLoop,
+    LearningSample,
+    Policy,
+    LearningMode,
+)
+
+# ==================== 多Agent编排 ====================
+# 从架构指南 Phase C 新增 (2026-04-28)
+
+from client.src.business.hermes_agent.multi_agent_orchestrator import (
+    MultiAgentOrchestrator,
+    Agent,
+    SubTask,
+    AgentRole,
+)
+
+
+__all__ = [
+    # 原有导出
+    "PreferenceType",
+    "UserPreference",
+    "InteractionRecord",
+    "UserProfile",
+    "UserProfileManager",
+    "get_profile_manager",
+    "get_current_user_context",
+    # 新增导出 (Phase A)
+    "Intent",
+    "IntentRecognizer",
+    "AdaptiveClarifier",
+    "ClarificationResult",
+    "ClarificationStrategy",
+    "ProgressiveUIRenderer",
+    "UIRenderState",
+    "RenderPriority",
+    # 新增导出 (Phase C)
+    "AdaptiveLearningLoop",
+    "LearningSample",
+    "Policy",
+    "LearningMode",
+    "MultiAgentOrchestrator",
+    "Agent",
+    "SubTask",
+    "AgentRole",
+]

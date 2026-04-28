@@ -12,6 +12,9 @@ BabelDoc-style Bilingual Document System - 双语对照文档系统
 
 典型工作流：
     文档输入 → 语言检测 → 智能判断(是否双语) → 翻译 → 双语渲染 → 输出
+
+新增 (2026-04-28):
+- UniversalParser: 通用文档解析器（学习型）
 """
 
 from .document_parser import DocumentParser, ParsedDocument, TextBlock, TableBlock
@@ -19,6 +22,7 @@ from .bilingual_detector import BilingualDetector, BilingualDecision, Language
 from .translator import Translator, TranslationResult, TranslationProvider
 from .renderer import BilingualRenderer, RenderFormat, RenderLayout
 from .document_manager import DocumentManager, BilingualDocument
+from .universal_parser import UniversalParser, ParsedResult, DocumentStructure, DocumentType
 
 __all__ = [
     # 解析器
@@ -41,6 +45,11 @@ __all__ = [
     # 管理器
     "DocumentManager",
     "BilingualDocument",
+    # 通用解析器 (新增 2026-04-28)
+    "UniversalParser",
+    "ParsedResult",
+    "DocumentStructure",
+    "DocumentType",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

@@ -1,222 +1,316 @@
 """
-registrar - 统一注册入口
-负责扫描和注册所有工具
+Registrar - 统一注册入口
+
+负责注册所有已实现的工具模块。
+
+遵循自我进化原则：
+- 支持延迟加载
+- 支持动态注册
+- 支持自动发现新工具
 """
 
-import os
-import importlib
-import inspect
-from typing import List, Type, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_registry import ToolRegistry
+
+def register_all_tools():
+    """注册所有已实现的工具模块"""
+    logger.info("开始注册所有工具...")
+    
+    registry = _get_registry()
+    
+    # 1. 注册网络与搜索工具
+    _register_network_tools(registry)
+    
+    # 2. 注册文档处理工具
+    _register_document_tools(registry)
+    
+    # 3. 注册数据存储与检索工具
+    _register_database_tools(registry)
+    
+    # 4. 注册任务与流程工具
+    _register_task_tools(registry)
+    
+    # 5. 注册学习与进化工具
+    _register_learning_tools(registry)
+    
+    # 6. 注册地理空间工具
+    _register_geo_tools(registry)
+    
+    # 7. 注册计算模拟工具
+    _register_simulation_tools(registry)
+    
+    # 8. 注册文本处理工具
+    _register_text_tools(registry)
+    
+    stats = registry.get_stats()
+    logger.info(f"工具注册完成，共 {stats['total_tools']} 个工具")
+    logger.info(f"工具类别分布: {stats['categories']}")
 
 
-class ToolRegistrar:
-    """
-    工具注册器
-    
-    职责：
-    - 扫描指定目录下的工具模块
-    - 自动注册所有 BaseTool 子类
-    - 支持手动注册单个工具
-    
-    用法：
-        registrar = ToolRegistrar()
-        registrar.scan_and_register("client/src/business")
-        registrar.register_tool(my_tool)
-    """
-    
-    def __init__(self, registry: Optional[ToolRegistry] = None):
-        """
-        初始化注册器
+def _get_registry():
+    """获取 ToolRegistry 实例"""
+    from .tool_registry import ToolRegistry
+    return ToolRegistry.get_instance()
+
+
+def _register_network_tools(registry):
+    """注册网络与搜索工具"""
+    try:
+        from client.src.business.web_crawler.engine import ScraplingEngine
+        from .tool_registry import ToolDefinition
         
-        Args:
-            registry: 工具注册中心实例，默认使用单例
-        """
-        self._registry = registry or ToolRegistry.get_instance()
-        self._logger = logger.bind(component="ToolRegistrar")
-        self._registered_modules: List[str] = []
-    
-    def register_tool(self, tool: BaseTool) -> bool:
-        """
-        注册单个工具
+        # 注册网页爬虫工具
+        crawler = ScraplingEngine()
+        registry.register(ToolDefinition(
+            name="web_crawler",
+            description="网页内容提取（支持自适应解析、反爬绕过、并发爬取）",
+            handler=crawler.extract,
+            parameters={"url": "str", "selector": "str", "output_format": "str"},
+            returns="CrawResult",
+            category="network"
+        ))
+    except Exception as e:
+        logger.warning(f"注册网络工具失败: {e}")
+
+
+def _register_document_tools(registry):
+    """注册文档处理工具"""
+    try:
+        from client.src.business.bilingual_doc.document_parser import DocumentParser
+        from .tool_registry import ToolDefinition
         
-        Args:
-            tool: 工具实例
-            
-        Returns:
-            是否注册成功
-        """
-        return self._registry.register_tool(tool)
-    
-    def register_from_module(self, module_name: str) -> int:
-        """
-        从模块中注册所有工具
+        # 注册文档解析工具
+        parser = DocumentParser()
+        registry.register(ToolDefinition(
+            name="document_parser",
+            description="文档解析（支持 TXT/DOCX/PDF）",
+            handler=parser.parse,
+            parameters={"file_path": "str", "output_format": "str"},
+            returns="ParsedDocument",
+            category="document"
+        ))
         
-        Args:
-            module_name: 模块名称（如 "client.src.business.web_crawler"）
-            
-        Returns:
-            成功注册的工具数量
-        """
+        # 注册 Markdown 转换工具
         try:
-            module = importlib.import_module(module_name)
-            
-            count = 0
-            for name, obj in inspect.getmembers(module):
-                # 检查是否是 BaseTool 的子类（且不是 BaseTool 本身）
-                if (inspect.isclass(obj) and 
-                    issubclass(obj, BaseTool) and 
-                    obj != BaseTool):
-                    
-                    # 实例化并注册
-                    try:
-                        tool_instance = obj()
-                        if self._registry.register_tool(tool_instance):
-                            count += 1
-                    except Exception as e:
-                        self._logger.error(f"实例化工具 {name} 失败: {e}")
-            
-            self._logger.info(f"从模块 {module_name} 注册了 {count} 个工具")
-            return count
+            from client.src.business.tools.markdown_tool.markdown_converter import MarkdownConverter
+            converter = MarkdownConverter()
+            registry.register(ToolDefinition(
+                name="markdown_converter",
+                description="将 HTML/PDF/DOCX 转换为 Markdown 格式",
+                handler=converter.convert,
+                parameters={"input_path": "str", "output_format": "str"},
+                returns="ToolResult",
+                category="document"
+            ))
+        except ImportError:
+            logger.info("Markdown 转换工具未安装，跳过注册")
+    except Exception as e:
+        logger.warning(f"注册文档工具失败: {e}")
+
+
+def _register_database_tools(registry):
+    """注册数据存储与检索工具"""
+    try:
+        from client.src.business.knowledge_vector_db import VectorDatabase
+        from client.src.business.knowledge_graph import KnowledgeGraph
+        from .tool_registry import ToolDefinition
         
-        except Exception as e:
-            self._logger.exception(f"从模块 {module_name} 注册工具失败: {e}")
-            return 0
-    
-    def scan_and_register(self, base_dir: str, recursive: bool = True) -> int:
-        """
-        扫描目录并注册所有工具
+        # 注册向量数据库工具
+        vdb = VectorDatabase()
+        registry.register(ToolDefinition(
+            name="vector_database",
+            description="向量数据库（支持 Chroma/FAISS/memory）",
+            handler=vdb.query,
+            parameters={"query": "str", "top_k": "int"},
+            returns="List[Document]",
+            category="database"
+        ))
         
-        Args:
-            base_dir: 要扫描的目录（相对于项目根目录）
-            recursive: 是否递归扫描子目录
-            
-        Returns:
-            成功注册的工具总数
-        """
-        project_root = self._get_project_root()
-        target_dir = os.path.join(project_root, base_dir)
+        # 注册知识图谱工具
+        kg = KnowledgeGraph()
+        registry.register(ToolDefinition(
+            name="knowledge_graph",
+            description="知识图谱（实体-关系建模与查询）",
+            handler=kg.query,
+            parameters={"query": "str"},
+            returns="List[Entity]",
+            category="database"
+        ))
+    except Exception as e:
+        logger.warning(f"注册数据库工具失败: {e}")
+
+
+def _register_task_tools(registry):
+    """注册任务与流程工具"""
+    try:
+        from client.src.business.task_decomposer import TaskDecomposer
+        from client.src.business.task_queue import TaskQueue
+        from .tool_registry import ToolDefinition
         
-        if not os.path.exists(target_dir):
-            self._logger.error(f"目录不存在: {target_dir}")
-            return 0
+        # 注册任务分解工具
+        decomposer = TaskDecomposer()
+        registry.register(ToolDefinition(
+            name="task_decomposer",
+            description="任务分解（分析/设计/写作类任务模板）",
+            handler=decomposer.decompose,
+            parameters={"task": "str", "task_type": "str"},
+            returns="DecomposedTask",
+            category="task"
+        ))
         
-        self._logger.info(f"开始扫描目录: {target_dir}")
+        # 注册任务队列工具
+        queue = TaskQueue()
+        registry.register(ToolDefinition(
+            name="task_queue",
+            description="任务队列（FIFO + 优先级队列）",
+            handler=queue.submit_task,
+            parameters={"task": "dict", "priority": "str"},
+            returns="TaskResult",
+            category="task"
+        ))
+    except Exception as e:
+        logger.warning(f"注册任务工具失败: {e}")
+
+
+def _register_learning_tools(registry):
+    """注册学习与进化工具"""
+    try:
+        from client.src.business.expert_learning import ExpertGuidedLearningSystem
+        from client.src.business.skill_evolution import SkillEvolutionAgent
+        from .tool_registry import ToolDefinition
         
-        total_count = 0
+        # 注册专家学习工具
+        expert_learning = ExpertGuidedLearningSystem()
+        registry.register(ToolDefinition(
+            name="expert_learning",
+            description="专家学习系统（三层学习架构）",
+            handler=expert_learning.learn,
+            parameters={"topic": "str", "data": "list"},
+            returns="LearningResult",
+            category="learning"
+        ))
         
-        # 扫描 Python 文件
-        for root, dirs, files in os.walk(target_dir):
-            # 跳过特殊目录
-            dirs[:] = [d for d in dirs if not d.startswith("_") and d not in ["__pycache__", "tests", "test"]]
-            
-            for file in files:
-                if file.endswith(".py") and not file.startswith("_"):
-                    module_path = os.path.join(root, file)
-                    module_name = self._path_to_module(module_path, project_root)
-                    
-                    if module_name:
-                        count = self.register_from_module(module_name)
-                        total_count += count
-            
-            if not recursive:
-                break
+        # 注册技能进化工具
+        skill_evolution = SkillEvolutionAgent()
+        registry.register(ToolDefinition(
+            name="skill_evolution",
+            description="技能进化（L0-L4 分层记忆系统）",
+            handler=skill_evolution.evolve,
+            parameters={"skill": "str", "experience": "dict"},
+            returns="EvolutionResult",
+            category="learning"
+        ))
+    except Exception as e:
+        logger.warning(f"注册学习工具失败: {e}")
+
+
+def _register_geo_tools(registry):
+    """注册地理空间工具"""
+    try:
+        from .tool_registry import ToolDefinition
         
-        self._logger.info(f"扫描完成，共注册 {total_count} 个工具")
-        return total_count
-    
-    def _path_to_module(self, file_path: str, project_root: str) -> Optional[str]:
-        """
-        将文件路径转换为模块名称
-        
-        Args:
-            file_path: 文件路径
-            project_root: 项目根目录
-            
-        Returns:
-            模块名称（如 "client.src.business.web_crawler.engine"）
-        """
+        # 注册距离计算工具
         try:
-            # 获取相对路径
-            rel_path = os.path.relpath(file_path, project_root)
-            
-            # 移除 .py 后缀
-            if rel_path.endswith(".py"):
-                rel_path = rel_path[:-3]
-            
-            # 转换为模块路径（用 . 替换 / 或 \）
-            module_name = rel_path.replace(os.sep, ".")
-            
-            return module_name
+            from client.src.business.tools.distance_calculator import DistanceCalculator
+            calculator = DistanceCalculator()
+            registry.register(ToolDefinition(
+                name="distance_calculator",
+                description="距离计算（Haversine 公式）",
+                handler=calculator.calculate,
+                parameters={"lat1": "float", "lon1": "float", "lat2": "float", "lon2": "float"},
+                returns="float",
+                category="geo"
+            ))
+        except ImportError:
+            logger.info("距离计算工具未安装，跳过注册")
         
-        except Exception as e:
-            self._logger.error(f"转换路径失败: {file_path}, 错误: {e}")
-            return None
-    
-    def _get_project_root(self) -> str:
-        """获取项目根目录"""
-        # registrar.py 在 client/src/business/tools/ 下
-        # 向上 4 级：tools/ → business/ → src/ → client/ → 项目根目录
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 注册高程数据工具
+        try:
+            from client.src.business.tools.elevation_tool import ElevationTool
+            elevation = ElevationTool()
+            registry.register(ToolDefinition(
+                name="elevation_tool",
+                description="高程数据获取（SRTM/GTOPO30）",
+                handler=elevation.get_elevation,
+                parameters={"lat": "float", "lon": "float"},
+                returns="float",
+                category="geo"
+            ))
+        except ImportError:
+            logger.info("高程数据工具未安装，跳过注册")
         
-        # 方法1：向上查找标记文件
-        check_dir = current_dir
-        for _ in range(10):  # 最多向上 10 级
-            # 检查标记文件
-            has_git = os.path.exists(os.path.join(check_dir, ".git"))
-            has_main = os.path.exists(os.path.join(check_dir, "main.py"))
-            
-            if has_git or has_main:
-                return check_dir
-            
-            # 向上一级
-            parent = os.path.dirname(check_dir)
-            if parent == check_dir:
-                break  # 到达文件系统根目录
-            check_dir = parent
-        
-        # 方法2：假设当前文件在 client/src/business/tools/，直接向上 4 级
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
-        return project_root
-    
-    def get_registered_modules(self) -> List[str]:
-        """获取已注册的模块列表"""
-        return self._registered_modules.copy()
-    
-    def clear_all(self):
-        """清空所有工具（用于测试）"""
-        self._registry.clear()
-        self._registered_modules.clear()
-        self._logger.info("已清空所有工具")
+        # 注册地图 API 工具
+        try:
+            from client.src.business.tools.map_api_tool import MapAPITool
+            map_api = MapAPITool()
+            registry.register(ToolDefinition(
+                name="map_api_tool",
+                description="地图 API（高德/天地图）",
+                handler=map_api.geocode,
+                parameters={"address": "str"},
+                returns="GeoResult",
+                category="geo"
+            ))
+        except ImportError:
+            logger.info("地图 API 工具未安装，跳过注册")
+    except Exception as e:
+        logger.warning(f"注册地理工具失败: {e}")
 
 
-# 便捷函数
-def auto_register_all(base_dir: str = "client/src/business") -> int:
-    """
-    自动扫描并注册所有工具（便捷函数）
-    
-    Args:
-        base_dir: 要扫描的目录
+def _register_simulation_tools(registry):
+    """注册计算模拟工具"""
+    try:
+        from .tool_registry import ToolDefinition
         
-    Returns:
-        成功注册的工具总数
-    """
-    registrar = ToolRegistrar()
-    return registrar.scan_and_register(base_dir, recursive=True)
+        # 注册大气扩散模型工具
+        try:
+            from client.src.business.tools.aermod_tool import AERMODTool
+            aermod = AERMODTool()
+            registry.register(ToolDefinition(
+                name="aermod_tool",
+                description="AERMOD 大气扩散模型",
+                handler=aermod.run,
+                parameters={"input_file": "str", "output_file": "str"},
+                returns="SimulationResult",
+                category="simulation"
+            ))
+        except ImportError:
+            logger.info("AERMOD 工具未安装，跳过注册")
+    except Exception as e:
+        logger.warning(f"注册模拟工具失败: {e}")
 
 
-def register_tool(tool: BaseTool) -> bool:
-    """
-    注册单个工具（便捷函数）
-    
-    Args:
-        tool: 工具实例
+def _register_text_tools(registry):
+    """注册文本处理工具"""
+    try:
+        from client.src.business.tools.text_correction_tool import TextCorrectionTool
+        from .tool_registry import ToolDefinition
         
-    Returns:
-        是否注册成功
+        # 注册错别字纠正工具
+        corrector = TextCorrectionTool()
+        registry.register(ToolDefinition(
+            name="text_correction",
+            description="错别字纠正（上下文感知）",
+            handler=corrector.correct,
+            parameters={"text": "str", "context": "str"},
+            returns="CorrectionResult",
+            category="text"
+        ))
+    except Exception as e:
+        logger.warning(f"注册文本工具失败: {e}")
+
+
+def register_tool(tool_class):
     """
-    registry = ToolRegistry.get_instance()
-    return registry.register_tool(tool)
+    装饰器：注册单个工具
+    
+    Usage:
+        @register_tool
+        class MyTool(BaseTool):
+            ...
+    """
+    def wrapper(cls):
+        instance = cls()
+        instance.register()
+        return cls
+    return wrapper

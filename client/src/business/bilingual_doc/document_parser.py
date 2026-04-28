@@ -3,6 +3,11 @@ Document Parser - 文档解析器
 ============================
 
 支持多种文档格式的解析，提取文本、表格、图像等结构化内容。
+
+集成 Microsoft MarkItDown：
+- 支持 PDF/DOC/XLS/PPT → Markdown 转换
+- 将转换结果纳入 RAG 检索
+- LLM 优化的输出格式
 """
 
 import re
@@ -12,6 +17,13 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
 from enum import Enum
 from pathlib import Path
+
+# MarkItDown 集成
+try:
+    from markitdown import MarkItDown
+    MARKITDOWN_AVAILABLE = True
+except ImportError:
+    MARKITDOWN_AVAILABLE = False
 
 
 class BlockType(Enum):
@@ -413,16 +425,153 @@ class DOCXParser(BaseParser):
         return TextParser().parse(file_path)
 
 
+class MarkItDownParser(BaseParser):
+    """
+    MarkItDown 解析器
+    
+    使用 Microsoft MarkItDown 将多种格式转换为 Markdown。
+    支持: PDF, Word, Excel, PowerPoint, HTML, Images, Audio, YouTube 等
+    
+    特点:
+    - 保留文档结构（标题、列表、表格、链接）
+    - LLM 优化的输出格式
+    - 降低 token 占用成本
+    - 提高 LLM 理解效率
+    """
+
+    SUPPORTED_EXTENSIONS = [
+        '.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt',
+        '.html', '.htm', '.csv', '.json', '.xml',
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp',
+        '.zip', '.epub'
+    ]
+
+    def __init__(self, llm_client=None, llm_model=None):
+        self._md = None
+        self._llm_client = llm_client
+        self._llm_model = llm_model
+
+    def _init_markitdown(self):
+        """初始化 MarkItDown"""
+        if self._md is None and MARKITDOWN_AVAILABLE:
+            self._md = MarkItDown(
+                enable_plugins=True,
+                llm_client=self._llm_client,
+                llm_model=self._llm_model
+            )
+
+    def is_supported(self, file_path: str) -> bool:
+        """是否支持该文件"""
+        ext = Path(file_path).suffix.lower()
+        return ext in self.SUPPORTED_EXTENSIONS
+
+    def parse(self, file_path: str) -> ParsedDocument:
+        """使用 MarkItDown 解析文档"""
+        self._init_markitdown()
+
+        if self._md is None:
+            # 如果 MarkItDown 不可用，使用回退解析
+            return self._fallback_parse(file_path)
+
+        try:
+            result = self._md.convert(file_path)
+            
+            # 解析 Markdown 输出
+            blocks = []
+            lines = result.text_content.split('\n')
+            page_num = 1
+
+            for line in lines:
+                if line.strip() == '':
+                    continue
+
+                block_type = self._detect_block_type(line)
+                blocks.append(TextBlock(
+                    text=line,
+                    block_type=block_type,
+                    page_num=page_num
+                ))
+
+                if len(blocks) % 50 == 0:
+                    page_num += 1
+
+            file_name = Path(file_path).name
+            return ParsedDocument(
+                file_path=file_path,
+                file_name=file_name,
+                text_blocks=blocks,
+                raw_text=result.text_content,
+                metadata={
+                    'format': Path(file_path).suffix.lower()[1:],
+                    'engine': 'markitdown',
+                    'token_efficient': True,
+                    'llm_optimized': True
+                }
+            )
+        except Exception as e:
+            # 解析失败，使用回退方案
+            return self._fallback_parse(file_path)
+
+    def _detect_block_type(self, line: str) -> BlockType:
+        """检测块类型"""
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            return BlockType.HEADING
+        elif stripped.startswith('```'):
+            return BlockType.CODE
+        elif stripped.startswith('|'):
+            return BlockType.TABLE
+        elif stripped.startswith(('- ', '* ', '+ ')) or re.match(r'^\d+\.', stripped):
+            return BlockType.LIST
+        elif stripped.startswith('[') and '](' in stripped:
+            # 链接或图片
+            if stripped.startswith('!['):
+                return BlockType.IMAGE
+        return BlockType.TEXT
+
+    def _fallback_parse(self, file_path: str) -> ParsedDocument:
+        """回退解析方案"""
+        ext = Path(file_path).suffix.lower()
+        
+        if ext == '.pdf':
+            return PDFParser().parse(file_path)
+        elif ext in ['.docx', '.doc']:
+            return DOCXParser().parse(file_path)
+        elif ext in ['.md', '.markdown']:
+            return MarkdownParser().parse(file_path)
+        else:
+            return TextParser().parse(file_path)
+
+    def convert_to_markdown(self, file_path: str) -> str:
+        """直接转换为 Markdown 字符串"""
+        self._init_markitdown()
+        
+        if self._md is None:
+            # 回退到基本解析
+            parsed = self._fallback_parse(file_path)
+            return parsed.to_plain_text()
+        
+        result = self._md.convert(file_path)
+        return result.text_content
+
+
 class DocumentParser:
     """文档解析器主类"""
 
-    def __init__(self):
-        self.parsers: List[BaseParser] = [
+    def __init__(self, use_markitdown: bool = True, llm_client=None, llm_model=None):
+        self.parsers: List[BaseParser] = []
+        
+        # 如果启用 MarkItDown，优先使用
+        if use_markitdown and MARKITDOWN_AVAILABLE:
+            self.parsers.append(MarkItDownParser(llm_client, llm_model))
+        
+        # 添加其他解析器作为回退
+        self.parsers.extend([
             PDFParser(),
             DOCXParser(),
             MarkdownParser(),
             TextParser(),
-        ]
+        ])
 
     def parse(self, file_path: str) -> ParsedDocument:
         """解析文档"""

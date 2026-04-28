@@ -180,13 +180,24 @@ class AutonomousToolCreator:
 学习材料：
 {learning_materials[:2000]}  # 限制长度
 
-要求：
+=== 简单优先原则（必须遵守）===
+1. KEEP IT SIMPLE: 优先选择最简单的解决方案
+2. NO OVER-ENGINEERING: 避免过度工程化，不使用不必要的抽象
+3. MINIMAL DEPENDENCIES: 使用最少的依赖
+4. STRAIGHTFORWARD: 代码应该直接、易于理解
+5. AVOID PATTERNS: 除非绝对必要，否则不要使用设计模式
+6. SINGLE RESPONSIBILITY: 工具只做一件事，并且做好
+
+=== 代码要求 ===
 1. 创建一个继承自 BaseTool 的工具类
 2. 类名格式：{tool_name.title().replace('_', '')}Tool
 3. 实现 __init__ 方法和 execute 方法
 4. 添加完整的文档字符串
 5. 处理所有可能的异常
 6. 返回 ToolResult 对象
+7. 保持代码简洁，避免不必要的复杂性
+8. 不要创建不必要的辅助类或函数
+9. 优先使用标准库，避免引入额外依赖
 
 代码模板：
 ```python
@@ -205,7 +216,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
             category="auto",
             tags=["auto", "{tool_name}"]
         )
-        # 初始化代码
+        # 初始化代码（保持简单）
         
     def execute(self, **kwargs):
         \"\"\"
@@ -218,7 +229,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
             ToolResult
         \"\"\"
         try:
-            # 执行逻辑
+            # 直接、简单的执行逻辑
             result = None  # 替换为实际逻辑
             
             return ToolResult.ok(
@@ -239,6 +250,31 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
             # 提取代码块
             code = self._extract_code(response)
             
+            # 检查代码复杂度（简单优先约束）
+            complexity_result = self._check_simple_first(code)
+            if not complexity_result["pass"]:
+                self._logger.warning(f"  代码复杂度检查失败: {complexity_result['reason']}")
+                # 重新生成代码
+                self._logger.info("  重新生成代码以满足简单优先原则...")
+                simple_prompt = f"""
+以下代码不符合简单优先原则：
+
+代码：
+{code}
+
+问题：{complexity_result['reason']}
+
+请简化代码，遵循以下原则：
+1. 移除不必要的抽象和类
+2. 使用简单直接的实现
+3. 减少不必要的依赖
+4. 保持代码行数最少
+
+请只输出简化后的完整 Python 代码。
+"""
+                response = await self._call_llm(simple_prompt)
+                code = self._extract_code(response)
+            
             self._logger.info("  代码生成完成")
             
             return code
@@ -246,6 +282,55 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
         except Exception as e:
             self._logger.error(f"  代码生成失败: {e}")
             raise
+    
+    def _check_simple_first(self, code: str) -> Dict[str, Any]:
+        """
+        检查代码是否符合简单优先原则
+        
+        Args:
+            code: 生成的代码
+            
+        Returns:
+            {"pass": bool, "reason": str}
+        """
+        lines = code.strip().split('\n')
+        line_count = len(lines)
+        
+        # 检查代码行数（不应超过 100 行）
+        if line_count > 100:
+            return {"pass": False, "reason": f"代码行数过多 ({line_count} 行)，应简化"}
+        
+        # 检查类数量（应该只有一个工具类）
+        class_count = sum(1 for line in lines if line.strip().startswith('class '))
+        if class_count > 1:
+            return {"pass": False, "reason": f"类数量过多 ({class_count} 个)，应只保留一个工具类"}
+        
+        # 检查函数数量（应该只有必要的方法）
+        func_count = sum(1 for line in lines if line.strip().startswith('def '))
+        if func_count > 5:  # __init__, execute, 以及最多 3 个辅助方法
+            return {"pass": False, "reason": f"函数数量过多 ({func_count} 个)，应简化"}
+        
+        # 检查导入数量（应最少）
+        import_count = sum(1 for line in lines if line.strip().startswith(('import ', 'from ')))
+        if import_count > 5:
+            return {"pass": False, "reason": f"导入数量过多 ({import_count} 个)，应减少依赖"}
+        
+        # 检查嵌套层数（不应过深）
+        max_indent = 0
+        for line in lines:
+            indent = len(line) - len(line.lstrip())
+            if indent > max_indent:
+                max_indent = indent
+        if max_indent > 20:  # 超过 5 层嵌套（每层约 4 空格）
+            return {"pass": False, "reason": f"代码嵌套过深 (缩进 {max_indent} 空格)，应简化"}
+        
+        # 检查是否有不必要的设计模式术语
+        pattern_terms = ["Singleton", "Factory", "Builder", "Observer", "Strategy", "Decorator"]
+        for term in pattern_terms:
+            if term in code:
+                return {"pass": False, "reason": f"使用了不必要的设计模式 ({term})"}
+        
+        return {"pass": True, "reason": "代码符合简单优先原则"}
     
     async def _write_code_to_file(self, tool_name: str, code: str) -> str:
         """将代码写入到文件"""

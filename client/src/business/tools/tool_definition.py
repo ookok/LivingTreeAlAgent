@@ -1,83 +1,84 @@
 """
-ToolDefinition - 工具定义数据类
-定义工具的元数据结构
+ToolDefinition - 工具定义
+
+定义工具的元数据，用于工具注册和发现。
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable
+from typing import Dict, Callable, Any, Optional
 
 
 @dataclass
 class ToolDefinition:
-    """工具定义 - 描述一个工具的完整元数据"""
+    """
+    工具定义
     
-    name: str                                           # 工具名称（唯一标识）
-    description: str                                    # 工具描述（用于 LLM 理解）
-    handler: Optional[Callable] = None                 # 工具处理函数
-    parameters: Dict[str, Any] = field(default_factory=dict)   # 参数定义（JSON Schema 格式）
-    returns: Dict[str, Any] = field(default_factory=dict)      # 返回值定义
-    category: str = "general"                          # 工具分类
-    version: str = "1.0.0"                            # 工具版本
-    is_builtin: bool = False                           # 是否内置工具
-    is_enabled: bool = True                            # 是否启用
-    dependencies: List[str] = field(default_factory=list)      # 依赖的其他工具
-    tags: List[str] = field(default_factory=list)              # 标签（用于搜索/分类）
-    examples: List[Dict[str, Any]] = field(default_factory=list)  # 使用示例
+    用于描述工具的元数据，包括名称、描述、处理函数、参数等。
+    """
     
+    name: str
+    """工具名称"""
+    
+    description: str
+    """工具描述"""
+    
+    handler: Callable
+    """工具处理函数"""
+    
+    parameters: Dict[str, str] = field(default_factory=dict)
+    """参数 schema，key 为参数名，value 为参数类型"""
+    
+    returns: str = "ToolResult"
+    """返回值 schema"""
+    
+    category: str = "general"
+    """工具类别（network/document/database/task/learning/geo/simulation）"""
+    
+    version: str = "1.0"
+    """工具版本"""
+    
+    author: str = "system"
+    """工具作者"""
+    
+    enabled: bool = True
+    """是否启用"""
+    
+    tags: Optional[list] = None
+    """工具标签"""
+
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典（用于序列化）"""
+        """转换为字典"""
         return {
             "name": self.name,
             "description": self.description,
-            "parameters": self.parameters,
-            "returns": self.returns,
             "category": self.category,
             "version": self.version,
-            "is_builtin": self.is_builtin,
-            "is_enabled": self.is_enabled,
-            "dependencies": self.dependencies,
-            "tags": self.tags,
-            "examples": self.examples
+            "author": self.author,
+            "parameters": self.parameters,
+            "returns": self.returns,
+            "enabled": self.enabled,
+            "tags": self.tags or [],
         }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ToolDefinition":
-        """从字典创建"""
-        return cls(**data)
-    
-    def validate_params(self, params: Dict[str, Any]) -> tuple[bool, str]:
+
+    def is_compatible(self, query: str) -> float:
         """
-        验证参数是否符合定义
+        判断工具是否与查询兼容
         
         Args:
-            params: 待验证的参数
+            query: 用户查询
             
         Returns:
-            (is_valid, error_message)
+            匹配度（0-1）
         """
-        # 检查必需参数
-        required = self.parameters.get("required", [])
-        for param in required:
-            if param not in params:
-                return False, f"缺少必需参数: {param}"
+        query_lower = query.lower()
+        description_lower = self.description.lower()
         
-        # 检查参数类型（简单检查）
-        properties = self.parameters.get("properties", {})
-        for param_name, param_value in params.items():
-            if param_name in properties:
-                expected_type = properties[param_name].get("type")
-                if expected_type:
-                    # 简单类型检查
-                    type_map = {
-                        "string": str,
-                        "number": (int, float),
-                        "integer": int,
-                        "boolean": bool,
-                        "array": list,
-                        "object": dict
-                    }
-                    if expected_type in type_map:
-                        if not isinstance(param_value, type_map[expected_type]):
-                            return False, f"参数 {param_name} 类型错误，期望 {expected_type}"
+        # 简单匹配：检查关键词
+        match_count = 0
+        keywords = query_lower.split()
         
-        return True, ""
+        for keyword in keywords:
+            if keyword in description_lower or keyword in self.name.lower():
+                match_count += 1
+        
+        return match_count / max(len(keywords), 1)

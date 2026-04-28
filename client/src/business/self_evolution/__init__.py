@@ -11,6 +11,11 @@
 7. ProxySourceManager - 代理源管理器（代理池/自动测试/自动切换）
 8. CLIToolDiscoverer - CLI 工具发现器（扫描PATH/帮助解析/自动封装）
 9. ModelAutoDetectorAndUpgrader - 模型自动检测与升级器（能力测试/对比/自动升级）
+10. DeterministicExecutor - 确定性执行器（有状态可干预运行时）
+11. ModelNativeDSL - LLM优化的领域特定语言
+12. AntiRationalizationTable - 反合理化表（防止错误推理模式）
+
+核心原则：不预置逻辑和模板，一切通过学习、交互和反馈不断进化
 """
 
 from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
@@ -25,6 +30,25 @@ from client.src.business.self_evolution.model_auto_detector_and_upgrader import 
     ModelAutoDetectorAndUpgrader,
     ModelProfile,
     UpgradeDecision,
+)
+from client.src.business.self_evolution.deterministic_executor import (
+    DeterministicExecutor,
+    ExecutionStatus,
+    InterventionType,
+    ExecutionSnapshot,
+    ExecutionStep,
+    ExecutionContext,
+)
+from client.src.business.self_evolution.model_native_dsl import (
+    ModelNativeDSL,
+    DSLTokenType,
+    DSLCommand,
+    DSLToken,
+    DSLNode,
+)
+from client.src.business.self_evolution.anti_rationalization_table import (
+    AntiRationalizationTable,
+    AntiRationalizationRule,
 )
 from typing import Any, Dict, List
 from loguru import logger
@@ -43,6 +67,21 @@ __all__ = [
     "ModelAutoDetectorAndUpgrader",
     "ModelProfile",
     "UpgradeDecision",
+    # 确定性执行与 DSL（2 个）
+    "DeterministicExecutor",
+    "ExecutionStatus",
+    "InterventionType",
+    "ExecutionSnapshot",
+    "ExecutionStep",
+    "ExecutionContext",
+    "ModelNativeDSL",
+    "DSLTokenType",
+    "DSLCommand",
+    "DSLToken",
+    "DSLNode",
+    # 反合理化表
+    "AntiRationalizationTable",
+    "AntiRationalizationRule",
     # 整合引擎
     "SelfEvolutionEngine",
     "enable_self_evolution_for_agent",

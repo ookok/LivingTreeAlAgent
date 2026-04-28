@@ -2,6 +2,8 @@
 多通道通信管理器
 
 管理不同类型的通信通道: 文本/文件/语音/视频/直播/邮件
+
+配置来源：NanochatConfig (client/src/business/nanochat_config.py)
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from typing import Callable, Optional, Dict, List
 
 from .models import (ChannelType, ChannelSession, P2PConnection, 
                     ConnectionStatus, NodeProfile)
+from client.src.business.nanochat_config import config
 
 logger = logging.getLogger(__name__)
 
@@ -192,8 +195,7 @@ class MultiChannelManager:
                                peer: NodeProfile) -> bool:
         """尝试P2P穿透连接"""
         try:
-            # 复用 nat_traversal 模块
-            from core.p2p_knowledge.nat_traversal import NATTraversal
+            from client.src.business.p2p_knowledge.nat_traversal import NATTraversal
             
             nat = NATTraversal()
             result = await nat.try_hole_punch(peer.public_ip, peer.public_port)
@@ -215,24 +217,22 @@ class MultiChannelManager:
             if not peer.relay_hosts:
                 return False
             
-            # 使用 relay_client
-            from core.lightweight_ui.relay_client import RelayClient, RelayServerConfig
+            from client.src.business.relay_client import AsyncRelayClient
             
             relay_host = peer.relay_hosts[0].split(":")
             host = relay_host[0]
             port = int(relay_host[1]) if len(relay_host) > 1 else 8888
             
-            config = RelayServerConfig(host=host, port=port)
-            client = RelayClient(config)
+            server_url = f"ws://{host}:{port}"
+            client = AsyncRelayClient(server_url)
             
             await client.connect()
             
-            if client.is_connected():
+            if client.state == "connected" or client.state.value == "connected":
                 connection.relay_server = f"{host}:{port}"
                 connection.via_relay = True
                 
-                # 注册连接
-                await client.send_peer_message(peer.node_id, {
+                await client.send({
                     "type": "connect_request",
                     "connection_id": connection.connection_id,
                     "from_node": self.node_id

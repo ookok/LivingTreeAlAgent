@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2026-04-28T10:00:00",
+    "tool_name": "groundwater_tool",
+    "error_message": "ModuleNotFoundError: No module named 'flopy'",
+    "tool_input": {
+      "model_type": "MODFLOW-6"
+    },
+    "repair_strategy": "install_dependency",
+    "repair_success": false,
+    "used_for_training": false
+  },
+  {
+    "id": 2,
+    "timestamp": "2026-04-28T10:05:00",
+    "tool_name": "aermod_tool",
+    "error_message": "FileNotFoundError: aermod.exe not found",
+    "tool_input": {
+      "project_name": "test"
+    },
+    "repair_strategy": "fix_config",
+    "repair_success": false,
+    "used_for_training": false
+  },
+  {
+    "id": 3,
+    "timestamp": "2026-04-28T10:10:00",
+    "tool_name": "noise_model_tool",
+    "error_message": "ValueError: Invalid frequency range",
+    "tool_input": {
+      "frequency": 20000
+    },
+    "repair_strategy": "fix_code",
+    "repair_success": false,
+    "used_for_training": false
+  }
+]

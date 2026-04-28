@@ -13,6 +13,11 @@ L4 异构执行层:
 - write_back_cache: L4 结果回填缓存
 - l4_aware_router: L4 感知智能路由
 
+RAG 优化层 (2026-04-28 新增):
+- query_classifier: 判断查询是否需要检索
+- query_transformer: 查询重写与分解
+- reranker: 检索结果重新排序
+
 核心模块:
 - exact_cache: 精确缓存层
 - session_cache: 会话缓存层
@@ -41,6 +46,11 @@ from .l4_executor import L4RelayExecutor, L4ExecutionError, get_l4_executor, exe
 from .write_back_cache import WriteBackCache, get_write_back_cache
 from .l4_aware_router import L4AwareRouter, L4RouterError, get_l4_aware_router
 
+# RAG 优化层（2026-04-28 新增）
+from .query_classifier import QueryClassifier, ClassificationResult
+from .query_transformer import QueryTransformer, TransformResult
+from .reranker import Reranker, RerankItem
+
 __all__ = [
     # 基础缓存层
     "ExactCacheLayer",
@@ -64,6 +74,14 @@ __all__ = [
     "L4AwareRouter",
     "L4RouterError",
 
+    # RAG 优化层
+    "QueryClassifier",
+    "ClassificationResult",
+    "QueryTransformer",
+    "TransformResult",
+    "Reranker",
+    "RerankItem",
+
     # 工具函数
     "get_l4_executor",
     "execute_via_l4",
@@ -71,4 +89,4 @@ __all__ = [
     "get_l4_aware_router",
 ]
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"

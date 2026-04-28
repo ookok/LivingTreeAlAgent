@@ -103,6 +103,39 @@ class ModelBackend(Enum):
     MOCK = "mock"  # 测试用
 
 
+class LogLevel(Enum):
+    """日志级别"""
+    DEBUG = "debug"
+    INFO = "info"
+    WARN = "warn"
+    ERROR = "error"
+
+
+class HealthStatus(Enum):
+    """健康状态"""
+    HEALTHY = "healthy"       # 健康
+    DEGRADED = "degraded"    # 降级（部分功能可用）
+    UNHEALTHY = "unhealthy"   # 不健康
+    UNKNOWN = "unknown"       # 未知
+
+
+class LoadBalancingStrategy(Enum):
+    """负载均衡策略"""
+    ROUND_ROBIN = "round_robin"       # 轮询
+    LEAST_LOAD = "least_load"         # 最小负载
+    WEIGHTED_ROUND_ROBIN = "weighted_round_robin"  # 加权轮询
+    RANDOM = "random"                 # 随机
+
+
+class CompressionLevel(Enum):
+    """caveman 压缩级别"""
+    DISABLED = "disabled"     # 禁用压缩
+    LITE = "lite"             # 轻度压缩
+    FULL = "full"             # 完全压缩（默认）
+    ULTRA = "ultra"           # 极致压缩
+    WENYAN = "wenyan"         # 文言文模式（趣味模式）
+
+
 @dataclass
 class RoutingWeights:
     """
@@ -311,14 +344,50 @@ class GlobalModelRouter:
         # 设置默认分层路由
         self._setup_default_tier_routing()
         
+        # ========== 日志级别配置 ==========
+        self._log_level: LogLevel = LogLevel.INFO
+        self._request_logs: List[dict] = []  # 请求日志列表
+        self._max_request_logs: int = 1000   # 最大日志条数
+        
+        # ========== 健康检查配置 ==========
+        self._health_check_interval: int = 60  # 健康检查间隔（秒）
+        self._health_check_thread: Optional[threading.Thread] = None
+        self._health_check_stop_event = threading.Event()
+        self._health_check_running: bool = False
+        
+        # 健康状态缓存
+        self._backend_health: Dict[str, dict] = {}  # {backend_url: {"status": ..., "last_check": ..., "models": [...]}}
+        
         # 心跳检测相关字段
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._heartbeat_stop_event = threading.Event()
         self._heartbeat_interval: int = 30  # 心跳间隔（秒）
         self._heartbeat_running: bool = False
         
-        # 启动心跳检测
+        # ========== API Key 校验 ==========
+        self._api_key_validation_enabled: bool = False
+        self._valid_api_keys: List[str] = []  # 有效的 API Key 列表
+        self._api_key_header: str = "X-API-Key"  # API Key 请求头
+        
+        # ========== 负载均衡配置 ==========
+        self._load_balancing_enabled: bool = True
+        self._load_balancing_strategy: LoadBalancingStrategy = LoadBalancingStrategy.ROUND_ROBIN
+        self._server_weights: Dict[str, float] = {}  # 服务器权重 {url: weight}
+        
+        # ========== caveman 压缩配置 ==========
+        self._caveman_enabled: bool = False  # 是否启用 token 压缩
+        self._caveman_level: CompressionLevel = CompressionLevel.FULL  # 压缩级别
+        self._caveman_compress_input: bool = False  # 是否压缩输入
+        self._caveman_min_tokens: int = 200  # 最小 token 数才触发压缩
+        self._caveman_available: bool = False  # caveman 是否可用
+        self._caveman_tool = None  # caveman 工具实例
+        
+        # 检查 caveman 可用性
+        self._check_caveman_availability()
+        
+        # 启动心跳检测和健康检查
         self.start_heartbeat()
+        self.start_health_check()
 
     # ------------------------------------------------------------------ #
     #  _setup_default_tier_routing  <<  自动分配 L0-L4 层级  >>
@@ -2013,6 +2082,697 @@ class GlobalModelRouter:
         
         return status
 
+    # ============= 健康检查机制 =============
+
+    def start_health_check(self, interval: int = 60):
+        """
+        启动健康检查（后台线程）
+        
+        Args:
+            interval: 健康检查间隔（秒），默认 60 秒
+        
+        健康检查功能：
+        - 自动探测后端可用性（Ollama /api/ps、DeepSeek /health）
+        - 动态更新实例健康状态
+        - 支持配置健康检查间隔
+        """
+        if self._health_check_running:
+            logger.warning("健康检查已在运行")
+            return
+        
+        self._health_check_interval = interval
+        self._health_check_stop_event.clear()
+        self._health_check_running = True
+        
+        self._health_check_thread = threading.Thread(
+            target=self._health_check_loop,
+            daemon=True,
+            name="ModelRouter-HealthCheck"
+        )
+        self._health_check_thread.start()
+        logger.info(f"🏥 健康检查已启动（间隔: {interval}秒）")
+
+    def stop_health_check(self):
+        """停止健康检查"""
+        if not self._health_check_running:
+            return
+        
+        self._health_check_stop_event.set()
+        if self._health_check_thread and self._health_check_thread.is_alive():
+            self._health_check_thread.join(timeout=5)
+        self._health_check_running = False
+        logger.info("⏹️ 健康检查已停止")
+
+    def _health_check_loop(self):
+        """
+        健康检查循环（后台线程运行）
+        定期检查所有后端服务的健康状态
+        """
+        logger.info("🔄 健康检查线程已启动")
+        
+        while not self._health_check_stop_event.is_set():
+            try:
+                self._do_health_check()
+            except Exception as e:
+                logger.error(f"健康检查异常: {e}")
+            
+            # 等待下一个周期
+            self._health_check_stop_event.wait(self._health_check_interval)
+        
+        logger.info("🔄 健康检查线程已退出")
+
+    def _do_health_check(self):
+        """
+        执行一次完整的健康检查
+        1. 检查所有 Ollama 后端（/api/ps）
+        2. 检查所有 OpenAI/DeepSeek 后端（/health 或 /v1/models）
+        3. 更新模型的健康状态
+        """
+        # 检查 Ollama 后端
+        self._check_ollama_backends()
+        
+        # 检查 OpenAI/DeepSeek 后端
+        self._check_openai_backends()
+
+    def _check_ollama_backends(self):
+        """检查所有 Ollama 后端健康状态"""
+        server_urls = set()
+        model_server_map = {}
+        
+        for model_id, model_info in self.models.items():
+            if model_info.backend == ModelBackend.OLLAMA:
+                url = model_info.config.get("url", "")
+                if url:
+                    server_urls.add(url)
+                    if url not in model_server_map:
+                        model_server_map[url] = []
+                    model_server_map[url].append(model_id)
+        
+        for url in server_urls:
+            health_data = self._check_ollama_health(url)
+            self._backend_health[url] = health_data
+            
+            # 更新模型可用性
+            for model_id in model_server_map.get(url, []):
+                self.models[model_id].is_available = health_data.get("status") == "healthy"
+            
+            if self._log_level == LogLevel.DEBUG:
+                logger.debug(f"Ollama 健康检查: {url} → {health_data.get('status')}")
+
+    def _check_ollama_health(self, url: str) -> dict:
+        """
+        检查单个 Ollama 后端健康状态
+        
+        Args:
+            url: Ollama 服务器地址
+        
+        Returns:
+            {"status": "healthy"/"unhealthy"/"unknown", "last_check": timestamp, "models": [...], "message": "..."}
+        """
+        try:
+            import aiohttp
+            import asyncio
+            
+            async def _check():
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                    # 使用 /api/ps 端点检测（返回已加载的模型列表）
+                    ps_url = f"{url.rstrip('/')}/api/ps"
+                    async with session.get(ps_url) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            loaded_models = [m.get("name", "") for m in data.get("models", [])]
+                            return {
+                                "status": "healthy",
+                                "last_check": time.time(),
+                                "models": loaded_models,
+                                "message": f"Ollama 服务正常，已加载 {len(loaded_models)} 个模型",
+                                "backend_type": "ollama",
+                                "url": url
+                            }
+                        else:
+                            return {
+                                "status": "unhealthy",
+                                "last_check": time.time(),
+                                "models": [],
+                                "message": f"HTTP 状态码: {resp.status}",
+                                "backend_type": "ollama",
+                                "url": url
+                            }
+            
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(_check())
+            loop.close()
+            return result
+        
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "last_check": time.time(),
+                "models": [],
+                "message": str(e),
+                "backend_type": "ollama",
+                "url": url
+            }
+
+    def _check_openai_backends(self):
+        """检查所有 OpenAI/DeepSeek 后端健康状态"""
+        server_urls = set()
+        model_server_map = {}
+        
+        for model_id, model_info in self.models.items():
+            if model_info.backend == ModelBackend.OPENAI:
+                url = model_info.config.get("base_url", "")
+                if url:
+                    server_urls.add(url)
+                    if url not in model_server_map:
+                        model_server_map[url] = []
+                    model_server_map[url].append(model_id)
+        
+        for url in server_urls:
+            health_data = self._check_openai_health(url)
+            self._backend_health[url] = health_data
+            
+            # 更新模型可用性
+            for model_id in model_server_map.get(url, []):
+                self.models[model_id].is_available = health_data.get("status") == "healthy"
+            
+            if self._log_level == LogLevel.DEBUG:
+                logger.debug(f"OpenAI/DeepSeek 健康检查: {url} → {health_data.get('status')}")
+
+    def _check_openai_health(self, url: str) -> dict:
+        """
+        检查单个 OpenAI/DeepSeek 后端健康状态
+        
+        Args:
+            url: 后端服务器地址
+        
+        Returns:
+            {"status": "healthy"/"unhealthy"/"unknown", "last_check": timestamp, "message": "..."}
+        """
+        try:
+            # 尝试多个健康检查端点
+            endpoints = [
+                "/health",
+                "/v1/models",
+                "/api/models"
+            ]
+            
+            import requests
+            
+            for endpoint in endpoints:
+                try:
+                    check_url = f"{url.rstrip('/')}{endpoint}"
+                    response = requests.get(check_url, timeout=10)
+                    
+                    if response.status_code == 200:
+                        try:
+                            data = response.json()
+                            model_count = len(data.get("data", [])) if isinstance(data, dict) else 0
+                            return {
+                                "status": "healthy",
+                                "last_check": time.time(),
+                                "models": data.get("data", [])[:3],  # 返回前3个模型
+                                "message": f"服务正常，可用模型: {model_count}",
+                                "backend_type": "openai",
+                                "url": url
+                            }
+                        except:
+                            return {
+                                "status": "healthy",
+                                "last_check": time.time(),
+                                "models": [],
+                                "message": "服务正常（非JSON响应）",
+                                "backend_type": "openai",
+                                "url": url
+                            }
+                except Exception:
+                    continue
+            
+            return {
+                "status": "unhealthy",
+                "last_check": time.time(),
+                "models": [],
+                "message": "所有端点均不可达",
+                "backend_type": "openai",
+                "url": url
+            }
+        
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "last_check": time.time(),
+                "models": [],
+                "message": str(e),
+                "backend_type": "openai",
+                "url": url
+            }
+
+    def get_health_summary(self) -> dict:
+        """
+        获取健康状态摘要
+        
+        Returns:
+            {
+                "overall": "healthy"/"degraded"/"unhealthy",
+                "backends": {...},
+                "available_models": int,
+                "total_models": int,
+                "last_check": timestamp
+            }
+        """
+        total_models = len(self.models)
+        available_models = sum(1 for m in self.models.values() if m.is_available)
+        
+        # 判断整体状态
+        if available_models == 0:
+            overall_status = "unhealthy"
+        elif available_models == total_models:
+            overall_status = "healthy"
+        else:
+            overall_status = "degraded"
+        
+        return {
+            "overall": overall_status,
+            "backends": self._backend_health,
+            "available_models": available_models,
+            "total_models": total_models,
+            "last_check": time.time()
+        }
+
+    def set_health_check_interval(self, interval: int):
+        """
+        设置健康检查间隔
+        
+        Args:
+            interval: 间隔时间（秒）
+        """
+        self._health_check_interval = interval
+        logger.info(f"健康检查间隔已设置为 {interval} 秒")
+
+    # ============= 日志级别配置 =============
+
+    def set_log_level(self, level: Union[str, LogLevel]):
+        """
+        设置日志级别
+        
+        Args:
+            level: 日志级别（debug/info/warn/error 或 LogLevel 枚举）
+        """
+        if isinstance(level, str):
+            try:
+                self._log_level = LogLevel(level.lower())
+            except ValueError:
+                logger.warning(f"无效的日志级别: {level}，使用默认值 INFO")
+                self._log_level = LogLevel.INFO
+        elif isinstance(level, LogLevel):
+            self._log_level = level
+        
+        # 设置 logger 级别
+        logger_level = {
+            LogLevel.DEBUG: logging.DEBUG,
+            LogLevel.INFO: logging.INFO,
+            LogLevel.WARN: logging.WARNING,
+            LogLevel.ERROR: logging.ERROR
+        }.get(self._log_level, logging.INFO)
+        
+        logging.getLogger(__name__).setLevel(logger_level)
+        logger.info(f"日志级别已设置为: {self._log_level.value}")
+
+    def get_log_level(self) -> LogLevel:
+        """获取当前日志级别"""
+        return self._log_level
+
+    def _log_request(self, model_name: str, capability: ModelCapability, 
+                    success: bool, response_time: float):
+        """
+        记录请求日志
+        
+        Args:
+            model_name: 模型名称
+            capability: 能力类型
+            success: 是否成功
+            response_time: 响应时间（秒）
+        """
+        log_entry = {
+            "timestamp": time.time(),
+            "model_name": model_name,
+            "capability": capability.value if capability else None,
+            "success": success,
+            "response_time": response_time,
+            "call_count": self._call_count.get(model_name, 0)
+        }
+        
+        # 添加到日志列表
+        self._request_logs.append(log_entry)
+        
+        # 保持日志数量限制
+        while len(self._request_logs) > self._max_request_logs:
+            self._request_logs.pop(0)
+
+    def get_request_logs(self, limit: int = 100) -> List[dict]:
+        """
+        获取请求日志
+        
+        Args:
+            limit: 返回日志条数（默认 100）
+        
+        Returns:
+            请求日志列表（按时间倒序）
+        """
+        return list(reversed(self._request_logs[-limit:]))
+
+    def get_request_stats(self) -> dict:
+        """
+        获取请求统计信息
+        
+        Returns:
+            {
+                "total_requests": int,
+                "success_rate": float,
+                "avg_response_time": float,
+                "model_stats": {model_name: {"count": int, "success_rate": float, "avg_response_time": float}}
+            }
+        """
+        if not self._request_logs:
+            return {
+                "total_requests": 0,
+                "success_rate": 0.0,
+                "avg_response_time": 0.0,
+                "model_stats": {}
+            }
+        
+        total_requests = len(self._request_logs)
+        success_count = sum(1 for log in self._request_logs if log["success"])
+        total_response_time = sum(log["response_time"] for log in self._request_logs)
+        
+        # 按模型统计
+        model_stats = {}
+        for log in self._request_logs:
+            model_name = log["model_name"]
+            if model_name not in model_stats:
+                model_stats[model_name] = {
+                    "count": 0,
+                    "success_count": 0,
+                    "total_response_time": 0.0
+                }
+            
+            model_stats[model_name]["count"] += 1
+            if log["success"]:
+                model_stats[model_name]["success_count"] += 1
+            model_stats[model_name]["total_response_time"] += log["response_time"]
+        
+        # 计算每个模型的统计数据
+        for model_name, stats in model_stats.items():
+            stats["success_rate"] = stats["success_count"] / stats["count"] if stats["count"] > 0 else 0.0
+            stats["avg_response_time"] = stats["total_response_time"] / stats["count"] if stats["count"] > 0 else 0.0
+            # 移除中间变量
+            stats.pop("success_count", None)
+            stats.pop("total_response_time", None)
+        
+        return {
+            "total_requests": total_requests,
+            "success_rate": success_count / total_requests if total_requests > 0 else 0.0,
+            "avg_response_time": total_response_time / total_requests if total_requests > 0 else 0.0,
+            "model_stats": model_stats
+        }
+
+    # ============= API Key 校验 =============
+
+    def enable_api_key_validation(self, enable: bool):
+        """
+        启用/禁用 API Key 校验
+        
+        Args:
+            enable: 是否启用 API Key 校验
+        """
+        self._api_key_validation_enabled = enable
+        if enable:
+            logger.info("🔐 API Key 校验已启用")
+        else:
+            logger.info("🔓 API Key 校验已禁用")
+
+    def is_api_key_validation_enabled(self) -> bool:
+        """检查是否启用了 API Key 校验"""
+        return self._api_key_validation_enabled
+
+    def add_api_key(self, api_key: str):
+        """
+        添加有效的 API Key
+        
+        Args:
+            api_key: API Key
+        """
+        if api_key not in self._valid_api_keys:
+            self._valid_api_keys.append(api_key)
+            logger.info(f"🔑 添加 API Key: {api_key[:8]}...")
+
+    def remove_api_key(self, api_key: str) -> bool:
+        """
+        移除 API Key
+        
+        Args:
+            api_key: 要移除的 API Key
+        
+        Returns:
+            是否移除成功
+        """
+        if api_key in self._valid_api_keys:
+            self._valid_api_keys.remove(api_key)
+            logger.info(f"🔑 移除 API Key: {api_key[:8]}...")
+            return True
+        return False
+
+    def set_api_keys(self, api_keys: List[str]):
+        """
+        设置有效的 API Key 列表（覆盖现有列表）
+        
+        Args:
+            api_keys: API Key 列表
+        """
+        self._valid_api_keys = list(api_keys)
+        logger.info(f"🔑 设置了 {len(api_keys)} 个 API Key")
+
+    def validate_api_key(self, api_key: str) -> bool:
+        """
+        校验 API Key 是否有效
+        
+        Args:
+            api_key: 待校验的 API Key
+        
+        Returns:
+            是否有效
+        """
+        if not self._api_key_validation_enabled:
+            return True
+        
+        if not api_key:
+            return False
+        
+        return api_key in self._valid_api_keys
+
+    def set_api_key_header(self, header: str):
+        """
+        设置 API Key 请求头名称
+        
+        Args:
+            header: 请求头名称（如 "X-API-Key"）
+        """
+        self._api_key_header = header
+        logger.info(f"🔑 API Key 请求头已设置为: {header}")
+
+    def get_api_key_header(self) -> str:
+        """获取 API Key 请求头名称"""
+        return self._api_key_header
+
+    # ============= 负载均衡支持 =============
+
+    def set_load_balancing_enabled(self, enable: bool):
+        """
+        启用/禁用负载均衡
+        
+        Args:
+            enable: 是否启用负载均衡
+        """
+        self._load_balancing_enabled = enable
+        if enable:
+            logger.info("⚖️ 负载均衡已启用")
+        else:
+            logger.info("⚖️ 负载均衡已禁用")
+
+    def is_load_balancing_enabled(self) -> bool:
+        """检查是否启用了负载均衡"""
+        return self._load_balancing_enabled
+
+    def set_load_balancing_strategy(self, strategy: Union[str, LoadBalancingStrategy]):
+        """
+        设置负载均衡策略
+        
+        Args:
+            strategy: 负载均衡策略（round_robin/least_load/weighted_round_robin/random）
+        """
+        if isinstance(strategy, str):
+            try:
+                self._load_balancing_strategy = LoadBalancingStrategy(strategy.lower())
+            except ValueError:
+                logger.warning(f"无效的负载均衡策略: {strategy}，使用默认值 ROUND_ROBIN")
+                self._load_balancing_strategy = LoadBalancingStrategy.ROUND_ROBIN
+        elif isinstance(strategy, LoadBalancingStrategy):
+            self._load_balancing_strategy = strategy
+        
+        logger.info(f"⚖️ 负载均衡策略已设置为: {self._load_balancing_strategy.value}")
+
+    def get_load_balancing_strategy(self) -> LoadBalancingStrategy:
+        """获取当前负载均衡策略"""
+        return self._load_balancing_strategy
+
+    def set_server_weight(self, server_url: str, weight: float):
+        """
+        设置服务器权重（用于加权轮询策略）
+        
+        Args:
+            server_url: 服务器地址
+            weight: 权重（正数，越大权重越高）
+        """
+        if weight <= 0:
+            if server_url in self._server_weights:
+                del self._server_weights[server_url]
+        else:
+            self._server_weights[server_url] = weight
+        logger.info(f"⚖️ 设置服务器权重: {server_url} = {weight}")
+
+    def get_server_weight(self, server_url: str) -> float:
+        """
+        获取服务器权重
+        
+        Args:
+            server_url: 服务器地址
+        
+        Returns:
+            权重值（默认为 1.0）
+        """
+        return self._server_weights.get(server_url, 1.0)
+
+    def select_server(self, servers: List[str]) -> Optional[str]:
+        """
+        根据负载均衡策略选择服务器
+        
+        Args:
+            servers: 可用服务器列表
+        
+        Returns:
+            选中的服务器地址，如果列表为空返回 None
+        """
+        if not servers:
+            return None
+        
+        if not self._load_balancing_enabled:
+            return servers[0]
+        
+        strategy = self._load_balancing_strategy
+        
+        if strategy == LoadBalancingStrategy.ROUND_ROBIN:
+            return self._select_round_robin(servers)
+        
+        elif strategy == LoadBalancingStrategy.LEAST_LOAD:
+            return self._select_least_load(servers)
+        
+        elif strategy == LoadBalancingStrategy.WEIGHTED_ROUND_ROBIN:
+            return self._select_weighted_round_robin(servers)
+        
+        elif strategy == LoadBalancingStrategy.RANDOM:
+            return self._select_random(servers)
+        
+        return servers[0]
+
+    def _select_round_robin(self, servers: List[str]) -> str:
+        """轮询选择服务器"""
+        key = "lb_round_robin"
+        index = self._rr_index.get(key, 0)
+        selected = servers[index % len(servers)]
+        self._rr_index[key] = (index + 1) % len(servers)
+        return selected
+
+    def _select_least_load(self, servers: List[str]) -> str:
+        """选择负载最小的服务器"""
+        best_server = servers[0]
+        min_load = float('inf')
+        
+        for server_url in servers:
+            # 获取该服务器上所有模型的总负载
+            total_load = 0
+            for model in self.models.values():
+                model_url = model.config.get("url", "")
+                if model_url == server_url:
+                    total_load += model.current_load
+            
+            if total_load < min_load:
+                min_load = total_load
+                best_server = server_url
+        
+        return best_server
+
+    def _select_weighted_round_robin(self, servers: List[str]) -> str:
+        """加权轮询选择服务器"""
+        # 计算总权重
+        total_weight = sum(self.get_server_weight(s) for s in servers)
+        
+        if total_weight == 0:
+            return self._select_round_robin(servers)
+        
+        # 使用轮询索引计算位置
+        key = "lb_weighted_round_robin"
+        index = self._rr_index.get(key, 0)
+        
+        # 根据权重选择
+        current = index % total_weight
+        cumulative = 0
+        
+        for server_url in servers:
+            weight = self.get_server_weight(server_url)
+            cumulative += weight
+            if current < cumulative:
+                self._rr_index[key] = index + 1
+                return server_url
+        
+        self._rr_index[key] = index + 1
+        return servers[0]
+
+    def _select_random(self, servers: List[str]) -> str:
+        """随机选择服务器"""
+        import random
+        return random.choice(servers)
+
+    def get_load_balancing_stats(self) -> dict:
+        """
+        获取负载均衡统计信息
+        
+        Returns:
+            {
+                "strategy": ...,
+                "enabled": ...,
+                "server_weights": {...},
+                "server_loads": {...}
+            }
+        """
+        # 计算每个服务器的负载
+        server_loads = {}
+        for model in self.models.values():
+            server_url = model.config.get("url", "")
+            if server_url not in server_loads:
+                server_loads[server_url] = {
+                    "load": 0,
+                    "models": []
+                }
+            server_loads[server_url]["load"] += model.current_load
+            server_loads[server_url]["models"].append(model.model_id)
+        
+        return {
+            "strategy": self._load_balancing_strategy.value,
+            "enabled": self._load_balancing_enabled,
+            "server_weights": self._server_weights,
+            "server_loads": server_loads
+        }
+
 
 # ============= 全局实例 =============
 
@@ -2086,6 +2846,121 @@ def call_model_sync(capability: ModelCapability,
         return asyncio.run(
             router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier, expert_type, thinking_mode, rys_config=rys_config, verify=verify)
         )
+
+    # ============= caveman 压缩功能 =============
+
+    def _check_caveman_availability(self):
+        """检查 caveman 是否可用"""
+        try:
+            from client.src.business.tools.caveman_tool import CavemanTool
+            self._caveman_tool = CavemanTool()
+            self._caveman_available = self._caveman_tool.is_available()
+            
+            if self._caveman_available:
+                logger.info("✅ caveman 压缩工具可用")
+            else:
+                logger.warning("⚠️ caveman 压缩工具不可用，请安装: pip install caveman")
+                
+        except ImportError as e:
+            logger.warning(f"⚠️ 无法加载 CavemanTool: {e}")
+            self._caveman_available = False
+
+    def is_caveman_available(self) -> bool:
+        """检查 caveman 是否可用"""
+        return self._caveman_available
+
+    def enable_caveman(self, enable: bool):
+        """
+        启用/禁用 caveman 压缩
+        
+        Args:
+            enable: 是否启用压缩
+        """
+        if enable and not self._caveman_available:
+            logger.warning("无法启用 caveman 压缩：caveman 不可用")
+            return
+        
+        self._caveman_enabled = enable
+        
+        if enable:
+            logger.info("🗜️ caveman token 压缩已启用")
+        else:
+            logger.info("🗜️ caveman token 压缩已禁用")
+
+    def is_caveman_enabled(self) -> bool:
+        """检查是否启用了 caveman 压缩"""
+        return self._caveman_enabled and self._caveman_available
+
+    def set_caveman_level(self, level: Union[str, CompressionLevel]):
+        """
+        设置 caveman 压缩级别
+        
+        Args:
+            level: 压缩级别（lite/full/ultra/wenyan 或 CompressionLevel 枚举）
+        """
+        if isinstance(level, str):
+            try:
+                self._caveman_level = CompressionLevel(level.lower())
+            except ValueError:
+                logger.warning(f"无效的压缩级别: {level}，使用默认级别")
+                self._caveman_level = CompressionLevel.FULL
+        elif isinstance(level, CompressionLevel):
+            self._caveman_level = level
+        
+        logger.info(f"🗜️ caveman 压缩级别已设置为: {self._caveman_level.value}")
+
+    def get_caveman_level(self) -> CompressionLevel:
+        """获取当前压缩级别"""
+        return self._caveman_level
+
+    def set_caveman_min_tokens(self, min_tokens: int):
+        """
+        设置触发压缩的最小 token 数
+        
+        Args:
+            min_tokens: 最小 token 数
+        """
+        self._caveman_min_tokens = max(0, min_tokens)
+        logger.info(f"🗜️ caveman 最小 token 数已设置为: {self._caveman_min_tokens}")
+
+    def get_caveman_min_tokens(self) -> int:
+        """获取触发压缩的最小 token 数"""
+        return self._caveman_min_tokens
+
+    async def _compress_with_caveman(self, text: str) -> str:
+        """
+        使用 caveman 压缩文本
+        
+        Args:
+            text: 需要压缩的文本
+            
+        Returns:
+            压缩后的文本（如果压缩失败则返回原始文本）
+        """
+        if not self.is_caveman_enabled():
+            return text
+        
+        if len(text) < self._caveman_min_tokens:
+            return text
+        
+        try:
+            result = await self._caveman_tool.execute(
+                text=text,
+                level=self._caveman_level.value
+            )
+            
+            if result.get("success", False):
+                compressed = result.get("compressed_text", text)
+                ratio = result.get("compression_ratio", 0)
+                logger.debug(f"🗜️ 压缩完成: {len(text)} → {len(compressed)} ({ratio:.1%})")
+                return compressed
+            else:
+                logger.warning(f"🗜️ 压缩失败: {result.get('message', 'unknown error')}")
+                return text
+                
+        except Exception as e:
+            logger.error(f"🗜️ 压缩过程中发生错误: {e}")
+            return text
 
 
 # ============= Handler 体系 =============

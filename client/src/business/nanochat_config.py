@@ -191,7 +191,9 @@ class NanochatConfig:
     ))
     
     relay: EndpointConfig = field(default_factory=lambda: EndpointConfig(
-        url="139.199.124.242:8888",
+        url="ws://139.199.124.242:8888",
+        timeout=60,
+        max_retries=5,
     ))
     
     # 超时配置

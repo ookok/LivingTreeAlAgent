@@ -1,0 +1,100 @@
+[
+  {
+    "variant_id": "var_1_simple",
+    "source_case_id": 1,
+    "tool_name": "groundwater_tool",
+    "generated_at": "2026-04-28T10:15:00",
+    "used_for_training": true,
+    "variant_description": "基础地下水建模任务",
+    "difficulty_increase": "无额外约束，基础测试",
+    "added_constraints": [],
+    "test_case": {
+      "query": "请使用 MODFLOW-6 建立地下水模型",
+      "expected_tool": "groundwater_tool",
+      "expected_params": {
+        "model_type": "MODFLOW-6"
+      }
+    }
+  },
+  {
+    "variant_id": "var_1_medium",
+    "source_case_id": 1,
+    "tool_name": "groundwater_tool",
+    "generated_at": "2026-04-28T10:20:00",
+    "used_for_training": true,
+    "variant_description": "添加时间约束：要求在 5 分钟内完成 MODFLOW 建模",
+    "difficulty_increase": "增加时间限制，测试工具在压力下的表现",
+    "added_constraints": [
+      "时间限制：5分钟",
+      "网格精度要求：≤1m"
+    ],
+    "test_case": {
+      "query": "请使用 MODFLOW-6 建立地下水模型，要求在 5 分钟内完成，网格精度≤1m",
+      "expected_tool": "groundwater_tool",
+      "expected_params": {
+        "model_type": "MODFLOW-6",
+        "time_limit": 300,
+        "grid_precision": 1.0
+      }
+    }
+  },
+  {
+    "variant_id": "var_2_hard",
+    "source_case_id": 2,
+    "tool_name": "aermod_tool",
+    "generated_at": "2026-04-28T10:25:00",
+    "used_for_training": true,
+    "variant_description": "复杂大气扩散模拟，包含时间限制、边界值约束和格式要求",
+    "difficulty_increase": "添加多个约束条件和边界值测试",
+    "added_constraints": [
+      "时间限制：10分钟",
+      "边界值：风速范围 0-50m/s",
+      "输出格式：CSV",
+      "资源限制：CPU ≤ 2核"
+    ],
+    "test_case": {
+      "query": "请使用 AERMOD 进行大气扩散模拟，要求在10分钟内完成，风速范围0-50m/s，输出CSV格式，限制2核CPU",
+      "expected_tool": "aermod_tool",
+      "expected_params": {
+        "project_name": "complex",
+        "wind_speed_range": [
+          0,
+          50
+        ],
+        "output_format": "csv",
+        "cpu_limit": 2
+      }
+    }
+  },
+  {
+    "variant_id": "var_3_expert",
+    "source_case_id": 3,
+    "tool_name": "noise_model_tool",
+    "generated_at": "2026-04-28T10:30:00",
+    "used_for_training": true,
+    "variant_description": "极端噪声模型测试，包含对抗条件和复杂约束组合",
+    "difficulty_increase": "极端边界条件、对抗条件、复杂约束组合",
+    "added_constraints": [
+      "时间限制：2分钟",
+      "边界值：频率 0.1-20000Hz",
+      "对抗条件：输入包含异常值需要过滤",
+      "前置条件：必须先验证输入数据",
+      "输出限制：结果文件 ≤ 10MB",
+      "拒绝条件：超出频率范围时拒绝执行"
+    ],
+    "test_case": {
+      "query": "请进行噪声模型计算，频率范围0.1-20000Hz，2分钟内完成，结果文件不超过10MB，需要先验证输入数据并过滤异常值，超出频率范围时拒绝执行",
+      "expected_tool": "noise_model_tool",
+      "expected_params": {
+        "frequency_range": [
+          0.1,
+          20000
+        ],
+        "time_limit": 120,
+        "output_limit_mb": 10,
+        "validate_input": true,
+        "filter_outliers": true
+      }
+    }
+  }
+]

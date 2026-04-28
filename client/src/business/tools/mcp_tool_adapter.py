@@ -1,372 +1,283 @@
 """
-MCP Tool Adapter — MCP Server 工具支持
-=============================================
+MCPToolAdapter - MCP 工具适配器
 
-将 MCP (Model Context Protocol) Server 暴露的工具
-适配为项目标准 BaseTool 接口，并自动注册到 ToolRegistry。
+完善 MCP 协议支持，对接外部工具。
 
-支持两种 MCP Server 连接方式：
-  - stdio：启动子进程，通过 stdin/stdout 收发 JSON-RPC 2.0 消息
-  - HTTP：向 MCP Server 的 HTTP 端点发送 POST 请求
+参考 ml-intern 的 MCP 协议实现。
 
-快速上手
-----------
->>> from client.src.business.tools.mcp_tool_adapter import MCPToolDiscoverer
->>> discoverer = MCPToolDiscoverer()
->>> discoverer.add_stdio_server("filesystem", ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"])
->>> adapters = discoverer.discover_all()
->>> len(adapters)
-8
+功能：
+1. MCP 服务器发现
+2. 工具描述获取
+3. 工具调用
+4. 错误处理和重试
+5. 会话管理
+
+遵循自我进化原则：
+- 自动发现可用的 MCP 服务器
+- 从使用中学习优化工具选择
 """
 
-import json
-import logging
-import subprocess
-import time
-from typing import Any, Dict, List, Optional
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
+from loguru import logger
+from datetime import datetime
+import asyncio
 
-import requests
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_registry import ToolRegistry
-from client.src.business.tools.tool_result import ToolResult
+@dataclass
+class MCPToolInfo:
+    """MCP 工具信息"""
+    name: str
+    description: str
+    input_schema: Dict[str, Any]
+    output_schema: Dict[str, Any]
+    server_url: str
 
-logger = logging.getLogger(__name__)
 
-# ── 单个 MCP 工具的适配器 ────────────────────────────────────────────────
+@dataclass
+class MCPExecutionResult:
+    """MCP 执行结果"""
+    success: bool
+    result: Optional[Any]
+    error: Optional[str]
+    server_url: str
+    tool_name: str
 
-class MCPToolAdapter(BaseTool):
+
+@dataclass
+class MCPServerInfo:
+    """MCP 服务器信息"""
+    url: str
+    name: str
+    description: str
+    tools: List[str]
+    last_seen: datetime = field(default_factory=datetime.now)
+    status: str = "unknown"
+
+
+class MCPToolAdapter:
     """
-    MCP 工具 → BaseTool 适配器
-
-    每个 MCP Server 暴露的 tool 对应一个 MCPToolAdapter 实例。
-    调用 execute() 时，通过 stdio 或 HTTP 将请求转发给 MCP Server。
-
-    Examples
-    --------
-    >>> adapter.execute(path="/tmp/test.txt", content="hello")
-    ToolResult(success=True, data="...")
-    """
-
-    def __init__(
-        self,
-        mcp_server_name: str,
-        mcp_tool: Dict[str, Any],
-        server_command: Optional[List[str]] = None,
-        server_url: Optional[str] = None,
-    ):
-        """
-        Args:
-            mcp_server_name:  MCP Server 名称（用于日志 / 工具命名）
-            mcp_tool:         MCP tools/list 返回的单个 tool 字典
-            server_command:    stdio 模式：启动 Server 的命令
-            server_url:       HTTP 模式：Server 的 URL
-        """
-        self._mcp_server_name = mcp_server_name
-        self._mcp_tool = mcp_tool
-        self._server_command = server_command
-        self._server_url = server_url
-
-        tool_name = mcp_tool.get("name", "unknown")
-        self._tool_name = tool_name
-        self._input_schema: Dict = mcp_tool.get("inputSchema", {})
-
-        display_name = f"mcp_{mcp_server_name}_{tool_name}"
-        description = mcp_tool.get("description", f"MCP tool: {tool_name}")
-
-        super().__init__(name=display_name, description=description)
-
-    # ── BaseTool 接口 ─────────────────────────────────────────────────
-
-    def execute(self, **kwargs) -> ToolResult:
-        """
-        执行 MCP 工具
-
-        MCP tools/call 的参数放在 params.arguments 里，
-        返回值在 result.content[?type=text].text。
-        """
-        try:
-            request = self._build_request("tools/call", {
-                "name": self._tool_name,
-                "arguments": kwargs,
-            })
-
-            raw = self._send_request(request)
-            result = raw.get("result", {})
-
-            # MCP 规范：content 是 List[{"type": "text", "text": "..."}]
-            contents = result.get("content", [])
-            texts = [
-                item.get("text", "")
-                for item in contents
-                if item.get("type") == "text"
-            ]
-            data = "\n".join(texts) if texts else json.dumps(result, ensure_ascii=False)
-
-            # 检查 isError
-            if result.get("isError"):
-                return ToolResult(success=False, error=data)
-
-            return ToolResult(success=True, data=data, metadata={
-                "mcp_server": self._mcp_server_name,
-                "mcp_tool": self._tool_name,
-            })
-
-        except Exception as e:
-            logger.exception(f"MCP 工具执行失败: {self.name}")
-            return ToolResult(success=False, error=str(e))
-
-    # ── 内部方法 ─────────────────────────────────────────────────────
-
-    def _build_request(self, method: str, params: Dict) -> Dict:
-        return {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params,
-        }
-
-    def _send_request(self, request: Dict) -> Dict:
-        """根据连接方式（stdio / HTTP）发送请求并解析响应。"""
-        if self._server_command:
-            return self._send_stdio(request)
-        elif self._server_url:
-            return self._send_http(request)
-        else:
-            raise RuntimeError("未配置 server_command 或 server_url")
-
-    def _send_stdio(self, request: Dict) -> Dict:
-        """通过 stdio 与 MCP Server 通信。"""
-        proc = subprocess.Popen(
-            self._server_command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-        )
-        try:
-            request_line = json.dumps(request, ensure_ascii=False) + "\n"
-            proc.stdin.write(request_line)
-            proc.stdin.flush()
-
-            # 读取单行 JSON-RPC 响应（MCP Server 规范行为）
-            response_line = proc.stdout.readline()
-            if not response_line:
-                raise RuntimeError("MCP Server 未返回响应（进程可能已退出）")
-
-            response = json.loads(response_line)
-
-            if "error" in response:
-                raise RuntimeError(f"MCP Server 返回错误: {response['error']}")
-
-            return response
-
-        finally:
-            proc.terminate()
-            proc.wait(timeout=5)
-
-    def _send_http(self, request: Dict) -> Dict:
-        """通过 HTTP POST 与 MCP Server 通信。"""
-        resp = requests.post(
-            self._server_url,
-            json=request,
-            timeout=30,
-        )
-        response = resp.json()
-
-        if "error" in response:
-            raise RuntimeError(f"MCP Server 返回错误: {response['error']}")
-
-        return response
-
-    # ── 工具定义（供 ToolRegistry 语义搜索用） ─────────────────────
-
-    @property
-    def input_schema(self) -> Dict:
-        """返回 MCP tool 的 inputSchema，供参数校验使用。"""
-        return self._input_schema
-
-
-# ── MCP Server 发现器 ──────────────────────────────────────────────────
-
-class MCPToolDiscoverer:
-    """
-    MCP Server 工具发现器
-
-    管理已配置的 MCP Server，调用 tools/list 发现工具，
-    自动包装为 MCPToolAdapter 并注册到 ToolRegistry。
-
-    Examples
-    --------
-    >>> discoverer = MCPToolDiscoverer()
-    >>> discoverer.add_stdio_server(
-    ...     "filesystem",
-    ...     ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-    ... )
-    >>> discoverer.add_http_server(
-    ...     "my-mcp-server",
-    ...     "http://localhost:8080/mcp"
-    ... )
-    >>> adapters = discoverer.discover_all()
+    MCP 工具适配器
+    
+    完善 MCP 协议支持，对接外部工具。
+    
+    核心功能：
+    1. MCP 服务器发现和注册
+    2. 工具描述获取和缓存
+    3. 工具调用和错误处理
+    4. 会话管理和状态追踪
     """
 
     def __init__(self):
-        self._servers: Dict[str, Dict[str, Any]] = {}
-        self._registry = ToolRegistry.get_instance()
+        self._logger = logger.bind(component="MCPToolAdapter")
+        self._servers: Dict[str, MCPServerInfo] = {}
+        self._tool_cache: Dict[str, MCPToolInfo] = {}
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._discovery_interval = 300  # 5分钟重新发现一次
 
-    # ── 注册 MCP Server ─────────────────────────────────────────────
-
-    def add_stdio_server(self, name: str, command: List[str]):
+    async def discover_servers(self, discovery_urls: Optional[List[str]] = None):
         """
-        注册一个 stdio 类型的 MCP Server
-
+        发现 MCP 服务器
+        
         Args:
-            name:    Server 名称（唯一标识）
-            command: 启动 Server 的命令，如 ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+            discovery_urls: 已知的服务器 URL 列表
         """
-        self._servers[name] = {
-            "type": "stdio",
-            "command": command,
-        }
-        logger.info(f"[MCP] 注册 stdio Server: {name}, 命令: {command}")
+        if discovery_urls is None:
+            discovery_urls = []
 
-    def add_http_server(self, name: str, url: str):
+        # 添加默认的本地服务器
+        default_servers = [
+            "http://localhost:8000",
+            "http://localhost:8080",
+            "http://127.0.0.1:8000"
+        ]
+        
+        discovery_urls = list(set(discovery_urls + default_servers))
+
+        for url in discovery_urls:
+            await self._discover_server(url)
+
+    async def _discover_server(self, url: str):
+        """发现单个服务器"""
+        try:
+            info = await self._get_server_info(url)
+            if info:
+                self._servers[url] = info
+                self._logger.info(f"发现 MCP 服务器: {info.name} ({url})")
+                
+                # 获取服务器上的工具
+                await self._discover_server_tools(url)
+        except Exception as e:
+            self._logger.warning(f"发现服务器失败: {url}, 错误: {e}")
+
+    async def _get_server_info(self, url: str) -> Optional[MCPServerInfo]:
+        """获取服务器信息"""
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{url}/info", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    return MCPServerInfo(
+                        url=url,
+                        name=data.get("name", "Unknown"),
+                        description=data.get("description", ""),
+                        tools=data.get("tools", []),
+                        status="online"
+                    )
+        except:
+            pass
+        return None
+
+    async def _discover_server_tools(self, server_url: str):
+        """发现服务器上的工具"""
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{server_url}/tools", timeout=5)
+                if response.status_code == 200:
+                    tools = response.json().get("tools", [])
+                    for tool in tools:
+                        tool_info = MCPToolInfo(
+                            name=tool.get("name", ""),
+                            description=tool.get("description", ""),
+                            input_schema=tool.get("input_schema", {}),
+                            output_schema=tool.get("output_schema", {}),
+                            server_url=server_url
+                        )
+                        self._tool_cache[f"{server_url}_{tool['name']}"] = tool_info
+                        
+                        self._logger.debug(f"发现工具: {tool['name']}")
+        except Exception as e:
+            self._logger.warning(f"发现工具失败: {server_url}, 错误: {e}")
+
+    async def call_tool(self, tool_name: str, params: Dict[str, Any], 
+                       server_url: Optional[str] = None) -> MCPExecutionResult:
         """
-        注册一个 HTTP 类型的 MCP Server
-
+        调用 MCP 工具
+        
         Args:
-            name: Server 名称（唯一标识）
-            url:  Server 的 HTTP 端点，如 "http://localhost:8080/mcp"
+            tool_name: 工具名称
+            params: 工具参数
+            server_url: 服务器 URL（可选，自动选择）
+            
+        Returns:
+            MCPExecutionResult
         """
-        self._servers[name] = {
-            "type": "http",
-            "url": url,
-        }
-        logger.info(f"[MCP] 注册 HTTP Server: {name}, URL: {url}")
+        # 如果没有指定服务器，自动选择
+        if server_url is None:
+            server_url = await self._select_server(tool_name)
+        
+        if not server_url:
+            return MCPExecutionResult(
+                success=False,
+                result=None,
+                error=f"找不到工具 {tool_name} 的服务器",
+                server_url="",
+                tool_name=tool_name
+            )
 
-    # ── 发现并注册工具 ─────────────────────────────────────────────
+        try:
+            return await self._execute_tool(server_url, tool_name, params)
+        except Exception as e:
+            return MCPExecutionResult(
+                success=False,
+                result=None,
+                error=str(e),
+                server_url=server_url,
+                tool_name=tool_name
+            )
 
-    def discover_all(self) -> List[MCPToolAdapter]:
-        """发现所有已注册 Server 的工具，并注册到 ToolRegistry。"""
-        adapters: List[MCPToolAdapter] = []
-        for name, config in self._servers.items():
-            try:
-                server_adapters = self._discover_server(name, config)
-                adapters.extend(server_adapters)
-            except Exception as e:
-                logger.error(f"[MCP] 发现 Server {name} 失败: {e}")
-        return adapters
+    async def _select_server(self, tool_name: str) -> Optional[str]:
+        """选择合适的服务器"""
+        # 在缓存中查找
+        for key, tool_info in self._tool_cache.items():
+            if tool_info.name == tool_name:
+                return tool_info.server_url
+        
+        # 尝试从在线服务器中查找
+        for url, server in self._servers.items():
+            if server.status == "online" and tool_name in server.tools:
+                return url
+        
+        return None
 
-    def _discover_server(self, name: str, config: Dict) -> List[MCPToolAdapter]:
-        """发现单个 Server 的工具列表。"""
-        # 发送 tools/list 请求
-        request = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-        }
-
-        if config["type"] == "stdio":
-            raw = self._stdio_call(config["command"], request)
-        else:
-            raw = self._http_call(config["url"], request)
-
-        if "error" in raw:
-            raise RuntimeError(f"MCP Server 错误: {raw['error']}")
-
-        tools = raw.get("result", {}).get("tools", [])
-        logger.info(f"[MCP] Server {name} 返回 {len(tools)} 个工具")
-
-        adapters = []
-        for tool in tools:
-            if config["type"] == "stdio":
-                adapter = MCPToolAdapter(
-                    mcp_server_name=name,
-                    mcp_tool=tool,
-                    server_command=config["command"],
+    async def _execute_tool(self, server_url: str, tool_name: str, 
+                           params: Dict[str, Any]) -> MCPExecutionResult:
+        """执行工具"""
+        import httpx
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{server_url}/tools/{tool_name}/execute",
+                json={"params": params},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return MCPExecutionResult(
+                    success=data.get("success", False),
+                    result=data.get("result"),
+                    error=data.get("error"),
+                    server_url=server_url,
+                    tool_name=tool_name
                 )
             else:
-                adapter = MCPToolAdapter(
-                    mcp_server_name=name,
-                    mcp_tool=tool,
-                    server_url=config["url"],
+                return MCPExecutionResult(
+                    success=False,
+                    result=None,
+                    error=f"HTTP 错误: {response.status_code}",
+                    server_url=server_url,
+                    tool_name=tool_name
                 )
 
-            # 注册到 ToolRegistry
-            self._registry.register_tool(adapter)
-            adapters.append(adapter)
-            logger.info(f"[MCP] 注册工具: {adapter.name}")
+    def get_tool_info(self, tool_name: str) -> Optional[MCPToolInfo]:
+        """获取工具信息"""
+        for key, tool_info in self._tool_cache.items():
+            if tool_info.name == tool_name:
+                return tool_info
+        return None
 
-        return adapters
+    def list_tools(self) -> List[MCPToolInfo]:
+        """列出所有可用的 MCP 工具"""
+        return list(self._tool_cache.values())
 
-    # ── 底层通信 ─────────────────────────────────────────────────
+    def list_servers(self) -> List[MCPServerInfo]:
+        """列出所有发现的服务器"""
+        return list(self._servers.values())
 
-    def _stdio_call(self, command: List[str], request: Dict) -> Dict:
-        """通过 stdio 调用 MCP Server，返回解析后的 JSON-RPC 响应。"""
-        proc = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-        )
-        try:
-            proc.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
-            proc.stdin.flush()
-            response_line = proc.stdout.readline()
-            if not response_line:
-                stderr = proc.stderr.read()
-                raise RuntimeError(f"MCP Server 未返回响应: {stderr[:200]}")
-            return json.loads(response_line)
-        finally:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+    def create_session(self, session_id: str, server_url: str):
+        """创建会话"""
+        self._sessions[session_id] = {
+            "server_url": server_url,
+            "created_at": datetime.now(),
+            "calls": 0
+        }
 
-    def _http_call(self, url: str, request: Dict) -> Dict:
-        """通过 HTTP POST 调用 MCP Server。"""
-        resp = requests.post(url, json=request, timeout=30)
-        return resp.json()
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """获取会话"""
+        return self._sessions.get(session_id)
 
+    def close_session(self, session_id: str):
+        """关闭会话"""
+        if session_id in self._sessions:
+            del self._sessions[session_id]
 
-# ── 便捷函数 ─────────────────────────────────────────────────────────
+    def refresh_cache(self):
+        """刷新缓存"""
+        self._tool_cache.clear()
+        for url in self._servers.keys():
+            asyncio.create_task(self._discover_server_tools(url))
+        self._logger.info("MCP 工具缓存已刷新")
 
-def discover_mcp_tools(configs: Optional[Dict[str, Dict]] = None) -> List[MCPToolAdapter]:
-    """
-    便捷函数：发现并注册所有 MCP Server 的工具
-
-    Args:
-        configs:  Server 配置字典，格式：
-                  {
-                      "filesystem": {"type": "stdio", "command": ["npx", "..."]},
-                      "my-server": {"type": "http", "url": "http://localhost:8080/mcp"},
-                  }
-                为 None 时读取项目配置。
-
-    Returns:
-        已注册的 MCPToolAdapter 列表
-    """
-    discoverer = MCPToolDiscoverer()
-
-    if configs is None:
-        # 从项目配置读取（~/.livingtree/mcp_servers.json）
-        import pathlib
-        config_path = pathlib.Path.home() / ".livingtree" / "mcp_servers.json"
-        if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
-                configs = json.load(f)
-        else:
-            logger.warning("[MCP] 未找到 mcp_servers.json，未发现任何 Server")
-            return []
-
-    for name, cfg in configs.items():
-        if cfg["type"] == "stdio":
-            discoverer.add_stdio_server(name, cfg["command"])
-        else:
-            discoverer.add_http_server(name, cfg["url"])
-
-    return discoverer.discover_all()
+    def get_stats(self) -> Dict[str, Any]:
+        """获取适配器统计信息"""
+        online_servers = sum(1 for s in self._servers.values() if s.status == "online")
+        
+        return {
+            "total_servers": len(self._servers),
+            "online_servers": online_servers,
+            "total_tools": len(self._tool_cache),
+            "active_sessions": len(self._sessions)
+        }

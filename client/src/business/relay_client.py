@@ -13,6 +13,8 @@ WebSocket Relay Client SDK
 - 桌面端：PyQt6 (Python)
 - 移动端：Flutter/React Native
 - 网页端：JavaScript/TypeScript
+
+配置来源：NanochatConfig (client/src/business/nanochat_config.py)
 """
 
 import os
@@ -25,6 +27,8 @@ import uuid
 from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass, field
 from enum import Enum
+
+from client.src.business.nanochat_config import config
 
 # WebSocket support
 try:
@@ -534,13 +538,36 @@ if PYQT6_AVAILABLE:
 
 
 def create_relay_client(
-    server_url: str,
+    server_url: str = None,
     client_name: str = "",
     client_type: ClientType = ClientType.DESKTOP,
     use_qt: bool = False,
     **kwargs
 ) -> RelayClientBase:
-    """工厂函数：创建合适的客户端"""
+    """工厂函数：创建合适的客户端
+    
+    Args:
+        server_url: 服务器URL，默认为配置中的 relay.url
+        client_name: 客户端名称
+        client_type: 客户端类型
+        use_qt: 是否使用 PyQt6 版本
+        **kwargs: 其他参数（auto_reconnect, reconnect_interval, ping_interval）
+    
+    Returns:
+        RelayClientBase: 中继客户端实例
+    """
+    # 使用配置中的默认值
+    if server_url is None:
+        server_url = config.relay.url
+    
+    # 设置默认参数
+    if "auto_reconnect" not in kwargs:
+        kwargs["auto_reconnect"] = True
+    if "reconnect_interval" not in kwargs:
+        kwargs["reconnect_interval"] = config.retries.default
+    if "ping_interval" not in kwargs:
+        kwargs["ping_interval"] = config.delays.heartbeat
+    
     if use_qt and PYQT6_AVAILABLE:
         return PyQt6RelayClient(server_url, client_name=client_name, client_type=client_type, **kwargs)
     elif asyncio.get_event_loop().is_running():

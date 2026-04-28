@@ -3,7 +3,23 @@ Test Dual Flywheel - 测试双数据飞轮
 
 完整演示"双数据飞轮"工作流程：
 1. 推理飞轮：从错题生成更难变体
-2. （未来）智能体飞轮：将线性工作流扩展为行为树
+2. 智能体飞轮：使用变体训练工具选择（支持多难度级别）
+
+支持的难度级别：
+- SIMPLE（简单）: 基础查询，无额外约束
+- MEDIUM（中等）: 添加1-2个约束条件
+- HARD（困难）: 添加多个约束、边界值、对抗条件
+- EXPERT（专家）: 极端边界条件、复杂约束组合
+
+支持的约束类型：
+- TIME_LIMIT（时间限制）
+- RESOURCE_LIMIT（资源限制）
+- FORMAT_REQUIREMENT（格式要求）
+- BOUNDARY_VALUE（边界值约束）
+- PRECONDITION（前置条件）
+- REJECTION_CONDITION（拒绝条件）
+- ADVERSARIAL（对抗条件）
+- OUTPUT_LIMIT（输出限制）
 
 Author: LivingTreeAI Agent
 Date: 2026-04-28
@@ -23,6 +39,8 @@ from client.src.business.self_evolution.hard_variant_generator import (
 )
 from client.src.business.self_evolution.train_with_variants import (
     VariantTrainer,
+    DifficultyLevel,
+    ConstraintType,
 )
 
 
@@ -174,8 +192,11 @@ async def test_simple_flywheel():
     # 1. 创建模拟错题
     print("\n[1] 创建模拟错题...")
     
-    failed_cases_file = "d:/mhzyapp/LivingTreeAlAgent/.workbuddy/memory/failed_cases.json"
-    os.makedirs(os.path.dirname(failed_cases_file), exist_ok=True)
+    # 使用相对路径
+    base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), ".workbuddy", "memory")
+    os.makedirs(base_dir, exist_ok=True)
+    
+    failed_cases_file = os.path.join(base_dir, "failed_cases.json")
     
     mock_cases = [
         {
@@ -197,6 +218,16 @@ async def test_simple_flywheel():
             "repair_strategy": "fix_config",
             "repair_success": False,
             "used_for_training": False
+        },
+        {
+            "id": 3,
+            "timestamp": "2026-04-28T10:10:00",
+            "tool_name": "noise_model_tool",
+            "error_message": "ValueError: Invalid frequency range",
+            "tool_input": {"frequency": 20000},
+            "repair_strategy": "fix_code",
+            "repair_success": False,
+            "used_for_training": False
         }
     ]
     
@@ -205,17 +236,34 @@ async def test_simple_flywheel():
     
     print(f"  ✓ 已创建 {len(mock_cases)} 条模拟错题")
     
-    # 2. 创建模拟变体
-    print("\n[2] 创建模拟变体...")
+    # 2. 创建模拟变体（包含不同难度级别）
+    print("\n[2] 创建模拟变体（不同难度级别）...")
     
-    training_pool_file = "d:/mhzyapp/LivingTreeAlAgent/.workbuddy/memory/training_pool.json"
+    training_pool_file = os.path.join(base_dir, "training_pool.json")
     
     mock_variants = [
+        # SIMPLE（简单）: 无额外约束
         {
-            "variant_id": "var_1_1",
+            "variant_id": "var_1_simple",
             "source_case_id": 1,
             "tool_name": "groundwater_tool",
-            "generated_at": "2026-04-28T10:10:00",
+            "generated_at": "2026-04-28T10:15:00",
+            "used_for_training": False,
+            "variant_description": "基础地下水建模任务",
+            "difficulty_increase": "无额外约束，基础测试",
+            "added_constraints": [],
+            "test_case": {
+                "query": "请使用 MODFLOW-6 建立地下水模型",
+                "expected_tool": "groundwater_tool",
+                "expected_params": {"model_type": "MODFLOW-6"}
+            }
+        },
+        # MEDIUM（中等）: 1-2个约束条件
+        {
+            "variant_id": "var_1_medium",
+            "source_case_id": 1,
+            "tool_name": "groundwater_tool",
+            "generated_at": "2026-04-28T10:20:00",
             "used_for_training": False,
             "variant_description": "添加时间约束：要求在 5 分钟内完成 MODFLOW 建模",
             "difficulty_increase": "增加时间限制，测试工具在压力下的表现",
@@ -223,11 +271,51 @@ async def test_simple_flywheel():
             "test_case": {
                 "query": "请使用 MODFLOW-6 建立地下水模型，要求在 5 分钟内完成，网格精度≤1m",
                 "expected_tool": "groundwater_tool",
-                "expected_params": {
-                    "model_type": "MODFLOW-6",
-                    "time_limit": 300,
-                    "grid_precision": 1.0
-                }
+                "expected_params": {"model_type": "MODFLOW-6", "time_limit": 300, "grid_precision": 1.0}
+            }
+        },
+        # HARD（困难）: 多个约束，包含边界值
+        {
+            "variant_id": "var_2_hard",
+            "source_case_id": 2,
+            "tool_name": "aermod_tool",
+            "generated_at": "2026-04-28T10:25:00",
+            "used_for_training": False,
+            "variant_description": "复杂大气扩散模拟，包含时间限制、边界值约束和格式要求",
+            "difficulty_increase": "添加多个约束条件和边界值测试",
+            "added_constraints": [
+                "时间限制：10分钟",
+                "边界值：风速范围 0-50m/s",
+                "输出格式：CSV",
+                "资源限制：CPU ≤ 2核"
+            ],
+            "test_case": {
+                "query": "请使用 AERMOD 进行大气扩散模拟，要求在10分钟内完成，风速范围0-50m/s，输出CSV格式，限制2核CPU",
+                "expected_tool": "aermod_tool",
+                "expected_params": {"project_name": "complex", "wind_speed_range": [0, 50], "output_format": "csv", "cpu_limit": 2}
+            }
+        },
+        # EXPERT（专家）: 极端边界条件、对抗条件
+        {
+            "variant_id": "var_3_expert",
+            "source_case_id": 3,
+            "tool_name": "noise_model_tool",
+            "generated_at": "2026-04-28T10:30:00",
+            "used_for_training": False,
+            "variant_description": "极端噪声模型测试，包含对抗条件和复杂约束组合",
+            "difficulty_increase": "极端边界条件、对抗条件、复杂约束组合",
+            "added_constraints": [
+                "时间限制：2分钟",
+                "边界值：频率 0.1-20000Hz",
+                "对抗条件：输入包含异常值需要过滤",
+                "前置条件：必须先验证输入数据",
+                "输出限制：结果文件 ≤ 10MB",
+                "拒绝条件：超出频率范围时拒绝执行"
+            ],
+            "test_case": {
+                "query": "请进行噪声模型计算，频率范围0.1-20000Hz，2分钟内完成，结果文件不超过10MB，需要先验证输入数据并过滤异常值，超出频率范围时拒绝执行",
+                "expected_tool": "noise_model_tool",
+                "expected_params": {"frequency_range": [0.1, 20000], "time_limit": 120, "output_limit_mb": 10, "validate_input": True, "filter_outliers": True}
             }
         }
     ]
@@ -235,20 +323,45 @@ async def test_simple_flywheel():
     with open(training_pool_file, 'w', encoding='utf-8') as f:
         json.dump(mock_variants, f, ensure_ascii=False, indent=2)
     
-    print(f"  ✓ 已创建 {len(mock_variants)} 个模拟变体")
+    print(f"  ✓ 已创建 {len(mock_variants)} 个模拟变体（涵盖所有难度级别）")
     
-    # 3. 显示文件内容
-    print("\n[3] 查看生成的数据结构...")
+    # 3. 使用 VariantTrainer 测试工具选择（按难度级别筛选）
+    print("\n[3] 使用 VariantTrainer 测试工具选择...")
+    
+    trainer = VariantTrainer()
+    
+    # 测试所有难度级别
+    print("\n  测试所有变体:")
+    report_all = await trainer.train(max_variants=10, only_unused=False)
+    print(f"    总准确率: {report_all.get('accuracy', 0):.1%} ({report_all.get('correct', 0)}/{report_all.get('total_variants', 0)})")
+    
+    # 按难度级别统计
+    difficulty_stats = report_all.get('difficulty_stats', {})
+    for level, stats in difficulty_stats.items():
+        if stats.get('total', 0) > 0:
+            print(f"    {level}: {stats.get('correct', 0)}/{stats.get('total', 0)} ({stats.get('accuracy', 0):.1%})")
+    
+    # 4. 显示文件内容
+    print("\n[4] 查看生成的数据结构...")
     
     print(f"\n  错题记录 ({failed_cases_file}):")
-    with open(failed_cases_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    print(f"    {json.dumps(data, ensure_ascii=False, indent=4)[:500]}...")
+    if os.path.exists(failed_cases_file):
+        with open(failed_cases_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"    共 {len(data)} 条记录")
+    else:
+        print("    文件不存在")
     
     print(f"\n  训练池 ({training_pool_file}):")
-    with open(training_pool_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    print(f"    {json.dumps(data, ensure_ascii=False, indent=4)[:500]}...")
+    if os.path.exists(training_pool_file):
+        with open(training_pool_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"    共 {len(data)} 个变体")
+        for v in data:
+            constraints_count = len(v.get('added_constraints', []))
+            print(f"    - {v['variant_id']}: {v['variant_description'][:40]}... (约束数: {constraints_count})")
+    else:
+        print("    文件不存在")
     
     print("\n" + "=" * 70)
     print("简化版测试完成")

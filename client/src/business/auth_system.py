@@ -2,7 +2,9 @@
 用户认证系统
 User Authentication System
 
-支持本地 SQLite 数据库的用户注册、登录、个人资料管理。
+支持本地 SQLite 数据库的用户注册、登录、个人资料管理、密码重置、会话管理。
+
+配置来源：NanochatConfig (client/src/business/nanochat_config.py)
 """
 
 import sqlite3
@@ -13,9 +15,11 @@ import os
 import shutil
 from pathlib import Path
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional, List, Callable
+from datetime import datetime, timedelta
+from typing import Optional, List, Callable, Dict
 from enum import Enum
+
+from client.src.business.nanochat_config import config
 
 
 class UserRole(Enum):
@@ -139,7 +143,9 @@ class AuthSystem:
                     last_login TEXT,
                     preferences TEXT DEFAULT '{}',
                     avatar TEXT DEFAULT '',
-                    bio TEXT DEFAULT ''
+                    bio TEXT DEFAULT '',
+                    failed_attempts INTEGER DEFAULT 0,
+                    locked_until TEXT
                 );
                 
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -147,11 +153,23 @@ class AuthSystem:
                     user_id TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     expires_at TEXT,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    token TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 );
                 
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+                CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+                CREATE INDEX IF NOT EXISTS idx_reset_tokens_user ON password_reset_tokens(user_id);
             """)
             conn.commit()
     
@@ -241,17 +259,24 @@ class AuthSystem:
         except Exception as e:
             return AuthResult(False, f"注册失败: {e}")
     
-    def login(self, username: str, password: str) -> AuthResult:
+    def login(self, username: str, password: str, ip_address: str = "", user_agent: str = "") -> AuthResult:
         """
         用户登录
         
         Args:
             username: 用户名
             password: 密码
+            ip_address: 客户端IP地址（可选）
+            user_agent: 客户端User-Agent（可选）
             
         Returns:
             AuthResult: 登录结果
         """
+        # 检查账户是否被锁定
+        lock_message = self._check_account_locked(username)
+        if lock_message:
+            return AuthResult(False, lock_message)
+        
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """SELECT id, username, password_hash, salt, email, display_name, 
@@ -262,11 +287,17 @@ class AuthSystem:
             row = cursor.fetchone()
         
         if not row:
+            # 记录失败尝试（即使用户名不存在，防止枚举攻击）
+            self._record_failed_attempt(username)
             return AuthResult(False, "用户名或密码错误")
         
         # 验证密码
         if not self._verify_password(password, row["password_hash"], row["salt"]):
+            self._record_failed_attempt(username)
             return AuthResult(False, "用户名或密码错误")
+        
+        # 重置失败尝试次数
+        self._reset_failed_attempts(row["id"])
         
         # 更新最后登录时间
         with self._get_connection() as conn:
@@ -277,7 +308,7 @@ class AuthSystem:
             conn.commit()
         
         # 创建会话
-        session_token = self._create_session(row["id"])
+        session_token = self._create_session(row["id"], ip_address, user_agent)
         
         # 创建用户对象
         user = UserProfile(
@@ -472,6 +503,7 @@ class AuthSystem:
         try:
             with self._get_connection() as conn:
                 conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+                conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user_id,))
                 conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
             
@@ -482,6 +514,402 @@ class AuthSystem:
             return AuthResult(True, "用户已删除")
         except Exception as e:
             return AuthResult(False, f"删除失败: {e}")
+    
+    # ========== 密码重置功能 ==========
+    
+    def generate_reset_token(self, email: str) -> Optional[str]:
+        """
+        生成密码重置令牌
+        
+        Args:
+            email: 用户邮箱
+            
+        Returns:
+            重置令牌（如果找到用户）
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT id FROM users WHERE email = ?",
+                (email,)
+            )
+            row = cursor.fetchone()
+        
+        if not row:
+            return None
+        
+        user_id = row["id"]
+        token = uuid.uuid4().hex
+        created_at = datetime.now().isoformat()
+        expires_at = (datetime.now() + timedelta(hours=2)).isoformat()
+        
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "DELETE FROM password_reset_tokens WHERE user_id = ?",
+                    (user_id,)
+                )
+                conn.execute(
+                    """INSERT INTO password_reset_tokens 
+                       (token, user_id, created_at, expires_at) 
+                       VALUES (?, ?, ?, ?)""",
+                    (token, user_id, created_at, expires_at)
+                )
+                conn.commit()
+            
+            return token
+        except Exception:
+            return None
+    
+    def validate_reset_token(self, token: str) -> Optional[str]:
+        """
+        验证密码重置令牌
+        
+        Args:
+            token: 重置令牌
+            
+        Returns:
+            用户ID（如果令牌有效）
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?",
+                (token,)
+            )
+            row = cursor.fetchone()
+        
+        if not row:
+            return None
+        
+        # 检查是否过期
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if datetime.now() > expires_at:
+            # 删除过期令牌
+            with self._get_connection() as conn:
+                conn.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+                conn.commit()
+            return None
+        
+        return row["user_id"]
+    
+    def reset_password(self, token: str, new_password: str) -> AuthResult:
+        """
+        使用令牌重置密码
+        
+        Args:
+            token: 重置令牌
+            new_password: 新密码
+            
+        Returns:
+            AuthResult: 重置结果
+        """
+        if len(new_password) < 6:
+            return AuthResult(False, "新密码至少需要6个字符")
+        
+        user_id = self.validate_reset_token(token)
+        if not user_id:
+            return AuthResult(False, "无效或过期的重置令牌")
+        
+        # 更新密码
+        new_hash, new_salt = self._hash_password(new_password)
+        
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET password_hash = ?, salt = ?, failed_attempts = 0 WHERE id = ?",
+                    (new_hash, new_salt, user_id)
+                )
+                conn.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+                conn.commit()
+            
+            return AuthResult(True, "密码重置成功")
+        except Exception as e:
+            return AuthResult(False, f"重置失败: {e}")
+    
+    # ========== 会话管理 ==========
+    
+    def _create_session(self, user_id: str, ip_address: str = "", user_agent: str = "") -> str:
+        """创建会话"""
+        token = uuid.uuid4().hex
+        created_at = datetime.now().isoformat()
+        expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
+        
+        with self._get_connection() as conn:
+            conn.execute(
+                """INSERT INTO sessions 
+                   (token, user_id, created_at, expires_at, ip_address, user_agent) 
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (token, user_id, created_at, expires_at, ip_address, user_agent)
+            )
+            conn.commit()
+        
+        return token
+    
+    def validate_session(self, token: str) -> Optional[UserProfile]:
+        """
+        验证会话令牌
+        
+        Args:
+            token: 会话令牌
+            
+        Returns:
+            用户对象（如果会话有效）
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT u.id, u.username, u.email, u.display_name, u.role, 
+                          u.created_at, u.last_login, u.preferences, u.avatar, u.bio,
+                          s.expires_at
+                   FROM sessions s
+                   JOIN users u ON s.user_id = u.id
+                   WHERE s.token = ?""",
+                (token,)
+            )
+            row = cursor.fetchone()
+        
+        if not row:
+            return None
+        
+        # 检查是否过期
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if datetime.now() > expires_at:
+            with self._get_connection() as conn:
+                conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+                conn.commit()
+            return None
+        
+        # 刷新会话过期时间
+        new_expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE sessions SET expires_at = ? WHERE token = ?",
+                (new_expires_at, token)
+            )
+            conn.commit()
+        
+        return UserProfile(
+            id=row["id"],
+            username=row["username"],
+            email=row["email"] or "",
+            display_name=row["display_name"] or row["username"],
+            role=UserRole(row["role"]),
+            created_at=row["created_at"],
+            last_login=row["last_login"] or "",
+            preferences=json.loads(row["preferences"] or "{}"),
+            avatar=row["avatar"] or "",
+            bio=row["bio"] or ""
+        )
+    
+    def login_with_session(self, token: str) -> AuthResult:
+        """
+        使用会话令牌登录
+        
+        Args:
+            token: 会话令牌
+            
+        Returns:
+            AuthResult: 登录结果
+        """
+        user = self.validate_session(token)
+        if user:
+            self._current_user = user
+            self._session_token = token
+            return AuthResult(True, "会话验证成功", user)
+        
+        return AuthResult(False, "无效或过期的会话")
+    
+    def clear_user_sessions(self, user_id: str):
+        """
+        清除用户所有会话（强制登出所有设备）
+        
+        Args:
+            user_id: 用户ID
+        """
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            conn.commit()
+        
+        # 如果当前用户被强制登出
+        if self._current_user and self._current_user.id == user_id:
+            self.logout()
+    
+    def cleanup_expired_sessions(self):
+        """清理过期会话"""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+            conn.commit()
+    
+    # ========== 权限检查 ==========
+    
+    def has_role(self, user_id: str, required_role: UserRole) -> bool:
+        """
+        检查用户是否具有指定角色
+        
+        Args:
+            user_id: 用户ID
+            required_role: 所需角色
+            
+        Returns:
+            是否具有该角色
+        """
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        
+        role_order = {UserRole.GUEST: 0, UserRole.USER: 1, UserRole.ADMIN: 2}
+        return role_order[user.role] >= role_order[required_role]
+    
+    def is_admin(self, user_id: str) -> bool:
+        """检查用户是否为管理员"""
+        return self.has_role(user_id, UserRole.ADMIN)
+    
+    def require_admin(self, user_id: str) -> bool:
+        """
+        要求管理员权限
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            是否为管理员
+        """
+        return self.is_admin(user_id)
+    
+    def can_access(self, user_id: str, resource: str) -> bool:
+        """
+        检查用户是否有权限访问资源
+        
+        Args:
+            user_id: 用户ID
+            resource: 资源标识符
+            
+        Returns:
+            是否有权限
+        """
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        
+        # 管理员可以访问所有资源
+        if user.role == UserRole.ADMIN:
+            return True
+        
+        # 用户可以访问自己的资源
+        if resource.startswith(f"user/{user_id}/"):
+            return True
+        
+        # 公共资源
+        public_resources = ["public/", "shared/"]
+        for prefix in public_resources:
+            if resource.startswith(prefix):
+                return True
+        
+        return False
+    
+    # ========== 账户安全 ==========
+    
+    def _check_account_locked(self, username: str) -> Optional[str]:
+        """检查账户是否被锁定"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT locked_until FROM users WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+        
+        if not row or not row["locked_until"]:
+            return None
+        
+        locked_until = datetime.fromisoformat(row["locked_until"])
+        if datetime.now() < locked_until:
+            remaining = (locked_until - datetime.now()).seconds // 60
+            return f"账户已被锁定，请 {remaining} 分钟后重试"
+        
+        # 锁定时间已过，解锁账户
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET locked_until = NULL, failed_attempts = 0 WHERE username = ?",
+                (username,)
+            )
+            conn.commit()
+        
+        return None
+    
+    def _record_failed_attempt(self, username: str):
+        """记录登录失败尝试"""
+        max_attempts = 5
+        lock_duration = 15  # 分钟
+        
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT failed_attempts FROM users WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+            
+            if row:
+                attempts = row["failed_attempts"] + 1
+                
+                if attempts >= max_attempts:
+                    locked_until = (datetime.now() + timedelta(minutes=lock_duration)).isoformat()
+                    conn.execute(
+                        "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE username = ?",
+                        (attempts, locked_until, username)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE users SET failed_attempts = ? WHERE username = ?",
+                        (attempts, username)
+                    )
+                conn.commit()
+    
+    def _reset_failed_attempts(self, user_id: str):
+        """重置登录失败尝试次数"""
+        with self._get_connection() as conn:
+            conn.execute("UPDATE users SET failed_attempts = 0 WHERE id = ?", (user_id,))
+            conn.commit()
+    
+    # ========== 批量操作 ==========
+    
+    def get_users_with_role(self, role: UserRole) -> List[UserProfile]:
+        """获取指定角色的所有用户"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """SELECT id, username, email, display_name, role, 
+                          created_at, last_login, preferences, avatar, bio
+                   FROM users WHERE role = ? ORDER BY created_at DESC""",
+                (role.value,)
+            )
+            rows = cursor.fetchall()
+        
+        return [
+            UserProfile(
+                id=row["id"],
+                username=row["username"],
+                email=row["email"] or "",
+                display_name=row["display_name"] or row["username"],
+                role=UserRole(row["role"]),
+                created_at=row["created_at"],
+                last_login=row["last_login"] or "",
+                preferences=json.loads(row["preferences"] or "{}"),
+                avatar=row["avatar"] or "",
+                bio=row["bio"] or ""
+            )
+            for row in rows
+        ]
+    
+    def update_user_role(self, user_id: str, new_role: UserRole) -> bool:
+        """更新用户角色"""
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET role = ? WHERE id = ?",
+                    (new_role.value, user_id)
+                )
+                conn.commit()
+            return True
+        except Exception:
+            return False
     
     def list_users(self) -> List[UserProfile]:
         """列出所有用户（仅管理员）"""

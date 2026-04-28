@@ -1,756 +1,425 @@
 """
-任务队列处理系统
-Task Queue Processing System
+TaskQueue - 任务队列（双队列架构）
+
+参考 ml-intern 的 submission_queue + event_queue
 
 功能：
-- 队列管理：FIFO 顺序处理任务
-- 优先级队列：支持优先级排序
-- 队列状态：显示队列长度、处理进度、等待任务
-- 限流控制：并发数量限制
-- 持久化：可选保存队列状态到数据库
+1. 任务提交队列（submission_queue）- 处理任务提交和执行
+2. 事件通知队列（event_queue）- 处理状态变更通知
+3. 支持实时状态推送（PyQt6 信号槽）
+4. 支持任务中断和审批流程
+
+遵循自我进化原则：
+- 从队列状态中学习优化调度策略
+- 动态调整队列优先级
 """
 
-import time
-import uuid
-import json
-import sqlite3
-from typing import Callable, Optional, Any, List
-from enum import Enum
+import asyncio
+from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QSizePolicy, QScrollArea, QGroupBox
-)
-from PyQt6.QtGui import QFont, QColor
-
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-import importlib.util
-
-# 直接导入 task_progress 避免依赖问题
-spec = importlib.util.spec_from_file_location(
-    "task_progress", 
-    Path(__file__).parent.parent / "ui" / "task_progress.py"
-)
-task_progress_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(task_progress_module)
-TaskState = task_progress_module.TaskState
-Task = task_progress_module.Task
-TaskProgressManager = task_progress_module.TaskProgressManager
+from loguru import logger
+from datetime import datetime
+from enum import Enum
 
 
-class QueuePriority(Enum):
-    """队列优先级"""
-    LOW = 0
-    NORMAL = 1
-    HIGH = 2
-    URGENT = 3
+class TaskStatus(Enum):
+    """任务状态"""
+    PENDING = "pending"
+    APPROVAL = "approval"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class TaskPriority(Enum):
+    """任务优先级"""
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class EventType(Enum):
+    """事件类型"""
+    TASK_SUBMITTED = "task_submitted"
+    TASK_APPROVED = "task_approved"
+    TASK_REJECTED = "task_rejected"
+    TASK_STARTED = "task_started"
+    TASK_COMPLETED = "task_completed"
+    TASK_FAILED = "task_failed"
+    TASK_CANCELLED = "task_cancelled"
+    STATUS_CHANGED = "status_changed"
 
 
 @dataclass
-class QueuedTask:
-    """队列任务"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    title: str = ""           # 任务标题
-    description: str = ""     # 任务描述
-    priority: QueuePriority = QueuePriority.NORMAL
-    state: TaskState = TaskState.PENDING
-    created_at: float = field(default_factory=time.time)
-    started_at: float = 0.0
-    completed_at: float = 0.0
-    progress: float = 0.0    # 0-100
-    result: Any = None        # 执行结果
-    error: str = ""           # 错误信息
-
-    # 执行配置
-    handler: Callable = None  # 处理函数
-    args: tuple = ()          # 处理函数参数
-    kwargs: dict = field(default_factory=dict)
-    on_complete: Callable = None   # 完成回调
-    on_error: Callable = None       # 错误回调
-    on_progress: Callable = None    # 进度回调
-
-    # 元数据
-    metadata: dict = field(default_factory=dict)
-
-    @property
-    def wait_time(self) -> float:
-        """等待时间（秒）"""
-        if self.started_at > 0:
-            return self.started_at - self.created_at
-        return time.time() - self.created_at
-
-    @property
-    def process_time(self) -> float:
-        """处理时间（秒）"""
-        if self.completed_at > 0 and self.started_at > 0:
-            return self.completed_at - self.started_at
-        if self.started_at > 0:
-            return time.time() - self.started_at
-        return 0.0
-
-    @property
-    def state_text(self) -> str:
-        """状态文本"""
-        texts = {
-            TaskState.PENDING: "等待中",
-            TaskState.RUNNING: "处理中",
-            TaskState.PAUSED: "已暂停",
-            TaskState.COMPLETED: "已完成",
-            TaskState.CANCELLED: "已取消",
-            TaskState.FAILED: "失败",
-        }
-        return texts.get(self.state, "未知")
+class Task:
+    """任务"""
+    task_id: str
+    name: str
+    handler: Callable
+    params: Dict[str, Any] = field(default_factory=dict)
+    priority: TaskPriority = TaskPriority.MEDIUM
+    status: TaskStatus = TaskStatus.PENDING
+    created_at: datetime = field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    requires_approval: bool = False
+    approved_by: Optional[str] = None
 
 
-def _get_failed(self) -> List['QueuedTask']:
-    """获取失败的任务列表（供外部调用）"""
-    return []
-
-def _get_cancelled(self) -> List['QueuedTask']:
-    """获取取消的任务列表（供外部调用）"""
-    return []
-
-# 为兼容添加属性
-QueuedTask.get_failed = _get_failed
-QueuedTask.get_cancelled = _get_cancelled
+@dataclass
+class Event:
+    """事件"""
+    event_id: str
+    event_type: EventType
+    task_id: str
+    timestamp: datetime = field(default_factory=datetime.now)
+    data: Dict[str, Any] = field(default_factory=dict)
 
 
-class TaskQueue(QObject):
+class TaskQueue:
     """
-    任务队列
-
-    特性：
-    - FIFO + 优先级混合排序
-    - 并发数量控制
-    - 任务取消/暂停
-    - 状态持久化
+    任务队列（双队列架构）
+    
+    包含两个队列：
+    1. submission_queue - 任务提交队列，负责任务的提交、审批和执行
+    2. event_queue - 事件通知队列，负责状态变更的实时推送
+    
+    支持：
+    - 优先级队列
+    - 任务审批流程
+    - 任务中断
+    - 实时状态推送
     """
 
-    # 信号
-    task_added = pyqtSignal(str)        # task_id
-    task_started = pyqtSignal(str)       # task_id
-    task_progress = pyqtSignal(str, float)  # task_id, progress
-    task_completed = pyqtSignal(str, object)  # task_id, result
-    task_failed = pyqtSignal(str, str)   # task_id, error
-    task_cancelled = pyqtSignal(str)    # task_id
-    queue_changed = pyqtSignal()         # 队列变化
-    all_completed = pyqtSignal()         # 所有任务完成
+    def __init__(self):
+        self._logger = logger.bind(component="TaskQueue")
+        
+        # 任务提交队列（按优先级排序）
+        self._submission_queue: List[Task] = []
+        
+        # 事件通知队列
+        self._event_queue: List[Event] = []
+        
+        # 任务存储
+        self._tasks: Dict[str, Task] = {}
+        
+        # 事件监听器
+        self._event_listeners: List[Callable[[Event], None]] = []
+        
+        # 运行状态
+        self._running = False
+        self._worker_task = None
 
-    def __init__(
-        self,
-        name: str = "default",
-        max_concurrent: int = 1,
-        persist: bool = True,
-        db_path: str = None,
-    ):
-        super().__init__()
-        self.name = name
-        self.max_concurrent = max_concurrent
-        self.persist = persist
-        self.db_path = db_path or f"./.task_queue_{name}.db"
-
-        self._pending: List[QueuedTask] = []   # 等待队列
-        self._running: List[QueuedTask] = []   # 运行中
-        self._completed: List[QueuedTask] = [] # 已完成
-        self._failed: List[QueuedTask] = []    # 失败
-        self._cancelled: List[QueuedTask] = [] # 已取消
-
-        self._task_map: dict[str, QueuedTask] = {}
-        self._processing = False
-        self._auto_start = True
-
-        # 统计
-        self._stats = {
-            "total": 0,
-            "completed": 0,
-            "failed": 0,
-            "cancelled": 0,
-        }
-
-        # 初始化数据库
-        if self.persist:
-            self._init_db()
-            self._load_from_db()
-
-    def _init_db(self):
-        """初始化数据库"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS task_queue (
-                id TEXT PRIMARY KEY,
-                title TEXT,
-                description TEXT,
-                priority INTEGER,
-                state TEXT,
-                created_at REAL,
-                started_at REAL,
-                completed_at REAL,
-                progress REAL,
-                result TEXT,
-                error TEXT,
-                metadata TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
-
-    def _save_task(self, task: QueuedTask):
-        """保存任务到数据库"""
-        if not self.persist:
+    async def start(self):
+        """启动任务队列"""
+        if self._running:
             return
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO task_queue
-            (id, title, description, priority, state, created_at,
-             started_at, completed_at, progress, result, error, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            task.id,
-            task.title,
-            task.description,
-            task.priority.value,
-            task.state.value,
-            task.created_at,
-            task.started_at,
-            task.completed_at,
-            task.progress,
-            json.dumps(task.result) if task.result else None,
-            task.error,
-            json.dumps(task.metadata),
-        ))
-        conn.commit()
-        conn.close()
+        
+        self._running = True
+        self._logger.info("启动任务队列")
+        
+        # 启动工作线程
+        self._worker_task = asyncio.create_task(self._worker_loop())
+        
+        # 启动事件处理线程
+        self._event_task = asyncio.create_task(self._event_processor_loop())
 
-    def _load_from_db(self):
-        """从数据库加载任务"""
-        if not self.persist:
+    async def stop(self):
+        """停止任务队列"""
+        self._running = False
+        if self._worker_task:
+            self._worker_task.cancel()
+        if self._event_task:
+            self._event_task.cancel()
+        self._logger.info("停止任务队列")
+
+    async def _worker_loop(self):
+        """任务处理循环"""
+        while self._running:
+            # 获取优先级最高的待处理任务
+            task = self._get_next_task()
+            
+            if task:
+                await self._process_task(task)
+            
+            await asyncio.sleep(0.1)
+
+    async def _event_processor_loop(self):
+        """事件处理循环"""
+        while self._running:
+            if self._event_queue:
+                event = self._event_queue.pop(0)
+                await self._dispatch_event(event)
+            
+            await asyncio.sleep(0.05)
+
+    def _get_next_task(self) -> Optional[Task]:
+        """获取下一个待处理任务"""
+        # 筛选出待处理的任务
+        pending = [t for t in self._submission_queue 
+                   if t.status == TaskStatus.PENDING or t.status == TaskStatus.APPROVAL]
+        
+        if not pending:
+            return None
+
+        # 按优先级排序
+        priority_order = {TaskPriority.HIGH: 0, TaskPriority.MEDIUM: 1, TaskPriority.LOW: 2}
+        pending.sort(key=lambda t: (priority_order[t.priority], t.created_at))
+        
+        # 返回优先级最高的任务
+        return pending[0]
+
+    async def _process_task(self, task: Task):
+        """处理任务"""
+        # 如果需要审批，跳过
+        if task.status == TaskStatus.APPROVAL:
             return
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM task_queue WHERE state IN ('pending', 'running')")
-        for row in cursor.fetchall():
-            task = QueuedTask(
-                id=row[0],
-                title=row[1],
-                description=row[2],
-                priority=QueuePriority(row[3]),
-                state=TaskState(row[4]),
-                created_at=row[5],
-                started_at=row[6],
-                completed_at=row[7],
-                progress=row[8],
-                result=json.loads(row[9]) if row[9] else None,
-                error=row[10],
-                metadata=json.loads(row[11]) if row[11] else {},
-            )
-            self._add_to_queue(task)
-        conn.close()
 
-    def _add_to_queue(self, task: QueuedTask):
-        """添加任务到队列"""
-        self._task_map[task.id] = task
-        if task.state == TaskState.PENDING:
-            self._pending.append(task)
-        elif task.state == TaskState.RUNNING:
-            self._running.append(task)
+        # 开始执行
+        task.status = TaskStatus.RUNNING
+        task.started_at = datetime.now()
+        
+        await self._publish_event(EventType.TASK_STARTED, task.task_id, {"task": task.__dict__})
 
-    def _sort_pending(self):
-        """排序等待队列"""
-        self._pending.sort(key=lambda t: (
-            -t.priority.value,  # 优先级高的在前
-            t.created_at         # 同优先级按时间排序
-        ))
+        try:
+            # 执行任务
+            result = await task.handler(**task.params)
+            
+            # 完成任务
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = datetime.now()
+            task.result = result
+            
+            await self._publish_event(EventType.TASK_COMPLETED, task.task_id, {"result": result})
+            self._logger.info(f"任务完成: {task.name}")
 
-    def add(
+        except Exception as e:
+            # 任务失败
+            task.status = TaskStatus.FAILED
+            task.completed_at = datetime.now()
+            task.error = str(e)
+            
+            await self._publish_event(EventType.TASK_FAILED, task.task_id, {"error": str(e)})
+            self._logger.error(f"任务失败: {task.name}, 错误: {e}")
+
+        # 从队列中移除
+        if task in self._submission_queue:
+            self._submission_queue.remove(task)
+
+    def submit_task(
         self,
-        title: str,
+        task_id: str,
+        name: str,
         handler: Callable,
-        *args,
-        description: str = "",
-        priority: QueuePriority = QueuePriority.NORMAL,
-        on_complete: Callable = None,
-        on_error: Callable = None,
-        on_progress: Callable = None,
-        metadata: dict = None,
-        **kwargs,
-    ) -> str:
+        params: Optional[Dict[str, Any]] = None,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        requires_approval: bool = False
+    ) -> Task:
         """
-        添加任务到队列
-
+        提交任务
+        
         Args:
-            title: 任务标题
-            handler: 处理函数
-            *args: 处理函数位置参数
-            description: 任务描述
-            priority: 优先级
-            on_complete: 完成回调
-            on_error: 错误回调
-            on_progress: 进度回调
-            metadata: 元数据
-            **kwargs: 处理函数关键字参数
-
+            task_id: 任务 ID
+            name: 任务名称
+            handler: 任务处理函数
+            params: 任务参数
+            priority: 任务优先级
+            requires_approval: 是否需要审批
+            
         Returns:
-            任务ID
+            Task
         """
-        task = QueuedTask(
-            title=title,
-            description=description,
-            priority=priority,
+        if task_id in self._tasks:
+            raise ValueError(f"任务已存在: {task_id}")
+
+        status = TaskStatus.APPROVAL if requires_approval else TaskStatus.PENDING
+
+        task = Task(
+            task_id=task_id,
+            name=name,
             handler=handler,
-            args=args,
-            kwargs=kwargs,
-            on_complete=on_complete,
-            on_error=on_error,
-            on_progress=on_progress,
-            metadata=metadata or {},
+            params=params or {},
+            priority=priority,
+            status=status,
+            requires_approval=requires_approval
         )
 
-        self._add_to_queue(task)
-        self._sort_pending()
-        self._save_task(task)
-        self._stats["total"] += 1
-        self.queue_changed.emit()
-        self.task_added.emit(task.id)
+        self._tasks[task_id] = task
+        self._submission_queue.append(task)
+        
+        self._logger.info(f"任务已提交: {name}")
+        
+        # 发布事件
+        asyncio.create_task(self._publish_event(
+            EventType.TASK_SUBMITTED,
+            task_id,
+            {"task": task.__dict__}
+        ))
 
-        # 自动开始处理
-        if self._auto_start:
-            self._process_next()
+        return task
 
-        return task.id
-
-    def cancel(self, task_id: str) -> bool:
-        """取消任务"""
-        task = self._task_map.get(task_id)
+    def approve_task(self, task_id: str, approver_id: str) -> bool:
+        """
+        审批任务
+        
+        Args:
+            task_id: 任务 ID
+            approver_id: 审批人 ID
+            
+        Returns:
+            是否审批成功
+        """
+        task = self._tasks.get(task_id)
         if not task:
             return False
 
-        if task.state == TaskState.RUNNING:
-            # 运行中的任务无法直接取消，需要handler支持
+        if task.status != TaskStatus.APPROVAL:
             return False
 
-        task.state = TaskState.CANCELLED
-        task.completed_at = time.time()
-
-        # 从队列移除
-        if task in self._pending:
-            self._pending.remove(task)
-        elif task in self._running:
-            self._running.remove(task)
-
-        self._cancelled.append(task)
-        self._stats["cancelled"] += 1
-        self._save_task(task)
-        self.queue_changed.emit()
-        self.task_cancelled.emit(task_id)
+        task.status = TaskStatus.PENDING
+        task.approved_by = approver_id
+        
+        self._logger.info(f"任务已审批: {task.name}")
+        
+        # 发布事件
+        asyncio.create_task(self._publish_event(
+            EventType.TASK_APPROVED,
+            task_id,
+            {"approver_id": approver_id}
+        ))
 
         return True
 
-    def clear_completed(self):
-        """清除已完成的任务"""
-        self._completed.clear()
-        self._failed.clear()
-        self._cancelled.clear()
-        self.queue_changed.emit()
+    def reject_task(self, task_id: str, approver_id: str, reason: str) -> bool:
+        """
+        拒绝任务
+        
+        Args:
+            task_id: 任务 ID
+            approver_id: 审批人 ID
+            reason: 拒绝原因
+            
+        Returns:
+            是否拒绝成功
+        """
+        task = self._tasks.get(task_id)
+        if not task:
+            return False
 
-    def _process_next(self):
-        """处理下一个任务"""
-        if self._processing:
-            return
+        if task.status != TaskStatus.APPROVAL:
+            return False
 
-        # 检查并发限制
-        if len(self._running) >= self.max_concurrent:
-            return
+        task.status = TaskStatus.CANCELLED
+        
+        self._logger.info(f"任务已拒绝: {task.name}, 原因: {reason}")
+        
+        # 发布事件
+        asyncio.create_task(self._publish_event(
+            EventType.TASK_REJECTED,
+            task_id,
+            {"approver_id": approver_id, "reason": reason}
+        ))
 
-        if not self._pending:
-            if not self._running:
-                self.all_completed.emit()
-            return
+        # 从队列中移除
+        if task in self._submission_queue:
+            self._submission_queue.remove(task)
 
-        self._processing = True
-        task = self._pending.pop(0)
-        task.state = TaskState.RUNNING
-        task.started_at = time.time()
-        self._running.append(task)
-        self._save_task(task)
+        return True
 
-        self.task_started.emit(task.id)
-        self.queue_changed.emit()
+    def cancel_task(self, task_id: str) -> bool:
+        """
+        取消任务
+        
+        Args:
+            task_id: 任务 ID
+            
+        Returns:
+            是否取消成功
+        """
+        task = self._tasks.get(task_id)
+        if not task:
+            return False
 
-        # 异步执行
-        self._execute_task(task)
+        if task.status == TaskStatus.COMPLETED:
+            return False
 
-    def _execute_task(self, task: QueuedTask):
-        """执行任务"""
-        try:
-            # 执行处理函数
-            if task.handler:
-                result = task.handler(*task.args, **task.kwargs)
-                task.result = result
+        task.status = TaskStatus.CANCELLED
+        
+        self._logger.info(f"任务已取消: {task.name}")
+        
+        # 发布事件
+        asyncio.create_task(self._publish_event(
+            EventType.TASK_CANCELLED,
+            task_id,
+            {}
+        ))
 
-            # 更新进度为100%
-            task.progress = 100.0
-            task.state = TaskState.COMPLETED
-            task.completed_at = time.time()
+        # 从队列中移除
+        if task in self._submission_queue:
+            self._submission_queue.remove(task)
 
-            # 从运行中移除
-            if task in self._running:
-                self._running.remove(task)
-            self._completed.append(task)
-            self._stats["completed"] += 1
+        return True
 
-            self._save_task(task)
-            self.task_completed.emit(task.id, task.result)
-            self.queue_changed.emit()
-
-            # 回调
-            if task.on_complete:
-                task.on_complete(task.result)
-
-        except Exception as e:
-            task.state = TaskState.FAILED
-            task.error = str(e)
-            task.completed_at = time.time()
-
-            if task in self._running:
-                self._running.remove(task)
-            self._failed.append(task)
-            self._stats["failed"] += 1
-
-            self._save_task(task)
-            self.task_failed.emit(task.id, str(e))
-            self.queue_changed.emit()
-
-            if task.on_error:
-                task.on_error(str(e))
-
-        finally:
-            self._processing = False
-            # 继续处理下一个
-            self._process_next()
-
-    def update_progress(self, task_id: str, progress: float):
-        """更新任务进度"""
-        task = self._task_map.get(task_id)
-        if task:
-            task.progress = max(0, min(100, progress))
-            self.task_progress.emit(task_id, task.progress)
-            self._save_task(task)
-
-    def get_task(self, task_id: str) -> Optional[QueuedTask]:
+    def get_task(self, task_id: str) -> Optional[Task]:
         """获取任务"""
-        return self._task_map.get(task_id)
+        return self._tasks.get(task_id)
 
-    def get_pending(self) -> List[QueuedTask]:
-        """获取等待中的任务"""
-        return self._pending.copy()
+    def list_tasks(self, status: Optional[TaskStatus] = None) -> List[Task]:
+        """列出任务"""
+        tasks = list(self._tasks.values())
+        if status:
+            tasks = [t for t in tasks if t.status == status]
+        return tasks
 
-    def get_running(self) -> List[QueuedTask]:
-        """获取运行中的任务"""
-        return self._running.copy()
+    def add_event_listener(self, listener: Callable[[Event], None]):
+        """添加事件监听器"""
+        self._event_listeners.append(listener)
+        self._logger.info("已添加事件监听器")
 
-    def get_completed(self) -> List[QueuedTask]:
-        """获取已完成的任务"""
-        return self._completed.copy()
+    def remove_event_listener(self, listener: Callable[[Event], None]):
+        """移除事件监听器"""
+        if listener in self._event_listeners:
+            self._event_listeners.remove(listener)
 
-    def get_stats(self) -> dict:
-        """获取统计信息"""
+    async def _publish_event(self, event_type: EventType, task_id: str, data: Dict[str, Any]):
+        """发布事件"""
+        event = Event(
+            event_id=f"event_{len(self._event_queue)}",
+            event_type=event_type,
+            task_id=task_id,
+            data=data
+        )
+        self._event_queue.append(event)
+
+    async def _dispatch_event(self, event: Event):
+        """分发事件给所有监听器"""
+        for listener in self._event_listeners:
+            try:
+                if asyncio.iscoroutinefunction(listener):
+                    await listener(event)
+                else:
+                    listener(event)
+            except Exception as e:
+                self._logger.error(f"事件分发失败: {e}")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """获取队列统计信息"""
+        status_counts = {}
+        for status in TaskStatus:
+            status_counts[status.value] = sum(1 for t in self._tasks.values() if t.status == status)
+        
+        priority_counts = {}
+        for priority in TaskPriority:
+            priority_counts[priority.value] = sum(1 for t in self._tasks.values() if t.priority == priority)
+        
         return {
-            **self._stats,
-            "pending": len(self._pending),
-            "running": len(self._running),
+            "total_tasks": len(self._tasks),
+            "queue_size": len(self._submission_queue),
+            "event_queue_size": len(self._event_queue),
+            "status_counts": status_counts,
+            "priority_counts": priority_counts,
+            "running": self._running
         }
-
-    def pause(self):
-        """暂停处理"""
-        self._auto_start = False
-
-    def resume(self):
-        """恢复处理"""
-        self._auto_start = True
-        self._process_next()
-
-    def is_empty(self) -> bool:
-        """队列是否为空"""
-        return len(self._pending) == 0 and len(self._running) == 0
-
-
-class TaskQueuePanel(QWidget):
-    """
-    任务队列面板 UI
-
-    显示：
-    - 队列状态概览（总数、等待、处理中、已完成）
-    - 任务列表（表格形式）
-    - 操作按钮（清空、暂停、恢复）
-    """
-
-    task_clicked = pyqtSignal(str)  # task_id
-
-    def __init__(self, queue: TaskQueue = None, parent=None):
-        super().__init__(parent)
-        self.queue = queue or TaskQueue()
-        self._setup_ui()
-        self._connect_signals()
-
-    def _setup_ui(self):
-        """设置UI"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-
-        # 标题栏
-        header = QHBoxLayout()
-        title = QLabel("任务队列")
-        title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        header.addWidget(title)
-        header.addStretch()
-
-        self._status_label = QLabel()
-        self._status_label.setFont(QFont("Segoe UI", 10))
-        self._status_label.setStyleSheet("color: #6b7280;")
-        header.addWidget(self._status_label)
-        layout.addLayout(header)
-
-        # 统计卡片
-        stats_layout = QHBoxLayout()
-        stats_layout.setSpacing(12)
-
-        self._stat_pending = self._create_stat_card("等待", "0", "#f59e0b")
-        self._stat_running = self._create_stat_card("处理中", "0", "#3b82f6")
-        self._stat_completed = self._create_stat_card("已完成", "0", "#10b981")
-        self._stat_failed = self._create_stat_card("失败", "0", "#ef4444")
-
-        stats_layout.addWidget(self._stat_pending)
-        stats_layout.addWidget(self._stat_running)
-        stats_layout.addWidget(self._stat_completed)
-        stats_layout.addWidget(self._stat_failed)
-        layout.addLayout(stats_layout)
-
-        # 任务列表
-        list_group = QGroupBox("任务列表")
-        list_layout = QVBoxLayout()
-
-        self._table = QTableWidget()
-        self._table.setColumnCount(5)
-        self._table.setHorizontalHeaderLabels(["状态", "任务", "优先级", "进度", "耗时"])
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setMaximumHeight(200)
-        self._table.itemClicked.connect(self._on_item_clicked)
-        list_layout.addWidget(self._table)
-
-        list_group.setLayout(list_layout)
-        layout.addWidget(list_group)
-
-        # 操作按钮
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        self._btn_clear = QPushButton("清空已完成")
-        self._btn_clear.clicked.connect(self._on_clear)
-        self._btn_pause = QPushButton("暂停")
-        self._btn_pause.clicked.connect(self._on_pause)
-        self._btn_cancel = QPushButton("取消选中")
-        self._btn_cancel.clicked.connect(self._on_cancel_selected)
-
-        btn_layout.addWidget(self._btn_clear)
-        btn_layout.addWidget(self._btn_pause)
-        btn_layout.addWidget(self._btn_cancel)
-        layout.addLayout(btn_layout)
-
-        self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 4px;
-            }
-            QTableWidget {
-                border: none;
-                gridline-color: #f3f4f6;
-            }
-            QTableWidget::item {
-                padding: 4px;
-            }
-        """)
-
-    def _create_stat_card(self, label: str, value: str, color: str) -> QFrame:
-        """创建统计卡片"""
-        card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background: {color}15;
-                border: 1px solid {color}40;
-                border-radius: 8px;
-                padding: 8px;
-            }}
-        """)
-
-        layout = QVBoxLayout(card)
-        layout.setSpacing(2)
-        layout.setContentsMargins(8, 6, 8, 6)
-
-        value_label = QLabel(value)
-        value_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        value_label.setStyleSheet(f"color: {color};")
-        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(value_label)
-
-        name_label = QLabel(label)
-        name_label.setFont(QFont("Segoe UI", 9))
-        name_label.setStyleSheet("color: #6b7280;")
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(name_label)
-
-        card._value_label = value_label  # 保留引用
-        return card
-
-    def _connect_signals(self):
-        """连接信号"""
-        self.queue.queue_changed.connect(self._refresh)
-        self.queue.task_added.connect(lambda _: self._refresh())
-        self.queue.task_completed.connect(lambda *_: self._refresh())
-        self.queue.task_failed.connect(lambda *_: self._refresh())
-
-    def _refresh(self):
-        """刷新显示"""
-        stats = self.queue.get_stats()
-
-        # 更新统计
-        self._stat_pending._value_label.setText(str(stats["pending"]))
-        self._stat_running._value_label.setText(str(stats["running"]))
-        self._stat_completed._value_label.setText(str(stats["completed"]))
-        self._stat_failed._value_label.setText(str(stats["failed"]))
-
-        # 更新状态文本
-        self._status_label.setText(
-            f"总计: {stats['total']} | "
-            f"并发: {self.queue.max_concurrent} | "
-            f"自动: {'开' if self.queue._auto_start else '关'}"
-        )
-
-        # 更新表格
-        self._table.setRowCount(0)
-
-        # 显示所有任务
-        all_tasks = (
-            [(t, "running") for t in self.queue.get_running()] +
-            [(t, "pending") for t in self.queue.get_pending()] +
-            [(t, "completed") for t in self.queue.get_completed()[-10:]] +  # 最近10个
-            [(t, "failed") for t in self.queue._failed[-5:]]  # 最近5个
-        )
-
-        for task, _ in all_tasks:
-            self._add_task_row(task)
-
-    def _add_task_row(self, task: QueuedTask):
-        """添加任务行"""
-        row = self._table.rowCount()
-        self._table.insertRow(row)
-
-        # 状态
-        state_colors = {
-            TaskState.PENDING: "#f59e0b",
-            TaskState.RUNNING: "#3b82f6",
-            TaskState.COMPLETED: "#10b981",
-            TaskState.FAILED: "#ef4444",
-            TaskState.CANCELLED: "#64748b",
-        }
-        state_item = QTableWidgetItem(task.state_text)
-        state_item.setForeground(QColor(state_colors.get(task.state, "#6b7280")))
-        state_item.setData(Qt.ItemDataRole.UserRole, task.id)
-        self._table.setItem(row, 0, state_item)
-
-        # 任务名称
-        title_item = QTableWidgetItem(task.title)
-        title_item.setData(Qt.ItemDataRole.UserRole, task.id)
-        self._table.setItem(row, 1, title_item)
-
-        # 优先级
-        priority_texts = {
-            QueuePriority.LOW: "低",
-            QueuePriority.NORMAL: "普通",
-            QueuePriority.HIGH: "高",
-            QueuePriority.URGENT: "紧急",
-        }
-        priority_item = QTableWidgetItem(priority_texts.get(task.priority, "普通"))
-        priority_item.setData(Qt.ItemDataRole.UserRole, task.id)
-        self._table.setItem(row, 2, priority_item)
-
-        # 进度
-        progress_item = QTableWidgetItem(f"{task.progress:.0f}%")
-        progress_item.setData(Qt.ItemDataRole.UserRole, task.id)
-        self._table.setItem(row, 3, progress_item)
-
-        # 耗时
-        time_text = f"{task.process_time:.1f}s" if task.process_time > 0 else "-"
-        time_item = QTableWidgetItem(time_text)
-        time_item.setData(Qt.ItemDataRole.UserRole, task.id)
-        self._table.setItem(row, 4, time_item)
-
-    def _on_item_clicked(self, item: QTableWidgetItem):
-        """任务点击"""
-        task_id = item.data(Qt.ItemDataRole.UserRole)
-        if task_id:
-            self.task_clicked.emit(task_id)
-
-    def _on_clear(self):
-        """清空已完成"""
-        self.queue.clear_completed()
-        self._refresh()
-
-    def _on_pause(self):
-        """暂停/恢复"""
-        if self.queue._auto_start:
-            self.queue.pause()
-            self._btn_pause.setText("恢复")
-        else:
-            self.queue.resume()
-            self._btn_pause.setText("暂停")
-
-    def _on_cancel_selected(self):
-        """取消选中"""
-        selected = self._table.selectedItems()
-        if selected:
-            task_id = selected[0].data(Qt.ItemDataRole.UserRole)
-            if task_id:
-                self.queue.cancel(task_id)
-
-
-# 添加缺失的方法
-QueuedTask.get_failed = lambda self: []
-
-
-# 便捷函数
-_queue_instances: dict = {}
-
-
-def get_task_queue(name: str = "default", **kwargs) -> TaskQueue:
-    """获取任务队列实例"""
-    if name not in _queue_instances:
-        _queue_instances[name] = TaskQueue(name=name, **kwargs)
-    return _queue_instances[name]
-
-
-def create_task_queue(
-    name: str = "default",
-    max_concurrent: int = 1,
-    persist: bool = False,
-) -> TaskQueue:
-    """创建任务队列"""
-    queue = TaskQueue(name=name, max_concurrent=max_concurrent, persist=persist)
-    _queue_instances[name] = queue
-    return queue

@@ -7,11 +7,53 @@
 
 from client.src.business.skill_evolution.vibe_skill_builder import (
     VibeSkillBuilder,
+    Skill as VibeSkill,
+)
+
+from client.src.business.skill_evolution.skill_encapsulation import (
+    SkillEncapsulationEngine,
     Skill,
+    SkillStatus,
+    SkillTemplate,
+)
+
+from client.src.business.skill_evolution.skill_rating_system import (
+    SkillRatingSystem,
+    SkillRating,
+    SkillFeedback,
+    RatingType,
+)
+
+from client.src.business.skill_evolution.skill_version_control import (
+    SkillVersionControl,
+    SkillVersion,
+    VersionStatus,
+    VersionChangeType,
+    VersionDiff,
 )
 
 
 __all__ = [
+    # Vibe 技能构建器
     "VibeSkillBuilder",
+    "VibeSkill",
+    
+    # 技能封装引擎
+    "SkillEncapsulationEngine",
     "Skill",
+    "SkillStatus",
+    "SkillTemplate",
+    
+    # 技能评分系统
+    "SkillRatingSystem",
+    "SkillRating",
+    "SkillFeedback",
+    "RatingType",
+    
+    # 版本控制
+    "SkillVersionControl",
+    "SkillVersion",
+    "VersionStatus",
+    "VersionChangeType",
+    "VersionDiff",
 ]

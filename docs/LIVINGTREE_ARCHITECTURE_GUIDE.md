@@ -11,16 +11,17 @@
 
 1. [一、项目现状](#一项目现状)
 2. [二、架构概览](#二架构概览)
-3. [三、参考借鉴](#三参考借鉴) ⭐
-4. [四、阶段一：工具层基础设施](#四阶段一工具层基础设施)
-5. [五、阶段二：工具模块改造](#五阶段二工具模块改造)
-6. [六、阶段三：智能体集成](#六阶段三智能体集成)
-7. [七、阶段四：新建缺失工具](#七阶段四新建缺失工具)
-8. [八、阶段五：自我进化引擎](#八阶段五自我进化引擎)
-9. [九、已实现模块清单](#九已实现模块清单)
-10. [十、开发规范](#十开发规范)
-11. [附录A：Docker部署](#附录adocker部署) ⏸️ **推迟**
-12. [附录B：MCP集成](#附录bmcp集成) ⏸️ **推迟**
+3. [三、极简设计理念](#三极简设计理念) ⭐ **核心原则**
+4. [四、参考借鉴](#四参考借鉴)
+5. [五、阶段一：工具层基础设施](#五阶段一工具层基础设施)
+6. [六、阶段二：工具模块改造](#六阶段二工具模块改造)
+7. [七、阶段三：智能体集成](#七阶段三智能体集成)
+8. [八、阶段四：新建缺失工具](#八阶段四新建缺失工具)
+9. [九、阶段五：自我进化引擎](#九阶段五自我进化引擎)
+10. [十、已实现模块清单](#十已实现模块清单)
+11. [十一、开发规范](#十一开发规范)
+12. [附录A：Docker部署](#附录adocker部署) ⏸️ **推迟**
+13. [附录B：MCP集成](#附录bmcp集成) ⏸️ **推迟**
 
 ---
 
@@ -114,7 +115,148 @@ client/src/business/
 
 > ⭐ **核心原则**: 不集成框架（太重），只借鉴设计哲学（轻量），用LivingTree现有架构实现（无缝融合）
 
-### 3.1 开源项目分析
+---
+
+## 四、参考借鉴
+
+> ⭐ **核心原则**: 不集成框架（太重），只借鉴设计哲学（轻量），用LivingTree现有架构实现（无缝融合）
+
+### 三大原则
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    极简设计三角                              │
+│                                                             │
+│           ┌──────────────┐                                 │
+│           │   会话交互    │  ← 自然对话，减少界面摩擦        │
+│           └──────┬───────┘                                 │
+│                  │                                         │
+│     ┌────────────┼────────────┐                            │
+│     ↓            ↓            ↓                            │
+│ ┌───────┐  ┌──────────┐  ┌──────────┐                    │
+│ │需求澄清│  │渐进渲染UI │  │按需加载  │                    │
+│ │       │  │          │  │          │                    │
+│ │避免猜测│  │先骨架后细节│  │沉默成本低│                    │
+│ └───────┘  └──────────┘  └──────────┘                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.1.1 会话交互 (Conversational Interaction)
+
+**目标**: 像聊天一样完成任务，减少界面点击
+
+| 对比 | 传统UI | 会话交互 |
+|------|--------|----------|
+| 任务创建 | 填表单 → 点按钮 → 等待 | 说一句话 → 自动完成 |
+| 参数配置 | 多级菜单 → 选项卡 | 渐进式提问 → 动态理解 |
+| 结果展示 | 表格 → 图表 → 详情 | 关键信息 → "还需要什么？" |
+
+**LivingTree实现**:
+```python
+# ✅ 好：自然对话驱动
+class ConversationalAgent:
+    async def process(self, user_message: str):
+        # 1. 理解意图（可能需要澄清）
+        intent = await self.understand(user_message)
+
+        # 2. 缺失信息？主动询问
+        if intent.missing_fields:
+            return await self.clarify(intent.missing_fields)
+
+        # 3. 执行 + 渐进展示
+        return await self.execute_progressive(intent)
+```
+
+### 3.1.2 需求澄清 (Requirement Clarification)
+
+**原则**: 宁可多问一次，也不要猜错
+
+| 场景 | 不澄清 → 猜 | 澄清 → 确认 |
+|------|------------|-------------|
+| 时间 | "明天" → 假设24小时内 | "明天下午3点？" |
+| 范围 | "环评报告" → 模板A | "要AERMOD还是Mike21？" |
+| 精度 | "详细" → 最高精度 | "精确到小数点后几位？" |
+
+**IntentClarifier模块** (P1优先级):
+```python
+class IntentClarifier:
+    """需求澄清器 - 主动询问缺失信息"""
+
+    def needs_clarification(self, intent: Intent) -> List[str]:
+        """返回需要澄清的字段列表"""
+        missing = []
+        if not intent.time_constraint:
+            missing.append("完成时间")
+        if not intent.scope:
+            missing.append("任务范围")
+        if not intent.precision:
+            missing.append("精度要求")
+        return missing
+
+    def generate_clarifying_question(self, missing_fields: List[str]) -> str:
+        """生成自然语言的澄清问题"""
+        # 示例："要什么时候完成？范围有多大？"
+```
+
+### 3.1.3 渐进式UI渲染 (Progressive Rendering)
+
+**原则**: 先看到能看的，慢慢加载完整的
+
+```
+时间线:
+─────────────────────────────────────────────────────────────►
+│         │              │              │              │
+T+0ms    T+100ms         T+300ms        T+500ms       T+1000ms
+│         │              │              │              │
+▼         ▼              ▼              ▼              ▼
+┌───┐   ┌─────────┐   ┌───────────┐  ┌───────────┐  ┌───────────┐
+│骨架│   │  标题   │   │  内容主体  │  │  图表    │  │  细节    │
+│   │   │  + 日期  │   │           │  │         │  │  备注    │
+│   │   │         │   │           │  │         │  │         │
+└───┘   └─────────┘   └───────────┘  └───────────┘  └───────────┘
+```
+
+**实现模式**:
+
+| 层级 | 渲染时机 | 内容 |
+|------|---------|------|
+| **L1 骨架** | 立即 (0ms) | 占位符、加载动画 |
+| **L2 结构** | <100ms | 标题、时间、关键数据 |
+| **L3 内容** | <500ms | 主体文本、列表 |
+| **L4 丰富** | <1s | 图表、交互元素 |
+| **L5 细节** | 随需 | 注释、帮助、扩展信息 |
+
+```python
+# ProgressiveRenderer 示例
+class ProgressiveRenderer:
+    async def render(self, data: Any) -> AsyncGenerator[str, None]:
+        yield self.render_skeleton()           # L1: 骨架
+        core = await self.load_core(data)
+        yield self.render_structure(core)      # L2: 结构
+        content = await self.load_content(core)
+        yield self.render_content(content)     # L3: 内容
+        if self.user_wants_details():
+            enriched = await self.load_enriched(content)
+            yield self.render_enriched(enriched)  # L4/L5: 丰富+细节
+```
+
+### 3.1.4 极简设计检查清单
+
+开发新功能时检查：
+
+- [ ] **会话优先**: 能否用一句话完成这个操作？
+- [ ] **按需提问**: 是否只在必要时询问？
+- [ ] **渐进展示**: 是否先展示关键信息？
+- [ ] **沉默成本**: 用户不操作会怎样？最小代价是什么？
+- [ ] **撤销友好**: 能否轻松回退？
+
+---
+
+## 四、参考借鉴
+
+> ⭐ **核心原则**: 不集成框架（太重），只借鉴设计哲学（轻量），用LivingTree现有架构实现（无缝融合）
+
+### 4.1 开源项目分析
 
 | 项目 | 核心特性 | 匹配度 | LivingTree借鉴 |
 |------|---------|--------|----------------|
@@ -126,7 +268,7 @@ client/src/business/
 | **Nano-vLLM** | 1200行轻量实现、前缀缓存、张量并行 | 45% | 本地推理优化 |
 | **Vheer** | 免费图像视频生成、多模型集成 | 55% | 多模态内容生成 |
 
-### 3.2 设计框架借鉴
+### 4.2 设计框架借鉴
 
 | 框架 | 设计哲学 | 优先级 | 轻量实现 |
 |------|---------|--------|----------|
@@ -137,7 +279,7 @@ client/src/business/
 | **ECC** | Harness系统化优化、生产级可靠 | P2 | MemoryManager+SecurityChecker |
 | **Trellis** | 项目记忆管理、多工具协作 | P1 | ProjectMemoryManager |
 
-### 3.3 记忆系统增强方案 (借鉴 claude-mem + cognee)
+### 4.3 记忆系统增强方案 (借鉴 claude-mem + cognee)
 
 ```
 当前状态                          目标状态
@@ -167,7 +309,7 @@ class CogneeMemoryAdapter:
         """持续改进优化"""
 ```
 
-### 3.4 Discourse-Aware RAG (借鉴 Disco-RAG)
+### 4.4 Discourse-Aware RAG (借鉴 Disco-RAG)
 
 **新增模块**: `client/src/business/disco_rag/`
 
@@ -177,13 +319,13 @@ class CogneeMemoryAdapter:
 | 块间修辞图 | 跨段落修辞关系图 | 🔲 |
 | 规划蓝图 | 结构化生成引导 | 🔲 |
 
-### 3.5 多模态集成 (借鉴 Vheer)
+### 4.5 多模态集成 (借鉴 Vheer)
 
 **功能**: 文生图、图生视频、文生视频
 
 **集成方式**: 通过 `多模态内容生成` 技能（bundled）
 
-### 3.6 企业级模型路由 (借鉴 LinkMind)
+### 4.6 企业级模型路由 (借鉴 LinkMind)
 
 **已有**: GlobalModelRouter (L0-L4分层) ✅
 
@@ -192,7 +334,7 @@ class CogneeMemoryAdapter:
 - 生产级过滤器 (敏感词/停用词)
 - Token用量统计
 
-### 3.7 借鉴实施计划
+### 4.7 借鉴实施计划
 
 | 阶段 | 内容 | 优先级 | 工时 | 状态 |
 |------|------|--------|------|------|
@@ -206,13 +348,13 @@ class CogneeMemoryAdapter:
 
 ---
 
-## 四、阶段一：工具层基础设施
+## 五、阶段一：工具层基础设施
 
-**目标**: 搭建工具注册与调用框架  
-**状态**: ✅ **已完成**  
+**目标**: 搭建工具注册与调用框架
+**状态**: ✅ **已完成**
 **工时**: 1-2小时
 
-### 3.1 已交付文件
+### 5.1 已交付文件
 
 ```
 client/src/business/tools/
@@ -224,7 +366,7 @@ client/src/business/tools/
 └── registrar.py         # ✅ 统一注册入口
 ```
 
-### 3.2 核心接口
+### 5.2 核心接口
 
 ```python
 # ToolRegistry - 工具注册中心
@@ -245,7 +387,7 @@ class BaseTool(ABC):
     def category(self) -> str
 ```
 
-### 3.3 使用示例
+### 5.3 使用示例
 
 ```python
 from client.src.business.tools import tool_registry
@@ -262,13 +404,13 @@ result = await tool_registry.execute("web_crawler", url="https://example.com")
 
 ---
 
-## 五、阶段二：工具模块改造
+## 六、阶段二：工具模块改造
 
-**目标**: 将18个已有模块封装为标准化工具  
-**状态**: 🔄 **进行中**  
+**目标**: 将18个已有模块封装为标准化工具
+**状态**: 🔄 **进行中**
 **工时**: 3-4小时
 
-### 4.1 已完成改造
+### 6.1 已完成改造
 
 | 类别 | 工具 | 状态 |
 |------|------|------|
@@ -277,7 +419,7 @@ result = await tool_registry.execute("web_crawler", url="https://example.com")
 | 工具编排 | ToolChainOrchestrator | ✅ |
 | 主动发现 | ProactiveDiscoveryAgent | ✅ |
 
-### 4.2 待改造清单
+### 6.2 待改造清单
 
 | 批次 | 工具 | 路径 | 状态 |
 |------|------|------|------|
@@ -295,7 +437,7 @@ result = await tool_registry.execute("web_crawler", url="https://example.com")
 | **学习** | ExpertLearning | `expert_learning/` | 🔲 |
 | **学习** | SkillEvolution | `skill_evolution/` | 🔲 |
 
-### 4.3 改造模板
+### 6.3 改造模板
 
 ```python
 # client/src/business/tools/[模块名]_tool.py
@@ -333,13 +475,13 @@ def register():
 
 ---
 
-## 六、阶段三：智能体集成
+## 七、阶段三：智能体集成
 
-**目标**: 让智能体通过ToolRegistry调用工具  
-**状态**: ✅ **已完成**  
+**目标**: 让智能体通过ToolRegistry调用工具
+**状态**: ✅ **已完成**
 **工时**: 2-3小时
 
-### 5.1 已集成模块
+### 7.1 已集成模块
 
 ```
 ✅ BaseToolAgent基类 (client/src/business/hermes_agent/base_agents/base_agent.py)
@@ -348,7 +490,7 @@ def register():
 ✅ 语义搜索发现
 ```
 
-### 5.2 智能体工作流
+### 7.2 智能体工作流
 
 ```python
 class HermesAgent:
@@ -371,19 +513,19 @@ class HermesAgent:
 
 ---
 
-## 七、阶段四：新建缺失工具
+## 八、阶段四：新建缺失工具
 
-**目标**: 补齐P0/P1优先级工具  
-**状态**: 📋 **规划中**  
+**目标**: 补齐P0/P1优先级工具
+**状态**: 📋 **规划中**
 **工时**: 按需
 
-### 6.1 P0 - 立即开始
+### 8.1 P0 - 立即开始
 
 | 工具 | 功能 | 工时 | 依赖 |
 |------|------|------|------|
 | **MarkdownExporter** | HTML/DOCX → Markdown | 1天 | markdown库 |
 
-### 6.2 P1 - 近期完成
+### 8.2 P1 - 近期完成
 
 | 工具 | 功能 | 工时 | 依赖 |
 |------|------|------|------|
@@ -391,7 +533,7 @@ class HermesAgent:
 | **ProgressiveUIRenderer** | 分步式地图生成向导 | 3天 | drawing_engine |
 | **IntentionClarifier** | 用户意图澄清对话 | 2天 | hermes_agent |
 
-### 6.3 P2 - 优化迭代
+### 8.3 P2 - 优化迭代
 
 | 工具 | 功能 | 工时 | 状态 |
 |------|------|------|------|
@@ -401,13 +543,13 @@ class HermesAgent:
 
 ---
 
-## 八、阶段五：自我进化引擎
+## 九、阶段五：自我进化引擎
 
-**目标**: 让系统具备自我进化能力  
-**状态**: 🔄 **部分完成**  
+**目标**: 让系统具备自我进化能力
+**状态**: 🔄 **部分完成**
 **工时**: 3-5天
 
-### 7.1 已实现组件
+### 9.1 已实现组件
 
 ```
 ✅ ToolSelfRepairer (工具自我修复)
@@ -416,7 +558,7 @@ class HermesAgent:
 ✅ SelfReflectionEngine (自我反思)
 ```
 
-### 7.2 待实现组件
+### 9.2 待实现组件
 
 | 组件 | 功能 | 状态 |
 |------|------|------|
@@ -425,7 +567,7 @@ class HermesAgent:
 | **ActiveLearningLoop** | 主动学习循环 | 🔲 |
 | **SafeAutonomousToolCreator** | 安全创建器(沙箱) | 🔲 |
 
-### 7.3 进化流程
+### 9.2 待实现组件
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -460,9 +602,9 @@ class HermesAgent:
 
 ---
 
-## 九、已实现模块清单
+## 十、已实现模块清单
 
-### 8.1 工具层 (client/src/business/tools/)
+### 10.1 工具层 (client/src/business/tools/)
 
 | 文件 | 功能 | 状态 |
 |------|------|------|
@@ -474,7 +616,7 @@ class HermesAgent:
 | `text_correction_tool.py` | 错别字纠正 | ✅ |
 | `mcp_tool_adapter.py` | MCP适配器 | ✅ |
 
-### 8.2 EIA系统 (client/src/business/ei_agent/)
+### 10.2 EIA系统 (client/src/business/ei_agent/)
 
 | 文件 | 功能 | 状态 |
 |------|------|------|
@@ -486,7 +628,7 @@ class HermesAgent:
 | `drawing_engine.py` | 绘图引擎 | ✅ |
 | `export_manager.py` | 多格式导出 | ✅ |
 
-### 8.3 LLM核心 (client/src/business/)
+### 10.3 LLM核心 (client/src/business/)
 
 | 文件 | 功能 | 状态 |
 |------|------|------|
@@ -497,16 +639,16 @@ class HermesAgent:
 
 ---
 
-## 十、开发规范
+## 十一、开发规范
 
-### 9.1 代码位置
+### 11.1 代码位置
 
 ```
 ✅ 新代码 → client/src/business/ (逻辑) 或 client/src/presentation/ (UI)
 ❌ 旧代码 → core/ 或 ui/ (已删除)
 ```
 
-### 9.2 LLM调用
+### 11.2 LLM调用
 
 ```python
 # ✅ 正确: 通过GlobalModelRouter
@@ -519,7 +661,7 @@ import requests
 requests.post("http://localhost:11434/api/generate")
 ```
 
-### 9.3 工具注册
+### 11.3 工具注册
 
 ```python
 # 每个工具必须实现register()函数
@@ -532,7 +674,7 @@ from .web_crawler_tool import register as register_web_crawler
 register_web_crawler()
 ```
 
-### 9.4 单元测试
+### 11.4 单元测试
 
 ```python
 # tests/test_tool_registry.py
@@ -577,9 +719,10 @@ def test_register_and_discover():
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v1.2 | 2026-04-28 | 新增极简设计理念章节（会话交互+需求澄清+渐进渲染UI） |
 | v1.1 | 2026-04-28 | 新增参考借鉴章节（开源项目分析+框架借鉴+实施计划） |
 | v1.0 | 2026-04-28 | 初始版本，按阶段任务重新组织 |
 
 ---
 
-**下一步**: 开始阶段A - 实现cognee记忆适配器 + ContextBufferManager
+**下一步**: 开始P1任务 - 实现IntentClarifier意图澄清器

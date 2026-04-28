@@ -98,6 +98,7 @@ class ModelBackend(Enum):
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
     LOCAL_GGUF = "local_gguf"
+    LTAI = "ltai"   # LTAI (LivingTreeAi) 本地细胞模型
     CUSTOM = "custom"
     MOCK = "mock"  # 测试用
 
@@ -518,6 +519,60 @@ class GlobalModelRouter:
                                  "timeout": mc.get("timeout", 60)},
                     )
                     logger.info(f"[加载] OpenAI {mc.get('model_name', key)}")
+
+            # ── 4. LTAI 细胞模型配置 ─────────────────────────────────────
+            ltai_cfg = load_model_config("ltai") or {}
+            cells = ltai_cfg.get("cells", [])
+            if not cells:
+                # 无配置时，自动扫描 cells/ 目录注册已训练的 checkpoint
+                from pathlib import Path
+                cells_dir = Path(__file__).parent.parent / "llmcore" / "cells"
+                if cells_dir.exists():
+                    for ckpt in cells_dir.glob("*.pt"):
+                        cell_name = ckpt.stem  # e.g. "table_cell_v1"
+                        base_name = cell_name.rsplit("_", 1)[0] if "_v" in cell_name else cell_name
+                        cells.append({
+                            "cell_name": base_name,
+                            "checkpoint_path": str(ckpt),
+                            "model_id": f"ltai_{base_name}",
+                            "capabilities": ["content_generation", "format_understanding"],
+                        })
+
+            for cell in cells:
+                cell_name = cell.get("cell_name", "table_cell")
+                ckpt_path = cell.get("checkpoint_path", "")
+                model_id = cell.get("model_id", f"ltai_{cell_name}")
+                if model_id in self.models:
+                    continue
+                caps = [
+                    getattr(ModelCapability, c.upper(), ModelCapability.CONTENT_GENERATION)
+                    for c in cell.get("capabilities", [])
+                ]
+                if not caps:
+                    caps = [ModelCapability.CONTENT_GENERATION, ModelCapability.FORMAT_UNDERSTANDING]
+
+                self.models[model_id] = ModelInfo(
+                    model_id=model_id,
+                    name=f"{cell_name} (LTAI)",
+                    backend=ModelBackend.LTAI,
+                    capabilities=caps,
+                    max_tokens=cell.get("max_new_tokens", 256),
+                    context_length=1024,
+                    quality_score=cell.get("quality_score", 0.6),
+                    speed_score=0.95,
+                    cost_score=1.0,
+                    privacy_score=1.0,
+                    is_available=bool(ckpt_path and Path(ckpt_path).exists()),
+                    config={
+                        "cell_name": cell_name,
+                        "checkpoint_path": ckpt_path,
+                        "device": cell.get("device", "cpu"),
+                        "temperature": cell.get("temperature", 0.8),
+                        "top_k": cell.get("top_k", 50),
+                        "max_new_tokens": cell.get("max_new_tokens", 256),
+                    },
+                )
+                logger.info(f"[加载] LTAI {cell_name} @ {ckpt_path or '(checkpoint待训练)'}")
 
         except Exception as e:
             logger.error(f"从加密配置加载模型失败: {e}")
@@ -983,6 +1038,10 @@ class GlobalModelRouter:
                     response = await handler(prompt, system_prompt)
                     success = bool(response)
 
+            elif model.backend == ModelBackend.LTAI:
+                response = await self._call_ltai(model, prompt, system_prompt)
+                success = bool(response)
+
         except Exception as e:
             logger.error(f"模型调用异常: {e}")
             success = False
@@ -1233,7 +1292,12 @@ class GlobalModelRouter:
                 async for chunk in self._call_openai_stream(model, prompt, system_prompt):
                     yield chunk
                 success = True
-        
+
+            elif model.backend == ModelBackend.LTAI:
+                async for chunk in self._call_ltai_stream(model, prompt, system_prompt):
+                    yield chunk
+                success = True
+
         except Exception as e:
             logger.error(f"流式调用异常: {e}")
         
@@ -1484,7 +1548,99 @@ class GlobalModelRouter:
             if 'response' in locals():
                 logger.error(f"响应内容: {response.text}")
             yield ""  # 流式函数需要yield
-    
+
+    # ── LTAI 后端调用（LTAI 细胞）────────────────────────────────────
+
+    async def _call_ltai(self, model: ModelInfo, prompt: str,
+                              system_prompt: str = "") -> str:
+        """
+        调用 LTAI 模型（同步）
+        通过 LTAIAdapter 加载本地 nanoGPT checkpoint 做推理。
+        """
+        try:
+            from client.src.business.llmcore.adapter import LTAIAdapter, ChatMessage
+
+            cell_name = model.config.get("cell_name", "table_cell")
+            checkpoint_path = model.config.get("checkpoint_path", "")
+            device = model.config.get("device", "cpu")
+            temperature = model.config.get("temperature", 0.8)
+            top_k = model.config.get("top_k", 50)
+            max_new_tokens = model.config.get("max_new_tokens", 256)
+
+            adapter = LTAIAdapter(
+                cell_name=cell_name,
+                checkpoint_path=checkpoint_path,
+                device=device,
+            )
+
+            messages = []
+            if system_prompt:
+                messages.append(ChatMessage(role="system", content=system_prompt))
+            messages.append(ChatMessage(role="user", content=prompt))
+
+            # 非流式收集完整结果
+            full_response = []
+            import asyncio
+            loop = asyncio.get_event_loop()
+            # chat_stream 是同步生成器，直接迭代
+            for chunk in adapter.chat_stream(
+                [{"role": m.role, "content": m.content} for m in messages],
+                temperature=temperature,
+                top_k=top_k,
+                max_new_tokens=max_new_tokens,
+            ):
+                if chunk.done:
+                    break
+                full_response.append(chunk.delta)
+
+            return "".join(full_response)
+
+        except Exception as e:
+            logger.error(f"LTAI 调用异常: {e}")
+            return ""
+
+    async def _call_ltai_stream(self, model: ModelInfo, prompt: str,
+                                     system_prompt: str = "") -> AsyncIterator[str]:
+        """
+        调用 LTAI 模型（流式）
+        通过 LTAIAdapter.chat_stream() 流式 yield 文本片段。
+        """
+        try:
+            from client.src.business.llmcore.adapter import LTAIAdapter
+
+            cell_name = model.config.get("cell_name", "table_cell")
+            checkpoint_path = model.config.get("checkpoint_path", "")
+            device = model.config.get("device", "cpu")
+            temperature = model.config.get("temperature", 0.8)
+            top_k = model.config.get("top_k", 50)
+            max_new_tokens = model.config.get("max_new_tokens", 256)
+
+            adapter = LTAIAdapter(
+                cell_name=cell_name,
+                checkpoint_path=checkpoint_path,
+                device=device,
+            )
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            import asyncio
+            loop = asyncio.get_event_loop()
+            for chunk in adapter.chat_stream(
+                messages,
+                temperature=temperature,
+                top_k=top_k,
+                max_new_tokens=max_new_tokens,
+            ):
+                if chunk.done:
+                    break
+                yield chunk.delta
+
+        except Exception as e:
+            logger.error(f"LTAI 流式调用异常: {e}")
+
     @staticmethod
     def _mock_response(prompt: str) -> str:
         """模拟模型响应（测试用）"""

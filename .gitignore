@@ -16,7 +16,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Embedded libraries - external repos (sync via sync_opencode.py)
+libs/opencode-core/
+libs/oh-my-opencode-plugin/
+libs/serena-core/
+# libs/opencode_integration/ IS version controlled
 lib64/
 parts/
 sdist/

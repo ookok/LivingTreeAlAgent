@@ -136,29 +136,116 @@ class PlatformBootstrapper:
         return 0.0
     
     def _select_qwen_model(self, hardware) -> str:
-        """根据硬件选择Qwen模型（优先3.6系列）
+        """根据硬件动态选择Qwen模型（优先3.6系列）
         
-        参考 Ollama 官方模型库：
-        - https://ollama.com/library/qwen3.5
-        - https://ollama.com/library/qwen3.6
+        从 Ollama 官方库获取最新模型列表，然后根据硬件配置选择最合适的模型。
+        如果无法获取官方列表，则使用内置的推荐策略。
         """
         gpu_vram = hardware["gpu_vram"]
         ram_gb = hardware["ram_gb"]
         
-        # Qwen 3.6 系列（优先 - 支持工具和思考）
-        # https://ollama.com/library/qwen3.6
+        # 获取可用模型列表
+        available_models = self.get_available_models()
+        
+        # 优先选择 Qwen 3.6 系列（GPU加速）
+        if gpu_vram >= 8:
+            selected_model = self._select_model_by_gpu(gpu_vram, available_models.get("qwen3.6", {}).get("models", []))
+            if selected_model:
+                return selected_model
+        
+        # 备用：选择 Qwen 3.5 系列（CPU运行）
+        selected_model = self._select_model_by_ram(ram_gb, available_models.get("qwen3.5", {}).get("models", []))
+        if selected_model:
+            return selected_model
+        
+        # 最终备用
+        return "qwen3.5:latest"
+    
+    def _select_model_by_gpu(self, gpu_vram: float, models: list) -> Optional[str]:
+        """根据GPU显存选择模型"""
+        if not models:
+            return self._fallback_select_by_gpu(gpu_vram)
+        
+        # 按模型大小排序（从大到小）
+        model_size_map = {
+            "qwen3.6": 48,      # MoE 235B 需要大量显存
+            "qwen3.6:32b": 32,
+            "qwen3.6:14b": 16,
+            "qwen3.6:8b": 8,
+        }
+        
+        # 过滤可用模型并按大小排序
+        available_names = [m["name"] for m in models]
+        sorted_models = sorted(
+            [(name, size) for name, size in model_size_map.items() if name in available_names],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        # 选择最大的适合当前GPU的模型
+        for name, required_vram in sorted_models:
+            if gpu_vram >= required_vram:
+                self._logger.info(f"选择 GPU 模型: {name} (需要 {required_vram}GB, 可用 {gpu_vram}GB)")
+                return name
+        
+        # 如果没有找到合适的，返回最小的可用模型
+        if available_names:
+            return available_names[0]
+        
+        return None
+    
+    def _select_model_by_ram(self, ram_gb: float, models: list) -> Optional[str]:
+        """根据内存选择模型"""
+        if not models:
+            return self._fallback_select_by_ram(ram_gb)
+        
+        # 按模型大小排序（从大到小）
+        model_size_map = {
+            "qwen3.5:122b": 64,
+            "qwen3.5:35b": 32,
+            "qwen3.5:27b": 24,
+            "qwen3.5:9b": 16,
+            "qwen3.5:4b": 8,
+            "qwen3.5:2b": 4,
+            "qwen3.5:0.8b": 2,
+            "qwen3.5:latest": 8,
+        }
+        
+        # 过滤可用模型并按大小排序
+        available_names = [m["name"] for m in models]
+        sorted_models = sorted(
+            [(name, size) for name, size in model_size_map.items() if name in available_names],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        # 选择最大的适合当前内存的模型
+        for name, required_ram in sorted_models:
+            if ram_gb >= required_ram:
+                self._logger.info(f"选择 RAM 模型: {name} (需要 {required_ram}GB, 可用 {ram_gb}GB)")
+                return name
+        
+        # 如果没有找到合适的，返回最小的可用模型
+        if available_names:
+            return available_names[-1] if len(available_names) > 1 else available_names[0]
+        
+        return None
+    
+    def _fallback_select_by_gpu(self, gpu_vram: float) -> str:
+        """备用：根据GPU选择模型（硬编码）"""
         if gpu_vram >= 48:
-            return "qwen3.6"  # 默认最大模型 (MoE 235B)
+            return "qwen3.6"
         elif gpu_vram >= 32:
             return "qwen3.6:32b"
         elif gpu_vram >= 16:
             return "qwen3.6:14b"
         elif gpu_vram >= 8:
             return "qwen3.6:8b"
-        
-        # Qwen 3.5 系列（备用 - 多模态支持）
-        # https://ollama.com/library/qwen3.5
-        elif ram_gb >= 64:
+        return ""
+    
+    def _fallback_select_by_ram(self, ram_gb: float) -> str:
+        """备用：根据内存选择模型（硬编码）"""
+        if ram_gb >= 64:
             return "qwen3.5:122b"
         elif ram_gb >= 32:
             return "qwen3.5:35b"
@@ -172,8 +259,7 @@ class PlatformBootstrapper:
             return "qwen3.5:2b"
         elif ram_gb >= 2:
             return "qwen3.5:0.8b"
-        else:
-            return "qwen3.5:latest"
+        return "qwen3.5:latest"
     
     def get_available_models(self) -> dict:
         """从 Ollama 官方库动态获取 Qwen 模型列表"""

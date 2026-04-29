@@ -451,41 +451,84 @@ class CompressionUtils:
         return True
 
 
-class NanoZipIntegration:
+class PeaZipIntegration:
     """
-    NanoZip 集成类
+    PeaZip 集成类
     
-    如果系统安装了 NanoZip，则使用 NanoZip 进行压缩
+    如果系统安装了 PeaZip，则使用 PeaZip 进行压缩/解压
     否则回退到标准库实现
+    
+    PeaZip 命令行语法:
+    - 压缩: peazip -add archive.zip files
+    - 解压: peazip -extract archive.zip dest_folder
+    - 查看内容: peazip -list archive.zip
+    
+    项目地址: https://github.com/giorgiotani/PeaZip
     """
     
-    _nanozip_available = None
+    _peazip_available = None
     
     @classmethod
-    def is_nanozip_available(cls) -> bool:
-        """检查 NanoZip 是否可用"""
-        if cls._nanozip_available is not None:
-            return cls._nanozip_available
+    def is_peazip_available(cls) -> bool:
+        """检查 PeaZip 是否可用"""
+        if cls._peazip_available is not None:
+            return cls._peazip_available
         
         try:
-            import nanozip
-            cls._nanozip_available = True
-        except ImportError:
-            # 尝试检查命令行工具
-            try:
-                import subprocess
-                result = subprocess.run(["nanozip", "--version"], capture_output=True)
-                cls._nanozip_available = result.returncode == 0
-            except Exception:
-                cls._nanozip_available = False
+            # 检查命令行工具
+            result = subprocess.run(
+                ["peazip", "--help"], 
+                capture_output=True, 
+                text=True,
+                timeout=10
+            )
+            cls._peazip_available = result.returncode == 0
+        except Exception:
+            # 尝试查找 PeaZip 安装路径
+            possible_paths = [
+                "C:\\Program Files\\PeaZip\\peazip.exe",
+                "C:\\Program Files (x86)\\PeaZip\\peazip.exe",
+                "/usr/bin/peazip",
+                "/usr/local/bin/peazip"
+            ]
+            for path in possible_paths:
+                if Path(path).exists():
+                    cls._peazip_available = True
+                    break
+            else:
+                cls._peazip_available = False
         
-        return cls._nanozip_available
+        return cls._peazip_available
+    
+    @classmethod
+    def get_peazip_path(cls) -> Optional[str]:
+        """获取 PeaZip 可执行文件路径"""
+        # 首先尝试直接调用
+        try:
+            result = subprocess.run(["peazip", "--help"], capture_output=True)
+            if result.returncode == 0:
+                return "peazip"
+        except:
+            pass
+        
+        # 尝试常见安装路径
+        possible_paths = [
+            "C:\\Program Files\\PeaZip\\peazip.exe",
+            "C:\\Program Files (x86)\\PeaZip\\peazip.exe",
+            "/usr/bin/peazip",
+            "/usr/local/bin/peazip"
+        ]
+        for path in possible_paths:
+            if Path(path).exists():
+                return path
+        
+        return None
     
     @classmethod
     def compress(cls, source_path: Union[str, Path], output_path: Union[str, Path], 
                  level: int = 5, password: str = None) -> bool:
         """
-        使用 NanoZip 压缩
+        使用 PeaZip 压缩
         
         Args:
             source_path: 源文件或目录路径
@@ -496,44 +539,47 @@ class NanoZipIntegration:
         Returns:
             是否压缩成功
         """
-        if not cls.is_nanozip_available():
-            logger.warning("NanoZip 不可用，使用标准压缩")
+        if not cls.is_peazip_available():
+            logger.warning("PeaZip 不可用，使用标准压缩")
             return CompressionUtils.compress(source_path, output_path, "zip", password)
         
+        peazip_path = cls.get_peazip_path()
+        if not peazip_path:
+            return CompressionUtils.compress(source_path, output_path, "zip", password)
+        
+        source_path = Path(source_path)
+        output_path = Path(output_path)
+        
         try:
-            # 尝试使用 nanozip 库
-            import nanozip
+            # PeaZip 命令行参数
+            args = [peazip_path, "-add", str(output_path), str(source_path)]
             
-            source_path = Path(source_path)
-            output_path = Path(output_path)
+            # 添加压缩级别
+            if level:
+                args.extend(["-level", str(level)])
             
-            if source_path.is_file():
-                nanozip.compress_file(
-                    str(source_path), 
-                    str(output_path), 
-                    level=level,
-                    password=password
-                )
+            # 添加密码
+            if password:
+                args.extend(["-password", password])
+            
+            result = subprocess.run(args, capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0:
+                logger.info(f"PeaZip 压缩完成: {output_path}")
+                return True
             else:
-                nanozip.compress_directory(
-                    str(source_path), 
-                    str(output_path), 
-                    level=level,
-                    password=password
-                )
-            
-            logger.info(f"NanoZip 压缩完成: {output_path}")
-            return True
-            
+                logger.warning(f"PeaZip 压缩失败: {result.stderr}")
+                return CompressionUtils.compress(source_path, output_path, "zip", password)
+                
         except Exception as e:
-            logger.warning(f"NanoZip 压缩失败，回退到标准压缩: {e}")
+            logger.warning(f"PeaZip 压缩失败，回退到标准压缩: {e}")
             return CompressionUtils.compress(source_path, output_path, "zip", password)
     
     @classmethod
     def decompress(cls, source_path: Union[str, Path], output_dir: Union[str, Path], 
                    password: str = None) -> bool:
         """
-        使用 NanoZip 解压
+        使用 PeaZip 解压
         
         Args:
             source_path: 压缩文件路径
@@ -543,33 +589,43 @@ class NanoZipIntegration:
         Returns:
             是否解压成功
         """
-        if not cls.is_nanozip_available():
-            logger.warning("NanoZip 不可用，使用标准解压")
+        if not cls.is_peazip_available():
+            logger.warning("PeaZip 不可用，使用标准解压")
             return CompressionUtils.decompress(source_path, output_dir, password)
         
+        peazip_path = cls.get_peazip_path()
+        if not peazip_path:
+            return CompressionUtils.decompress(source_path, output_dir, password)
+        
+        source_path = Path(source_path)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         try:
-            import nanozip
+            # PeaZip 命令行参数
+            args = [peazip_path, "-extract", str(source_path), str(output_dir)]
             
-            source_path = Path(source_path)
-            output_dir = Path(output_dir)
+            # 添加密码
+            if password:
+                args.extend(["-password", password])
             
-            nanozip.decompress(
-                str(source_path), 
-                str(output_dir),
-                password=password
-            )
+            result = subprocess.run(args, capture_output=True, text=True, timeout=60)
             
-            logger.info(f"NanoZip 解压完成: {output_dir}")
-            return True
-            
+            if result.returncode == 0:
+                logger.info(f"PeaZip 解压完成: {output_dir}")
+                return True
+            else:
+                logger.warning(f"PeaZip 解压失败: {result.stderr}")
+                return CompressionUtils.decompress(source_path, output_dir, password)
+                
         except Exception as e:
-            logger.warning(f"NanoZip 解压失败，回退到标准解压: {e}")
+            logger.warning(f"PeaZip 解压失败，回退到标准解压: {e}")
             return CompressionUtils.decompress(source_path, output_dir, password)
     
     @classmethod
     def list_contents(cls, source_path: Union[str, Path]) -> List[Dict]:
         """
-        使用 NanoZip 查看压缩包内容
+        使用 PeaZip 查看压缩包内容
         
         Args:
             source_path: 压缩文件路径
@@ -577,18 +633,69 @@ class NanoZipIntegration:
         Returns:
             文件列表
         """
-        if not cls.is_nanozip_available():
+        if not cls.is_peazip_available():
             return CompressionUtils.list_contents(source_path)
         
-        try:
-            import nanozip
-            
-            source_path = Path(source_path)
-            return nanozip.list_contents(str(source_path))
-            
-        except Exception as e:
-            logger.warning(f"NanoZip 查看失败，回退到标准方法: {e}")
+        peazip_path = cls.get_peazip_path()
+        if not peazip_path:
             return CompressionUtils.list_contents(source_path)
+        
+        source_path = Path(source_path)
+        
+        try:
+            # PeaZip 命令行参数
+            result = subprocess.run(
+                [peazip_path, "-list", str(source_path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                # 解析输出
+                lines = result.stdout.strip().split('\n')
+                contents = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith(('---', 'Archive', 'Size', 'Name')):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            size_str = parts[-2]
+                            name = ' '.join(parts[:-2])
+                            contents.append({
+                                "name": name,
+                                "size": cls._parse_size(size_str),
+                                "is_dir": name.endswith('/')
+                            })
+                
+                return contents
+            else:
+                logger.warning(f"PeaZip 查看失败: {result.stderr}")
+                return CompressionUtils.list_contents(source_path)
+                
+        except Exception as e:
+            logger.warning(f"PeaZip 查看失败，回退到标准方法: {e}")
+            return CompressionUtils.list_contents(source_path)
+    
+    @classmethod
+    def _parse_size(cls, size_str: str) -> int:
+        """解析文件大小字符串"""
+        size_str = size_str.upper()
+        multipliers = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3, 'TB': 1024**4}
+        
+        for unit, multiplier in multipliers.items():
+            if unit in size_str:
+                try:
+                    num = float(size_str.replace(unit, '').strip())
+                    return int(num * multiplier)
+                except:
+                    return 0
+        
+        try:
+            return int(size_str)
+        except:
+            return 0
 
 
 # 快捷函数

@@ -161,26 +161,26 @@ class ModelRegistrySync:
                 "updated": item.get("updated", "unknown")
             }
         
-        # 保存分片数据（使用 NanoZip 压缩）
+        # 保存分片数据（使用 PeaZip 压缩）
         for family, models in model_families.items():
             family_file = self.registry_dir / f"{family}.json.gz"
             
-            # 使用 NanoZip 进行压缩（如果可用）
-            from .compression_utils import NanoZipIntegration
+            # 使用 PeaZip 进行压缩（如果可用）
+            from .compression_utils import PeaZipIntegration
             
             try:
                 # 将数据写入临时文件，然后压缩
                 temp_file = self.registry_dir / f"{family}_temp.json"
                 temp_file.write_text(json.dumps(models, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
                 
-                # 使用 NanoZip 压缩
-                NanoZipIntegration.compress(temp_file, family_file)
+                # 使用 PeaZip 压缩
+                PeaZipIntegration.compress(temp_file, family_file)
                 temp_file.unlink()
                 
                 logger.debug(f"  ✅ 保存系列: {family} ({len(models)} 个模型)")
             except Exception as e:
                 # 回退到标准 gzip 压缩
-                logger.debug(f"NanoZip 不可用，使用标准压缩: {e}")
+                logger.debug(f"PeaZip 不可用，使用标准压缩: {e}")
                 with gzip.open(family_file, "wt", encoding="utf-8") as f:
                     json.dump(models, f, ensure_ascii=False, separators=(",", ":"))
         
@@ -283,7 +283,7 @@ class LazyModelRegistry:
         return None
     
     def _load_family(self, family: str):
-        """加载单个模型系列的数据（使用 NanoZip 解压）"""
+        """加载单个模型系列的数据（使用 PeaZip 解压）"""
         family_file = self.registry_dir / f"{family}.json.gz"
         
         if not family_file.exists():
@@ -293,16 +293,16 @@ class LazyModelRegistry:
                 self._loaded_families[family] = []
                 return
         
-        # 使用 NanoZip 解压（如果可用）
-        from .compression_utils import NanoZipIntegration
+        # 使用 PeaZip 解压（如果可用）
+        from .compression_utils import PeaZipIntegration
         
         try:
             # 创建临时目录
             temp_dir = self.registry_dir / "temp"
             temp_dir.mkdir(exist_ok=True)
             
-            # 使用 NanoZip 解压
-            NanoZipIntegration.decompress(family_file, temp_dir)
+            # 使用 PeaZip 解压
+            PeaZipIntegration.decompress(family_file, temp_dir)
             
             # 读取解压后的文件
             extracted_file = temp_dir / f"{family}.json"
@@ -324,7 +324,7 @@ class LazyModelRegistry:
             
         except Exception as e:
             # 回退到标准 gzip 解压
-            logger.debug(f"NanoZip 解压失败，使用标准解压: {e}")
+            logger.debug(f"PeaZip 解压失败，使用标准解压: {e}")
             with gzip.open(family_file, "rt", encoding="utf-8") as f:
                 self._loaded_families[family] = json.load(f)
         

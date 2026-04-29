@@ -96,74 +96,29 @@ class SystemResources:
 
 
 class ModelLibrarySync:
-    """从外部模型库同步模型列表"""
-    
-    # 外部模型库来源
-    SOURCES = {
-        "primary": {
-            "name": "yuma-shintani/ollama-model-library",
-            "url": "https://raw.githubusercontent.com/yuma-shintani/ollama-model-library/main/models.json",
-            "backup_url": "https://github.com/yuma-shintani/ollama-model-library/raw/main/models.json"
-        },
-        "secondary": {
-            "name": "frefrik/ollama-models-api",
-            "url": "https://raw.githubusercontent.com/frefrik/ollama-models-api/main/models.json",
-            "backup_url": "https://github.com/frefrik/ollama-models-api/raw/main/models.json"
-        }
-    }
+    """从外部模型库同步模型列表（使用优化的注册表）"""
     
     @classmethod
     def sync_models(cls, output_path: str = None, force: bool = False) -> bool:
         """
-        从外部模型库同步模型列表
+        从外部模型库同步模型列表（使用索引+分片策略）
         
         Args:
-            output_path: 输出文件路径，默认为项目中的 models.json
+            output_path: 输出目录路径（可选）
             force: 是否强制更新（忽略缓存时间）
         
         Returns:
             是否同步成功
         """
-        if output_path is None:
-            output_path = Path(__file__).parent / "models.json"
+        from .model_registry import ModelRegistrySync
         
-        output_path = Path(output_path)
-        
-        # 检查缓存是否有效（24小时内）
-        if not force and output_path.exists():
-            mtime = output_path.stat().st_mtime
-            if time.time() - mtime < 24 * 3600:
-                logger.info("模型列表缓存有效，跳过同步")
-                return True
-        
-        logger.info("开始从外部模型库同步模型列表...")
-        
-        for source_name, source in cls.SOURCES.items():
-            try:
-                logger.info(f"尝试从 {source['name']} 获取模型列表...")
-                response = httpx.get(source["url"], timeout=30)
-                response.raise_for_status()
-                
-                data = response.json()
-                
-                # 保存到文件
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-                
-                logger.info(f"✅ 成功从 {source['name']} 同步 {len(data.get('models', []))} 个模型")
-                return True
-                
-            except Exception as e:
-                logger.warning(f"从 {source['name']} 获取失败: {e}")
-                continue
-        
-        logger.error("所有来源都无法获取模型列表")
-        return False
+        sync = ModelRegistrySync(output_path)
+        return sync.sync_models(force)
     
     @classmethod
     def load_synced_models(cls, model_family: str = None) -> List[dict]:
         """
-        加载已同步的模型列表
+        加载已同步的模型列表（使用懒加载注册表）
         
         Args:
             model_family: 模型系列过滤（如 "qwen"）
@@ -171,21 +126,24 @@ class ModelLibrarySync:
         Returns:
             模型列表
         """
-        models_path = Path(__file__).parent / "models.json"
-        
-        if not models_path.exists():
-            logger.warning("模型列表文件不存在，尝试同步...")
-            if not cls.sync_models():
-                return []
+        from .model_registry import LazyModelRegistry
         
         try:
-            data = json.loads(models_path.read_text(encoding="utf-8"))
-            models = data.get("models", [])
+            registry = LazyModelRegistry()
             
             if model_family:
-                models = [m for m in models if m.get("name", "").startswith(model_family)]
-            
-            return models
+                # 获取指定系列的模型
+                model_names = registry.get_models_by_family(model_family)
+                models = []
+                for name in model_names[:20]:  # 限制数量
+                    info = registry.get_model_info(name)
+                    if info:
+                        models.append(info)
+                return models
+            else:
+                # 返回所有模型（仅索引信息）
+                registry.load_index()
+                return [{"name": name, **info} for name, info in registry.index.get("models", {}).items()]
         except Exception as e:
             logger.error(f"加载模型列表失败: {e}")
             return []
@@ -261,26 +219,44 @@ class ModelFitter:
         return results
     
     def _fetch_available_models(self, model_family: str) -> List[ModelInfo]:
-        """从外部模型库或 Ollama 官方库获取可用模型"""
+        """从外部模型库或 Ollama 官方库获取可用模型（使用懒加载注册表）"""
         models = []
         
-        # 优先使用同步的模型列表
+        # 优先使用同步的模型列表（索引+分片策略）
         if self._use_synced_models:
-            synced_models = ModelLibrarySync.load_synced_models(model_family)
-            if synced_models:
-                self._logger.info(f"使用同步的模型列表，共 {len(synced_models)} 个模型")
-                for m in synced_models:
-                    name = m.get("name", "")
-                    if name:
-                        req = self.MODEL_REQUIREMENTS.get(name)
-                        models.append(ModelInfo(
-                            name=name,
-                            tag=m.get("tag", ""),
-                            size_gb=req["base_vram_gb"] if req else 0,
-                            params_b=str(req["params_b"]) if req else "",
-                            description=m.get("description", "")
-                        ))
-                return models
+            from .model_registry import get_model_registry
+            
+            try:
+                registry = get_model_registry()
+                
+                # 获取指定系列的候选模型
+                if model_family == "qwen":
+                    # 搜索所有 qwen 相关系列
+                    candidates = []
+                    for family in ["qwen", "qwen2", "qwen3"]:
+                        try:
+                            candidates.extend(registry.get_candidates_for_family(family, 10))
+                        except:
+                            pass
+                else:
+                    candidates = registry.get_candidates_for_family(model_family, 10)
+                
+                if candidates:
+                    self._logger.info(f"使用注册表模型列表，共 {len(candidates)} 个候选模型")
+                    for m in candidates:
+                        name = m.get("name", "")
+                        if name:
+                            req = self.MODEL_REQUIREMENTS.get(name)
+                            models.append(ModelInfo(
+                                name=name,
+                                tag=m.get("tag", ""),
+                                size_gb=req["base_vram_gb"] if req else 0,
+                                params_b=str(req["params_b"]) if req else "",
+                                description=m.get("description", "")
+                            ))
+                    return models
+            except Exception as e:
+                self._logger.warning(f"使用注册表失败，回退到备用方案: {e}")
         
         # 备用：从 Ollama 官方库获取
         families = {

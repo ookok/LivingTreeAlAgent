@@ -198,31 +198,53 @@ def run_status():
 
 
 def run_sync_models():
-    """Sync model list from external repositories"""
+    """Sync model list from external repositories (using index + shard strategy)"""
     print("🔄 Syncing model list from external repositories...")
+    print("   使用索引+分片策略优化内存使用")
     
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'client'))
     
-    from client.src.infrastructure.model_fitter import ModelLibrarySync
+    from client.src.infrastructure.model_registry import ModelRegistrySync, LazyModelRegistry
     
     try:
-        # 同步模型列表
-        success = ModelLibrarySync.sync_models()
+        # 同步模型列表（生成索引 + 分片）
+        sync = ModelRegistrySync()
+        success = sync.sync_models()
         
         if success:
             print("✅ 模型列表同步成功")
-            # 显示同步的模型数量
-            models = ModelLibrarySync.load_synced_models()
-            print(f"   共同步 {len(models)} 个模型")
             
-            # 显示 Qwen 系列模型
-            qwen_models = ModelLibrarySync.load_synced_models("qwen")
-            print(f"   Qwen 系列模型: {len(qwen_models)} 个")
+            # 加载索引查看统计信息
+            registry = LazyModelRegistry()
+            registry.load_index()
+            
+            total_models = registry.index.get("total_models", 0)
+            families = registry.index.get("families", [])
+            
+            print(f"   共同步 {total_models} 个模型")
+            print(f"   共 {len(families)} 个模型系列")
+            print(f"   系列列表: {families[:10]}...")
+            
+            # 检查 Qwen 系列
+            qwen_count = len(registry.get_models_by_family("qwen"))
+            print(f"   Qwen 系列模型: {qwen_count} 个")
+            
+            registry_dir = sync.get_registry_dir()
+            print(f"   注册表目录: {registry_dir}")
+            
+            # 显示目录结构
+            import glob
+            index_files = glob.glob(str(registry_dir / "*.json"))
+            shard_files = glob.glob(str(registry_dir / "*.json.gz"))
+            print(f"   索引文件: {len(index_files)} 个")
+            print(f"   分片文件: {len(shard_files)} 个")
         else:
             print("❌ 模型列表同步失败")
             sys.exit(1)
     except Exception as e:
         print(f"❌ 同步失败: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

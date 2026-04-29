@@ -1,12 +1,15 @@
 """
-压缩工具库 - 基于 NanoZip 的压缩和解压缩功能
+压缩工具库 - 基于 PeaZip 的压缩和解压缩功能
 
 功能特性：
-1. 支持多种压缩格式：zip, tar, gzip, bzip2, xz
-2. 支持 NanoZip 压缩（如果可用）
+1. 支持多种压缩格式：zip, tar, gzip, bzip2, xz, rar, 7z
+2. 支持 PeaZip 压缩/解压（如果可用）
 3. 查看压缩包内容
 4. 支持密码保护
 5. 批量压缩/解压
+6. RAR 文件解压支持
+
+项目参考: https://github.com/giorgiotani/PeaZip
 """
 
 import os
@@ -16,8 +19,9 @@ import gzip
 import bz2
 import lzma
 import shutil
+import subprocess
 from pathlib import Path
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Tuple
 from loguru import logger
 
 
@@ -31,6 +35,8 @@ class CompressionUtils:
     - GZIP (.gz)
     - BZIP2 (.bz2)
     - XZ (.xz)
+    - RAR (.rar) - 仅支持解压
+    - 7Z (.7z) - 仅支持解压
     - TAR.GZ (.tar.gz)
     - TAR.BZ2 (.tar.bz2)
     - TAR.XZ (.tar.xz)
@@ -38,14 +44,16 @@ class CompressionUtils:
     
     # 支持的压缩格式
     SUPPORTED_FORMATS = {
-        "zip": {"ext": ".zip", "description": "ZIP 压缩"},
-        "tar": {"ext": ".tar", "description": "TAR 归档"},
-        "gz": {"ext": ".gz", "description": "GZIP 压缩"},
-        "bz2": {"ext": ".bz2", "description": "BZIP2 压缩"},
-        "xz": {"ext": ".xz", "description": "XZ 压缩"},
-        "tar.gz": {"ext": ".tar.gz", "description": "TAR + GZIP"},
-        "tar.bz2": {"ext": ".tar.bz2", "description": "TAR + BZIP2"},
-        "tar.xz": {"ext": ".tar.xz", "description": "TAR + XZ"},
+        "zip": {"ext": ".zip", "description": "ZIP 压缩", "can_compress": True, "can_decompress": True},
+        "tar": {"ext": ".tar", "description": "TAR 归档", "can_compress": True, "can_decompress": True},
+        "gz": {"ext": ".gz", "description": "GZIP 压缩", "can_compress": True, "can_decompress": True},
+        "bz2": {"ext": ".bz2", "description": "BZIP2 压缩", "can_compress": True, "can_decompress": True},
+        "xz": {"ext": ".xz", "description": "XZ 压缩", "can_compress": True, "can_decompress": True},
+        "rar": {"ext": ".rar", "description": "RAR 压缩", "can_compress": False, "can_decompress": True},
+        "7z": {"ext": ".7z", "description": "7-Zip 压缩", "can_compress": False, "can_decompress": True},
+        "tar.gz": {"ext": ".tar.gz", "description": "TAR + GZIP", "can_compress": True, "can_decompress": True},
+        "tar.bz2": {"ext": ".tar.bz2", "description": "TAR + BZIP2", "can_compress": True, "can_decompress": True},
+        "tar.xz": {"ext": ".tar.xz", "description": "TAR + XZ", "can_compress": True, "can_decompress": True},
     }
     
     @classmethod
@@ -129,6 +137,10 @@ class CompressionUtils:
                 return cls._decompress_bz2(source_path, output_dir)
             elif source_path.suffix == ".xz":
                 return cls._decompress_xz(source_path, output_dir)
+            elif source_path.suffix == ".rar":
+                return cls._decompress_rar(source_path, output_dir, password)
+            elif source_path.suffix == ".7z":
+                return cls._decompress_7z(source_path, output_dir, password)
             elif source_path.suffixes[-2:] == [".tar", ".gz"]:
                 return cls._decompress_tar_gz(source_path, output_dir)
             elif source_path.suffixes[-2:] == [".tar", ".bz2"]:
@@ -449,6 +461,87 @@ class CompressionUtils:
         
         logger.info(f"已解压到: {output_dir}")
         return True
+    
+    # ==================== RAR ====================
+    @classmethod
+    def _decompress_rar(cls, source_path: Path, output_dir: Path, password: str = None) -> bool:
+        """解压 RAR 文件（使用 PeaZip）"""
+        from .compression_utils import PeaZipIntegration
+        
+        if PeaZipIntegration.is_peazip_available():
+            return PeaZipIntegration.decompress(source_path, output_dir, password)
+        
+        # 尝试使用 unrar 命令行工具
+        try:
+            result = subprocess.run(
+                ["unrar", "x", str(source_path), str(output_dir) + "/"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"已解压 RAR 到: {output_dir}")
+                return True
+            else:
+                logger.warning(f"unrar 解压失败: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"无法使用 unrar: {e}")
+        
+        # 尝试使用 rarfile 库
+        try:
+            import rarfile
+            rf = rarfile.RarFile(str(source_path))
+            rf.extractall(str(output_dir), pwd=password)
+            logger.info(f"已解压 RAR 到: {output_dir}")
+            return True
+        except ImportError:
+            logger.warning("rarfile 库未安装")
+        except Exception as e:
+            logger.warning(f"rarfile 解压失败: {e}")
+        
+        logger.error("无法解压 RAR 文件，请安装 PeaZip、unrar 或 rarfile 库")
+        return False
+    
+    # ==================== 7Z ====================
+    @classmethod
+    def _decompress_7z(cls, source_path: Path, output_dir: Path, password: str = None) -> bool:
+        """解压 7Z 文件（使用 PeaZip）"""
+        from .compression_utils import PeaZipIntegration
+        
+        if PeaZipIntegration.is_peazip_available():
+            return PeaZipIntegration.decompress(source_path, output_dir, password)
+        
+        # 尝试使用 7z 命令行工具
+        try:
+            args = ["7z", "x", str(source_path), f"-o{output_dir}"]
+            if password:
+                args.append(f"-p{password}")
+            
+            result = subprocess.run(args, capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0:
+                logger.info(f"已解压 7Z 到: {output_dir}")
+                return True
+            else:
+                logger.warning(f"7z 解压失败: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"无法使用 7z: {e}")
+        
+        # 尝试使用 py7zr 库
+        try:
+            import py7zr
+            with py7zr.SevenZipFile(str(source_path), mode='r', password=password) as z:
+                z.extractall(str(output_dir))
+            logger.info(f"已解压 7Z 到: {output_dir}")
+            return True
+        except ImportError:
+            logger.warning("py7zr 库未安装")
+        except Exception as e:
+            logger.warning(f"py7zr 解压失败: {e}")
+        
+        logger.error("无法解压 7Z 文件，请安装 PeaZip、7z 或 py7zr 库")
+        return False
 
 
 class PeaZipIntegration:

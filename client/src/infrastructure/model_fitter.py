@@ -14,6 +14,7 @@ import platform
 import psutil
 import json
 import subprocess
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -94,6 +95,102 @@ class SystemResources:
                 f"ram={self.ram_gb}GB, gpu={self.gpu_vram_gb}GB, gpus={self.gpu_count})")
 
 
+class ModelLibrarySync:
+    """从外部模型库同步模型列表"""
+    
+    # 外部模型库来源
+    SOURCES = {
+        "primary": {
+            "name": "yuma-shintani/ollama-model-library",
+            "url": "https://raw.githubusercontent.com/yuma-shintani/ollama-model-library/main/models.json",
+            "backup_url": "https://github.com/yuma-shintani/ollama-model-library/raw/main/models.json"
+        },
+        "secondary": {
+            "name": "frefrik/ollama-models-api",
+            "url": "https://raw.githubusercontent.com/frefrik/ollama-models-api/main/models.json",
+            "backup_url": "https://github.com/frefrik/ollama-models-api/raw/main/models.json"
+        }
+    }
+    
+    @classmethod
+    def sync_models(cls, output_path: str = None, force: bool = False) -> bool:
+        """
+        从外部模型库同步模型列表
+        
+        Args:
+            output_path: 输出文件路径，默认为项目中的 models.json
+            force: 是否强制更新（忽略缓存时间）
+        
+        Returns:
+            是否同步成功
+        """
+        if output_path is None:
+            output_path = Path(__file__).parent / "models.json"
+        
+        output_path = Path(output_path)
+        
+        # 检查缓存是否有效（24小时内）
+        if not force and output_path.exists():
+            mtime = output_path.stat().st_mtime
+            if time.time() - mtime < 24 * 3600:
+                logger.info("模型列表缓存有效，跳过同步")
+                return True
+        
+        logger.info("开始从外部模型库同步模型列表...")
+        
+        for source_name, source in cls.SOURCES.items():
+            try:
+                logger.info(f"尝试从 {source['name']} 获取模型列表...")
+                response = httpx.get(source["url"], timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                # 保存到文件
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+                
+                logger.info(f"✅ 成功从 {source['name']} 同步 {len(data.get('models', []))} 个模型")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"从 {source['name']} 获取失败: {e}")
+                continue
+        
+        logger.error("所有来源都无法获取模型列表")
+        return False
+    
+    @classmethod
+    def load_synced_models(cls, model_family: str = None) -> List[dict]:
+        """
+        加载已同步的模型列表
+        
+        Args:
+            model_family: 模型系列过滤（如 "qwen"）
+        
+        Returns:
+            模型列表
+        """
+        models_path = Path(__file__).parent / "models.json"
+        
+        if not models_path.exists():
+            logger.warning("模型列表文件不存在，尝试同步...")
+            if not cls.sync_models():
+                return []
+        
+        try:
+            data = json.loads(models_path.read_text(encoding="utf-8"))
+            models = data.get("models", [])
+            
+            if model_family:
+                models = [m for m in models if m.get("name", "").startswith(model_family)]
+            
+            return models
+        except Exception as e:
+            logger.error(f"加载模型列表失败: {e}")
+            return []
+
+
 class ModelFitter:
     """LLMFit 风格的智能模型选择器"""
     
@@ -128,6 +225,7 @@ class ModelFitter:
         self._logger = logger.bind(component="ModelFitter")
         self.system = SystemResources()
         self._available_models = {}
+        self._use_synced_models = True  # 是否使用同步的模型列表
     
     def fit(self, model_family: str = "qwen") -> List[Tuple[str, float, str]]:
         """
@@ -163,9 +261,28 @@ class ModelFitter:
         return results
     
     def _fetch_available_models(self, model_family: str) -> List[ModelInfo]:
-        """从 Ollama 官方库获取可用模型"""
+        """从外部模型库或 Ollama 官方库获取可用模型"""
         models = []
         
+        # 优先使用同步的模型列表
+        if self._use_synced_models:
+            synced_models = ModelLibrarySync.load_synced_models(model_family)
+            if synced_models:
+                self._logger.info(f"使用同步的模型列表，共 {len(synced_models)} 个模型")
+                for m in synced_models:
+                    name = m.get("name", "")
+                    if name:
+                        req = self.MODEL_REQUIREMENTS.get(name)
+                        models.append(ModelInfo(
+                            name=name,
+                            tag=m.get("tag", ""),
+                            size_gb=req["base_vram_gb"] if req else 0,
+                            params_b=str(req["params_b"]) if req else "",
+                            description=m.get("description", "")
+                        ))
+                return models
+        
+        # 备用：从 Ollama 官方库获取
         families = {
             "qwen": ["qwen3.6", "qwen3.5", "qwen2.5"],
             "qwen3.6": ["qwen3.6"],
@@ -195,7 +312,6 @@ class ModelFitter:
                     ))
             except Exception as e:
                 self._logger.warning(f"获取 {family} 模型列表失败: {e}")
-                # 使用备用列表
                 models.extend(self._get_fallback_models(family))
         
         return models

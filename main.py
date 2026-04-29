@@ -197,6 +197,35 @@ def run_status():
             print(f"⚠️ 无法检测服务状态: {e}")
 
 
+def run_sync_models():
+    """Sync model list from external repositories"""
+    print("🔄 Syncing model list from external repositories...")
+    
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'client'))
+    
+    from client.src.infrastructure.model_fitter import ModelLibrarySync
+    
+    try:
+        # 同步模型列表
+        success = ModelLibrarySync.sync_models()
+        
+        if success:
+            print("✅ 模型列表同步成功")
+            # 显示同步的模型数量
+            models = ModelLibrarySync.load_synced_models()
+            print(f"   共同步 {len(models)} 个模型")
+            
+            # 显示 Qwen 系列模型
+            qwen_models = ModelLibrarySync.load_synced_models("qwen")
+            print(f"   Qwen 系列模型: {len(qwen_models)} 个")
+        else:
+            print("❌ 模型列表同步失败")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ 同步失败: {e}")
+        sys.exit(1)
+
+
 def main():
     if len(sys.argv) < 2:
         print("🌳 LivingTree AI Agent - Unified Entry Point")
@@ -210,6 +239,7 @@ def main():
         print("  python main.py install     # Install as background service")
         print("  python main.py uninstall   # Uninstall background service")
         print("  python main.py status      # Check service status")
+        print("  python main.py sync-models # Sync model list from external repos")
         print()
         print("Default: client")
         
@@ -234,9 +264,11 @@ def main():
         run_uninstall()
     elif command == 'status':
         run_status()
+    elif command == 'sync-models':
+        run_sync_models()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: client, relay, tracker, app, bootstrap, install, uninstall, status")
+        print("Available commands: client, relay, tracker, app, bootstrap, install, uninstall, status, sync-models")
         sys.exit(1)
 
 

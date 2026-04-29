@@ -140,27 +140,27 @@ class PlatformBootstrapper:
         
         # Qwen 3.6 系列（优先）
         if gpu_vram >= 48:
-            return "qwen3.6-max:latest"
+            return "qwen3.6:128b"
         elif gpu_vram >= 24:
-            return "qwen3.6-72b:latest"
+            return "qwen3.6:27b"
         elif gpu_vram >= 16:
-            return "qwen3.6-32b:latest"
+            return "qwen3.6:14b"
         elif gpu_vram >= 8:
-            return "qwen3.6-7b:latest"
+            return "qwen3.6:7b"
         
         # Qwen 3.5 系列（备用）
-        elif ram_gb >= 64:
-            return "qwen3.5-max:latest"
         elif ram_gb >= 32:
-            return "qwen3.5-72b:latest"
+            return "qwen3.5:72b"
         elif ram_gb >= 24:
-            return "qwen3.5-32b:latest"
+            return "qwen3.5:32b"
         elif ram_gb >= 16:
-            return "qwen3.5-14b:latest"
+            return "qwen3.5:14b"
         elif ram_gb >= 8:
-            return "qwen3.5-7b:latest"
+            return "qwen3.5:4b"
+        elif ram_gb >= 4:
+            return "qwen3.5:2b"
         else:
-            return "qwen3.5-1.8b:latest"
+            return "qwen2.5:0.5b"
     
     def _linux_config(self, hardware) -> Dict[str, Any]:
         """Linux 特定配置"""

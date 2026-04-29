@@ -122,5 +122,41 @@
 - `CAPABILITY`: 我能做什么（触发 Need 匹配）
 - `TASK`: 有任务要处理
 
+## PyDracula UI 框架集成
+### 概述
+- 基于 [Wanderson-Magalhaes/Modern_GUI_PyDracula_PySide6_or_PyQt6](https://github.com/Wanderson-Magalhaes/Modern_GUI_PyDracula_PySide6_or_PyQt6)
+- 默认亮色主题（PyDracula_Light）
+- 支持深色主题切换
+
+### 核心文件
+| 文件 | 功能 |
+|------|------|
+| `ui/__init__.py` | 包入口 |
+| `ui/main_window.py` | MainWindow 主窗口类 |
+| `ui/theme_manager.py` | ThemeManager 主题管理器（单例模式）|
+| `ui/modules/ui_settings.py` | UI 设置常量 |
+| `ui/modules/ui_functions.py` | UI 工具函数 |
+| `ui/themes/py_dracula_light.qss` | 亮色主题 |
+| `ui/themes/py_dracula_dark.qss` | 深色主题 |
+
+### 主题切换 API
+```python
+from ui.theme_manager import get_theme_manager
+
+tm = get_theme_manager()
+tm.set_theme(is_light=True)   # 亮色主题
+tm.set_theme(is_light=False)  # 深色主题
+tm.toggle_theme()             # 切换主题
+```
+
+### 启动方式
+```bash
+python ui/ui_run.py              # 亮色主题（默认）
+python ui/ui_run.py --dark       # 深色主题
+```
+
+### 依赖
+- PySide6>=6.5.0 或 PyQt6>=6.5.0
+
 ---
 **最后更新**: 2026-04-29

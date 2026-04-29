@@ -60,7 +60,6 @@ def run_bootstrap():
     """Run platform bootstrap (auto-configure and deploy)"""
     print("🚀 Running Platform Bootstrap...")
     
-    # 设置路径
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'client'))
     
     from client.src.infrastructure.platform_bootstrapper import (
@@ -78,14 +77,22 @@ def run_bootstrap():
         print(f"   内存: {config['hardware']['ram_gb']} GB")
         print(f"   GPU显存: {config['hardware']['gpu_vram']} GB")
         print(f"   推理引擎: {config['inference_engine']}")
-        print(f"   模型: {config['model']}")
+        print(f"   模型: {config['ollama']['model']}")
         
-        # 2. 设置环境
-        print("\n🔧 设置虚拟环境...")
+        # 2. 检查并安装 Ollama
+        print("\n🔧 检查 Ollama 依赖...")
+        bootstrapper._check_dependencies()
+        
+        # 3. 下载模型
+        print("\n📥 下载模型...")
+        bootstrapper._download_model()
+        
+        # 4. 设置虚拟环境
+        print("\n🔨 设置虚拟环境...")
         env_manager = EnvironmentManager(config)
         env_manager.setup_environment()
         
-        # 3. 部署服务
+        # 5. 部署服务
         print("\n📦 部署服务...")
         deployer = ServiceDeployer(config)
         deployer.deploy_all()
@@ -93,6 +100,11 @@ def run_bootstrap():
         print("\n✅ 零部署完成！")
         print("   应用目录: " + config['app_dir'])
         print("   日志目录: " + config['log_path'])
+        print("   模型: " + config['ollama']['model'])
+        
+        # 6. 启动客户端
+        print("\n🌳 启动客户端...")
+        start_client()
         
     except Exception as e:
         print(f"\n❌ 部署失败: {e}")
@@ -108,12 +120,15 @@ def run_install():
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'client'))
     
     from client.src.infrastructure.platform_bootstrapper import (
-        PlatformBootstrapper, ServiceDeployer
+        PlatformBootstrapper, ServiceDeployer, EnvironmentManager
     )
     
     try:
         bootstrapper = PlatformBootstrapper()
         config = bootstrapper.detect_and_configure()
+        
+        env_manager = EnvironmentManager(config)
+        env_manager.setup_environment()
         
         deployer = ServiceDeployer(config)
         deployer.deploy_all()
@@ -153,7 +168,7 @@ def run_status():
     
     os_type = os.name
     
-    if os_type == 'posix':  # Linux/macOS
+    if os_type == 'posix':
         try:
             result = subprocess.run(
                 ["systemctl", "is-active", "livingtree-agent"],
@@ -166,7 +181,7 @@ def run_status():
                 print("❌ LivingTree Agent 服务未运行")
         except FileNotFoundError:
             print("⚠️ 无法检测服务状态 (systemctl不可用)")
-    else:  # Windows
+    else:
         try:
             result = subprocess.run(
                 ["sc", "query", "LivingTreeAgent"],
@@ -198,7 +213,6 @@ def main():
         print()
         print("Default: client")
         
-        # 默认启动客户端
         start_client()
         return
 

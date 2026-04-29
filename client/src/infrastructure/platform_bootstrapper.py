@@ -9,6 +9,7 @@
 - 自动下载模型
 - 部署后台服务 (Systemd/NSSM)
 - 生命周期管理
+- 从 Ollama 官方库动态获取模型列表
 """
 
 import platform
@@ -18,8 +19,9 @@ import sys
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
+import httpx
 from loguru import logger
 
 
@@ -174,31 +176,66 @@ class PlatformBootstrapper:
             return "qwen3.5:latest"
     
     def get_available_models(self) -> dict:
-        """获取 Ollama 官方模型库中的 Qwen 模型列表"""
+        """从 Ollama 官方库动态获取 Qwen 模型列表"""
         return {
             "qwen3.6": {
-                "models": [
-                    {"name": "qwen3.6", "size": "~235B", "description": "Qwen 3.6 MoE 模型，最强能力"},
-                    {"name": "qwen3.6:32b", "size": "~32B", "description": "Qwen 3.6 32B 模型"},
-                    {"name": "qwen3.6:14b", "size": "~14B", "description": "Qwen 3.6 14B 模型"},
-                    {"name": "qwen3.6:8b", "size": "~8B", "description": "Qwen 3.6 8B 模型"},
-                ],
+                "models": self._fetch_ollama_models("qwen3.6"),
                 "url": "https://ollama.com/library/qwen3.6"
             },
             "qwen3.5": {
-                "models": [
-                    {"name": "qwen3.5:122b", "size": "~122B", "description": "Qwen 3.5 122B 模型"},
-                    {"name": "qwen3.5:35b", "size": "~35B", "description": "Qwen 3.5 35B 模型"},
-                    {"name": "qwen3.5:27b", "size": "~27B", "description": "Qwen 3.5 27B 模型"},
-                    {"name": "qwen3.5:9b", "size": "~9B", "description": "Qwen 3.5 9B 模型"},
-                    {"name": "qwen3.5:4b", "size": "~6.6GB", "description": "Qwen 3.5 4B 模型 (默认)"},
-                    {"name": "qwen3.5:2b", "size": "~2GB", "description": "Qwen 3.5 2B 模型"},
-                    {"name": "qwen3.5:0.8b", "size": "~1GB", "description": "Qwen 3.5 0.8B 模型"},
-                    {"name": "qwen3.5:latest", "size": "~6.6GB", "description": "Qwen 3.5 最新版"},
-                ],
+                "models": self._fetch_ollama_models("qwen3.5"),
                 "url": "https://ollama.com/library/qwen3.5"
             }
         }
+    
+    def _fetch_ollama_models(self, model_name: str) -> List[dict]:
+        """从 Ollama 官方 API 获取指定模型的所有标签"""
+        url = f"https://registry.ollama.ai/v2/library/{model_name}/tags/list"
+        
+        try:
+            response = httpx.get(url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for tag in data.get("tags", []):
+                model_full_name = f"{model_name}:{tag}" if tag != "latest" else model_name
+                models.append({
+                    "name": model_full_name,
+                    "tag": tag,
+                    "digest": data.get("digest", "")
+                })
+            
+            self._logger.info(f"从 Ollama 官方库获取到 {model_name} 的 {len(models)} 个模型")
+            return models
+        
+        except Exception as e:
+            self._logger.error(f"从 Ollama 官方库获取模型列表失败: {e}")
+            return self._get_fallback_models(model_name)
+    
+    def _get_fallback_models(self, model_name: str) -> List[dict]:
+        """备用模型列表（当无法从官方库获取时使用）"""
+        fallback_data = {
+            "qwen3.6": [
+                {"name": "qwen3.6", "tag": "latest", "size": "~235B", "description": "Qwen 3.6 MoE 模型"},
+                {"name": "qwen3.6:32b", "tag": "32b", "size": "~32B", "description": "Qwen 3.6 32B"},
+                {"name": "qwen3.6:14b", "tag": "14b", "size": "~14B", "description": "Qwen 3.6 14B"},
+                {"name": "qwen3.6:8b", "tag": "8b", "size": "~8B", "description": "Qwen 3.6 8B"},
+            ],
+            "qwen3.5": [
+                {"name": "qwen3.5", "tag": "latest", "size": "~6.6GB", "description": "Qwen 3.5 最新版"},
+                {"name": "qwen3.5:122b", "tag": "122b", "size": "~122B", "description": "Qwen 3.5 122B"},
+                {"name": "qwen3.5:35b", "tag": "35b", "size": "~35B", "description": "Qwen 3.5 35B"},
+                {"name": "qwen3.5:27b", "tag": "27b", "size": "~27B", "description": "Qwen 3.5 27B"},
+                {"name": "qwen3.5:9b", "tag": "9b", "size": "~9B", "description": "Qwen 3.5 9B"},
+                {"name": "qwen3.5:4b", "tag": "4b", "size": "~6.6GB", "description": "Qwen 3.5 4B"},
+                {"name": "qwen3.5:2b", "tag": "2b", "size": "~2GB", "description": "Qwen 3.5 2B"},
+                {"name": "qwen3.5:0.8b", "tag": "0.8b", "size": "~1GB", "description": "Qwen 3.5 0.8B"},
+            ]
+        }
+        
+        return fallback_data.get(model_name, [])
     
     def _linux_config(self, hardware) -> Dict[str, Any]:
         """Linux 特定配置"""
@@ -582,6 +619,7 @@ class EnvironmentManager:
             "fastapi",
             "uvicorn",
             "requests",
+            "httpx",
             "numpy",
             "pandas",
             "scikit-learn",

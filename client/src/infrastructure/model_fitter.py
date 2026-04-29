@@ -155,28 +155,34 @@ class ModelFitter:
     # 模型资源需求估算（基于 LLMFit 公式）
     # 显存需求 ≈ 参数数量 (B) × 2 (FP16) × 安全系数
     # 内存需求 ≈ 显存需求 × 1.5 (CPU fallback)
+    # 参考 Ollama 官方库: https://ollama.com/library/qwen3.5 和 https://ollama.com/library/qwen3.6
     MODEL_REQUIREMENTS = {
-        # Qwen 3.6 系列
-        "qwen3.6": {"params_b": 235, "base_vram_gb": 460, "recommended_vram": 48, "quantized": True},
-        "qwen3.6:32b": {"params_b": 32, "base_vram_gb": 64, "recommended_vram": 32, "quantized": True},
-        "qwen3.6:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True},
-        "qwen3.6:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True},
+        # Qwen 3.6 系列（优先选择）
+        "qwen3.6": {"params_b": 235, "base_vram_gb": 460, "recommended_vram": 48, "quantized": True, "description": "Qwen 3.6 MoE 235B"},
+        "qwen3.6:32b": {"params_b": 32, "base_vram_gb": 64, "recommended_vram": 32, "quantized": True, "description": "Qwen 3.6 32B"},
+        "qwen3.6:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True, "description": "Qwen 3.6 14B"},
+        "qwen3.6:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Qwen 3.6 8B"},
         
-        # Qwen 3.5 系列
-        "qwen3.5:122b": {"params_b": 122, "base_vram_gb": 244, "recommended_vram": 64, "quantized": True},
-        "qwen3.5:35b": {"params_b": 35, "base_vram_gb": 70, "recommended_vram": 32, "quantized": True},
-        "qwen3.5:27b": {"params_b": 27, "base_vram_gb": 54, "recommended_vram": 24, "quantized": True},
-        "qwen3.5:9b": {"params_b": 9, "base_vram_gb": 18, "recommended_vram": 12, "quantized": True},
-        "qwen3.5:4b": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True},
-        "qwen3.5:2b": {"params_b": 2, "base_vram_gb": 4, "recommended_vram": 3, "quantized": True},
-        "qwen3.5:0.8b": {"params_b": 0.8, "base_vram_gb": 1.6, "recommended_vram": 2, "quantized": True},
-        "qwen3.5:latest": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True},
+        # Qwen 3.5 系列（多模态支持）
+        "qwen3.5": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True, "description": "Qwen 3.5 4B (默认)"},
+        "qwen3.5:122b": {"params_b": 122, "base_vram_gb": 244, "recommended_vram": 64, "quantized": True, "description": "Qwen 3.5 122B"},
+        "qwen3.5:35b": {"params_b": 35, "base_vram_gb": 70, "recommended_vram": 32, "quantized": True, "description": "Qwen 3.5 35B"},
+        "qwen3.5:27b": {"params_b": 27, "base_vram_gb": 54, "recommended_vram": 24, "quantized": True, "description": "Qwen 3.5 27B"},
+        "qwen3.5:9b": {"params_b": 9, "base_vram_gb": 18, "recommended_vram": 12, "quantized": True, "description": "Qwen 3.5 9B"},
+        "qwen3.5:4b": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True, "description": "Qwen 3.5 4B"},
+        "qwen3.5:2b": {"params_b": 2, "base_vram_gb": 4, "recommended_vram": 3, "quantized": True, "description": "Qwen 3.5 2B"},
+        "qwen3.5:0.8b": {"params_b": 0.8, "base_vram_gb": 1.6, "recommended_vram": 2, "quantized": True, "description": "Qwen 3.5 0.8B"},
         
         # Qwen 2.5 系列（备用）
-        "qwen2.5:0.5b": {"params_b": 0.5, "base_vram_gb": 1, "recommended_vram": 1, "quantized": True},
-        "qwen2.5:1.5b": {"params_b": 1.5, "base_vram_gb": 3, "recommended_vram": 2, "quantized": True},
-        "qwen2.5:7b": {"params_b": 7, "base_vram_gb": 14, "recommended_vram": 8, "quantized": True},
-        "qwen2.5:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True},
+        "qwen2.5:0.5b": {"params_b": 0.5, "base_vram_gb": 1, "recommended_vram": 1, "quantized": True, "description": "Qwen 2.5 0.5B"},
+        "qwen2.5:1.5b": {"params_b": 1.5, "base_vram_gb": 3, "recommended_vram": 2, "quantized": True, "description": "Qwen 2.5 1.5B"},
+        "qwen2.5:7b": {"params_b": 7, "base_vram_gb": 14, "recommended_vram": 8, "quantized": True, "description": "Qwen 2.5 7B"},
+        "qwen2.5:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True, "description": "Qwen 2.5 14B"},
+        
+        # 其他常用模型
+        "smollm2": {"params_b": 1.7, "base_vram_gb": 3.4, "recommended_vram": 2, "quantized": True, "description": "Small LLM 2"},
+        "llama3:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Llama 3 8B"},
+        "llama3.1:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Llama 3.1 8B"},
     }
     
     def __init__(self):
@@ -293,16 +299,16 @@ class ModelFitter:
         return models
     
     def _get_fallback_models(self, family: str) -> List[ModelInfo]:
-        """备用模型列表"""
+        """备用模型列表（与 MODEL_REQUIREMENTS 保持一致）"""
         fallback = {
             "qwen3.6": [
-                ModelInfo("qwen3.6", "latest", 48, "235B", "Qwen 3.6 MoE"),
+                ModelInfo("qwen3.6", "latest", 48, "235B", "Qwen 3.6 MoE 235B"),
                 ModelInfo("qwen3.6:32b", "32b", 32, "32B", "Qwen 3.6 32B"),
                 ModelInfo("qwen3.6:14b", "14b", 16, "14B", "Qwen 3.6 14B"),
                 ModelInfo("qwen3.6:8b", "8b", 8, "8B", "Qwen 3.6 8B"),
             ],
             "qwen3.5": [
-                ModelInfo("qwen3.5", "latest", 6, "4B", "Qwen 3.5 4B"),
+                ModelInfo("qwen3.5", "latest", 6, "4B", "Qwen 3.5 4B (默认)"),
                 ModelInfo("qwen3.5:122b", "122b", 64, "122B", "Qwen 3.5 122B"),
                 ModelInfo("qwen3.5:35b", "35b", 32, "35B", "Qwen 3.5 35B"),
                 ModelInfo("qwen3.5:27b", "27b", 24, "27B", "Qwen 3.5 27B"),
@@ -317,8 +323,13 @@ class ModelFitter:
                 ModelInfo("qwen2.5:7b", "7b", 8, "7B", "Qwen 2.5 7B"),
                 ModelInfo("qwen2.5:14b", "14b", 16, "14B", "Qwen 2.5 14B"),
             ],
+            "other": [
+                ModelInfo("smollm2", "latest", 2, "1.7B", "Small LLM 2"),
+                ModelInfo("llama3:8b", "8b", 8, "8B", "Llama 3 8B"),
+                ModelInfo("llama3.1:8b", "8b", 8, "8B", "Llama 3.1 8B"),
+            ],
         }
-        return fallback.get(family, [])
+        return fallback.get(family, fallback.get("other", []))
     
     def _score_model(self, model_name: str) -> Tuple[float, str]:
         """

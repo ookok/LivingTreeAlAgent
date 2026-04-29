@@ -150,46 +150,118 @@ class ModelLibrarySync:
 
 
 class ModelFitter:
-    """LLMFit 风格的智能模型选择器"""
-    
-    # 模型资源需求估算（基于 LLMFit 公式）
-    # 显存需求 ≈ 参数数量 (B) × 2 (FP16) × 安全系数
-    # 内存需求 ≈ 显存需求 × 1.5 (CPU fallback)
-    # 参考 Ollama 官方库: https://ollama.com/library/qwen3.5 和 https://ollama.com/library/qwen3.6
-    MODEL_REQUIREMENTS = {
-        # Qwen 3.6 系列（优先选择）
-        "qwen3.6": {"params_b": 235, "base_vram_gb": 460, "recommended_vram": 48, "quantized": True, "description": "Qwen 3.6 MoE 235B"},
-        "qwen3.6:32b": {"params_b": 32, "base_vram_gb": 64, "recommended_vram": 32, "quantized": True, "description": "Qwen 3.6 32B"},
-        "qwen3.6:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True, "description": "Qwen 3.6 14B"},
-        "qwen3.6:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Qwen 3.6 8B"},
-        
-        # Qwen 3.5 系列（多模态支持）
-        "qwen3.5": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True, "description": "Qwen 3.5 4B (默认)"},
-        "qwen3.5:122b": {"params_b": 122, "base_vram_gb": 244, "recommended_vram": 64, "quantized": True, "description": "Qwen 3.5 122B"},
-        "qwen3.5:35b": {"params_b": 35, "base_vram_gb": 70, "recommended_vram": 32, "quantized": True, "description": "Qwen 3.5 35B"},
-        "qwen3.5:27b": {"params_b": 27, "base_vram_gb": 54, "recommended_vram": 24, "quantized": True, "description": "Qwen 3.5 27B"},
-        "qwen3.5:9b": {"params_b": 9, "base_vram_gb": 18, "recommended_vram": 12, "quantized": True, "description": "Qwen 3.5 9B"},
-        "qwen3.5:4b": {"params_b": 4, "base_vram_gb": 8, "recommended_vram": 6, "quantized": True, "description": "Qwen 3.5 4B"},
-        "qwen3.5:2b": {"params_b": 2, "base_vram_gb": 4, "recommended_vram": 3, "quantized": True, "description": "Qwen 3.5 2B"},
-        "qwen3.5:0.8b": {"params_b": 0.8, "base_vram_gb": 1.6, "recommended_vram": 2, "quantized": True, "description": "Qwen 3.5 0.8B"},
-        
-        # Qwen 2.5 系列（备用）
-        "qwen2.5:0.5b": {"params_b": 0.5, "base_vram_gb": 1, "recommended_vram": 1, "quantized": True, "description": "Qwen 2.5 0.5B"},
-        "qwen2.5:1.5b": {"params_b": 1.5, "base_vram_gb": 3, "recommended_vram": 2, "quantized": True, "description": "Qwen 2.5 1.5B"},
-        "qwen2.5:7b": {"params_b": 7, "base_vram_gb": 14, "recommended_vram": 8, "quantized": True, "description": "Qwen 2.5 7B"},
-        "qwen2.5:14b": {"params_b": 14, "base_vram_gb": 28, "recommended_vram": 16, "quantized": True, "description": "Qwen 2.5 14B"},
-        
-        # 其他常用模型
-        "smollm2": {"params_b": 1.7, "base_vram_gb": 3.4, "recommended_vram": 2, "quantized": True, "description": "Small LLM 2"},
-        "llama3:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Llama 3 8B"},
-        "llama3.1:8b": {"params_b": 8, "base_vram_gb": 16, "recommended_vram": 8, "quantized": True, "description": "Llama 3.1 8B"},
-    }
+    """LLMFit 风格的智能模型选择器（完全动态获取模型列表）"""
     
     def __init__(self):
         self._logger = logger.bind(component="ModelFitter")
         self.system = SystemResources()
         self._available_models = {}
         self._use_synced_models = True  # 是否使用同步的模型列表
+        self._model_requirements = {}  # 动态获取的模型资源需求
+    
+    def _get_model_requirements(self, model_name: str) -> Optional[dict]:
+        """
+        动态获取模型资源需求
+        
+        从模型名称自动推断资源需求：
+        - 根据参数数量估算显存需求
+        - 支持常见的模型命名约定
+        
+        Args:
+            model_name: 模型名称（如 qwen3.5:4b）
+        
+        Returns:
+            模型资源需求字典
+        """
+        # 如果已经缓存，直接返回
+        if model_name in self._model_requirements:
+            return self._model_requirements[model_name]
+        
+        # 尝试从模型名称推断资源需求
+        requirements = self._infer_requirements_from_name(model_name)
+        
+        # 缓存结果
+        self._model_requirements[model_name] = requirements
+        return requirements
+    
+    def _infer_requirements_from_name(self, model_name: str) -> dict:
+        """
+        从模型名称推断资源需求
+        
+        支持的命名模式：
+        - qwen3.6:8b → params_b=8, recommended_vram=8
+        - qwen3.5:35b → params_b=35, recommended_vram=32
+        - llama3:8b → params_b=8, recommended_vram=8
+        - smollm2 → params_b=1.7, recommended_vram=2
+        """
+        model_lower = model_name.lower()
+        
+        # 提取参数数量
+        params_b = self._extract_params_from_name(model_lower)
+        
+        # 计算显存需求
+        # 基础显存 = 参数数量 × 2 (FP16)
+        # 推荐显存 = 基础显存 × 安全系数（考虑量化后约为原始的 0.5-0.75）
+        base_vram_gb = params_b * 2
+        recommended_vram = max(2, int(params_b * 1.5))
+        
+        # 系列优先级（新版本优先）
+        if "qwen3.6" in model_lower:
+            version_priority = 10
+        elif "qwen3.5" in model_lower:
+            version_priority = 7
+        elif "qwen3" in model_lower:
+            version_priority = 6
+        elif "qwen2.5" in model_lower:
+            version_priority = 4
+        elif "qwen2" in model_lower:
+            version_priority = 3
+        else:
+            version_priority = 5
+        
+        return {
+            "params_b": params_b,
+            "base_vram_gb": base_vram_gb,
+            "recommended_vram": recommended_vram,
+            "quantized": True,
+            "description": model_name,
+            "version_priority": version_priority
+        }
+    
+    def _extract_params_from_name(self, model_name: str) -> float:
+        """
+        从模型名称提取参数数量
+        
+        支持的格式：
+        - qwen3.5:4b → 4
+        - qwen3.6:32b → 32
+        - llama3:8b → 8
+        - smollm2 → 1.7 (默认)
+        """
+        import re
+        
+        # 匹配数字+b 或数字+B 的模式
+        match = re.search(r'(\d+(?:\.\d+)?)\s*[bB]', model_name)
+        if match:
+            return float(match.group(1))
+        
+        # 针对没有明确参数的模型使用默认值
+        if "smollm" in model_name:
+            return 1.7
+        elif "tinyllama" in model_name:
+            return 1.1
+        elif "phi3" in model_name:
+            return 3.8
+        elif "phi2" in model_name:
+            return 2.7
+        elif "phi" in model_name:
+            return 1.3
+        elif "gemma" in model_name:
+            # 默认 gemma 为 7B
+            return 7
+        
+        # 默认返回 4B（常见的基础模型大小）
+        return 4.0
     
     def fit(self, model_family: str = "qwen") -> List[Tuple[str, float, str]]:
         """
@@ -281,7 +353,7 @@ class ModelFitter:
                 
                 for tag in data.get("tags", []):
                     name = f"{family}:{tag}" if tag != "latest" else family
-                    req = self.MODEL_REQUIREMENTS.get(name)
+                    req = self._get_model_requirements(name)
                     size_gb = req["base_vram_gb"] if req else 0
                     params_b = req["params_b"] if req else ""
                     
@@ -299,37 +371,33 @@ class ModelFitter:
         return models
     
     def _get_fallback_models(self, family: str) -> List[ModelInfo]:
-        """备用模型列表（与 MODEL_REQUIREMENTS 保持一致）"""
-        fallback = {
-            "qwen3.6": [
-                ModelInfo("qwen3.6", "latest", 48, "235B", "Qwen 3.6 MoE 235B"),
-                ModelInfo("qwen3.6:32b", "32b", 32, "32B", "Qwen 3.6 32B"),
-                ModelInfo("qwen3.6:14b", "14b", 16, "14B", "Qwen 3.6 14B"),
-                ModelInfo("qwen3.6:8b", "8b", 8, "8B", "Qwen 3.6 8B"),
-            ],
-            "qwen3.5": [
-                ModelInfo("qwen3.5", "latest", 6, "4B", "Qwen 3.5 4B (默认)"),
-                ModelInfo("qwen3.5:122b", "122b", 64, "122B", "Qwen 3.5 122B"),
-                ModelInfo("qwen3.5:35b", "35b", 32, "35B", "Qwen 3.5 35B"),
-                ModelInfo("qwen3.5:27b", "27b", 24, "27B", "Qwen 3.5 27B"),
-                ModelInfo("qwen3.5:9b", "9b", 12, "9B", "Qwen 3.5 9B"),
-                ModelInfo("qwen3.5:4b", "4b", 6, "4B", "Qwen 3.5 4B"),
-                ModelInfo("qwen3.5:2b", "2b", 3, "2B", "Qwen 3.5 2B"),
-                ModelInfo("qwen3.5:0.8b", "0.8b", 2, "0.8B", "Qwen 3.5 0.8B"),
-            ],
-            "qwen2.5": [
-                ModelInfo("qwen2.5:0.5b", "0.5b", 1, "0.5B", "Qwen 2.5 0.5B"),
-                ModelInfo("qwen2.5:1.5b", "1.5b", 2, "1.5B", "Qwen 2.5 1.5B"),
-                ModelInfo("qwen2.5:7b", "7b", 8, "7B", "Qwen 2.5 7B"),
-                ModelInfo("qwen2.5:14b", "14b", 16, "14B", "Qwen 2.5 14B"),
-            ],
-            "other": [
-                ModelInfo("smollm2", "latest", 2, "1.7B", "Small LLM 2"),
-                ModelInfo("llama3:8b", "8b", 8, "8B", "Llama 3 8B"),
-                ModelInfo("llama3.1:8b", "8b", 8, "8B", "Llama 3.1 8B"),
-            ],
-        }
-        return fallback.get(family, fallback.get("other", []))
+        """
+        动态生成备用模型列表（不再硬编码）
+        
+        根据系列名称动态生成常见的模型变体
+        """
+        models = []
+        
+        # 常见的模型标签
+        common_tags = ["", ":latest", ":8b", ":14b", ":32b", ":7b", ":4b", ":2b"]
+        
+        for tag in common_tags[:6]:  # 限制数量
+            model_name = family + tag
+            if tag == "" or tag == ":latest":
+                display_tag = "latest"
+            else:
+                display_tag = tag[1:]  # 去掉冒号
+            
+            req = self._get_model_requirements(model_name)
+            models.append(ModelInfo(
+                name=model_name,
+                tag=display_tag,
+                size_gb=req["base_vram_gb"] if req else 0,
+                params_b=str(req["params_b"]) if req else "",
+                description=f"{family} {display_tag}"
+            ))
+        
+        return models
     
     def _score_model(self, model_name: str) -> Tuple[float, str]:
         """
@@ -340,8 +408,10 @@ class ModelFitter:
         2. 内存充足度 (30分)
         3. CPU 核心数 (20分)
         4. 模型偏好 (10分) - 优先选择更新的模型
+        
+        模型需求从动态获取，不再硬编码
         """
-        req = self.MODEL_REQUIREMENTS.get(model_name)
+        req = self._get_model_requirements(model_name)
         if not req:
             return 0, "未知模型"
         

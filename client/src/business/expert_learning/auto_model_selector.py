@@ -7,9 +7,9 @@
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import time

@@ -3,9 +3,9 @@
 File Preview Module
 
 支持常见文件格式的在线预览
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import mimetypes

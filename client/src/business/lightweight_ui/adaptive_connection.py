@@ -2,9 +2,9 @@
 自适应连接管理系统
 
 连接池管理、智能心跳、负载均衡
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

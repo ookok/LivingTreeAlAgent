@@ -2,9 +2,9 @@
 P2P通信协议
 
 实现消息传输、文件传输、心跳保活等核心通信功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import hashlib

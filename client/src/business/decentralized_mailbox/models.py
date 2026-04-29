@@ -2,9 +2,9 @@
 去中心化邮箱数据模型
 
 定义邮箱地址、消息、附件、联系人等核心数据结构
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import hashlib
 import time

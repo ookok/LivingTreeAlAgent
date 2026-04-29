@@ -7,9 +7,9 @@
 - 来源标签识别
 
 作者：Living Tree AI 进化系统
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

@@ -2,9 +2,9 @@
 P2P CDN 数据模型
 
 定义 CDN 系统中使用的数据结构
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 from typing import Dict, Set, Optional, Any

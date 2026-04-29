@@ -386,7 +386,7 @@ class LogisticsTracker:
             },
         ]
 
-    def _update_status_from_traces(self, record: LogisticsRecord) -> None:
+    async def _update_status_from_traces(self, record: LogisticsRecord) -> None:
         """根据轨迹更新状态"""
         if not record.traces:
             return

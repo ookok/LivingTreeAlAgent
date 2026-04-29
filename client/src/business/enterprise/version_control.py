@@ -3,9 +3,9 @@
 Version Control Module
 
 实现文件版本管理，支持版本历史和回滚功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import hashlib

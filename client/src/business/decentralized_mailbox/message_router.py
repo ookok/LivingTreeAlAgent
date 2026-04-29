@@ -2,9 +2,9 @@
 消息投递与路由
 
 实现P2P消息路由、中继转发、离线存储
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

@@ -2,9 +2,9 @@
 附件与大信处理
 
 实现大文件分片、加密、上传、下载
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import hashlib

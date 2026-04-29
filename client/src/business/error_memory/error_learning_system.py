@@ -13,12 +13,12 @@ Error Learning System - 错误学习系统
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('error_memory.error_learning_system')
 
-from __future__ import annotations
 
 import re
 from typing import Optional, List, Dict, Any, Callable

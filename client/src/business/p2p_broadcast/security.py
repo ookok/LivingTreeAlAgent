@@ -2,9 +2,9 @@
 安全加密模块
 
 实现端到端加密、身份验证、安全通信等功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import hashlib
 import hmac

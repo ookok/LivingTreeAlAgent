@@ -2,9 +2,9 @@
 性能监控与优化
 
 FPS监控、内存优化、异步更新
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta

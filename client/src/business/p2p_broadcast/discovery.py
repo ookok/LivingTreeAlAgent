@@ -2,9 +2,9 @@
 广播发现服务
 
 实现UDP广播、mDNS服务发现、设备管理等功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

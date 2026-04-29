@@ -21,9 +21,9 @@ LivingTree AI OS 集成方式：
   - LLM-as-a-Verifier: https://arxiv.org/abs/2506.01369
   - Incentivizing LLMs to Self-Verify (ICLR 2026)
   - dnhkng/RYS (层重复增强): https://github.com/dnhkng/RYS
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import logging

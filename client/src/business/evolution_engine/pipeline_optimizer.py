@@ -11,9 +11,9 @@ Agent Pipeline 优化器
 3. 管道执行优化
 
 Author: LivingTreeAI Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field

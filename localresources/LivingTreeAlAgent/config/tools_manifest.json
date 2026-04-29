@@ -1,0 +1,62 @@
+{
+  "version": "20260416",
+  "updated_at": "2026-04-16T12:00:00Z",
+  "tools": [
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "desc": "音视频录制、转码、推流引擎 (直播必备)",
+      "enabled_by_default": true,
+      "category": "media",
+      "platforms": {
+        "windows_amd64": {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+          "bin_name": "ffmpeg.exe",
+          "extract": true,
+          "strip_components": 1,
+          "sha256": null
+        },
+        "linux_x86_64": {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+          "bin_name": "ffmpeg",
+          "extract": true,
+          "strip_components": 1,
+          "sha256": null
+        },
+        "darwin_x86_64": {
+          "url": "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+          "bin_name": "ffmpeg",
+          "extract": false,
+          "sha256": null
+        },
+        "darwin_arm64": {
+          "url": "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+          "bin_name": "ffmpeg",
+          "extract": false,
+          "sha256": null
+        }
+      }
+    },
+    {
+      "id": "simple-turn",
+      "name": "Pion Simple-TURN",
+      "desc": "WebRTC TURN 中继服务器，用于穿透 NAT",
+      "enabled_by_default": false,
+      "category": "network",
+      "platforms": {
+        "windows_amd64": {
+          "url": "https://github.com/pion/simple-turn/releases/latest/download/simple-turn-windows-amd64.zip",
+          "bin_name": "simple-turn.exe",
+          "extract": true,
+          "strip_components": 0
+        },
+        "linux_x86_64": {
+          "url": "https://github.com/pion/simple-turn/releases/latest/download/simple-turn-linux-amd64.tar.gz",
+          "bin_name": "simple-turn",
+          "extract": true,
+          "strip_components": 0
+        }
+      }
+    }
+  ]
+}

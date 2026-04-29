@@ -255,7 +255,7 @@ class ModelCalculationEngine:
             result.raw_output = raw_output
             result.processed_output = self._process_output(raw_output)
             result.predictions = self._extract_predictions(raw_output)
-            result.status = Com Com
+            result.status = ComputationStatus.SUCCESS
             result.execution_time = (datetime.now() - start_time).total_seconds()
 
             # 计算指纹

@@ -2,9 +2,9 @@
 轻量级UI综合面板
 
 集成网络探测、协议管理、质量监控、故障恢复、中继服务器配置
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QLabel, QPushButton, QTableWidget, QTableWidgetItem,

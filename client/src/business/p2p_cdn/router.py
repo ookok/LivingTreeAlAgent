@@ -2,9 +2,9 @@
 CDN 路由器
 
 负责智能选择最优节点来获取数据
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 import time

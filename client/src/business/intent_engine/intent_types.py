@@ -4,9 +4,9 @@
 =======================
 
 定义 IntentEngine 使用的所有数据类型。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum

@@ -10,9 +10,9 @@ Phase 5: 企业级应用场景集成
 - WorkflowOrchestrator - 工作流编排器
 - BusinessMetricsMonitor - 业务指标监控
 - EnterpriseIntegrationHub - 企业集成中心
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import uuid

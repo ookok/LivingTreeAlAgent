@@ -12,9 +12,9 @@ TechStack Detector - 技术栈检测器
 4. 工具/中间件检测
 5. 云服务检测
 6. 技术栈组合推断
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 from typing import List, Dict, Tuple, Set, Optional

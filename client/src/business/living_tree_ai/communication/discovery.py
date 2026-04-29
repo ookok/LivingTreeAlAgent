@@ -8,9 +8,9 @@ NodeDiscovery - 混合节点发现机制
 3. mDNS/Zeroconf（跨平台）
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple, Callable

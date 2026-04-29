@@ -6,7 +6,8 @@
 """
 
 from typing import Callable, Type
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtCore import Qt
 
 from .router import Route, Router
 
@@ -29,7 +30,7 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("deep_search", "深度搜索", "🔍", _lazy("search"), category="main"),
         Route("knowledge_base", "知识库", "📚", _lazy("knowledge"), category="main"),
         Route("expert_training", "专家训练", "🎓", _lazy("training"), category="main"),
-        Route("smart_ide", "智能IDE", "💻", _lazy("ide"), category="main"),
+        Route("smart_ide", "OpenCode IDE", "💻", _lazy_opencode_ide(), category="main"),
         Route("smart_writing", "智能写作", "✍️", _lazy("writing"), category="main"),
         # 环评助手（P0 新增）
         Route("ei_wizard", "环评助手", "📋", _lazy_ei_wizard(), category="main"),
@@ -54,6 +55,12 @@ def register_default_routes(router: Router, module_map: dict = None):
         Route("plugin_manager", "插件管理", "🔌", _create_plugin_manager_panel, category="tool"),
         Route("marketplace", "生态市场", "🛒", _create_marketplace_panel, category="tool"),
         Route("skills", "技能中心", "🧠", _create_skills_panel, category="tool"),
+        # LLM Wiki 知识库（Phase 1/2/3）📚
+        Route("llm_wiki", "LLM 知识库", "📚", _create_llm_wiki_panel, category="tool"),
+        # EvoRAG 管理器（Phase 4）🚀
+        Route("evorag", "EvoRAG 管理器", "🚀", _create_evorag_panel, category="tool"),
+        # Opik Dashboard（Phase 3）📊
+        Route("opik", "Opik 监控", "📊", _create_opik_panel, category="tool"),
     ]
 
     # =========================================================================
@@ -448,6 +455,54 @@ def _create_skills_panel() -> type:
         return None
 
 
+def _create_llm_wiki_panel() -> type:
+    """
+    返回 LLMWikiPanel 类（LLM Wiki 知识库管理）
+    """
+    try:
+        from client.src.presentation.panels.llm_wiki_panel import LLMWikiPanel
+        return LLMWikiPanel
+    except Exception as e:
+        print(f"[_create_llm_wiki_panel] Failed to import: {e}")
+        return None
+
+
+def _create_evorag_panel() -> type:
+    """
+    返回 EvoRAGPanel 类（EvoRAG 管理器）
+
+    提供EvoRAG三大核心特性的UI界面：
+    1. 反馈驱动反向传播
+    2. 知识图谱自进化
+    3. 混合优先级检索
+    """
+    try:
+        from client.src.presentation.panels.evorag_panel import EvoRAGPanel
+        return EvoRAGPanel
+    except Exception as e:
+        print(f"[_create_evorag_panel] Failed to import: {e}")
+        return None
+
+
+def _create_opik_panel() -> type:
+    """
+    返回 OpikDashboardPanel 类（Opik 监控面板）
+
+    提供 Opik Dashboard 的 UI 集成：
+    1. 嵌入 Opik Dashboard (QWebEngineView)
+    2. Traces 查看器
+    3. Metrics 监控
+    4. Alerts 管理
+    5. 配置管理
+    """
+    try:
+        from client.src.presentation.panels.opik_panel import OpikDashboardPanel
+        return OpikDashboardPanel
+    except Exception as e:
+        print(f"[_create_opik_panel] Failed to import: {e}")
+        return None
+
+
 def _lazy_ei_wizard() -> type:
     """
     延迟导入环评助手面板（EIWizardChat）
@@ -477,4 +532,49 @@ def _lazy_ei_wizard() -> type:
                 layout.addWidget(QLabel(f"❌ 环评助手加载失败: {e}"))
 
     return EIWizardPanel
+
+
+def _lazy_opencode_ide() -> type:
+    """
+    延迟导入 OpenCode IDE 面板（Chat-First 设计）
+
+    新一代 IDE 面板，采用 OpenCode 风格：
+    - 左右分栏布局（聊天 | 编辑器）
+    - 流式输出 + Markdown 渲染
+    - 工具调用可视化
+    - GitHub Dark 暗色主题
+    """
+    class OpenCodeIDEPanel(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._load_real_panel()
+
+        def _load_real_panel(self):
+            """加载真实面板"""
+            try:
+                from client.src.presentation.modules.ide.opencode_ide_panel import OpenCodeIDEPanel
+
+                real_panel = OpenCodeIDEPanel(self)
+
+                # 设置布局
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(real_panel)
+
+            except Exception as e:
+                print(f"[OpenCodeIDEPanel] Failed to load: {e}")
+                # 显示错误占位符
+                from PyQt6.QtWidgets import QLabel, QVBoxLayout
+                layout = QVBoxLayout(self)
+                error_label = QLabel(f"❌ OpenCode IDE 加载失败\n\n{e}")
+                error_label.setStyleSheet("""
+                    color: #f85149;
+                    font-size: 14px;
+                    padding: 40px;
+                    qproperty-alignment: 'AlignCenter';
+                """)
+                error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout.addWidget(error_label)
+
+    return OpenCodeIDEPanel
 

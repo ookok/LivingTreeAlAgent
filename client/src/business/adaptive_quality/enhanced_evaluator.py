@@ -14,9 +14,9 @@ Enhanced Quality Evaluator - 增强型质量评估器
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import time

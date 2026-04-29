@@ -5,11 +5,11 @@ LLM 提供商模块
 
 模块结构：
 - base_provider.py: 抽象基类
+- provider_registry.py: 提供商注册中心 (40+ providers)
 - ollama_provider.py: Ollama 提供商
 - openai_provider.py: OpenAI 提供商
 - anthropic_provider.py: Anthropic 提供商
 - google_provider.py: Google 提供商
-- provider_registry.py: 提供商注册管理
 
 Author: LivingTreeAI Agent
 Date: 2026-04-28
@@ -24,13 +24,31 @@ from .base_provider import (
     UsageInfo,
     ProviderResponse
 )
+from .provider_registry import (
+    ProviderConfig,
+    ProviderRegistry,
+    ModelConfig,
+    TransportType,
+    ProviderCategory,
+    PROVIDER_CATALOG,
+    get_provider_registry
+)
 
 __all__ = [
+    # base_provider
     "BaseProvider",
     "ProviderType",
     "ModelCapability",
     "ModelInfo",
     "ChatMessage",
     "UsageInfo",
-    "ProviderResponse"
+    "ProviderResponse",
+    # provider_registry
+    "ProviderConfig",
+    "ProviderRegistry",
+    "ModelConfig",
+    "TransportType",
+    "ProviderCategory",
+    "PROVIDER_CATALOG",
+    "get_provider_registry",
 ]

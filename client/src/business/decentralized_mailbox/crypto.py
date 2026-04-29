@@ -2,9 +2,9 @@
 消息加密与解密模块
 
 实现端到端加密、签名验签、密钥派生
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import base64

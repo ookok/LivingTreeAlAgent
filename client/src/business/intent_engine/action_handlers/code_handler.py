@@ -13,9 +13,9 @@
 - 文档生成 (DOCUMENTATION)
 
 v2.0: 所有 Handler 共享 LLMClient（自动回退 requests→urllib），带重试和错误分类
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import time

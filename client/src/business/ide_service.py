@@ -14,9 +14,9 @@ IDE Service - 智能IDE服务层
 
 Author: LivingTreeAI Agent
 Date: 2026-04-26
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import sys

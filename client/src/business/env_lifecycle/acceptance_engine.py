@@ -275,7 +275,7 @@ class AcceptanceEngine:
         for i, stack in enumerate(project_data.get('stacks', [])):
             point = MonitoringPoint(
                 point_id=f"MP-A-{i+1:02d}",
-                point_name=f"废气排气筒{i+1}（{}）".format(stack.get('type', '工艺废气')),
+                point_name=f"废气排气筒{i+1}（{stack.get('type', '工艺废气')}）",
                 location=stack.get('location', ''),
                 latitude=stack.get('lat', 0.0),
                 longitude=stack.get('lon', 0.0),

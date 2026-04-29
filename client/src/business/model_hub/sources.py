@@ -2,9 +2,9 @@
 """
 多源模型下载封装
 支持 ModelScope / HuggingFace Hub / GitHub
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import logging

@@ -11,9 +11,9 @@
 3. 资源使用优化
 
 Author: LivingTreeAI Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import psutil

@@ -2,9 +2,9 @@
 邮箱地址与身份管理
 
 管理去中心化邮箱地址 (user@nodeid.p2p)、身份密钥、地址簿
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import hashlib

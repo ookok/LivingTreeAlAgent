@@ -9,9 +9,9 @@
 - 同时作为 CODE_GENERATION 等的补充处理器
 
 v2.0: 使用共享 LLMClient（自动回退 requests→urllib）
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import time

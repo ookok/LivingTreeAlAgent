@@ -2,9 +2,9 @@
 CDN 存储
 
 负责数据的持久化存储
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import logging

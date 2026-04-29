@@ -8,9 +8,9 @@ NodeRPC - MessagePack RPC会话层
 - 方法注册与调用
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime

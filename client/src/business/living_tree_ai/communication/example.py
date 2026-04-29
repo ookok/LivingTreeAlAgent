@@ -133,10 +133,10 @@ async def example_rpc():
 
     # 模拟调用
     request = asyncio.create_task(client.call(
-        target_node="server_001",
-        method="add",
+        "add",
         10,
         20,
+        target_node="server_001",
         timeout=5.0,
     ))
 

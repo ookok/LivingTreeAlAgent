@@ -11,9 +11,9 @@ Agent Pipeline 集成器
 3. 统一配置接口
 
 Author: LivingTreeAI Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field

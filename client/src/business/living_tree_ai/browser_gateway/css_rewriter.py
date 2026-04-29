@@ -40,7 +40,7 @@ class CSSRule:
     theme: ThemeType = ThemeType.CUSTOM
     enabled: bool = True
     priority: int = 0         # 优先级
-    created_at: datetime = = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=datetime.now)
 
 
 @dataclass

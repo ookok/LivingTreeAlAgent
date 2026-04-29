@@ -233,7 +233,7 @@ class SmartCache:
         return removed
 
 
-class SmartAI Router:
+class SmartAIRouter:
     """
     智能AI路由器
 

@@ -12,9 +12,9 @@ OfflineQueue - 离线队列
 4. 手动清空/重试
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime

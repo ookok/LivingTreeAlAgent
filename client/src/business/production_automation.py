@@ -12,9 +12,9 @@
 - 回滚机制
 
 依赖 Phase 6: core/performance_deployment.py
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import re

@@ -7,9 +7,9 @@
 - IMAGE_GENERATION: 文本生成图像
 
 使用外部图像生成 API（DALL-E / Stable Diffusion）。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 import os

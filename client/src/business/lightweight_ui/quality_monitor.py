@@ -2,9 +2,9 @@
 实时网络质量监控
 
 延迟监控、带宽监控、丢包检测、智能预警
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

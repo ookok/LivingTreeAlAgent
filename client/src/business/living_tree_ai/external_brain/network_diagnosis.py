@@ -11,9 +11,9 @@ NetworkDiagnoser - 网络诊断器
 - 其他常用AI服务
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable

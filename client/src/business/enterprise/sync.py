@@ -3,9 +3,9 @@
 Sync Module
 
 实现企业网盘与虚拟（聚合）云盘的同步功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

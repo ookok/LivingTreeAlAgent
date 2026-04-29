@@ -23,9 +23,9 @@ LLM驱动的智能语义分块，不是简单的固定长度截断，
 
 Author: Hermes Desktop Team
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import time

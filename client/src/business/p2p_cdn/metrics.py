@@ -2,9 +2,9 @@
 指标收集器
 
 负责收集和管理 CDN 系统的性能指标
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 from typing import Dict, List, Any

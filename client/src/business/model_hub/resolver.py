@@ -2,9 +2,9 @@
 """
 模型名解析器 (Model Resolver)
 支持模糊匹配、多源搜索、相似推荐
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import logging

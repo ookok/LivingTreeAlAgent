@@ -2,9 +2,9 @@
 聊天会话管理
 
 实现聊天会话管理、消息历史、AI回复等功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import logging

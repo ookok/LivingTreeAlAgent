@@ -27,9 +27,9 @@
     template = distiller.get_template("为什么海水是蓝色的")
     if template:
         logger.info(f"使用模板: {template['pattern']}")
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import time

@@ -22,9 +22,9 @@ TaskTracer 提供完整的执行链路追踪：
 
 Author: LivingTreeAI Team
 Version: 1.0.0
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import uuid

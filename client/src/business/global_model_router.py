@@ -28,6 +28,21 @@ import asyncio.tasks
 
 logger = logging.getLogger(__name__)
 
+# ── Opik 追踪支持 ─────────────────────────────────────────────────
+try:
+    from client.src.business.opik_tracer import (
+        is_opik_enabled,
+        start_trace,
+        log_trace,
+    )
+    OPIK_TRACER_AVAILABLE = True
+except ImportError:
+    logger.warning("Opik 追踪模块导入失败，追踪功能将不可用")
+    OPIK_TRACER_AVAILABLE = False
+    is_opik_enabled = lambda: False
+    start_trace = lambda *a, **kw: None
+    log_trace = lambda *a, **kw: None
+
 
 # ============= 专家思考模式支持 =============
 
@@ -1002,6 +1017,28 @@ class GlobalModelRouter:
         Returns:
             模型输出文本
         """
+        # ── Opik 追踪初始化 ─────────────────────────────────────────
+        _opik_trace = None
+        _opik_start_time = time.time()
+        _opik_input = {
+            "capability": capability.value if capability else None,
+            "prompt": prompt[:500],  # 只记录前500字符
+            "system_prompt": system_prompt[:500],
+            "strategy": strategy.value if strategy else None,
+            "context_length": context_length,
+            "model_id": model_id,
+        }
+
+        if OPIK_TRACER_AVAILABLE and is_opik_enabled():
+            try:
+                _opik_trace = start_trace(
+                    name=f"call_model_{capability.value if capability else 'unknown'}",
+                    trace_type="llm",
+                    metadata={"function": "call_model"}
+                )
+            except Exception as e:
+                logger.warning(f"Opik 追踪初始化失败: {e}")
+        
         # ── 注入专家思考模式指令（动态版，无枚举） ─────────────────────────────
         if expert_type or thinking_mode:
             controller = _get_expert_thinking_controller()
@@ -1374,6 +1411,33 @@ class GlobalModelRouter:
             model.current_load -= 1
             response_time = time.time() - start_time
             model.update_stats(success, response_time)
+
+            # ── Opik 追踪记录 ─────────────────────────────────
+            if _opik_trace is not None:
+                try:
+                    _opik_end_time = time.time()
+                    _opik_latency = _opik_end_time - _opik_start_time
+
+                    _opik_output = {
+                        "response": response[:1000] if response else None,  # 只记录前1000字符
+                        "latency": _opik_latency,
+                        "success": success,
+                        "model_name": model.name if 'model' in locals() else None,
+                        "backend": model.backend.value if 'model' in locals() else None,
+                    }
+
+                    log_trace(
+                        _opik_trace,
+                        input_data=_opik_input,
+                        output_data=_opik_output,
+                        metadata={
+                            "latency": _opik_latency,
+                            "success": success,
+                            "model": model.name if 'model' in locals() else None,
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Opik 追踪记录失败: {e}")
     
     # ============= 后端调用实现 =============
     
@@ -2808,22 +2872,88 @@ def call_model_sync(capability: ModelCapability,
                     **kwargs) -> str:
     """
     同步调用模型（供非异步函数使用）
-    
-    内部使用 asyncio.run() 调用异步的 call_model()
-    注意：如果已有事件循环运行，此方法会失败
-    
-    Args:
-        capability: 需要的能力
-        prompt: 用户提示
-        system_prompt: 系统提示
-        strategy: 路由策略
-        context_length: 需要的上下文长度
-        use_cache: 是否使用缓存
-        model_id: 直接指定模型ID（不走路由）
-    
-    Returns:
-        模型输出文本
+
+    Note: 由于 call_model 已经有 Opik 追踪，这里主要作为入口追踪。
+    如果需要独立的追踪，可以取消下面的注释。
     """
+    # ── Opik 入口追踪（可选）────────────────────────────────
+    # 如果需要为 call_model_sync 添加独立追踪，取消下面的注释
+    # _opik_trace = None
+    # _opik_start_time = time.time()
+    # 
+    # if OPIK_TRACER_AVAILABLE and is_opik_enabled():
+    #     try:
+    #         _opik_trace = start_trace(
+    #             name=f"call_model_sync_{capability.value if capability else 'unknown'}",
+    #             trace_type="llm",
+    #             metadata={"function": "call_model_sync"}
+    #         )
+    #     except Exception as e:
+    #         logger.warning(f"Opik 追踪初始化失败: {e}")
+
+    try:
+        result = asyncio.run(
+            get_global_router().call_model(
+                capability, prompt, system_prompt,
+                strategy, context_length, use_cache,
+                model_id, tier, expert_type, thinking_mode,
+                rys_config, verify, **kwargs
+            )
+        )
+
+        # ── Opik 入口追踪记录（可选）────────────────────────
+        # if _opik_trace is not None:
+        #     try:
+        #         _opik_end_time = time.time()
+        #         _opik_latency = _opik_end_time - _opik_start_time
+        # 
+        #         log_trace(
+        #             _opik_trace,
+        #             input_data={
+        #                 "capability": capability.value if capability else None,
+        #                 "prompt": prompt[:500],
+        #             },
+        #             output_data={
+        #                 "response": result[:1000] if result else None,
+        #                 "latency": _opik_latency,
+        #             },
+        #             metadata={"latency": _opik_latency, "success": bool(result)}
+        #         )
+        #     except Exception as e:
+        #         logger.warning(f"Opik 追踪记录失败: {e}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"call_model_sync 执行失败: {e}")
+        # ── Opik 入口追踪记录（失败）──────────────────────
+        # if _opik_trace is not None:
+        #     try:
+        #         log_trace(
+        #             _opik_trace,
+        #             input_data={"capability": capability.value if capability else None},
+        #             output_data={"error": str(e)},
+        #             metadata={"success": False, "error": str(e)}
+        #         )
+        #     except Exception as ex:
+        #         logger.warning(f"Opik 追踪记录失败: {ex}")
+        raise
+    
+#     内部使用 asyncio.run() 调用异步的 call_model()
+#     # 注意: 如果已有事件循环运行，此方法会失败
+#     
+#     Args:
+#         capability: 需要的能力
+#         prompt: 用户提示
+#         system_prompt: 系统提示
+#         strategy: 路由策略
+#         context_length: 需要的上下文长度
+#         use_cache: 是否使用缓存
+#         model_id: 直接指定模型ID（不走路由）
+#     
+#     Returns:
+#         模型输出文本
+#     """
     router = get_global_router()
     
     try:

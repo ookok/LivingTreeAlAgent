@@ -2,9 +2,9 @@
 智能网络探测系统
 
 网络环境评估、连接方式选择、NAT类型检测
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

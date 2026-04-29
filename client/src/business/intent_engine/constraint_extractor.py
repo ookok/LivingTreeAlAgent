@@ -4,9 +4,9 @@ Constraint Extractor - 约束条件提取器
 =====================================
 
 从用户查询中提取约束条件。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 from typing import List, Tuple, Optional, Dict, Any

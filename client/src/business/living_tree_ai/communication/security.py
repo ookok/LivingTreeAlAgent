@@ -8,9 +8,9 @@ Security - 端到端加密层
 - HKDF密钥派生
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Any, Callable
 from datetime import datetime

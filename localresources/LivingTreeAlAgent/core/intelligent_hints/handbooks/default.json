@@ -1,0 +1,61 @@
+{
+  "scene_id": "default",
+  "scene_name": "通用",
+  "description": "通用场景模板",
+
+  "rules": [
+    {
+      "rule_id": "celebrate_success",
+      "conditions": {
+        "user_action": "成功"
+      },
+      "priority": 95,
+      "template": {
+        "emoji": "🎉",
+        "title": "太棒了！",
+        "content": "做得好！继续保持～有什么需要帮忙的尽管说！",
+        "level": "glow"
+      }
+    },
+    {
+      "rule_id": "error_comfort",
+      "conditions": {
+        "user_action": "失败"
+      },
+      "priority": 95,
+      "template": {
+        "emoji": "😅",
+        "title": "没关系的",
+        "content": "出错很正常，别灰心～一起看看哪里出了问题？",
+        "level": "gentle"
+      }
+    },
+    {
+      "rule_id": "shortcut_hint",
+      "conditions": {
+        "show_shortcut": true
+      },
+      "priority": 20,
+      "template": {
+        "emoji": "⌨️",
+        "title": "快捷键",
+        "content": "试试 Ctrl+L 清空对话，Ctrl+S 保存笔记～",
+        "level": "transparent"
+      }
+    }
+  ],
+
+  "chat_templates": {
+    "intro": "有什么想问的？",
+    "questions": [
+      "怎么用这个功能？",
+      "有什么技巧吗？",
+      "能帮我做XX吗？"
+    ]
+  },
+
+  "hide_messages": {
+    "temp": "好的～",
+    "perma": "好的，不再打扰你了 🌿"
+  }
+}

@@ -2,9 +2,9 @@
 消息存储引擎
 
 管理邮件消息的本地存储、索引、检索
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

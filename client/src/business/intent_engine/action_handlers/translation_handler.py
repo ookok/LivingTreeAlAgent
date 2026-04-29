@@ -7,9 +7,9 @@
 - TRANSLATION: 文本翻译
 
 使用 GlobalModelRouter 调用翻译能力。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 from typing import Optional

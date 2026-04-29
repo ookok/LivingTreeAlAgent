@@ -619,7 +619,8 @@ class LocalSQLiteSource:
         else:
             # 搜索所有表
             tables = ["form_submissions", "workflow_executions", "templates"]
-        else:
+        
+        if table:
             tables = [table]
 
         conn = sqlite3.connect(str(self.db_path))

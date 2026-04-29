@@ -39,9 +39,9 @@ print(f"维度详情: {report.dimensions_summary}")
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 # 版本信息
 __version__ = "1.0.0"

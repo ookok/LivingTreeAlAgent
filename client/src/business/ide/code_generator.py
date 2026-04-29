@@ -18,9 +18,9 @@ Intent Code Generator - 意图驱动代码生成器
 4. 预览+应用：安全的两阶段确认
 
 Author: LivingTreeAI
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import re
@@ -407,7 +407,6 @@ module.exports = router;
             constructor_params="",
             constructor_body="",
             param_types="",
-            return_type="*",
         )
         
         return GeneratedCode(

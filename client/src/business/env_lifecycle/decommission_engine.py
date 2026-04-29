@@ -76,7 +76,7 @@ class ContaminationZone:
 
     # 调查数据
     soil_samples: List[Dict] = field(default_factory=list)
-    groundwater_samples: List[Dict] = field(default_factory=dic
+    groundwater_samples: List[Dict] = field(default_factory=list)
 
     # 修复信息
     remediation_required: bool = False

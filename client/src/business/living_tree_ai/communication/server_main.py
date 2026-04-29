@@ -5,9 +5,9 @@ ServerMain - 四层通信协议栈整合入口
 整合发现层、传输层、会话层、安全层
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime

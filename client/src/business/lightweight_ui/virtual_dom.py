@@ -3,9 +3,9 @@
 
 高效的虚拟DOM实现，支持批量更新、差异对比、
 异步更新和智能缓存
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from typing import Dict, List, Optional, Any, Callable, Set
 from dataclasses import dataclass, field
 from datetime import datetime

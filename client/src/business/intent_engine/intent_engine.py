@@ -13,9 +13,9 @@ IntentEngine - 意图引擎主入口
     print(intent.tech_stack)      # ['fastapi', 'python']
     print(intent.action)          # 编写
     print(intent.target)          # 登录接口
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 from typing import Optional, List, Dict, Any
 from .intent_types import Intent, IntentType, IntentPriority

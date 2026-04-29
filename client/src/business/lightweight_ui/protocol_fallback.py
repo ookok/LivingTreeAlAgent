@@ -2,9 +2,9 @@
 多协议降级策略
 
 智能协议选择、自动降级、优雅恢复
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

@@ -1,0 +1,83 @@
+{
+  "id": "nanazip",
+  "name": "NanaZip CLI",
+  "desc": "高性能压缩/解压引擎 (Windows 11 优化版，基于 7-Zip)",
+  "enabled_by_default": true,
+  "version": "6.0.1650.0",
+  "platforms": {
+    "windows_amd64": {
+      "url": "https://github.com/M2Team/NanaZip/releases/download/6.0.1650.0/NanaZip_6.0.1650.0_Binaries.zip",
+      "bin_name": "NanaZip.exe",
+      "extract": true,
+      "sha256": "9f6a708a86eeef6928e4891a30ac684971da99dca82a0fa704c3b26967dae0ec"
+    }
+  },
+  "fallback_platforms": {
+    "windows_amd64": {
+      "id": "7zip",
+      "name": "7-Zip CLI",
+      "desc": "7-Zip 命令行版本作为 NanaZip 的备选",
+      "url": "https://www.7-zip.org/a/7z2408-x64.exe",
+      "bin_name": "7z.exe",
+      "install_args": ["/S"],
+      "sha256": ""
+    }
+  },
+  "dependencies": {
+    "system": []
+  },
+  "capabilities": {
+    "compression": {
+      "formats": ["7z", "zip", "tar", "gz", "bz2", "xz", "wim"],
+      "methods": ["LZMA2", "LZMA", "PPMd", "BCJ", "BCJ2"],
+      "features": [
+        "多线程压缩",
+        "分卷压缩",
+        "固实压缩",
+        "AES-256 加密"
+      ]
+    },
+    "extraction": {
+      "formats": [
+        "7z", "zip", "rar", "tar", "gz", "bz2", "xz", "wim", "ar", "arj", "cab", "chm", "cpio", "deb", "dmg", "hfs", "iso", "lzh", "nsis", "rpm", "udf", "vhd", "xar", "z"
+      ],
+      "features": [
+        "智能解压",
+        "完整性校验",
+        "加密文件支持"
+      ]
+    }
+  },
+  "config_options": {
+    "compression_level": {
+      "type": "enum",
+      "default": "normal",
+      "options": ["store", "fastest", "fast", "normal", "maximum", "ultra"],
+      "desc": "压缩级别"
+    },
+    "dictionary_size": {
+      "type": "enum",
+      "default": "64mb",
+      "options": ["16mb", "32mb", "64mb", "128mb", "256mb", "512mb", "1gb"],
+      "desc": "字典大小，影响压缩率"
+    },
+    "threads": {
+      "type": "int",
+      "default": 0,
+      "range": [0, 32],
+      "desc": "线程数，0=自动(CPU核心数)"
+    }
+  },
+  "cli_usage": {
+    "compress": "NanaZip.exe a -t{format} -r {output} {input}",
+    "extract": "NanaZip.exe x -r {archive} -o{output_dir}",
+    "list": "NanaZip.exe l {archive}",
+    "test": "NanaZip.exe t {archive}"
+  },
+  "use_cases": [
+    "电商批量商品图压缩打包",
+    "开发者 SDK/插件分发",
+    "P2P 大文件传输前压缩",
+    "日志/备份文件归档"
+  ]
+}

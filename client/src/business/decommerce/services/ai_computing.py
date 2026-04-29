@@ -250,13 +250,7 @@ class AIComputingHandler(BaseServiceHandler):
             job.completed_at = time.time()
 
             logger.info(f"[AIComputing] Job {job_id} completed")
-
-        except Exception as e:
-            job.status = "failed"
-            job.error = str(e)
-            job.completed_at = time.time()
-            logger.error(f"[AIComputing] Job {job_id} failed: {e}")
-
+            
     async def get_job_result(self, session_id: str, job_id: str) -> Optional[AIJob]:
         """获取任务结果"""
         session = self._sessions.get(session_id)

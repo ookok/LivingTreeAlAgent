@@ -14,9 +14,9 @@ AI 服务提供商配置管理
 - MiniMax: MiniMax
 - HuggingFace: HuggingFace
 - 本地: Ollama / LM Studio / vLLM
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import logging

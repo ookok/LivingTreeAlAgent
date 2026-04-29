@@ -13,12 +13,12 @@ Adaptive Quality Assurance System - 自适应质量保障系统
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('adaptive_quality.adaptive_quality_system')
 
-from __future__ import annotations
 
 import time
 from typing import Optional, List, Dict, Any, Callable, Tuple, Union

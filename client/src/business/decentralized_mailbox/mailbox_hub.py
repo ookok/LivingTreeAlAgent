@@ -2,9 +2,9 @@
 去中心化邮箱核心调度器
 
 整合所有子模块, 提供统一的邮箱服务接口
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

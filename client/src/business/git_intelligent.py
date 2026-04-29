@@ -236,7 +236,7 @@ class CommitMessageGenerator:
         else:
             return self._generate_with_rules(files)
     
-    def _generate_with_llm(self, files: List[FileChange]) -> Optional[CommitInfo]:
+    async def _generate_with_llm(self, files: List[FileChange]) -> Optional[CommitInfo]:
         """使用LLM生成提交信息"""
         try:
             # 构建变更摘要

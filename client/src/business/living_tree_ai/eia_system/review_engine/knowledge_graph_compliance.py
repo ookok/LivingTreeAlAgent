@@ -210,7 +210,7 @@ class StandardKnowledgeGraph:
             ("GB_16297_1996", "GB 16297-1996", "大气污染物综合排放标准", StandardType.NATIONAL),
             ("GB_3838_2002", "GB 3838-2002", "地表水环境质量标准", StandardType.NATIONAL),
             ("GB_12348_2008", "GB 12348-2008", "工业企业厂界环境噪声排放标准", StandardType.NATIONAL),
-            ("GB_18599_2020", "GB 18599-2020", 一般工业固体废物贮存标准", StandardType.NATIONAL),
+            ("GB_18599_2020", "GB 18599-2020", "一般工业固体废物贮存标准", StandardType.NATIONAL),
             ("HJ_22_2018", "HJ 2.2-2018", "大气环境影响评价技术导则", StandardType.INDUSTRY),
             ("HJ_24_2014", "HJ 2.4-2014", "环境影响评价技术导则 声环境", StandardType.INDUSTRY),
             ("HJ_19_2011", "HJ 19-2011", "环境影响评价技术导则 生态影响", StandardType.INDUSTRY),

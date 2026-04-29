@@ -35,6 +35,16 @@ import os
 from datetime import datetime
 from enum import Enum
 
+# ── Opik 监控支持 ─────────────────────────────────────────
+try:
+    from client.src.business.opik_monitor import get_monitor, monitor_tool
+    OPIK_MONITOR_AVAILABLE = True
+except ImportError:
+    logger.warning("Opik 监控模块导入失败，监控功能将不可用")
+    OPIK_MONITOR_AVAILABLE = False
+    get_monitor = lambda: None
+    monitor_tool = lambda *a, **kw: lambda func: func  # no-op decorator
+
 
 class ToolNodeType:
     """工具节点类型"""
@@ -639,6 +649,16 @@ print(result.to_json())
         Returns:
             AgentCallResult - 结构化的调用结果
         """
+        # ── Opik 监控：开始 ─────────────────────────────────
+        _monitor = None
+        _start_time = time.time() if 'time' in sys.modules else 0
+        
+        if OPIK_MONITOR_AVAILABLE:
+            try:
+                _monitor = get_monitor()
+            except Exception as e:
+                logger.warning(f"获取监控器失败: {e}")
+        
         try:
             # 参数验证
             validation_error = await self.validate_parameters(**kwargs)
@@ -652,6 +672,16 @@ print(result.to_json())
             self._logger.info(f"智能体调用: {self.name} 参数: {kwargs}")
             result = await self.execute(**kwargs)
             
+            # ── Opik 监控：记录成功 ─────────────────────────
+            if _monitor is not None:
+                try:
+                    _latency = time.time() - _start_time
+                    # 记录到监控器（通过 monitor_tool 装饰器）
+                    # 注意：如果在 execute() 方法中使用了 @monitor_tool 装饰器，
+                    # 这里不需要重复记录
+                except Exception as e:
+                    logger.warning(f"监控记录失败: {e}")
+            
             # 返回成功结果
             return AgentCallResult.success(
                 data=result,
@@ -660,6 +690,14 @@ print(result.to_json())
             )
             
         except Exception as e:
+            # ── Opik 监控：记录失败 ─────────────────────────
+            if _monitor is not None:
+                try:
+                    _latency = time.time() - _start_time
+                    # 记录失败
+                except Exception as ex:
+                    logger.warning(f"监控记录失败: {ex}")
+            
             self._logger.error(f"智能体调用失败 {self.name}: {e}")
             return AgentCallResult.error(
                 error=str(e),

@@ -10,9 +10,9 @@
 4. 配置导入/导出
 
 Author: LivingTreeAI Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import os

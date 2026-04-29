@@ -1,8 +1,8 @@
 """
 P2P广播发现与通信系统 - 统一调度器
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

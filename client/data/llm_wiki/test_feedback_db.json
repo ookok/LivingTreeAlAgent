@@ -1,0 +1,87 @@
+{
+  "feedback_records": [
+    {
+      "query": "什么是机器学习？",
+      "response": "机器学习是人工智能的一个分支...",
+      "paths": [
+        [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        [
+          "t2",
+          "t4"
+        ]
+      ],
+      "feedback_score": 4.5,
+      "feedback_type": "human",
+      "utility_scores": {
+        "2026-04-29T11:53:00.305698_0": 0.44999999999999996,
+        "2026-04-29T11:53:00.305698_1": 0.30000000000000004
+      },
+      "timestamp": "2026-04-29T11:53:00.305698",
+      "metadata": {}
+    },
+    {
+      "query": "什么是机器学习？",
+      "response": "机器学习是人工智能的一个分支...",
+      "paths": [
+        [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        [
+          "t2",
+          "t4"
+        ]
+      ],
+      "feedback_score": 4.5,
+      "feedback_type": "human",
+      "utility_scores": {
+        "2026-04-29T11:53:12.618810_0": 0.44999999999999996,
+        "2026-04-29T11:53:12.618810_1": 0.30000000000000004
+      },
+      "timestamp": "2026-04-29T11:53:12.618810",
+      "metadata": {}
+    }
+  ],
+  "triplet_scores": {
+    "t1": {
+      "triplet_id": "t1",
+      "semantic_similarity": 0.8,
+      "contribution_score": 0.9058305950509312,
+      "priority": 0.5,
+      "update_count": 1,
+      "last_updated": "2026-04-29T11:53:12.619126"
+    },
+    "t2": {
+      "triplet_id": "t2",
+      "semantic_similarity": 0.6,
+      "contribution_score": 0.699807246090557,
+      "priority": 0.5,
+      "update_count": 1,
+      "last_updated": "2026-04-29T11:53:12.619134"
+    },
+    "t3": {
+      "triplet_id": "t3",
+      "semantic_similarity": 0.9,
+      "contribution_score": 0.30583059505093124,
+      "priority": 0.5,
+      "update_count": 1,
+      "last_updated": "2026-04-29T11:53:12.619137"
+    },
+    "t4": {
+      "triplet_id": "t4",
+      "semantic_similarity": 0.5,
+      "contribution_score": 0.19397665103962586,
+      "priority": 0.5,
+      "update_count": 1,
+      "last_updated": "2026-04-29T11:53:12.619140"
+    }
+  },
+  "alpha": 0.5125,
+  "learning_rate": 0.5,
+  "last_updated": "2026-04-29T11:53:12.619488"
+}

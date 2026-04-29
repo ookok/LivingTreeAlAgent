@@ -7,9 +7,9 @@
 - 自动存入已发送文件夹
 
 作者：Living Tree AI 进化系统
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

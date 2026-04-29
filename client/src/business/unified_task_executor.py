@@ -15,12 +15,12 @@
 - ToolRegistry (core/tools_registry.py)
 
 Author: Hermes Desktop Team
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('unified_task_executor')
 
-from __future__ import annotations
 
 import logging
 import time

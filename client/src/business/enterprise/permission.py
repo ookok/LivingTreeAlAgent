@@ -3,9 +3,9 @@
 Permission Management Module
 
 实现细粒度的权限管理系统
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field

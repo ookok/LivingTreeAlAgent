@@ -7,9 +7,9 @@
 2. 选择模型 → 下载 (多源自动降级)
 3. 下载完成 → 自动注册
 4. 加载模型 → 自动选择后端
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import json

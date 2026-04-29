@@ -10,9 +10,9 @@ AI 原生 OS 的多模态交互能力：
 5. 文档交互 - PDF、Word、Markdown
 
 Author: AI Native OS Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import json

@@ -7,9 +7,9 @@
 - SUMMARIZATION: 文本/文档摘要
 
 使用 GlobalModelRouter 调用摘要能力。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 from typing import Optional

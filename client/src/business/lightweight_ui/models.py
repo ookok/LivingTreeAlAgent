@@ -2,9 +2,9 @@
 轻量级UI数据模型
 
 定义组件、布局、状态等核心数据模型
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable

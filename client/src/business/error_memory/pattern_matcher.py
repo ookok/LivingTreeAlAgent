@@ -13,12 +13,12 @@ Error Pattern Matcher - 错误模式匹配器
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('error_memory.pattern_matcher')
 
-from __future__ import annotations
 
 import re
 from typing import Optional, List, Dict, Any, Tuple

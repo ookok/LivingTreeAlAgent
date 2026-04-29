@@ -4,9 +4,9 @@ Composite Detector - 复合意图检测器
 ===================================
 
 检测用户查询中的复合意图，并分解为多个子意图。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 from typing import List, Tuple, Optional

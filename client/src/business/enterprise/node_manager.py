@@ -3,9 +3,9 @@
 Enterprise Node Manager
 
 管理企业内的P2P节点，负责节点发现、资源分配和负载均衡
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

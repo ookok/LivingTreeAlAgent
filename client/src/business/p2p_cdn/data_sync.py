@@ -2,9 +2,9 @@
 数据同步管理器
 
 负责数据的同步和一致性，处理版本控制和增量同步
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

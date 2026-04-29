@@ -10,9 +10,9 @@ AI 原生 OS 的智能核心能力：
 5. 自适应压缩策略
 
 Author: AI Native OS Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import uuid

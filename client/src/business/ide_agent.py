@@ -24,11 +24,12 @@ IDE Agent - 智能IDE智能体（重构版）
 
 Author: LivingTreeAI Agent
 Date: 2026-04-26 (重构)
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
+import os
 import re
 from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
@@ -84,12 +85,20 @@ class IDEAgent:
         self._service = None
         self._init_service()
 
+        # ── v3: CodeTool + Serena 集成 ──
+        self._code_tool = None
+        self._serena = None
+        self._init_code_tool()
+        self._init_serena()
+
         # 统计信息
         self._stats = {
             "total_requests": 0,
             "code_generations": 0,
             "code_executions": 0,
             "intent_recognitions": 0,
+            "code_tool_calls": 0,       # v3: CodeTool 调用次数
+            "serena_operations": 0,      # v3: Serena 操作次数
         }
 
     def _init_intent_engine(self):
@@ -118,6 +127,46 @@ class IDEAgent:
         """初始化服务层"""
         from client.src.business.ide_service import IDEService
         self._service = IDEService(self.config)
+
+    # ============= v3: CodeTool + Serena 初始化 =============
+
+    def _init_code_tool(self):
+        """初始化 CodeTool v3（自动写/测/修/发布）"""
+        try:
+            from client.src.business.self_evolution.code_tool import CodeTool
+            self._code_tool = CodeTool()
+            self._use_code_tool = True
+            print("[IDEAgent] CodeTool v3 初始化成功")
+        except Exception as e:
+            self._code_tool = None
+            self._use_code_tool = False
+            print(f"[IDEAgent] CodeTool v3 初始化失败: {e}，回退到基础模式")
+
+    def _init_serena(self):
+        """初始化 SerenaAdapter（LSP 代码操作）"""
+        try:
+            from client.src.business.self_evolution.serena_adapter import (
+                SerenaAdapter, SerenaStatus
+            )
+            self._serena = SerenaAdapter()
+            self._use_serena = self._serena.status != SerenaStatus.OFFLINE
+            print(f"[IDEAgent] Serena 初始化: {self._serena.status.value}")
+        except Exception as e:
+            self._serena = None
+            self._use_serena = False
+            print(f"[IDEAgent] Serena 初始化失败: {e}，回退到基础模式")
+
+    def _ensure_code_tool(self):
+        """确保 CodeTool 已初始化"""
+        if self._code_tool is None:
+            self._init_code_tool()
+        return self._code_tool and self._use_code_tool
+
+    def _ensure_serena(self):
+        """确保 Serena 已初始化"""
+        if self._serena is None:
+            self._init_serena()
+        return self._serena and self._use_serena
 
     def _ensure_service(self) -> "IDEService":
         """确保服务层已初始化"""
@@ -460,6 +509,19 @@ class IDEAgent:
         # 根据意图调用不同的方法
         intent_type = intent_result.intent_type.value if hasattr(intent_result, 'intent_type') else intent_result.get('type', 'unknown')
 
+        # ── v3: CodeTool 流水线意图 ──
+        if 'test' in intent_type or 'auto_test' in intent_type:
+            return self._handle_test_code(message, intent_result, context, callbacks)
+        elif 'fix' in intent_type or 'auto_fix' in intent_type:
+            return self._handle_fix_code(message, intent_result, context, callbacks)
+        elif 'publish' in intent_type or 'deploy' in intent_type or 'release' in intent_type:
+            return self._handle_publish_code(message, intent_result, context, callbacks)
+        elif 'plan' in intent_type or 'refactor' in intent_type:
+            return self._handle_plan_code(message, intent_result, context, callbacks)
+        elif 'scan' in intent_type or 'analyze_project' in intent_type:
+            return self._handle_scan_project(message, context, callbacks)
+
+        # ── 原有意图 ──
         if 'generate' in intent_type or 'code_generation' in intent_type:
             return self._handle_generate_code(message, intent_result, callbacks)
         elif 'modify' in intent_type or 'code_modification' in intent_type:
@@ -507,6 +569,50 @@ class IDEAgent:
             Dict: 意图信息
         """
         message_lower = message.lower()
+
+        # ── v3: CodeTool 流水线意图 ──
+
+        # 自动测试
+        test_keywords = ['测试', '跑测试', '运行测试', 'test', 'run test', 'pytest', '单元测试', '集成测试']
+        if any(kw in message_lower for kw in test_keywords):
+            return {
+                'type': 'auto_test',
+                'description': message,
+            }
+
+        # 自动修复
+        fix_keywords = ['自动修复', '修复错误', '修复bug', 'fix error', 'fix bug', 'lint', '诊断']
+        if any(kw in message_lower for kw in fix_keywords):
+            return {
+                'type': 'auto_fix',
+                'description': message,
+            }
+
+        # 发布/部署
+        publish_keywords = ['发布', '提交', 'deploy', 'publish', 'release', 'git push', '上线']
+        if any(kw in message_lower for kw in publish_keywords):
+            return {
+                'type': 'publish',
+                'description': message,
+            }
+
+        # 规划/重构
+        plan_keywords = ['规划', '重构', '设计', 'plan', 'refactor', '架构']
+        if any(kw in message_lower for kw in plan_keywords):
+            return {
+                'type': 'plan',
+                'description': message,
+            }
+
+        # 项目扫描
+        scan_keywords = ['扫描项目', '项目分析', 'scan', 'project structure', '项目结构']
+        if any(kw in message_lower for kw in scan_keywords):
+            return {
+                'type': 'scan_project',
+                'description': message,
+            }
+
+        # ── 原有意图 ──
 
         # 生成代码
         generate_keywords = ['创建', '生成', '新建', '写', '开发', '实现', 'create', 'generate', 'new']
@@ -650,12 +756,360 @@ class IDEAgent:
         context: Optional[Dict],
         callbacks: Optional[Dict[str, Callable]],
     ) -> Dict:
-        """处理代码修改"""
-        # TODO: 实现代码修改逻辑
+        """处理代码修改（v3: 接入 CodeTool._auto_write）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.auto_write', f'指令: {message[:100]}')
+
+                result = self._code_tool.execute(
+                    action='write',
+                    instruction=message,
+                    project_path=project_path,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    detail = f"修改 {len(result.data.get('files_modified', []))} 个文件，"
+                    detail += f"新增 {len(result.data.get('files_created', []))} 个文件"
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_write', detail, True)
+                    return {
+                        'type': 'code_modification',
+                        'message': f"代码修改完成！{detail}",
+                        'files_modified': result.data.get('files_modified', []),
+                        'files_created': result.data.get('files_created', []),
+                        'lines_added': result.data.get('lines_added', 0),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_write', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"代码修改失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 修改失败: {e}")
+
+        # 回退：提示功能不可用
         return {
             'type': 'general_chat',
-            'message': '代码修改功能正在开发中...',
+            'message': '代码修改功能需要 CodeTool v3，请确认已正确安装。',
         }
+
+    # ============= v3: CodeTool 流水线处理 =============
+
+    def _handle_test_code(
+        self,
+        message: str,
+        intent: Any,
+        context: Optional[Dict],
+        callbacks: Optional[Dict[str, Callable]],
+    ) -> Dict:
+        """处理自动测试（CodeTool._auto_test）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.auto_test', f'项目: {project_path}')
+
+                result = self._code_tool.execute(
+                    action='test',
+                    project_path=project_path,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    data = result.data
+                    detail = f"通过 {data.get('tests_passed', 0)}/{data.get('tests_total', 0)} 个测试"
+                    if data.get('fix_rounds', 0) > 0:
+                        detail += f"（自动修复 {data['fix_rounds']} 轮）"
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_test', detail, True)
+                    return {
+                        'type': 'test_result',
+                        'message': f"测试完成！{detail}",
+                        'tests_passed': data.get('tests_passed', 0),
+                        'tests_total': data.get('tests_total', 0),
+                        'fix_rounds': data.get('fix_rounds', 0),
+                        'failed_tests': data.get('failed_tests', []),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_test', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"测试失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 测试失败: {e}")
+
+        return {
+            'type': 'general_chat',
+            'message': '自动测试功能需要 CodeTool v3。',
+        }
+
+    def _handle_fix_code(
+        self,
+        message: str,
+        intent: Any,
+        context: Optional[Dict],
+        callbacks: Optional[Dict[str, Callable]],
+    ) -> Dict:
+        """处理自动修复（CodeTool._auto_fix）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.auto_fix', f'项目: {project_path}')
+
+                result = self._code_tool.execute(
+                    action='fix',
+                    project_path=project_path,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    data = result.data
+                    detail = f"修复 {data.get('files_fixed', 0)} 个文件"
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_fix', detail, True)
+                    return {
+                        'type': 'fix_result',
+                        'message': f"自动修复完成！{detail}",
+                        'files_fixed': data.get('files_fixed', []),
+                        'fixes_applied': data.get('fixes_applied', []),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_fix', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"自动修复失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 修复失败: {e}")
+
+        return {
+            'type': 'general_chat',
+            'message': '自动修复功能需要 CodeTool v3。',
+        }
+
+    def _handle_publish_code(
+        self,
+        message: str,
+        intent: Any,
+        context: Optional[Dict],
+        callbacks: Optional[Dict[str, Callable]],
+    ) -> Dict:
+        """处理自动发布（CodeTool._auto_publish）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.auto_publish', f'项目: {project_path}')
+
+                result = self._code_tool.execute(
+                    action='publish',
+                    project_path=project_path,
+                    commit_message=message,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    data = result.data
+                    detail = f"提交: {data.get('commit_hash', '')[:8]} → {data.get('branch', '')}"
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_publish', detail, True)
+                    return {
+                        'type': 'publish_result',
+                        'message': f"发布成功！{detail}",
+                        'commit_hash': data.get('commit_hash', ''),
+                        'branch': data.get('branch', ''),
+                        'files_committed': data.get('files_committed', []),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.auto_publish', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"发布失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 发布失败: {e}")
+
+        return {
+            'type': 'general_chat',
+            'message': '自动发布功能需要 CodeTool v3。',
+        }
+
+    def _handle_plan_code(
+        self,
+        message: str,
+        intent: Any,
+        context: Optional[Dict],
+        callbacks: Optional[Dict[str, Callable]],
+    ) -> Dict:
+        """处理规划（CodeTool._plan_code）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.plan', f'指令: {message[:100]}')
+
+                result = self._code_tool.execute(
+                    action='plan',
+                    instruction=message,
+                    project_path=project_path,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    data = result.data
+                    steps = data.get('steps', [])
+                    plan_text = "\n".join(
+                        f"  {i+1}. {s.get('description', '')} ({s.get('type', '')})"
+                        for i, s in enumerate(steps)
+                    )
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.plan', plan_text, True)
+
+                    # 流式输出规划结果
+                    if callbacks and 'on_stream_delta' in callbacks:
+                        for chunk in plan_text.split('\n'):
+                            callbacks['on_stream_delta'](chunk + '\n')
+
+                    return {
+                        'type': 'plan_result',
+                        'message': f"规划完成！共 {len(steps)} 步",
+                        'steps': steps,
+                        'estimated_time': data.get('estimated_time', ''),
+                        'risks': data.get('risks', []),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.plan', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"规划失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 规划失败: {e}")
+
+        return {
+            'type': 'general_chat',
+            'message': '代码规划功能需要 CodeTool v3。',
+        }
+
+    def _handle_scan_project(
+        self,
+        message: str,
+        context: Optional[Dict],
+        callbacks: Optional[Dict[str, Callable]],
+    ) -> Dict:
+        """处理项目扫描（CodeTool._scan_project）"""
+        if self._ensure_code_tool():
+            try:
+                project_path = (context or {}).get('project_path', os.getcwd())
+                if callbacks and 'on_tool_start' in callbacks:
+                    callbacks['on_tool_start']('CodeTool.scan', f'项目: {project_path}')
+
+                result = self._code_tool.execute(
+                    action='scan',
+                    project_path=project_path,
+                )
+
+                self._stats['code_tool_calls'] += 1
+
+                if result.success:
+                    data = result.data
+                    summary = (
+                        f"文件: {data.get('total_files', 0)} | "
+                        f"类: {data.get('total_classes', 0)} | "
+                        f"函数: {data.get('total_functions', 0)} | "
+                        f"模块: {len(data.get('modules', {}))}"
+                    )
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.scan', summary, True)
+                    return {
+                        'type': 'scan_result',
+                        'message': f"项目扫描完成！{summary}",
+                        'total_files': data.get('total_files', 0),
+                        'total_classes': data.get('total_classes', 0),
+                        'total_functions': data.get('total_functions', 0),
+                        'modules': data.get('modules', {}),
+                    }
+                else:
+                    if callbacks and 'on_tool_result' in callbacks:
+                        callbacks['on_tool_result']('CodeTool.scan', result.error, False)
+                    return {
+                        'type': 'error',
+                        'message': f"项目扫描失败: {result.error}",
+                    }
+            except Exception as e:
+                print(f"[IDEAgent] CodeTool 扫描失败: {e}")
+
+        return {
+            'type': 'general_chat',
+            'message': '项目扫描功能需要 CodeTool v3。',
+        }
+
+    # ============= v3: Serena 操作接口 =============
+
+    def get_serena_diagnostics(self, file_path: str) -> List[Dict]:
+        """获取文件的 LSP 诊断信息"""
+        if self._ensure_serena():
+            try:
+                result = self._serena.get_diagnostics(file_path)
+                self._stats['serena_operations'] += 1
+                if result.success:
+                    return [
+                        {
+                            'severity': d.severity,
+                            'message': d.message,
+                            'line': d.line,
+                            'column': d.column,
+                            'code': d.code,
+                            'source': d.source,
+                        }
+                        for d in result.data
+                    ]
+            except Exception as e:
+                print(f"[IDEAgent] Serena 诊断失败: {e}")
+        return []
+
+    def get_file_symbols(self, file_path: str) -> List[Dict]:
+        """获取文件的符号列表（类/函数/方法）"""
+        if self._ensure_serena():
+            try:
+                result = self._serena.find_symbols(file_path)
+                self._stats['serena_operations'] += 1
+                if result.success:
+                    return [
+                        {
+                            'name': s.name,
+                            'kind': s.kind,
+                            'line_start': s.line_start,
+                            'line_end': s.line_end,
+                            'documentation': s.documentation,
+                        }
+                        for s in result.data
+                    ]
+            except Exception as e:
+                print(f"[IDEAgent] Serena 符号查找失败: {e}")
+        return []
+
+    def get_serena_status(self) -> str:
+        """获取 Serena 连接状态"""
+        if self._serena:
+            return self._serena.status.value
+        return 'offline'
 
     def _handle_explain_code(
         self,
@@ -915,6 +1369,62 @@ class IDEAgent:
             language = message.get("language", "python")
             analysis = self.analyze_code(code, language)
             return {"status": "success", "result": analysis}
+
+        # ── v3: CodeTool 流水线 A2A ──
+        elif message_type == "auto_write":
+            instruction = message.get("instruction", "")
+            project_path = message.get("project_path", os.getcwd())
+            if self._ensure_code_tool():
+                result = self._code_tool.execute(
+                    action='write', instruction=instruction, project_path=project_path
+                )
+                return {"status": "success" if result.success else "error",
+                        "result": result.data, "error": result.error}
+            return {"status": "error", "error": "CodeTool v3 不可用"}
+
+        elif message_type == "auto_test":
+            project_path = message.get("project_path", os.getcwd())
+            test_command = message.get("test_command", "")
+            if self._ensure_code_tool():
+                result = self._code_tool.execute(
+                    action='test', project_path=project_path, test_command=test_command
+                )
+                return {"status": "success" if result.success else "error",
+                        "result": result.data, "error": result.error}
+            return {"status": "error", "error": "CodeTool v3 不可用"}
+
+        elif message_type == "auto_fix":
+            project_path = message.get("project_path", os.getcwd())
+            if self._ensure_code_tool():
+                result = self._code_tool.execute(action='fix', project_path=project_path)
+                return {"status": "success" if result.success else "error",
+                        "result": result.data, "error": result.error}
+            return {"status": "error", "error": "CodeTool v3 不可用"}
+
+        elif message_type == "auto_publish":
+            project_path = message.get("project_path", os.getcwd())
+            commit_message = message.get("commit_message", "")
+            if self._ensure_code_tool():
+                result = self._code_tool.execute(
+                    action='publish', project_path=project_path, commit_message=commit_message
+                )
+                return {"status": "success" if result.success else "error",
+                        "result": result.data, "error": result.error}
+            return {"status": "error", "error": "CodeTool v3 不可用"}
+
+        # ── v3: Serena A2A ──
+        elif message_type == "get_diagnostics":
+            file_path = message.get("file_path", "")
+            diagnostics = self.get_serena_diagnostics(file_path)
+            return {"status": "success", "result": {"diagnostics": diagnostics}}
+
+        elif message_type == "get_symbols":
+            file_path = message.get("file_path", "")
+            symbols = self.get_file_symbols(file_path)
+            return {"status": "success", "result": {"symbols": symbols}}
+
+        elif message_type == "get_serena_status":
+            return {"status": "success", "result": {"status": self.get_serena_status()}}
 
         else:
             return {

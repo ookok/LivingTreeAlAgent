@@ -90,7 +90,7 @@ class CreativeSpace:
     achievements: list[str] = field(default_factory=list)  # 已解锁成就 ID
     total_points: int = 0           # 总积分
     created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field=field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
     metadata: dict = field(default_factory=dict)
     collaborators: list[str] = field(default_factory=list)  # 协作者
     is_public: bool = False

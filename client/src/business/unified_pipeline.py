@@ -19,12 +19,12 @@
 - SkillEvolutionAgent (技能固化)
 
 Author: Hermes Desktop Team
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('unified_pipeline')
 
-from __future__ import annotations
 
 import logging
 import time

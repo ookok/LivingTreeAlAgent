@@ -9,9 +9,9 @@ Evolution-Intent Bridge - Evolution Engine 与 IntentEngine 联动
 3. 反馈闭环：将意图执行结果反馈给 Evolution Engine 学习
 
 Author: Hermes Desktop Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 from typing import Optional, Dict, Any, List, Callable, TYPE_CHECKING

@@ -3,9 +3,9 @@
 Enterprise Task Scheduler
 
 管理企业内的任务调度和编排，支持分组任务
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

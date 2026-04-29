@@ -1,17 +1,32 @@
 """
-任务分解与链式思考系统
-Task Decomposer for Small Models
+任务分解与链式思考系统（增强版 - 集成 CrewAI Process 模式）
 
 通过结构化拆解任务并串联子任务，引导小模型逐步推理，
 从而提升精准回答能力。
+
+新增特性（借鉴 CrewAI）：
+1. Sequential Process - 顺序执行
+2. Hierarchical Process - 层级执行（Manager Agent 协调）
+3. Parallel Process - 并行执行（异步任务）
 """
 
 import json
 import re
+import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Callable, Iterator
 from typing import List, Dict, Any
+from datetime import datetime
+
+
+# ==================== Process 模式定义（借鉴 CrewAI）====================
+
+class ProcessType(Enum):
+    """任务执行流程类型（借鉴 CrewAI）"""
+    SEQUENTIAL = "sequential"       # 顺序执行
+    HIERARCHICAL = "hierarchical"  # 层级执行（Manager 协调）
+    PARALLEL = "parallel"           # 并行执行（异步）
 
 
 class StepStatus(Enum):
@@ -36,6 +51,7 @@ class TaskStep:
     error: Optional[str] = None
     confidence: float = 0.0
     depends_on: List[str] = field(default_factory=list)
+    async_execution: bool = False  # 是否异步执行（用于 PARALLEL 模式）
     
     def to_dict(self) -> dict:
         return {
@@ -45,7 +61,8 @@ class TaskStep:
             "status": self.status.value,
             "confidence": self.confidence,
             "error": self.error,
-            "has_output": self.output_data is not None
+            "has_output": self.output_data is not None,
+            "async_execution": self.async_execution
         }
 
 
@@ -56,6 +73,7 @@ class DecomposedTask:
     original_question: str
     steps: List[TaskStep]
     metadata: Dict[str, Any] = field(default_factory=dict)
+    process_type: ProcessType = ProcessType.SEQUENTIAL  # 执行流程类型
     
     @property
     def total_steps(self) -> int:
@@ -96,14 +114,43 @@ class DecomposedTask:
             if self.can_execute_step(step.step_id):
                 return step
         return None
+    
+    def get_parallel_steps(self) -> List[TaskStep]:
+        """
+        获取可并行执行的步骤列表
+        
+        Returns:
+            可并行执行的步骤列表（互相无依赖）
+        """
+        parallel_steps = []
+        
+        for step in self.steps:
+            if step.status != StepStatus.PENDING:
+                continue
+            
+            # 检查依赖是否满足
+            if all(
+                self.get_step(dep_id).status == StepStatus.COMPLETED
+                for dep_id in step.depends_on
+            ):
+                parallel_steps.append(step)
+        
+        return parallel_steps
 
+
+# ==================== 任务分解器 ====================
 
 class TaskDecomposer:
     """
-    任务分解器
+    任务分解器（增强版 - 支持 CrewAI Process 模式）
     
     将复杂问题拆解为有序、可执行的子步骤，
     适用于参数有限的小模型。
+    
+    新增特性：
+    - 支持三种 Process 类型（sequential/hierarchical/parallel）
+    - 支持异步任务执行
+    - 支持 Manager Agent 协调（hierarchical 模式）
     """
     
     # 内置分解模板
@@ -111,6 +158,7 @@ class TaskDecomposer:
         "analysis": {
             "name": "分析类任务",
             "max_steps": 4,
+            "process_type": ProcessType.SEQUENTIAL,
             "steps": [
                 {
                     "id": "context",
@@ -141,6 +189,7 @@ class TaskDecomposer:
         "design": {
             "name": "设计类任务",
             "max_steps": 5,
+            "process_type": ProcessType.HIERARCHICAL,  # 设计任务适合层级执行
             "steps": [
                 {
                     "id": "requirement",
@@ -152,7 +201,8 @@ class TaskDecomposer:
                     "id": "research",
                     "title": "方案调研",
                     "desc": "调研可行方案和技术选型",
-                    "prompt": "针对需求：\n{requirements}\n\n列出2-3种可行方案，简述各方案的技术特点、优缺点"
+                    "prompt": "针对需求：\n{requirements}\n\n列出2-3种可行方案，简述各方案的技术特点、优缺点",
+                    "async_execution": True  # 可并行调研
                 },
                 {
                     "id": "architecture",
@@ -164,7 +214,8 @@ class TaskDecomposer:
                     "id": "detail",
                     "title": "详细设计",
                     "desc": "关键模块的详细设计",
-                    "prompt": "针对关键模块：\n{architecture}\n\n给出具体的实现细节，包括接口定义和关键逻辑"
+                    "prompt": "针对关键模块：\n{architecture}\n\n给出具体的实现细节，包括接口定义和关键逻辑",
+                    "async_execution": True  # 可并行设计
                 },
                 {
                     "id": "implementation",
@@ -177,6 +228,7 @@ class TaskDecomposer:
         "writing": {
             "name": "写作类任务",
             "max_steps": 4,
+            "process_type": ProcessType.SEQUENTIAL,
             "steps": [
                 {
                     "id": "outline",
@@ -207,6 +259,7 @@ class TaskDecomposer:
         "decision": {
             "name": "决策类任务",
             "max_steps": 5,
+            "process_type": ProcessType.HIERARCHICAL,  # 决策任务适合层级执行
             "steps": [
                 {
                     "id": "problem",
@@ -230,7 +283,8 @@ class TaskDecomposer:
                     "id": "evaluate",
                     "title": "评估选项",
                     "desc": "按标准评估各选项",
-                    "prompt": "使用以下标准评估选项：\n{criteria}\n\n对每个选项按标准打分（1-10分），并说明理由"
+                    "prompt": "使用以下标准评估选项：\n{criteria}\n\n对每个选项按标准打分（1-10分），并说明理由",
+                    "async_execution": True  # 可并行评估
                 },
                 {
                     "id": "recommend",
@@ -243,6 +297,7 @@ class TaskDecomposer:
         "general": {
             "name": "通用任务",
             "max_steps": 3,
+            "process_type": ProcessType.SEQUENTIAL,
             "steps": [
                 {
                     "id": "understand",
@@ -266,9 +321,15 @@ class TaskDecomposer:
         }
     }
     
-    def __init__(self):
-        """初始化分解器"""
+    def __init__(self, default_process_type: ProcessType = ProcessType.SEQUENTIAL):
+        """
+        初始化分解器
+        
+        Args:
+            default_process_type: 默认执行流程类型
+        """
         self.templates = self.DECOMPOSITION_TEMPLATES
+        self.default_process_type = default_process_type
     
     def detect_task_type(self, question: str) -> str:
         """
@@ -309,16 +370,18 @@ class TaskDecomposer:
         question: str, 
         task_type: str = None,
         max_steps: int = 5,
-        custom_steps: List[Dict] = None
+        custom_steps: List[Dict] = None,
+        process_type: ProcessType = None
     ) -> DecomposedTask:
         """
-        分解任务
+        分解任务（增强版 - 支持 Process 类型）
         
         Args:
             question: 用户问题
             task_type: 任务类型（自动检测如果为None）
             max_steps: 最大步骤数（超过会合并）
             custom_steps: 自定义步骤列表
+            process_type: 执行流程类型（如果为None，使用模板默认值）
             
         Returns:
             DecomposedTask: 分解后的任务
@@ -335,9 +398,11 @@ class TaskDecomposer:
         # 获取模板
         if custom_steps:
             steps_config = custom_steps
+            process_type = process_type or self.default_process_type
         else:
             template = self.templates.get(task_type, self.templates["general"])
             steps_config = template["steps"][:max_steps]
+            process_type = process_type or template.get("process_type", self.default_process_type)
         
         # 构建步骤
         steps = []
@@ -354,7 +419,8 @@ class TaskDecomposer:
                 title=config["title"],
                 description=config.get("desc", ""),
                 instruction=instruction,
-                depends_on=[prev_step_id] if prev_step_id else []
+                depends_on=[prev_step_id] if prev_step_id else [],
+                async_execution=config.get("async_execution", False)  # 新增：异步执行标志
             )
             steps.append(step)
             prev_step_id = step_id
@@ -363,7 +429,8 @@ class TaskDecomposer:
             task_id=task_id,
             original_question=question,
             steps=steps,
-            metadata={"task_type": task_type}
+            metadata={"task_type": task_type, "process_type": process_type.value},
+            process_type=process_type
         )
     
     def _build_instruction(self, template: str, question: str) -> str:
@@ -375,18 +442,24 @@ class TaskDecomposer:
         return instruction
 
 
+# ==================== 执行器（支持三种 Process 模式）====================
+
 class ChainOfThoughtExecutor:
     """
-    链式思考执行器
+    链式思考执行器（增强版 - 支持 CrewAI Process 模式）
     
-    按照依赖顺序执行分解后的任务步骤，
-    传递上下文，实现链式推理。
+    按照指定的流程类型执行分解后的任务步骤：
+    1. Sequential - 顺序执行
+    2. Hierarchical - 层级执行（Manager 协调）
+    3. Parallel - 并行执行（异步任务）
     """
     
     def __init__(
         self,
         llm_callable: Callable[[str], str] = None,
-        progress_callback: Callable[[TaskStep, int, int], None] = None
+        progress_callback: Callable[[TaskStep, int, int], None] = None,
+        process_type: ProcessType = ProcessType.SEQUENTIAL,
+        manager_llm: Callable[[str], str] = None
     ):
         """
         初始化执行器
@@ -394,21 +467,51 @@ class ChainOfThoughtExecutor:
         Args:
             llm_callable: LLM调用函数，签名为 (prompt: str) -> str
             progress_callback: 进度回调，签名为 (step: TaskStep, current: int, total: int) -> None
+            process_type: 执行流程类型
+            manager_llm: Manager LLM（用于 HIERARCHICAL 模式）
         """
         self.llm_callable = llm_callable or self._default_llm_call
         self.progress_callback = progress_callback
+        self.process_type = process_type
+        self.manager_llm = manager_llm
     
-    def execute(self, task: DecomposedTask) -> DecomposedTask:
+    def execute(
+        self, 
+        task: DecomposedTask,
+        process_type: ProcessType = None
+    ) -> DecomposedTask:
         """
-        执行分解后的任务
+        执行分解后的任务（支持三种 Process 模式）
         
         Args:
             task: 分解后的任务
+            process_type: 执行流程类型（如果为None，使用 task.process_type）
             
         Returns:
             完成任务（带输出数据）
         """
-        # 按顺序执行步骤
+        # 确定执行流程类型
+        process_type = process_type or task.process_type
+        
+        # 根据流程类型选择执行策略
+        if process_type == ProcessType.SEQUENTIAL:
+            return self._execute_sequential(task)
+        elif process_type == ProcessType.HIERARCHICAL:
+            return self._execute_hierarchical(task)
+        elif process_type == ProcessType.PARALLEL:
+            return self._execute_parallel(task)
+        else:
+            raise ValueError(f"Unknown process type: {process_type}")
+    
+    def _execute_sequential(self, task: DecomposedTask) -> DecomposedTask:
+        """
+        顺序执行（Sequential Process）
+        
+        按照依赖顺序逐个执行步骤。
+        """
+        if self.progress_callback:
+            self.progress_callback(None, 0, task.total_steps, "sequential")
+        
         for i, step in enumerate(task.steps):
             # 检查依赖
             if not task.can_execute_step(step.step_id):
@@ -439,142 +542,362 @@ class ChainOfThoughtExecutor:
         
         return task
     
-    def execute_async(
-        self, 
-        task: DecomposedTask,
-        callback: Callable[[DecomposedTask], None] = None
-    ) -> None:
+    def _execute_hierarchical(self, task: DecomposedTask) -> DecomposedTask:
         """
-        异步执行任务（用于非阻塞UI）
+        层级执行（Hierarchical Process）
+        
+        使用 Manager LLM 协调任务执行：
+        1. Manager 制定执行计划
+        2. 分配子任务给 Worker
+        3. 验证结果并决定下一步
+        """
+        if self.progress_callback:
+            self.progress_callback(None, 0, task.total_steps, "hierarchical")
+        
+        # 如果没有 Manager LLM，降级为 Sequential
+        if self.manager_llm is None:
+            if self.progress_callback:
+                self.progress_callback(None, 0, 0, "no_manager_fallback_to_sequential")
+            return self._execute_sequential(task)
+        
+        # Manager 制定执行计划
+        plan = self._manager_plan(task)
+        
+        if self.progress_callback:
+            self.progress_callback(None, 0, task.total_steps, f"manager_plan: {plan}")
+        
+        # 按 Manager 计划执行
+        for i, step_id in enumerate(plan["execution_order"]):
+            step = task.get_step(step_id)
+            if not step:
+                continue
+            
+            # 执行步骤
+            step.status = StepStatus.RUNNING
+            
+            try:
+                # 构建完整指令（注入前置步骤输出和 Manager 指令）
+                full_instruction = self._inject_context(task, step)
+                full_instruction += f"\n\nManager 指令：{plan.get('instructions', {}).get(step_id, '')}"
+                
+                # 调用LLM
+                output = self.llm_callable(full_instruction)
+                
+                step.output_data = output
+                step.status = StepStatus.COMPLETED
+                step.confidence = 0.9  # Manager 协调的任务置信度更高
+                
+                # Manager 验证结果
+                if plan.get("validate_results", False):
+                    is_valid = self._manager_validate(step, plan)
+                    if not is_valid:
+                        # 重新执行
+                        step.status = StepStatus.RUNNING
+                        output = self.llm_callable(full_instruction + "\n\n请修正之前的错误，重新执行。")
+                        step.output_data = output
+                        step.status = StepStatus.COMPLETED
+                
+            except Exception as e:
+                step.status = StepStatus.FAILED
+                step.error = str(e)
+            
+            # 回调
+            if self.progress_callback:
+                self.progress_callback(step, i + 1, task.total_steps)
+        
+        return task
+    
+    def _execute_parallel(self, task: DecomposedTask) -> DecomposedTask:
+        """
+        并行执行（Parallel Process）
+        
+        并发执行无依赖的异步任务，提高执行效率。
+        """
+        if self.progress_callback:
+            self.progress_callback(None, 0, task.total_steps, "parallel")
+        
+        import concurrent.futures
+        
+        # 分组：可以并行的步骤 vs 必须串行的步骤
+        parallel_groups = []
+        sequential_steps = []
+        
+        # 简单策略：标记了 async_execution=True 的步骤可以并行
+        async_steps = [s for s in task.steps if s.async_execution and task.can_execute_step(s.step_id)]
+        sync_steps = [s for s in task.steps if not s.async_execution]
+        
+        # 执行同步步骤（按依赖顺序）
+        for step in sync_steps:
+            if not task.can_execute_step(step.step_id):
+                step.status = StepStatus.SKIPPED
+                continue
+            
+            step.status = StepStatus.RUNNING
+            
+            try:
+                full_instruction = self._inject_context(task, step)
+                output = self.llm_callable(full_instruction)
+                
+                step.output_data = output
+                step.status = StepStatus.COMPLETED
+                step.confidence = 0.8
+                
+            except Exception as e:
+                step.status = StepStatus.FAILED
+                step.error = str(e)
+            
+            if self.progress_callback:
+                idx = task.steps.index(step)
+                self.progress_callback(step, idx + 1, task.total_steps)
+        
+        # 并发执行异步步骤
+        if async_steps:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = {
+                    executor.submit(self._execute_step_async, task, step): step
+                    for step in async_steps
+                }
+                
+                for future in concurrent.futures.as_completed(futures):
+                    step = futures[future]
+                    try:
+                        output = future.result()
+                        step.output_data = output
+                        step.status = StepStatus.COMPLETED
+                        step.confidence = 0.8
+                    except Exception as e:
+                        step.status = StepStatus.FAILED
+                        step.error = str(e)
+                    
+                    if self.progress_callback:
+                        idx = task.steps.index(step)
+                        self.progress_callback(step, idx + 1, task.total_steps)
+        
+        return task
+    
+    def _execute_step_async(self, task: DecomposedTask, step: TaskStep) -> str:
+        """
+        异步执行单个步骤
+        
+        Args:
+            task: 任务
+            step: 步骤
+            
+        Returns:
+            执行结果
+        """
+        step.status = StepStatus.RUNNING
+        
+        # 构建完整指令
+        full_instruction = self._inject_context(task, step)
+        
+        # 调用LLM
+        output = self.llm_callable(full_instruction)
+        
+        return output
+    
+    def _manager_plan(self, task: DecomposedTask) -> Dict[str, Any]:
+        """
+        Manager LLM 制定执行计划
         
         Args:
             task: 分解后的任务
-            callback: 完成回调
+            
+        Returns:
+            执行计划字典
         """
-        import threading
+        # 构建 Manager 提示
+        manager_prompt = f"""
+        你是一个任务协调 Manager。请为以下任务制定执行计划：
         
-        def run():
-            result = self.execute(task)
-            if callback:
-                callback(result)
+        原始问题：{task.original_question}
         
-        thread = threading.Thread(target=run, daemon=True)
-        thread.start()
+        任务步骤：
+        {self._format_steps(task.steps)}
+        
+        请输出JSON格式的执行计划，包含：
+        1. execution_order: 步骤执行顺序（step_id列表）
+        2. instructions: 每个步骤的 Manager 指令（字典，key为step_id）
+        3. validate_results: 是否验证结果（布尔值）
+        
+        只输出JSON，不要输出其他内容。
+        """
+        
+        try:
+            # 调用 Manager LLM
+            plan_json = self.manager_llm(manager_prompt)
+            
+            # 解析JSON
+            plan = json.loads(plan_json)
+            
+            return plan
+        except Exception as e:
+            # 解析失败，使用默认顺序
+            return {
+                "execution_order": [s.step_id for s in task.steps],
+                "instructions": {},
+                "validate_results": False
+            }
+    
+    def _manager_validate(self, step: TaskStep, plan: Dict[str, Any]) -> bool:
+        """
+        Manager 验证步骤结果
+        
+        Args:
+            step: 已完成的步骤
+            plan: 执行计划
+            
+        Returns:
+            结果是否有效
+        """
+        validation_prompt = f"""
+        你是一个质量验证 Manager。请验证以下结果是否满意：
+        
+        步骤：{step.title}
+        指令：{step.instruction}
+        结果：{step.output_data}
+        
+        如果结果满意，输出 "VALID"。
+        如果不满意，输出 "INVALID: <原因>"。
+        """
+        
+        try:
+            validation_result = self.manager_llm(validation_prompt)
+            
+            if "VALID" in validation_result.upper():
+                return True
+            else:
+                return False
+        except Exception:
+            return True  # 验证失败时默认通过
     
     def _inject_context(self, task: DecomposedTask, step: TaskStep) -> str:
-        """注入前置步骤的输出作为上下文"""
-        instruction = step.instruction
+        """
+        注入上下文（前置步骤的输出）
         
-        # 收集前置步骤的输出
+        Args:
+            task: 任务
+            step: 当前步骤
+            
+        Returns:
+            完整的指令（带上下文）
+        """
+        full_instruction = step.instruction
+        
+        # 替换上下文占位符
         for dep_id in step.depends_on:
             dep = task.get_step(dep_id)
             if dep and dep.output_data:
-                # 根据依赖步骤ID注入对应变量
-                if dep_id == "context":
-                    instruction = instruction.replace("{context}", dep.output_data)
-                elif dep_id == "data" or dep_id == "data_collection":
-                    instruction = instruction.replace("{data}", dep.output_data)
-                elif dep_id == "materials":
-                    instruction = instruction.replace("{materials}", dep.output_data)
-                elif dep_id == "requirements":
-                    instruction = instruction.replace("{requirements}", dep.output_data)
-                elif dep_id == "research":
-                    instruction = instruction.replace("{research}", dep.output_data)
-                elif dep_id == "architecture":
-                    instruction = instruction.replace("{architecture}", dep.output_data)
-                elif dep_id == "outline":
-                    instruction = instruction.replace("{outline}", dep.output_data)
-                elif dep_id == "analysis":
-                    instruction = instruction.replace("{analysis}", dep.output_data)
-                elif dep_id == "evaluation":
-                    instruction = instruction.replace("{evaluation}", dep.output_data)
-                elif dep_id == "understanding":
-                    instruction = instruction.replace("{understanding}", dep.output_data)
-                elif dep_id == "content":
-                    instruction = instruction.replace("{content}", dep.output_data)
-                elif dep_id == "answer":
-                    instruction = instruction.replace("{answer}", dep.output_data)
-                elif dep_id == "problem":
-                    instruction = instruction.replace("{problem}", dep.output_data)
-                elif dep_id == "options":
-                    instruction = instruction.replace("{options}", dep.output_data)
-                elif dep_id == "criteria":
-                    instruction = instruction.replace("{criteria}", dep.output_data)
-                elif dep_id == "detail" or dep_id == "detail_design":
-                    instruction = instruction.replace("{detail}", dep.output_data)
+                placeholder = "{" + dep_id + "}"
+                full_instruction = full_instruction.replace(
+                    placeholder, 
+                    str(dep.output_data)
+                )
         
-        # 保留原问题
-        instruction = instruction.replace("{original_question}", task.original_question)
-        
-        return instruction
+        return full_instruction
+    
+    def _format_steps(self, steps: List[TaskStep]) -> str:
+        """格式化步骤列表（用于 Manager 提示）"""
+        lines = []
+        for i, step in enumerate(steps, 1):
+            lines.append(f"{i}. {step.title}: {step.description}")
+        return "\n".join(lines)
     
     def _default_llm_call(self, prompt: str) -> str:
-        """默认的LLM调用（用于测试）"""
-        return f"[模拟响应]: {prompt[:100]}..."
+        """默认的LLM调用（使用 GlobalModelRouter）"""
+        try:
+            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            return call_model_sync(ModelCapability.CHAT, prompt)
+        except Exception as e:
+            return f"[Error: {str(e)}]"
 
 
-def format_task_result(task: DecomposedTask) -> str:
+# ==================== 便捷函数 ====================
+
+def create_sequential_task(
+    question: str,
+    task_type: str = None,
+    max_steps: int = 5
+) -> DecomposedTask:
     """
-    格式化任务结果为可读文本
-    
-    Args:
-        task: 完成任务
-        
-    Returns:
-        格式化后的结果文本
-    """
-    lines = []
-    lines.append(f"# 任务完成报告\n")
-    lines.append(f"**原始问题**: {task.original_question}\n")
-    lines.append(f"**任务类型**: {task.metadata.get('task_type', 'general')}\n")
-    lines.append(f"**进度**: {task.completed_steps}/{task.total_steps} 步骤完成\n")
-    lines.append(f"\n---\n\n")
-    
-    for step in task.steps:
-        lines.append(f"## {step.step_id}. {step.title}\n")
-        lines.append(f"**状态**: {step.status.value}")
-        
-        if step.description:
-            lines.append(f" | *{step.description}*")
-        lines.append("\n")
-        
-        if step.output_data:
-            lines.append(f"{step.output_data}\n")
-        elif step.error:
-            lines.append(f"❌ 错误: {step.error}\n")
-        
-        lines.append("\n")
-    
-    return "".join(lines)
-
-
-def get_chain_of_thought_prompt(question: str) -> str:
-    """
-    获取链式思考提示词
-    
-    用于直接发送给不支持结构化分解的小模型。
+    创建 Sequential 流程的任务
     
     Args:
         question: 用户问题
+        task_type: 任务类型
+        max_steps: 最大步骤数
         
     Returns:
-        链式思考提示词
+        DecomposedTask
     """
-    return f"""请采用链式思考方式，逐步分析和回答以下问题。
+    decomposer = TaskDecomposer(default_process_type=ProcessType.SEQUENTIAL)
+    return decomposer.decompose(
+        question=question,
+        task_type=task_type,
+        max_steps=max_steps,
+        process_type=ProcessType.SEQUENTIAL
+    )
 
-**问题**: {question}
 
-**思考步骤**:
-1. 首先理解问题的核心要点
-2. 然后进行逐步推理，每步说明理由
-3. 最后给出完整答案
+def create_hierarchical_task(
+    question: str,
+    task_type: str = None,
+    max_steps: int = 5
+) -> DecomposedTask:
+    """
+    创建 Hierarchical 流程的任务
+    
+    Args:
+        question: 用户问题
+        task_type: 任务类型
+        max_steps: 最大步骤数
+        
+    Returns:
+        DecomposedTask
+    """
+    decomposer = TaskDecomposer(default_process_type=ProcessType.HIERARCHICAL)
+    return decomposer.decompose(
+        question=question,
+        task_type=task_type,
+        max_steps=max_steps,
+        process_type=ProcessType.HIERARCHICAL
+    )
 
-请在回答中明确标注你的思考过程：
-- 第一步：...
-- 第二步：...
-- 第三步：...
 
-最后：
-- 结论：...
-- 置信度：（你对答案的确信程度：高/中/低）
-"""
+def create_parallel_task(
+    question: str,
+    task_type: str = None,
+    max_steps: int = 5
+) -> DecomposedTask:
+    """
+    创建 Parallel 流程的任务
+    
+    Args:
+        question: 用户问题
+        task_type: 任务类型
+        max_steps: 最大步骤数
+        
+    Returns:
+        DecomposedTask
+    """
+    decomposer = TaskDecomposer(default_process_type=ProcessType.PARALLEL)
+    return decomposer.decompose(
+        question=question,
+        task_type=task_type,
+        max_steps=max_steps,
+        process_type=ProcessType.PARALLEL
+    )
+
+
+# 导出
+__all__ = [
+    'ProcessType',
+    'StepStatus',
+    'TaskStep',
+    'DecomposedTask',
+    'TaskDecomposer',
+    'ChainOfThoughtExecutor',
+    'create_sequential_task',
+    'create_hierarchical_task',
+    'create_parallel_task'
+]

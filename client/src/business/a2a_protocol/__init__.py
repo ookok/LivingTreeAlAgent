@@ -687,3 +687,177 @@ __all__ = [
     'A2AServer',
     'A2AClient'
 ]
+
+
+# ==================== EigenFlux 扩展 ====================
+# 懒加载，避免循环导入
+# 使用方式：
+#   from client.src.business.a2a_protocol import SignalBus, SignalType, A2AEigenFluxBridge
+
+
+def get_all_modules():
+    """获取所有 EigenFlux 增强模块"""
+    return {
+        **get_eigenflux_modules(),
+        **get_semantic_modules(),
+        **get_interop_modules(),
+        **get_distributed_modules(),
+    }
+
+
+def get_eigenflux_modules():
+    """
+    获取 EigenFlux 核心模块
+    """
+    from client.src.business.a2a_protocol.eigenflux import (
+        SignalBus,
+        SignalType,
+        SignalPriority,
+        Signal,
+        Subscriber,
+        SignalMatchEngine,
+        SemanticMatcher,
+        KeywordMatcher,
+        CapabilityMatcher,
+        InterestMatcher,
+        CompositeMatcher,
+        AgentSignalAdapter,
+        A2AEigenFluxBridge,
+        LRUCache,
+        SignalCache,
+        BatchProcessor,
+    )
+    return {
+        'SignalBus': SignalBus,
+        'SignalType': SignalType,
+        'SignalPriority': SignalPriority,
+        'Signal': Signal,
+        'Subscriber': Subscriber,
+        'SignalMatchEngine': SignalMatchEngine,
+        'SemanticMatcher': SemanticMatcher,
+        'KeywordMatcher': KeywordMatcher,
+        'CapabilityMatcher': CapabilityMatcher,
+        'InterestMatcher': InterestMatcher,
+        'CompositeMatcher': CompositeMatcher,
+        'AgentSignalAdapter': AgentSignalAdapter,
+        'A2AEigenFluxBridge': A2AEigenFluxBridge,
+        'LRUCache': LRUCache,
+        'SignalCache': SignalCache,
+        'BatchProcessor': BatchProcessor,
+    }
+
+
+def get_semantic_modules():
+    """
+    获取语义嵌入模块
+    """
+    from client.src.business.a2a_protocol.semantic_embedder import (
+        SemanticEmbedder,
+        TextVectorizer,
+        EmbeddingConfig,
+        EmbeddingSignalBus,
+    )
+    return {
+        'SemanticEmbedder': SemanticEmbedder,
+        'TextVectorizer': TextVectorizer,
+        'EmbeddingConfig': EmbeddingConfig,
+        'EmbeddingSignalBus': EmbeddingSignalBus,
+    }
+
+
+def get_interop_modules():
+    """
+    获取跨框架互操作模块
+    """
+    from client.src.business.a2a_protocol.interop_adapters import (
+        ProtocolType,
+        ProtocolAdapter,
+        A2AAdapter,
+        ModelScopeAgentAdapter,
+        LangChainAdapter,
+        MCPAdapter,
+        ProtocolConverter,
+        InteropGateway,
+        InteropMessage,
+    )
+    return {
+        'ProtocolType': ProtocolType,
+        'ProtocolAdapter': ProtocolAdapter,
+        'A2AAdapter': A2AAdapter,
+        'ModelScopeAgentAdapter': ModelScopeAgentAdapter,
+        'LangChainAdapter': LangChainAdapter,
+        'MCPAdapter': MCPAdapter,
+        'ProtocolConverter': ProtocolConverter,
+        'InteropGateway': InteropGateway,
+        'InteropMessage': InteropMessage,
+    }
+
+
+def get_distributed_modules():
+    """
+    获取分布式集群模块
+    """
+    from client.src.business.a2a_protocol.distributed_signal_bus import (
+        ClusterConfig,
+        NodeState,
+        NodeInfo,
+        ClusterMessageType,
+        ClusterMessage,
+        Transport,
+        MemoryTransport,
+        RedisTransport,
+        MembershipService,
+        FederationEngine,
+        DistributedSignalBus,
+    )
+    return {
+        'ClusterConfig': ClusterConfig,
+        'NodeState': NodeState,
+        'NodeInfo': NodeInfo,
+        'ClusterMessageType': ClusterMessageType,
+        'ClusterMessage': ClusterMessage,
+        'Transport': Transport,
+        'MemoryTransport': MemoryTransport,
+        'RedisTransport': RedisTransport,
+        'MembershipService': MembershipService,
+        'FederationEngine': FederationEngine,
+        'DistributedSignalBus': DistributedSignalBus,
+    }
+
+
+# 导出到模块级别，方便直接访问
+# 注意：实际类定义在各自的模块中
+def SignalBus(*args, **kwargs):
+    """EigenFlux 信号总线 - 广播与智能匹配"""
+    from client.src.business.a2a_protocol.eigenflux import SignalBus as _SignalBus
+    return _SignalBus(*args, **kwargs)
+
+
+def SignalType(*args, **kwargs):
+    """EigenFlux 信号类型枚举"""
+    from client.src.business.a2a_protocol.eigenflux import SignalType as _SignalType
+    return _SignalType(*args, **kwargs)
+
+
+def A2AEigenFluxBridge(*args, **kwargs):
+    """A2A 与 EigenFlux 桥接器"""
+    from client.src.business.a2a_protocol.eigenflux import A2AEigenFluxBridge as _Bridge
+    return _Bridge(*args, **kwargs)
+
+
+def SemanticEmbedder(*args, **kwargs):
+    """语义嵌入生成器"""
+    from client.src.business.a2a_protocol.semantic_embedder import SemanticEmbedder as _Embedder
+    return _Embedder(*args, **kwargs)
+
+
+def InteropGateway(*args, **kwargs):
+    """跨框架互操作网关"""
+    from client.src.business.a2a_protocol.interop_adapters import InteropGateway as _Gateway
+    return _Gateway(*args, **kwargs)
+
+
+def DistributedSignalBus(*args, **kwargs):
+    """分布式信号总线"""
+    from client.src.business.a2a_protocol.distributed_signal_bus import DistributedSignalBus as _Bus
+    return _Bus(*args, **kwargs)

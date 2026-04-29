@@ -8,9 +8,9 @@
 - DATA_VISUALIZATION: 数据可视化
 
 使用 GlobalModelRouter 调用数据分析能力。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import logging
 from typing import Optional

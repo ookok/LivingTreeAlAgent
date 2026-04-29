@@ -2,9 +2,9 @@
 """
 模型本地注册表 (Model Registry)
 跟踪已下载的模型，提供快速查询
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import json

@@ -8,9 +8,9 @@
 - 枚举类型（节点状态、更新阶段、消息类型等）
 - 数据类（版本信息、节点信息、分片信息等）
 - 工具函数
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import hashlib

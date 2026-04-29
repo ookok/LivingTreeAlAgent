@@ -3,9 +3,9 @@
 Intelligent Task Router
 
 基于 RouteLLM 的路由算法，实现智能任务路由和资源优化
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

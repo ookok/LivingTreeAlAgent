@@ -4,9 +4,9 @@
 ================
 
 定义所有动作处理器的统一接口和数据结构。
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import logging

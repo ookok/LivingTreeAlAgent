@@ -3,9 +3,9 @@
 Virtual File System
 
 实现企业内的虚拟文件系统，支持文件夹式的可视化管理
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import hashlib

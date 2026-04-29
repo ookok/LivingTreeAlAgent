@@ -41,9 +41,9 @@ Phase 3: 多智能体协同分析器
 
 Author: Hermes Desktop Team
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import logging

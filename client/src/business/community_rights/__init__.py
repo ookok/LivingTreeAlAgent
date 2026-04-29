@@ -47,7 +47,7 @@ from .manager import (
 
 __all__ = [
     # 版本信息
-    '__version__': '1.0.0',
+    '__version__',
     '__author__': 'Hermes Desktop Team',
     # RightsLedger
     'RightsLedger',

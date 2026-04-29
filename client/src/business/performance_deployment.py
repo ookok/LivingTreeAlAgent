@@ -11,9 +11,9 @@ Phase 6: 性能优化与生产部署
 - DeploymentConfig - 部署配置
 - HealthMonitor - 健康监控
 - ProductionReadyChecker - 生产就绪检查
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import re
 import uuid

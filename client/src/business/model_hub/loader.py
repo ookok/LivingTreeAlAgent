@@ -8,9 +8,9 @@
 3. vLLM       - 通过 vLLM Python API 加载模型 (兼容 OpenAI API)
 4. Unsloth    - 通过 Unsloth 快速加载 HuggingFace 模型
 5. Transformers - 通过 HuggingFace Transformers 原生加载
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import json

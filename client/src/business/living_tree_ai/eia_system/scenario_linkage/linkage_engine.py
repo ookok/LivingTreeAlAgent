@@ -353,7 +353,7 @@ class DataLinkageEngine:
 
     # ============ 知识沉淀 ============
 
-    async def沉淀_monitoring_data(
+    async def precipitate_monitoring_data(
         self,
         project_context: Dict[str, Any],
         acceptance_report: AcceptanceMonitoringReport

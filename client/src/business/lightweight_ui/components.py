@@ -2,9 +2,9 @@
 响应式组件库
 
 轻量级、高性能组件实现，支持多种类型组件
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from typing import Dict, List, Optional, Any, Callable, Set
 from dataclasses import dataclass, field
 from enum import Enum

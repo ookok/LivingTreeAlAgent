@@ -3,9 +3,9 @@
 Enterprise Storage System
 
 基于P2P CDN的企业虚拟网盘系统，整合节点管理和虚拟文件系统
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

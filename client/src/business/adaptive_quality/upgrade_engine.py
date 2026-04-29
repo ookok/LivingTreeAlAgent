@@ -13,9 +13,9 @@ Intelligent Upgrade Decision Engine - 智能升级决策引擎
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 from typing import Optional, List, Dict, Any, Callable, Tuple

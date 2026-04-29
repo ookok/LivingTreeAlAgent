@@ -2,9 +2,9 @@
 中继客户端模块
 
 支持 WebSocket/TCP 中继连接，自动重连，消息队列
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

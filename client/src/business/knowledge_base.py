@@ -255,7 +255,9 @@ class KnowledgeBase:
     
     def add_knowledge(self, title: str, content: str, knowledge_type: KnowledgeType, domain: KnowledgeDomain, tags: List[str] = None) -> str:
         """添加知识"""
-        item_id = f"knowledge_{int(datetime.now().timestamp())}_{hashlib.md5((title + content).encode()).hexdigest()[:8]"
+        timestamp = int(datetime.now().timestamp())
+        md5_hash = hashlib.md5((title + content).encode()).hexdigest()[:8]
+        item_id = f"knowledge_{timestamp}_{md5_hash}"
         
         item = KnowledgeItem(
             id=item_id,

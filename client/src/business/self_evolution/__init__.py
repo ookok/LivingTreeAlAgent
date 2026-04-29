@@ -15,6 +15,20 @@
 11. ModelNativeDSL - LLM优化的领域特定语言
 12. AntiRationalizationTable - 反合理化表（防止错误推理模式）
 
+v2 自我进化管线（2026-04-29）：
+13. ProjectStructureScanner - 项目结构自动扫描器
+14. KnowledgeIngestionPipeline - 多源知识摄入管道
+15. CodeEvolutionPlanner - 代码进化规划器
+16. CodeEvolutionExecutor - 代码进化执行器
+17. SelfEvolutionOrchestrator - 自我进化协调器（顶层）
+
+v3 OpenCode + Serena 集成（2026-04-29）：
+18. SerenaAdapter - Serena MCP 客户端适配层（LSP 精准操作 + AST fallback）
+19. CodeTool - OpenCode+Serena 智能编码工具（自动写/自动测/自动修/自动发布）
+
+v4 性能优化层（2026-04-29）：
+20. PerformanceLayer - 性能优化基础设施（缓存/异步I/O/线程管理）
+
 核心原则：不预置逻辑和模板，一切通过学习、交互和反馈不断进化
 """
 
@@ -49,6 +63,39 @@ from client.src.business.self_evolution.model_native_dsl import (
 from client.src.business.self_evolution.anti_rationalization_table import (
     AntiRationalizationTable,
     AntiRationalizationRule,
+)
+from client.src.business.self_evolution.project_structure_scanner import ProjectStructureScanner
+from client.src.business.self_evolution.knowledge_ingestion_pipeline import KnowledgeIngestionPipeline
+from client.src.business.self_evolution.code_evolution_planner import CodeEvolutionPlanner
+from client.src.business.self_evolution.code_evolution_executor import CodeEvolutionExecutor
+from client.src.business.self_evolution.self_evolution_orchestrator import SelfEvolutionOrchestrator
+from client.src.business.self_evolution.serena_adapter import (
+    SerenaAdapter,
+    SymbolInfo,
+    DiagnosticInfo,
+    SerenaResult,
+    SerenaStatus,
+    ASTFallbackEngine,
+)
+from client.src.business.self_evolution.code_tool import (
+    CodeTool,
+    CodeAction,
+    WriteResult,
+    TestResult,
+    FixResult,
+    PublishResult,
+    PlanStep,
+    CodeToolSession,
+)
+from client.src.business.self_evolution.performance_layer import (
+    LRUCache,
+    FileContentCache,
+    ASTCache,
+    AsyncFileIO,
+    ThreadPoolManager,
+    DebounceTimer,
+    ChatHistoryManager,
+    ParallelScanner,
 )
 from typing import Any, Dict, List
 from loguru import logger
@@ -85,6 +132,36 @@ __all__ = [
     # 整合引擎
     "SelfEvolutionEngine",
     "enable_self_evolution_for_agent",
+    # v2 自我进化管线（2026-04-29）
+    "ProjectStructureScanner",
+    "KnowledgeIngestionPipeline",
+    "CodeEvolutionPlanner",
+    "CodeEvolutionExecutor",
+    "SelfEvolutionOrchestrator",
+    # v3 OpenCode + Serena 集成（2026-04-29）
+    "SerenaAdapter",
+    "SymbolInfo",
+    "DiagnosticInfo",
+    "SerenaResult",
+    "SerenaStatus",
+    "ASTFallbackEngine",
+    "CodeTool",
+    "CodeAction",
+    "WriteResult",
+    "TestResult",
+    "FixResult",
+    "PublishResult",
+    "PlanStep",
+    "CodeToolSession",
+    # v4 性能优化层（2026-04-29）
+    "LRUCache",
+    "FileContentCache",
+    "ASTCache",
+    "AsyncFileIO",
+    "ThreadPoolManager",
+    "DebounceTimer",
+    "ChatHistoryManager",
+    "ParallelScanner",
 ]
 
 

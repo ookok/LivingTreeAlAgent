@@ -65,7 +65,7 @@ class GameRoom:
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
         self.game_state = None
-        self observers: List[str] = []  # 观战者
+        self.observers: List[str] = []  # 观战者
 
     def join(self, player_info: PlayerInfo) -> bool:
         """加入房间"""

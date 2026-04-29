@@ -460,12 +460,14 @@ class MobileDesktop:
         """打开应用"""
         pass
 
-else:
+else:  # noqa: E999
     # PyQt 不可用时的占位符
-    class DesktopWindow:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("PyQt6 is required for DesktopWindow")
-
-    class MobileDesktop:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("Kivy is required for MobileDesktop")
+    # class DesktopWindowFallback:
+    #     """PyQt 不可用时的占位符"""
+    #     def __init__(self, *args, **kwargs):
+    #         raise RuntimeError("PyQt6 is required for DesktopWindow")
+    
+    # class MobileDesktopFallback:
+    #     """Kivy 不可用时的占位符"""
+    #     def __init__(self, *args, **kwargs):
+    #         raise RuntimeError("Kivy is required for MobileDesktop")

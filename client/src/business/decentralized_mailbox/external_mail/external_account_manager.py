@@ -7,9 +7,9 @@
 - 账号添加/删除/更新/启用禁用
 
 作者：Living Tree AI 进化系统
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import logging

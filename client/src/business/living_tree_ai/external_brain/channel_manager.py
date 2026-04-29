@@ -9,9 +9,9 @@ ChannelManager - 通道管理器
 - Channel3: 本地降级（离线韧性）
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

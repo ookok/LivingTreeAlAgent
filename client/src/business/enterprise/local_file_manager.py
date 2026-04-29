@@ -3,9 +3,9 @@
 Local File Manager
 
 管理本地文件的路径记录和状态监控
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 import time

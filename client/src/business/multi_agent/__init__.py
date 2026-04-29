@@ -22,7 +22,6 @@ from .agent_memory import (
     AgentMemoryStore,
     SharedMemorySpace,
     AgentMemoryBridge,
-    AgentMemory,
     MemoryType,
     get_memory_bridge,
 )
@@ -68,7 +67,6 @@ __all__ = [
     'AgentMemoryStore',
     'SharedMemorySpace',
     'AgentMemoryBridge',
-    'AgentMemory',
     'MemoryType',
     'get_memory_bridge',
     # Collaboration

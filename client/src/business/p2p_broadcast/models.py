@@ -2,9 +2,9 @@
 广播发现与P2P通信系统 - 数据模型
 
 定义系统所需的全部数据结构和枚举类型
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import uuid
 import time

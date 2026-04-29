@@ -3,9 +3,9 @@
 
 响应式状态管理，支持不可变数据、批量更新、
 订阅发布和持久化
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from typing import Dict, List, Optional, Any, Callable, Set
 from dataclasses import dataclass, field
 from datetime import datetime

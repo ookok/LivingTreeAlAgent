@@ -13,9 +13,9 @@ url = get_ollama_url()  # http://www.mogoo.com.cn:8899/v1
 config = get_ollama_config()
 model = get_default_model("l0")
 ```
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import os
 from typing import Optional

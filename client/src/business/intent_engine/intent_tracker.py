@@ -18,9 +18,9 @@
 
 Author: LivingTreeAI Team
 Version: 1.0.0
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import uuid
@@ -356,7 +356,7 @@ class IntentTracker:
         lines.append(f"| 总目标数 | {stats['total_goals']} |")
         lines.append(f"| 活跃目标 | {stats['active_count']} |")
         lines.append(f"| 已完成 | {stats['total_completed']} |")
-        lines.append(f)| 已放弃 | {stats['total_abandoned']} |")
+        lines.append(f"| 已放弃 | {stats['total_abandoned']} |")
         lines.append(f"| 分支数 | {stats['branch_count']} |")
         lines.append(f"| 平均轮次/目标 | {stats['avg_turns_per_goal']:.1f} |")
 

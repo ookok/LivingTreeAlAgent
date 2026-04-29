@@ -19,12 +19,12 @@
 - IndustryDistiller (行业蒸馏)
 - KnowledgeGraph (知识图谱)
 - Unified Cache (缓存)
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('expert_learning.expert_guided_system')
 
-from __future__ import annotations
 
 import json
 import time

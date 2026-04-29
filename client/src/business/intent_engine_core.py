@@ -6,9 +6,9 @@
 简化版意图引擎，提供清晰的 API。
 
 Author: LivingTreeAI Team
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum

@@ -9,9 +9,9 @@ ExternalBrainPanel - 外脑调用系统 PyQt6 UI面板
 4. 离线队列面板 - 显示和管理离线任务
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 

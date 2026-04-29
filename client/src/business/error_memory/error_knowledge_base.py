@@ -13,12 +13,12 @@ Error Knowledge Base - 错误知识库
 
 Author: LivingTreeAI Agent
 Date: 2026-04-24
+from __future__ import annotations
 """
 
 from client.src.business.logger import get_logger
 logger = get_logger('error_memory.error_knowledge_base')
 
-from __future__ import annotations
 
 import json
 import os

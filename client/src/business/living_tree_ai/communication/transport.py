@@ -8,9 +8,9 @@ NodeConnection - 跨平台传输层
 3. 原始TCP（兜底方案）
 
 Author: LivingTreeAI Community
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable, Tuple

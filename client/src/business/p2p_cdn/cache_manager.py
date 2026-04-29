@@ -2,9 +2,9 @@
 缓存管理器
 
 负责管理本地缓存，实现缓存策略和数据淘汰
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

@@ -9,9 +9,9 @@
 - 最佳实践 (BEST_PRACTICE) — 同时也注册在 CodeReviewHandler
 
 v2.0: 使用共享 LLMClient（自动回退 requests→urllib），带重试和错误分类
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import time
 import logging

@@ -2,9 +2,9 @@
 快速故障恢复系统
 
 快速检测、自动恢复、优雅降级
+from __future__ import annotations
 """
 
-from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable

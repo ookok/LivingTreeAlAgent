@@ -2,9 +2,9 @@
 好友与关系管理系统
 
 实现好友列表管理、关系维护、黑名单等功能
+from __future__ import annotations
 """
 
-from __future__ import annotations
 
 import json
 import logging

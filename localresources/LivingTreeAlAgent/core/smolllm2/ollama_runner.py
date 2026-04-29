@@ -334,25 +334,44 @@ class OllamaRunnerManager:
         return True
 
     def _select_best_model(self, models: list) -> Optional[str]:
-        """选择最合适的 Ollama 模型"""
-        # 模型优先级列表
+        """使用 LLMFit 风格的智能模型选择器选择最合适的模型"""
+        try:
+            from client.src.infrastructure.model_fitter import get_model_fitter
+            
+            fitter = get_model_fitter()
+            results = fitter.fit("qwen")
+            
+            if results:
+                best_model, score, reason = results[0]
+                # 检查最佳模型是否在可用列表中
+                if best_model in models:
+                    print(f"LLMFit 选择模型: {best_model} (评分: {score}/100)")
+                    return best_model
+                
+                # 如果最佳模型不可用，选择可用列表中评分最高的
+                for model_name, _, _ in results:
+                    if model_name in models:
+                        print(f"LLMFit 选择备选模型: {model_name}")
+                        return model_name
+        except Exception as e:
+            print(f"LLMFit 模型选择失败，使用备用策略: {e}")
+        
+        # 备用策略：按优先级选择
         model_priorities = [
-            # 轻量级模型优先
             "smollm2",
-            "qwen2.5:0.5b",
-            "qwen3.5:2b",
             "qwen3.5:4b",
-            "llama3:8b",
-            "qwen3.6:27b",
+            "qwen3.5:2b",
+            "qwen3.5:0.8b",
+            "qwen2.5:0.5b",
+            "qwen3.6:8b",
+            "qwen3.6:14b",
         ]
         
-        # 按优先级选择模型
         for priority_model in model_priorities:
             for available_model in models:
                 if priority_model in available_model.lower():
                     return available_model
         
-        # 如果没有匹配的优先级模型，返回第一个可用模型
         return models[0] if models else None
 
     async def shutdown(self):

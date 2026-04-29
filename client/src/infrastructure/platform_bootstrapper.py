@@ -134,14 +134,20 @@ class PlatformBootstrapper:
         return 0.0
     
     def _select_qwen_model(self, hardware) -> str:
-        """根据硬件选择Qwen模型（优先3.6系列）"""
+        """根据硬件选择Qwen模型（优先3.6系列）
+        
+        参考 Ollama 官方模型库：
+        - https://ollama.com/library/qwen3.5
+        - https://ollama.com/library/qwen3.6
+        """
         gpu_vram = hardware["gpu_vram"]
         ram_gb = hardware["ram_gb"]
         
         # Qwen 3.6 系列（优先 - 支持工具和思考）
+        # https://ollama.com/library/qwen3.6
         if gpu_vram >= 48:
-            return "qwen3.6"  # 默认最大模型
-        elif gpu_vram >= 24:
+            return "qwen3.6"  # 默认最大模型 (MoE 235B)
+        elif gpu_vram >= 32:
             return "qwen3.6:32b"
         elif gpu_vram >= 16:
             return "qwen3.6:14b"
@@ -149,6 +155,7 @@ class PlatformBootstrapper:
             return "qwen3.6:8b"
         
         # Qwen 3.5 系列（备用 - 多模态支持）
+        # https://ollama.com/library/qwen3.5
         elif ram_gb >= 64:
             return "qwen3.5:122b"
         elif ram_gb >= 32:
@@ -165,6 +172,33 @@ class PlatformBootstrapper:
             return "qwen3.5:0.8b"
         else:
             return "qwen3.5:latest"
+    
+    def get_available_models(self) -> dict:
+        """获取 Ollama 官方模型库中的 Qwen 模型列表"""
+        return {
+            "qwen3.6": {
+                "models": [
+                    {"name": "qwen3.6", "size": "~235B", "description": "Qwen 3.6 MoE 模型，最强能力"},
+                    {"name": "qwen3.6:32b", "size": "~32B", "description": "Qwen 3.6 32B 模型"},
+                    {"name": "qwen3.6:14b", "size": "~14B", "description": "Qwen 3.6 14B 模型"},
+                    {"name": "qwen3.6:8b", "size": "~8B", "description": "Qwen 3.6 8B 模型"},
+                ],
+                "url": "https://ollama.com/library/qwen3.6"
+            },
+            "qwen3.5": {
+                "models": [
+                    {"name": "qwen3.5:122b", "size": "~122B", "description": "Qwen 3.5 122B 模型"},
+                    {"name": "qwen3.5:35b", "size": "~35B", "description": "Qwen 3.5 35B 模型"},
+                    {"name": "qwen3.5:27b", "size": "~27B", "description": "Qwen 3.5 27B 模型"},
+                    {"name": "qwen3.5:9b", "size": "~9B", "description": "Qwen 3.5 9B 模型"},
+                    {"name": "qwen3.5:4b", "size": "~6.6GB", "description": "Qwen 3.5 4B 模型 (默认)"},
+                    {"name": "qwen3.5:2b", "size": "~2GB", "description": "Qwen 3.5 2B 模型"},
+                    {"name": "qwen3.5:0.8b", "size": "~1GB", "description": "Qwen 3.5 0.8B 模型"},
+                    {"name": "qwen3.5:latest", "size": "~6.6GB", "description": "Qwen 3.5 最新版"},
+                ],
+                "url": "https://ollama.com/library/qwen3.5"
+            }
+        }
     
     def _linux_config(self, hardware) -> Dict[str, Any]:
         """Linux 特定配置"""

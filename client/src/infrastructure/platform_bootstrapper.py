@@ -138,29 +138,33 @@ class PlatformBootstrapper:
         gpu_vram = hardware["gpu_vram"]
         ram_gb = hardware["ram_gb"]
         
-        # Qwen 3.6 系列（优先）
+        # Qwen 3.6 系列（优先 - 支持工具和思考）
         if gpu_vram >= 48:
-            return "qwen3.6:128b"
+            return "qwen3.6"  # 默认最大模型
         elif gpu_vram >= 24:
-            return "qwen3.6:27b"
+            return "qwen3.6:32b"
         elif gpu_vram >= 16:
             return "qwen3.6:14b"
         elif gpu_vram >= 8:
-            return "qwen3.6:7b"
+            return "qwen3.6:8b"
         
-        # Qwen 3.5 系列（备用）
+        # Qwen 3.5 系列（备用 - 多模态支持）
+        elif ram_gb >= 64:
+            return "qwen3.5:122b"
         elif ram_gb >= 32:
-            return "qwen3.5:72b"
+            return "qwen3.5:35b"
         elif ram_gb >= 24:
-            return "qwen3.5:32b"
+            return "qwen3.5:27b"
         elif ram_gb >= 16:
-            return "qwen3.5:14b"
+            return "qwen3.5:9b"
         elif ram_gb >= 8:
             return "qwen3.5:4b"
         elif ram_gb >= 4:
             return "qwen3.5:2b"
+        elif ram_gb >= 2:
+            return "qwen3.5:0.8b"
         else:
-            return "qwen2.5:0.5b"
+            return "qwen3.5:latest"
     
     def _linux_config(self, hardware) -> Dict[str, Any]:
         """Linux 特定配置"""

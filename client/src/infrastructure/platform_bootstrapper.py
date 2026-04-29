@@ -200,12 +200,29 @@ class PlatformBootstrapper:
         """检查依赖是否安装"""
         self._logger.info("检查 Ollama 是否安装...")
         
-        ollama_path = self.config.get("ollama_path", "ollama")
+        try:
+            import ollama
+            # 检查 Ollama 服务是否运行
+            ollama.list()
+            self._logger.info("✅ Ollama 服务已运行")
+            return
+        except ImportError:
+            self._logger.warning("ollama Python 包未安装，尝试安装...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "ollama"], check=True)
+        except Exception as e:
+            self._logger.warning(f"Ollama 服务未运行: {e}")
         
+        # 检查系统安装
+        ollama_path = self.config.get("ollama_path", "ollama")
         try:
             result = subprocess.run([ollama_path, "--version"], capture_output=True, text=True)
             if result.returncode == 0:
                 self._logger.info(f"✅ Ollama 已安装: {result.stdout.strip()}")
+                # 启动 Ollama 服务
+                if self.os_type == "linux":
+                    subprocess.run(["ollama", "serve"], check=True, capture_output=True)
+                else:
+                    subprocess.Popen(["ollama", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return
         except FileNotFoundError:
             pass
@@ -217,14 +234,12 @@ class PlatformBootstrapper:
         """自动安装 Ollama"""
         try:
             if self.os_type == "linux":
-                # Linux: 使用官方脚本安装
                 subprocess.run(
                     ["curl", "-fsSL", "https://ollama.com/install.sh", "|", "sh"],
                     shell=True,
                     check=True
                 )
             else:
-                # Windows: 下载安装程序
                 import urllib.request
                 installer_url = "https://ollama.com/download/OllamaSetup.exe"
                 installer_path = self.app_dir / "OllamaSetup.exe"
@@ -237,33 +252,70 @@ class PlatformBootstrapper:
                 
                 installer_path.unlink()
             
+            # 安装 Python 包
+            subprocess.run([sys.executable, "-m", "pip", "install", "ollama"], check=True)
+            
+            # 启动 Ollama 服务
+            if self.os_type == "linux":
+                subprocess.run(["ollama", "serve"], check=True, capture_output=True)
+            else:
+                subprocess.Popen(["ollama", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
             self._logger.info("✅ Ollama 安装完成")
         except Exception as e:
             self._logger.error(f"❌ Ollama 安装失败: {e}")
             raise
     
     def _download_model(self):
-        """自动下载模型"""
+        """自动下载模型（使用 ollama Python 库）"""
         model_name = self.config["ollama"]["model"]
         self._logger.info(f"下载模型: {model_name}")
         
+        try:
+            import ollama
+            
+            # 检查模型是否已存在
+            models = ollama.list()
+            model_names = [m["name"] for m in models.get("models", [])]
+            
+            if model_name in model_names:
+                self._logger.info(f"✅ 模型 {model_name} 已存在")
+                return
+            
+            # 检查正在运行的模型
+            running = ollama.ps()
+            running_names = [m["name"] for m in running.get("models", [])]
+            if model_name in running_names:
+                self._logger.info(f"✅ 模型 {model_name} 正在运行")
+                return
+            
+            # 下载模型
+            self._logger.info(f"开始下载模型 {model_name}...")
+            ollama.pull(model_name)
+            
+            self._logger.info(f"✅ 模型 {model_name} 下载完成")
+        except ImportError:
+            self._logger.error("ollama Python 包未安装")
+            self._download_model_fallback(model_name)
+        except Exception as e:
+            self._logger.error(f"❌ 模型下载失败: {e}")
+            self._download_model_fallback(model_name)
+    
+    def _download_model_fallback(self, model_name: str):
+        """备用下载方法（使用命令行）"""
+        self._logger.info(f"使用命令行方式下载模型: {model_name}")
         ollama_path = self.config.get("ollama_path", "ollama")
         
         try:
-            # 检查模型是否已存在
             result = subprocess.run([ollama_path, "list"], capture_output=True, text=True)
             if model_name in result.stdout:
                 self._logger.info(f"✅ 模型 {model_name} 已存在")
                 return
             
-            # 下载模型
-            self._logger.info(f"开始下载模型 {model_name}...")
             subprocess.run([ollama_path, "pull", model_name], check=True)
-            
             self._logger.info(f"✅ 模型 {model_name} 下载完成")
         except Exception as e:
-            self._logger.error(f"❌ 模型下载失败: {e}")
-            # 继续执行，使用默认配置
+            self._logger.error(f"❌ 备用下载也失败: {e}")
     
     def _deploy_services(self):
         """部署服务"""

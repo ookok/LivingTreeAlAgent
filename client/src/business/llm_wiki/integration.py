@@ -8,14 +8,16 @@ LLM Wiki 集成模块 - 将 Phase 1 解析器集成到现有 FusionRAG 系统
 3. CodeExtractor → FusionRAG KnowledgeBase (代码块索引)
 4. 提供统一的搜索接口（复用 FusionRAG 四层架构）
 5. DeepKE-LLM 术语抽取器集成
+6. VimRAG 多模态记忆图引擎集成
 
 功能对等 FusionRAG：
 - 行业治理、分层检索、行业过滤、相关性打分、负反馈学习
 - 方言词典、三重链验证、智能术语抽取
+- 多模态记忆图（VimRAG 扩展）
 
 作者: LivingTreeAI Team
 日期: 2026-04-30
-版本: 2.0.0 (Phase 1 + FusionRAG Full Integration + DeepKE-LLM)
+版本: 2.1.0 (Phase 1 + FusionRAG + DeepKE-LLM + VimRAG)
 """
 
 import os
@@ -91,7 +93,20 @@ class LLMWikiIntegration:
                 self.term_extractor = get_term_extractor()
                 self.dict_builder = get_dict_builder()
                 
-                logger.info("FusionRAG 治理模块集成完成（含 DeepKE-LLM）")
+                # 集成 VimRAG 多模态记忆图引擎
+                try:
+                    from client.src.business.memory_graph_engine import (
+                        get_memory_graph_engine,
+                        NodeType,
+                        RelationType
+                    )
+                    self.memory_graph_engine = get_memory_graph_engine()
+                    logger.info("VimRAG 记忆图引擎集成完成")
+                except ImportError as e:
+                    logger.warning(f"VimRAG 记忆图引擎导入失败: {e}")
+                    self.memory_graph_engine = None
+                
+                logger.info("FusionRAG 治理模块集成完成（含 DeepKE-LLM + VimRAG）")
             except ImportError as e:
                 logger.warning(f"FusionRAG 治理模块导入失败: {e}")
                 self.governance = None
@@ -522,13 +537,14 @@ class LLMWikiIntegration:
     def search_with_triple_chain(self, query: str, top_k: int = 10) -> Dict[str, Any]:
         """
         带三重链验证的检索流程（与 FusionRAG.search_with_triple_chain 对等）
+        集成 VimRAG 多模态记忆图
         
         Args:
             query: 用户查询
             top_k: 返回数量
             
         Returns:
-            包含三重链信息的检索结果
+            包含三重链信息和记忆图的检索结果
         """
         if not self.triple_chain_engine:
             logger.warning("三重链引擎不可用")
@@ -541,7 +557,9 @@ class LLMWikiIntegration:
                 "validation_passed": False,
                 "task_type": "unknown",
                 "query": query,
-                "normalized_query": query
+                "normalized_query": query,
+                "memory_graph": None,
+                "graph_visualization": None
             }
         
         try:
@@ -554,15 +572,18 @@ class LLMWikiIntegration:
             # 3. 确定任务类型
             task_type = self._determine_task_type(query)
             
-            # 4. 构建三重链
+            # 4. 构建三重链（已自动构建记忆图）
             triple_chain_result = self.triple_chain_engine.build_triple_chain(
                 query=query,
                 task_type=task_type,
                 retrieved_docs=retrieved_docs[:5]
             )
             
-            # 5. 构建返回结果
-            return {
+            # 5. 构建记忆图（VimRAG 扩展）
+            memory_graph_info = self._build_memory_graph(query, triple_chain_result, retrieved_docs)
+            
+            # 6. 构建返回结果
+            result = {
                 "answer": triple_chain_result.answer,
                 "reasoning": [{"step_id": s.step_id, "content": s.content, "confidence": s.confidence} 
                              for s in triple_chain_result.reasoning_steps],
@@ -578,8 +599,12 @@ class LLMWikiIntegration:
                 "validation_passed": triple_chain_result.validation_passed,
                 "task_type": task_type,
                 "query": query,
-                "normalized_query": normalized_query
+                "normalized_query": normalized_query,
+                "memory_graph": memory_graph_info.get("graph_id"),
+                "graph_visualization": memory_graph_info.get("visualization")
             }
+            
+            return result
         
         except Exception as e:
             logger.error(f"三重链检索失败: {e}")
@@ -592,8 +617,60 @@ class LLMWikiIntegration:
                 "validation_passed": False,
                 "task_type": "unknown",
                 "query": query,
-                "normalized_query": query
+                "normalized_query": query,
+                "memory_graph": None,
+                "graph_visualization": None
             }
+    
+    def _build_memory_graph(self, query: str, triple_chain_result, retrieved_docs: List[Dict]) -> Dict[str, Any]:
+        """
+        构建多模态记忆图（VimRAG 扩展）
+        
+        Args:
+            query: 用户查询
+            triple_chain_result: 三重链结果
+            retrieved_docs: 检索文档
+            
+        Returns:
+            记忆图信息（图ID和可视化）
+        """
+        if not self.memory_graph_engine:
+            return {"graph_id": None, "visualization": None}
+        
+        try:
+            # 准备证据列表
+            evidence_list = []
+            for doc in retrieved_docs[:5]:
+                evidence_list.append({
+                    "content": doc.get("content", "")[:500],
+                    "confidence": doc.get("score", 0.0),
+                    "modalities": ["text"]
+                })
+            
+            # 准备推理步骤
+            step_contents = [step.content for step in triple_chain_result.reasoning_steps]
+            
+            # 构建记忆图
+            graph_id = self.memory_graph_engine.build_reasoning_graph(
+                query=query,
+                evidences=evidence_list,
+                reasoning_steps=step_contents,
+                conclusion=triple_chain_result.answer
+            )
+            
+            # 获取可视化
+            visualization = self.memory_graph_engine.visualize_graph(graph_id)
+            
+            logger.info(f"LLM Wiki 记忆图构建完成: {graph_id}")
+            
+            return {
+                "graph_id": graph_id,
+                "visualization": visualization
+            }
+            
+        except Exception as e:
+            logger.error(f"记忆图构建失败: {e}")
+            return {"graph_id": None, "visualization": None}
     
     def _determine_task_type(self, query: str) -> str:
         """确定任务类型"""

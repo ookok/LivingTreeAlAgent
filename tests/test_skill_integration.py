@@ -15,11 +15,11 @@ Date: 2026-04-30
 
 import pytest
 import asyncio
-from client.src.business import (
+from client.src.business.optimization_integration_bootstrapper import (
     integrate_optimization,
     get_integration_bootstrapper,
-    get_skill_integration_service,
 )
+from client.src.business.skill_integration_service import get_skill_integration_service
 
 
 class TestSkillDiscoveryIntegration:

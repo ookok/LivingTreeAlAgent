@@ -21,11 +21,11 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
-# 导入自然语言命令解析器
+# 导入统一意图定义中心和自然语言命令解析器
 try:
+    from client.src.business.intent_definitions import Intent
     from client.src.business.natural_command_parser import (
         get_natural_command_parser,
-        CommandIntent,
         ParsedCommand
     )
     NATURAL_PARSER_AVAILABLE = True
@@ -143,7 +143,8 @@ class CommandProcessor:
         if self.natural_parser:
             parsed = self.natural_parser.parse(message)
             
-            if parsed.intent != CommandIntent.UNKNOWN and parsed.confidence >= 0.7:
+            # 使用统一意图定义中心判断
+            if parsed.intent != Intent.NLU_FALLBACK and parsed.confidence >= 0.7:
                 # 返回映射后的命令和参数
                 return parsed.command, parsed.args
         
@@ -158,7 +159,8 @@ class CommandProcessor:
         if not command and self.natural_parser:
             parsed = self.natural_parser.parse(message)
             
-            if parsed.intent != CommandIntent.UNKNOWN and parsed.confidence >= 0.7:
+            # 使用统一意图定义中心判断
+            if parsed.intent != Intent.NLU_FALLBACK and parsed.confidence >= 0.7:
                 command = parsed.command
                 args = parsed.args
         

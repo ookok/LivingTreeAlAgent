@@ -72,6 +72,24 @@ class Intent(Enum):
     LONG_WRITING = "long_writing"              # 长篇写作
     COMPLEX_REASONING = "complex_reasoning"    # 复杂推理
     
+    # === 命令意图 ===
+    MODEL_INFO = "model_info"                  # 模型信息查询
+    MODEL_RECOMMEND = "model_recommend"        # 模型推荐
+    KB_INIT = "kb_init"                        # 知识库初始化
+    KB_STATUS = "kb_status"                    # 知识库状态
+    KB_INGEST = "kb_ingest"                    # 知识摄入
+    KB_QUERY = "kb_query"                      # 知识查询
+    KB_LINT = "kb_lint"                        # 知识库健康检查
+    RECORD_START = "record_start"              # 开始记录
+    RECORD_STOP = "record_stop"                # 停止记录
+    RECORD_SUMMARY = "record_summary"          # 记录总结
+    RECORD_STATUS = "record_status"            # 记录状态
+    VIDEO_START = "video_start"                # 开始录制
+    VIDEO_STOP = "video_stop"                  # 停止录制
+    VIDEO_STATUS = "video_status"              # 录制状态
+    SYSTEM_STATS = "system_stats"              # 系统统计
+    CHAT_CLEAR = "chat_clear"                  # 清空聊天
+    
     @classmethod
     def get_name(cls, intent: 'Intent') -> str:
         """获取意图显示名称"""
@@ -101,6 +119,22 @@ class Intent(Enum):
             cls.WEATHER_QUERY: "天气查询",
             cls.LONG_WRITING: "长篇写作",
             cls.COMPLEX_REASONING: "复杂推理",
+            cls.MODEL_INFO: "模型信息查询",
+            cls.MODEL_RECOMMEND: "模型推荐",
+            cls.KB_INIT: "知识库初始化",
+            cls.KB_STATUS: "知识库状态",
+            cls.KB_INGEST: "知识摄入",
+            cls.KB_QUERY: "知识查询",
+            cls.KB_LINT: "知识库健康检查",
+            cls.RECORD_START: "开始记录",
+            cls.RECORD_STOP: "停止记录",
+            cls.RECORD_SUMMARY: "记录总结",
+            cls.RECORD_STATUS: "记录状态",
+            cls.VIDEO_START: "开始录制",
+            cls.VIDEO_STOP: "停止录制",
+            cls.VIDEO_STATUS: "录制状态",
+            cls.SYSTEM_STATS: "系统统计",
+            cls.CHAT_CLEAR: "清空聊天",
         }
         return names.get(intent, intent.value)
     
@@ -156,6 +190,11 @@ class Intent(Enum):
             "fallback": [cls.NLU_FALLBACK],
             "multi_modal": [cls.MULTI_MODAL_QUERY],
             "other": [cls.WEATHER_QUERY, cls.LONG_WRITING, cls.COMPLEX_REASONING],
+            "command": [cls.MODEL_INFO, cls.MODEL_RECOMMEND, cls.KB_INIT, cls.KB_STATUS,
+                        cls.KB_INGEST, cls.KB_QUERY, cls.KB_LINT, cls.RECORD_START,
+                        cls.RECORD_STOP, cls.RECORD_SUMMARY, cls.RECORD_STATUS,
+                        cls.VIDEO_START, cls.VIDEO_STOP, cls.VIDEO_STATUS,
+                        cls.SYSTEM_STATS, cls.CHAT_CLEAR],
         }
     
     @classmethod
@@ -183,6 +222,22 @@ class Intent(Enum):
             cls.WEATHER_QUERY.value: ["天气", "温度", "预报", "气候"],
             cls.LONG_WRITING.value: ["写一篇", "报告", "文章", "论文", "文档"],
             cls.COMPLEX_REASONING.value: ["分析", "推理", "论证", "深入分析"],
+            cls.MODEL_INFO.value: ["模型信息", "查看模型", "当前模型", "连接的模型", "model info"],
+            cls.MODEL_RECOMMEND.value: ["推荐模型", "扫描硬件", "硬件检测", "选择模型", "适合的模型", "llmfit", "量化版本"],
+            cls.KB_INIT.value: ["初始化知识库", "创建知识库规则", "kb init"],
+            cls.KB_STATUS.value: ["知识库状态", "kb status", "查看知识库"],
+            cls.KB_INGEST.value: ["摄入资料", "处理资料", "更新知识库", "读取raw", "导入资料", "ingest"],
+            cls.KB_QUERY.value: ["查询知识库", "搜索知识", "查找资料", "知识库搜索", "帮我查", "请查一下"],
+            cls.KB_LINT.value: ["健康检查", "知识库检查", "检查知识库", "找矛盾", "清理知识库", "lint"],
+            cls.RECORD_START.value: ["开始记录", "记录操作", "开启记录", "record start"],
+            cls.RECORD_STOP.value: ["停止记录", "结束记录", "record stop"],
+            cls.RECORD_SUMMARY.value: ["记录总结", "会话总结", "record summary"],
+            cls.RECORD_STATUS.value: ["记录状态", "record status"],
+            cls.VIDEO_START.value: ["开始录制", "录制视频", "开启录制", "video start", "录像"],
+            cls.VIDEO_STOP.value: ["停止录制", "结束录制", "video stop", "停止录像"],
+            cls.VIDEO_STATUS.value: ["录制状态", "video status"],
+            cls.SYSTEM_STATS.value: ["系统统计", "统计信息", "系统信息", "查看统计", "stats"],
+            cls.CHAT_CLEAR.value: ["清空聊天", "清除记录", "clear", "重置聊天"],
         }
     
     @classmethod

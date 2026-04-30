@@ -234,6 +234,11 @@ class KnowledgeBaseManager:
         """
         从 raw/ 读取新资料并更新 wiki/
         
+        复用现有模块：
+        - LLM Wiki 的文档解析能力
+        - FusionRAG 的知识入库能力
+        - DeepKE-LLM 的术语抽取能力
+        
         Returns:
             摄入结果
         """
@@ -259,17 +264,37 @@ class KnowledgeBaseManager:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
-                    # 抽取术语和关系
-                    terms = self.term_extractor.extract_terms(content)
-                    relations = self.term_extractor.extract_relations(content)
+                    # 1. 使用 LLM Wiki 解析文档（复用现有能力）
+                    if self.wiki_integration:
+                        terms = self.wiki_integration.extract_terms_from_text(content, self._get_current_industry())
+                        relations = self.wiki_integration.extract_relations_from_text(content, self._get_current_industry())
+                    else:
+                        # 降级方案：使用 DeepKE-LLM 术语抽取器
+                        terms = self.term_extractor.extract_terms(content)
+                        relations = self.term_extractor.extract_relations(content)
                     
                     result.terms_extracted += len(terms)
                     
-                    # 更新 wiki 页面
+                    # 2. 使用行业治理添加术语（复用现有能力）
+                    for term in terms:
+                        term_name = term.get("term", "")
+                        if term_name:
+                            self.governance.add_term(term_name, term_name, self._get_current_industry())
+                    
+                    # 3. 更新 wiki 页面（内部实现，因为这是文件级操作）
                     updated, created = await self._update_wiki_pages(terms, relations, file_path)
                     result.pages_updated += updated
                     result.new_pages_created += created
                     result.files_processed += 1
+                    
+                    # 4. 将知识入库到 FusionRAG（复用现有能力）
+                    if self.fusion_rag:
+                        self.fusion_rag.add_document({
+                            "title": file_path.stem,
+                            "content": content[:5000],
+                            "source": str(file_path),
+                            "industry": self._get_current_industry()
+                        })
                     
                     # 标记文件已处理
                     self._mark_file_processed(file_path)
@@ -290,6 +315,12 @@ class KnowledgeBaseManager:
             result.errors.append(f"摄入过程失败: {e}")
         
         return result
+    
+    def _get_current_industry(self) -> str:
+        """获取当前行业（从配置或治理模块）"""
+        if hasattr(self.governance, 'target_industry'):
+            return self.governance.target_industry
+        return "通用"
     
     def _is_file_processed(self, file_path: Path) -> bool:
         """检查文件是否已处理"""
@@ -386,31 +417,55 @@ class KnowledgeBaseManager:
         """
         查询知识库
         
+        复用现有模块：
+        - LLM Wiki 的搜索能力（search_with_governance, search_with_triple_chain）
+        - FusionRAG 的三重链验证和检索能力
+        
         Args:
             question: 用户问题
             
         Returns:
             查询结果（含答案、来源、关联主题）
         """
-        # 1. 使用 FusionRAG 检索
-        results = self.fusion_rag.search_with_governance(question)
-        
-        # 2. 三重链验证
-        verified = self.triple_chain_engine.verify(results)
-        
-        # 3. 综合作答
-        answer = self._synthesize_answer(verified)
-        
-        # 4. 提取来源和关联主题
-        sources = self._extract_sources(verified)
-        related_topics = self._extract_related_topics(verified)
-        
-        return QueryResult(
-            answer=answer,
-            sources=sources,
-            related_topics=related_topics,
-            confidence=0.85
-        )
+        # 1. 优先使用 LLM Wiki 进行检索（已集成 FusionRAG 能力）
+        if self.wiki_integration:
+            results = self.wiki_integration.search_with_governance(question, top_k=10)
+            
+            # 2. 使用三重链验证（LLM Wiki 已集成）
+            triple_chain_result = self.wiki_integration.search_with_triple_chain(question)
+            answer = triple_chain_result.get("answer", "")
+            
+            # 3. 提取来源和关联主题
+            sources = []
+            for item in results:
+                sources.append({
+                    "title": item.get("title", ""),
+                    "source": item.get("source_attribution", ""),
+                    "score": item.get("score", 0)
+                })
+            
+            related_topics = triple_chain_result.get("reasoning", [])[:5]
+            
+            return QueryResult(
+                answer=answer,
+                sources=sources,
+                related_topics=related_topics,
+                confidence=triple_chain_result.get("overall_confidence", 0.85)
+            )
+        else:
+            # 降级方案：直接使用 FusionRAG
+            results = self.fusion_rag.search_with_governance(question)
+            verified = self.triple_chain_engine.verify(results)
+            answer = self._synthesize_answer(verified)
+            sources = self._extract_sources(verified)
+            related_topics = self._extract_related_topics(verified)
+            
+            return QueryResult(
+                answer=answer,
+                sources=sources,
+                related_topics=related_topics,
+                confidence=0.85
+            )
     
     def _synthesize_answer(self, results: List[Dict]) -> str:
         """综合答案"""
@@ -484,21 +539,47 @@ class KnowledgeBaseManager:
         """
         巡检 wiki/ 所有页面
         
+        复用现有模块：
+        - FusionRAG 的行业治理和反馈学习能力
+        - LLM Wiki 的验证能力
+        
         Returns:
             问题列表
         """
         issues = []
         
-        # 1. 检查孤儿页面
+        # 1. 使用 FusionRAG 行业治理检查术语冲突（复用现有能力）
+        if hasattr(self.governance, 'check_term_conflicts'):
+            conflicts = self.governance.check_term_conflicts()
+            for conflict in conflicts:
+                issues.append(LintIssue(
+                    issue_type="contradictions",
+                    page_title=conflict.get("term", ""),
+                    description=f"术语冲突: {conflict.get('message', '')}",
+                    severity="high"
+                ))
+        
+        # 2. 使用 FusionRAG 反馈学习检查低质量内容（复用现有能力）
+        if hasattr(self.fusion_rag, 'get_low_quality_docs'):
+            low_quality_docs = self.fusion_rag.get_low_quality_docs()
+            for doc in low_quality_docs:
+                issues.append(LintIssue(
+                    issue_type="gaps",
+                    page_title=doc.get("title", ""),
+                    description=f"低质量内容: 相关性评分低",
+                    severity="medium"
+                ))
+        
+        # 3. 检查孤儿页面（文件级操作）
         issues.extend(await self._find_orphans())
         
-        # 2. 检查内容缺口
+        # 4. 检查内容缺口（文件级操作）
         issues.extend(await self._find_gaps())
         
-        # 3. 检查过期信息
+        # 5. 检查过期信息（文件级操作）
         issues.extend(await self._find_outdated())
         
-        # 4. 检查知识矛盾（简化版）
+        # 6. 检查知识矛盾（文件级操作）
         issues.extend(await self._find_contradictions())
         
         # 发布事件

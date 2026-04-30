@@ -266,3 +266,8 @@ kubectl apply -f deploy/k8s/deployment.yml
 ## 📞 联系方式
 
 - **项目主页**: https://github.com/ookok/LivingTreeAlAgent
+- **问题反馈**: https://github.com/ookok/LivingTreeAlAgent/issues
+
+---
+
+**Built with ❤️ by LivingTreeAI Team**

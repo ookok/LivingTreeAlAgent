@@ -74,10 +74,11 @@ class CommandProcessor:
             "/query": self._handle_query_command,
             "/lint": self._handle_lint_command,
             "/kb": self._handle_kb_command,
-            "/record": self._handle_record_command
+            "/record": self._handle_record_command,
+            "/video": self._handle_video_command
         }
         
-        print("[CommandProcessor] 初始化完成（含知识库和操作记录命令）")
+        print("[CommandProcessor] 初始化完成（含知识库、操作记录和视频录制命令）")
     
     def is_command(self, message: str) -> bool:
         """判断消息是否为命令"""
@@ -366,6 +367,12 @@ class CommandProcessor:
         result += "/record stop - 停止记录并生成会话总结\n"
         result += "/record summary - 获取当前会话总结\n"
         result += "/record status - 查看记录状态\n"
+        result += "\n【视频录制命令】\n"
+        result += "/video start - 开始视频录制\n"
+        result += "/video stop - 停止视频录制\n"
+        result += "/video status - 查看录制状态\n"
+        result += "/video list - 列出录制文件\n"
+        result += "/video config - 查看/设置录制配置\n"
         result += "\n──────────────────────────\n"
         result += "提示：输入命令时无需加引号，直接输入即可"
         return result
@@ -582,6 +589,99 @@ class CommandProcessor:
         
         except Exception as e:
             return f"操作记录失败: {e}"
+    
+    async def _handle_video_command(self, args: str) -> str:
+        """处理 /video 命令 - 视频录制管理"""
+        try:
+            from client.src.business.video_recording_service import (
+                get_video_recording_service,
+                RecordingQuality
+            )
+            
+            video_service = get_video_recording_service()
+            
+            parts = args.split()
+            sub_command = parts[0] if parts else ""
+            options = parts[1:] if len(parts) > 1 else []
+            
+            if sub_command == "start":
+                # 解析选项
+                quality = "medium"
+                mode = "full_screen"
+                
+                for opt in options:
+                    if opt.startswith("quality="):
+                        quality = opt.split("=")[1]
+                    elif opt.startswith("mode="):
+                        mode = opt.split("=")[1]
+                
+                session_id = video_service.start_recording(quality=quality, mode=mode)
+                return f"🎥 开始视频录制! 会话ID: {session_id}\n\n质量: {quality}\n模式: {mode}\n使用 /video stop 停止录制。"
+            
+            elif sub_command == "stop":
+                video_path = video_service.stop_recording()
+                if video_path:
+                    return f"⏹️ 视频录制已停止。\n\n文件已保存到: {video_path}\n\n自动生成的摘要已保存到知识库和记忆图。"
+                else:
+                    return "❌ 没有正在进行的录制。"
+            
+            elif sub_command == "status":
+                status = video_service.get_recording_status()
+                if status["is_recording"]:
+                    return f"📹 录制状态:\n" \
+                           f"- 状态: 🟢 正在录制\n" \
+                           f"- 会话ID: {status['session_id']}\n" \
+                           f"- 已录制: {status['elapsed_seconds']} 秒\n" \
+                           f"- 质量: {status['quality']}\n" \
+                           f"- 模式: {status['mode']}"
+                else:
+                    return "📹 录制状态: 🔴 未在录制"
+            
+            elif sub_command == "list":
+                recordings = video_service.list_recordings()
+                if recordings:
+                    result = "📋 录制文件列表:\n\n"
+                    for i, rec in enumerate(recordings, 1):
+                        result += f"{i}. {rec['filename']} ({rec['size']} bytes)\n"
+                    return result
+                else:
+                    return "📋 暂无录制文件。"
+            
+            elif sub_command == "config":
+                config = video_service.get_config()
+                return f"⚙️ 当前视频配置:\n" \
+                       f"- 质量: {config.quality.value}\n" \
+                       f"- 模式: {config.mode.value}\n" \
+                       f"- 帧率: {config.frame_rate} fps\n" \
+                       f"- 最大时长: {config.max_duration} 秒\n" \
+                       f"- 自动压缩: {'是' if config.auto_compress else '否'}\n" \
+                       f"- 自动摘要: {'是' if config.auto_summarize else '否'}"
+            
+            elif sub_command.startswith("config set"):
+                # 设置配置
+                config_args = {}
+                for opt in options:
+                    if "=" in opt:
+                        key, value = opt.split("=", 1)
+                        config_args[key] = value
+                
+                if config_args:
+                    video_service.set_config(**config_args)
+                    return f"✅ 视频配置已更新:\n{config_args}"
+                else:
+                    return "❌ 请指定要设置的配置项，如: /video config set quality=high"
+            
+            else:
+                return "📹 视频录制命令:\n" \
+                       "- /video start [quality=high|medium|low] [mode=full_screen|active_window]: 开始录制\n" \
+                       "- /video stop: 停止录制\n" \
+                       "- /video status: 查看录制状态\n" \
+                       "- /video list: 列出录制文件\n" \
+                       "- /video config: 查看当前配置\n" \
+                       "- /video config set <key=value>: 设置配置"
+        
+        except Exception as e:
+            return f"视频录制失败: {e}"
 
 
 # 创建全局实例

@@ -73,10 +73,11 @@ class CommandProcessor:
             "/ingest": self._handle_ingest_command,
             "/query": self._handle_query_command,
             "/lint": self._handle_lint_command,
-            "/kb": self._handle_kb_command
+            "/kb": self._handle_kb_command,
+            "/record": self._handle_record_command
         }
         
-        print("[CommandProcessor] 初始化完成（含知识库命令）")
+        print("[CommandProcessor] 初始化完成（含知识库和操作记录命令）")
     
     def is_command(self, message: str) -> bool:
         """判断消息是否为命令"""
@@ -360,6 +361,11 @@ class CommandProcessor:
         result += "/ingest - 从 raw/ 摄入资料到 wiki/\n"
         result += "/query <问题> - 查询知识库并返回带引用的答案\n"
         result += "/lint - 知识库健康检查（找矛盾、补缺口、清孤儿页面）\n"
+        result += "\n【操作记录命令】\n"
+        result += "/record start - 开始记录屏幕操作（低资源消耗）\n"
+        result += "/record stop - 停止记录并生成会话总结\n"
+        result += "/record summary - 获取当前会话总结\n"
+        result += "/record status - 查看记录状态\n"
         result += "\n──────────────────────────\n"
         result += "提示：输入命令时无需加引号，直接输入即可"
         return result
@@ -538,6 +544,44 @@ class CommandProcessor:
         
         except Exception as e:
             return f"知识库操作失败: {e}"
+    
+    async def _handle_record_command(self, args: str) -> str:
+        """处理 /record 命令 - 操作记录管理"""
+        try:
+            from client.src.business.action_memory_system import get_action_memory_system
+            
+            action_memory = get_action_memory_system()
+            
+            if args == "start":
+                session_id = action_memory.start_session()
+                return f"✅ 开始操作记录! 会话ID: {session_id}\n\n系统将每30秒捕获一次屏幕状态，记录您的操作。\n使用 /record stop 停止记录。"
+            
+            elif args == "stop":
+                action_memory.end_session()
+                return "⏹️ 操作记录已停止。\n\n会话总结已保存到记忆图，可用于后续分析和知识关联。"
+            
+            elif args == "summary":
+                summary = action_memory.get_session_summary()
+                if summary:
+                    return f"📊 当前会话总结:\n\n{summary}"
+                else:
+                    return "❌ 没有活跃的会话或未记录任何操作。"
+            
+            elif args == "status":
+                return "📋 操作记录状态:\n" \
+                       "- 状态: " + ("🟢 正在记录" if action_memory.is_recording else "🔴 未记录") + "\n" \
+                       "- 快照间隔: 30秒\n" \
+                       "- 会话操作数: " + str(len(action_memory.active_session.actions) if action_memory.active_session else 0)
+            
+            else:
+                return "📋 操作记录命令:\n" \
+                       "- /record start: 开始记录操作\n" \
+                       "- /record stop: 停止记录并总结\n" \
+                       "- /record summary: 获取当前会话总结\n" \
+                       "- /record status: 查看记录状态"
+        
+        except Exception as e:
+            return f"操作记录失败: {e}"
 
 
 # 创建全局实例

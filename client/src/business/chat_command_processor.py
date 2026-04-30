@@ -6,15 +6,31 @@
 - /llmfit: 扫描硬件并推荐最适合的本地 LLM 及量化版本
 - /help: 显示帮助信息
 
-设计模式：命令模式 + 工厂模式
+支持自然语言命令调用：
+- "帮我查看模型信息" → /model
+- "开始记录操作" → /record start
+- "查询知识库" → /query
+
+设计模式：命令模式 + 工厂模式 + 策略模式
 """
 
 import os
 import platform
 import subprocess
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+
+# 导入自然语言命令解析器
+try:
+    from client.src.business.natural_command_parser import (
+        get_natural_command_parser,
+        CommandIntent,
+        ParsedCommand
+    )
+    NATURAL_PARSER_AVAILABLE = True
+except ImportError:
+    NATURAL_PARSER_AVAILABLE = False
 
 
 @dataclass
@@ -60,7 +76,9 @@ class CommandProcessor:
     """
     聊天命令处理器
     
-    解析并执行聊天窗口中的命令
+    解析并执行聊天窗口中的命令，支持：
+    1. 直接命令调用：/model, /llmfit, /help 等
+    2. 自然语言调用："帮我查看模型信息", "开始记录操作" 等
     """
     
     def __init__(self):
@@ -78,32 +96,89 @@ class CommandProcessor:
             "/video": self._handle_video_command
         }
         
-        print("[CommandProcessor] 初始化完成（含知识库、操作记录和视频录制命令）")
+        # 初始化自然语言命令解析器
+        self._init_natural_parser()
+        
+        print("[CommandProcessor] 初始化完成（含知识库、操作记录和视频录制命令，支持自然语言调用）")
+    
+    def _init_natural_parser(self):
+        """初始化自然语言命令解析器"""
+        if NATURAL_PARSER_AVAILABLE:
+            try:
+                self.natural_parser = get_natural_command_parser()
+                print("[CommandProcessor] 自然语言命令解析器初始化完成")
+            except Exception as e:
+                print(f"[CommandProcessor] 自然语言命令解析器初始化失败: {e}")
+                self.natural_parser = None
+        else:
+            self.natural_parser = None
     
     def is_command(self, message: str) -> bool:
-        """判断消息是否为命令"""
+        """判断消息是否为命令（支持直接命令和自然语言命令）"""
         message = message.strip()
-        return message.startswith("/") and message.split()[0] in self.commands
+        
+        # 检查直接命令
+        if message.startswith("/"):
+            command = message.split()[0]
+            return command in self.commands
+        
+        # 检查自然语言命令
+        if self.natural_parser:
+            return self.natural_parser.is_command(message)
+        
+        return False
     
-    def parse_command(self, message: str) -> tuple:
-        """解析命令"""
+    def parse_command(self, message: str) -> Tuple[str, str]:
+        """解析命令（支持直接命令和自然语言命令）"""
         message = message.strip()
-        parts = message.split(maxsplit=1)
-        command = parts[0]
-        args = parts[1] if len(parts) > 1 else ""
-        return command, args
+        
+        # 如果是直接命令（以 / 开头）
+        if message.startswith("/"):
+            parts = message.split(maxsplit=1)
+            command = parts[0]
+            args = parts[1] if len(parts) > 1 else ""
+            return command, args
+        
+        # 如果是自然语言命令
+        if self.natural_parser:
+            parsed = self.natural_parser.parse(message)
+            
+            if parsed.intent != CommandIntent.UNKNOWN and parsed.confidence >= 0.7:
+                # 返回映射后的命令和参数
+                return parsed.command, parsed.args
+        
+        # 默认返回原消息作为参数（非命令）
+        return "", message
     
     async def execute_command(self, message: str) -> str:
-        """执行命令并返回结果"""
+        """执行命令并返回结果（支持直接命令和自然语言命令）"""
         command, args = self.parse_command(message)
+        
+        # 如果没有解析出命令，尝试自然语言解析
+        if not command and self.natural_parser:
+            parsed = self.natural_parser.parse(message)
+            
+            if parsed.intent != CommandIntent.UNKNOWN and parsed.confidence >= 0.7:
+                command = parsed.command
+                args = parsed.args
         
         if command in self.commands:
             try:
-                return await self.commands[command](args)
+                result = await self.commands[command](args)
+                # 如果是自然语言触发的命令，添加提示
+                if not message.startswith("/"):
+                    result = f"🔧 已识别命令: `{command}`\n\n" + result
+                return result
             except Exception as e:
                 return f"命令执行失败: {e}"
         
         return f"未知命令: {command}"
+    
+    def suggest_commands(self, message: str) -> List[Tuple[str, float]]:
+        """给出命令建议（基于自然语言解析）"""
+        if self.natural_parser:
+            return self.natural_parser.suggest_commands(message)
+        return []
     
     async def _handle_model_command(self, args: str) -> str:
         """处理 /model 命令 - 查看连接的 LLM 信息"""

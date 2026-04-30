@@ -6,11 +6,16 @@
 
 import json
 import os
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Dict, List, Optional, Any, Callable, Type
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QMetaObject
+
+
+class PluginMeta(type(QObject), ABCMeta):
+    """兼容 QObject 和 ABC 的元类"""
+    pass
 
 
 class PluginType(Enum):
@@ -102,7 +107,7 @@ class PluginManifest:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
-class BasePlugin(QObject, ABC):
+class BasePlugin(QObject, ABC, metaclass=PluginMeta):
     """
     插件基类
 
@@ -444,3 +449,58 @@ class PluginFramework:
         if plugin_id not in self._plugin_configs:
             self._plugin_configs[plugin_id] = {}
         self._plugin_configs[plugin_id][key] = value
+
+
+class PluginState(Enum):
+    """插件状态枚举"""
+    UNLOADED = "unloaded"       # 未加载
+    LOADED = "loaded"           # 已加载
+    INITIALIZING = "initializing" # 初始化中
+    INITIALIZED = "initialized"   # 已初始化
+    ACTIVATING = "activating"     # 激活中
+    ACTIVE = "active"           # 已激活
+    DEACTIVATING = "deactivating" # 停用中
+    ERROR = "error"             # 出错
+    DISABLED = "disabled"       # 已禁用
+
+
+@dataclass
+class PluginInfo:
+    """插件信息"""
+    plugin_id: str
+    name: str
+    version: str
+    author: str
+    description: str
+    plugin_type: PluginType
+    state: PluginState
+    enabled: bool = True
+    has_ui: bool = True
+
+
+class PluginFramework:
+    """插件框架接口"""
+    
+    def get_plugin_manager(self) -> 'PluginManager':
+        """获取插件管理器"""
+        raise NotImplementedError
+    
+    def get_event_bus(self) -> 'EventBus':
+        """获取事件总线"""
+        raise NotImplementedError
+    
+    def get_layout_manager(self) -> 'LayoutManager':
+        """获取布局管理器"""
+        raise NotImplementedError
+    
+    def get_theme_system(self) -> 'ThemeSystem':
+        """获取主题系统"""
+        raise NotImplementedError
+    
+    def get_view_factory(self) -> 'ViewFactory':
+        """获取视图工厂"""
+        raise NotImplementedError
+    
+    def get_shared_workspace(self) -> 'SharedWorkspace':
+        """获取共享工作区"""
+        raise NotImplementedError

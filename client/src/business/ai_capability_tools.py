@@ -322,7 +322,7 @@ def publish_ai_service(
         description = "\n".join(description_parts)
 
         # 构建服务列表
-        from core.decommerce.ai_capability_registry import AICapability, CapabilityType
+        from client.src.business.decommerce.ai_capability_registry import AICapability, CapabilityType
 
         capability_type_map = {
             "text_chat": CapabilityType.TEXT_CHAT,

@@ -4,7 +4,7 @@ core/models.py - 统一数据模型导出
 提供 SystemConfig 等通用数据模型
 """
 
-from core.self_upgrade.models import (
+from client.src.business.self_upgrade.models import (
     SystemConfig,
     DebateRole,
     DebateVerdict,

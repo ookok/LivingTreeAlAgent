@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field
 
 # 延迟导入：避免循环导入
-# from core.plugin_framework.event_bus import EventBus, Event, EventPriority
+# from client.src.business.plugin_framework.event_bus import EventBus, Event, EventPriority
 
 logger = logging.getLogger(__name__)
 
@@ -539,7 +539,7 @@ class PersistentEventBus:
     包装现有 EventBus，添加持久化支持。
 
     使用示例：
-        from core.plugin_framework.event_bus import get_event_bus
+        from client.src.business.plugin_framework.event_bus import get_event_bus
 
         event_bus = get_event_bus()
         persistent_bus = PersistentEventBus(event_bus, db_path="events.db")
@@ -614,7 +614,7 @@ class PersistentEventBus:
         for persisted_event in events:
             try:
                 # 重建 Event 对象
-                from core.plugin_framework.event_bus import Event
+                from client.src.business.plugin_framework.event_bus import Event
                 import json
                 event = Event(
                     type=persisted_event.event_type,
@@ -662,7 +662,7 @@ def create_persistent_event_bus(db_path: str = "kernel_events.db") -> Persistent
     Returns:
         PersistentEventBus 实例
     """
-    from core.plugin_framework.event_bus import get_event_bus
+    from client.src.business.plugin_framework.event_bus import get_event_bus
     event_bus = get_event_bus()
     persistent_bus = PersistentEventBus(event_bus, db_path)
     persistent_bus.init()

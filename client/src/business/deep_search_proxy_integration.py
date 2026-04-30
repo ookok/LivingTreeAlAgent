@@ -121,7 +121,7 @@ class DeepSearchProxyIntegration:
 
             # 尝试导入浏览器适配器
             try:
-                from core.browser_gateway.browser_use_adapter import BrowserUseAdapter
+                from client.src.business.browser_gateway.browser_use_adapter import BrowserUseAdapter
                 self._browser_adapter = BrowserUseAdapter()
             except ImportError:
                 self._browser_adapter = None

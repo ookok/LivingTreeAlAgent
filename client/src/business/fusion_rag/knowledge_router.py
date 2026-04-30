@@ -369,7 +369,7 @@ class KnowledgeRouter:
     def _init_knowledge_base(self):
         """初始化知识库层"""
         try:
-            from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
+            from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
             self.kb_layer = KnowledgeBaseLayer(
                 embedding_model="BAAI/bge-small-zh",
                 top_k=10,
@@ -382,7 +382,7 @@ class KnowledgeRouter:
     def _init_page_index(self):
         """初始化 PageIndex"""
         try:
-            from core.page_index.index_builder import PageIndexBuilder
+            from client.src.business.page_index.index_builder import PageIndexBuilder
             self.page_index = PageIndexBuilder(
                 chunk_size=200,
                 tree_height=3,
@@ -395,7 +395,7 @@ class KnowledgeRouter:
     def _init_wiki_generator(self):
         """初始化 Wiki 生成器"""
         try:
-            from core.deep_search_wiki.wiki_generator import WikiGenerator
+            from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
             self.wiki_generator = WikiGenerator()
         except Exception as e:
             print(f"[Router] Wiki Generator init failed: {e}")

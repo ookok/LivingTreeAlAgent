@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
 # 导入沙箱能力
-from core.ai_script_generator.script_sandbox import (
+from client.src.business.ai_script_generator.script_sandbox import (
     ScriptSandbox,
     SandboxExecutor,
     SandboxConfig,

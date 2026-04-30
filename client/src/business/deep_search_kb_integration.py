@@ -8,7 +8,7 @@
 3. 与现有 L4Executor / DeepSearchWikiSystem 集成
 
 使用方式：
-    from core.deep_search_kb_integration import DeepSearchKBIntegration
+    from client.src.business.deep_search_kb_integration import DeepSearchKBIntegration
 
     integration = DeepSearchKBIntegration()
     integration.setup_hooks()  # 注册自动摄入钩子
@@ -55,7 +55,7 @@ class DeepSearchKBIntegration:
 
         try:
             # 延迟导入避免循环依赖
-            from core.knowledge_auto_ingest import get_kb_ingest, get_kb_hooks, ContentSource
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, get_kb_hooks, ContentSource
 
             kb_ingest = get_kb_ingest()
             kb_hooks = get_kb_hooks()
@@ -110,7 +110,7 @@ class DeepSearchKBIntegration:
             摄入统计
         """
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest, ContentSource
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, ContentSource
 
             kb_ingest = get_kb_ingest()
 
@@ -170,7 +170,7 @@ class DeepSearchKBIntegration:
             摄入统计
         """
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest, ContentSource, KnowledgeEntry
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, ContentSource, KnowledgeEntry
             import hashlib
 
             kb_ingest = get_kb_ingest()
@@ -240,7 +240,7 @@ class DeepSearchKBIntegration:
             摄入统计
         """
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest, ConversationExtractor
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, ConversationExtractor
 
             kb_ingest = get_kb_ingest()
             extractor = ConversationExtractor()
@@ -304,7 +304,7 @@ class DeepSearchKBIntegration:
             知识条目列表
         """
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest, ContentSource
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, ContentSource
 
             kb_ingest = get_kb_ingest()
 
@@ -339,7 +339,7 @@ class DeepSearchKBIntegration:
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest
 
             kb_ingest = get_kb_ingest()
             kb_stats = kb_ingest.get_stats()
@@ -358,7 +358,7 @@ class DeepSearchKBIntegration:
     ) -> List[Dict[str, Any]]:
         """获取最近的知识"""
         try:
-            from core.knowledge_auto_ingest import get_kb_ingest, ContentSource
+            from client.src.business.knowledge_auto_ingest import get_kb_ingest, ContentSource
             import sqlite3
 
             kb_ingest = get_kb_ingest()

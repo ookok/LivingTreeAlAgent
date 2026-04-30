@@ -41,7 +41,7 @@ try:
         get_hint_memory,
         get_global_air_icon,
     )
-    from core.intelligent_hints.global_signals import emit_hint_signal, HintSignalType
+    from client.src.business.intelligent_hints.global_signals import emit_hint_signal, HintSignalType
     
     HINTS_AVAILABLE = True
 except ImportError:

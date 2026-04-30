@@ -202,7 +202,7 @@ class VirtualConferenceSystem:
         self.is_active: bool = False
 
         # 共享工作空间
-        from core.living_tree_ai.agency_integration.shared_workspace import SharedWorkspace
+        from client.src.business.living_tree_ai.agency_integration.shared_workspace import SharedWorkspace
         self.workspace = SharedWorkspace(workspace_id=f"conference_{uuid.uuid4()}")
         self.workspace_name = f"conference_{uuid.uuid4()}"
 

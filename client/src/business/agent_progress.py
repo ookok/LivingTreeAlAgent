@@ -10,7 +10,7 @@ Agent Chat 进度反馈系统
 
 用法：
 ```python
-from core.agent_progress import AgentProgressCallback, get_progress_tracker
+from client.src.business.agent_progress import AgentProgressCallback, get_progress_tracker
 
 # 创建进度跟踪器
 tracker = get_progress_tracker()

@@ -83,7 +83,7 @@ from client.src.business.agent_chat_enhancer import (
 
 # 知识库组件
 try:
-    from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
+    from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
     from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
     KB_AVAILABLE = True
 except ImportError:

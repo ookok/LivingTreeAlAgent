@@ -18,7 +18,7 @@ def test_models():
     print("测试 1: 数据模型")
     print("="*50)
 
-    from core.smolllm2.models import RouteType, IntentType, RouteDecision, SmolLM2Config
+    from client.src.business.smolllm2.models import RouteType, IntentType, RouteDecision, SmolLM2Config
 
     # 测试配置
     config = SmolLM2Config()
@@ -51,7 +51,7 @@ def test_downloader():
     print("="*50)
 
     try:
-        from core.smolllm2.downloader import find_smallest_gguf, SMOLLLM2_MANIFEST
+        from client.src.business.smolllm2.downloader import find_smallest_gguf, SMOLLLM2_MANIFEST
 
         print(f"\nSmolLM2 Manifest:")
         for k, v in SMOLLLM2_MANIFEST.items():
@@ -79,7 +79,7 @@ def test_fast_patterns():
     print("="*50)
 
     import re
-    from core.smolllm2.models import RouteType, IntentType
+    from client.src.business.smolllm2.models import RouteType, IntentType
 
     FAST_PATTERNS = {
         # 问候
@@ -121,8 +121,8 @@ def test_router_logic():
     print("测试 4: 路由器逻辑")
     print("="*50)
 
-    from core.smolllm2.router import L0Router, LRUCache
-    from core.smolllm2.models import RouteType, IntentType
+    from client.src.business.smolllm2.router import L0Router, LRUCache
+    from client.src.business.smolllm2.models import RouteType, IntentType
 
     # 测试 LRU 缓存
     cache = LRUCache(max_size=3, ttl_hours=1)
@@ -198,8 +198,8 @@ async def test_l0_router():
     print("测试 6: L0 Router（需要 Ollama）")
     print("="*50)
 
-    from core.smolllm2.router import L0Router
-    from core.smolllm2.models import SmolLM2Config
+    from client.src.business.smolllm2.router import L0Router
+    from client.src.business.smolllm2.models import SmolLM2Config
 
     router = L0Router()
 

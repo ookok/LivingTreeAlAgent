@@ -449,7 +449,7 @@ class GBrainMemoryAdapter(IMemorySystem):
     
     def store(self, item: MemoryItem) -> str:
         """存储到GBrain系统"""
-        from core.gbrain_memory.models import MemoryCategory, EvidenceSource
+        from client.src.business.gbrain_memory.models import MemoryCategory, EvidenceSource
         
         # 转换分类
         category_map = {
@@ -472,7 +472,7 @@ class GBrainMemoryAdapter(IMemorySystem):
     
     def retrieve(self, query: MemoryQuery) -> MemoryResult:
         """从GBrain系统检索"""
-        from core.gbrain_memory.models import MemoryQuery as GBrainQuery
+        from client.src.business.gbrain_memory.models import MemoryQuery as GBrainQuery
         
         gb_query = MemoryQuery(
             keywords=query.keywords or [query.query],

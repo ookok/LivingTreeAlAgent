@@ -14,12 +14,12 @@ from typing import Optional, List, Dict, Any, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.gbrain_memory.models import (
+from client.src.business.gbrain_memory.models import (
     BrainPage, MemoryCategory, TimelineEntry, EvidenceSource,
     EntityMention, MemoryQuery
 )
-from core.gbrain_memory.page_manager import PageManager
-from core.gbrain_memory.search_engine import SearchEngine
+from client.src.business.gbrain_memory.page_manager import PageManager
+from client.src.business.gbrain_memory.search_engine import SearchEngine
 
 
 class SignalType(Enum):

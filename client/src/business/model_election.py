@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 # 硬件感知 - 利用已有的 ai_capability_detector
 try:
-    from core.ai_capability_detector import AICapabilityDetector, HardwareSpec
+    from client.src.business.ai_capability_detector import AICapabilityDetector, HardwareSpec
     HARDWARE_DETECTOR_AVAILABLE = True
 except ImportError:
     HARDWARE_DETECTOR_AVAILABLE = False

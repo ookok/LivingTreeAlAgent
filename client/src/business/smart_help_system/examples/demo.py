@@ -172,7 +172,7 @@ def demo_answer_aggregator():
     aggregator = AnswerAggregator()
 
     # Simulate posts with answers
-    from core.smart_help_system.answer_monitor import MonitoredPost, Answer, MonitorStatus
+    from client.src.business.smart_help_system.answer_monitor import MonitoredPost, Answer, MonitorStatus
 
     # Create simulated posts
     post1 = MonitoredPost(

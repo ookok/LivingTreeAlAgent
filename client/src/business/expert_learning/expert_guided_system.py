@@ -41,7 +41,7 @@ def _get_hermes_agent():
     return HermesAgent
 
 def _get_skill_evolution():
-    from core.skill_evolution.agent_loop import SkillEvolutionAgent
+    from client.src.business.skill_evolution.agent_loop import SkillEvolutionAgent
     return SkillEvolutionAgent
 
 def _get_knowledge_graph():
@@ -62,7 +62,7 @@ def _get_ollama_url():
 
 def _get_industry_distiller():
     try:
-        from core.evolution.experience_optimizer import IndustryDistiller
+        from client.src.business.evolution.experience_optimizer import IndustryDistiller
         return IndustryDistiller
     except ImportError:
         return None
@@ -665,7 +665,7 @@ class ExpertGuidedLearningSystem:
             return
 
         try:
-            from core.evolution.models import DistillationCategory
+            from client.src.business.evolution.models import DistillationCategory
             self.distiller.record_behavior(
                 category=DistillationCategory.USER_HABIT,
                 keywords=self._extract_keywords(query),

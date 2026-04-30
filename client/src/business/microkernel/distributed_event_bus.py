@@ -227,7 +227,7 @@ class DistributedEventBus:
         self._redis_mgr = RedisConnectionManager(self._redis_config)
 
         # 本地事件总线（用于本地分发）
-        from core.plugin_framework.event_bus import get_event_bus
+        from client.src.business.plugin_framework.event_bus import get_event_bus
         self._local_bus = get_event_bus()
 
         # 订阅者：event_type -> List[callback]

@@ -137,7 +137,7 @@ class GlobalHintSignalBus:
         发射信号
 
         用法：
-        >>> from core.intelligent_hints.global_signals import GlobalHintSignalBus, HintSignalType, HintSignal
+        >>> from client.src.business.intelligent_hints.global_signals import GlobalHintSignalBus, HintSignalType, HintSignal
         >>> bus = GlobalHintSignalBus.get_instance()
         >>> bus.emit(HintSignal(
         ...     signal_type=HintSignalType.HINT_NEEDED,

@@ -3,6 +3,7 @@
 """
 
 from typing import Dict, Set
+from enum import Enum
 
 
 class DegradationLevel(Enum):

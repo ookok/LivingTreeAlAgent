@@ -14,7 +14,7 @@ from client.src.business.credit_economy import (
     TransactionLedger, TransactionType,
     CreditEconomyManager, get_credit_economy_manager
 )
-from core.credit_economy.credit_registry import TaskType
+from client.src.business.credit_economy.credit_registry import TaskType
 
 
 def demo_basic_scheduling():

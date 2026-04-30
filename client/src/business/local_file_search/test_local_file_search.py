@@ -130,7 +130,7 @@ def test_usn_monitor():
         print("  [SKIP] USN Journal 仅在 Windows 上可用")
         return True
     
-    from core.local_file_search.usn_monitor import is_usn_available
+    from client.src.business.local_file_search.usn_monitor import is_usn_available
     
     available = is_usn_available()
     print(f"  USN Journal 可用: {available}")

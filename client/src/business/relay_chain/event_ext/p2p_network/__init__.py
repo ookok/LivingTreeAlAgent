@@ -18,7 +18,7 @@ P2P 自组织网络 - Zero-Config Distributed System
 
 使用示例：
 ```python
-from core.relay_chain.event_ext.p2p_network import DistributedNode
+from client.src.business.relay_chain.event_ext.p2p_network import DistributedNode
 
 # 零配置启动
 node = DistributedNode()

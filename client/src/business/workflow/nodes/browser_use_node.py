@@ -54,7 +54,7 @@ class BrowserUseNode(WorkflowNode):
         """
         try:
             # 导入 browser-use 适配器
-            from core.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
+            from client.src.business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
             
             # 创建适配器
             adapter = create_browser_use_adapter()

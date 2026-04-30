@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional, Type, Callable, Set
 
 # 从业务层导入基础设施
 from ..enhanced_event_bus import EnhancedEventBus, get_enhanced_event_bus
-from core.plugin_framework.plugin_manager import PluginManager, get_plugin_manager
-from core.plugin_framework.base_plugin import BasePlugin, PluginManifest
+from ..plugin_framework.event_bus import EventBus
+from ..plugin_framework.plugin_manager import PluginManager, get_plugin_manager
+from ..plugin_framework.base_plugin import BasePlugin, PluginManifest
 
 from .service_registry import ServiceRegistry, ServiceDescriptor
 from .extension_point import ExtensionPointManager, ExtensionPoint

@@ -193,7 +193,7 @@ class UnifiedPipeline:
     def intent_classifier(self):
         """L0 意图分类器"""
         if self._intent_classifier is None:
-            from core.fusion_rag.intent_classifier import QueryIntentClassifier
+            from client.src.business.fusion_rag.intent_classifier import QueryIntentClassifier
             self._intent_classifier = QueryIntentClassifier()
         return self._intent_classifier
     
@@ -201,7 +201,7 @@ class UnifiedPipeline:
     def router(self):
         """智能路由器"""
         if self._router is None:
-            from core.fusion_rag.intelligent_router import IntelligentRouter
+            from client.src.business.fusion_rag.intelligent_router import IntelligentRouter
             self._router = IntelligentRouter()
         return self._router
     
@@ -209,7 +209,7 @@ class UnifiedPipeline:
     def knowledge_base(self):
         """知识库"""
         if self._knowledge_base is None:
-            from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
+            from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
             self._knowledge_base = KnowledgeBaseLayer()
         return self._knowledge_base
     
@@ -225,7 +225,7 @@ class UnifiedPipeline:
     def wiki_generator(self):
         """Wiki 生成器"""
         if self._wiki_generator is None:
-            from core.deep_search_wiki.wiki_generator import WikiGenerator
+            from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
             self._wiki_generator = WikiGenerator()
         return self._wiki_generator
     
@@ -233,7 +233,7 @@ class UnifiedPipeline:
     def skill_agent(self):
         """技能进化 Agent"""
         if self._skill_agent is None:
-            from core.skill_evolution.agent_loop import SkillEvolutionAgent
+            from client.src.business.skill_evolution.agent_loop import SkillEvolutionAgent
             self._skill_agent = SkillEvolutionAgent()
         return self._skill_agent
     
@@ -249,7 +249,7 @@ class UnifiedPipeline:
     def memory_palace(self):
         """记忆宫殿"""
         if self._memory_palace is None:
-            from core.memory_palace.models import MemoryPalace
+            from client.src.business.memory_palace.models import MemoryPalace
             self._memory_palace = MemoryPalace()
         return self._memory_palace
     

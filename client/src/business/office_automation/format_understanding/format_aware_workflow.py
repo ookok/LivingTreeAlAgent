@@ -28,11 +28,11 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable, Tuple
 
-from core.office_automation.format_understanding.format_parser import FormatParser, FormatInfo
-from core.office_automation.format_understanding.format_graph import FormatGraph, FormatNode, NodeType
-from core.office_automation.format_understanding.format_semantic import FormatSemanticModel, FormatIntent
-from core.office_automation.format_understanding.format_evaluator import FormatEvaluator, QualityMetrics
-from core.office_automation.format_understanding.format_knowledge import FormatKnowledgeBase
+from client.src.business.office_automation.format_understanding.format_parser import FormatParser, FormatInfo
+from client.src.business.office_automation.format_understanding.format_graph import FormatGraph, FormatNode, NodeType
+from client.src.business.office_automation.format_understanding.format_semantic import FormatSemanticModel, FormatIntent
+from client.src.business.office_automation.format_understanding.format_evaluator import FormatEvaluator, QualityMetrics
+from client.src.business.office_automation.format_understanding.format_knowledge import FormatKnowledgeBase
 
 logger = logging.getLogger(__name__)
 

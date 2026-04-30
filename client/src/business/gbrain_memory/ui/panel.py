@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QAction
 
-from core.gbrain_memory.agent_loop import BrainAgentLoop
-from core.gbrain_memory.models import (
+from client.src.business.gbrain_memory.agent_loop import BrainAgentLoop
+from client.src.business.gbrain_memory.models import (
     BrainPage, MemoryCategory, CATEGORY_STRUCTURE, EvidenceSource
 )
 
@@ -418,7 +418,7 @@ class GBrainPanel(QWidget):
             return
 
         # 执行搜索
-        from core.gbrain_memory.models import MemoryQuery
+        from client.src.business.gbrain_memory.models import MemoryQuery
 
         keywords = query.split()
         search_results = self.brain_agent.search_engine.search(
@@ -502,7 +502,7 @@ class GBrainPanel(QWidget):
         if not self.brain_agent:
             return
 
-        from core.gbrain_memory.sync import SyncManager
+        from client.src.business.gbrain_memory.sync import SyncManager
         sync = SyncManager()
         result = sync.export_all()
 

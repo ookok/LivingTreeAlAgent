@@ -264,9 +264,9 @@ class EIAReport:
 
 
 # 导入核心组件
-from core.eia_process.agents.process_parser import ProcessParser
-from core.eia_process.agents.process_expander import ProcessExpander
-from core.eia_process.agents.eia_analyst import EIAAnalyst
-from core.eia_process.agents.visualization_agent import VisualizationAgent
-from core.eia_process.knowledge.knowledge_base import EIAProcessKnowledgeBase
-from core.eia_process.eia_process_manager import EIAProcessManager
+from client.src.business.eia_process.agents.process_parser import ProcessParser
+from client.src.business.eia_process.agents.process_expander import ProcessExpander
+from client.src.business.eia_process.agents.eia_analyst import EIAAnalyst
+from client.src.business.eia_process.agents.visualization_agent import VisualizationAgent
+from client.src.business.eia_process.knowledge.knowledge_base import EIAProcessKnowledgeBase
+from client.src.business.eia_process.eia_process_manager import EIAProcessManager

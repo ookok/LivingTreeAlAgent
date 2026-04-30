@@ -10,8 +10,8 @@ sys.path.insert(0, '.')
 
 def test_credibility_evaluator():
     """测试可信度评估器"""
-    from core.deep_search_wiki.credibility import CredibilityEvaluator
-    from core.deep_search_wiki.models import SourceInfo, SourceType
+    from client.src.business.deep_search_wiki.credibility import CredibilityEvaluator
+    from client.src.business.deep_search_wiki.models import SourceInfo, SourceType
     from datetime import datetime, timedelta
     
     print("\n" + "="*60)
@@ -72,7 +72,7 @@ def test_credibility_evaluator():
 
 def test_search_engine():
     """测试搜索引擎"""
-    from core.deep_search_wiki.search_engine import SmartSearchEngine
+    from client.src.business.deep_search_wiki.search_engine import SmartSearchEngine
     
     print("\n" + "="*60)
     print("测试2: 智能搜索引擎")
@@ -110,7 +110,7 @@ def test_search_engine():
 
 def test_wiki_generator():
     """测试Wiki生成器"""
-    from core.deep_search_wiki.wiki_generator import WikiGenerator
+    from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
     
     print("\n" + "="*60)
     print("测试3: Wiki生成器")
@@ -144,7 +144,7 @@ def test_wiki_generator():
 
 def test_markdown_output():
     """测试Markdown输出"""
-    from core.deep_search_wiki.wiki_generator import WikiGenerator
+    from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
     
     print("\n" + "="*60)
     print("测试4: Markdown输出")
@@ -163,7 +163,7 @@ def test_markdown_output():
 
 async def test_async_generate():
     """测试异步生成"""
-    from core.deep_search_wiki.wiki_generator import DeepSearchWikiSystem
+    from client.src.business.deep_search_wiki.wiki_generator import DeepSearchWikiSystem
     
     print("\n" + "="*60)
     print("测试5: 异步Wiki生成")

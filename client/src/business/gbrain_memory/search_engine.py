@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 
-from core.gbrain_memory.models import (
+from client.src.business.gbrain_memory.models import (
     BrainPage, MemoryCategory, MemoryQuery, MemorySearchResult
 )
 

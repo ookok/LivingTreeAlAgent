@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 
-from core.gbrain_memory.models import (
+from client.src.business.gbrain_memory.models import (
     BrainPage, MemoryCategory, TimelineEntry, CompiledTruth,
     EvidenceSource, CATEGORY_STRUCTURE
 )

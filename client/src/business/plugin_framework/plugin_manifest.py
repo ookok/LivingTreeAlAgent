@@ -370,7 +370,7 @@ __all__ = ['{to_class_name(plugin_id)}Plugin']
 {plugin_id} 主插件文件
 """
 
-from core.plugin_framework.base_plugin import (
+from client.src.business.plugin_framework.base_plugin import (
     BasePlugin, PluginManifest, PluginType,
     ViewPreference, ViewMode
 )

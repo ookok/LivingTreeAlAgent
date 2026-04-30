@@ -16,12 +16,12 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
-from core.knowledge_vector_db_persistent import (
+from client.src.business.knowledge_vector_db_persistent import (
     PersistentKnowledgeBase,
     ChineseTypoCorrector,
     TypoCorrection
 )
-from core.search_engine_monitor import SearchEngineMonitor, EngineStatus
+from client.src.business.search_engine_monitor import SearchEngineMonitor, EngineStatus
 
 
 class SearchSource(Enum):

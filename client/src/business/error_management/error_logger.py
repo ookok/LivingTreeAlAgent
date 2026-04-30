@@ -33,8 +33,8 @@ from typing import Any, Dict, Optional, List, Tuple
 from pathlib import Path
 
 # 导入现有的日志系统
-from core.intelligent_diagnosis.structured_logger import get_logger, ErrorCategory
-from core.intelligent_diagnosis.diagnosis_engine import get_diagnosis_engine, DiagnosisResult
+from client.src.business.intelligent_diagnosis.structured_logger import get_logger, ErrorCategory
+from client.src.business.intelligent_diagnosis.diagnosis_engine import get_diagnosis_engine, DiagnosisResult
 
 # 全局错误日志目录
 _ERROR_LOG_DIR = Path.home() / ".living_tree_ai" / "errors"

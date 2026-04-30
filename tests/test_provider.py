@@ -24,9 +24,9 @@ import pytest
 # ── 确保 provider 包可导入 ──────────────────────────────────────
 
 import sys
-sys.path.insert(0, "d:/git-lvai/LivingTreeAlAgent")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.provider.base import (
+from client.src.business.provider.base import (
     DriverMode, DriverState,
     ChatMessage, ChatRequest, ChatResponse,
     CompletionRequest, CompletionResponse,
@@ -34,13 +34,13 @@ from core.provider.base import (
     StreamChunk, UsageInfo,
     HealthReport, ModelDriver,
 )
-from core.provider.gateway import ModelGateway, RouteStrategy
-from core.provider.fault_tolerance import (
+from client.src.business.provider.gateway import ModelGateway, RouteStrategy
+from client.src.business.provider.fault_tolerance import (
     FaultToleranceManager, DegradationStrategy,
     CircuitBreaker, CircuitState,
 )
-from core.provider.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
-from core.provider.config_manager import (
+from client.src.business.provider.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
+from client.src.business.provider.config_manager import (
     ProviderConfigManager, ProviderConfig,
     ModelSlotConfig, ABTestConfig,
 )
@@ -667,7 +667,7 @@ class TestHardLoadRegistry:
     """硬加载注册表测试"""
 
     def test_register_and_create(self):
-        from core.provider.hard_load.registry import (
+        from client.src.business.provider.hard_load.registry import (
             register_hard_backend,
             get_hard_backend,
             list_backends,
@@ -713,8 +713,8 @@ class TestHardLoadRegistry:
         driver = create_hard_driver("mock_backend", name="test-mock")
         assert driver.name == "test-mock"
 
-    def test_create_unknown_backend(self):
-        from core.provider.hard_load.registry import create_hard_driver
+    def test_create_unknown_backend(self):        
+        from client.src.business.provider.hard_load.registry import create_hard_driver
         with pytest.raises(ValueError, match="未知硬加载后端"):
             create_hard_driver("nonexistent_backend")
 

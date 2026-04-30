@@ -303,7 +303,7 @@ class UnifiedPublisher:
 
         try:
             # 构建邮件消息
-            from core.decentralized_mailbox.models import MailMessage, MailboxAddress
+            from client.src.business.decentralized_mailbox.models import MailMessage, MailboxAddress
 
             msg = MailMessage(
                 message_id=str(uuid.uuid4()),
@@ -363,7 +363,7 @@ class UnifiedPublisher:
         # 使用 Forum 模型发布博客文章
 
         try:
-            from core.forum.models import (
+            from client.src.business.forum.models import (
                 ForumPost, Author, PostContent, ContentType,
                 PostStatus, generate_post_id
             )
@@ -419,7 +419,7 @@ class UnifiedPublisher:
     ) -> PublishResult:
         """发布论坛帖子"""
         try:
-            from core.forum.models import (
+            from client.src.business.forum.models import (
                 ForumPost, Author, PostContent, ContentType,
                 PostStatus, generate_post_id
             )

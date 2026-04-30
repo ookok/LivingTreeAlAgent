@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC, abstractmethod
 
-from core.enterprise.node_manager import EnterpriseNode
-from core.enterprise.task_scheduler import EnterpriseTask, TaskType, TaskState
+from client.src.business.enterprise.node_manager import EnterpriseNode
+from client.src.business.enterprise.task_scheduler import EnterpriseTask, TaskType, TaskState
 
 logger = logging.getLogger(__name__)
 

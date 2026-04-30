@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Set, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.enterprise.node_manager import EnterpriseNodeManager, get_enterprise_manager, EnterpriseNode
+from client.src.business.enterprise.node_manager import EnterpriseNodeManager, get_enterprise_manager, EnterpriseNode
 from client.src.business.task_queue import TaskQueue, get_task_queue, QueuedTask, QueuePriority
 from .intelligent_router import get_intelligent_router, get_cost_optimizer
 

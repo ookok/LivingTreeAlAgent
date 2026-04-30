@@ -5,7 +5,7 @@
 """
 
 import asyncio
-from core.living_tree_ai.distributed_ai import (
+from client.src.business.living_tree_ai.distributed_ai import (
     # 核心组件
     CentralBrain,
     IntentCollector,

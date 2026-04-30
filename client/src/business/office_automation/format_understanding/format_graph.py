@@ -561,7 +561,7 @@ class FormatGraph:
     @staticmethod
     def _element_type_to_node_type(elem_type) -> NodeType:
         """元素类型转换"""
-        from core.office_automation.format_understanding.format_parser import ElementType
+        from client.src.business.office_automation.format_understanding.format_parser import ElementType
 
         mapping = {
             ElementType.PARAGRAPH: NodeType.PARAGRAPH,

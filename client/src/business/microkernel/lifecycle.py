@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Callable, Set
 import logging
 
 # 从 plugin_framework 导入基础设施
-from core.plugin_framework.event_bus import EventBus, get_event_bus
+from client.src.business.plugin_framework.event_bus import EventBus, get_event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class LifecycleManager:
         if not self._event_bus:
             return
         try:
-            from core.plugin_framework.event_bus import Event
+            from client.src.business.plugin_framework.event_bus import Event
             event_obj = Event(
                 type=f"lifecycle.{event.value if event else 'unknown'}",
                 data={

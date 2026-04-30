@@ -338,9 +338,14 @@ class PromptCacheManager:
 
 
 # 便捷函数
-def get_prompt_cache() -> PromptCacheManager:
+def get_prompt_cache() -> PromptCacheManager:     
     """获取Prompt缓存管理器单例"""
     return PromptCacheManager()
+
+
+def get_prompt_cache_manager() -> PromptCacheManager:
+    """获取Prompt缓存管理器单例（兼容旧接口）"""
+    return get_prompt_cache()
 
 
 __all__ = [
@@ -350,4 +355,5 @@ __all__ = [
     "CacheStats",
     "PromptCacheManager",
     "get_prompt_cache",
+    "get_prompt_cache_manager",
 ]

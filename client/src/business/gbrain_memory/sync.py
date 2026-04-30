@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from core.gbrain_memory.page_manager import PageManager
+from client.src.business.gbrain_memory.page_manager import PageManager
 
 
 class SyncStatus(Enum):
@@ -441,7 +441,7 @@ backups/
                 content = md_file.read_text(encoding="utf-8")
 
                 # 解析页面
-                from core.gbrain_memory.models import BrainPage
+                from client.src.business.gbrain_memory.models import BrainPage
                 page = BrainPage.from_markdown(content)
 
                 # 检查是否已存在

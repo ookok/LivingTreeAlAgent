@@ -39,44 +39,44 @@ def _import_l04_components():
     components = {}
 
     try:
-        from core.fusion_rag.intent_classifier import QueryIntentClassifier
+        from client.src.business.fusion_rag.intent_classifier import QueryIntentClassifier
         components["intent_classifier"] = QueryIntentClassifier
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
+        from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
         components["knowledge_base"] = KnowledgeBaseLayer
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.session_cache import SessionCacheLayer
+        from client.src.business.fusion_rag.session_cache import SessionCacheLayer
         components["session_cache"] = SessionCacheLayer
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.exact_cache import ExactCacheLayer
+        from client.src.business.fusion_rag.exact_cache import ExactCacheLayer
         components["exact_cache"] = ExactCacheLayer
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.l4_executor import get_l4_executor, L4RelayExecutor
+        from client.src.business.fusion_rag.l4_executor import get_l4_executor, L4RelayExecutor
         components["l4_executor"] = get_l4_executor
         components["l4_class"] = L4RelayExecutor
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.intelligent_router import IntelligentRouter
+        from client.src.business.fusion_rag.intelligent_router import IntelligentRouter
         components["router"] = IntelligentRouter
     except ImportError:
         pass
 
     try:
-        from core.fusion_rag.fusion_engine import FusionEngine
+        from client.src.business.fusion_rag.fusion_engine import FusionEngine
         components["fusion_engine"] = FusionEngine
     except ImportError:
         pass
@@ -1297,7 +1297,7 @@ class L04IntegratedRecursiveLearner:
 
         if "fusion_engine" in L04_COMPONENTS:
             try:
-                from core.fusion_rag.l4_executor import get_l4_executor
+                from client.src.business.fusion_rag.l4_executor import get_l4_executor
                 self.fusion_engine = L04_COMPONENTS["fusion_engine"](
                     l4_executor=get_l4_executor()
                 )

@@ -16,17 +16,17 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QToolBar,
     QLabel, QStackedWidget, QSplitter,
     QTreeWidget, QTreeWidgetItem, QMenu,
-    QAction, QSystemTrayIcon, QInputDialog,
+    QSystemTrayIcon, QInputDialog,
     QFileDialog, QScrollArea,
 )
-from PyQt6.QtGui import QAction as QPyAction, QIcon, QFont
+from PyQt6.QtGui import QAction, QIcon, QFont
 from PyQt6.QtGui import QPainter, QColor
 
-from core.plugin_framework.base_plugin import (
+from client.src.business.plugin_framework.base_plugin import (
     BasePlugin, PluginManifest, PluginType,
     ViewPreference, ViewMode
 )
-from core.plugin_framework.event_bus import Event
+from client.src.business.plugin_framework.event_bus import Event
 
 
 @dataclass

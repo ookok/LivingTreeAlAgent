@@ -4,6 +4,7 @@
 
 import asyncio
 from typing import Any, Callable, Dict, Optional
+from enum import Enum
 
 
 class TaskPriority(Enum):

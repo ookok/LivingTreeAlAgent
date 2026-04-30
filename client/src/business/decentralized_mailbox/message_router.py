@@ -279,7 +279,7 @@ class MessageRouter:
         try:
             # 复用 lightweight_ui 的 relay_client
             if self._relay_client is None:
-                from core.lightweight_ui.relay_client import RelayClient, RelayServerConfig
+                from client.src.business.lightweight_ui.relay_client import RelayClient, RelayServerConfig
                 
                 config = RelayServerConfig(
                     host=self.relay_config["host"],

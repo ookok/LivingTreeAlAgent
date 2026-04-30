@@ -28,11 +28,11 @@ try:
         FFmpegTool, FFmpegRecorder, FFmpegPipeline,
         get_ffmpeg, PRESET_BALANCED
     )
-    from core.webrtc.ffmpeg_recorder import (
+    from client.src.business.webrtc.ffmpeg_recorder import (
         RecordingManager, RecordingSession, RecordingState,
         get_recording_manager
     )
-    from core.webrtc.ffmpeg_streamer import (
+    from client.src.business.webrtc.ffmpeg_streamer import (
         RTMPStreamer, StreamSession, StreamState,
         PROFILES, get_rtmp_streamer
     )

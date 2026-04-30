@@ -128,7 +128,7 @@ class L0L4IntegratedExecutor:
         if self._l4_executor is None:
             # 懒加载 L4 执行器
             try:
-                from core.fusion_rag.l4_executor import L4RelayExecutor
+                from client.src.business.fusion_rag.l4_executor import L4RelayExecutor
                 self._l4_executor = L4RelayExecutor()
             except ImportError:
                 raise RuntimeError("L4 执行器不可用，请检查 fusion_rag 模块")

@@ -14,10 +14,10 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
 # 复用现有组件
-from core.fusion_rag.intent_classifier import QueryIntentClassifier
-from core.fusion_rag.intelligent_router import IntelligentRouter
-from core.search.result_fusion import ResultFusion
-from core.fusion_rag.l4_aware_router import L4AwareRouter
+from client.src.business.fusion_rag.intent_classifier import QueryIntentClassifier
+from client.src.business.fusion_rag.intelligent_router import IntelligentRouter
+from client.src.business.search.result_fusion import ResultFusion
+from client.src.business.fusion_rag.l4_aware_router import L4AwareRouter
 
 
 @dataclass
@@ -137,7 +137,7 @@ class KnowledgeRouter:
         # KnowledgeBaseLayer
         if "knowledge_base" in layers:
             try:
-                from core.fusion_rag.knowledge_base import KnowledgeBaseLayer
+                from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
                 kb = KnowledgeBaseLayer()
                 kb_results = kb.search(query, top_k=top_k)
                 results.extend(kb_results if kb_results else [])
@@ -147,7 +147,7 @@ class KnowledgeRouter:
         # PageIndex
         if "exact_cache" in layers:
             try:
-                from core.page_index.index_builder import PageIndexBuilder
+                from client.src.business.page_index.index_builder import PageIndexBuilder
                 pi = PageIndexBuilder()
                 pi_results = pi.search(query, top_k=top_k)
                 results.extend(pi_results if pi_results else [])

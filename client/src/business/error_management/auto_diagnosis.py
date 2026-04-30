@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
-from core.error_management.error_logger import get_error_logger, ErrorType, ErrorSeverity
+from client.src.business.error_management.error_logger import get_error_logger, ErrorType, ErrorSeverity
 
 # 全局诊断配置
 _DIAGNOSIS_CONFIG = {

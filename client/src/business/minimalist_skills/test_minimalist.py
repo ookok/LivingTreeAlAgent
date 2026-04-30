@@ -26,7 +26,7 @@ def test_import():
     print("Module Import Test")
     print("=" * 50)
     try:
-        from client.src.business.minimalist_skills import (
+        from business.minimalist_skills import (
             MinimalistSkillLoader,
             MinimalistSkill,
             SkillCategory,
@@ -46,7 +46,7 @@ def test_loader():
     print("Loader Test")
     print("=" * 50)
 
-    from client.src.business.minimalist_skills import MinimalistSkillLoader
+    from business.minimalist_skills import MinimalistSkillLoader
 
     # 创建加载器
     loader = MinimalistSkillLoader()
@@ -67,7 +67,7 @@ def test_get_skill():
     print("Get Skill Test")
     print("=" * 50)
 
-    from client.src.business.minimalist_skills import get_skill_loader
+    from business.minimalist_skills import get_skill_loader
 
     loader = get_skill_loader()
 
@@ -92,7 +92,7 @@ def test_skill_prompt():
     print("Skill Prompt Test")
     print("=" * 50)
 
-    from client.src.business.minimalist_skills import get_skill_loader
+    from business.minimalist_skills import get_skill_loader
 
     loader = get_skill_loader()
 
@@ -118,7 +118,7 @@ def test_categories():
     print("Categories Test")
     print("=" * 50)
 
-    from client.src.business.minimalist_skills import get_skill_loader, SkillCategory
+    from business.minimalist_skills import get_skill_loader, SkillCategory
 
     loader = get_skill_loader()
 
@@ -141,7 +141,7 @@ def test_skill_info():
     print("Skill Info Test")
     print("=" * 50)
 
-    from client.src.business.minimalist_skills import get_skill_loader
+    from business.minimalist_skills import get_skill_loader
 
     loader = get_skill_loader()
 

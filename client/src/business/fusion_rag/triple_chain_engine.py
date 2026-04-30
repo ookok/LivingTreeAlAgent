@@ -25,7 +25,7 @@ from datetime import datetime
 
 # 集成 LLM Wiki 模块
 try:
-    from client.src.business.llm_wiki import (
+    from business.llm_wiki import (
         HybridRetriever,
         FeedbackManager,
         KnowledgeGraphSelfEvolver,
@@ -37,7 +37,7 @@ except ImportError:
 
 # 集成记忆图引擎（VimRAG 扩展）
 try:
-    from client.src.business.memory_graph_engine import (
+    from business.memory_graph_engine import (
         get_memory_graph_engine,
         NodeType,
         RelationType

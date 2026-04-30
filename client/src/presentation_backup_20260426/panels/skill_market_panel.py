@@ -31,7 +31,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from client.src.business.skill_market import (
+from .business.skill_market import (
     Skill, SkillManifest, SkillDatabase,
     SkillStatus, SkillCategory
 )

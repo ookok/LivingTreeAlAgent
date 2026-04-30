@@ -314,7 +314,7 @@ class WebRTCPanel(QWidget):
     def _check_ffmpeg_status(self):
         """检查 FFmpeg 状态"""
         try:
-            from client.src.business.ffmpeg_tool import get_ffmpeg
+            from .business.ffmpeg_tool import get_ffmpeg
             ffmpeg = get_ffmpeg()
             if ffmpeg.available:
                 info = ffmpeg.version_info()
@@ -395,7 +395,7 @@ class WebRTCPanel(QWidget):
         # FFmpeg status callback
         def get_ffmpeg_status():
             try:
-                from client.src.business.ffmpeg_tool import get_ffmpeg
+                from .business.ffmpeg_tool import get_ffmpeg
                 ffmpeg = get_ffmpeg()
                 return {"available": ffmpeg.available}
             except:
@@ -454,7 +454,7 @@ class WebRTCPanel(QWidget):
     async def _start_server_async(self):
         """异步启动服务器"""
         try:
-            from client.src.business.webrtc import SignalingServer
+            from .business.webrtc import SignalingServer
             self.signaling_server = SignalingServer(
                 host=self._config["signaling_host"],
                 port=self._config["signaling_port"]
@@ -515,7 +515,7 @@ class WebRTCPanel(QWidget):
     async def _inject_ice_config_async(self):
         """异步注入 ICE 配置"""
         try:
-            from client.src.business.webrtc import select_best_ice_config
+            from .business.webrtc import select_best_ice_config
 
             config = await select_best_ice_config(
                 cloud_turn_url=self.turn_url_input.text(),
@@ -547,7 +547,7 @@ class WebRTCPanel(QWidget):
 
             async def probe():
                 try:
-                    from client.src.business.webrtc import select_best_ice_config
+                    from .business.webrtc import select_best_ice_config
 
                     result = await select_best_ice_config(
                         cloud_turn_url=self.turn_url_input.text(),

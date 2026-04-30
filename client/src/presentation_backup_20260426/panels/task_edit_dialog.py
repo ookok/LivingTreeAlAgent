@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from client.src.business.enhanced_task import Task, TaskPriority
+from .business.enhanced_task import Task, TaskPriority
 
 
 class TaskEditDialog(QDialog):

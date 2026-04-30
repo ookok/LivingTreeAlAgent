@@ -211,7 +211,7 @@ class RegulationSearchPanel(QWidget):
     def init_database(self):
         """初始化数据库"""
         try:
-            from client.src.business.regulation_vector_db import create_regulation_db, RegulationLaw
+            from .business.regulation_vector_db import create_regulation_db, RegulationLaw
 
             # 尝试加载已存在的数据库
             db_path = "./data/regulations"
@@ -383,7 +383,7 @@ class RegulationSearchPanel(QWidget):
             return False
 
         try:
-            from client.src.business.regulation_vector_db import RegulationLaw
+            from .business.regulation_vector_db import RegulationLaw
 
             law = RegulationLaw.from_dict(law_data)
             success = self.db.add_law(law)

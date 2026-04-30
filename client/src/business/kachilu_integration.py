@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 
 from browser_use import Agent, Browser
 
-from client.src.business.living_tree_ai.browser_gateway.browser_pool import BrowserSession
-from client.src.business.living_tree_ai.browser_gateway.security_manager import SecurityManager
+from business.living_tree_ai.browser_gateway.browser_pool import BrowserSession
+from business.living_tree_ai.browser_gateway.security_manager import SecurityManager
 
 
 @dataclass

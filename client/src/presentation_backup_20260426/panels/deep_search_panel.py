@@ -574,7 +574,7 @@ class DeepSearchPanel(QWidget):
             self._intelligence_hub = None
 
         try:
-            from client.src.business.deep_search_wiki import get_wiki_system
+            from .business.deep_search_wiki import get_wiki_system
             self._wiki_system = get_wiki_system()
             logger.info("DeepSearchWikiSystem 初始化成功")
         except ImportError as e:

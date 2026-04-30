@@ -14,9 +14,8 @@
 
 from typing import Dict, Type, Optional, Callable, Any
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import QObject, pyqtSignal
 
-from ..theme import theme_manager
+from ..theme.theme_manager import theme_manager
 
 
 class Route:
@@ -50,7 +49,7 @@ class Route:
         self._instance = None
 
 
-class Router(QObject):
+class Router:
     """
     路由管理器（单例）
 
@@ -60,11 +59,10 @@ class Router(QObject):
         router.navigate_to("chat")
     """
 
-    route_changed = pyqtSignal(str)  # new_route_id
-    route_registered = pyqtSignal(Route)
-
     _instance = None
     _initialized = False
+    _route_changed_listeners = []
+    _route_registered_listeners = []
 
     def __new__(cls):
         if cls._instance is None:
@@ -74,7 +72,6 @@ class Router(QObject):
     def __init__(self):
         if self._initialized:
             return
-        super().__init__()
         self._initialized = True
         self._routes: Dict[str, Route] = {}
         self._current_route: Optional[str] = None
@@ -84,10 +81,34 @@ class Router(QObject):
         """设置父窗口（用于创建面板实例）"""
         self._parent = parent
 
+    def register_route_changed_listener(self, listener):
+        """注册路由变更监听器"""
+        self._route_changed_listeners.append(listener)
+
+    def register_route_registered_listener(self, listener):
+        """注册路由注册监听器"""
+        self._route_registered_listeners.append(listener)
+
+    def _emit_route_changed(self, route_id):
+        """触发路由变更事件"""
+        for listener in self._route_changed_listeners:
+            try:
+                listener(route_id)
+            except:
+                pass
+
+    def _emit_route_registered(self, route):
+        """触发路由注册事件"""
+        for listener in self._route_registered_listeners:
+            try:
+                listener(route)
+            except:
+                pass
+
     def register(self, route: Route):
         """注册路由"""
         self._routes[route.route_id] = route
-        self.route_registered.emit(route)
+        self._emit_route_registered(route)
 
     def register_many(self, routes: list[Route]):
         """批量注册路由"""
@@ -106,7 +127,7 @@ class Router(QObject):
         self._current_route = route_id
         route = self._routes[route_id]
         instance = route.get_instance(self._parent)
-        self.route_changed.emit(route_id)
+        self._emit_route_changed(route_id)
         return instance
 
     def get_route(self, route_id: str) -> Optional[Route]:
@@ -128,4 +149,7 @@ class Router(QObject):
 
 def get_router() -> Router:
     """获取路由管理器单例"""
-    return Router()
+    print("    get_router: Creating Router instance...")
+    result = Router()
+    print("    get_router: Router instance created")
+    return result

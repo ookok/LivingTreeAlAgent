@@ -15,7 +15,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 import httpx
 
-from client.src.business.model_layer_config import (
+from business.model_layer_config import (
     ModelTier, ServiceStatus, DeployMode,
     ModelDefinition, LayerConfig, LayerDeploymentConfig,
     L0_L4_MODELS, get_default_model_for_tier,
@@ -24,11 +24,11 @@ from client.src.business.model_layer_config import (
 
 # 导入配置获取函数
 try:
-    from client.src.business.config import get_config
+    from business.config import get_config
 except ImportError:
     get_config = None
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('deployment_engine')
 
 

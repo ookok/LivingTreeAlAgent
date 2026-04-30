@@ -8,7 +8,7 @@ import asyncio
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from client.src.business.multi_path_explorer import (
+from business.multi_path_explorer import (
     MultiPathExplorer,
     ExplorerConfig,
     PathType,
@@ -158,7 +158,7 @@ async def test_evaluator():
     evaluator = PathEvaluator()
     
     # 创建测试路径
-    from client.src.business.multi_path_explorer import PathNode, PathStatus
+    from business.multi_path_explorer import PathNode, PathStatus
     
     path = ExplorationPath(
         path_id="test_path",
@@ -209,7 +209,7 @@ async def test_adaptive_evaluator():
     print("测试4: 自适应评估器")
     print("="*50)
     
-    from client.src.business.multi_path_explorer import AdaptiveEvaluator
+    from business.multi_path_explorer import AdaptiveEvaluator
     
     evaluator = AdaptiveEvaluator()
     
@@ -235,7 +235,7 @@ async def test_path_merger():
     print("测试5: 路径合并")
     print("="*50)
     
-    from client.src.business.multi_path_explorer import (
+    from business.multi_path_explorer import (
         PathMergerFactory,
         MergeStrategy,
         MergeConfig,

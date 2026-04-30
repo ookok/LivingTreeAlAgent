@@ -78,7 +78,7 @@ class UnifiedRAGService:
         """初始化RAG组件"""
         # 1. FusionEngine（核心融合引擎）
         try:
-            from client.src.business.fusion_rag.fusion_engine import FusionEngine
+            from business.fusion_rag.fusion_engine import FusionEngine
             self._fusion_engine = FusionEngine()
             self._logger.info("✓ 集成 FusionEngine")
         except Exception as e:
@@ -86,7 +86,7 @@ class UnifiedRAGService:
         
         # 2. KnowledgeBase（知识库）
         try:
-            from client.src.business.fusion_rag.knowledge_base import KnowledgeBase
+            from business.fusion_rag.knowledge_base import KnowledgeBase
             self._knowledge_base = KnowledgeBase()
             self._logger.info("✓ 集成 KnowledgeBase")
         except Exception as e:
@@ -94,7 +94,7 @@ class UnifiedRAGService:
         
         # 3. IntentClassifier（意图分类）
         try:
-            from client.src.business.fusion_rag.intent_classifier import QueryIntentClassifier
+            from business.fusion_rag.intent_classifier import QueryIntentClassifier
             self._intent_classifier = QueryIntentClassifier()
             self._logger.info("✓ 集成 QueryIntentClassifier")
         except Exception as e:
@@ -102,7 +102,7 @@ class UnifiedRAGService:
         
         # 4. MultiModalRetriever（多模态检索）
         try:
-            from client.src.business.fusion_rag.multi_modal_retriever import MultiModalRetriever
+            from business.fusion_rag.multi_modal_retriever import MultiModalRetriever
             self._multi_modal_retriever = MultiModalRetriever()
             self._logger.info("✓ 集成 MultiModalRetriever")
         except Exception as e:
@@ -110,7 +110,7 @@ class UnifiedRAGService:
         
         # 5. Reranker（重排序）
         try:
-            from client.src.business.fusion_rag.reranker import Reranker
+            from business.fusion_rag.reranker import Reranker
             self._reranker = Reranker()
             self._logger.info("✓ 集成 Reranker")
         except Exception as e:
@@ -118,7 +118,7 @@ class UnifiedRAGService:
         
         # 6. SessionCache（会话缓存）
         try:
-            from client.src.business.fusion_rag.session_cache import SessionCache
+            from business.fusion_rag.session_cache import SessionCache
             self._session_cache = SessionCache()
             self._logger.info("✓ 集成 SessionCache")
         except Exception as e:
@@ -126,7 +126,7 @@ class UnifiedRAGService:
         
         # 7. ExactCache（精确缓存）
         try:
-            from client.src.business.fusion_rag.exact_cache import ExactCache
+            from business.fusion_rag.exact_cache import ExactCache
             self._exact_cache = ExactCache()
             self._logger.info("✓ 集成 ExactCache")
         except Exception as e:

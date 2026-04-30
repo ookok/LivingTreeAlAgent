@@ -24,15 +24,15 @@ logger = logging.getLogger(__name__)
 
 # 导入 FFmpeg 模块
 try:
-    from client.src.business.ffmpeg_tool import (
+    from business.ffmpeg_tool import (
         FFmpegTool, FFmpegRecorder, FFmpegPipeline,
         get_ffmpeg, PRESET_BALANCED
     )
-    from client.src.business.webrtc.ffmpeg_recorder import (
+    from business.webrtc.ffmpeg_recorder import (
         RecordingManager, RecordingSession, RecordingState,
         get_recording_manager
     )
-    from client.src.business.webrtc.ffmpeg_streamer import (
+    from business.webrtc.ffmpeg_streamer import (
         RTMPStreamer, StreamSession, StreamState,
         PROFILES, get_rtmp_streamer
     )

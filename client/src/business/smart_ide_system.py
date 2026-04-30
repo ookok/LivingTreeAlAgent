@@ -8,27 +8,27 @@ import asyncio
 from typing import Dict, List, Optional, Any
 
 # 导入现有组件
-from client.src.business.smart_ide_game.ai_coding_assistant import AICodingAssistant, TaskType, AITask
-from client.src.business.model_hub.manager import ModelHubManager
-from client.src.business.model_store.store_manager import ModelStoreManager
-from client.src.business.rag_anything import MultimodalRAGPipeline, CrossModalKnowledgeGraph
-from client.src.business.multimodal_support import MultimodalManager
-from client.src.business.tier_model.intelligent_router import IntelligentRouter
-from client.src.business.fusion_rag.l4_aware_router import L4AwareRouter
-from client.src.business.smolllm2.l0_integration import L0Router
+from business.smart_ide_game.ai_coding_assistant import AICodingAssistant, TaskType, AITask
+from business.model_hub.manager import ModelHubManager
+from business.model_store.store_manager import ModelStoreManager
+from business.rag_anything import MultimodalRAGPipeline, CrossModalKnowledgeGraph
+from business.multimodal_support import MultimodalManager
+from business.tier_model.intelligent_router import IntelligentRouter
+from business.fusion_rag.l4_aware_router import L4AwareRouter
+from business.smolllm2.l0_integration import L0Router
 
 # 导入增强组件
-from client.src.business.context_enhancer import ContextCompressionEnhancer, IntentStateManager, ContextLevel
-from client.src.business.enhanced_intent_classifier import EnhancedIntentClassifier, IntentType, SecondaryIntent, IntentResult
-from client.src.business.constitutional_prompt import ConstitutionalPromptBuilder, HierarchicalSummarizer
-from client.src.business.task_planning import TaskPlanner, TaskExecutor
-from client.src.business.git_intelligent import GitManager
-from client.src.business.performance_optimization import PerformanceOptimizer, ModelLoadBalancer
-from client.src.business.transparent_reasoning import ReasoningManager
-from client.src.business.personalized_learning import PersonalizedLearningSystem
+from business.context_enhancer import ContextCompressionEnhancer, IntentStateManager, ContextLevel
+from business.enhanced_intent_classifier import EnhancedIntentClassifier, IntentType, SecondaryIntent, IntentResult
+from business.constitutional_prompt import ConstitutionalPromptBuilder, HierarchicalSummarizer
+from business.task_planning import TaskPlanner, TaskExecutor
+from business.git_intelligent import GitManager
+from business.performance_optimization import PerformanceOptimizer, ModelLoadBalancer
+from business.transparent_reasoning import ReasoningManager
+from business.personalized_learning import PersonalizedLearningSystem
 
 # 导入文件加载优化
-from client.src.business.file_loader_optimizer import get_file_loader, FileLoader
+from business.file_loader_optimizer import get_file_loader, FileLoader
 
 
 class SmartIDESystem:

@@ -410,8 +410,8 @@ class HybridRetriever:
 
 if __name__ == "__main__":
     # 测试混合检索器
-    from client.src.business.llm_wiki.feedback_manager import FeedbackManager, TripletScore
-    from client.src.business.llm_wiki.kg_self_evolver import KnowledgeGraphSelfEvolver
+    from business.llm_wiki.feedback_manager import FeedbackManager, TripletScore
+    from business.llm_wiki.kg_self_evolver import KnowledgeGraphSelfEvolver
 
     # 创建组件
     fm = FeedbackManager()

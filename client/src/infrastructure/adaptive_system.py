@@ -173,7 +173,7 @@ class AdaptiveSystem:
     def _init_execution_layer(self):
         """初始化执行层"""
         try:
-            from client.src.business.smolllm2.ollama_runner import OllamaRunner
+            from .business.smolllm2.ollama_runner import OllamaRunner
             self._inference_engine = OllamaRunner()
             self._logger.info("✓ 集成 OllamaRunner")
         except Exception as e:
@@ -181,7 +181,7 @@ class AdaptiveSystem:
             self._inference_engine = None
         
         try:
-            from client.src.business.fusion_rag.rag_engine import RAGEngine
+            from .business.fusion_rag.rag_engine import RAGEngine
             self._rag_engine = RAGEngine()
             self._logger.info("✓ 集成 RAGEngine")
         except Exception as e:
@@ -194,7 +194,7 @@ class AdaptiveSystem:
         
         # 1. 自我进化协调器 - 核心进化引擎
         try:
-            from client.src.business.self_evolution.self_evolution_orchestrator import (
+            from .business.self_evolution.self_evolution_orchestrator import (
                 SelfEvolutionOrchestrator
             )
             self._evolution_orchestrator = SelfEvolutionOrchestrator(
@@ -223,7 +223,7 @@ class AdaptiveSystem:
         
         # 3. 强化学习引擎 - 数据飞轮核心
         try:
-            from client.src.business.evolution_engine.memory.learning_engine import (
+            from .business.evolution_engine.memory.learning_engine import (
                 get_learning_engine
             )
             self._learning_engine = get_learning_engine()
@@ -234,7 +234,7 @@ class AdaptiveSystem:
         
         # 4. 主动学习循环
         try:
-            from client.src.business.self_evolution.active_learning_loop import (
+            from .business.self_evolution.active_learning_loop import (
                 ActiveLearningLoop
             )
             self._active_learning_loop = ActiveLearningLoop()
@@ -254,13 +254,13 @@ class AdaptiveSystem:
         
         # 6. 双数据飞轮组件（修复导入路径）
         try:
-            from client.src.business.self_evolution.hard_variant_generator import (
+            from .business.self_evolution.hard_variant_generator import (
                 HardVariantGenerator
             )
-            from client.src.business.self_evolution.train_with_variants import (
+            from .business.self_evolution.train_with_variants import (
                 VariantTrainer
             )
-            from client.src.business.self_evolution.tool_self_repairer import (
+            from .business.self_evolution.tool_self_repairer import (
                 ToolSelfRepairer
             )
             self._variant_generator = HardVariantGenerator()

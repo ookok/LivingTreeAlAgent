@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from client.src.business.profiles import (
+from .business.profiles import (
     get_profile_manager, ProfileInfo, ProfileManager,
     create_profile, delete_profile, rename_profile,
     export_profile, import_profile, get_active_profile,

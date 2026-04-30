@@ -3,7 +3,7 @@ Base Intent Engine
 基础意图引擎，为所有意图识别模块提供通用功能。
 
 使用方式：
-    from client.src.business.base_intent_engine import BaseIntentEngine, IntentResult
+    from business.base_intent_engine import BaseIntentEngine, IntentResult
     
     class MyIntentEngine(BaseIntentEngine):
         def parse(self, text: str) -> IntentResult:

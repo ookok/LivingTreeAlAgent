@@ -930,7 +930,7 @@ class ChainOfThoughtExecutor:
     def _default_llm_call(self, prompt: str) -> str:
         """默认的LLM调用（使用 GlobalModelRouter）"""
         try:
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             return call_model_sync(ModelCapability.CHAT, prompt)
         except Exception as e:
             return f"[Error: {str(e)}]"

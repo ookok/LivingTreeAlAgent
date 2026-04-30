@@ -8,13 +8,13 @@ import asyncio
 from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass
 
-from client.src.business.skill_evolution import (
+from business.skill_evolution import (
     SkillEvolutionAgent,
     TaskSkill,
     create_agent
 )
 
-from client.src.business.superpowers import get_superpowers_engine
+from business.superpowers import get_superpowers_engine
 
 from .karpathy_engine import KarpathyEngine, get_karpathy_engine
 from .skill_configs import KarpathySkillRegistry, get_karpathy_registry

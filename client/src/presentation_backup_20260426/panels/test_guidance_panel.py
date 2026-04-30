@@ -231,7 +231,7 @@ def test_integration_import():
     print("7. 测试集成模块...")
 
     try:
-        from client.src.presentation.panels.guidance_integration import (
+        from .presentation.panels.guidance_integration import (
             AgentChatWithGuidance,
             GuidanceUIConfig,
             create_chat_with_guidance,

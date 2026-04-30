@@ -19,13 +19,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint, QMimeData
 from PyQt6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent
 
-from client.src.business.function_knowledge import get_knowledge_base, FunctionModule
-from client.src.presentation.framework.minimal_ui_framework import (
+from business.function_knowledge import get_knowledge_base, FunctionModule
+from presentation.framework.minimal_ui_framework import (
     ColorScheme, Spacing, MinimalCard, UIComponentFactory, MinimalLayout
 )
-from client.src.presentation.components.voice_input import VoiceInputWidget
-from client.src.presentation.components.loading_animation import LoadingSpinner, AnimationType
-from client.src.presentation.components.task_widget import Task, TaskListWidget, create_sample_tasks
+from presentation.components.voice_input import VoiceInputWidget
+from presentation.components.loading_animation import LoadingSpinner, AnimationType
+from presentation.components.task_widget import Task, TaskListWidget, create_sample_tasks
 
 
 class MessageBubble(QFrame):
@@ -158,9 +158,8 @@ class CommandPalettePopup(QFrame):
         self.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
+                border: 2px solid #E5E7EB;
                 border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
                 padding: 8px;
             }
         """)

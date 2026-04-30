@@ -18,7 +18,7 @@ from typing import Callable, Optional, Dict, List
 
 from .models import (ChannelType, ChannelSession, P2PConnection, 
                     ConnectionStatus, NodeProfile)
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ class MultiChannelManager:
                                peer: NodeProfile) -> bool:
         """尝试P2P穿透连接"""
         try:
-            from client.src.business.p2p_knowledge.nat_traversal import NATTraversal
+            from business.p2p_knowledge.nat_traversal import NATTraversal
             
             nat = NATTraversal()
             result = await nat.try_hole_punch(peer.public_ip, peer.public_port)
@@ -217,7 +217,7 @@ class MultiChannelManager:
             if not peer.relay_hosts:
                 return False
             
-            from client.src.business.relay_client import AsyncRelayClient
+            from business.relay_client import AsyncRelayClient
             
             relay_host = peer.relay_hosts[0].split(":")
             host = relay_host[0]

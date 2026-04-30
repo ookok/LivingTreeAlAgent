@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 
 logger = get_logger('a2a_collab')
 
@@ -383,7 +383,7 @@ class AgentTeam:
     
     async def _dispatch_collaboration_task(self, task: CollaborationTask):
         """分发协作任务到 A2A 网络"""
-        from client.src.business.a2a_protocol import Task
+        from business.a2a_protocol import Task
         
         a2a_task = Task(
             task_id=task.task_id,

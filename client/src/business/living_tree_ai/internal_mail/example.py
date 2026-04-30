@@ -5,7 +5,7 @@
 """
 
 import asyncio
-from client.src.business.living_tree_ai.internal_mail import (
+from business.living_tree_ai.internal_mail import (
     # 身份
     NodeIdentity,
     create_node_identity,

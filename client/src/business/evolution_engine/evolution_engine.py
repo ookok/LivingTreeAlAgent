@@ -855,7 +855,7 @@ class EvolutionEngine:
             # 初始化自我学习模块 (使用简化版实现)
             try:
                 # 1. 强化学习
-                from client.src.business.self_learning.reinforcement import (
+                from business.self_learning.reinforcement import (
                     CodeEvolutionEnv,
                     PPOAgent,
                     RLTrainer,
@@ -868,7 +868,7 @@ class EvolutionEngine:
                 self._rl_trainer = RLTrainer(self._rl_env, self._rl_agent, training_config)
                 
                 # 2. 知识图谱
-                from client.src.business.self_learning.knowledge_graph import (
+                from business.self_learning.knowledge_graph import (
                     CodeKnowledgeGraph,
                     ASTParser,
                     ImpactAnalyzer,
@@ -879,7 +879,7 @@ class EvolutionEngine:
                 self._impact_analyzer = ImpactAnalyzer(self._kg)
                 
                 # 3. 迁移学习
-                from client.src.business.self_learning.transfer import (
+                from business.self_learning.transfer import (
                     DomainAdapter,
                     TransferTrainer,
                     CodeBERTAdapter,

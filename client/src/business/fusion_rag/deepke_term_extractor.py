@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     Term,
     EventBus,
     CacheLayer,
@@ -81,7 +81,7 @@ class DeepKETermExtractor:
     def _init_agent(self):
         """初始化 Agent"""
         try:
-            from client.src.business.agent_adapter import create_agent_adapter, AgentConfig
+            from business.agent_adapter import create_agent_adapter, AgentConfig
             
             self.agent = create_agent_adapter(AgentConfig(
                 agent_type="local",

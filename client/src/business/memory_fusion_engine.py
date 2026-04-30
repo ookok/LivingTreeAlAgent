@@ -143,27 +143,27 @@ class MemoryFusionEngine:
         return self._modules.get(source)
     
     def _load_auto_memory(self):
-        from client.src.business.auto_memory_manager import get_auto_memory_manager
+        from business.auto_memory_manager import get_auto_memory_manager
         return get_auto_memory_manager()
     
     def _load_intelligent_retriever(self):
-        from client.src.business.intelligent_memory_retriever import get_intelligent_retriever
+        from business.intelligent_memory_retriever import get_intelligent_retriever
         return get_intelligent_retriever()
     
     def _load_summary_generator(self):
-        from client.src.business.memory_summary_generator import get_summary_generator
+        from business.memory_summary_generator import get_summary_generator
         return get_summary_generator()
     
     def _load_multimodal_memory(self):
-        from client.src.business.multimodal_memory import get_multimodal_memory
+        from business.multimodal_memory import get_multimodal_memory
         return get_multimodal_memory()
     
     def _load_shared_memory(self):
-        from client.src.business.shared_memory_system import get_shared_memory
+        from business.shared_memory_system import get_shared_memory
         return get_shared_memory()
     
     def _load_intelligent_memory(self):
-        from client.src.business.intelligent_memory import get_memory_system
+        from business.intelligent_memory import get_memory_system
         return get_memory_system()
     
     async def query(self, query: str, conversation_id: str = None, 

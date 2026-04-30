@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # 导入 GlobalModelRouter（遵守系统架构设定）
 try:
-    from client.src.business.global_model_router import (
+    from business.global_model_router import (
         RoutingStrategy
     )
     GLOBAL_ROUTER_AVAILABLE = True
@@ -152,7 +152,7 @@ class KnowledgeDiscoveryEngine(ABC):
             LLM 输出的文本
         """
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 get_global_router,
                 ModelCapability,
                 call_model_sync,

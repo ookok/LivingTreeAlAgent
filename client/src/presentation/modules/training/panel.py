@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
 
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 
 # ── 训练工作线程 ─────────────────────────────────────────────────────────

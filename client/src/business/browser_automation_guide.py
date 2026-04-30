@@ -24,7 +24,7 @@ from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from client.src.business.config import UnifiedConfig
+from business.config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 

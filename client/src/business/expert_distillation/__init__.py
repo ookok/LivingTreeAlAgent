@@ -21,7 +21,7 @@ Expert Distillation Module - 专家蒸馏模块
 
 使用方式:
     # 短期方案（无需训练）
-    from client.src.business.expert_distillation import ExpertTrainingPipeline
+    from business.expert_distillation import ExpertTrainingPipeline
     pipeline = ExpertTrainingPipeline()
     result = pipeline.chat_with_expert_prompt("分析这只股票", domain="金融")
 

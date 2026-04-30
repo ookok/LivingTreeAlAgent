@@ -196,7 +196,7 @@ class ExploratoryExecutor:
 
         try:
             # 使用全局模型路由器（异步调用）
-            from client.src.business.global_model_router import get_global_router, ModelCapability
+            from business.global_model_router import get_global_router, ModelCapability
             router = get_global_router()
             
             response = await router.call_model(
@@ -495,7 +495,7 @@ class ExploratoryExecutor:
 
         try:
             # 使用全局模型路由器（异步调用）
-            from client.src.business.global_model_router import get_global_router, ModelCapability
+            from business.global_model_router import get_global_router, ModelCapability
             router = get_global_router()
             
             response = await router.call_model(

@@ -75,7 +75,7 @@ class KBBasedAutoTrainer:
     
     def _init_modules(self):
         """初始化子模块"""
-        from client.src.business.fusion_rag import (
+        from business.fusion_rag import (
             create_industry_governance,
             create_knowledge_tier_manager,
             create_industry_filter,

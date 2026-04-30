@@ -28,7 +28,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from client.src.business.global_model_router import get_global_router
+from business.global_model_router import get_global_router
 
 logger = logging.getLogger(__name__)
 

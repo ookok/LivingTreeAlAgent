@@ -13,7 +13,7 @@ import yaml
 import ast
 import inspect
 
-from client.src.business.tools.base_tool import BaseTool
+from business.tools.base_tool import BaseTool
 
 
 class SkillConverter:

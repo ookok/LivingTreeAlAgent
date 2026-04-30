@@ -9,7 +9,7 @@ GitProxyConfig - Git代理配置模块
 4. 代理配置导出和导入
 
 使用方式：
-    from client.src.business.git_proxy_config import GitProxyConfig
+    from business.git_proxy_config import GitProxyConfig
 
     config = GitProxyConfig()
 

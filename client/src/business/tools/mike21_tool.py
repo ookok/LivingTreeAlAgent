@@ -23,8 +23,8 @@ import tempfile
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 
 
 # ============================================================

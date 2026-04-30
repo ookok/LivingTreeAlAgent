@@ -36,7 +36,7 @@ RAG 优化层 (2026-04-28):
 from typing import Dict, List, Optional, Any
 
 # 共享基础设施层
-from client.src.business.shared import (
+from business.shared import (
     Container,
     Term,
     ConfigCenter,

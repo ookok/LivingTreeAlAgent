@@ -274,7 +274,7 @@ def create_document_qa_api_service() -> ApiService:
     @service.register("/api/qa/ask", HttpMethod.POST, "提问")
     async def ask_question(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
+            from business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
             
             body = request.body
             question = body.get("question", "")
@@ -307,7 +307,7 @@ def create_document_qa_api_service() -> ApiService:
     @service.register("/api/qa/load", HttpMethod.POST, "加载文档")
     async def load_document(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
+            from business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
             
             body = request.body
             file_path = body.get("file_path", "")
@@ -340,7 +340,7 @@ def create_document_qa_api_service() -> ApiService:
     @service.register("/api/qa/collections", HttpMethod.GET, "获取集合列表")
     async def list_collections(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
+            from business.living_tree_ai.knowledge.multi_document_qa import get_collection_manager
             
             manager = get_collection_manager()
             collections = manager.list_collections()
@@ -370,7 +370,7 @@ def create_browser_use_api_service() -> ApiService:
     @service.register("/api/browser/navigate", HttpMethod.POST, "导航")
     async def navigate(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
+            from business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
             
             body = request.body
             url = body.get("url", "")
@@ -392,7 +392,7 @@ def create_browser_use_api_service() -> ApiService:
     @service.register("/api/browser/execute", HttpMethod.POST, "执行任务")
     async def execute_task(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
+            from business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
             
             body = request.body
             task = body.get("task", "")
@@ -414,7 +414,7 @@ def create_browser_use_api_service() -> ApiService:
     @service.register("/api/browser/search", HttpMethod.POST, "搜索")
     async def search(request: Request) -> ApiResponse:
         try:
-            from client.src.business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
+            from business.living_tree_ai.browser_gateway.browser_use_adapter import create_browser_use_adapter
             
             body = request.body
             query = body.get("query", "")

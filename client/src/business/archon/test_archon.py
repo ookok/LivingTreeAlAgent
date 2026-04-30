@@ -21,7 +21,7 @@ def test_archon_import():
     print("Archon Import Test")
     print("=" * 50)
     try:
-        from client.src.business.archon import (
+        from business.archon import (
             ArchonAgent,
             ArchonCore,
             PermissionLevel,
@@ -41,7 +41,7 @@ def test_opendataloader_import():
     print("OpenDataLoader Import Test")
     print("=" * 50)
     try:
-        from client.src.business.opendataloader import (
+        from business.opendataloader import (
             OpenDataLoader,
             ParsedDocument,
             PDFPage,
@@ -61,7 +61,7 @@ def test_kronos_import():
     print("Kronos Import Test")
     print("=" * 50)
     try:
-        from client.src.business.kronos import (
+        from business.kronos import (
             KronosAnalyzer,
             KronosRouter,
             FinancialMetrics,
@@ -82,7 +82,7 @@ async def test_archon_execution():
     print("Archon Execution Test")
     print("=" * 50)
 
-    from client.src.business.archon import get_archon, PermissionLevel
+    from business.archon import get_archon, PermissionLevel
 
     archon = get_archon()
 
@@ -105,7 +105,7 @@ async def test_opendataloader_parse():
     print("OpenDataLoader Parse Test")
     print("=" * 50)
 
-    from client.src.business.opendataloader import get_opendataloader, ParseMode
+    from business.opendataloader import get_opendataloader, ParseMode
 
     loader = get_opendataloader()
 
@@ -128,7 +128,7 @@ async def test_kronos_analysis():
     print("Kronos Analysis Test")
     print("=" * 50)
 
-    from client.src.business.kronos import (
+    from business.kronos import (
         get_kronos_analyzer,
         FinancialMetrics,
         RiskLevel

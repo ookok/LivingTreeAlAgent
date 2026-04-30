@@ -186,7 +186,7 @@ class MonitorStats:
 
 # 导入 Opik 追踪函数
 try:
-    from client.src.business.opik_tracer import start_trace, log_trace
+    from business.opik_tracer import start_trace, log_trace
     OPIK_TRACE_AVAILABLE = True
 except ImportError:
     OPIK_TRACE_AVAILABLE = False

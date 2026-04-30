@@ -20,7 +20,7 @@ import random
 
 # 尝试导入成就系统，如果失败则使用模拟
 try:
-    from client.src.business.achievement_system import (
+    from .business.achievement_system import (
         AchievementSystemManager, AchievementRarity, AchievementCategory,
         AchievementMetaverse, AchievementTracker, TimeCapsuleAchievement,
         EvolvingAchievement, AchievementComboSystem, AchievementMetaverseGallery,

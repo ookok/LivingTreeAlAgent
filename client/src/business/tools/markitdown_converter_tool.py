@@ -4,8 +4,8 @@ MarkItDown Converter Tool
 HTML/PDF/DOCX → Markdown 转换器
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 
@@ -97,7 +97,7 @@ class BasicMarkdownConverter:
 
 def register_markitdown_tool():
     """注册 markitdown_converter 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = MarkItDownTool()
@@ -125,7 +125,7 @@ def _auto_register():
         _tool_instance = MarkItDownTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

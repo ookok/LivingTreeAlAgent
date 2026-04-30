@@ -20,7 +20,7 @@ try:
     from pathlib import Path
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
-    from client.src.business.fusion_rag.l4_executor import L4RelayExecutor
+    from business.fusion_rag.l4_executor import L4RelayExecutor
     HAS_L4_EXECUTOR = True
 except ImportError:
     HAS_L4_EXECUTOR = False
@@ -28,7 +28,7 @@ except ImportError:
 
 # 尝试导入记忆宫殿
 try:
-    from client.src.business.memory_palace.memory_engine import MemoryPalace
+    from business.memory_palace.memory_engine import MemoryPalace
     HAS_MEMORY_PALACE = True
 except ImportError:
     HAS_MEMORY_PALACE = False

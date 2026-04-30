@@ -88,11 +88,11 @@ class LightweightPolisher:
             return None
 
         try:
-            from client.src.business.smolllm2 import get_l0_router
+            from business.smolllm2 import get_l0_router
             return get_l0_router()
         except ImportError:
             try:
-                from client.src.business.system_brain import get_system_brain
+                from business.system_brain import get_system_brain
                 return get_system_brain()
             except ImportError:
                 return None
@@ -317,11 +317,11 @@ class HermesPolisher:
             return self._client
 
         try:
-            from client.src.business.smolllm2 import get_l0_router
+            from business.smolllm2 import get_l0_router
             return get_l0_router()
         except ImportError:
             try:
-                from client.src.business.system_brain import get_system_brain
+                from business.system_brain import get_system_brain
                 return get_system_brain()
             except ImportError:
                 return None

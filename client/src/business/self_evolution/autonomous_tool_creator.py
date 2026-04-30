@@ -18,9 +18,9 @@ import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.tools.tool_registry import ToolRegistry
 
 
 class AutonomousToolCreator:
@@ -201,8 +201,8 @@ class AutonomousToolCreator:
 
 代码模板：
 ```python
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 
@@ -483,7 +483,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
         """搜索知识库"""
         try:
             # 尝试使用知识库搜索
-            from client.src.business.knowledge_vector_db import VectorDatabase
+            from business.knowledge_vector_db import VectorDatabase
             db = VectorDatabase()
             results = db.search(query, top_k=3)
             return "\n".join([r.get("content", "") for r in results])
@@ -493,7 +493,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
     async def _deep_search(self, query: str, proxy: Optional[str] = None) -> str:
         """深度搜索"""
         try:
-            from client.src.business.deep_search_wiki.wiki_generator import LLMWikiGenerator
+            from business.deep_search_wiki.wiki_generator import LLMWikiGenerator
             generator = LLMWikiGenerator()
             result = await generator.generate_wiki(query)
             return result[:1000] if result else "深度搜索无结果"
@@ -503,7 +503,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
     async def _get_proxy(self) -> Optional[str]:
         """获取代理"""
         try:
-            from client.src.business.base_proxy_manager import ProxyManager
+            from business.base_proxy_manager import ProxyManager
             manager = ProxyManager()
             return manager.get_best_proxy()
         except Exception:
@@ -542,7 +542,7 @@ class {tool_name.title().replace('_', '')}Tool(BaseTool):
             return await self._llm.chat(prompt, model="qwen3.6:35b-a3b")
         else:
             try:
-                from client.src.business.hermes_agent.llm_client import LLMClient
+                from business.hermes_agent.llm_client import LLMClient
                 llm = LLMClient()
                 return await llm.chat(prompt, model="qwen3.6:35b-a3b")
             except Exception as e:

@@ -19,7 +19,7 @@ from typing import Optional, List, Dict, Set
 from enum import Enum
 from pathlib import Path
 
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.tool_result import ToolResult
 
 
 # ============================================================

@@ -205,7 +205,7 @@ class OptimizationBootstrapper:
     def _enable_rtk_compression(self) -> Dict[str, Any]:
         """启用 RTK 压缩优化"""
         try:
-            from client.src.business.context_preprocessor import ContextPreprocessor
+            from business.context_preprocessor import ContextPreprocessor
             
             self._context_preprocessor = ContextPreprocessor(
                 max_context_tokens=8192,
@@ -270,7 +270,7 @@ class OptimizationBootstrapper:
     def _enable_model_optimization(self) -> Dict[str, Any]:
         """启用模型优化代理"""
         try:
-            from client.src.business.model_optimization_proxy import (
+            from business.model_optimization_proxy import (
                 get_model_optimization_proxy,
                 OptimizationFeature
             )
@@ -324,7 +324,7 @@ class OptimizationBootstrapper:
     def _enable_code_review_graph(self) -> Dict[str, Any]:
         """启用代码审查图谱"""
         try:
-            from client.src.business.code_review_graph import CodeReviewGraph
+            from business.code_review_graph import CodeReviewGraph
             
             self._code_review_graph = CodeReviewGraph()
             
@@ -368,7 +368,7 @@ class OptimizationBootstrapper:
     def _enable_context_mode(self) -> Dict[str, Any]:
         """启用 Context Mode"""
         try:
-            from client.src.business.context_mode_manager import ContextModeManager
+            from business.context_mode_manager import ContextModeManager
             
             self._context_mode_manager = ContextModeManager()
             

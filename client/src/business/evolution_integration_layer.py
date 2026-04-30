@@ -137,10 +137,10 @@ class EvolutionIntegrationLayer:
     def _lazy_load_components(self):
         """延迟加载组件"""
         try:
-            from client.src.business.self_evolution_engine import get_self_evolution_engine
-            from client.src.business.open_ended_evolution import create_open_ended_evolution
-            from client.src.business.rl_driven_improvement import create_rl_improvement, RLAlgorithm
-            from client.src.business.intelligent_optimization_engine import get_intelligent_optimization_engine
+            from business.self_evolution_engine import get_self_evolution_engine
+            from business.open_ended_evolution import create_open_ended_evolution
+            from business.rl_driven_improvement import create_rl_improvement, RLAlgorithm
+            from business.intelligent_optimization_engine import get_intelligent_optimization_engine
             
             self._evolution_engine = get_self_evolution_engine()
             self._open_evolution = create_open_ended_evolution()
@@ -256,7 +256,7 @@ class EvolutionIntegrationLayer:
         if not self._rl_improvement:
             return
         
-        from client.src.business.rl_driven_improvement import StateFeature
+        from business.rl_driven_improvement import StateFeature
         
         # 设置状态
         self._rl_improvement.set_current_state({

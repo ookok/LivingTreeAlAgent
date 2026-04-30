@@ -113,8 +113,8 @@ class LocalModelAdapter(BaseAgentAdapter):
         动态从 ModelManager 获取可用模型，避免硬编码
         """
         try:
-            from client.src.business.model_manager import ModelManager
-            from client.src.business.config import AppConfig, get_config
+            from business.model_manager import ModelManager
+            from business.config import AppConfig, get_config
             
             config = get_config()
             manager = ModelManager(config)

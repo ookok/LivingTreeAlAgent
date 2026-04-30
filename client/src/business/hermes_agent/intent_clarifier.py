@@ -10,8 +10,8 @@ from pathlib import Path
 import json
 import logging
 
-from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
-from client.src.business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
+from business.global_model_router import GlobalModelRouter, ModelCapability
+from business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
 
 
 logger = logging.getLogger(__name__)

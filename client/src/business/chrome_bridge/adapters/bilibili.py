@@ -9,7 +9,7 @@ Bilibili Adapter - bilibili 网站适配器
 """
 
 from typing import Dict, Any
-from client.src.business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
+from business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
 
 
 class BilibiliAdapter(BaseWebsiteAdapter):

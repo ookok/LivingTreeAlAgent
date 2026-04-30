@@ -15,12 +15,12 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable
 
-from client.src.business.office_automation.document_context import (
+from business.office_automation.document_context import (
     DocumentContext, DocumentIntent, DocumentType, OutputFormat
 )
-from client.src.business.office_automation.design_system import DesignSystem, DocumentTheme, ColorRole
-from client.src.business.office_automation.template_router import TemplateRouter, TemplateMatch, CoverStyle
-from client.src.business.office_automation.model_router import ModelRouter, ModelCapability
+from business.office_automation.design_system import DesignSystem, DocumentTheme, ColorRole
+from business.office_automation.template_router import TemplateRouter, TemplateMatch, CoverStyle
+from business.office_automation.model_router import ModelRouter, ModelCapability
 
 logger = logging.getLogger(__name__)
 

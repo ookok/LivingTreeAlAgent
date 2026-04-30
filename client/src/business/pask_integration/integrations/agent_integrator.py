@@ -9,7 +9,7 @@ from loguru import logger
 
 from ..demand_detector import DemandDetector
 from ..proactive_agent import ProactiveAgent
-from client.src.business.hermes_agent import (
+from business.hermes_agent import (
     UserProfile,
     UserPreference,
     PreferenceType,
@@ -44,7 +44,7 @@ class AgentIntegrator:
     def _get_hermes_agent(self):
         """延迟加载 HermesAgent"""
         if self._hermes_agent is None:
-            from client.src.business.hermes_agent import HermesAgent
+            from business.hermes_agent import HermesAgent
             self._hermes_agent = HermesAgent.get_instance()
         return self._hermes_agent
     

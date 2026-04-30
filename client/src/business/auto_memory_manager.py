@@ -27,13 +27,13 @@ from enum import Enum
 from datetime import datetime
 from uuid import uuid4
 
-from client.src.business.unified_memory import (
+from business.unified_memory import (
     MemoryRouter,
     MemoryItem,
     MemoryType,
     MemoryQuery,
 )
-from client.src.business.intelligent_memory import get_memory_system
+from business.intelligent_memory import get_memory_system
 
 logger = __import__('logging').getLogger(__name__)
 
@@ -369,7 +369,7 @@ class AutoMemoryManager:
             if not self._llm_callable:
                 # 尝试获取默认的 LLM 调用
                 try:
-                    from client.src.business.global_model_router import call_model_sync, ModelCapability
+                    from business.global_model_router import call_model_sync, ModelCapability
                     llm_response = call_model_sync(ModelCapability.CHAT, self._build_summary_prompt(turns))
                 except ImportError:
                     logger.warning("[AutoMemoryManager] LLM 不可用，跳过摘要生成")

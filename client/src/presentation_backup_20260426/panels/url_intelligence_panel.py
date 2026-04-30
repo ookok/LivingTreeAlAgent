@@ -30,7 +30,7 @@ class URLTestWorker(QThread):
     
     def run(self):
         try:
-            from client.src.business.url_intelligence import get_url_system
+            from .business.url_intelligence import get_url_system
             system = get_url_system()
             result = asyncio.run(system.optimize(self.url))
             self.finished.emit(result)
@@ -50,7 +50,7 @@ class WikiGenerateWorker(QThread):
     
     def run(self):
         try:
-            from client.src.business.deep_search_wiki import get_wiki_system
+            from .business.deep_search_wiki import get_wiki_system
             system = get_wiki_system()
             wiki = asyncio.run(system.generate_async(self.topic, self.use_search))
             self.finished.emit(wiki)
@@ -549,7 +549,7 @@ class URLIntelligencePanel(QWidget):
     
     def _load_mirrors(self):
         """加载镜像列表"""
-        from client.src.business.url_intelligence import get_url_system
+        from .business.url_intelligence import get_url_system
         
         system = get_url_system()
         stats = system.get_statistics()
@@ -572,7 +572,7 @@ class URLIntelligencePanel(QWidget):
         if not category:
             return
         
-        from client.src.business.url_intelligence import get_url_system
+        from .business.url_intelligence import get_url_system
         system = get_url_system()
         registry = system._optimizer.registry
         
@@ -591,8 +591,8 @@ class URLIntelligencePanel(QWidget):
     
     def _refresh_stats(self):
         """刷新统计"""
-        from client.src.business.url_intelligence import get_url_system
-        from client.src.business.deep_search_wiki import get_wiki_system
+        from .business.url_intelligence import get_url_system
+        from .business.deep_search_wiki import get_wiki_system
         
         # URL优化统计
         url_system = get_url_system()

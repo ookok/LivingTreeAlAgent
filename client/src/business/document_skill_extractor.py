@@ -12,7 +12,7 @@ Functionality:
 4. Computes document embedding and saves it
 
 Usage:
-    from client.src.business.document_skill_extractor import DocumentSkillExtractor
+    from business.document_skill_extractor import DocumentSkillExtractor
 
     extractor = DocumentSkillExtractor()
     skill_path = extractor.extract_skill(
@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
+from business.global_model_router import GlobalModelRouter, ModelCapability
 from loguru import logger
 
 

@@ -103,7 +103,7 @@ class SelfEvolvingSystem:
     
     使用方式：
     ```python
-    from client.src.business.self_evolving import SelfEvolvingSystem, get_evolution_system
+    from business.self_evolving import SelfEvolvingSystem, get_evolution_system
     
     # 获取全局实例
     system = get_evolution_system()
@@ -173,7 +173,7 @@ class SelfEvolvingSystem:
         """延迟加载质量系统"""
         if self._quality_system is None and self._enabled['quality']:
             try:
-                from client.src.business.adaptive_quality import AdaptiveQualitySystem
+                from business.adaptive_quality import AdaptiveQualitySystem
                 self._quality_system = AdaptiveQualitySystem()
                 logger.info("Quality system loaded")
             except ImportError as e:
@@ -186,7 +186,7 @@ class SelfEvolvingSystem:
         """延迟加载反思循环"""
         if self._reflection_loop is None and self._enabled['reflection']:
             try:
-                from client.src.business.reflective_agent import ReflectiveAgentLoop, ReflectiveLoopConfig
+                from business.reflective_agent import ReflectiveAgentLoop, ReflectiveLoopConfig
                 config = ReflectiveLoopConfig(
                     max_reflection_turns=3,
                     improvement_threshold=0.7,
@@ -203,7 +203,7 @@ class SelfEvolvingSystem:
         """延迟加载错误记忆"""
         if self._error_memory is None and self._enabled['error_learning']:
             try:
-                from client.src.business.error_memory import ErrorLearningSystem
+                from business.error_memory import ErrorLearningSystem
                 self._error_memory = ErrorLearningSystem()
                 logger.info("Error memory loaded")
             except ImportError as e:
@@ -216,7 +216,7 @@ class SelfEvolvingSystem:
         """延迟加载技能进化"""
         if self._skill_evolution is None and self._enabled['skill_evolution']:
             try:
-                from client.src.business.skill_evolution import SkillEvolutionAgent
+                from business.skill_evolution import SkillEvolutionAgent
                 self._skill_evolution = SkillEvolutionAgent()
                 logger.info("Skill evolution loaded")
             except ImportError as e:
@@ -413,7 +413,7 @@ class SelfEvolvingSystem:
     ) -> Tuple[float, bool, int]:
         """评估质量"""
         try:
-            from client.src.business.adaptive_quality import quick_evaluate
+            from business.adaptive_quality import quick_evaluate
             score, needs_upgrade, level = quick_evaluate(ctx.response, ctx.task)
             return score, needs_upgrade, level
         except Exception:
@@ -490,7 +490,7 @@ class SelfEvolvingSystem:
     async def _handle_error(self, ctx: ExecutionContext) -> Optional[Dict]:
         """处理错误"""
         try:
-            from client.src.business.error_memory import quick_fix_from_exception
+            from business.error_memory import quick_fix_from_exception
             solution = quick_fix_from_exception(ctx.error_info['error'])
             return solution
         except Exception:
@@ -509,7 +509,7 @@ class SelfEvolvingSystem:
     async def _record_error(self, ctx: ExecutionContext):
         """记录错误"""
         try:
-            from client.src.business.error_memory import quick_learn
+            from business.error_memory import quick_learn
             quick_learn(ctx.error_info['error'], {'task': ctx.task})
         except Exception:
             pass

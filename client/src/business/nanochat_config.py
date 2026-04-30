@@ -224,7 +224,7 @@ class NanochatConfig:
         6. 同时支持属性访问和字典式访问
     
     使用示例:
-        from client.src.business.nanochat_config import config
+        from business.nanochat_config import config
         
         # 读取配置（推荐：属性访问，最快）
         url = config.ollama.url
@@ -482,17 +482,17 @@ config = NanochatConfig()
 
 class UnifiedConfig:
     """
-    ⚠️ 已废弃: 请直接使用 `from client.src.business.nanochat_config import config`
+    ⚠️ 已废弃: 请直接使用 `from business.nanochat_config import config`
     
     兼容层: UnifiedConfig → NanochatConfig
     
     旧代码（仍然工作，但会显示弃用警告）:
-        from client.src.business.config import UnifiedConfig
+        from business.config import UnifiedConfig
         config = UnifiedConfig.get_instance()
         url = config.get("endpoints.ollama.url")
     
     新代码（推荐）:
-        from client.src.business.nanochat_config import config
+        from business.nanochat_config import config
         url = config.ollama.url
         # 或字典式访问
         url = config["ollama.url"]

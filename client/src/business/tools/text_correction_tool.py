@@ -16,7 +16,7 @@ TextCorrectionTool - 错别字纠正工具（增强版）
 - 乱序错别字：字序颠倒            例："我天今去公园" → "我今天去公园"
 
 使用方法：
-    from client.src.business.tools.text_correction_tool import TextCorrectionTool
+    from business.tools.text_correction_tool import TextCorrectionTool
 
     tool = TextCorrectionTool()
     result = tool.execute(text="我想吃平果", context="讨论健康饮食")
@@ -36,9 +36,9 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult, SUCCESS, ERROR
+from business.global_model_router import GlobalModelRouter, ModelCapability
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult, SUCCESS, ERROR
 
 
 # --------------------------------------------------------------------------- #
@@ -568,7 +568,7 @@ if __name__ == "__main__":
 
 def auto_register():
     """自动注册工具到 ToolRegistry"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
 
     registry = ToolRegistry.get_instance()
     tool = TextCorrectionTool()

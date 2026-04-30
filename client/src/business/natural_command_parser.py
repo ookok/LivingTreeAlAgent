@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 # 导入统一意图定义中心
-from client.src.business.intent_definitions import (
+from business.intent_definitions import (
     Intent,
     get_intent_by_keyword,
     get_intent_category

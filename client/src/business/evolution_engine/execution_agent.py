@@ -12,7 +12,7 @@ Execution Agent - 工具执行集成
 Author: Hermes Desktop Team
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('evolution.execution_agent')
 
 import time
@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
 # 导入沙箱能力
-from client.src.business.ai_script_generator.script_sandbox import (
+from business.ai_script_generator.script_sandbox import (
     ScriptSandbox,
     SandboxExecutor,
     SandboxConfig,

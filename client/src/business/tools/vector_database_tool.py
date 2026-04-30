@@ -2,9 +2,9 @@
 VectorDatabaseTool - Vector database tool wrapper
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.knowledge_vector_db import VectorDatabase
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.knowledge_vector_db import VectorDatabase
 
 
 class VectorDatabaseTool(BaseTool):
@@ -35,7 +35,7 @@ class VectorDatabaseTool(BaseTool):
 
 def register_vector_database_tool():
     """Register vector database tool"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     registry = ToolRegistry.get_instance()
     tool = VectorDatabaseTool()
     registry.register_tool(tool)
@@ -60,7 +60,7 @@ def _auto_register():
         _tool_instance = VectorDatabaseTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

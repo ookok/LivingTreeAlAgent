@@ -4,12 +4,12 @@ KBAutoIngest Tool Wrapper
 Auto-generated BaseTool wrapper for KBAutoIngest
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.knowledge_auto_ingest import KBAutoIngest
+    from business.knowledge_auto_ingest import KBAutoIngest
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     KBAutoIngest = None
@@ -81,7 +81,7 @@ class KBAutoIngestTool(BaseTool):
 
 def register_kb_auto_ingest_tool():
     """注册 kb_auto_ingest 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = KBAutoIngestTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = KBAutoIngestTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

@@ -18,7 +18,7 @@ async def example_basic_usage():
     """
     基础用法：调用外脑服务
     """
-    from client.src.business.living_tree_ai import (
+    from business.living_tree_ai import (
         get_channel_manager,
         get_network_diagnoser,
         get_offline_queue,
@@ -69,7 +69,7 @@ async def example_with_proxy():
     """
     示例：配置用户代理
     """
-    from client.src.business.living_tree_ai import (
+    from business.living_tree_ai import (
         get_channel_manager,
         UserProxyConfig,
     )
@@ -96,7 +96,7 @@ async def example_with_api_key():
     """
     示例：配置API Key
     """
-    from client.src.business.living_tree_ai import (
+    from business.living_tree_ai import (
         get_channel_manager,
         APIKeyConfig,
     )
@@ -119,7 +119,7 @@ async def example_with_local_llm():
     """
     示例：配置本地LLM降级
     """
-    from client.src.business.living_tree_ai import (
+    from business.living_tree_ai import (
         get_channel_manager,
         LocalLLMConfig,
     )
@@ -142,7 +142,7 @@ async def example_offline_queue():
     """
     示例：管理离线队列
     """
-    from client.src.business.living_tree_ai import get_offline_queue
+    from business.living_tree_ai import get_offline_queue
 
     queue = get_offline_queue()
 
@@ -165,7 +165,7 @@ async def example_ui_panel():
     示例：在PyQt6中使用UI面板
     """
     from PyQt6.QtWidgets import QApplication
-    from client.src.business.living_tree_ai import create_external_brain_panel
+    from business.living_tree_ai import create_external_brain_panel
 
     app = QApplication([])
 

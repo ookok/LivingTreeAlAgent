@@ -11,7 +11,7 @@ LivingTree AI 统一日志系统
 - 环境变量配置
 
 使用方式:
-    from client.src.business.logger import logger
+    from business.logger import logger
 
     logger.info("信息日志")
     logger.debug("调试日志")
@@ -20,7 +20,7 @@ LivingTree AI 统一日志系统
     logger.critical("严重错误")
 
 或者使用模块级日志器:
-    from client.src.business.logger import get_logger
+    from business.logger import get_logger
 
     log = get_logger(__name__)
     log.info("模块日志")
@@ -332,7 +332,7 @@ class PrintReplacer:
     Print语句替换工具
 
     使用方式:
-        from client.src.business.logger import PrintReplacer
+        from business.logger import PrintReplacer
         PrintReplacer.replace_in_module("core.agent")
 
         # 或者替换当前模块
@@ -386,7 +386,7 @@ def auto_setup():
     自动设置日志系统
 
     在应用入口点调用:
-        from client.src.business.logger import auto_setup
+        from business.logger import auto_setup
         auto_setup()
     """
     # 设置根日志器

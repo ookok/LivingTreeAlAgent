@@ -22,7 +22,7 @@ from enum import Enum
 
 # 导入已有环评模块
 try:
-    from client.src.business.eia_process import EIAProcessManager
+    from business.eia_process import EIAProcessManager
     HAS_EIA_PROCESS = True
 except ImportError:
     HAS_EIA_PROCESS = False

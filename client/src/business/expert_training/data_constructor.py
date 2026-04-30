@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     Term,
     CacheLayer,
     get_cache

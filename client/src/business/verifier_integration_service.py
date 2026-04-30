@@ -101,7 +101,7 @@ class VerifierIntegrationService:
     def _lazy_load_verifier(self):
         """延迟加载验证器"""
         if self._verifier is None:
-            from client.src.business.llm_verifier import create_llm_verifier
+            from business.llm_verifier import create_llm_verifier
             self._verifier = create_llm_verifier()
     
     async def verify_code(self, code: str, language: str = "python") -> Dict[str, Any]:

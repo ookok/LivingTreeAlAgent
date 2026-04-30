@@ -13,7 +13,7 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.smart_quota_manager')
 
 import time
@@ -192,7 +192,7 @@ class SmartQuotaManager:
         """获取提供者管理器 (懒加载)"""
         if self._provider_manager is None:
             try:
-                from client.src.business.expert_learning.external_provider_config import get_provider_manager
+                from business.expert_learning.external_provider_config import get_provider_manager
                 self._provider_manager = get_provider_manager()
             except ImportError:
                 self._provider_manager = None
@@ -886,7 +886,7 @@ class SmartQuotaManager:
             return None
 
         try:
-            from client.src.business.expert_learning.external_provider_config import ProviderType, CostType
+            from business.expert_learning.external_provider_config import ProviderType, CostType
 
 
             # 转换类型

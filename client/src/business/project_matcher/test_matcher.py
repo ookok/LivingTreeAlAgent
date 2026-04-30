@@ -9,16 +9,16 @@ import os
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
 # 导入项目分析器
-from client.src.business.project_matcher.project_analyzer import (
+from business.project_matcher.project_analyzer import (
     ProjectData, ProjectType, ArchitectureInfo, BusinessInfo,
     CodeStructure
 )
 
 # 导入匹配器
-from client.src.business.project_matcher.surface_matcher import create_surface_matcher
-from client.src.business.project_matcher.architectural_matcher import create_architectural_matcher
-from client.src.business.project_matcher.semantic_matcher import create_semantic_matcher
-from client.src.business.project_matcher.comprehensive_evaluator import create_evaluator
+from business.project_matcher.surface_matcher import create_surface_matcher
+from business.project_matcher.architectural_matcher import create_architectural_matcher
+from business.project_matcher.semantic_matcher import create_semantic_matcher
+from business.project_matcher.comprehensive_evaluator import create_evaluator
 
 print("=" * 60)
 print("项目匹配度分析引擎测试")
@@ -64,7 +64,7 @@ local = ProjectData(
 )
 
 # 添加 mock metadata
-from client.src.business.project_matcher.project_analyzer import GitHubMetadata
+from business.project_matcher.project_analyzer import GitHubMetadata
 github.metadata = GitHubMetadata(
     url='https://github.com/example/ai-ide',
     owner='example',

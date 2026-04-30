@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 
 # 导入统一代理面板
 try:
-    from client.src.presentation.panels.unified_proxy_panel import UnifiedProxyPanel
+    from .presentation.panels.unified_proxy_panel import UnifiedProxyPanel
     HAS_UNIFIED_PROXY = True
 except ImportError:
     HAS_UNIFIED_PROXY = False

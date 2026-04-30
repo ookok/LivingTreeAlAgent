@@ -5,7 +5,7 @@ Web Crawler - Scrapling 封装模块
 支持自适应解析、反爬绕过、并发爬取。
 
 用法：
-    from client.src.business.web_crawler import ScraplingEngine
+    from business.web_crawler import ScraplingEngine
     
     engine = ScraplingEngine()
     content = await engine.extract("https://example.com")

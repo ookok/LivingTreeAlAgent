@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 
 # ── 知识库工作线程 ──────────────────────────────────────────────────────

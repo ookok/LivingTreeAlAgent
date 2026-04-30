@@ -22,7 +22,7 @@ def demo_model_deployer():
     print("Demo 1: Model Deployer")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.model_deployer import (
+    from business.seamless_tool_integration.model_deployer import (
         ModelDeployer, ToolType, DeploymentStatus
     )
 
@@ -55,7 +55,7 @@ def demo_input_generator():
     print("Demo 2: Input Generator")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.input_generator import (
+    from business.seamless_tool_integration.input_generator import (
         InputGenerator, ProjectData, SourceParams,
         MeteorologyData, ReceptorGrid, ScaleType
     )
@@ -159,7 +159,7 @@ def demo_tool_executor():
     print("Demo 3: Tool Executor")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.tool_executor import (
+    from business.seamless_tool_integration.tool_executor import (
         ToolExecutor, ExecutionStatus
     )
 
@@ -218,7 +218,7 @@ def demo_result_parser():
     print("Demo 4: Result Parser")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.result_parser import (
+    from business.seamless_tool_integration.result_parser import (
         ResultParser, PredictionResult, ConcentrationData,
         MaxResult, ReportGenerator
     )
@@ -311,7 +311,7 @@ def demo_cloud_bridge():
     print("Demo 5: Cloud Bridge")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.cloud_bridge import (
+    from business.seamless_tool_integration.cloud_bridge import (
         CloudBridge, CloudExecutionMode, LocalCapabilityDetector
     )
 
@@ -353,7 +353,7 @@ def demo_manager():
     print("Demo 6: Integration Manager")
     print("=" * 60)
 
-    from client.src.business.seamless_tool_integration.manager import SeamlessIntegrationManager
+    from business.seamless_tool_integration.manager import SeamlessIntegrationManager
 
     # Get manager instance
     manager = SeamlessIntegrationManager.get_instance()

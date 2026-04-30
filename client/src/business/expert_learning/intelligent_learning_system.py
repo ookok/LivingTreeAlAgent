@@ -35,7 +35,7 @@ Date: 2026-04-24
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.intelligent_learning_system')
 
 
@@ -57,23 +57,23 @@ def _import_modules():
     global EnhancedPerformanceMonitor, get_offline_learning_loop
 
     try:
-        from client.src.business.expert_learning.offline_learning_loop import (
+        from business.expert_learning.offline_learning_loop import (
             OfflineLearningLoop, get_offline_learning_loop,
             ConnectionStatus as OfflineStatus
         )
-        from client.src.business.expert_learning.knowledge_consistency import (
+        from business.expert_learning.knowledge_consistency import (
             KnowledgeConsistencyVerifier, ConsensusLevel, VerificationStatus
         )
-        from client.src.business.expert_learning.auto_model_selector import (
+        from business.expert_learning.auto_model_selector import (
             AutoModelSelector, TaskType
         )
-        from client.src.business.expert_learning.cost_optimizer import (
+        from business.expert_learning.cost_optimizer import (
             CostOptimizer, CostMode
         )
-        from client.src.business.expert_learning.multi_model_comparison import (
+        from business.expert_learning.multi_model_comparison import (
             MultiModelComparison
         )
-        from client.src.business.expert_learning.enhanced_performance_monitor import (
+        from business.expert_learning.enhanced_performance_monitor import (
 
             EnhancedPerformanceMonitor, MetricType
         )

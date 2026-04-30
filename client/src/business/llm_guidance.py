@@ -18,7 +18,7 @@ LLM 增强追问模块 (Phase 4)
 """
 
 from typing import Optional, Callable, List, Dict, Any, Tuple
-from client.src.business.global_model_router import get_global_router, ModelCapability
+from business.global_model_router import get_global_router, ModelCapability
 from dataclasses import dataclass, field
 from enum import Enum
 import time
@@ -36,7 +36,7 @@ except ImportError:
 
 # 导入统一配置
 try:
-    from client.src.business.config import get_ollama_url, get
+    from business.config import get_ollama_url, get
 except ImportError:
     # 兼容旧环境
     def get_ollama_url():

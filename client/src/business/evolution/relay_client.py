@@ -10,7 +10,7 @@ from datetime import datetime
 import urllib.request
 import urllib.error
 
-from client.src.business.config import UnifiedConfig
+from business.config import UnifiedConfig
 from .models import (
     WeeklyReport, ClientConfig, ReportStatus,
 )

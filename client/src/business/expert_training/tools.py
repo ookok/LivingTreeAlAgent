@@ -6,12 +6,12 @@ import json
 from typing import Dict, List, Optional
 from pathlib import Path
 
-from client.src.business.expert_training import (
+from business.expert_training import (
     get_expert_training_system,
     get_industry_classifier,
     get_notification_system
 )
-from client.src.business.expert_training.industry_classification import (
+from business.expert_training.industry_classification import (
     INDUSTRY_CATEGORIES,
     OCCUPATION_CATEGORIES
 )
@@ -146,7 +146,7 @@ def notify_expert_change(expert_name: str, expert_path: str, action: str) -> boo
         是否通知成功
     """
     try:
-        from client.src.business.expert_training.notification_system import (
+        from business.expert_training.notification_system import (
             notify_expert_created,
             notify_expert_updated,
             notify_expert_deleted
@@ -190,7 +190,7 @@ def check_industry_update() -> Dict:
         检查结果
     """
     try:
-        from client.src.business.expert_training.industry_updater import get_industry_updater
+        from business.expert_training.industry_updater import get_industry_updater
         
         updater = get_industry_updater()
         return updater.check_and_update(force=False)

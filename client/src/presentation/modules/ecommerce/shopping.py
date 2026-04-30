@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from client.src.presentation.framework.minimal_ui_framework import (
+from presentation.framework.minimal_ui_framework import (
     ColorScheme, Spacing, MinimalCard, UIComponentFactory
 )
 

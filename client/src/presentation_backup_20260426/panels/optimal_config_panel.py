@@ -63,7 +63,7 @@ class OptimalConfigPanel(QWidget if PYQT6_AVAILABLE else object):
 
     使用示例：
     ```python
-    from client.src.presentation.panels.optimal_config_panel import OptimalConfigPanel
+    from .presentation.panels.optimal_config_panel import OptimalConfigPanel
 
     panel = OptimalConfigPanel()
     panel.config_changed.connect(lambda cfg: print(f"Config: {cfg}"))

@@ -13,14 +13,14 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from client.src.business.eia_process import (
+from business.eia_process import (
     ProcessType, EIAReport, ProcessStep, Pollutant, EIAMitigation
 )
-from client.src.business.eia_process.agents.process_parser import ProcessParser
-from client.src.business.eia_process.agents.process_expander import ProcessExpander
-from client.src.business.eia_process.agents.eia_analyst import EIAAnalyst
-from client.src.business.eia_process.agents.visualization_agent import VisualizationAgent
-from client.src.business.eia_process.knowledge.knowledge_base import EIAProcessKnowledgeBase
+from business.eia_process.agents.process_parser import ProcessParser
+from business.eia_process.agents.process_expander import ProcessExpander
+from business.eia_process.agents.eia_analyst import EIAAnalyst
+from business.eia_process.agents.visualization_agent import VisualizationAgent
+from business.eia_process.knowledge.knowledge_base import EIAProcessKnowledgeBase
 
 logger = logging.getLogger(__name__)
 

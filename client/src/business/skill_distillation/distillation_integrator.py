@@ -14,7 +14,7 @@ import shutil
 from .distillation_config import SkillSource, DistillationConfig, DEFAULT_SKILL_SOURCES
 from .skill_finder import SkillFinder
 from .skill_converter import SkillConverter
-from client.src.business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
+from business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
 
 
 class DistillationIntegrator:

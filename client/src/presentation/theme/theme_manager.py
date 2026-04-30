@@ -1,8 +1,8 @@
 """
-统一主题管理器 - 合并原有2个ThemeManager定义
+统一主题管理器 - 支持 Dracula 主题
 
 使用单例模式，全局唯一实例。
-支持浅色/深色/蓝色三种主题，可扩展。
+支持浅色/深色/Dracula三种主题。
 """
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -10,18 +10,13 @@ from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
 from .colors import LIGHT, DARK, LightTheme, DarkTheme
+from .dracula_theme import DRACULA, DraculaTheme
 
 
-class ThemeManager(QObject):
+class ThemeManager:
     """
     统一主题管理器（单例）
-
-    原有代码中有2个ThemeManager定义：
-    - presentation/theme.py 中的 ThemeManager
-    - presentation/widgets/aidock.py 中的 ThemeManager
-    现在合并为一个，统一维护。
     """
-    theme_changed = pyqtSignal(str)  # theme_name
 
     # 预定义主题
     THEMES = {
@@ -35,10 +30,10 @@ class ThemeManager(QObject):
             "cls": DarkTheme,
             "obj": DARK,
         },
-        "blue": {
-            "name": "蓝色主题",
-            "cls": LightTheme,  # 基于浅色，但primary改为蓝色
-            "obj": None,  # 动态创建
+        "dracula": {
+            "name": "Dracula 主题",
+            "cls": DraculaTheme,
+            "obj": DRACULA,
         },
     }
 
@@ -53,9 +48,8 @@ class ThemeManager(QObject):
     def __init__(self):
         if self._initialized:
             return
-        super().__init__()
         self._initialized = True
-        self._current_theme = "light"
+        self._current_theme = "dracula"  # 默认使用 Dracula 主题
         self._load_saved_theme()
 
     def _load_saved_theme(self):
@@ -67,7 +61,7 @@ class ThemeManager(QObject):
             if os.path.exists(config_path):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                    theme = config.get("theme", "light")
+                    theme = config.get("theme", "dracula")
                     if theme in self.THEMES:
                         self._current_theme = theme
         except Exception:
@@ -97,32 +91,27 @@ class ThemeManager(QObject):
         if theme_info:
             obj = theme_info["obj"]
             if obj is None:
-                # 动态创建（如蓝色主题）
                 obj = self._create_theme_object(self._current_theme)
                 self.THEMES[self._current_theme]["obj"] = obj
             return obj
-        return LIGHT
+        return DRACULA
 
     def _create_theme_object(self, theme_name: str) -> object:
         """动态创建主题对象"""
-        if theme_name == "blue":
-            # 蓝色主题：基于浅色，修改primary
-            class BlueTheme(LightTheme):
-                PRIMARY = "#3B82F6"
-                PRIMARY_HOVER = "#2563EB"
-                PRIMARY_LIGHT = "#DBEAFE"
-            return BlueTheme()
-        return LIGHT
+        return DRACULA
 
     def set_theme(self, theme_name: str):
         """切换主题"""
         if theme_name in self.THEMES:
             self._current_theme = theme_name
             self._save_theme()
-            self.theme_changed.emit(theme_name)
 
     def get_stylesheet(self) -> str:
-        """获取全局样式表（CSS变量）"""
+        """获取全局样式表"""
+        if self._current_theme == "dracula":
+            from .dracula_theme import get_dracula_stylesheet
+            return get_dracula_stylesheet()
+        
         c = self.colors
         return f"""
             /* 全局变量 */
@@ -130,34 +119,26 @@ class ThemeManager(QObject):
                 --primary: {c.PRIMARY};
                 --primary-hover: {c.PRIMARY_HOVER};
                 --primary-light: {c.PRIMARY_LIGHT};
-
                 --bg-main: {c.BG_MAIN};
                 --bg-secondary: {c.BG_SECONDARY};
                 --bg-tertiary: {c.BG_TERTIARY};
-
                 --border: {c.BORDER};
                 --border-hover: {c.BORDER_HOVER};
-
                 --text-primary: {c.TEXT_PRIMARY};
                 --text-secondary: {c.TEXT_SECONDARY};
                 --text-tertiary: {c.TEXT_TERTIARY};
                 --text-placeholder: {c.TEXT_PLACEHOLDER};
-
                 --success: {c.SUCCESS};
                 --warning: {c.WARNING};
                 --error: {c.ERROR};
                 --info: {c.INFO};
-
                 --card-bg: {c.CARD_BG};
                 --card-hover: {c.CARD_HOVER};
             }}
         """
 
     def get_widget_style(self, widget_type: str) -> str:
-        """
-        获取组件样式
-        widget_type: 'button_primary' | 'button_secondary' | 'input' | 'card' | 'scrollbar' | 'panel'
-        """
+        """获取组件样式"""
         c = self.colors
 
         styles = {

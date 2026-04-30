@@ -16,7 +16,7 @@ Cognitive Framework - 认知中间件框架
 - 提供统一的认知中间表示（语义图）
 
 使用示例：
-    from client.src.business.cognitive_framework import CognitiveFramework
+    from business.cognitive_framework import CognitiveFramework
     
     cf = CognitiveFramework()
     

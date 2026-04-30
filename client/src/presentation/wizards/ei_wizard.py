@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot
 
 # 导入 EIAgentAdapter
 try:
-    from client.src.business.ei_agent.ei_agent_adapter import (
+    from business.ei_agent.ei_agent_adapter import (
         get_ei_agent_adapter,
         submit_ei_task,
         EIAgentAdapter
@@ -92,7 +92,7 @@ class EIWizard(QWizard):
         # 降级方案：使用旧的 EIAgent
         if not self.use_adapter:
             try:
-                from client.src.business.ei_agent import EIAgent
+                from business.ei_agent import EIAgent
                 self.agent = EIAgent()
                 print("[EIWizard] 使用降级方案: EIAgent")
             except ImportError:
@@ -153,7 +153,7 @@ class EIWizard(QWizard):
                 import time
                 max_wait = 60
                 for _ in range(max_wait):
-                    from client.src.business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
+                    from business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
                     adapter = get_ei_agent_adapter()
                     status = adapter.get_task_status(task_id)
                     if status and status.value in ["completed", "failed", "cancelled"]:

@@ -9,7 +9,7 @@ from loguru import logger
 
 from ..demand_detector import LatentNeed
 from ..proactive_agent import ProactiveAction
-from client.src.business.skill_evolution import (
+from business.skill_evolution import (
     VibeSkillBuilder,
     SkillEncapsulationEngine,
     SkillRatingSystem,
@@ -48,7 +48,7 @@ class SkillIntegrator:
     def _load_dependencies(self):
         """延迟加载依赖"""
         try:
-            from client.src.business.skill_evolution import (
+            from business.skill_evolution import (
                 VibeSkillBuilder,
                 SkillEncapsulationEngine,
                 SkillRatingSystem,

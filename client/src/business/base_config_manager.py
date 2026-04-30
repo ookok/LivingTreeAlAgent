@@ -7,7 +7,7 @@ Base Config Manager
   2. 字典模式：不传入 config_class，配置以 dict 存储（支持点路径访问）
 
 使用方式（dataclass 模式）：
-    from client.src.business.base_config_manager import BaseConfigManager
+    from business.base_config_manager import BaseConfigManager
     
     class MyConfigManager(BaseConfigManager):
         def __init__(self, config_path: Path):

@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 
 # 正确的导入路径
-from client.src.business.tools.base_tool import BaseTool, AgentCallResult
+from business.tools.base_tool import BaseTool, AgentCallResult
 
 # 定义本地 ModelCapability 枚举（避免依赖 global_model_router）
 class ModelCapability(Enum):
@@ -249,7 +249,7 @@ class CrewAIAgentAdapter(BaseTool):
     def _init_memory(self):
         """初始化项目记忆系统集成"""
         try:
-            from client.src.business.intelligent_memory.memory_manager import MemoryManager
+            from business.intelligent_memory.memory_manager import MemoryManager
             
             self._memory = MemoryManager()
             
@@ -268,7 +268,7 @@ class CrewAIAgentAdapter(BaseTool):
         使其可以被其他组件发现和使用。
         """
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry, ToolDefinition
+            from business.tools.tool_registry import ToolRegistry, ToolDefinition
             
             registry = ToolRegistry.get_instance()
             tool_def = ToolDefinition(
@@ -391,7 +391,7 @@ class CrewAIAgentAdapter(BaseTool):
     def _start_monitoring(self, prompt: str):
         """启动监控（Opik 集成）"""
         try:
-            from client.src.business.opik_tracer import opik_tracer
+            from business.opik_tracer import opik_tracer
             
             if opik_tracer.is_enabled():
                 opik_tracer.start_trace(
@@ -404,7 +404,7 @@ class CrewAIAgentAdapter(BaseTool):
     def _end_monitoring(self, result: Any, execution_time: float):
         """结束监控"""
         try:
-            from client.src.business.opik_tracer import opik_tracer
+            from business.opik_tracer import opik_tracer
             
             if opik_tracer.is_enabled():
                 opik_tracer.end_trace(

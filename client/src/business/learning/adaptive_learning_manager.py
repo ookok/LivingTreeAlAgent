@@ -42,9 +42,9 @@ class AdaptiveLearningManager:
         self._logger = logger.bind(component="AdaptiveLearningManager")
         
         # 延迟导入避免循环依赖
-        from client.src.business.learning.knowledge_graph_editor import get_knowledge_graph_editor
-        from client.src.business.learning.active_learning_engine import get_active_learning_engine
-        from client.src.business.learning.long_term_mastery import get_long_term_mastery
+        from business.learning.knowledge_graph_editor import get_knowledge_graph_editor
+        from business.learning.active_learning_engine import get_active_learning_engine
+        from business.learning.long_term_mastery import get_long_term_mastery
         
         self._graph_editor = get_knowledge_graph_editor()
         self._active_learning = get_active_learning_engine()
@@ -62,7 +62,7 @@ class AdaptiveLearningManager:
         """与系统架构集成"""
         # 1. 集成自适应系统
         try:
-            from client.src.infrastructure.adaptive_system import AdaptiveSystem
+            from infrastructure.adaptive_system import AdaptiveSystem
             self._adaptive_system = AdaptiveSystem()
             self._logger.info("✓ 集成 AdaptiveSystem")
         except Exception as e:
@@ -71,7 +71,7 @@ class AdaptiveLearningManager:
         
         # 2. 集成进化引擎
         try:
-            from client.src.business.evolution_engine import EvolutionEngine
+            from business.evolution_engine import EvolutionEngine
             self._evolution_engine = EvolutionEngine()
             self._logger.info("✓ 集成 EvolutionEngine")
         except Exception as e:
@@ -80,7 +80,7 @@ class AdaptiveLearningManager:
         
         # 3. 集成知识图谱服务
         try:
-            from client.src.business.memory import get_knowledge_graph_service
+            from business.memory import get_knowledge_graph_service
             self._kg_service = get_knowledge_graph_service()
             self._logger.info("✓ 集成 KnowledgeGraphService")
         except Exception as e:
@@ -89,7 +89,7 @@ class AdaptiveLearningManager:
         
         # 4. 集成模型路由器
         try:
-            from client.src.business.smolllm2.router import L0Router
+            from business.smolllm2.router import L0Router
             self._l0_router = L0Router()
             self._logger.info("✓ 集成 L0Router")
         except Exception as e:

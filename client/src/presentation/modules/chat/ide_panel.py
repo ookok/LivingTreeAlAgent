@@ -23,10 +23,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QTimer, QMimeData
 from PyQt6.QtGui import QTextCursor, QDragEnterEvent, QDropEvent, QIcon
 
-from client.src.business.nanochat_config import config
-from client.src.presentation.components.markdown_renderer import MarkdownRenderer
-from client.src.presentation.components.code_highlighter import CodeHighlighterWidget
-from client.src.presentation.components.command_palette import CommandPalette
+from business.nanochat_config import config
+from presentation.components.markdown_renderer import MarkdownRenderer
+from presentation.components.code_highlighter import CodeHighlighterWidget
+from presentation.components.command_palette import CommandPalette
 
 
 class CodeAnalyzer:

@@ -66,7 +66,7 @@ class LocalModelPriorityLoader:
 
     def _get_default_models_dir(self) -> str:
         """获取默认模型目录"""
-        from client.src.business.config import get_config_dir
+        from business.config import get_config_dir
         return str(get_config_dir() / "models")
 
     def check_backend_availability(self) -> List[BackendInfo]:
@@ -154,7 +154,7 @@ class LocalModelPriorityLoader:
         )
 
         try:
-            from client.src.business.nano_vllm import NanoVLLMClient
+            from business.nano_vllm import NanoVLLMClient
             info.available = True
             info.reason = "Nano-vLLM available"
         except ImportError:
@@ -398,7 +398,7 @@ class LocalModelPriorityLoader:
     def _load_with_nano_vllm(self, model_path: str, **kwargs) -> LoadResult:
         """使用 Nano-vLLM 加载"""
         try:
-            from client.src.business.nano_vllm import NanoVLLMClient
+            from business.nano_vllm import NanoVLLMClient
             
             port = kwargs.get("port", 8000)
             host = kwargs.get("host", "localhost")
@@ -436,8 +436,8 @@ class LocalModelPriorityLoader:
     def _load_with_ollama(self, model_path: str, **kwargs) -> LoadResult:
         """使用 Ollama 加载"""
         try:
-            from client.src.business.ollama_client import OllamaClient
-            from client.src.business.config import OllamaConfig
+            from business.ollama_client import OllamaClient
+            from business.config import OllamaConfig
             import subprocess
             import os
             
@@ -557,7 +557,7 @@ class LocalModelPriorityLoader:
                 return outputs[0].outputs[0].text
 
             elif self._current_backend == ModelBackend.NANO_VLLM:
-                from client.src.business.nano_vllm import SamplingParams
+                from business.nano_vllm import SamplingParams
                 sampling_params = SamplingParams(
                     temperature=temperature,
                     max_tokens=max_tokens,

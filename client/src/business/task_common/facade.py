@@ -6,7 +6,7 @@ Task Common - 门面类
 """
 
 from typing import List, Dict, Any, Optional
-from client.src.business.task_common import (
+from business.task_common import (
     BaseTaskDecomposer,
     DecomposedTask,
     DecomposerType,

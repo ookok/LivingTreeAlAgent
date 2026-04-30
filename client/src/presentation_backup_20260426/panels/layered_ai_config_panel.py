@@ -727,8 +727,8 @@ class LayeredAIConfigPanel(QWidget):
         def do_download():
             try:
                 # 使用系统统一下载中心
-                from client.src.business.unified_downloader import get_download_center
-                from client.src.business.unified_downloader import DownloadStatus, SourceType
+                from .business.unified_downloader import get_download_center
+                from .business.unified_downloader import DownloadStatus, SourceType
                 
                 # 根据模型类型选择下载链接
                 model_downloads = {
@@ -784,9 +784,9 @@ class LayeredAIConfigPanel(QWidget):
                         success = False
                 else:
                     # 使用系统下载中心下载 GGUF 模型
-                    from client.src.business.model_manager import ModelManager
-                    from client.src.business.config import AppConfig
-                    from client.src.business.unified_downloader import get_download_center
+                    from .business.model_manager import ModelManager
+                    from .business.config import AppConfig
+                    from .business.unified_downloader import get_download_center
                     
                     config = AppConfig()
                     model_manager = ModelManager(config)
@@ -911,7 +911,7 @@ class LayeredAIConfigPanel(QWidget):
 
     def _save_config(self):
         """保存配置"""
-        from client.src.infrastructure.config.config import save_config
+        from .infrastructure.config.config import save_config
 
         la = self.config.layered_ai
 

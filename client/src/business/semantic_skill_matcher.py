@@ -8,7 +8,7 @@ SemanticSkillMatcher - 语义 Skill 匹配器（通用·Embedding 版）
 4. 无匹配 → 提示用户是否从当前文档提炼新 Skill
 
 使用方法：
-    from client.src.business.semantic_skill_matcher import SemanticSkillMatcher
+    from business.semantic_skill_matcher import SemanticSkillMatcher
 
     matcher = SemanticSkillMatcher()
     matched = matcher.match(document_text="通知内容…")

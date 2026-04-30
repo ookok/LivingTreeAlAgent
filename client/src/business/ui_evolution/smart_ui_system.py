@@ -15,7 +15,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('ui_evolution.smart_ui_system')
 
 import time
@@ -333,7 +333,7 @@ def smart_predict(
     
     使用示例:
     ```python
-    from client.src.business.ui_evolution import smart_predict
+    from business.ui_evolution import smart_predict
 
     
     # 用户点击了输入框

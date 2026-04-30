@@ -20,8 +20,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer, QUrl, QPoint
 from PySide6.QtGui import QFont, QIcon, QTextCursor, QDesktopServices, QCursor, QAction, QClipboard
-from client.src.presentation.components.spell_check_edit import SpellCheckTextEdit
-from client.src.presentation.components.spell_check_edit import SpellCheckTextEdit
+from presentation.components.spell_check_edit import SpellCheckTextEdit
+from presentation.components.spell_check_edit import SpellCheckTextEdit
 
 import logging
 from typing import Dict, Any, Optional, List
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # 导入多媒体消息支持（P2 新增）
 try:
-    from client.src.presentation.wizards.ei_wizard_media import (
+    from presentation.wizards.ei_wizard_media import (
         VideoBubble, AudioBubble, MediaMessageHandler
     )
     MEDIA_SUPPORT = True
@@ -44,7 +44,7 @@ except ImportError:
 
 # 导入消息操作支持（P2 新增）
 try:
-    from client.src.presentation.wizards.ei_wizard_msg_actions import (
+    from presentation.wizards.ei_wizard_msg_actions import (
         MessageActions, patch_message_bubble
     )
     MSG_ACTIONS_SUPPORT = True
@@ -57,7 +57,7 @@ except ImportError:
 # 导入 TTS 语音朗读支持
 try:
     import edge_tts
-    from client.src.business.living_tree_ai.voice.voice_adapter import (
+    from business.living_tree_ai.voice.voice_adapter import (
         MossTTSAdapter, VoiceConfig
     )
     TTS_AVAILABLE = True
@@ -357,7 +357,7 @@ class EIWizardChat(QWidget):
     def _init_agent(self):
         """初始化 EIAgent"""
         try:
-            from client.src.business.ei_agent.ei_agent_adapter import (
+            from business.ei_agent.ei_agent_adapter import (
                 get_ei_agent_adapter,
                 submit_ei_task,
             )
@@ -661,7 +661,7 @@ class EIWizardChat(QWidget):
         
         try:
             # 查询任务状态
-            from client.src.business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
+            from business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
             adapter = get_ei_agent_adapter()
             
             status = adapter.get_task_status(self.current_task_id)
@@ -712,7 +712,7 @@ class EIWizardChat(QWidget):
     def _on_task_completed(self, task_id: str):
         """任务完成处理"""
         try:
-            from client.src.business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
+            from business.ei_agent.ei_agent_adapter import get_ei_agent_adapter
             adapter = get_ei_agent_adapter()
             
             # 获取任务结果

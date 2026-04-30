@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 
 
 # ── 预设 CLI 工具列表（高价值工具，优先注册） ──────────
@@ -562,10 +562,10 @@ CLI 工具路径：{tool_info.path}
 ```
 
 要求：
-1. 继承 BaseTool 类（from client.src.business.tools.base_tool import BaseTool）
+1. 继承 BaseTool 类（from business.tools.base_tool import BaseTool）
 2. 实现 name、description 属性和 execute() 方法
 3. 通过 subprocess 调用 CLI 工具
-4. 返回 ToolResult（from client.src.business.tools.tool_result import ToolResult）
+4. 返回 ToolResult（from business.tools.tool_result import ToolResult）
 5. execute() 接受 **kwargs，将其转为 CLI 参数
 6. 添加必要的参数解析和错误处理
 7. description 要准确描述工具功能（用中文）
@@ -718,7 +718,7 @@ CLI 工具路径：{tool_info.path}
 
         # 6. 注册到 ToolRegistry
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry
+            from business.tools.tool_registry import ToolRegistry
             registry = ToolRegistry.get_instance()
             registry.register_tool(tool_class())
             tool_info.wrapped = True
@@ -738,7 +738,7 @@ CLI 工具路径：{tool_info.path}
     async def _call_llm(self, prompt: str) -> str:
         """调用 LLM（通过 GlobalModelRouter）"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
             return call_model_sync(
@@ -840,7 +840,7 @@ CLI 工具路径：{tool_info.path}
         registered_names = set()
         if skip_installed:
             try:
-                from client.src.business.tools.tool_registry import ToolRegistry
+                from business.tools.tool_registry import ToolRegistry
                 registry = ToolRegistry.get_instance()
                 for t in registry.list_tools():
                     registered_names.add(t.name)
@@ -964,8 +964,8 @@ import subprocess
 from typing import Any, Dict
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 
 
 class {safe_class}Tool(BaseTool):

@@ -12,7 +12,7 @@ import asyncio
 
 def test_classifier():
     """测试URL分类器"""
-    from client.src.business.url_intelligence.url_classifier import URLClassifier
+    from business.url_intelligence.url_classifier import URLClassifier
     
     print("\n" + "="*60)
     print("测试1: URL分类器")
@@ -53,7 +53,7 @@ def test_classifier():
 
 def test_mirror_registry():
     """测试镜像源注册表"""
-    from client.src.business.url_intelligence.mirror_registry import MirrorRegistry
+    from business.url_intelligence.mirror_registry import MirrorRegistry
     
     print("\n" + "="*60)
     print("测试2: 镜像源注册表")
@@ -92,7 +92,7 @@ def test_mirror_registry():
 
 async def test_url_optimizer():
     """测试URL优化器"""
-    from client.src.business.url_intelligence.url_optimizer import URLOptimizer
+    from business.url_intelligence.url_optimizer import URLOptimizer
     
     print("\n" + "="*60)
     print("测试3: URL优化器")
@@ -140,7 +140,7 @@ async def test_url_optimizer():
 
 def test_markdown_output():
     """测试Markdown输出"""
-    from client.src.business.url_intelligence.url_optimizer import URLOptimizer
+    from business.url_intelligence.url_optimizer import URLOptimizer
     
     print("\n" + "="*60)
     print("测试4: Markdown输出")

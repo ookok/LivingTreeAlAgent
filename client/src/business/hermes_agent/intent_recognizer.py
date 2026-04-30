@@ -10,7 +10,7 @@ from pathlib import Path
 import json
 import logging
 
-from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
+from business.global_model_router import GlobalModelRouter, ModelCapability
 
 
 logger = logging.getLogger(__name__)

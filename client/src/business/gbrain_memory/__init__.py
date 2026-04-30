@@ -18,7 +18,7 @@ Inspired by: https://github.com/garrytan/gbrain
 - ui/panel.py: PyQt6 管理面板
 """
 
-from client.src.business.gbrain_memory.models import (
+from business.gbrain_memory.models import (
     BrainPage,
     MemoryCategory,
     TimelineEntry,
@@ -33,10 +33,10 @@ from client.src.business.gbrain_memory.models import (
     CATEGORY_STRUCTURE,
 )
 
-from client.src.business.gbrain_memory.page_manager import PageManager
-from client.src.business.gbrain_memory.search_engine import SearchEngine
-from client.src.business.gbrain_memory.agent_loop import BrainAgentLoop
-from client.src.business.gbrain_memory.sync import SyncManager, SyncStatus, ConflictResolution
+from business.gbrain_memory.page_manager import PageManager
+from business.gbrain_memory.search_engine import SearchEngine
+from business.gbrain_memory.agent_loop import BrainAgentLoop
+from business.gbrain_memory.sync import SyncManager, SyncStatus, ConflictResolution
 
 __all__ = [
     # 模型

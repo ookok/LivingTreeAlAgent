@@ -30,7 +30,7 @@ def _get_emotion_perception():
     global _emotion_perception
     if _emotion_perception is None:
         try:
-            from client.src.business.emotion_perception import (
+            from business.emotion_perception import (
                 get_emotion_perception, EmotionType as EPEmotionType
             )
             _emotion_perception = get_emotion_perception()

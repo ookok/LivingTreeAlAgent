@@ -18,11 +18,11 @@ import os
 from typing import Any, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.self_evolution.tool_self_repairer import (
+from business.self_evolution.tool_self_repairer import (
     ToolSelfRepairer,
     RepairStrategy,
 )
-from client.src.business.global_model_router import GlobalModelRouter
+from business.global_model_router import GlobalModelRouter
 
 
 # 训练池文件路径

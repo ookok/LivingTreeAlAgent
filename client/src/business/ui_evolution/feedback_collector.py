@@ -17,7 +17,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('ui_evolution.feedback_collector')
 
 import json
@@ -472,7 +472,7 @@ def record_prediction_feedback(
     
     使用示例:
     ```python
-    from client.src.business.ui_evolution import record_prediction_feedback
+    from business.ui_evolution import record_prediction_feedback
 
     
     # 预测

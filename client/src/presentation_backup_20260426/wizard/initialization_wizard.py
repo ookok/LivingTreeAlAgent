@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QPainter, QColor, QFont, QIcon
 
-from client.src.business.config import (
+from .business.config import (
     AppConfig, OllamaConfig, ModelPathConfig,
     ModelMarketConfig, AgentConfig, ModelStoreConfig,
     DEFAULT_CONFIG, load_config, save_config, _get_config_dir,

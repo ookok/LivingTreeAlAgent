@@ -13,7 +13,7 @@ L4: LLM (异步)             - 大模型生成
 
 使用方式
 --------
-from client.src.business.local_file_search.router import LocalFileSearchRouter
+from business.local_file_search.router import LocalFileSearchRouter
 
 router = LocalFileSearchRouter()
 
@@ -492,7 +492,7 @@ def patch_fusion_rag_router():
     将本地文件搜索作为 L1.5 层集成
     """
     try:
-        from client.src.business.fusion_rag.intelligent_router import IntelligentRouter
+        from business.fusion_rag.intelligent_router import IntelligentRouter
         
         # 保存原始配置
         original_layer_configs = IntelligentRouter.__dict__.get('_original_layer_configs')

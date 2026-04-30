@@ -201,7 +201,7 @@ class MainPage(QWidget):
         if module_id == "deep_search":
             # 深度搜索面板
             try:
-                from client.src.presentation.deep_search_panel import DeepSearchPanel
+                from .presentation.deep_search_panel import DeepSearchPanel
                 panel = DeepSearchPanel()
                 self._panels[module_id] = panel
                 logger.info(f"[MainPage] 深度搜索面板已加载")
@@ -211,7 +211,7 @@ class MainPage(QWidget):
         elif module_id == "knowledge_base":
             # 知识库面板
             try:
-                from client.src.presentation.knowledge_base_panel import KnowledgeBasePanel
+                from .presentation.knowledge_base_panel import KnowledgeBasePanel
                 panel = KnowledgeBasePanel()
                 panel.init_ai_modules()
                 self._panels[module_id] = panel
@@ -225,7 +225,7 @@ class MainPage(QWidget):
         elif module_id == "smart_ide":
             # AI 驱动智能 IDE 面板（Trae Solo 模式）
             try:
-                from client.src.presentation.ai_driven_ide_panel import AIDrivenIDEPanel
+                from .presentation.ai_driven_ide_panel import AIDrivenIDEPanel
                 panel = AIDrivenIDEPanel()
                 panel.init_ai_modules()
                 self._panels[module_id] = panel
@@ -263,7 +263,7 @@ class MainPage(QWidget):
         elif module_id == "smart_writing":
             # AI 智能写作平台
             try:
-                from client.src.presentation.ai_writing_platform import AIWritingPanel
+                from .presentation.ai_writing_platform import AIWritingPanel
                 panel = AIWritingPanel()
                 self._panels[module_id] = panel
                 logger.info(f"[MainPage] 智能写作面板已加载")
@@ -272,7 +272,7 @@ class MainPage(QWidget):
                 QMessageBox.warning(self, "错误", f"智能写作面板加载失败: {e}")
         elif module_id == "project_generation":
             try:
-                from client.src.presentation.project_generation_panel import ProjectGenerationPanel
+                from .presentation.project_generation_panel import ProjectGenerationPanel
                 panel = ProjectGenerationPanel()
                 self._panels[module_id] = panel
                 logger.info(f"[MainPage] 项目生成面板已加载")
@@ -300,8 +300,8 @@ class MainPage(QWidget):
     def _show_settings(self):
         """显示设置面板"""
         try:
-            from client.src.business.config import AppConfig
-            from client.src.presentation.settings_dialog import SettingsDialog
+            from .business.config import AppConfig
+            from .presentation.settings_dialog import SettingsDialog
             
             # 创建默认配置（如果不存在）
             config = AppConfig()

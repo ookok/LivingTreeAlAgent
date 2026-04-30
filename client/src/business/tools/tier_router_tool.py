@@ -4,12 +4,12 @@ TierRouter Tool Wrapper
 Auto-generated BaseTool wrapper for TierRouter
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.search.tier_router import TierRouter
+    from business.search.tier_router import TierRouter
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     TierRouter = None
@@ -81,7 +81,7 @@ class TierRouterTool(BaseTool):
 
 def register_tier_router_tool():
     """注册 tier_router 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = TierRouterTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = TierRouterTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

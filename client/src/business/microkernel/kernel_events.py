@@ -34,7 +34,7 @@ from typing import Any, Dict, Optional
 from enum import Enum
 
 # 延迟导入：避免循环导入
-# from client.src.business.plugin_framework.event_bus import Event
+# from business.plugin_framework.event_bus import Event
 
 
 class KernelState(Enum):
@@ -57,7 +57,7 @@ class KernelEventData:
     def to_event(self, source: str = "Microkernel"):
         """转换为 EventBus 的 Event 对象"""
         # 延迟导入
-        from client.src.business.plugin_framework.event_bus import Event
+        from business.plugin_framework.event_bus import Event
         return Event(
             type=self.event_type,
             data=self.data,

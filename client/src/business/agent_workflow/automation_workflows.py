@@ -11,8 +11,8 @@
 
 from typing import Dict, Optional, Any
 from . import WorkflowBuilder, register_workflow, execute_workflow
-from client.src.business.agent_adapter import create_agent_adapter, AgentConfig
-from client.src.business.shared.event_bus import EventBus, Event
+from business.agent_adapter import create_agent_adapter, AgentConfig
+from business.shared.event_bus import EventBus, Event
 import asyncio
 
 

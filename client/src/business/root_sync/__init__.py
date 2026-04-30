@@ -14,7 +14,7 @@ Root Sync - 根系同步 🌳
 - 优先级调度
 
 Usage:
-    from client.src.business.root_sync import RootSyncSystem, FolderConfig
+    from business.root_sync import RootSyncSystem, FolderConfig
 
     # 创建系统
     system = RootSyncSystem(storage_dir="~/.hermes/root_sync")

@@ -32,7 +32,7 @@ def test_operation_sequence():
     print("测试 1: OperationSequenceDB - 操作序列数据库")
     print("="*60)
     
-    from client.src.business.ui_evolution.operation_sequence import (
+    from business.ui_evolution.operation_sequence import (
         OperationSequenceDB,
         OperationRecord,
         record_action,
@@ -91,7 +91,7 @@ def test_tfidf_predictor():
     print("测试 2: TFIDFPredictor - TF-IDF 预测器")
     print("="*60)
     
-    from client.src.business.ui_evolution.tfidf_predictor import (
+    from business.ui_evolution.tfidf_predictor import (
         TFIDFPredictor,
         predict_next,
         quick_predict,
@@ -159,7 +159,7 @@ def test_feedback_collector():
     print("测试 3: FeedbackCollector - 反馈收集器")
     print("="*60)
     
-    from client.src.business.ui_evolution.feedback_collector import (
+    from business.ui_evolution.feedback_collector import (
         FeedbackCollector,
         FeedbackType,
         record_prediction_feedback,
@@ -229,14 +229,14 @@ def test_evolution_scheduler():
     print("测试 4: EvolutionScheduler - 进化调度器")
     print("="*60)
     
-    from client.src.business.ui_evolution.evolution_scheduler import (
+    from business.ui_evolution.evolution_scheduler import (
         EvolutionScheduler,
         EvolutionLevel,
         trigger_learning,
         get_evolution_status,
     )
-    from client.src.business.ui_evolution.tfidf_predictor import TFIDFPredictor
-    from client.src.business.ui_evolution.feedback_collector import FeedbackCollector
+    from business.ui_evolution.tfidf_predictor import TFIDFPredictor
+    from business.ui_evolution.feedback_collector import FeedbackCollector
     import tempfile
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -297,7 +297,7 @@ def test_smart_ui_system():
     print("测试 5: SmartUISystem - 智能 UI 系统")
     print("="*60)
     
-    from client.src.business.ui_evolution.smart_ui_system import (
+    from business.ui_evolution.smart_ui_system import (
         SmartUISystem,
         smart_predict,
         record_ui_feedback,
@@ -361,7 +361,7 @@ def test_hints_integration():
     print("="*60)
     
     try:
-        from client.src.business.ui_evolution.hints_integration import (
+        from business.ui_evolution.hints_integration import (
             create_ui_hints_integration,
             UIHintsConfig,
         )

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 
 from . import MessageType, TaskStatus, A2AMessage, Task, SessionContext, AgentCapability
 from .security import SecurityFilter, ThreatLevel

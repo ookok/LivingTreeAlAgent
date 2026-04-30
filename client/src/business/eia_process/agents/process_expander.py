@@ -15,7 +15,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 
-from client.src.business.eia_process import ProcessType, ProcessStep
+from business.eia_process import ProcessType, ProcessStep
 
 logger = logging.getLogger(__name__)
 

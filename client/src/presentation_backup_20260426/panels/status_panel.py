@@ -20,8 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from client.src.business.config import get_hermes_home, get_env_value
-from client.src.business.providers import get_all_configured_providers, has_api_key, get_label
+from .business.config import get_hermes_home, get_env_value
+from .business.providers import get_all_configured_providers, has_api_key, get_label
 
 
 class StatusCard(QFrame):

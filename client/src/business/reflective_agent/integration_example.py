@@ -7,7 +7,7 @@
 import asyncio
 from typing import Dict, Any, Optional, Callable, Awaitable
 
-from client.src.business.reflective_agent import (
+from business.reflective_agent import (
     ReflectiveAgentLoop,
     ReflectiveLoopConfig,
     ExecutionPlan,

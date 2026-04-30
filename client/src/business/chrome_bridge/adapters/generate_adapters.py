@@ -21,7 +21,7 @@ if ADAPTERS_DIR not in sys.path:
     sys.path.insert(0, ADAPTERS_DIR)
 
 # 导入注册表数据
-from client.src.business.chrome_bridge.website_adapter_registry import WEBSITE_REGISTRY_DATA
+from business.chrome_bridge.website_adapter_registry import WEBSITE_REGISTRY_DATA
 
 
 # 适配器模板
@@ -37,7 +37,7 @@ ADAPTER_TEMPLATE = '''\
 """
 
 from typing import Dict, Any
-from client.src.business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
+from business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
 
 
 class {class_name}(BaseWebsiteAdapter):

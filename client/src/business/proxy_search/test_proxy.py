@@ -28,7 +28,7 @@ async def test_fetch_proxies():
     print("=" * 50)
     
     try:
-        from client.src.business.proxy_search import fetch_proxies
+        from business.proxy_search import fetch_proxies
         
         print("正在从代理源获取列表...")
         proxies = await fetch_proxies()
@@ -61,7 +61,7 @@ async def test_validator(proxies):
         return []
     
     try:
-        from client.src.business.proxy_search import validate_proxies
+        from business.proxy_search import validate_proxies
         
         # 只验证前 10 个
         test_proxies = proxies[:10]
@@ -100,8 +100,8 @@ async def test_proxy_pool():
     print("=" * 50)
     
     try:
-        from client.src.business.proxy_search import initialize_pool, get_proxy_pool
-        from client.src.business.proxy_search.deep_search_integration import get_integration, SearchMode
+        from business.proxy_search import initialize_pool, get_proxy_pool
+        from business.proxy_search.deep_search_integration import get_integration, SearchMode
         
         print("初始化代理池...")
         pool = await initialize_pool(min_size=3)
@@ -136,7 +136,7 @@ async def test_middleware():
     print("=" * 50)
     
     try:
-        from client.src.business.proxy_search import get_middleware, get_proxy_pool
+        from business.proxy_search import get_middleware, get_proxy_pool
         
         pool = get_proxy_pool()
         
@@ -174,7 +174,7 @@ async def test_integration():
     print("=" * 50)
     
     try:
-        from client.src.business.proxy_search.deep_search_integration import initialize_integration, SearchMode
+        from business.proxy_search.deep_search_integration import initialize_integration, SearchMode
         
         integration = await initialize_integration()
         

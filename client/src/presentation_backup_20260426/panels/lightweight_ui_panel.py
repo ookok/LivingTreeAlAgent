@@ -37,7 +37,7 @@ class LightweightUIPanel(QWidget):
         self._init_timers()
         
         try:
-            from client.src.business.lightweight_ui import get_lightweight_ui
+            from .business.lightweight_ui import get_lightweight_ui
             self._ui_system = get_lightweight_ui()
         except ImportError:
             self._ui_system = None

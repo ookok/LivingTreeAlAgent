@@ -2,7 +2,7 @@
 颜色常量定义 - 消除1865处硬编码颜色值
 
 使用方式：
-    from client.src.presentation.theme.colors import LIGHT_THEME, DARK_THEME
+    from presentation.theme.colors import LIGHT_THEME, DARK_THEME
     bg = LIGHT_THEME.BG_MAIN
 """
 
@@ -93,6 +93,12 @@ class LightTheme:
     CARD_HOVER = ThemeColors.CARD_HOVER
     SCROLL_BG = ThemeColors.SCROLL_BG
     SCROLL_HANDLE = ThemeColors.SCROLL_HANDLE
+    # 额外属性（用于设置面板）
+    CARD = ThemeColors.CARD_BG
+    BACKGROUND = ThemeColors.BG_MAIN
+    ACCENT_PRIMARY = ThemeColors.PRIMARY
+    ACCENT_PRIMARY_DARK = ThemeColors.PRIMARY_DARK
+    SURFACE = ThemeColors.BG_SECONDARY
 
 
 class DarkTheme:
@@ -117,6 +123,12 @@ class DarkTheme:
     CARD_HOVER = ThemeColors.CARD_DARK_HOVER
     SCROLL_BG = ThemeColors.BG_DARK_SECONDARY
     SCROLL_HANDLE = ThemeColors.BORDER_DARK
+    # 额外属性（用于设置面板）
+    CARD = ThemeColors.CARD_DARK_BG
+    BACKGROUND = ThemeColors.BG_DARK_MAIN
+    ACCENT_PRIMARY = ThemeColors.PRIMARY
+    ACCENT_PRIMARY_DARK = ThemeColors.PRIMARY_DARK
+    SURFACE = ThemeColors.BG_DARK_SECONDARY
 
 
 # 快捷访问

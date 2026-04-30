@@ -155,7 +155,7 @@ class P2PToolMarketplace:
     def _get_node_id(self) -> str:
         """获取当前节点 ID"""
         try:
-            from client.src.business.p2p_connector import get_p2p_connector
+            from business.p2p_connector import get_p2p_connector
             connector = get_p2p_connector()
             return connector.node_id
         except Exception as e:
@@ -167,7 +167,7 @@ class P2PToolMarketplace:
         """获取 P2P 连接器（延迟初始化）"""
         if self._p2p_connector is None:
             try:
-                from client.src.business.p2p_connector import get_p2p_connector
+                from business.p2p_connector import get_p2p_connector
                 self._p2p_connector = get_p2p_connector()
             except Exception as e:
                 logger.error(f"初始化 P2P 连接器失败: {e}")
@@ -407,7 +407,7 @@ class P2PToolMarketplace:
         
         # 6. 注册到 ToolRegistry
         try:
-            from client.src.business.tools.register_all_tools import register_all_tools
+            from business.tools.register_all_tools import register_all_tools
             register_all_tools()
             logger.info(f"[P2PToolMarketplace] 工具已注册: {listing.tool_name}")
         except Exception as e:
@@ -496,7 +496,7 @@ class P2PToolMarketplace:
         """查找工具文件"""
         # 从 ToolRegistry 获取工具
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry
+            from business.tools.tool_registry import ToolRegistry
             registry = ToolRegistry.get_instance()
             tool = registry.get_tool(tool_name)
             if tool and hasattr(tool, '__file__'):

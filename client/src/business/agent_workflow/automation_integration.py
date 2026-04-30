@@ -13,20 +13,20 @@ from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from client.src.business.agent_workflow import (
+from business.agent_workflow import (
     WorkflowEngine, 
     WorkflowBuilder, 
     WorkflowResult,
     register_workflow,
     execute_workflow as execute_agent_workflow
 )
-from client.src.business.agent_adapter import (
+from business.agent_adapter import (
     create_agent_adapter, 
     AgentConfig, 
     AgentResponse
 )
-from client.src.business.shared.event_bus import EventBus, Event
-from client.src.business.agent_skills.cron_scheduler import (
+from business.shared.event_bus import EventBus, Event
+from business.agent_skills.cron_scheduler import (
     CronScheduler, 
     ScheduledTask, 
     TaskStatus,

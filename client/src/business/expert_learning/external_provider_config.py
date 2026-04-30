@@ -15,7 +15,7 @@ Author: LivingTreeAI Agent
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.external_provider_config')
 
 import json
@@ -335,7 +335,7 @@ class ExternalProviderManager:
     
     使用示例:
     ```python
-    from client.src.business.expert_learning.external_provider_config import (
+    from business.expert_learning.external_provider_config import (
         ExternalProviderManager, ProviderType, CostType
     )
     

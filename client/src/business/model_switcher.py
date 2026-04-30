@@ -276,7 +276,7 @@ class ModelSwitcher:
     def _update_global_router(self, model: ModelConfig):
         """更新全局模型路由器"""
         try:
-            from client.src.business.global_model_router import GlobalModelRouter
+            from business.global_model_router import GlobalModelRouter
             router = GlobalModelRouter()
             
             # 设置默认模型

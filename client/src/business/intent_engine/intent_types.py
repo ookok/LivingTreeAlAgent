@@ -4,9 +4,8 @@
 =======================
 
 定义 IntentEngine 使用的所有数据类型。
-from __future__ import annotations
 """
-
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -239,7 +238,7 @@ class Intent:
         # 分词：先用空白字符分，再按中文/英文标点二次分割
         import re
         tokens = re.split(r'\s+', self.raw_input.strip())
-        punct = ',，。、！？；：""\'\'（）【】\[\]{}()'
+        punct = ',，。、！？；：""\'\'（）【】[]{}()'
         words = []
         for token in tokens:
             parts = re.split('|'.join(re.escape(c) for c in punct), token)

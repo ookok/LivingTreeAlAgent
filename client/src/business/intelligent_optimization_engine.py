@@ -524,10 +524,10 @@ class IntelligentOptimizationEngine:
     def _lazy_load_components(self):
         """延迟加载优化组件"""
         try:
-            from client.src.business.optimization_bootstrapper import get_optimization_bootstrapper
+            from business.optimization_bootstrapper import get_optimization_bootstrapper
             self._optimization_bootstrapper = get_optimization_bootstrapper()
             
-            from client.src.business.model_optimization_proxy import get_model_optimization_proxy
+            from business.model_optimization_proxy import get_model_optimization_proxy
             self._model_optimization_proxy = get_model_optimization_proxy()
             
             logger.info("[IntelligentOptimizationEngine] 优化组件加载完成")

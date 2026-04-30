@@ -343,7 +343,7 @@ class ToolSelfRepairer:
     async def _update_registry(self, tool_name: str) -> RepairResult:
         """更新注册表"""
         try:
-            from client.src.business.tools.registrar import register_all_tools
+            from business.tools.registrar import register_all_tools
             register_all_tools()
             return RepairResult(
                 success=True,

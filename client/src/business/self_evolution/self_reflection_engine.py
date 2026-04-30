@@ -21,9 +21,9 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
-from client.src.business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
-from client.src.business.self_evolution.tool_self_repairer import ToolSelfRepairer, RepairResult
+from business.self_evolution.tool_missing_detector import ToolMissingDetector
+from business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
+from business.self_evolution.tool_self_repairer import ToolSelfRepairer, RepairResult
 
 
 class SelfReflectionEngine:
@@ -221,7 +221,7 @@ class SelfReflectionEngine:
                 self._logger.info(f"  创建/安装工具: {cap}")
                 # 先尝试用 NaturalLanguageToolAdder 安装
                 try:
-                    from client.src.business.self_evolution.natural_language_tool_adder import add_tool_from_text
+                    from business.self_evolution.natural_language_tool_adder import add_tool_from_text
                     result = await add_tool_from_text(f"帮我安装 {cap} 工具")
                     if result.success:
                         self._logger.info(f"  工具安装成功: {cap}")
@@ -378,7 +378,7 @@ class SelfReflectionEngine:
         增强：改用 GlobalModelRouter，不再直接调用 LLM。
         """
         try:
-            from client.src.business.global_model_router import GlobalModelRouter
+            from business.global_model_router import GlobalModelRouter
             router = GlobalModelRouter.get_instance()
             
             response = await router.call_model_sync(

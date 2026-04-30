@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from client.src.business.config_manager import ConfigManager, ExportResult, ImportResult
+from .business.config_manager import ConfigManager, ExportResult, ImportResult
 
 
 class ExportWorker(QThread):
@@ -534,7 +534,7 @@ class ConfigExportDialog(QWidget):
                 f"跳过 {result.items_skipped} 个"
             )
             
-            from client.src.presentation.panels.toast_notification import toast_success
+            from .presentation.panels.toast_notification import toast_success
             toast_success(f"导入成功: {result.items_imported} 个项目")
         else:
             self._status_label.setText(f"❌ 导入失败")

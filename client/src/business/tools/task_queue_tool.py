@@ -2,9 +2,9 @@
 TaskQueueTool - Task queue tool wrapper
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.task_queue import TaskQueue
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.task_queue import TaskQueue
 
 
 class TaskQueueTool(BaseTool):
@@ -38,7 +38,7 @@ class TaskQueueTool(BaseTool):
 
 def register_task_queue_tool():
     """Register task queue tool"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     registry = ToolRegistry.get_instance()
     tool = TaskQueueTool()
     registry.register_tool(tool)
@@ -63,7 +63,7 @@ def _auto_register():
         _tool_instance = TaskQueueTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

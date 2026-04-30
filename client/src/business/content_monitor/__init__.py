@@ -10,23 +10,23 @@
 6. Web界面 (web_dashboard.py) - 响应式管理仪表板
 
 使用方法：
-    from client.src.business.content_monitor import ContentMonitorServer, create_server
+    from business.content_monitor import ContentMonitorServer, create_server
     
     # 方式1: 创建服务器
     server = await create_server({"port": 8765})
     
     # 方式2: 直接使用监控引擎
-    from client.src.business.content_monitor import ContentMonitor
+    from business.content_monitor import ContentMonitor
     monitor = ContentMonitor()
     result = monitor.analyze_content("待检测内容")
     
     # 方式3: 使用内容识别
-    from client.src.business.content_monitor import ContentRecognizer
+    from business.content_monitor import ContentRecognizer
     recognizer = ContentRecognizer()
     analysis = recognizer.recognize("财务内容...")
     
     # 方式4: 使用归纳汇总
-    from client.src.business.content_monitor import ContentSummarizer, ContentType
+    from business.content_monitor import ContentSummarizer, ContentType
     summarizer = ContentSummarizer()
     result = summarizer.summarize("内容...", ContentType.FINANCIAL)
 """

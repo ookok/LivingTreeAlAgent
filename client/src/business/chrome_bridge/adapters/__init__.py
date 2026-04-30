@@ -24,7 +24,7 @@ def _get_registry_data():
     """获取注册表数据（从 website_adapter_registry 导入）"""
     global _registry_data
     if _registry_data is None:
-        from client.src.business.chrome_bridge.website_adapter_registry import WEBSITE_REGISTRY_DATA
+        from business.chrome_bridge.website_adapter_registry import WEBSITE_REGISTRY_DATA
         _registry_data = WEBSITE_REGISTRY_DATA
     return _registry_data
 
@@ -40,7 +40,7 @@ def register_all(force_reload: bool = False):
     if _loaded and not force_reload:
         return
 
-    from client.src.business.chrome_bridge.website_adapter_registry import get_adapter_registry
+    from business.chrome_bridge.website_adapter_registry import get_adapter_registry
 
     registry = get_adapter_registry()
     data = _get_registry_data()

@@ -13,7 +13,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('ui_evolution.evolution_scheduler')
 
 import json
@@ -523,7 +523,7 @@ def trigger_learning(
     
     使用示例:
     ```python
-    from client.src.business.ui_evolution import trigger_learning
+    from business.ui_evolution import trigger_learning
 
     
     # 用户接受了建议

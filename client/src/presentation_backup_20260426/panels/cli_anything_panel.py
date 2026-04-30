@@ -402,7 +402,7 @@ class CLIAutoGenPanel(QWidget):
     def _initialize_cli_anything(self):
         """初始化CLI-Anything引擎"""
         if self.cli_anything is None:
-            from client.src.business.cli_anything import get_cli_anything
+            from .business.cli_anything import get_cli_anything
             self.cli_anything = get_cli_anything()
 
     def _start_generation(self):
@@ -463,7 +463,7 @@ class CLIAutoGenPanel(QWidget):
         if self.opt_register.isChecked():
             tool_entry = artifacts.get("tool_entry", {})
             if tool_entry:
-                from client.src.business.cli_anything import get_tools_registry
+                from .business.cli_anything import get_tools_registry
                 registry = get_tools_registry()
                 registry.register_tool(tool_entry)
                 self.output_text.append("\n✨ 已注册到本地工具清单")
@@ -513,7 +513,7 @@ class CLIAutoGenPanel(QWidget):
 
     def _refresh_registry(self):
         """刷新注册表"""
-        from client.src.business.cli_anything import get_tools_registry
+        from .business.cli_anything import get_tools_registry
 
         registry = get_tools_registry()
         tools = registry.get_tools()
@@ -588,7 +588,7 @@ class CLIAutoGenPanel(QWidget):
             return
 
         tool_id = self.registry_table.item(row, 0).text()
-        from client.src.business.cli_anything import get_tools_registry
+        from .business.cli_anything import get_tools_registry
         registry = get_tools_registry()
         registry.unregister_tool(tool_id)
         self._refresh_registry()
@@ -596,7 +596,7 @@ class CLIAutoGenPanel(QWidget):
 
     def _export_registry(self):
         """导出注册表"""
-        from client.src.business.cli_anything import get_tools_registry
+        from .business.cli_anything import get_tools_registry
         registry = get_tools_registry()
         tools = registry._registry
 

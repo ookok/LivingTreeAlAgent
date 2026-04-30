@@ -25,14 +25,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QTextCursor, QKeySequence, QShortcut, QColor
 
-from client.src.business.ide_agent import IDEAgent
-from client.src.business.ide_service import IntelligentIDEService
-from client.src.presentation.widgets.project_browser import ProjectBrowser
-from client.src.presentation.widgets.global_search import GlobalSearchWidget
-from client.src.presentation.widgets.test_integration import TestIntegrationWidget
-from client.src.presentation.widgets.git_integration import GitIntegrationWidget
-from client.src.presentation.widgets.syntax_highlighter import get_highlighter
-from client.src.presentation.widgets.code_completer import get_completer
+from business.ide_agent import IDEAgent
+from business.ide_service import IntelligentIDEService
+from presentation.widgets.project_browser import ProjectBrowser
+from presentation.widgets.global_search import GlobalSearchWidget
+from presentation.widgets.test_integration import TestIntegrationWidget
+from presentation.widgets.git_integration import GitIntegrationWidget
+from presentation.widgets.syntax_highlighter import get_highlighter
+from presentation.widgets.code_completer import get_completer
 
 
 class ChatMessageThread(QThread):

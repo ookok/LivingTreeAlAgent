@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     Container,
     ConfigCenter,
     EventBus,
@@ -160,13 +160,13 @@ class TrainingManager:
                 from .evaluation_system import create_evaluation_system
                 return create_evaluation_system()
             elif module_name == "knowledge_discovery":
-                from client.src.business.fusion_rag import create_industrial_knowledge_discovery
+                from business.fusion_rag import create_industrial_knowledge_discovery
                 return create_industrial_knowledge_discovery()
             elif module_name == "term_table_builder":
                 from .term_table_builder import create_auto_term_table_builder
                 return create_auto_term_table_builder()
             elif module_name == "feedback_learner":
-                from client.src.business.fusion_rag import create_feedback_learner
+                from business.fusion_rag import create_feedback_learner
                 return create_feedback_learner()
             else:
                 return None

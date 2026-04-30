@@ -4,12 +4,12 @@ DocumentParser Tool Wrapper
 Auto-generated BaseTool wrapper for DocumentParser
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.bilingual_doc.document_parser import DocumentParser
+    from business.bilingual_doc.document_parser import DocumentParser
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     DocumentParser = None
@@ -81,7 +81,7 @@ class DocumentParserTool(BaseTool):
 
 def register_document_parser_tool():
     """注册 document_parser 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = DocumentParserTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = DocumentParserTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

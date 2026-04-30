@@ -7,9 +7,9 @@ KnowledgeGraphTool - 知识图谱工具（BaseTool 包装器）
 from typing import Any, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.knowledge_graph import KnowledgeGraph, Entity, Relation, EntityType, RelationType
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.knowledge_graph import KnowledgeGraph, Entity, Relation, EntityType, RelationType
 
 
 class KnowledgeGraphTool(BaseTool):
@@ -313,7 +313,7 @@ def _auto_register():
         _tool_instance = KnowledgeGraphTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

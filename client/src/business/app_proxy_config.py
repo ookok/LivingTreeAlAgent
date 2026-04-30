@@ -14,7 +14,7 @@ AppProxyConfig - 应用代理配置模块
 - 不再分散设置多个环境变量
 
 使用方式：
-    from client.src.business.app_proxy_config import AppProxyConfig
+    from business.app_proxy_config import AppProxyConfig
 
     # 获取统一配置实例（单例）
     config = AppProxyConfig.get_instance()
@@ -45,7 +45,7 @@ def _get_unified_config():
     global _UnifiedProxyConfig
     if _UnifiedProxyConfig is None:
         try:
-            from client.src.business.unified_proxy_config import UnifiedProxyConfig
+            from business.unified_proxy_config import UnifiedProxyConfig
             _UnifiedProxyConfig = UnifiedProxyConfig
         except ImportError:
             # 如果统一配置不存在，使用简化实现

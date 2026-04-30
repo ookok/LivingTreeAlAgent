@@ -605,7 +605,7 @@ class IntelligentMemorySystem:
     """
 
     def __init__(self, db_path: str | Path = None):
-        from client.src.business.config import get_config_dir
+        from business.config import get_config_dir
 
         if db_path is None:
             db_path = get_config_dir() / "intelligent_memory.db"

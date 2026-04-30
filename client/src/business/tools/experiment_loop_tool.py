@@ -4,12 +4,12 @@ ExperimentLoop Tool Wrapper
 Auto-generated BaseTool wrapper for ExperimentLoop
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.experiment_loop.evolution_loop import ExperimentLoop
+    from business.experiment_loop.evolution_loop import ExperimentLoop
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     ExperimentLoop = None
@@ -81,7 +81,7 @@ class ExperimentLoopTool(BaseTool):
 
 def register_experiment_loop_tool():
     """注册 experiment_loop 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = ExperimentLoopTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = ExperimentLoopTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

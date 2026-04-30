@@ -28,7 +28,7 @@ class TestBaseToolAgent:
     
     def test_base_agent_creation(self):
         """测试 BaseToolAgent 可以正常创建"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core"])
         assert agent is not None
@@ -38,7 +38,7 @@ class TestBaseToolAgent:
     
     def test_discover_tools(self):
         """测试工具语义搜索发现"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core", "geo"])
         results = agent.discover_tools("距离计算 地理坐标", max_results=3)
@@ -48,7 +48,7 @@ class TestBaseToolAgent:
     
     def test_execute_distance_tool(self):
         """测试执行距离计算工具"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core", "geo"])
         
@@ -73,7 +73,7 @@ class TestBaseToolAgent:
     
     def test_execute_unknown_tool(self):
         """测试执行不存在的工具（应有错误处理）"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core"])
         result = agent.execute_tool("nonexistent_tool_xyz", param1="test")
@@ -84,7 +84,7 @@ class TestBaseToolAgent:
     
     def test_build_tool_schema(self):
         """测试 OpenAI tools schema 生成"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core"])
         schema = agent.build_tool_schema()
@@ -99,7 +99,7 @@ class TestBaseToolAgent:
     
     def test_tool_descriptions(self):
         """测试工具描述文本生成"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core"])
         desc = agent.get_tool_descriptions()
@@ -113,8 +113,8 @@ class TestHermesAgentIntegration:
     
     def test_hermes_agent_has_tool_agent(self):
         """测试 HermesAgent 注入了 BaseToolAgent"""
-        from client.src.business.agent import HermesAgent
-        from client.src.business.config import AppConfig
+        from business.agent import HermesAgent
+        from business.config import AppConfig
         
         config = AppConfig()
         agent = HermesAgent(config=config)
@@ -125,8 +125,8 @@ class TestHermesAgentIntegration:
     
     def test_hermes_discover_tools(self):
         """测试 HermesAgent.discover_tools 方法"""
-        from client.src.business.agent import HermesAgent
-        from client.src.business.config import AppConfig
+        from business.agent import HermesAgent
+        from business.config import AppConfig
         
         config = AppConfig()
         agent = HermesAgent(config=config)
@@ -137,8 +137,8 @@ class TestHermesAgentIntegration:
     
     def test_hermes_execute_tool(self):
         """测试 HermesAgent.execute_tool 方法"""
-        from client.src.business.agent import HermesAgent
-        from client.src.business.config import AppConfig
+        from business.agent import HermesAgent
+        from business.config import AppConfig
         
         config = AppConfig()
         agent = HermesAgent(config=config)
@@ -158,8 +158,8 @@ class TestHermesAgentIntegration:
     
     def test_hermes_build_tool_schema(self):
         """测试 HermesAgent._build_tool_schema（优先新系统）"""
-        from client.src.business.agent import HermesAgent
-        from client.src.business.config import AppConfig
+        from business.agent import HermesAgent
+        from business.config import AppConfig
         
         config = AppConfig()
         agent = HermesAgent(config=config)
@@ -174,7 +174,7 @@ class TestEIAgentIntegration:
     
     def test_ei_agent_has_tool_agent(self):
         """测试 EIAgentExecutor 注入了 BaseToolAgent"""
-        from client.src.business.ei_agent.ei_agent_adapter import EIAgentExecutor
+        from business.ei_agent.ei_agent_adapter import EIAgentExecutor
         
         executor = EIAgentExecutor()
         assert hasattr(executor, "_tool_agent")
@@ -183,7 +183,7 @@ class TestEIAgentIntegration:
     
     def test_ei_agent_discover_tools(self):
         """测试 EIAgentExecutor.discover_tools"""
-        from client.src.business.ei_agent.ei_agent_adapter import EIAgentExecutor
+        from business.ei_agent.ei_agent_adapter import EIAgentExecutor
         
         executor = EIAgentExecutor()
         results = executor.discover_tools("大气扩散 环境 评估", max_results=5)
@@ -192,7 +192,7 @@ class TestEIAgentIntegration:
     
     def test_ei_agent_execute_distance(self):
         """测试 EIAgentExecutor.execute_tool 同步版"""
-        from client.src.business.ei_agent.ei_agent_adapter import EIAgentExecutor
+        from business.ei_agent.ei_agent_adapter import EIAgentExecutor
         
         executor = EIAgentExecutor()
         result = executor.execute_tool(
@@ -213,7 +213,7 @@ class TestEIAgentIntegration:
     def test_ei_agent_execute_async(self):
         """测试 EIAgentExecutor.execute_tool_async"""
         import asyncio
-        from client.src.business.ei_agent.ei_agent_adapter import EIAgentExecutor
+        from business.ei_agent.ei_agent_adapter import EIAgentExecutor
         
         async def _run():
             executor = EIAgentExecutor()
@@ -236,7 +236,7 @@ class TestToolExecutionFlow:
     
     def test_full_flow_discover_execute(self):
         """测试 discover → execute 完整链路"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core", "geo"])
         
@@ -263,7 +263,7 @@ class TestToolExecutionFlow:
     
     def test_tool_stats_tracking(self):
         """测试工具调用统计"""
-        from client.src.business.base_agents.base_agent import BaseToolAgent
+        from business.base_agents.base_agent import BaseToolAgent
         
         agent = BaseToolAgent(enabled_toolsets=["core", "geo"])
         

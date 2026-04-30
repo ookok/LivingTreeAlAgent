@@ -165,9 +165,11 @@ class StartupWorker(QObject):
             self.step_completed.emit("模型推荐", f"⚠️ 使用默认模型: {self._selected_model}", False)
     
     def _setup_local_mode(self):
-        """Local模式安装"""
+        """Local模式安装 - 使用 PowerShell 脚本下载并安装 Ollama"""
         import subprocess
         import shutil
+        import tempfile
+        import os
         
         # 步骤1: 检查是否已安装
         if shutil.which("ollama"):
@@ -175,57 +177,58 @@ class StartupWorker(QObject):
             self.step_completed.emit("环境安装", "✅ Ollama 已安装", True)
             return
         
-        # 步骤2: 执行安装（支持断点续传）
-        self.progress_updated.emit("环境安装", 50, "正在下载安装...")
+        # 步骤2: 使用 PowerShell 脚本下载并安装
+        self.progress_updated.emit("环境安装", 50, "正在使用 PowerShell 下载...")
         
         try:
-            import tempfile
-            import os
-            
-            # 备用下载地址列表（国内镜像优先）
-            download_urls = [
-                "https://mirror.ghproxy.com/https://github.com/ollama/ollama/releases/download/v0.1.48/OllamaSetup.exe",
-                "https://github.com/ollama/ollama/releases/download/v0.1.48/OllamaSetup.exe",
-                "https://ollama.com/download/OllamaSetup.exe",
-            ]
-            
             temp_dir = tempfile.gettempdir()
             local_path = os.path.join(temp_dir, "OllamaSetup.exe")
             
-            # 尝试从多个地址下载
-            download_success = False
-            last_error = ""
+            # PowerShell 下载脚本
+            download_script = f"""
+# 下载 Ollama
+Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "{local_path}" -UseBasicParsing
+"""
             
-            for idx, download_url in enumerate(download_urls):
-                self.progress_updated.emit("环境安装", 50, f"尝试下载 ({idx + 1}/{len(download_urls)})...")
-                
-                if self._download_with_resume(download_url, local_path):
-                    download_success = True
-                    break
-                else:
-                    # 清理可能的不完整文件
-                    if os.path.exists(local_path):
-                        try:
-                            os.remove(local_path)
-                        except:
-                            pass
+            # 执行下载脚本
+            self.progress_updated.emit("环境安装", 60, "执行下载脚本...")
+            download_result = subprocess.run(
+                ["powershell", "-Command", download_script],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
             
-            if download_success:
-                # 下载成功，执行安装
-                self.progress_updated.emit("环境安装", 85, "正在安装...")
-                
-                result = subprocess.run([local_path, "/S"], shell=True, capture_output=True, text=True)
-                
-                if result.returncode == 0:
-                    self.progress_updated.emit("环境安装", 100, "安装成功")
-                    self.step_completed.emit("环境安装", "✅ Ollama 安装成功", True)
-                else:
-                    error_msg = result.stderr[:100] if result.stderr else "安装失败"
-                    self.progress_updated.emit("环境安装", 100, "安装失败")
-                    self.step_completed.emit("环境安装", f"❌ 安装失败: {error_msg}", False)
-            else:
+            if download_result.returncode != 0:
+                error_msg = download_result.stderr[:100] if download_result.stderr else "下载失败"
                 self.progress_updated.emit("环境安装", 100, "下载失败")
-                self.step_completed.emit("环境安装", "❌ Ollama 下载失败，请检查网络连接或手动安装", False)
+                self.step_completed.emit("环境安装", f"❌ 下载失败: {error_msg}", False)
+                return
+            
+            # 检查下载是否成功
+            if not os.path.exists(local_path):
+                self.progress_updated.emit("环境安装", 100, "下载文件不存在")
+                self.step_completed.emit("环境安装", "❌ 下载文件不存在", False)
+                return
+            
+            self.progress_updated.emit("环境安装", 85, "下载成功，正在安装...")
+            
+            # 执行静默安装
+            install_result = subprocess.run(
+                [local_path, "/S"],
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if install_result.returncode == 0:
+                self.progress_updated.emit("环境安装", 100, "安装成功")
+                self.step_completed.emit("环境安装", "✅ Ollama 安装成功", True)
+            else:
+                error_msg = install_result.stderr[:100] if install_result.stderr else "安装失败"
+                self.progress_updated.emit("环境安装", 100, "安装失败")
+                self.step_completed.emit("环境安装", f"❌ 安装失败: {error_msg}", False)
                 
         except Exception as e:
             self.progress_updated.emit("环境安装", 100, "安装异常")

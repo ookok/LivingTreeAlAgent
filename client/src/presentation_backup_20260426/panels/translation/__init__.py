@@ -2,7 +2,7 @@
 Translation UI - 翻译 PyQt6 UI 模块
 
 使用方式:
-    from client.src.presentation.translation import TranslationPanel
+    from .presentation.translation import TranslationPanel
 
     panel = TranslationPanel()
 """

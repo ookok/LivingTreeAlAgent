@@ -1066,6 +1066,7 @@ class EditorPanel(QWidget):
 
     def _empty_state(self):
         """Show empty state widget"""
+        c = self.colors
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1085,9 +1086,19 @@ class EditorPanel(QWidget):
 
         self.tab_widget.addTab(empty, "")
         # Hide close button
-        close_btn = self.tab_widget.tabBar().tabButton(0, QTabWidget.TabButtonPosition.RightSide)
-        if close_btn:
-            close_btn.hide()
+        try:
+            close_btn = self.tab_widget.tabBar().tabButton(0, QTabWidget.TabButtonPosition.RightSide)
+            if close_btn:
+                close_btn.hide()
+        except AttributeError:
+            # PyQt6 compatibility: TabButtonPosition may be in a different location
+            try:
+                from PyQt6.QtWidgets import QTabBar
+                close_btn = self.tab_widget.tabBar().tabButton(0, QTabBar.ButtonPosition.RightSide)
+                if close_btn:
+                    close_btn.hide()
+            except Exception:
+                pass
 
     def _on_lang_changed(self, lang: str):
         self._current_lang = lang.lower()
@@ -1541,7 +1552,7 @@ class OpenCodeIDEPanel(QWidget):
     def _init_agent(self):
         """Initialize IDE agent with fallback"""
         try:
-            from client.src.business.ide_agent import IDEAgent
+            from business.ide_agent import IDEAgent
             self.ide_agent = IDEAgent()
         except Exception as e:
             print(f"[OpenCodeIDE] IDE Agent init failed: {e}")

@@ -9,15 +9,15 @@
 支持格式: DOCX / XLSX / PPTX / PDF
 """
 
-from client.src.business.office_automation.office_manager import OfficeManager
-from client.src.business.office_automation.design_system import (
+from business.office_automation.office_manager import OfficeManager
+from business.office_automation.design_system import (
     DesignSystem, DesignToken, TokenType, ColorToken,
     FontToken, SpacingToken, DocumentTheme
 )
-from client.src.business.office_automation.template_router import TemplateRouter, TemplateMatch
-from client.src.business.office_automation.model_router import ModelRouter, ModelCapability
-from client.src.business.office_automation.quality_checker import QualityChecker, CheckResult, CheckLevel
-from client.src.business.office_automation.document_context import DocumentContext, DocumentIntent
+from business.office_automation.template_router import TemplateRouter, TemplateMatch
+from business.office_automation.model_router import ModelRouter, ModelCapability
+from business.office_automation.quality_checker import QualityChecker, CheckResult, CheckLevel
+from business.office_automation.document_context import DocumentContext, DocumentIntent
 
 __all__ = [
     "OfficeManager",

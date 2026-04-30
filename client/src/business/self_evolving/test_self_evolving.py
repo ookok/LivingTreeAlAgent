@@ -28,7 +28,7 @@ def test_self_evolving_system():
     print("测试 1: SelfEvolvingSystem - 统一自进化系统")
     print("="*60)
     
-    from client.src.business.self_evolving import SelfEvolvingSystem, QualityLevel
+    from business.self_evolving import SelfEvolvingSystem, QualityLevel
     
     # 创建系统
     system = SelfEvolvingSystem(
@@ -75,7 +75,7 @@ def test_evolution_middleware():
     print("测试 2: EvolutionMiddleware - Agent集成中间件")
     print("="*60)
     
-    from client.src.business.self_evolving import EvolutionMiddleware, InterventionType
+    from business.self_evolving import EvolutionMiddleware, InterventionType
     
     # 创建模拟的AgentChat
     class MockAgentChat:
@@ -133,16 +133,16 @@ def test_module_integration():
         # 1. 导入所有模块
         print("\n[1] 导入模块检查...")
         
-        from client.src.business.adaptive_quality import AdaptiveQualitySystem, quick_evaluate
+        from business.adaptive_quality import AdaptiveQualitySystem, quick_evaluate
         print("  [OK] AdaptiveQualitySystem")
         
-        from client.src.business.error_memory import ErrorLearningSystem, quick_fix_from_message
+        from business.error_memory import ErrorLearningSystem, quick_fix_from_message
         print("  [OK] ErrorLearningSystem")
         
-        from client.src.business.reflective_agent import ReflectiveAgentLoop
+        from business.reflective_agent import ReflectiveAgentLoop
         print("  [OK] ReflectiveAgentLoop")
         
-        from client.src.business.self_evolving import SelfEvolvingSystem
+        from business.self_evolving import SelfEvolvingSystem
         print("  [OK] SelfEvolvingSystem (统一系统)")
         
         # 2. 测试质量评估
@@ -194,7 +194,7 @@ def test_error_handling():
     print("测试 4: 错误处理集成")
     print("="*60)
     
-    from client.src.business.self_evolving import EvolutionMiddleware
+    from business.self_evolving import EvolutionMiddleware
     
     # 创建会抛出异常的AgentChat
     class ErrorAgentChat:
@@ -236,7 +236,7 @@ def test_stats_and_metadata():
     print("测试 5: 统计和元数据")
     print("="*60)
     
-    from client.src.business.self_evolving import SelfEvolvingSystem
+    from business.self_evolving import SelfEvolvingSystem
     
     system = SelfEvolvingSystem()
     

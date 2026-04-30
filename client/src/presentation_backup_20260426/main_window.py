@@ -39,8 +39,8 @@ except ImportError:
     QSvgWidget = None  # 可选的SVG支持
 
 # 导入现有组件
-from client.src.presentation.panels.chat_panel import ChatPanel
-from client.src.presentation.panels.workspace_panel import (
+from .presentation.panels.chat_panel import ChatPanel
+from .presentation.panels.workspace_panel import (
     WorkspacePanel,
     SystemFeaturesPanel,
     KnowledgeBaseInitPanel,
@@ -54,7 +54,7 @@ from client.src.presentation.panels.workspace_panel import (
 )
 
 # 导入对话框
-from client.src.presentation.dialogs.settings_dialog import UserSettingsDialog, SystemSettingsDialog
+from .presentation.dialogs.settings_dialog import UserSettingsDialog, SystemSettingsDialog
 
 try:
     from PyQt6.QtWidgets import QProgressBar

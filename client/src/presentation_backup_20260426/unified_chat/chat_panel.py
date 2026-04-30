@@ -54,7 +54,7 @@ from PyQt6.QtGui import (
 # 导入统一聊天核心
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from client.src.business.unified_chat import (
+from .business.unified_chat import (
     get_chat_hub, UnifiedMessage, ChatSession, PeerInfo,
     MessageType, MessageStatus, SessionType, OnlineStatus,
     ChannelType, MESSAGE_TYPE_ICONS, STATUS_ICONS,
@@ -1593,7 +1593,7 @@ class ChatPanel(QWidget):
         """异步转写音频文件"""
         try:
             # 尝试使用 Ollama whisper 模型
-            from client.src.business.config import get_hermes_home
+            from .business.config import get_hermes_home
             import subprocess
             import json
             

@@ -531,7 +531,7 @@ def integrate_llm_wiki_to_graph_v4(
 
 if __name__ == "__main__":
     # 测试V4集成器
-    from client.src.business.llm_wiki.models import DocumentChunk
+    from business.llm_wiki.models import DocumentChunk
 
     # 创建测试数据
     test_chunks = [

@@ -220,7 +220,7 @@ class SmartSearchEngine:
             return results
         
         # 2. 并发提取全文（使用完整三层策略）
-        from client.src.business.web_content_extractor import ContentExtractor, ExtractionConfig
+        from business.web_content_extractor import ContentExtractor, ExtractionConfig
         
         config = ExtractionConfig(
             use_jina=use_jina,
@@ -340,7 +340,7 @@ class SmartSearchEngine:
         Returns:
             Optional[str]: 提取的文本内容（Markdown 格式）
         """
-        from client.src.business.web_content_extractor import ContentExtractor, ExtractionConfig
+        from business.web_content_extractor import ContentExtractor, ExtractionConfig
         
         config = ExtractionConfig(
             use_jina=use_jina,

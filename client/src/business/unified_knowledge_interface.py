@@ -226,7 +226,7 @@ class UnifiedKnowledgeManager:
         """初始化默认知识提供者（使用适配器）"""
         # 尝试注册 FusionRAG 适配器
         try:
-            from client.src.business.fusion_rag.adapter import create_fusion_rag_adapter
+            from business.fusion_rag.adapter import create_fusion_rag_adapter
             fusion_rag_adapter = create_fusion_rag_adapter()
             self.register_provider(KnowledgeProvider.FUSION_RAG, fusion_rag_adapter)
             print("[UnifiedKnowledgeManager] 已注册 FusionRAG 适配器")
@@ -235,7 +235,7 @@ class UnifiedKnowledgeManager:
         
         # 尝试注册 LLM Wiki 适配器
         try:
-            from client.src.business.llm_wiki.adapter import create_llm_wiki_adapter
+            from business.llm_wiki.adapter import create_llm_wiki_adapter
             llm_wiki_adapter = create_llm_wiki_adapter()
             self.register_provider(KnowledgeProvider.LLM_WIKI, llm_wiki_adapter)
             print("[UnifiedKnowledgeManager] 已注册 LLM Wiki 适配器")

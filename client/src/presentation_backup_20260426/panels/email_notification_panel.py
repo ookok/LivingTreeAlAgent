@@ -151,7 +151,7 @@ class EmailAccountDialog(QDialog):
 
     def load_account(self, account):
         """加载账户数据"""
-        from client.src.business.email_notification import EmailProvider
+        from .business.email_notification import EmailProvider
 
         self.email_edit.setText(account.email)
         self.display_name_edit.setText(account.display_name)
@@ -182,7 +182,7 @@ class EmailAccountDialog(QDialog):
 
     def get_account_data(self) -> dict:
         """获取账户数据"""
-        from client.src.business.email_notification import EmailProvider
+        from .business.email_notification import EmailProvider
 
         providers = [
             EmailProvider.QQ,
@@ -224,7 +224,7 @@ class TestConnectionWorker(QThread):
         self.account_data = account_data
 
     def run(self):
-        from client.src.business.email_notification import EmailAccount, IMAPListener
+        from .business.email_notification import EmailAccount, IMAPListener
 
         self.progress.emit("正在连接服务器...")
 
@@ -404,7 +404,7 @@ class EmailNotificationPanel(QWidget):
     def load_accounts(self):
         """加载账户"""
         try:
-            from client.src.business.email_notification import get_config_manager
+            from .business.email_notification import get_config_manager
             self._config_manager = get_config_manager()
             self.refresh_account_list()
             self.update_status(f"已加载 {len(self._config_manager.get_accounts())} 个账户")
@@ -429,7 +429,7 @@ class EmailNotificationPanel(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             data = dialog.get_account_data()
             try:
-                from client.src.business.email_notification import EmailAccount
+                from .business.email_notification import EmailAccount
                 import uuid
                 account = EmailAccount(
                     account_id=f"acc_{uuid.uuid4().hex[:8]}",
@@ -495,7 +495,7 @@ class EmailNotificationPanel(QWidget):
     def toggle_dnd(self, checked):
         """切换免打扰"""
         try:
-            from client.src.business.email_notification import get_notification_service
+            from .business.email_notification import get_notification_service
             svc = get_notification_service()
             svc.set_do_not_disturb(checked)
             self.dnd_btn.setText("🔔 免打扰" if not checked else "🔕 免打扰")
@@ -505,7 +505,7 @@ class EmailNotificationPanel(QWidget):
     def clear_history(self):
         """清空历史"""
         try:
-            from client.src.business.email_notification import get_notification_service
+            from .business.email_notification import get_notification_service
             svc = get_notification_service()
             svc.clear_history()
             self.history_list.clear()

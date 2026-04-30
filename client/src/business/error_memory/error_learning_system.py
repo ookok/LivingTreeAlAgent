@@ -16,7 +16,7 @@ Date: 2026-04-24
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('error_memory.error_learning_system')
 
 
@@ -69,7 +69,7 @@ class ErrorLearningSystem:
     
     使用示例：
     ```python
-    from client.src.business.error_memory import ErrorLearningSystem
+    from business.error_memory import ErrorLearningSystem
 
     
     # 初始化

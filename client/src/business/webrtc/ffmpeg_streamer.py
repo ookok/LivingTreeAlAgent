@@ -19,7 +19,7 @@ from enum import Enum
 import threading
 import queue
 
-from client.src.business.ffmpeg_tool import FFmpegTool, FFmpegPipeline
+from business.ffmpeg_tool import FFmpegTool, FFmpegPipeline
 
 
 class StreamState(Enum):

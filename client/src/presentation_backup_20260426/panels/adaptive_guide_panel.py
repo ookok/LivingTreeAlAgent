@@ -174,7 +174,7 @@ class AdaptiveGuidePanel(QWidget):
         
         # 导入管理器
         try:
-            from client.src.business.adaptive_guide import get_guide_manager, get_context_help
+            from .business.adaptive_guide import get_guide_manager, get_context_help
             self._manager = get_guide_manager()
             self._help = get_context_help()
         except ImportError as e:

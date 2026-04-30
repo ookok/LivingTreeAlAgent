@@ -346,7 +346,7 @@ class MemorySummaryGenerator:
         
         # 尝试使用默认的模型路由
         try:
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             return call_model_sync(ModelCapability.CHAT, prompt)
         except ImportError:
             logger.warning("[MemorySummaryGenerator] LLM 不可用")

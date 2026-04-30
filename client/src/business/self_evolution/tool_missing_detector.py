@@ -9,7 +9,7 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from loguru import logger
 
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.tools.tool_registry import ToolRegistry
 
 
 class ToolMissingDetector:
@@ -163,7 +163,7 @@ class ToolMissingDetector:
         else:
             # 尝试导入默认的 LLM 客户端
             try:
-                from client.src.business.hermes_agent.llm_client import LLMClient
+                from business.hermes_agent.llm_client import LLMClient
                 llm = LLMClient()
                 return await llm.chat(prompt, model="qwen3.6:35b-a3b")
             except Exception as e:

@@ -305,7 +305,7 @@ class LocalVLLMManager:
     """
 
     def __init__(self, models_dir: str = None):
-        from client.src.business.config import get_config_dir
+        from business.config import get_config_dir
 
         if models_dir is None:
             models_dir = get_config_dir() / "models"

@@ -2,9 +2,9 @@
 TaskExecutionEngineTool - Task execution engine tool wrapper
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.task_execution_engine import TaskExecutionEngine
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.task_execution_engine import TaskExecutionEngine
 
 
 class TaskExecutionEngineTool(BaseTool):
@@ -32,7 +32,7 @@ class TaskExecutionEngineTool(BaseTool):
 
 def register_task_execution_engine_tool():
     """Register task execution engine tool"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     registry = ToolRegistry.get_instance()
     tool = TaskExecutionEngineTool()
     registry.register_tool(tool)
@@ -57,7 +57,7 @@ def _auto_register():
         _tool_instance = TaskExecutionEngineTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

@@ -289,7 +289,7 @@ class VideoPlayerPanel(QWidget):
         """初始化播放器"""
         if VLC_AVAILABLE:
             try:
-                from client.src.business.video_player import VideoPlayer, Playlist, SubtitleManager
+                from .business.video_player import VideoPlayer, Playlist, SubtitleManager
 
                 self._player = VideoPlayer()
                 self._playlist = Playlist()

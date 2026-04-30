@@ -23,13 +23,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     get_event_bus,
     EVENTS
 )
 
 # 导入现有会议模块
-from client.src.business.meeting import (
+from business.meeting import (
     get_meeting_manager,
     TranscriptionEngine,
     MeetingSummarizer

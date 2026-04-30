@@ -241,7 +241,7 @@ class CompressionTool:
 def register_compression_tool():
     """注册压缩工具到系统工具注册表"""
     try:
-        from client.src.business.tools.tool_registry import ToolRegistry, ToolDefinition
+        from .business.tools.tool_registry import ToolRegistry, ToolDefinition
         
         tool_info = CompressionTool.get_tool_info()
         

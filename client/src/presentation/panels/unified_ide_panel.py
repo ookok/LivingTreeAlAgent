@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QIcon
 
 # 导入业务逻辑
-from client.src.business.ide_service import get_ide_service, IDEService, ExecutionStatus
+from business.ide_service import get_ide_service, IDEService, ExecutionStatus
 
 
 class UnifiedIDEPanel(QWidget):

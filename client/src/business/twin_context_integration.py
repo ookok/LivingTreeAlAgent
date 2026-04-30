@@ -12,7 +12,7 @@ Author: AI Native OS Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('twin_context_integration')
 
 import json
@@ -31,7 +31,7 @@ from enum import Enum
 
 # 意图保持型压缩器
 try:
-    from client.src.business.intent_preserving_compressor import (
+    from business.intent_preserving_compressor import (
         IntentRecognizer, CodeSignatureExtractor, ContextPyramid,
         IntentPreservingCompressor
     )
@@ -41,7 +41,7 @@ except ImportError:
 
 # 三级验证流水线
 try:
-    from client.src.business.three_level_verification import (
+    from business.three_level_verification import (
         ThreeLevelVerificationPipeline, VerifiedCompressionPipeline,
         VerificationStatus
     )
@@ -51,7 +51,7 @@ except ImportError:
 
 # 语义索引
 try:
-    from client.src.business.semantic_index import (
+    from business.semantic_index import (
 
         SemanticIndexer, VirtualFileSystem, SemanticChunk,
         LazySemanticLoader

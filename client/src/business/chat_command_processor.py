@@ -23,8 +23,8 @@ from datetime import datetime
 
 # 导入统一意图定义中心和自然语言命令解析器
 try:
-    from client.src.business.intent_definitions import Intent
-    from client.src.business.natural_command_parser import (
+    from business.intent_definitions import Intent
+    from business.natural_command_parser import (
         get_natural_command_parser,
         ParsedCommand
     )
@@ -215,7 +215,7 @@ class CommandProcessor:
         
         # 从 Agent Adapter 获取模型信息
         try:
-            from client.src.business.agent_adapter import (
+            from business.agent_adapter import (
                 create_agent_adapter,
                 AgentConfig
             )
@@ -457,7 +457,7 @@ class CommandProcessor:
     async def _handle_clear_command(self, args: str) -> str:
         """处理 /clear 命令 - 清空聊天记录"""
         # 触发清空事件
-        from client.src.business.shared.event_bus import EventBus, get_event_bus, EVENTS
+        from business.shared.event_bus import EventBus, get_event_bus, EVENTS
         
         event_bus = get_event_bus()
         event_bus.publish(EVENTS["CHAT_CLEAR"], {})
@@ -469,7 +469,7 @@ class CommandProcessor:
         try:
             # 获取 FusionRAG 统计
             try:
-                from client.src.business.fusion_rag import create_fusion_rag
+                from business.fusion_rag import create_fusion_rag
                 
                 fusion_rag = create_fusion_rag()
                 stats = fusion_rag.get_stats()
@@ -502,7 +502,7 @@ class CommandProcessor:
     async def _handle_ingest_command(self, args: str) -> str:
         """处理 /ingest 命令 - 从 raw/ 摄入资料到 wiki/"""
         try:
-            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            from business.knowledge_base_manager import get_knowledge_manager
             
             kb_manager = get_knowledge_manager()
             result = await kb_manager.ingest_from_raw()
@@ -525,7 +525,7 @@ class CommandProcessor:
     async def _handle_query_command(self, args: str) -> str:
         """处理 /query 命令 - 查询知识库"""
         try:
-            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            from business.knowledge_base_manager import get_knowledge_manager
             
             if not args:
                 return "请输入查询内容，例如: /query 工业AI应用场景"
@@ -555,7 +555,7 @@ class CommandProcessor:
     async def _handle_lint_command(self, args: str) -> str:
         """处理 /lint 命令 - 知识库健康检查"""
         try:
-            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            from business.knowledge_base_manager import get_knowledge_manager
             
             kb_manager = get_knowledge_manager()
             issues = await kb_manager.lint()
@@ -597,7 +597,7 @@ class CommandProcessor:
     async def _handle_kb_command(self, args: str) -> str:
         """处理 /kb 命令 - 知识库管理"""
         try:
-            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            from business.knowledge_base_manager import get_knowledge_manager
             
             kb_manager = get_knowledge_manager()
             
@@ -632,7 +632,7 @@ class CommandProcessor:
     async def _handle_record_command(self, args: str) -> str:
         """处理 /record 命令 - 操作记录管理"""
         try:
-            from client.src.business.action_memory_system import get_action_memory_system
+            from business.action_memory_system import get_action_memory_system
             
             action_memory = get_action_memory_system()
             
@@ -670,7 +670,7 @@ class CommandProcessor:
     async def _handle_video_command(self, args: str) -> str:
         """处理 /video 命令 - 视频录制管理"""
         try:
-            from client.src.business.video_recording_service import (
+            from business.video_recording_service import (
                 get_video_recording_service,
                 RecordingQuality
             )

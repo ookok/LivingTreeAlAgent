@@ -1,0 +1,45 @@
+Test Report - 20260430_175230
+============================================================
+
+Total: 3
+Passed: 0
+Failed: 3
+Skipped: 0
+Success Rate: 0.0%
+Duration: 25.41s
+
+
+✗ test_client_startup (0.255s)
+  Error: ModuleNotFoundError: No module named 'client'
+Traceback (most recent call last):
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_base.py", line 244, in run_test
+    test_method()
+    ~~~~~~~~~~~^^
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_client_startup.py", line 51, in test_client_startup
+    from client.src.main import main
+ModuleNotFoundError: No module named 'client'
+
+
+✗ test_sidebar_navigation (10.066s)
+  Error: AttributeError: 'bool' object has no attribute 'findChildren'
+Traceback (most recent call last):
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_base.py", line 244, in run_test
+    test_method()
+    ~~~~~~~~~~~^^
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_client_startup.py", line 117, in test_sidebar_navigation
+    nav_buttons = sidebar.findChildren(QPushButton)
+                  ^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'findChildren'
+
+
+✗ test_chat_panel_load (15.093s)
+  Error: AttributeError: 'bool' object has no attribute 'findChildren'
+Traceback (most recent call last):
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_base.py", line 244, in run_test
+    test_method()
+    ~~~~~~~~~~~^^
+  File "F:\mhzyapp\LivingTreeAlAgent\client\tests\ui_automation\test_client_startup.py", line 161, in test_chat_panel_load
+    from PyQt6.QtWidgets import QScrollArea, QFrame
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'findChildren'
+

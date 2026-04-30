@@ -32,7 +32,7 @@ from PyQt6.QtCore import QDate
 
 # 尝试导入授权模块
 try:
-    from client.src.business.activation_license import (
+    from .business.activation_license import (
         LicenseGenerator, LicenseValidator, RealNameVerifier,
         LicenseVersion, ValidationResult, ValidationResponse,
         VerificationType, VerificationStatus,

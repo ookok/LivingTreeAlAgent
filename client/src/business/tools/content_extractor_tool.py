@@ -4,12 +4,12 @@ ContentExtractor Tool Wrapper
 Auto-generated BaseTool wrapper for ContentExtractor
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.web_content_extractor.extractor import ContentExtractor
+    from business.web_content_extractor.extractor import ContentExtractor
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     ContentExtractor = None
@@ -81,7 +81,7 @@ class ContentExtractorTool(BaseTool):
 
 def register_content_extractor_tool():
     """注册 content_extractor 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = ContentExtractorTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = ContentExtractorTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

@@ -43,8 +43,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from client.src.business.evolution_engine import EvolutionEngine, create_evolution_engine
-    from client.src.business.evolution_engine.memory import (
+    from .business.evolution_engine import EvolutionEngine, create_evolution_engine
+    from .business.evolution_engine.memory import (
         EvolutionLog, LearningEngine, PatternMiner, DecisionTracker,
         DecisionType, DecisionOutcome
     )

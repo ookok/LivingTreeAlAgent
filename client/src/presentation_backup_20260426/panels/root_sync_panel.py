@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor, QAction
 
-from client.src.business.models import SystemConfig
+from .business.models import SystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -523,12 +523,12 @@ class RootSyncPanel(QWidget):
 
     def _start_system(self):
         try:
-            from client.src.business.root_sync import RootSyncSystem, FolderConfig
+            from .business.root_sync import RootSyncSystem, FolderConfig
             self.sync_system = RootSyncSystem()
             
             # 从配置文件加载设备列表
             try:
-                from client.src.business.config import get_hermes_home
+                from .business.config import get_hermes_home
                 config_file = get_hermes_home() / "root_sync_devices.json"
                 if config_file.exists():
                     import json
@@ -546,7 +546,7 @@ class RootSyncPanel(QWidget):
             
             # 从配置文件加载同步文件夹
             try:
-                from client.src.business.config import get_hermes_home
+                from .business.config import get_hermes_home
                 config_file = get_hermes_home() / "root_sync_folders.json"
                 if config_file.exists():
                     import json
@@ -578,7 +578,7 @@ class RootSyncPanel(QWidget):
         if self.sync_system:
             # 保存当前配置
             try:
-                from client.src.business.config import get_hermes_home
+                from .business.config import get_hermes_home
                 import json
                 
                 # 保存设备配置
@@ -754,7 +754,7 @@ class RootSyncPanel(QWidget):
     def _save_settings(self):
         """保存所有设置"""
         try:
-            from client.src.business.config import get_hermes_home
+            from .business.config import get_hermes_home
             import json
             
             settings = {

@@ -185,7 +185,7 @@ class MemoryReasoningEngine:
     def _get_fusion_engine(self):
         """延迟加载融合引擎"""
         if not self._fusion_engine:
-            from client.src.business.memory_fusion_engine import get_memory_fusion_engine
+            from business.memory_fusion_engine import get_memory_fusion_engine
             self._fusion_engine = get_memory_fusion_engine()
         return self._fusion_engine
     

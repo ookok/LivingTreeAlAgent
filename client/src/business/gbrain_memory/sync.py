@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from client.src.business.gbrain_memory.page_manager import PageManager
+from business.gbrain_memory.page_manager import PageManager
 
 
 class SyncStatus(Enum):
@@ -66,7 +66,7 @@ class SyncManager:
     """
 
     def __init__(self, brain_dir: str | Path = None):
-        from client.src.business.config import get_config_dir
+        from business.config import get_config_dir
 
         if brain_dir is None:
             brain_dir = get_config_dir() / "gbrain"
@@ -441,7 +441,7 @@ backups/
                 content = md_file.read_text(encoding="utf-8")
 
                 # 解析页面
-                from client.src.business.gbrain_memory.models import BrainPage
+                from business.gbrain_memory.models import BrainPage
                 page = BrainPage.from_markdown(content)
 
                 # 检查是否已存在
@@ -573,7 +573,7 @@ backups/
         result = SyncResult(status=SyncStatus.SYNCING, message="迁移中...")
 
         try:
-            from client.src.business.memory_manager import MemoryManager
+            from business.memory_manager import MemoryManager
 
             memory = MemoryManager()
 

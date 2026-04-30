@@ -47,9 +47,9 @@ from .business_logic_tester import (
 )
 
 from .opencode_ide_tester import (
-    OpenCodeIDETester,
     IDEComponentTest,
     IDETestSuite,
+    run_ide_tests,
 )
 
 from .resource_locator import (
@@ -94,9 +94,9 @@ __all__ = [
     "test_tool_call_timeline",
     "test_pipeline_progress",
     # OpenCode IDE
-    "OpenCodeIDETester",
     "IDEComponentTest",
     "IDETestSuite",
+    "run_ide_tests",
     # Resource Locator
     "ResourceLocator",
     "ResourceFile",

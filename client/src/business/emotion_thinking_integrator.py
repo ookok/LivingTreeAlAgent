@@ -71,7 +71,7 @@ class EmotionThinkingIntegrator:
         """延迟加载情绪感知器"""
         if self._emotion_perception is None:
             try:
-                from client.src.business.emotion_perception import get_emotion_perception
+                from business.emotion_perception import get_emotion_perception
                 self._emotion_perception = get_emotion_perception(use_llm=self.use_llm)
             except ImportError as e:
                 logger.error(f"情绪感知模块导入失败: {e}")
@@ -82,7 +82,7 @@ class EmotionThinkingIntegrator:
         """延迟加载思考模式控制器"""
         if self._thinking_controller is None:
             try:
-                from client.src.business.ei_agent.expert_thinking_mode import (
+                from business.ei_agent.expert_thinking_mode import (
                     get_expert_thinking_controller
                 )
                 self._thinking_controller = get_expert_thinking_controller()

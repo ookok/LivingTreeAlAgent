@@ -9,7 +9,7 @@ import numpy as np
 from collections import deque
 
 from loguru import logger
-from client.src.business.llm_wiki.feedback_manager import FeedbackManager, TripletScore
+from business.llm_wiki.feedback_manager import FeedbackManager, TripletScore
 
 
 @dataclass
@@ -419,7 +419,7 @@ class KnowledgeGraphSelfEvolver:
 
 if __name__ == "__main__":
     # 测试KG自进化器
-    from client.src.business.llm_wiki.feedback_manager import FeedbackManager
+    from business.llm_wiki.feedback_manager import FeedbackManager
 
     # 创建反馈管理器
     fm = FeedbackManager()

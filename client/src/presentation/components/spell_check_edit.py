@@ -9,7 +9,7 @@ SpellCheckTextEdit - 实时错别字检查输入框（QThread 真正异步版）
 5. 真正异步：QThread + signal/slot，零 UI 阻塞
 
 使用方法：
-    from client.src.presentation.components.spell_check_edit import SpellCheckTextEdit
+    from presentation.components.spell_check_edit import SpellCheckTextEdit
 
     edit = SpellCheckTextEdit()
     edit.setPlaceholderText("输入文本...")
@@ -76,7 +76,7 @@ class SpellCheckWorker(QThread):
             self.progress.emit(10, "正在加载纠正工具…")
 
             # 延迟导入 —— 必须在工作线程中 import，不能跨线程共享模块对象
-            from client.src.business.tools.text_correction_tool import TextCorrectionTool
+            from business.tools.text_correction_tool import TextCorrectionTool
 
             self.progress.emit(30, "正在检查错别字…")
 

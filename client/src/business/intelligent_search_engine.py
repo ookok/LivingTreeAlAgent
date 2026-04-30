@@ -148,7 +148,7 @@ class IntelligentSearchEngine:
         """延迟加载组件"""
         if self._memory_retriever is None:
             try:
-                from client.src.business.intelligent_memory_retriever import get_intelligent_retriever
+                from business.intelligent_memory_retriever import get_intelligent_retriever
                 self._memory_retriever = get_intelligent_retriever()
             except Exception as e:
                 logger.warning(f"[IntelligentSearchEngine] 无法加载记忆检索器: {e}")
@@ -156,7 +156,7 @@ class IntelligentSearchEngine:
         
         if self._skill_matcher is None:
             try:
-                from client.src.business.skill_matcher import create_skill_matcher
+                from business.skill_matcher import create_skill_matcher
                 self._skill_matcher = create_skill_matcher()
             except Exception as e:
                 logger.warning(f"[IntelligentSearchEngine] 无法加载技能匹配器: {e}")

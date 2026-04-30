@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont, QColor, QTextCursor
 # 添加项目路径
 sys.path.insert(0, ".")
 
-from client.src.business.task_execution_engine import (
+from .business.task_execution_engine import (
     SmartDecomposer,
     SmartTaskExecutor,
     TaskContext,
@@ -28,10 +28,10 @@ from client.src.business.task_execution_engine import (
     DecompositionDecision,
     ExecutionStrategy,
 )
-from client.src.business.task_decomposer import SubTask
-from client.src.business.agent import HermesAgent, AgentCallbacks
-from client.src.business.agent_progress import AgentProgress, ProgressPhase
-from client.src.presentation.panels.task_tree_widget import TaskTreeWidget
+from .business.task_decomposer import SubTask
+from .business.agent import HermesAgent, AgentCallbacks
+from .business.agent_progress import AgentProgress, ProgressPhase
+from .presentation.panels.task_tree_widget import TaskTreeWidget
 
 
 class AgentChatWithTasks(QMainWindow):
@@ -127,7 +127,7 @@ class AgentChatWithTasks(QMainWindow):
     def _setup_agent(self):
         """初始化 Agent"""
         try:
-            from client.src.business.config import AppConfig
+            from .business.config import AppConfig
             config = AppConfig.default()
 
             # 创建 Agent 回调

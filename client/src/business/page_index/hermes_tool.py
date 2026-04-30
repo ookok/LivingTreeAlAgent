@@ -207,7 +207,7 @@ class PageIndexTool:
 
         try:
             # 使用全局模型路由器（同步调用）
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
 
             response = call_model_sync(
                 capability=ModelCapability.CHAT,

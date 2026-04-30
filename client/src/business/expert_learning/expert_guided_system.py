@@ -22,7 +22,7 @@
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.expert_guided_system')
 
 
@@ -37,32 +37,32 @@ from pathlib import Path
 # ── 延迟导入避免循环依赖 ──────────────────────────────────────────
 
 def _get_hermes_agent():
-    from client.src.business.agent import HermesAgent
+    from business.agent import HermesAgent
     return HermesAgent
 
 def _get_skill_evolution():
-    from client.src.business.skill_evolution.agent_loop import SkillEvolutionAgent
+    from business.skill_evolution.agent_loop import SkillEvolutionAgent
     return SkillEvolutionAgent
 
 def _get_knowledge_graph():
-    from client.src.business.knowledge_graph import KnowledgeGraph
+    from business.knowledge_graph import KnowledgeGraph
     return KnowledgeGraph
 
 def _get_unified_cache():
-    from client.src.business.unified_cache import UnifiedCache
+    from business.unified_cache import UnifiedCache
     return UnifiedCache
 
 def _get_ollama_url():
     """获取 Ollama URL，支持统一配置"""
     try:
-        from client.src.business.config import get_ollama_url
+        from business.config import get_ollama_url
         return get_ollama_url()
     except ImportError:
         return "http://localhost:11434"
 
 def _get_industry_distiller():
     try:
-        from client.src.business.evolution.experience_optimizer import IndustryDistiller
+        from business.evolution.experience_optimizer import IndustryDistiller
         return IndustryDistiller
     except ImportError:
         return None
@@ -330,7 +330,7 @@ class ExpertGuidedLearningSystem:
         # ── 第四层：思维链蒸馏器 ⭐ ────────────────────────────────
         self.cot_distiller = None
         try:
-            from client.src.business.expert_learning.chain_of_thought_distiller import ChainOfThoughtDistiller
+            from business.expert_learning.chain_of_thought_distiller import ChainOfThoughtDistiller
             self.cot_distiller = ChainOfThoughtDistiller()
             logger.info("[ExpertLearning] [OK] Chain-of-Thought Distiller enabled")
         except ImportError:
@@ -361,7 +361,7 @@ class ExpertGuidedLearningSystem:
         # ── 性能监控器 ⭐ ───────────────────────────────────────────
         self._monitor = None
         try:
-            from client.src.business.expert_learning.performance_monitor import PerformanceMonitor
+            from business.expert_learning.performance_monitor import PerformanceMonitor
             self._monitor = PerformanceMonitor()
             logger.info("[ExpertLearning] [OK] Performance Monitor enabled")
         except ImportError:
@@ -372,7 +372,7 @@ class ExpertGuidedLearningSystem:
         # ── 智能卸载策略 ⭐ ─────────────────────────────────────────
         self._offload_strategy = None
         try:
-            from client.src.business.expert_learning.auto_offload_strategy import AutoOffloadStrategy
+            from business.expert_learning.auto_offload_strategy import AutoOffloadStrategy
             self._offload_strategy = AutoOffloadStrategy()
             logger.info("[ExpertLearning] [OK] Auto-Offload Strategy enabled")
         except ImportError:
@@ -383,7 +383,7 @@ class ExpertGuidedLearningSystem:
         # ── 自适应模型压缩器 ⭐ ─────────────────────────────────────
         self._compressor = None
         try:
-            from client.src.business.expert_learning.adaptive_model_compressor import AdaptiveModelCompressor
+            from business.expert_learning.adaptive_model_compressor import AdaptiveModelCompressor
             self._compressor = AdaptiveModelCompressor()
             logger.info("[ExpertLearning] [OK] Adaptive Model Compressor enabled")
         except ImportError:
@@ -394,7 +394,7 @@ class ExpertGuidedLearningSystem:
         # ── 智能配额管理器 ⭐ ───────────────────────────────────────
         self._quota_manager = None
         try:
-            from client.src.business.expert_learning.smart_quota_manager import SmartQuotaManager, QuotaMode, Provider
+            from business.expert_learning.smart_quota_manager import SmartQuotaManager, QuotaMode, Provider
             self._quota_manager = SmartQuotaManager()
             logger.info("[ExpertLearning] [OK] Smart Quota Manager enabled")
         except ImportError:
@@ -606,7 +606,7 @@ class ExpertGuidedLearningSystem:
         """专家模型生成（使用 L4，已迁移到GlobalModelRouter）"""
         try:
             # 使用全局模型路由器（同步调用）
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             
             # 使用 REASONING 能力（专家模型需要推理能力）
             content = call_model_sync(
@@ -665,7 +665,7 @@ class ExpertGuidedLearningSystem:
             return
 
         try:
-            from client.src.business.evolution.models import DistillationCategory
+            from business.evolution.models import DistillationCategory
             self.distiller.record_behavior(
                 category=DistillationCategory.USER_HABIT,
                 keywords=self._extract_keywords(query),
@@ -855,7 +855,7 @@ class ExpertGuidedLearningSystem:
         if not self._quota_manager:
             return False
         try:
-            from client.src.business.expert_learning.smart_quota_manager import QuotaMode
+            from business.expert_learning.smart_quota_manager import QuotaMode
             mode_enum = QuotaMode(mode)
             self._quota_manager.set_mode(mode_enum, locked=locked)
             return True
@@ -872,7 +872,7 @@ class ExpertGuidedLearningSystem:
         if not self._quota_manager:
             return True  # 默认允许
         try:
-            from client.src.business.expert_learning.smart_quota_manager import Provider
+            from business.expert_learning.smart_quota_manager import Provider
             provider_enum = Provider(provider)
             return self._quota_manager.can_call(provider_enum, estimated_tokens, priority)
         except Exception:
@@ -908,7 +908,7 @@ class ExpertGuidedLearningSystem:
         """记录API调用成本"""
         if self._quota_manager:
             try:
-                from client.src.business.expert_learning.smart_quota_manager import Provider
+                from business.expert_learning.smart_quota_manager import Provider
                 self._quota_manager.record_usage(
                     provider=Provider(provider),
                     model=model,
@@ -925,7 +925,7 @@ class ExpertGuidedLearningSystem:
     def get_provider_manager(self):
         """获取外部提供者管理器"""
         try:
-            from client.src.business.expert_learning.external_provider_config import get_provider_manager
+            from business.expert_learning.external_provider_config import get_provider_manager
             return get_provider_manager()
         except ImportError:
             return None
@@ -961,7 +961,7 @@ class ExpertGuidedLearningSystem:
             return None
 
         try:
-            from client.src.business.expert_learning.external_provider_config import ProviderType, CostType
+            from business.expert_learning.external_provider_config import ProviderType, CostType
 
 
             p_type = ProviderType(provider_type.lower())

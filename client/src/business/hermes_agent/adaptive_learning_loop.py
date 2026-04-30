@@ -17,8 +17,8 @@ import json
 import logging
 from enum import Enum
 
-from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
-from client.src.business.hermes_agent.intent_recognizer import Intent
+from business.global_model_router import GlobalModelRouter, ModelCapability
+from business.hermes_agent.intent_recognizer import Intent
 
 
 logger = logging.getLogger(__name__)

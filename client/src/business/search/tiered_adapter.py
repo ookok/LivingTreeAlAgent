@@ -11,7 +11,7 @@ from datetime import datetime
 
 # 尝试导入分层搜索模块
 try:
-    from client.src.business.search import (
+    from business.search import (
         SearchScheduler,
         TierRouter,
         TierLevel,

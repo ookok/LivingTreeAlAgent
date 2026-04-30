@@ -233,15 +233,14 @@ class MinimalStyle:
     @staticmethod
     def card(elevated: bool = False) -> str:
         """生成卡片样式"""
-        shadow = "box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);" if elevated else ""
+        border_width = "2px" if elevated else "1px"
         
         return f"""
             QFrame {{
                 background-color: {ColorScheme.SURFACE.value};
-                border: 1px solid {ColorScheme.BORDER.value};
+                border: {border_width} solid {ColorScheme.BORDER.value};
                 border-radius: 12px;
                 padding: {Spacing.LG}px;
-                {shadow}
             }}
         """
     

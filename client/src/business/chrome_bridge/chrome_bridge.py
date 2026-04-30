@@ -26,16 +26,16 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from loguru import logger
 
-from client.src.business.chrome_bridge.cdp_helper import CDPHelper, CDPPage, get_cdp_helper
-from client.src.business.chrome_bridge.browser_launcher import BrowserLauncher, get_browser_launcher
-from client.src.business.chrome_bridge.anti_detection import AntiDetectionEngine, get_anti_detection_engine
-from client.src.business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
-from client.src.business.chrome_bridge.website_adapter_registry import get_adapter_registry
-from client.src.business.chrome_bridge.utils.cookie_manager import CookieManager, get_cookie_manager
+from business.chrome_bridge.cdp_helper import CDPHelper, CDPPage, get_cdp_helper
+from business.chrome_bridge.browser_launcher import BrowserLauncher, get_browser_launcher
+from business.chrome_bridge.anti_detection import AntiDetectionEngine, get_anti_detection_engine
+from business.chrome_bridge.website_adapter_base import BaseWebsiteAdapter
+from business.chrome_bridge.website_adapter_registry import get_adapter_registry
+from business.chrome_bridge.utils.cookie_manager import CookieManager, get_cookie_manager
 
 # 导入新的 BrowserManager
 try:
-    from client.src.business.chrome_bridge.browser_manager import BrowserManager
+    from business.chrome_bridge.browser_manager import BrowserManager
     BROWSER_MANAGER_AVAILABLE = True
 except ImportError:
     BROWSER_MANAGER_AVAILABLE = False

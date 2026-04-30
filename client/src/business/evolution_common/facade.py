@@ -6,7 +6,7 @@ Evolution Common - 门面类
 """
 
 from typing import List, Dict, Any, Optional
-from client.src.business.evolution_common import (
+from business.evolution_common import (
     BaseEvolutionEngine,
     EvolutionTarget,
     EvolutionConfig,

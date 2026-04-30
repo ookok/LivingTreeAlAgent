@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List
 from loguru import logger
 
 from ..memory_model import HybridMemory
-from client.src.business.fusion_rag import (
+from business.fusion_rag import (
     FusionEngine,
     ExactCacheLayer,
     SessionCacheLayer
@@ -42,7 +42,7 @@ class RAGIntegrator:
     def _get_fusion_engine(self):
         """延迟加载 FusionEngine"""
         if self._fusion_engine is None:
-            from client.src.business.fusion_rag.fusion_engine import FusionEngine
+            from business.fusion_rag.fusion_engine import FusionEngine
             self._fusion_engine = FusionEngine()
         return self._fusion_engine
     

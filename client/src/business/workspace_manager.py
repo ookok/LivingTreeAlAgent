@@ -14,7 +14,7 @@ from datetime import datetime
 import json
 import os
 
-from client.src.business.nanochat_config import config as nanochat_config
+from business.nanochat_config import config as nanochat_config
 
 
 @dataclass

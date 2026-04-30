@@ -27,13 +27,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
 
-from client.src.business.unified_memory import (
+from business.unified_memory import (
     MemoryRouter,
     MemoryItem,
     MemoryType,
     MemoryQuery,
 )
-from client.src.business.auto_memory_manager import get_auto_memory_manager
+from business.auto_memory_manager import get_auto_memory_manager
 
 logger = __import__('logging').getLogger(__name__)
 

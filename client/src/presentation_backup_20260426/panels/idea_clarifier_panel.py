@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtSvgWidgets import QSvgWidget
 
-from client.src.business.idea_clarifier import (
+from .business.idea_clarifier import (
     get_idea_clarifier, IdeaClarifier, ClarifySession,
     ClarifyPhase, ClarifyQuestion, QuestionType,
     DesignOption, DesignSection

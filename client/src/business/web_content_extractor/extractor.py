@@ -65,7 +65,7 @@ class ExtractionConfig:
         # 2. 自动从代理池获取
         if self.proxy_auto:
             try:
-                from client.src.business.proxy_search.proxy_pool import get_proxy_pool
+                from business.proxy_search.proxy_pool import get_proxy_pool
                 pooled = get_proxy_pool().get_proxy()
                 if pooled:
                     addr = pooled.proxy.full_address
@@ -116,7 +116,7 @@ class ContentExtractor:
         """获取或创建 ScraplingEngine 实例"""
         if self._scrapling_engine is None:
             try:
-                from client.src.business.web_crawler.engine import ScraplingEngine
+                from business.web_crawler.engine import ScraplingEngine
                 self._scrapling_engine = ScraplingEngine(
                     timeout=self.config.scrapling_timeout,
                     proxy=self.config.proxy,
@@ -171,7 +171,7 @@ class ContentExtractor:
             try:
                 engine = self._get_scrapling_engine()
                 if engine:
-                    from client.src.business.web_crawler.engine import CrawlResult
+                    from business.web_crawler.engine import CrawlResult
                     result: CrawlResult = await engine.extract(url, proxy=proxy)
                     if result.success and result.content:
                         content = result.content
@@ -232,7 +232,7 @@ class ContentExtractor:
         if engine is None:
             raise RuntimeError("ScraplingEngine 初始化失败")
 
-        from client.src.business.web_crawler.engine import CrawlResult
+        from business.web_crawler.engine import CrawlResult
         result: CrawlResult = await engine.extract(url, proxy=proxy)
         if result.success:
             return result.content

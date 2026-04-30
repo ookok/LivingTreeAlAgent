@@ -8,7 +8,7 @@
 4. 自动生成密钥（基于机器指纹 + 用户密码）
 
 使用：
-    from client.src.business.encrypted_config import EncryptedConfig
+    from business.encrypted_config import EncryptedConfig
     
     config_manager = EncryptedConfig()
     

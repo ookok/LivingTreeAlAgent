@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     ConfigCenter,
     CacheLayer,
     get_config,

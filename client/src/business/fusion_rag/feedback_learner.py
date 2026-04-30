@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     EventBus,
     get_event_bus,
     EVENTS

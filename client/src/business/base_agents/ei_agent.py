@@ -19,7 +19,7 @@ Date: 2026-04-27
 
 from typing import Any, Dict, List, Optional
 
-from client.src.business.base_agents.base_agent import (
+from business.base_agents.base_agent import (
     BaseToolAgent,
     ToolCallResult,
 )
@@ -112,7 +112,7 @@ class EIToolAgent(BaseToolAgent):
         
         # 尝试从知识库加载成功的工具链模式
         try:
-            from client.src.business.knowledge_vector_db import VectorDatabase
+            from business.knowledge_vector_db import VectorDatabase
             db = VectorDatabase()
             similar_chains = db.search(f"环评工具链 {task}", top_k=3)
             
@@ -165,7 +165,7 @@ def create_ei_tool_agent(
     Returns:
         EIToolAgent 实例
     """
-    from client.src.business.tools.register_all_tools import register_all_tools
+    from business.tools.register_all_tools import register_all_tools
 
     # 确保所有工具已注册
     register_all_tools()

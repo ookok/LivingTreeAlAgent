@@ -21,14 +21,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 
-from client.src.business.task_decomposer import (
+from business.task_decomposer import (
     DecomposedTask,
     TaskStep,
     TaskDecomposer,
     ProcessType,
     create_task_split_task,
 )
-from client.src.business.agent_skills.task_decomposition_skills import (
+from business.agent_skills.task_decomposition_skills import (
     TaskSplitterProSkill,
     get_task_splitter,
 )

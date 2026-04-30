@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont
 from pathlib import Path
 
-from client.src.business.config import AppConfig
+from .business.config import AppConfig
 
 
 class SettingsDialog(QDialog):
@@ -175,19 +175,19 @@ class SettingsDialog(QDialog):
         create_scroll_tab(writing_tab, "Writing")
 
         # ── Providers ────────────────────────────────────────
-        from client.src.presentation.panels.provider_panel import ProviderPanel
+        from .presentation.panels.provider_panel import ProviderPanel
         provider_tab = ProviderPanel()
         self.provider_panel = provider_tab
         create_scroll_tab(provider_tab, "Providers")
 
         # ── Profiles ────────────────────────────────────────
-        from client.src.presentation.panels.profile_panel import ProfilePanel
+        from .presentation.panels.profile_panel import ProfilePanel
         profile_tab = ProfilePanel()
         self.profile_panel = profile_tab
         create_scroll_tab(profile_tab, "Profiles")
 
         # ── Status ───────────────────────────────────────────
-        from client.src.presentation.panels.status_panel import StatusPanel
+        from .presentation.panels.status_panel import StatusPanel
         status_tab = StatusPanel()
         self.status_panel = status_tab
         create_scroll_tab(status_tab, "Status")
@@ -292,7 +292,7 @@ class SettingsDialog(QDialog):
         lay.setSpacing(16)
         lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        from client.src.business.config import get_models_dir
+        from .business.config import get_models_dir
         models_dir = get_models_dir()
 
         self.models_dir = QLineEdit(str(models_dir))
@@ -386,7 +386,7 @@ class SettingsDialog(QDialog):
         lay = QFormLayout(w)
         lay.setSpacing(12)
 
-        from client.src.business.config import get_projects_dir
+        from .business.config import get_projects_dir
         proj_dir = get_projects_dir()
 
         self.proj_dir = QLineEdit(str(proj_dir))
@@ -598,7 +598,7 @@ class SettingsDialog(QDialog):
         self.logging_enabled.setChecked(True)
         general_lay.addWidget(self.logging_enabled)
 
-        from client.src.business.error_logger import LOG_DIR
+        from .business.error_logger import LOG_DIR
         log_dir_label = QLabel(f"日志目录: {LOG_DIR}")
         log_dir_label.setStyleSheet("color:#666;font-size:11px;")
         general_lay.addWidget(log_dir_label)
@@ -1357,7 +1357,7 @@ class SettingsDialog(QDialog):
 
     def _on_save(self):
         from pathlib import Path
-        from client.src.business.config import OllamaConfig, ModelPathConfig, AgentConfig, WritingConfig
+        from .business.config import OllamaConfig, ModelPathConfig, AgentConfig, WritingConfig
         import os
 
         # 处理配置对象可能是字典的情况

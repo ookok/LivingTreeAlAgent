@@ -1053,7 +1053,7 @@ def test_login_success():
         """初始化 AI 模块"""
         try:
             # 导入上下文预处理器
-            from client.src.business.context_preprocessor import ContextPreprocessor
+            from .business.context_preprocessor import ContextPreprocessor
             self.context_preprocessor = ContextPreprocessor()
 
             logger.info("[AIDrivenIDE] AI 模块初始化成功")

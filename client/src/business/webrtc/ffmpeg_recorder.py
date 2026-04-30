@@ -19,7 +19,7 @@ import threading
 import queue
 import uuid
 
-from client.src.business.ffmpeg_tool import FFmpegTool, FFmpegRecorder, PRESET_BALANCED
+from business.ffmpeg_tool import FFmpegTool, FFmpegRecorder, PRESET_BALANCED
 
 
 class RecordingState(Enum):

@@ -566,7 +566,7 @@ def create_streaming_executor(model_router, action_executor: Optional[Callable] 
 
 async def example_usage():
     """使用示例"""
-    from client.src.business.global_model_router import get_global_router
+    from business.global_model_router import get_global_router
     
     # 1. 获取全局路由器
     router = get_global_router()

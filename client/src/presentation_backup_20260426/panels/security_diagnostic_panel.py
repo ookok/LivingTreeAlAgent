@@ -280,7 +280,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def run_diagnostic(self):
         """运行诊断"""
-        from client.src.business.security import (
+        from .business.security import (
             get_security_manager,
             get_firewall_manager,
             get_antivirus_helper,
@@ -335,7 +335,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def _update_status_card(self, status):
         """更新状态卡片"""
-        from client.src.business.security import SecurityLevel
+        from .business.security import SecurityLevel
 
         level = status.level
 
@@ -396,7 +396,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def _update_antivirus_tab(self, av_status, products, helper):
         """更新杀毒软件 Tab"""
-        from client.src.business.security import AntivirusStatus
+        from .business.security import AntivirusStatus
 
         if products:
             names = [p.name for p in products]
@@ -421,7 +421,7 @@ class SecurityDiagnosticPanel(QWidget):
         self.log_list.clear()
 
         for event in events:
-            from client.src.business.security import RiskLevel
+            from .business.security import RiskLevel
 
             risk_color = {
                 RiskLevel.NONE: "#999",
@@ -441,7 +441,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def _update_problems(self, sec_status, fw_status, av_status):
         """更新问题列表"""
-        from client.src.business.security import AntivirusStatus, FirewallStatus
+        from .business.security import AntivirusStatus, FirewallStatus
 
         self.problem_list.clear()
         self.suggestion_list.clear()
@@ -470,7 +470,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def one_click_fix(self):
         """一键修复"""
-        from client.src.business.security import get_firewall_manager, get_security_manager
+        from .business.security import get_firewall_manager, get_security_manager
 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Information)
@@ -486,7 +486,7 @@ class SecurityDiagnosticPanel(QWidget):
                     logger.info(f"防火墙规则添加: {msg_text}")
 
                 # 添加 Defender 排除
-                from client.src.business.security import get_antivirus_helper
+                from .business.security import get_antivirus_helper
                 av_helper = get_antivirus_helper()
                 av_helper.add_to_defender_exclusions(
                     get_security_manager().config.app_data_dir
@@ -505,7 +505,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def add_firewall_rules(self):
         """添加防火墙规则"""
-        from client.src.business.security import get_firewall_manager
+        from .business.security import get_firewall_manager
 
         fw_mgr = get_firewall_manager()
 
@@ -531,7 +531,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def open_antivirus_settings(self):
         """打开杀毒软件设置"""
-        from client.src.business.security import get_antivirus_helper
+        from .business.security import get_antivirus_helper
 
         helper = get_antivirus_helper()
         products = helper.detect_antivirus()
@@ -547,7 +547,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def add_defender_exclusion(self):
         """添加 Defender 排除"""
-        from client.src.business.security import get_antivirus_helper, get_security_manager
+        from .business.security import get_antivirus_helper, get_security_manager
 
         helper = get_antivirus_helper()
         sec_mgr = get_security_manager()
@@ -566,7 +566,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def export_report(self):
         """导出诊断报告"""
-        from client.src.business.security import get_security_manager
+        from .business.security import get_security_manager
         import json
 
         try:
@@ -593,7 +593,7 @@ class SecurityDiagnosticPanel(QWidget):
 
     def export_logs(self):
         """导出日志"""
-        from client.src.business.security import get_behavior_monitor
+        from .business.security import get_behavior_monitor
         import json
 
         try:

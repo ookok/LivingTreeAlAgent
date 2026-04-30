@@ -5,8 +5,8 @@
 
 import json
 from pathlib import Path
-from client.src.business.tools_registry import ToolRegistry, tool, SCHEMA
-from client.src.business.config import get_projects_dir
+from business.tools_registry import ToolRegistry, tool, SCHEMA
+from business.config import get_projects_dir
 
 
 def _get_project_dir(project_name: str) -> Path:

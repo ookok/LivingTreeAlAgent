@@ -109,21 +109,21 @@ class MessageSyncService:
         """延迟加载组件"""
         if self._wecom_tool is None:
             try:
-                from client.src.business.wecom_tool import get_wecom_tool
+                from business.wecom_tool import get_wecom_tool
                 self._wecom_tool = get_wecom_tool()
             except Exception as e:
                 logger.warning(f"[MessageSyncService] 无法加载企业微信工具: {e}")
         
         if self._wechat_tool is None:
             try:
-                from client.src.business.wechat_tool import get_wechat_tool
+                from business.wechat_tool import get_wechat_tool
                 self._wechat_tool = get_wechat_tool()
             except Exception as e:
                 logger.warning(f"[MessageSyncService] 无法加载微信工具: {e}")
         
         if self._knowledge_base is None:
             try:
-                from client.src.business.fusion_rag import FusionRAG
+                from business.fusion_rag import FusionRAG
                 self._knowledge_base = FusionRAG()
             except Exception as e:
                 logger.warning(f"[MessageSyncService] 无法加载知识库: {e}")

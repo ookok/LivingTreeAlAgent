@@ -20,9 +20,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
-from client.src.business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
-from client.src.business.self_evolution.user_clarification_requester import UserClarificationRequester
-from client.src.business.tools.tool_result import ToolResult
+from business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
+from business.self_evolution.user_clarification_requester import UserClarificationRequester
+from business.tools.tool_result import ToolResult
 
 
 @dataclass
@@ -249,7 +249,7 @@ class Sandbox:
             spec.loader.exec_module(module)
 
             # 查找 BaseTool 子类
-            from client.src.business.tools.base_tool import BaseTool
+            from business.tools.base_tool import BaseTool
             tool_class = None
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
@@ -482,7 +482,7 @@ class SafeAutonomousToolCreator(AutonomousToolCreator):
 
             # 从 ToolRegistry 注销
             try:
-                from client.src.business.tools.tool_registry import ToolRegistry
+                from business.tools.tool_registry import ToolRegistry
                 registry = ToolRegistry.get_instance()
                 registry.unregister(tool_name)
                 self._logger.info(f"已从 ToolRegistry 注销: {tool_name}")
@@ -512,7 +512,7 @@ class SafeAutonomousToolCreator(AutonomousToolCreator):
     async def _call_llm(self, prompt: str) -> str:
         """调用 LLM（通过 GlobalModelRouter）"""
         try:
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             return call_model_sync(
                 capability=ModelCapability.CODE_GENERATION,
                 prompt=prompt,

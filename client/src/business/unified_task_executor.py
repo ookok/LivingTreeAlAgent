@@ -18,7 +18,7 @@ Author: Hermes Desktop Team
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('unified_task_executor')
 
 
@@ -106,7 +106,7 @@ class UnifiedTaskExecutor:
         **kwargs
     ):
         # 从配置模块获取默认值
-        from client.src.business.config_provider import get_ollama_url, get_l1_model
+        from business.config_provider import get_ollama_url, get_l1_model
 
         self._ollama_url = ollama_url or get_ollama_url()
         self._max_workers = max_workers
@@ -125,7 +125,7 @@ class UnifiedTaskExecutor:
         """智能任务执行器（延迟加载）"""
         if self._smart_executor is None:
             try:
-                from client.src.business.task_execution_engine import SmartTaskExecutor
+                from business.task_execution_engine import SmartTaskExecutor
                 # SmartTaskExecutor 不接受 llm_client 和 max_subtasks_per_node 参数
                 self._smart_executor = SmartTaskExecutor(
                     max_depth=3,
@@ -139,7 +139,7 @@ class UnifiedTaskExecutor:
     def tool_registry(self):
         """工具注册表（延迟加载）"""
         try:
-            from client.src.business.tools_registry import ToolRegistry
+            from business.tools_registry import ToolRegistry
             return ToolRegistry
         except ImportError:
             return None
@@ -242,7 +242,7 @@ class UnifiedTaskExecutor:
         prompt = self._build_prompt(task, context)
         
         # 使用全局模型路由器（同步调用）
-        from client.src.business.global_model_router import call_model_sync, ModelCapability
+        from business.global_model_router import call_model_sync, ModelCapability
         output = call_model_sync(
             capability=ModelCapability.CHAT,
             prompt=prompt,
@@ -356,7 +356,7 @@ class UnifiedTaskExecutor:
 
         try:
             # 使用全局模型路由器（同步调用）
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             response = call_model_sync(
                 capability=ModelCapability.REASONING,
                 prompt=prompt,
@@ -393,7 +393,7 @@ class UnifiedTaskExecutor:
 
         try:
             # 使用全局模型路由器（同步调用）
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             return call_model_sync(
                 capability=ModelCapability.CHAT,
                 prompt=prompt,
@@ -458,7 +458,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     # 从配置获取 Ollama URL
-    from client.src.business.config_provider import get_ollama_url
+    from business.config_provider import get_ollama_url
 
 
     executor = UnifiedTaskExecutor(

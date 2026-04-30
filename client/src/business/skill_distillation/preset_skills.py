@@ -13,8 +13,8 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
 
-from client.src.business.hermes_skill_factory import SkillFactory
-from client.src.business.skill_distillation import (
+from business.hermes_skill_factory import SkillFactory
+from business.skill_distillation import (
     DEFAULT_SKILL_SOURCES,
     register_all_tools,
     get_stats,
@@ -103,7 +103,7 @@ def preset_distilled_skills():
 
 def create_skill_config_file():
     """创建技能配置文件"""
-    from client.src.business.skill_distillation import DistillationConfig
+    from business.skill_distillation import DistillationConfig
     
     config = DistillationConfig(sources=DEFAULT_SKILL_SOURCES)
     

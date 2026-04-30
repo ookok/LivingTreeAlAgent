@@ -99,7 +99,7 @@ class ToolChain:
     
     def _get_registry(self):
         if self._registry is None:
-            from client.src.business.unified_tool_registry import get_registry
+            from business.unified_tool_registry import get_registry
             self._registry = get_registry()
         return self._registry
     

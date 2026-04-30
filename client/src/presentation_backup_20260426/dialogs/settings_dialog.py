@@ -15,7 +15,7 @@ from PyQt6.QtGui import QFont
 
 # 导入主题管理器
 try:
-    from client.src.presentation.theme import theme_manager
+    from .presentation.theme import theme_manager
 except ImportError:
     theme_manager = None
 

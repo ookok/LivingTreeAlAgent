@@ -4,12 +4,12 @@ OCREngine Tool Wrapper
 Auto-generated BaseTool wrapper for OCREngine
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.intelligent_ocr.ocr_engine import OCREngine
+    from business.intelligent_ocr.ocr_engine import OCREngine
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     OCREngine = None
@@ -81,7 +81,7 @@ class OCREngineTool(BaseTool):
 
 def register_intelligent_ocr_tool():
     """注册 intelligent_ocr 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = OCREngineTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = OCREngineTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

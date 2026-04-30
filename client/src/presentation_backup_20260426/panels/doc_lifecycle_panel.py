@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QProgressDialog
 )
 
-from client.src.business.doc_lifecycle import (
+from .business.doc_lifecycle import (
     get_doc_lifecycle_system, ReviewLevel, ReviewStatus,
     FileActivity, ActivityLevel, CleanupRule, CleanupTask,
     ReportInfo, ReviewResult

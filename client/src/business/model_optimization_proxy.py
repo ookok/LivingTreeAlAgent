@@ -209,7 +209,7 @@ class ModelOptimizationProxy:
         if self._features[OptimizationFeature.COST_MANAGEMENT]:
             cost_manager = self._get_cost_manager()
             if cost_manager:
-                from client.src.business.cost_manager import ModelType
+                from business.cost_manager import ModelType
                 model_enum = ModelType(model_type) if model_type in [m.value for m in ModelType] else ModelType.CLAUDE_3_SONNET
                 cost_manager.record_call(
                     model=model_enum,
@@ -279,7 +279,7 @@ class ModelOptimizationProxy:
     def _get_token_optimizer(self):
         if self._token_optimizer is None:
             try:
-                from client.src.business.token_optimizer import get_token_optimizer
+                from business.token_optimizer import get_token_optimizer
                 self._token_optimizer = get_token_optimizer()
             except Exception as e:
                 logger.warning(f"[ModelOptimizationProxy] Token优化器加载失败: {e}")
@@ -288,7 +288,7 @@ class ModelOptimizationProxy:
     def _get_prompt_cache(self):
         if self._prompt_cache is None:
             try:
-                from client.src.business.prompt_cache_manager import get_prompt_cache
+                from business.prompt_cache_manager import get_prompt_cache
                 self._prompt_cache = get_prompt_cache()
             except Exception as e:
                 logger.warning(f"[ModelOptimizationProxy] Prompt缓存加载失败: {e}")
@@ -297,7 +297,7 @@ class ModelOptimizationProxy:
     def _get_token_compressor(self):
         if self._token_compressor is None:
             try:
-                from client.src.business.token_compressor import get_token_compressor
+                from business.token_compressor import get_token_compressor
                 self._token_compressor = get_token_compressor()
             except Exception as e:
                 logger.warning(f"[ModelOptimizationProxy] Token压缩器加载失败: {e}")
@@ -306,7 +306,7 @@ class ModelOptimizationProxy:
     def _get_cost_manager(self):
         if self._cost_manager is None:
             try:
-                from client.src.business.cost_manager import get_cost_manager
+                from business.cost_manager import get_cost_manager
                 self._cost_manager = get_cost_manager()
             except Exception as e:
                 logger.warning(f"[ModelOptimizationProxy] 成本管理器加载失败: {e}")

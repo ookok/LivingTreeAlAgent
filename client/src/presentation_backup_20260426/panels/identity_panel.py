@@ -494,7 +494,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
             return
 
         try:
-            from client.src.business.identity_vault import get_vault_manager
+            from .business.identity_vault import get_vault_manager
             vault = get_vault_manager()
 
             if vault.unlock(password):
@@ -516,7 +516,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
     def _on_lock_clicked(self):
         """锁定保险箱"""
         try:
-            from client.src.business.identity_vault import get_vault_manager
+            from .business.identity_vault import get_vault_manager
             vault = get_vault_manager()
             vault.lock()
 
@@ -550,7 +550,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
             return
 
         try:
-            from client.src.business.identity_vault import get_vault_manager
+            from .business.identity_vault import get_vault_manager
 
             # 显示进度
             progress = QProgressDialog("正在创建身份...", None, 0, 0, self)
@@ -601,7 +601,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
             return
 
         try:
-            from client.src.business.identity_vault import get_vault_manager
+            from .business.identity_vault import get_vault_manager
 
             vault = get_vault_manager()
             device_id = vault.recover_identity(mnemonic, password)
@@ -619,7 +619,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
     def _on_refresh_devices(self):
         """刷新设备列表"""
         try:
-            from client.src.business.identity_vault import get_state_db
+            from .business.identity_vault import get_state_db
 
             db = get_state_db()
             devices = db.get_devices()
@@ -641,7 +641,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
             self.sync_started.emit()
             self._sync_now_btn.setEnabled(False)
 
-            from client.src.business.identity_vault import get_data_butler
+            from .business.identity_vault import get_data_butler
             butler = get_data_butler()
             result = butler.sync_all()
 
@@ -656,7 +656,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
     def _on_force_reconnect(self):
         """强制重新连接"""
         try:
-            from client.src.business.relay_router import get_connection_manager
+            from .business.relay_router import get_connection_manager
             cm = get_connection_manager()
             cm.force_reconnect()
             QMessageBox.information(self, "已触发", "正在尝试重新连接...")
@@ -669,7 +669,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
         try:
             self.backup_started.emit()
 
-            from client.src.business.identity_vault import get_data_butler
+            from .business.identity_vault import get_data_butler
             butler = get_data_butler()
 
             cloud_names = ["aliyun_oss", "tencent_cos", "google_drive", "onedrive", "dropbox"]
@@ -704,7 +704,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
 
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                from client.src.business.identity_vault import get_data_butler
+                from .business.identity_vault import get_data_butler
                 butler = get_data_butler()
                 result = butler.restore_backup(backup_id)
 
@@ -719,7 +719,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
     def _on_refresh_backups(self):
         """刷新备份列表"""
         try:
-            from client.src.business.identity_vault import get_data_butler
+            from .business.identity_vault import get_data_butler
             butler = get_data_butler()
             backups = butler.list_backups()
 
@@ -751,7 +751,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
             return
 
         try:
-            from client.src.business.relay_router import get_relay_config
+            from .business.relay_router import get_relay_config
             config = get_relay_config()
             config.configure_private_server(
                 domain=domain,
@@ -772,7 +772,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
         self._test_relay_btn.setText("测试中...")
 
         try:
-            from client.src.business.relay_router import get_health_monitor
+            from .business.relay_router import get_health_monitor
             monitor = get_health_monitor()
             results = monitor.check_all_relays()
 
@@ -819,7 +819,7 @@ class IdentityPanel(QWidget if PYQT6_AVAILABLE else object):
 
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                from client.src.business.relay_router import get_relay_config
+                from .business.relay_router import get_relay_config
                 config = get_relay_config()
                 config.disable_private_server()
 

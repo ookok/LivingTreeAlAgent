@@ -12,7 +12,7 @@ def test_knowledge_graph():
     """测试知识图谱"""
     print("\n=== 测试知识图谱 ===")
     
-    from client.src.business.smart_assistant.knowledge_graph import get_knowledge_graph
+    from business.smart_assistant.knowledge_graph import get_knowledge_graph
     
     kg = get_knowledge_graph()
     
@@ -46,8 +46,8 @@ def test_intent_recognizer():
     """测试意图识别器"""
     print("\n=== 测试意图识别器 ===")
     
-    from client.src.business.smart_assistant.intent_recognizer import get_intent_recognizer
-    from client.src.business.smart_assistant.models import IntentType
+    from business.smart_assistant.intent_recognizer import get_intent_recognizer
+    from business.smart_assistant.models import IntentType
     
     recognizer = get_intent_recognizer()
     
@@ -75,8 +75,8 @@ def test_guide_system():
     """测试指引系统"""
     print("\n=== 测试指引系统 ===")
     
-    from client.src.business.smart_assistant.guide_system import get_guide_system
-    from client.src.business.smart_assistant.knowledge_graph import get_knowledge_graph
+    from business.smart_assistant.guide_system import get_guide_system
+    from business.smart_assistant.knowledge_graph import get_knowledge_graph
     
     guide_system = get_guide_system()
     kg = get_knowledge_graph()
@@ -122,7 +122,7 @@ def test_smart_assistant():
     """测试智能助手"""
     print("\n=== 测试智能助手 ===")
     
-    from client.src.business.smart_assistant import get_smart_assistant
+    from business.smart_assistant import get_smart_assistant
     
     assistant = get_smart_assistant()
     

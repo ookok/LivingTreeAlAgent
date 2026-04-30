@@ -439,7 +439,7 @@ class CodeEvolutionPlanner:
     async def _call_llm(self, prompt: str) -> str:
         """通过 GlobalModelRouter 调用 LLM"""
         try:
-            from client.src.business.global_model_router import GlobalModelRouter
+            from business.global_model_router import GlobalModelRouter
             router = GlobalModelRouter.get_instance()
 
             response = await router.call_model(

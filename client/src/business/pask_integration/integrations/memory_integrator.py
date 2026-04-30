@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from ..memory_model import HybridMemory, MemoryEntry
-from client.src.business.memory_manager import MemoryManager
+from business.memory_manager import MemoryManager
 
 
 class MemoryIntegrator:

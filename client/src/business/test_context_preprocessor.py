@@ -19,7 +19,7 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from client.src.business.context_preprocessor import (
+from business.context_preprocessor import (
     ContextPreprocessor, ContextSegment, ContentType, ProcessingStats
 )
 

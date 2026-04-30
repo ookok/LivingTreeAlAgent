@@ -17,7 +17,7 @@ Phase 3: 多智能体协同
 
 使用示例：
 ```python
-from client.src.business.long_context import ProgressiveUnderstanding
+from business.long_context import ProgressiveUnderstanding
 
 # 创建渐进式理解器
 understander = ProgressiveUnderstanding()

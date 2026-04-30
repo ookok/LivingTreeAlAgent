@@ -202,7 +202,7 @@ class MarkdownRenderer:
             QLabel {{
                 font-size: {font_size}px;
                 font-weight: bold;
-                color: #1e40af;
+                color: #bd93f9;
                 margin-top: 12px;
                 margin-bottom: 4px;
             }}

@@ -560,7 +560,7 @@ class SystemBrain:
                 "steps": list           # 分解的步骤
             }
         """
-        from client.src.business.task_decomposer import get_chain_of_thought_prompt
+        from business.task_decomposer import get_chain_of_thought_prompt
         
         if use_chain_of_thought:
             prompt = get_chain_of_thought_prompt(question)
@@ -652,7 +652,7 @@ class SystemBrain:
         """
         if self._ui_automation is None:
             try:
-                from client.src.business.ui_automation import UIAutomation
+                from business.ui_automation import UIAutomation
                 self._ui_automation = UIAutomation(system_brain=self)
             except ImportError as e:
                 raise ImportError(
@@ -714,7 +714,7 @@ class SystemBrain:
             ReasoningModelClient 实例
         """
         if self._reasoning_client is None:
-            from client.src.business.reasoning_client import ReasoningModelClient, ReasoningConfig
+            from business.reasoning_client import ReasoningModelClient, ReasoningConfig
 
             model_name = self.current_model or "deepseek-r1:1.5b"
 

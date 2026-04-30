@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from client.src.business.karpathy_skills import (
+from .business.karpathy_skills import (
     AmbiguityDetector,
     AgentPromptBuilder,
     AgentType,

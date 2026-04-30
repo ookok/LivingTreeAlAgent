@@ -13,7 +13,7 @@
 
 使用示例：
 ```python
-from client.src.business.reflective_agent import ReflectiveAgentLoop, create_reflective_loop
+from business.reflective_agent import ReflectiveAgentLoop, create_reflective_loop
 
 # 创建反思循环
 loop = ReflectiveAgentLoop()

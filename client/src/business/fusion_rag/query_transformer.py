@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 try:
-    from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
+    from business.global_model_router import GlobalModelRouter, ModelCapability
     HAS_ROUTER = True
 except ImportError:
     HAS_ROUTER = False

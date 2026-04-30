@@ -11,10 +11,10 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 import uuid
 
-from client.src.business.living_tree_ai.skills.skill_manager import (
+from business.living_tree_ai.skills.skill_manager import (
     SkillManager, SkillExecutor, get_skill_manager, get_skill_executor
 )
-from client.src.business.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
+from business.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
 
 
 @dataclass
@@ -492,7 +492,7 @@ def create_skill_agent(conference: VirtualConferenceSystem) -> SkillAgent:
 # 示例使用
 async def demo_skill_integration():
     """演示技能集成"""
-    from client.src.business.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
+    from business.living_tree_ai.voice.virtual_conference import VirtualConferenceSystem
 
     # 创建会议
     conference = VirtualConferenceSystem()

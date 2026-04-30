@@ -10,9 +10,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from client.src.business.intent_engine.intent_types import Intent, IntentType, IntentConstraint, IntentPriority
-from client.src.business.intent_engine.intent_action_bridge import IntentActionBridge
-from client.src.business.intent_engine.action_handlers.base import (
+from business.intent_engine.intent_types import Intent, IntentType, IntentConstraint, IntentPriority
+from business.intent_engine.intent_action_bridge import IntentActionBridge
+from business.intent_engine.action_handlers.base import (
     BaseActionHandler, ActionContext, ActionResult, ActionResultStatus
 )
 

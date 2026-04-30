@@ -10,10 +10,10 @@ import inspect
 from typing import Any, Dict, List, Optional, Callable
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.tools.tool_registry import ToolRegistry
-from client.src.business.tools.tool_definition import ToolDefinition
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.tools.tool_registry import ToolRegistry
+from business.tools.tool_definition import ToolDefinition
 
 
 class AutoToolWrapper:

@@ -3,7 +3,7 @@ Ollama 模型工具集
 注册到 ToolRegistry
 """
 
-from client.src.business.tools_registry import ToolRegistry, tool, SCHEMA
+from business.tools_registry import ToolRegistry, tool, SCHEMA
 
 
 def register_model_tools(agent):

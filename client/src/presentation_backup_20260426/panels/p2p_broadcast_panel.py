@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from client.src.business.models import SystemConfig
-from client.src.business.p2p_broadcast import (
+from .business.models import SystemConfig
+from .business.p2p_broadcast import (
     P2PBroadcastSystem, DeviceInfo, ChatMessage, Conversation,
     DeviceStatus, BroadcastCategory
 )

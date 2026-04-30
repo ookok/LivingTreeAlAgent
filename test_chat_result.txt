@@ -1,0 +1,35 @@
+用户输入: 我怎么用脚本一键下载安装ollama
+============================================================
+以下是一键下载安装 Ollama 的脚本：
+
+**Windows PowerShell 脚本：**
+```powershell
+# 创建安装目录
+mkdir -p "$env:USERPROFILE\ollama"
+cd "$env:USERPROFILE\ollama"
+
+# 下载 Ollama
+Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "OllamaSetup.exe"
+
+# 静默安装
+Start-Process -Wait -FilePath "OllamaSetup.exe" -ArgumentList "/S"
+
+# 添加到环境变量
+$env:Path += ";$env:USERPROFILE\AppData\Local\Programs\Ollama"
+
+# 验证安装
+ollama --version
+
+# 拉取模型
+ollama pull qwen2.5:1.5b
+```
+
+**使用方法：**
+1. 打开 PowerShell
+2. 将上述脚本保存为 install_ollama.ps1
+3. 运行：.\install_ollama.ps1
+
+**注意：**
+- 需要管理员权限
+- 网络需要能够访问 Ollama 官网
+- 首次运行可能需要下载较大的模型文件

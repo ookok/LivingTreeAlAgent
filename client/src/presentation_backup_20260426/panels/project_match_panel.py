@@ -61,7 +61,7 @@ class AnalysisWorker(QThread):
     
     def run(self):
         try:
-            from client.src.business.project_matcher import analyze_projects
+            from .business.project_matcher import analyze_projects
             
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -614,7 +614,7 @@ if __name__ == '__main__':
             print("正在分析项目...")
             result = await analyze_projects(github_url, local_path)
             
-            from client.src.business.project_matcher import ComprehensiveEvaluator
+            from .business.project_matcher import ComprehensiveEvaluator
             evaluator = ComprehensiveEvaluator()
             report = evaluator.generate_text_report(result)
             

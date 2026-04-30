@@ -27,7 +27,7 @@ from PyQt6.QtGui import (
     QActionGroup, QIcon
 )
 
-from client.src.business.database_browser import DatabaseBrowser, get_database_browser
+from .business.database_browser import DatabaseBrowser, get_database_browser
 from core.database_browser.models import (
     DatabaseType, ConnectionConfig, ConnectionStatus,
     TableSchema, QueryResult, QueryResultType, DEFAULT_PORTS,

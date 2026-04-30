@@ -6,8 +6,8 @@ import logging
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool, AgentCallResult
-from client.src.business.chrome_bridge.browser_manager import BrowserManager
+from business.tools.base_tool import BaseTool, AgentCallResult
+from business.chrome_bridge.browser_manager import BrowserManager
 
 
 class BrowserManagerTool(BaseTool):
@@ -195,7 +195,7 @@ class BrowserManagerTool(BaseTool):
             是否注册成功
         """
         try:
-            from client.src.business.tool_registry import ToolRegistry
+            from business.tool_registry import ToolRegistry
 
             registry = ToolRegistry.get_instance()
 

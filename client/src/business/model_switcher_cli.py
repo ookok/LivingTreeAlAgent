@@ -24,7 +24,7 @@ import argparse
 import sys
 import asyncio
 
-from client.src.business.model_switcher import (
+from business.model_switcher import (
     ModelSwitcher,
     switch_model,
     next_model,

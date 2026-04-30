@@ -18,8 +18,8 @@ import re
 from typing import Optional, Dict, List, Any
 from loguru import logger
 
-from client.src.business.chrome_bridge.cdp_helper import CDPHelper, CDPPage
-from client.src.business.chrome_bridge.utils.js_injector import JSInjector, get_js_injector
+from business.chrome_bridge.cdp_helper import CDPHelper, CDPPage
+from business.chrome_bridge.utils.js_injector import JSInjector, get_js_injector
 
 
 # ============================================================

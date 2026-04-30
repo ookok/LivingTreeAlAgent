@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 """
 IDE Service - 智能IDE服务层
 ============================
@@ -14,9 +16,7 @@ IDE Service - 智能IDE服务层
 
 Author: LivingTreeAI Agent
 Date: 2026-04-26
-from __future__ import annotations
 """
-
 
 import os
 import sys
@@ -27,7 +27,7 @@ import io
 import contextlib
 import traceback
 import asyncio
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

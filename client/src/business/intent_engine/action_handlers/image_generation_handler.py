@@ -108,7 +108,7 @@ class ImageGenerationHandler(BaseActionHandler):
         """执行图像生成（优先使用 GlobalModelRouter，fallback 到外部 API）"""
         # 尝试使用 GlobalModelRouter（如果支持图像生成）
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 get_global_router, ModelCapability,
             )
             router = get_global_router()

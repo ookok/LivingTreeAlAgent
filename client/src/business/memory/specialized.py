@@ -60,7 +60,7 @@ class ErrorMemory:
     def _init_error_memory(self):
         """初始化错误记忆连接"""
         try:
-            from client.src.business.error_memory import ErrorLearningSystem, get_error_system
+            from business.error_memory import ErrorLearningSystem, get_error_system
             self._error_memory = get_error_system()
             self._logger.info("✓ 集成 ErrorLearningSystem")
         except Exception as e:
@@ -244,7 +244,7 @@ class EvolutionMemory:
     def _init_evolution_memory(self):
         """初始化进化记忆连接"""
         try:
-            from client.src.business.evolution_engine.memory.learning_engine import (
+            from business.evolution_engine.memory.learning_engine import (
                 get_learning_engine
             )
             self._evolution_memory = get_learning_engine()

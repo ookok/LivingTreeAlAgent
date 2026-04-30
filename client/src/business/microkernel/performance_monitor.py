@@ -173,7 +173,7 @@ class AppMetricsCollector:
             metrics["uptime_seconds"] = time.time() - self._start_time
 
             # 事件总线统计
-            from client.src.business.plugin_framework.event_bus import get_event_bus
+            from business.plugin_framework.event_bus import get_event_bus
             eb = get_event_bus()
             if eb:
                 stats = eb.get_stats()
@@ -181,7 +181,7 @@ class AppMetricsCollector:
                 metrics["listener_count"] = float(stats.get("listener_count", 0))
 
             # 插件统计
-            from client.src.business.plugin_framework.plugin_manager import get_plugin_manager
+            from business.plugin_framework.plugin_manager import get_plugin_manager
             pm = get_plugin_manager()
             if pm:
                 plugins = pm.get_all_plugins()
@@ -202,7 +202,7 @@ class AppMetricsCollector:
 
             # 缓存命中率（如果有 UnifiedIntentCache）
             try:
-                from client.src.business.intent_engine.unified_intent_cache import get_unified_cache
+                from business.intent_engine.unified_intent_cache import get_unified_cache
                 cache = get_unified_cache()
                 if cache:
                     stats = cache.get_stats()

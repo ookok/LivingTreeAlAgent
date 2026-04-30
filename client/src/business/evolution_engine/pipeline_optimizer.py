@@ -421,7 +421,7 @@ class PipelineExecutor:
     def execution_agent(self):
         """延迟创建 ExecutionAgent"""
         if self._execution_agent is None:
-            from client.src.business.evolution_engine.execution_agent import create_execution_agent
+            from business.evolution_engine.execution_agent import create_execution_agent
             self._execution_agent = create_execution_agent('sandbox')
         return self._execution_agent
 
@@ -430,7 +430,7 @@ class PipelineExecutor:
         """延迟创建 EvolutionIntentBridge"""
         if self._intent_bridge is None:
             try:
-                from client.src.business.evolution_engine.bridge import create_full_bridge
+                from business.evolution_engine.bridge import create_full_bridge
                 self._intent_bridge = create_full_bridge()
             except Exception as e:
                 logger.warning(f"无法创建 IntentBridge: {e}")

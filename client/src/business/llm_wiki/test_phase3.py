@@ -14,8 +14,8 @@ import os
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 
-from client.src.business.llm_wiki.models import DocumentChunk
-from client.src.business.llm_wiki.knowledge_graph_integrator_v3 import (
+from business.llm_wiki.models import DocumentChunk
+from business.llm_wiki.knowledge_graph_integrator_v3 import (
     LLMWikiKnowledgeGraphIntegratorV3,
     integrate_llm_wiki_to_graph_v3
 )

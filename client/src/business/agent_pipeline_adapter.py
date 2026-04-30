@@ -13,7 +13,7 @@ HermesAgent Pipeline Integration Adapter
 
 使用方法：
 ```python
-from client.src.business.agent_pipeline_adapter import HermesAgentPipelineAdapter
+from business.agent_pipeline_adapter import HermesAgentPipelineAdapter
 
 # 方式 1: 直接使用流水线
 adapter = HermesAgentPipelineAdapter()
@@ -30,19 +30,19 @@ Author: Hermes Desktop Team
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('agent_pipeline_adapter')
 
 
 import logging
 from typing import Optional, Iterator, Dict, Any, List
 
-from client.src.business.unified_pipeline import (
+from business.unified_pipeline import (
     UnifiedPipeline,
     PipelineContext,
     IntentType,
 )
-from client.src.business.ollama_client import StreamChunk
+from business.ollama_client import StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +251,7 @@ def create_pipeline_agent(
         支持流水线的 Agent 实例
     """
     if agent_class is None:
-        from client.src.business.agent import HermesAgent
+        from business.agent import HermesAgent
 
         agent_class = HermesAgent
     

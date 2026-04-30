@@ -20,9 +20,9 @@ from datetime import datetime
 from enum import Enum
 
 if TYPE_CHECKING:
-    from client.src.business.intent_engine import IntentEngine
-    from client.src.business.intent_engine.intent_types import Intent, IntentType, IntentPriority
-    from client.src.business.evolution_engine import EvolutionEngine
+    from business.intent_engine import IntentEngine
+    from business.intent_engine.intent_types import Intent, IntentType, IntentPriority
+    from business.evolution_engine import EvolutionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,7 @@ class EvolutionIntentBridge:
             evolution_signal = signal.to_evolution_signal()
             
             # 记录到 PatternMiner
-            from client.src.business.evolution_engine.memory import PatternMiner, get_pattern_miner
+            from business.evolution_engine.memory import PatternMiner, get_pattern_miner
             pattern_miner = get_pattern_miner()
             if pattern_miner:
                 pattern_miner.add_event({
@@ -396,7 +396,7 @@ class EvolutionIntentBridge:
         
         try:
             # 记录到 LearningEngine
-            from client.src.business.evolution_engine.memory import LearningEngine, get_learning_engine
+            from business.evolution_engine.memory import LearningEngine, get_learning_engine
             learning_engine = get_learning_engine()
             
             if learning_engine:
@@ -423,7 +423,7 @@ class EvolutionIntentBridge:
                 )
             
             # 记录到 PatternMiner
-            from client.src.business.evolution_engine.memory import PatternMiner, get_pattern_miner
+            from business.evolution_engine.memory import PatternMiner, get_pattern_miner
             pattern_miner = get_pattern_miner()
             if pattern_miner:
                 pattern_miner.add_event({
@@ -510,8 +510,8 @@ def create_full_bridge() -> EvolutionIntentBridge:
     Returns:
         配置完整的 EvolutionIntentBridge
     """
-    from client.src.business.intent_engine import IntentEngine
-    from client.src.business.evolution_engine import create_evolution_engine
+    from business.intent_engine import IntentEngine
+    from business.evolution_engine import create_evolution_engine
     
     # 初始化引擎
     intent_engine = IntentEngine()

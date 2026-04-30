@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import statistics
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.auto_offload_strategy')
 
 

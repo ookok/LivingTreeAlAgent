@@ -120,7 +120,7 @@ class HermesGuideEvolution:
             outcome: 结果描述
             metadata: 额外数据
         """
-        from client.src.business.user_profile_detector import get_user_profile_detector
+        from business.user_profile_detector import get_user_profile_detector
 
         try:
             profile_detector = get_user_profile_detector()
@@ -252,7 +252,7 @@ class HermesGuideEvolution:
     ):
         """保存成功经验到Hermes记忆"""
         try:
-            from client.src.business.memory_manager import MemoryManager
+            from business.memory_manager import MemoryManager
 
             mm = MemoryManager()
 
@@ -283,7 +283,7 @@ class HermesGuideEvolution:
     ):
         """保存失败教训到Hermes记忆"""
         try:
-            from client.src.business.memory_manager import MemoryManager
+            from business.memory_manager import MemoryManager
 
             mm = MemoryManager()
 

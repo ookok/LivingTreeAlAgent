@@ -27,11 +27,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap, QImage, QFont
 
 # 印章生成器
-from client.src.business.company_stamp import (
+from .business.company_stamp import (
     CompanyStampGenerator, StampConfig, StampType,
     NumberPosition, generate_stamp
 )
-from client.src.business.pdf_stamp import PDFStampTool, PageStampConfig
+from .business.pdf_stamp import PDFStampTool, PageStampConfig
 
 if TYPE_CHECKING:
     from PIL import Image

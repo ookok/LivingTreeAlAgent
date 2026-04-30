@@ -28,7 +28,7 @@ from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass, field
 from enum import Enum
 
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 # WebSocket support
 try:

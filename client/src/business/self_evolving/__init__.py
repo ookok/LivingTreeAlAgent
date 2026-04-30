@@ -16,7 +16,7 @@
 
 使用示例：
 ```python
-from client.src.business.self_evolving import (
+from business.self_evolving import (
     SelfEvolvingSystem,
     EvolutionMiddleware,
     get_evolution_system,

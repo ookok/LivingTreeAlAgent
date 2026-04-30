@@ -12,16 +12,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
-from client.src.business.expert_training.industry_classification import (
+from business.expert_training.industry_classification import (
     get_industry_classifier,
     INDUSTRY_CATEGORIES,
     OCCUPATION_CATEGORIES
 )
-from client.src.business.nanochat_config import config as nano_config
+from business.nanochat_config import config as nano_config
 
 # 使用 GlobalModelRouter（遵守系统架构设定）
 try:
-    from client.src.business.global_model_router import (
+    from business.global_model_router import (
         get_global_router,
         ModelCapability,
         RoutingStrategy,
@@ -37,7 +37,7 @@ except ImportError:
 
 # 导入 AI 科学家模块（用于知识发现）
 try:
-    from client.src.business.ai_scientist import (
+    from business.ai_scientist import (
         get_ai_scientist,
         get_domain_engine,
         list_registered_domains,

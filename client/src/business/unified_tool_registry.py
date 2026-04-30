@@ -8,10 +8,10 @@
 本模块提供统一的访问入口
 """
 
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.tools.tool_registry import ToolRegistry
 
 # 为了向后兼容，提供与旧系统相同的 API
-from client.src.business.tools.tool_registry import (
+from business.tools.tool_registry import (
     ToolRegistry as _NewToolRegistry,
     ToolDefinition,
     ToolResult,
@@ -55,7 +55,7 @@ class CompatibleToolRegistry(_NewToolRegistry):
         instance = cls.get_instance()
         
         # 创建兼容的工具
-        from client.src.business.tools.tool_definition import ToolDefinition as TD
+        from business.tools.tool_definition import ToolDefinition as TD
         
         definition = TD(
             name=name,

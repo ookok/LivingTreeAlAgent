@@ -15,7 +15,7 @@
 
 使用方式：
 ```python
-from client.src.business.tools import ToolRegistry, BaseTool
+from business.tools import ToolRegistry, BaseTool
 
 # 获取工具注册中心
 registry = ToolRegistry.get_instance()

@@ -63,7 +63,7 @@ class WeComToolAdapter:
         """延迟加载企业微信工具"""
         if self._wecom_tool is None:
             try:
-                from client.src.business.wecom_tool import get_wecom_tool
+                from business.wecom_tool import get_wecom_tool
                 self._wecom_tool = get_wecom_tool()
                 logger.info("[WeComToolAdapter] 企业微信工具加载成功")
             except Exception as e:
@@ -181,7 +181,7 @@ class WeComToolAdapter:
     async def _send_message(self, receiver_id: str, content: str, 
                            message_type: str = "text", chat_type: str = "private") -> ToolResult:
         """发送消息"""
-        from client.src.business.wecom_tool import MessageType, ChatType
+        from business.wecom_tool import MessageType, ChatType
         
         msg_type = MessageType(message_type)
         chat_type_enum = ChatType(chat_type)
@@ -199,7 +199,7 @@ class WeComToolAdapter:
     async def _send_file(self, receiver_id: str, file_path: str, 
                         chat_type: str = "private") -> ToolResult:
         """发送文件"""
-        from client.src.business.wecom_tool import ChatType
+        from business.wecom_tool import ChatType
         
         chat_type_enum = ChatType(chat_type)
         
@@ -299,7 +299,7 @@ class WeComToolAdapter:
     async def _send_template(self, receiver_id: str, template_name: str, 
                             params: Optional[Dict[str, str]] = None) -> ToolResult:
         """发送模板消息"""
-        from client.src.business.wecom_tool import ChatType
+        from business.wecom_tool import ChatType
         
         result = await self._wecom_tool.send_template_message(
             receiver_id, template_name, params or {}, ChatType.PRIVATE

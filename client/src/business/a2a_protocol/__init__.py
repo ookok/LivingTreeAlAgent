@@ -692,7 +692,7 @@ __all__ = [
 # ==================== EigenFlux 扩展 ====================
 # 懒加载，避免循环导入
 # 使用方式：
-#   from client.src.business.a2a_protocol import SignalBus, SignalType, A2AEigenFluxBridge
+#   from business.a2a_protocol import SignalBus, SignalType, A2AEigenFluxBridge
 
 
 def get_all_modules():
@@ -709,7 +709,7 @@ def get_eigenflux_modules():
     """
     获取 EigenFlux 核心模块
     """
-    from client.src.business.a2a_protocol.eigenflux import (
+    from business.a2a_protocol.eigenflux import (
         SignalBus,
         SignalType,
         SignalPriority,
@@ -751,7 +751,7 @@ def get_semantic_modules():
     """
     获取语义嵌入模块
     """
-    from client.src.business.a2a_protocol.semantic_embedder import (
+    from business.a2a_protocol.semantic_embedder import (
         SemanticEmbedder,
         TextVectorizer,
         EmbeddingConfig,
@@ -769,7 +769,7 @@ def get_interop_modules():
     """
     获取跨框架互操作模块
     """
-    from client.src.business.a2a_protocol.interop_adapters import (
+    from business.a2a_protocol.interop_adapters import (
         ProtocolType,
         ProtocolAdapter,
         A2AAdapter,
@@ -797,7 +797,7 @@ def get_distributed_modules():
     """
     获取分布式集群模块
     """
-    from client.src.business.a2a_protocol.distributed_signal_bus import (
+    from business.a2a_protocol.distributed_signal_bus import (
         ClusterConfig,
         NodeState,
         NodeInfo,
@@ -829,35 +829,35 @@ def get_distributed_modules():
 # 注意：实际类定义在各自的模块中
 def SignalBus(*args, **kwargs):
     """EigenFlux 信号总线 - 广播与智能匹配"""
-    from client.src.business.a2a_protocol.eigenflux import SignalBus as _SignalBus
+    from business.a2a_protocol.eigenflux import SignalBus as _SignalBus
     return _SignalBus(*args, **kwargs)
 
 
 def SignalType(*args, **kwargs):
     """EigenFlux 信号类型枚举"""
-    from client.src.business.a2a_protocol.eigenflux import SignalType as _SignalType
+    from business.a2a_protocol.eigenflux import SignalType as _SignalType
     return _SignalType(*args, **kwargs)
 
 
 def A2AEigenFluxBridge(*args, **kwargs):
     """A2A 与 EigenFlux 桥接器"""
-    from client.src.business.a2a_protocol.eigenflux import A2AEigenFluxBridge as _Bridge
+    from business.a2a_protocol.eigenflux import A2AEigenFluxBridge as _Bridge
     return _Bridge(*args, **kwargs)
 
 
 def SemanticEmbedder(*args, **kwargs):
     """语义嵌入生成器"""
-    from client.src.business.a2a_protocol.semantic_embedder import SemanticEmbedder as _Embedder
+    from business.a2a_protocol.semantic_embedder import SemanticEmbedder as _Embedder
     return _Embedder(*args, **kwargs)
 
 
 def InteropGateway(*args, **kwargs):
     """跨框架互操作网关"""
-    from client.src.business.a2a_protocol.interop_adapters import InteropGateway as _Gateway
+    from business.a2a_protocol.interop_adapters import InteropGateway as _Gateway
     return _Gateway(*args, **kwargs)
 
 
 def DistributedSignalBus(*args, **kwargs):
     """分布式信号总线"""
-    from client.src.business.a2a_protocol.distributed_signal_bus import DistributedSignalBus as _Bus
+    from business.a2a_protocol.distributed_signal_bus import DistributedSignalBus as _Bus
     return _Bus(*args, **kwargs)

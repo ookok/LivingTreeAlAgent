@@ -3,7 +3,7 @@ Base Proxy Manager
 基础代理管理器，为所有代理相关模块提供通用功能。
 
 使用方式：
-    from client.src.business.base_proxy_manager import BaseProxyManager
+    from business.base_proxy_manager import BaseProxyManager
     
     class MyProxyManager(BaseProxyManager):
         def fetch_proxies(self) -> list:

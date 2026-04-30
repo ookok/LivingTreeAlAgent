@@ -18,10 +18,10 @@ Chrome Bridge - Chrome 浏览器桥接系统
 
 __version__ = "1.0.0"
 
-from client.src.business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
-from client.src.business.chrome_bridge.browser_launcher import BrowserLauncher, get_browser_launcher
-from client.src.business.chrome_bridge.anti_detection import AntiDetectionEngine, get_anti_detection_engine
-from client.src.business.chrome_bridge.website_adapter_registry import WebsiteAdapterRegistry, get_adapter_registry
+from business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
+from business.chrome_bridge.browser_launcher import BrowserLauncher, get_browser_launcher
+from business.chrome_bridge.anti_detection import AntiDetectionEngine, get_anti_detection_engine
+from business.chrome_bridge.website_adapter_registry import WebsiteAdapterRegistry, get_adapter_registry
 
 __all__ = [
     "ChromeBridge",

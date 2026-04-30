@@ -19,12 +19,12 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from client.src.business.base_agents.hermes_agent import HermesToolAgent
-from client.src.business.self_evolution.natural_language_tool_adder import (
+from business.base_agents.hermes_agent import HermesToolAgent
+from business.self_evolution.natural_language_tool_adder import (
     NaturalLanguageToolAdder,
     add_tool_from_text,
 )
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.tools.tool_registry import ToolRegistry
 from loguru import logger
 
 
@@ -99,7 +99,7 @@ class ProactiveDiscoveryAgent(HermesToolAgent):
             )
             
             # 4. 刷新工具注册表
-            from client.src.business.tools.register_all_tools import register_all_tools
+            from business.tools.register_all_tools import register_all_tools
             register_all_tools()
             
             self._logger.info("工具注册表已刷新")
@@ -142,7 +142,7 @@ class ProactiveDiscoveryAgent(HermesToolAgent):
 只输出 JSON，不要有其他内容。"""
 
         try:
-            from client.src.business.global_model_router import GlobalModelRouter
+            from business.global_model_router import GlobalModelRouter
             router = GlobalModelRouter.get_instance()
             response = await router.call_model_sync(
                 capability="reasoning",

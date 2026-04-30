@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     EventBus,
     CacheLayer,
     get_event_bus,
@@ -32,13 +32,13 @@ from client.src.business.shared import (
 )
 
 # 导入现有模块
-from client.src.business.fusion_rag import (
+from business.fusion_rag import (
     create_industry_governance,
     create_fusion_rag,
     create_triple_chain_engine,
     get_term_extractor
 )
-from client.src.business.llm_wiki import create_llm_wiki_integration
+from business.llm_wiki import create_llm_wiki_integration
 
 
 @dataclass

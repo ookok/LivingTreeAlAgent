@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 def _get_butler():
     """获取数据管家实例"""
-    from client.src.business.identity_vault import get_data_butler
+    from business.identity_vault import get_data_butler
     return get_data_butler()
 
 
 def _get_relay_router():
     """获取中继路由器"""
-    from client.src.business.relay_router import get_connection_manager, get_smart_router, get_health_monitor
+    from business.relay_router import get_connection_manager, get_smart_router, get_health_monitor
     return {
         "connection_manager": get_connection_manager(),
         "smart_router": get_smart_router(),
@@ -31,7 +31,7 @@ def _get_relay_router():
 
 def _get_vault():
     """获取身份保险箱"""
-    from client.src.business.identity_vault import get_vault_manager
+    from business.identity_vault import get_vault_manager
     return get_vault_manager()
 
 

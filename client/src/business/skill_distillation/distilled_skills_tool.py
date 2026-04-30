@@ -13,7 +13,7 @@ import json
 from typing import Dict, Any, Optional, List
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
+from business.tools.base_tool import BaseTool
 from .distillation_config import DEFAULT_SKILL_SOURCES, SkillSource
 
 
@@ -156,8 +156,8 @@ def get_tools_by_category(category: str) -> List[DistilledSkillTool]:
 
 def register_all_tools():
     """注册所有蒸馏技能工具到系统"""
-    from client.src.business.tools.tool_registry import ToolRegistry
-    from client.src.business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
+    from business.tools.tool_registry import ToolRegistry
+    from business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
     
     tool_registry = ToolRegistry.get_instance()
     skill_registry = SkillRegistry()

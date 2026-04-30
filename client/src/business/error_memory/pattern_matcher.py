@@ -16,7 +16,7 @@ Date: 2026-04-24
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('error_memory.pattern_matcher')
 
 

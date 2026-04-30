@@ -29,9 +29,9 @@ except ImportError:
     HAS_DOCX = False
     print("[WordTemplateLearner] 警告: python-docx 未安装")
 
-from client.src.business.tools.tool_definition import ToolDefinition
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.tool_definition import ToolDefinition
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ class WordTemplateLearner:
             是否保存成功
         """
         try:
-            from client.src.business.knowledge_vector_db import VectorDatabase
+            from business.knowledge_vector_db import VectorDatabase
             
             db = VectorDatabase()
             
@@ -467,7 +467,7 @@ class AnalyzeTemplateStructureTool(BaseTool):
 
 def register_word_template_tools():
     """注册 Word 模板学习工具到 ToolRegistry"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     

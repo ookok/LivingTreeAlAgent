@@ -124,7 +124,7 @@ class L4StatusWidget(QFrame):
     def _refresh_status(self):
         """刷新状态"""
         try:
-            from client.src.business.fusion_rag import get_l4_executor
+            from .business.fusion_rag import get_l4_executor
             executor = get_l4_executor()
             stats = executor.get_stats()
 
@@ -286,7 +286,7 @@ class L4ExecutionLog(QWidget):
     def _refresh(self):
         """刷新日志"""
         try:
-            from client.src.business.fusion_rag import get_l4_executor
+            from .business.fusion_rag import get_l4_executor
             executor = get_l4_executor()
             stats = executor.get_stats()
 
@@ -393,7 +393,7 @@ class L4TestWidget(QWidget):
     async def _do_test(self, message: str, model: str):
         """执行测试"""
         try:
-            from client.src.business.fusion_rag import get_l4_executor
+            from .business.fusion_rag import get_l4_executor
 
             executor = get_l4_executor()
             messages = [{"role": "user", "content": message}]
@@ -590,7 +590,7 @@ class L4ExecutorPanel(QWidget):
     def _refresh_stats(self):
         """刷新统计"""
         try:
-            from client.src.business.fusion_rag import get_l4_executor
+            from .business.fusion_rag import get_l4_executor
             executor = get_l4_executor()
             stats = executor.get_stats()
 

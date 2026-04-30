@@ -25,12 +25,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint, QMimeData
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
-from client.src.business.function_knowledge import get_knowledge_base
-from client.src.presentation.framework.minimal_ui_framework import (
+from business.function_knowledge import get_knowledge_base
+from presentation.framework.minimal_ui_framework import (
     ColorScheme, Spacing, MinimalCard, UIComponentFactory
 )
-from client.src.presentation.components.voice_input import VoiceInputWidget
-from client.src.presentation.components.loading_animation import LoadingSpinner, AnimationType
+from presentation.components.voice_input import VoiceInputWidget
+from presentation.components.loading_animation import LoadingSpinner, AnimationType
 
 
 class LANUserDiscovery:

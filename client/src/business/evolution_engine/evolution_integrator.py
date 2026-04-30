@@ -22,14 +22,14 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 # 导入组件
-from client.src.business.evolution_engine.evolution_depth_optimizer import (
+from business.evolution_engine.evolution_depth_optimizer import (
     EvolutionDepthOptimizer,
     DepthHistory,
     OptimizationResult,
     AdjustmentStrategy,
     create_optimizer,
 )
-from client.src.business.evolution_engine.depth_hint_learner import (
+from business.evolution_engine.depth_hint_learner import (
     DepthHintLearner,
     DepthHint,
     get_global_learner,

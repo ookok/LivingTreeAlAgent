@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 
 import requests
 
-from client.src.business.config import OllamaConfig
-from client.src.business.model_router import ModelRouter, BackendType, BackendConfig, get_model_router
+from business.config import OllamaConfig
+from business.model_router import ModelRouter, BackendType, BackendConfig, get_model_router
 
 
 # ── 数据模型 ────────────────────────────────────────────────
@@ -298,7 +298,7 @@ def get_ollama_client(config: OllamaConfig | None = None) -> OllamaClient:
     global _default_client
     if _default_client is None:
         if config is None:
-            from client.src.business.config import UnifiedConfig
+            from business.config import UnifiedConfig
             config = UnifiedConfig.get_instance().get_ollama_config()
         _default_client = OllamaClient(config)
     return _default_client
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     
     # 创建配置
-    from client.src.business.config import OllamaConfig
+    from business.config import OllamaConfig
     config = OllamaConfig(
         base_url="http://localhost:11434",
         default_model="qwen2.5:1.5b"

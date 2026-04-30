@@ -29,7 +29,7 @@ from PyQt6.QtGui import QFont, QAction, QIcon, QTextCursor
 
 from writing.ai_writer import AIWriter, WritingContext, WritingMode, DocType, SubjectDomain, WritingFormat
 from writing.outline_generator import OutlineGenerator
-from client.src.business.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, DecomposedTask
+from .business.task_decomposer import TaskDecomposer, ChainOfThoughtExecutor, DecomposedTask
 
 
 @dataclass
@@ -70,7 +70,7 @@ class WritingWorker(QThread):
             result = self.executor.execute(self.task)
             
             # 生成最终结果
-            from client.src.business.task_decomposer import format_task_result
+            from .business.task_decomposer import format_task_result
             output = format_task_result(result)
             
             self.finished_signal.emit(output)
@@ -433,7 +433,7 @@ class WritingTab(QWidget):
     def _get_projects_dir(self) -> Optional[Path]:
         """获取项目目录"""
         try:
-            from client.src.business.config import get_projects_dir
+            from .business.config import get_projects_dir
             return get_projects_dir()
         except Exception:
             # 如果配置模块不可用，使用默认目录
@@ -808,7 +808,7 @@ class WritingTab(QWidget):
     
     def _show_toast(self, message: str, toast_type: str = "info"):
         """显示通知"""
-        from client.src.presentation.panels.toast_notification import show_toast, ToastType
+        from .presentation.panels.toast_notification import show_toast, ToastType
         
         type_map = {
             "success": ToastType.SUCCESS,

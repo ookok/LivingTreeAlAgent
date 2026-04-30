@@ -33,7 +33,7 @@ def _create_config_hint_banner(parent) -> tuple:
         (banner, manager)
     """
     try:
-        from client.src.presentation.panels.config_hint_banner import ConfigHintBanner, ConfigHintManager
+        from .presentation.panels.config_hint_banner import ConfigHintBanner, ConfigHintManager
         banner = ConfigHintBanner(parent)
         manager = ConfigHintManager(banner)
         return banner, manager
@@ -342,7 +342,7 @@ class ChatPanel(QWidget):
         # ── 任务分解面板 (2026-04-25) ──────────────────────────────────
         self.task_decompose_widget = None
         try:
-            from client.src.presentation.panels.task_decompose_panel import TaskDecomposePanel
+            from .presentation.panels.task_decompose_panel import TaskDecomposePanel
             self.task_decompose_panel = TaskDecomposePanel()
             self.task_decompose_panel.hide()
             root.addWidget(self.task_decompose_panel)
@@ -578,7 +578,7 @@ class ChatPanel(QWidget):
     def _init_clarifier(self):
         """初始化需求澄清器"""
         try:
-            from client.src.business.conversational_clarifier import get_conversational_clarifier
+            from .business.conversational_clarifier import get_conversational_clarifier
             self._clarifier = get_conversational_clarifier()
         except ImportError:
             self._clarifier = None
@@ -604,7 +604,7 @@ class ChatPanel(QWidget):
         prompt = self._clarifier.get_prompt()
 
         # 创建引导卡片
-        from client.src.presentation.panels.clarification_card import ClarificationCard
+        from .presentation.panels.clarification_card import ClarificationCard
         self._clarify_card = ClarificationCard(
             message=prompt.message,
             options=prompt.options
@@ -888,7 +888,7 @@ class ChatPanel(QWidget):
             return
 
         try:
-            from client.src.business.task_execution_engine import ExecutionStrategy
+            from .business.task_execution_engine import ExecutionStrategy
             strategy = strategy or ExecutionStrategy.SEQUENTIAL
         except ImportError:
             strategy = "sequential"
@@ -899,7 +899,7 @@ class ChatPanel(QWidget):
 
         # 初始化管理器
         if self.task_decompose_panel:
-            from client.src.presentation.panels.task_decompose_panel import TaskDecomposeManager
+            from .presentation.panels.task_decompose_panel import TaskDecomposeManager
             self._task_decompose_manager = TaskDecomposeManager(
                 self.task_decompose_panel
             )

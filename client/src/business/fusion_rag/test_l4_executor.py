@@ -28,7 +28,7 @@ async def test_l4_executor():
     # 1. 测试导入
     print("\n[1] Module Import...")
     try:
-        from client.src.business.fusion_rag import (
+        from business.fusion_rag import (
             L4RelayExecutor,
             get_l4_executor,
             execute_via_l4,
@@ -127,7 +127,7 @@ async def test_fusion_engine_integration():
     print("=" * 60)
 
     try:
-        from client.src.business.fusion_rag import FusionEngine, get_l4_executor
+        from business.fusion_rag import FusionEngine, get_l4_executor
 
         executor = get_l4_executor()
         engine = FusionEngine(top_k=5, l4_executor=executor)

@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget
 from PyQt6.QtGui import QKeyEvent
 
-from client.src.business.metaverse_ui import (
+from .business.metaverse_ui import (
     BridgeConsole,
     TradeDeck,
     OracleCoreWidget,
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # 应用样式
-    from client.src.business.metaverse_ui import get_bridge_stylesheet
+    from .business.metaverse_ui import get_bridge_stylesheet
     app.setStyleSheet(get_bridge_stylesheet())
     
     panel = MetaverseUIPanel()

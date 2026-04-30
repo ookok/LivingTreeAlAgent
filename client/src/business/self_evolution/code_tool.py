@@ -36,8 +36,8 @@ import re
 import hashlib
 from datetime import datetime
 
-from client.src.business.tools.base_tool import BaseTool, AgentCallResult
-from client.src.business.self_evolution.serena_adapter import (
+from business.tools.base_tool import BaseTool, AgentCallResult
+from business.self_evolution.serena_adapter import (
     SerenaAdapter, SymbolInfo, DiagnosticInfo, SerenaResult, SerenaStatus
 )
 
@@ -442,7 +442,7 @@ class CodeTool(BaseTool):
     ) -> List[Dict[str, Any]]:
         """LLM 规划写入步骤"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
 
@@ -619,7 +619,7 @@ class CodeTool(BaseTool):
     ) -> FixResult:
         """LLM 修复测试失败"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
 
@@ -770,7 +770,7 @@ class CodeTool(BaseTool):
     ) -> List[Dict[str, Any]]:
         """LLM 生成修复方案"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
 
@@ -946,7 +946,7 @@ class CodeTool(BaseTool):
     ) -> str:
         """LLM 生成 commit message"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
 
@@ -1033,7 +1033,7 @@ class CodeTool(BaseTool):
     ) -> Dict[str, Any]:
         """LLM 规划代码变更"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 call_model_sync, ModelCapability
             )
 
@@ -1246,7 +1246,7 @@ class CodeTool(BaseTool):
 
 def auto_register():
     """自动注册 CodeTool 到 ToolRegistry"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
 
     registry = ToolRegistry.get_instance()
     tool = CodeTool()

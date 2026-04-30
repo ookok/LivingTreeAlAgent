@@ -26,7 +26,7 @@ def test_import():
     print("Module Import Test")
     print("=" * 50)
     try:
-        from client.src.business.agent_reach import (
+        from business.agent_reach import (
             AgentReachClient,
             AgentReachConfig,
             SearchEngine,
@@ -49,7 +49,7 @@ def test_config():
     print("Config Test")
     print("=" * 50)
 
-    from client.src.business.agent_reach import AgentReachConfig
+    from business.agent_reach import AgentReachConfig
 
     config = AgentReachConfig()
     log(f"Default config created")
@@ -72,7 +72,7 @@ def test_client():
     print("Client Test")
     print("=" * 50)
 
-    from client.src.business.agent_reach import get_agent_reach, AgentReachClient
+    from business.agent_reach import get_agent_reach, AgentReachClient
 
     # 测试单例
     client1 = get_agent_reach()
@@ -91,7 +91,7 @@ async def test_installation_check():
     print("Installation Check Test")
     print("=" * 50)
 
-    from client.src.business.agent_reach import check_installation
+    from business.agent_reach import check_installation
 
     result = await check_installation()
     log(f"Installation check completed")
@@ -108,7 +108,7 @@ async def test_read_url():
     print("URL Read Test")
     print("=" * 50)
 
-    from client.src.business.agent_reach import read_content
+    from business.agent_reach import read_content
 
     # 测试读取 GitHub 仓库
     print("\n  Testing Jina Reader...")

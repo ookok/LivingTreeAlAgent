@@ -6,7 +6,7 @@
 
 from typing import Dict, List, Any, Optional, Callable
 
-from client.src.business.intelligent_hints.system import get_hints_system
+from business.intelligent_hints.system import get_hints_system
 
 
 def emit_context(

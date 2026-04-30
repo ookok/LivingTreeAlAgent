@@ -59,7 +59,7 @@ class VectorMemory:
     def _init_vector_db(self):
         """初始化向量数据库连接"""
         try:
-            from client.src.business.fusion_rag.vector_db_integration import VectorDBIntegration
+            from business.fusion_rag.vector_db_integration import VectorDBIntegration
             self._vector_db = VectorDBIntegration()
             self._logger.info("✓ 集成 VectorDBIntegration")
         except Exception as e:
@@ -198,7 +198,7 @@ class DocumentMemory:
     def _init_knowledge_base(self):
         """初始化知识库连接"""
         try:
-            from client.src.business.fusion_rag.knowledge_base import KnowledgeBase
+            from business.fusion_rag.knowledge_base import KnowledgeBase
             self._knowledge_base = KnowledgeBase()
             self._logger.info("✓ 集成 KnowledgeBase")
         except Exception as e:
@@ -334,7 +334,7 @@ class DatabaseMemory:
     def _init_database_layer(self):
         """初始化数据库层"""
         try:
-            from client.src.business.fusion_rag.database_layer import DatabaseLayer
+            from business.fusion_rag.database_layer import DatabaseLayer
             self._database_layer = DatabaseLayer()
             self._logger.info("✓ 集成 DatabaseLayer")
         except Exception as e:

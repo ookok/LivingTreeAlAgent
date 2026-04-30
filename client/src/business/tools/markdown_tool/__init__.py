@@ -7,8 +7,8 @@ from .markdown_converter import MarkdownConverter
 
 def register():
     """注册 Markdown 转换工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
-    from client.src.business.tools.tool_definition import ToolDefinition
+    from business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_definition import ToolDefinition
     
     registry = ToolRegistry.get_instance()
     tool = MarkdownConverter()

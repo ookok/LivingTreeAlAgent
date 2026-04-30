@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 # 导入统一意图定义
-from client.src.business.intent_definitions import Intent
+from business.intent_definitions import Intent
 
 
 @dataclass

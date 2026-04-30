@@ -32,12 +32,12 @@ class EnhancedGlobalMemory:
     def _load_dependencies(self):
         """延迟加载依赖"""
         try:
-            from client.src.business.llm_wiki import (
+            from business.llm_wiki import (
                 LLMWikiIntegration,
                 search_llm_wiki,
                 index_llm_document
             )
-            from client.src.business.fusion_rag import FusionEngine
+            from business.fusion_rag import FusionEngine
             
             self._llm_wiki_integration = LLMWikiIntegration()
             self._fusion_engine = FusionEngine()

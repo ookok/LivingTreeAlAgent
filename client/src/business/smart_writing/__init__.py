@@ -14,7 +14,7 @@ Smart Writing System
 - context_aware: 上下文感知
 """
 
-from client.src.business.smart_writing.dual_engine import (
+from business.smart_writing.dual_engine import (
     DualEngineCore,
     WritingMode,
     AILevel,
@@ -25,7 +25,7 @@ from client.src.business.smart_writing.dual_engine import (
     get_dual_engine,
 )
 
-from client.src.business.smart_writing.consulting_mode import (
+from business.smart_writing.consulting_mode import (
     ConsultingMode,
     ConsultingFramework,
     DocumentType,
@@ -33,7 +33,7 @@ from client.src.business.smart_writing.consulting_mode import (
     SectionTemplate,
 )
 
-from client.src.business.smart_writing.creative_mode import (
+from business.smart_writing.creative_mode import (
     CreativeMode,
     WritingGenre,
     NarrativeVoice,
@@ -45,7 +45,7 @@ from client.src.business.smart_writing.creative_mode import (
     InspirationEngine,
 )
 
-from client.src.business.smart_writing.ai_collaborator import (
+from business.smart_writing.ai_collaborator import (
     AICollaborator,
     AITask,
     AIResponse,
@@ -54,7 +54,7 @@ from client.src.business.smart_writing.ai_collaborator import (
     ModelConfig,
 )
 
-from client.src.business.smart_writing.context_aware import (
+from business.smart_writing.context_aware import (
     ContextAwareSystem,
     WritingPhase,
     TimeOfDay,

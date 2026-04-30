@@ -5,26 +5,26 @@
 架构指南参考: docs/LIVINGTREE_ARCHITECTURE_GUIDE.md (章节 5.3.2, 5.4.1)
 """
 
-from client.src.business.skill_evolution.vibe_skill_builder import (
+from business.skill_evolution.vibe_skill_builder import (
     VibeSkillBuilder,
     Skill as VibeSkill,
 )
 
-from client.src.business.skill_evolution.skill_encapsulation import (
+from business.skill_evolution.skill_encapsulation import (
     SkillEncapsulationEngine,
     Skill,
     SkillStatus,
     SkillTemplate,
 )
 
-from client.src.business.skill_evolution.skill_rating_system import (
+from business.skill_evolution.skill_rating_system import (
     SkillRatingSystem,
     SkillRating,
     SkillFeedback,
     RatingType,
 )
 
-from client.src.business.skill_evolution.skill_version_control import (
+from business.skill_evolution.skill_version_control import (
     SkillVersionControl,
     SkillVersion,
     VersionStatus,

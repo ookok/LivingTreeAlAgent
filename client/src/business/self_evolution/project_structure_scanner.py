@@ -502,7 +502,7 @@ class ProjectStructureScanner:
     def _scan_registered_tools(self):
         """扫描 ToolRegistry 中已注册的工具"""
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry
+            from business.tools.tool_registry import ToolRegistry
             registry = ToolRegistry.get_instance()
             tools = registry.list_tools()
             self._registered_tools = [t.name for t in tools]

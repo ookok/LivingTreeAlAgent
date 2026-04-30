@@ -9,8 +9,8 @@ from loguru import logger
 import os
 import importlib.util
 
-from client.src.business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
-from client.src.business.tools.base_tool import BaseTool
+from business.skill_evolution.skill_registry import SkillRegistry, PermissionLevel
+from business.tools.base_tool import BaseTool
 
 
 class SkillRegistryIntegrator:
@@ -25,7 +25,7 @@ class SkillRegistryIntegrator:
     def _init_tool_registry(self):
         """初始化工具注册中心"""
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry
+            from business.tools.tool_registry import ToolRegistry
             self._tool_registry = ToolRegistry.get_instance()
             self._logger.info("已连接到工具注册中心")
         except ImportError as e:

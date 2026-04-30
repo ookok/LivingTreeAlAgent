@@ -209,7 +209,7 @@ class VerifierEngine:
     def _load_from_system_config(self):
         """从 NanochatConfig 读取 ollama_url、model 等配置，避免硬编码"""
         try:
-            from client.src.business.nanochat_config import config as sys_config
+            from business.nanochat_config import config as sys_config
             # Ollama URL
             if not self.config.ollama_url and sys_config.ollama.url:
                 self.config.ollama_url = sys_config.ollama.url.rstrip("/v1")

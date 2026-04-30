@@ -11,7 +11,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from client.src.business.persona_skill import (
+from business.persona_skill import (
     PersonaEngine, PersonaRegistry, PersonaSkill,
     PersonaCategory, PersonaTier, consult
 )

@@ -11,7 +11,7 @@
 
 使用方式：
 ```python
-from client.src.business.self_evolving import EvolutionMiddleware
+from business.self_evolving import EvolutionMiddleware
 
 # 创建中间件
 middleware = EvolutionMiddleware(agent_chat)
@@ -140,7 +140,7 @@ class EvolutionMiddleware:
         """延迟加载质量系统"""
         if self._quality_system is None and self._enabled['quality']:
             try:
-                from client.src.business.adaptive_quality import AdaptiveQualitySystem
+                from business.adaptive_quality import AdaptiveQualitySystem
                 self._quality_system = AdaptiveQualitySystem()
             except ImportError as e:
                 logger.warning(f"Quality system not available: {e}")
@@ -151,7 +151,7 @@ class EvolutionMiddleware:
         """延迟加载错误记忆"""
         if self._error_memory is None and self._enabled['error_fix']:
             try:
-                from client.src.business.error_memory import ErrorLearningSystem
+                from business.error_memory import ErrorLearningSystem
                 self._error_memory = ErrorLearningSystem()
             except ImportError as e:
                 logger.warning(f"Error memory not available: {e}")
@@ -273,7 +273,7 @@ class EvolutionMiddleware:
     def _check_quality(self, response: str, query: str) -> Optional[Intervention]:
         """检查质量"""
         try:
-            from client.src.business.adaptive_quality import quick_evaluate
+            from business.adaptive_quality import quick_evaluate
             
             score, needs_upgrade, level = quick_evaluate(response, query)
             
@@ -356,7 +356,7 @@ class EvolutionMiddleware:
         try:
             if self.error_memory:
                 # 尝试使用错误记忆系统
-                from client.src.business.error_memory import quick_fix_from_exception
+                from business.error_memory import quick_fix_from_exception
                 solution = quick_fix_from_exception(
                     error_info['error'],
                     {'task': message}

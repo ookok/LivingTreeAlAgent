@@ -12,7 +12,7 @@ Lobe 风格布局组件库
 - SkillToggleBinding: 技能开关绑定
 
 使用示例：
-    from client.src.presentation.lobe_layout import LobeStyleWindow
+    from .presentation.lobe_layout import LobeStyleWindow
 
     window = LobeStyleWindow()
     window.show()

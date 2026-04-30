@@ -16,7 +16,7 @@ from .security_manager import get_security_manager
 from .extensions import get_extension_manager, get_plugin_system, get_user_script_manager
 from .config import get_config_manager, ConfigOption, ConfigType
 from .config.config_validator import RangeValidator, ChoicesValidator
-from client.src.business.kachilu_integration import create_kachilu_integrator, KachiluConfig
+from business.kachilu_integration import create_kachilu_integrator, KachiluConfig
 
 
 class BrowserUseAdapter:

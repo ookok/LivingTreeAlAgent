@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 from enum import Enum
 
-from client.src.business.tools.base_tool import BaseTool
+from business.tools.base_tool import BaseTool
 
 
 class DiagramType(Enum):

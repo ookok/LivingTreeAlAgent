@@ -15,7 +15,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('ui_evolution.hints_integration')
 
 import json
@@ -27,7 +27,7 @@ from datetime import datetime
 
 # 导入 intelligent_hints 模块
 try:
-    from client.src.business.intelligent_hints import (
+    from business.intelligent_hints import (
         ContextSniffer,
         ContextInfo,
         HintIntentEngine,
@@ -41,7 +41,7 @@ try:
         get_hint_memory,
         get_global_air_icon,
     )
-    from client.src.business.intelligent_hints.global_signals import emit_hint_signal, HintSignalType
+    from business.intelligent_hints.global_signals import emit_hint_signal, HintSignalType
     
     HINTS_AVAILABLE = True
 except ImportError:
@@ -357,7 +357,7 @@ def create_ui_hints_integration(
     
     使用示例:
     ```python
-    from client.src.business.ui_evolution import create_ui_hints_integration
+    from business.ui_evolution import create_ui_hints_integration
     
     # 创建集成
     interceptor = create_ui_hints_integration(

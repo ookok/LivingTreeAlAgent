@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 
 # 导入 NanochatConfig
-from client.src.business.nanochat_config import (
+from .business.nanochat_config import (
     NanochatConfig,
     config as nanochat_config,
     EndpointConfig,
@@ -28,7 +28,7 @@ class AppConfig:
     应用配置（基础设施层）
     
     注意: 后端配置（Ollama、API Keys 等）请使用 NanochatConfig:
-        from client.src.business.nanochat_config import config
+        from .business.nanochat_config import config
         url = config.ollama.url
     
     此 AppConfig 仅用于 UI/窗口/主题等基础设施配置。

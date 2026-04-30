@@ -12,7 +12,7 @@ Auto Diagnosis System - 自动诊断系统
 5. 生成诊断报告
 
 使用方式：
-    from client.src.business.error_management import get_auto_diagnoser
+    from business.error_management import get_auto_diagnoser
     
     diagnoser = get_auto_diagnoser()
     report = diagnoser.diagnose_recent_errors()
@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
-from client.src.business.error_management.error_logger import get_error_logger, ErrorType, ErrorSeverity
+from business.error_management.error_logger import get_error_logger, ErrorType, ErrorSeverity
 
 # 全局诊断配置
 _DIAGNOSIS_CONFIG = {

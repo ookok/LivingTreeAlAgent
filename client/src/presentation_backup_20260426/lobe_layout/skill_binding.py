@@ -286,7 +286,7 @@ class LobeMessageProcessor:
         # SmolLM2 意图路由
         async def handle_smollm2_route(prompt: str) -> dict:
             try:
-                from client.src.business.smolllm2 import L0Router
+                from .business.smolllm2 import L0Router
                 router = L0Router()
                 decision = await router.route(prompt)
 
@@ -304,7 +304,7 @@ class LobeMessageProcessor:
         # Agent-Reach 搜索
         async def handle_agent_reach(query: str) -> dict:
             try:
-                from client.src.business.agent_reach import AgentReachClient
+                from .business.agent_reach import AgentReachClient
                 client = AgentReachClient()
                 results = await asyncio.to_thread(
                     client.search, query, "duckduckgo", 5
@@ -319,7 +319,7 @@ class LobeMessageProcessor:
         # P2P 代理搜索
         async def handle_p2p_proxy(query: str) -> dict:
             try:
-                from client.src.business.p2p_search_proxy import P2PSearchProxy, SearchEngineType
+                from .business.p2p_search_proxy import P2PSearchProxy, SearchEngineType
                 proxy = P2PSearchProxy(node_id="lobe-client")
                 task = await proxy.search(query, SearchEngineType.DUCKDUCKGO)
                 return {
@@ -336,7 +336,7 @@ class LobeMessageProcessor:
         # 角色咨询
         async def handle_persona(prompt: str, persona_id: str) -> dict:
             try:
-                from client.src.business.persona_skill import PersonaEngine
+                from .business.persona_skill import PersonaEngine
                 engine = PersonaEngine()
                 result = await engine.invoke(task=prompt, persona_id=persona_id)
                 return {"status": "success", "response": result.response}

@@ -39,7 +39,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QKeyEvent, QAction, QIcon, QCloseEvent
 from PyQt6.QtCore import QEvent
 
-from client.src.business.plugin_framework import (
+from .business.plugin_framework import (
     PluginManager, get_plugin_manager,
     EventBus, get_event_bus,
     ViewFactory, ViewMode,

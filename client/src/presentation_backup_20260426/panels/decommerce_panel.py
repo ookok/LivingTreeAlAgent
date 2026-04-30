@@ -651,7 +651,7 @@ class DeCommercePanel(QWidget):
     def _discover_ai_capabilities(self):
         """探测AI能力"""
         try:
-            from client.src.business.decommerce import get_ai_capability_registry
+            from .business.decommerce import get_ai_capability_registry
             self.ai_registry = get_ai_capability_registry()
             asyncio.create_task(self.ai_registry.discover_capabilities())
             self.status_bar.showMessage("正在探测AI能力...")
@@ -738,7 +738,7 @@ class DeCommercePanel(QWidget):
     def _init_super_relay(self):
         """初始化Super Relay"""
         try:
-            from client.src.business.decommerce import init_edge_relay_network
+            from .business.decommerce import init_edge_relay_network
             self.edge_relay = init_edge_relay_network(
                 super_relay_host=self.turn_url.text().replace("turn://", "").split(":")[0] or "localhost",
                 super_relay_port=int(self.turn_url.text().replace("turn://", "").split(":")[1]) if ":" in self.turn_url.text() else 3478,
@@ -793,7 +793,7 @@ class DeCommercePanel(QWidget):
     def _start_audit(self):
         """开始审计"""
         try:
-            from client.src.business.decommerce import get_audit_trail
+            from .business.decommerce import get_audit_trail
             self.audit_trail = get_audit_trail()
 
             session_id = self.audit_trail.start_session(
@@ -876,7 +876,7 @@ class DeCommercePanel(QWidget):
     def _start_seller_node(self):
         """启动卖家节点"""
         try:
-            from client.src.business.decommerce import SellerNode
+            from .business.decommerce import SellerNode
 
             self.seller_node = SellerNode(
                 user_id="local_user",
@@ -934,7 +934,7 @@ class DeCommercePanel(QWidget):
             return
 
         try:
-            from client.src.business.decommerce import ServiceType
+            from .business.decommerce import ServiceType
 
             title = self.publish_title.text()
             desc = self.publish_desc.toPlainText()
@@ -1015,7 +1015,7 @@ class DeCommercePanel(QWidget):
     def _connect_buyer(self):
         """连接买家客户端"""
         try:
-            from client.src.business.decommerce import BuyerClient
+            from .business.decommerce import BuyerClient
 
             self.buyer_client = BuyerClient(
                 user_id="local_buyer",

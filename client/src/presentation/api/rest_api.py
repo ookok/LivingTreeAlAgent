@@ -17,8 +17,8 @@ from loguru import logger
 import asyncio
 
 try:
-    from client.src.business.tools.tool_registry import ToolRegistry
-    from client.src.business.tools.base_tool import ToolResult
+    from business.tools.tool_registry import ToolRegistry
+    from business.tools.base_tool import ToolResult
 except ImportError:
     from tools.tool_registry import ToolRegistry
     from tools.base_tool import ToolResult

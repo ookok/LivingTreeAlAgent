@@ -36,7 +36,7 @@ class ThoughtAuditPanel(QWidget):
     def _ensure_system(self):
         if self.system is None:
             try:
-                from client.src.business.self_upgrade import get_self_upgrade_system
+                from .business.self_upgrade import get_self_upgrade_system
                 self.system = get_self_upgrade_system()
             except ImportError:
                 self.system = None

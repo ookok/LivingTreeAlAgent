@@ -34,7 +34,7 @@ try:
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-    from client.src.business.unified_platform import (
+    from .business.unified_platform import (
         PlatformHub, PlatformType,
         UnifiedPublisher, PublishTarget,
         AutoPublisher, PublishingSchedule,

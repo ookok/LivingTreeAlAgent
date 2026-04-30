@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 
 # 导入统一意图定义
-from client.src.business.intent_definitions import Intent
+from business.intent_definitions import Intent
 
 
 @dataclass
@@ -99,7 +99,7 @@ class HybridIntentClassifier:
         
         # 2. L0 Router（深度路径）
         try:
-            from client.src.business.smolllm2.router import L0Router
+            from business.smolllm2.router import L0Router
             self._l0_router = L0Router(enable_cache=self._config["enable_cache"])
             self._logger.info("✓ 集成 L0Router (SmolLM2)")
         except Exception as e:

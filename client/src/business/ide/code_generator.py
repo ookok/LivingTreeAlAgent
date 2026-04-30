@@ -31,8 +31,8 @@ from enum import Enum
 
 # 意图引擎导入
 try:
-    from client.src.business.intent_engine import IntentEngine
-    from client.src.business.intent_engine.intent_types import Intent, IntentType
+    from business.intent_engine import IntentEngine
+    from business.intent_engine.intent_types import Intent, IntentType
 except ImportError:
     IntentEngine = None
     Intent = None

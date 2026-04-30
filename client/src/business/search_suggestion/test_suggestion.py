@@ -16,7 +16,7 @@ def test_suggestion_model():
     
     import sys
     sys.path.insert(0, r"F:\mhzyapp\LivingTreeAlAgent")
-    from client.src.business.search_suggestion import SuggestionManager
+    from business.search_suggestion import SuggestionManager
     
     manager = SuggestionManager(max_results=10)
     
@@ -45,7 +45,7 @@ async def test_knowledge_query():
     print("Test 2: Knowledge Query")
     print("=" * 50)
     
-    from client.src.business.search_suggestion import query_knowledge
+    from business.search_suggestion import query_knowledge
     
     suggestions = await query_knowledge("Python", limit=5)
     
@@ -61,7 +61,7 @@ def test_cache():
     print("Test 3: Cache")
     print("=" * 50)
     
-    from client.src.business.search_suggestion import get_suggestion_cache
+    from business.search_suggestion import get_suggestion_cache
     
     cache = get_suggestion_cache()
     
@@ -88,7 +88,7 @@ def test_popup_creation():
     
     try:
         from PyQt6.QtWidgets import QApplication, QLineEdit
-        from client.src.business.search_suggestion import SearchSuggestionPopup, SuggestionController
+        from business.search_suggestion import SearchSuggestionPopup, SuggestionController
         
         app = QApplication(sys.argv)
         

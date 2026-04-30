@@ -32,7 +32,7 @@ except ImportError:
     QWebEngineSettings = None
     QWebEnginePage = None
 
-from client.src.business.office_preview import (
+from .business.office_preview import (
     PreviewSystem, get_preview_system,
     TabManager, get_tab_manager, FileWatcher, get_file_watcher,
     PreviewFileType, PreviewTab, EditorMode, TabState, FileInfo,

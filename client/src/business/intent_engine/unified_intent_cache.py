@@ -168,7 +168,7 @@ class UnifiedIntentCache:
     def _init_semantic_cache(self) -> None:
         """初始化语义缓存（延迟加载）"""
         try:
-            from client.src.business.tier_model.semantic_cache import SemanticCache
+            from business.tier_model.semantic_cache import SemanticCache
             self._semantic_cache = SemanticCache(
                 vector_dim=self._semantic_dim,
                 similarity_threshold=self._semantic_threshold,
@@ -277,7 +277,7 @@ class UnifiedIntentCache:
             return None
 
         try:
-            from client.src.business.tier_model.semantic_cache import SemanticCacheResult
+            from business.tier_model.semantic_cache import SemanticCacheResult
             result = self._semantic_cache.get(query)
             if result is not None:
                 self._stats.semantic_hits += 1

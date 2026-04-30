@@ -134,7 +134,7 @@ class IntelligencePanel(QWidget):
         """异步搜索"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             search_type_map = {
@@ -242,7 +242,7 @@ class IntelligencePanel(QWidget):
         """异步添加竞品"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             cid = self.hub.add_competitor(name, keywords)
@@ -292,7 +292,7 @@ class IntelligencePanel(QWidget):
         """异步收集情报"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             self.status_bar.showMessage(f"正在收集 {comp_name} 的情报...")
@@ -339,7 +339,7 @@ class IntelligencePanel(QWidget):
         """异步运行监控流"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             self.status_bar.showMessage(f"正在运行 {comp_name} 的监控流...")
@@ -419,7 +419,7 @@ class IntelligencePanel(QWidget):
         """异步检测谣言"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             self.status_bar.showMessage("正在检测...")
@@ -592,12 +592,12 @@ class IntelligencePanel(QWidget):
         """异步生成报告"""
         try:
             if not self.hub:
-                from client.src.business.intelligence_center import get_intelligence_hub
+                from .business.intelligence_center import get_intelligence_hub
                 self.hub = get_intelligence_hub()
 
             self.status_bar.showMessage("正在生成报告...")
 
-            from client.src.business.intelligence_center import ReportType
+            from .business.intelligence_center import ReportType
 
             type_map = {
                 "日报": ReportType.DAILY,
@@ -609,7 +609,7 @@ class IntelligencePanel(QWidget):
             report = await self.hub.generate_daily_report()
 
             # 预览
-            from client.src.business.intelligence_center import ReportGenerator
+            from .business.intelligence_center import ReportGenerator
             gen = ReportGenerator()
             md_content = gen.render_markdown(report)
 

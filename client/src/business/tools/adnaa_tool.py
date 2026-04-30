@@ -24,9 +24,9 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 import json
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_definition import ToolDefinition, ToolParameter
-from client.src.business.tools.tool_result import ToolResult, SUCCESS, ERROR
+from business.tools.base_tool import BaseTool
+from business.tools.tool_definition import ToolDefinition, ToolParameter
+from business.tools.tool_result import ToolResult, SUCCESS, ERROR
 
 
 # ============================================================

@@ -211,7 +211,7 @@ class MessageBubble(QFrame):
 
         role_label = QLabel("🧑 用户" if self.role == "user" else "🤖 助手")
         role_label.setStyleSheet(
-            "font-size: 11px; color: #666; font-weight: bold;"
+            "font-size: 11px; color: #bd93f9; font-weight: bold;"
         )
         layout.addWidget(role_label)
 
@@ -241,17 +241,23 @@ class MessageBubble(QFrame):
         if self.role == "user":
             self.setStyleSheet("""
                 MessageBubble {
-                    background: #E3F2FD;
+                    background: #6272a4;
                     border-radius: 12px;
                     margin-left: 40px;
+                }
+                MessageBubble QLabel {
+                    color: #f8f8f2;
                 }
             """)
         else:
             self.setStyleSheet("""
                 MessageBubble {
-                    background: #F5F5F5;
+                    background: #44475a;
                     border-radius: 12px;
                     margin-right: 40px;
+                }
+                MessageBubble QLabel {
+                    color: #f8f8f2;
                 }
             """)
 
@@ -833,28 +839,54 @@ class Panel(QWidget):
 
         title_bar = QFrame()
         title_bar.setFixedHeight(52)
-        title_bar.setStyleSheet("background: #FFFFFF; border-bottom: 1px solid #E0E0E0;")
+        title_bar.setStyleSheet("background: #44475a; border-bottom: 1px solid #282a36;")
         title_layout = QHBoxLayout(title_bar)
         title_layout.setContentsMargins(16, 0, 16, 0)
 
         title_label = QLabel("💬 智能对话")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #f8f8f2;")
         title_layout.addWidget(title_label)
 
         self.model_label = QLabel()
-        self.model_label.setStyleSheet("font-size: 12px; color: #666;")
+        self.model_label.setStyleSheet("font-size: 12px; color: #bd93f9;")
         title_layout.addWidget(self.model_label)
 
         self.command_menu_btn = QToolButton()
         self.command_menu_btn.setText("⚙️")
         self.command_menu_btn.setToolTip("命令菜单")
         self.command_menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.command_menu_btn.setStyleSheet("""
+            QToolButton {
+                background-color: transparent;
+                color: #f8f8f2;
+                border: none;
+                padding: 8px;
+                font-size: 16px;
+            }
+            QToolButton:hover {
+                background-color: #6272a4;
+                border-radius: 4px;
+            }
+        """)
         self._setup_command_menu()
         title_layout.addWidget(self.command_menu_btn)
 
         self.tool_panel_btn = QToolButton()
         self.tool_panel_btn.setText("📦")
         self.tool_panel_btn.setToolTip("工具面板")
+        self.tool_panel_btn.setStyleSheet("""
+            QToolButton {
+                background-color: transparent;
+                color: #f8f8f2;
+                border: none;
+                padding: 8px;
+                font-size: 16px;
+            }
+            QToolButton:hover {
+                background-color: #6272a4;
+                border-radius: 4px;
+            }
+        """)
         self.tool_panel_btn.clicked.connect(self._toggle_tool_panel)
         title_layout.addWidget(self.tool_panel_btn)
 
@@ -864,9 +896,18 @@ class Panel(QWidget):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: #FAFAFA; }")
+        self.scroll_area.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background: #282a36; 
+            }
+            QScrollArea QWidget {
+                background: #282a36;
+            }
+        """)
 
         self.messages_container = QWidget()
+        self.messages_container.setStyleSheet("background: #282a36;")
         self.messages_layout = QVBoxLayout(self.messages_container)
         self.messages_layout.setContentsMargins(16, 16, 16, 16)
         self.messages_layout.addStretch()
@@ -875,7 +916,7 @@ class Panel(QWidget):
         chat_layout.addWidget(self.scroll_area, 1)
 
         input_frame = QFrame()
-        input_frame.setStyleSheet("background: #FFFFFF; border-top: 1px solid #E0E0E0;")
+        input_frame.setStyleSheet("background: #44475a; border-top: 1px solid #44475a;")
         input_layout = QHBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 12, 16, 12)
 
@@ -884,13 +925,13 @@ class Panel(QWidget):
         self.drop_zone.setFixedWidth(40)
         self.drop_zone.setStyleSheet("""
             QFrame {
-                background-color: #f5f5f5;
-                border: 2px dashed #ccc;
+                background-color: #44475a;
+                border: 2px dashed #6272a4;
                 border-radius: 8px;
             }
             QFrame.drag-over {
-                border-color: #2563eb;
-                background-color: #e0f2fe;
+                border-color: #bd93f9;
+                background-color: #6272a4;
             }
         """)
         drop_label = QLabel("📁")
@@ -911,8 +952,8 @@ class Panel(QWidget):
         self.command_btn.setText("/")
         self.command_btn.setStyleSheet("""
             QToolButton {
-                background-color: #e0e0e0;
-                color: #666;
+                background-color: #6272a4;
+                color: #f8f8f2;
                 border: none;
                 border-radius: 8px;
                 padding: 8px 12px;
@@ -920,7 +961,8 @@ class Panel(QWidget):
                 font-weight: bold;
             }
             QToolButton:hover {
-                background-color: #d0d0d0;
+                background-color: #bd93f9;
+                color: #282a36;
             }
         """)
         self.command_btn.clicked.connect(self._show_command_palette)
@@ -929,6 +971,19 @@ class Panel(QWidget):
         self.input_field = QTextEdit()
         self.input_field.setPlaceholderText("输入消息... (输入 / 查看命令)")
         self.input_field.setMaximumHeight(100)
+        self.input_field.setStyleSheet("""
+            QTextEdit {
+                background-color: #282a36;
+                color: #f8f8f2;
+                border: 2px solid #44475a;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+            QTextEdit:focus {
+                border-color: #bd93f9;
+            }
+        """)
         self.input_field.keyPressEvent = self._on_input_key_press
         self.input_field.textChanged.connect(self._on_input_text_changed)
         input_layout.addWidget(self.input_field, 1)
@@ -942,14 +997,14 @@ class Panel(QWidget):
         self.send_btn.setFixedSize(80, 40)
         self.send_btn.setStyleSheet("""
             QPushButton {
-                background: #1976D2;
-                color: white;
+                background: #bd93f9;
+                color: #282a36;
                 border: none;
                 border-radius: 8px;
                 font-weight: bold;
             }
-            QPushButton:hover { background: #1565C0; }
-            QPushButton:disabled { background: #BDBDBD; }
+            QPushButton:hover { background: #ff79c6; }
+            QPushButton:disabled { background: #44475a; color: #6272a4; }
         """)
         self.send_btn.clicked.connect(self._send_message)
         input_layout.addWidget(self.send_btn)

@@ -12,7 +12,7 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
 
-from client.src.business.hermes_skill_factory import (
+from business.hermes_skill_factory import (
     SkillFactory,
     SkillConfig,
     ToolConfig,

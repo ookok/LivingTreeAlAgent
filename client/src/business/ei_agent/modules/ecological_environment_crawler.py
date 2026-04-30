@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 # 复用系统已有的 ScraplingEngine
 try:
-    from client.src.business.web_crawler.engine import ScraplingEngine, CrawlResult
+    from business.web_crawler.engine import ScraplingEngine, CrawlResult
     _HAS_SCRAPLING = True
 except ImportError:
     ScraplingEngine = None

@@ -18,22 +18,22 @@
 "不仅仅是内容正确，格式也完美" - 企业级Office自动化的核心竞争力
 """
 
-from client.src.business.office_automation.format_understanding.format_parser import (
+from business.office_automation.format_understanding.format_parser import (
     FormatParser, FormatInfo, FormatElement, FormatProperty,
     VisualFormat, StructuralFormat, SemanticFormat,
 )
-from client.src.business.office_automation.format_understanding.format_graph import (
+from business.office_automation.format_understanding.format_graph import (
     FormatGraph, FormatNode, FormatEdge, FormatRelation,
 )
-from client.src.business.office_automation.format_understanding.format_semantic import (
+from business.office_automation.format_understanding.format_semantic import (
     FormatSemanticModel, FormatPattern, BusinessSemantic,
     FormatIntent, DesignIntent,
 )
-from client.src.business.office_automation.format_understanding.format_evaluator import (
+from business.office_automation.format_understanding.format_evaluator import (
     FormatEvaluator, QualityMetrics, ReadabilityMetrics,
     ProfessionalMetrics, AccessibilityMetrics,
 )
-from client.src.business.office_automation.format_understanding.format_knowledge import (
+from business.office_automation.format_understanding.format_knowledge import (
     FormatKnowledgeBase, FormatStandard, FormatPatternLibrary,
     FormatCase, UserPreference,
 )

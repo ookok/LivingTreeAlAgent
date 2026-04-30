@@ -27,24 +27,17 @@ def register_default_routes(router: Router, module_map: dict = None):
     # =========================================================================
     main_routes = [
         Route("chat", "智能对话", "💬", _lazy("chat"), category="main"),
-        Route("deep_search", "深度搜索", "🔍", _lazy("search"), category="main"),
         Route("knowledge_base", "知识库", "📚", _lazy("knowledge"), category="main"),
-        Route("expert_training", "专家训练", "🎓", _lazy("training"), category="main"),
-        Route("smart_ide", "OpenCode IDE", "💻", _lazy_opencode_ide(), category="main"),
-        Route("smart_writing", "智能写作", "✍️", _lazy("writing"), category="main"),
-        # 环评助手（P0 新增）
-        Route("ei_wizard", "环评助手", "📋", _lazy_ei_wizard(), category="main"),
-        # 共脑系统
-        Route("shared_brain", "共脑系统", "🧠", _lazy_shared_brain(), category="main"),
+        Route("search", "深度搜索", "🔍", _lazy("search"), category="main"),
+        Route("writing", "智能写作", "✍️", _lazy("writing"), category="main"),
+        Route("training", "专家训练", "🎓", _lazy("training"), category="main"),
+        Route("smart_ide", "代码编辑器", "💻", _lazy_opencode_ide(), category="main"),
     ]
 
     # =========================================================================
     # 领域面板（显示在左侧导航 - 专业领域）
     # =========================================================================
-    domain_routes = [
-        Route("finance", "金融中心", "💰", _lazy_finance(), category="domain"),
-        Route("game", "游戏中心", "🎮", _lazy_game(), category="domain"),
-    ]
+    domain_routes = []
 
     # =========================================================================
     # 工具模块（显示在工具菜单）
@@ -68,7 +61,7 @@ def register_default_routes(router: Router, module_map: dict = None):
     # =========================================================================
     settings_routes = [
         Route("settings", "系统设置", "⚙️", _lazy("settings"), category="settings"),
-        Route("profile", "个人资料", "👤", _create_profile_panel, category="settings"),
+        Route("profile", "个人资料", "👤", _lazy_profile(), category="settings"),
     ]
 
     all_routes = main_routes + domain_routes + tool_routes + settings_routes
@@ -91,9 +84,12 @@ def _lazy(module_name: str) -> type:
             super().__init__(parent)
             self._real_instance = None
             self._init_ui()
+            # 立即触发延迟加载
+            self._load_real_panel()
 
         def _init_ui(self):
             from PyQt6.QtWidgets import QLabel, QVBoxLayout
+            from PyQt6.QtCore import Qt
             layout = QVBoxLayout(self)
             self.placeholder = QLabel(f"🚀 {self._module_name} 加载中...")
             self.placeholder.setStyleSheet("""
@@ -101,32 +97,51 @@ def _lazy(module_name: str) -> type:
                 font-size: 16px;
                 padding: 40px;
             """)
-            self.placeholder.setAlignment(0x0004)  # Qt.AlignCenter
+            self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(self.placeholder)
             layout.addStretch()
 
         def _load_real_panel(self):
             """延迟加载真实面板"""
             if self._real_instance is not None:
+                print(f"[LazyPanel] {self._module_name} already loaded")
                 return self._real_instance
 
             # 动态导入
             import importlib
             try:
+                print(f"[LazyPanel] Loading {self._module_name}...")
                 module = importlib.import_module(
                     f"client.src.presentation.modules.{self._module_name}.panel"
                 )
+                print(f"[LazyPanel] Module imported successfully")
+                
                 panel_class = getattr(module, "Panel", None)
                 if panel_class:
-                    self._real_instance = panel_class(self.parent())
+                    print(f"[LazyPanel] Creating {panel_class.__name__} instance...")
+                    self._real_instance = panel_class(self)
+                    print(f"[LazyPanel] Instance created: {self._real_instance}")
+                    
                     # 替换当前widget
                     layout = self.layout()
                     layout.removeWidget(self.placeholder)
                     self.placeholder.hide()
-                    layout.addWidget(self._real_instance)
+                    layout.addWidget(self._real_instance, 1)
                     layout.addStretch()
+                    print(f"[LazyPanel] {self._module_name} loaded successfully")
+                else:
+                    print(f"[LazyPanel] Panel class not found in module")
             except Exception as e:
                 print(f"[LazyPanel] Failed to load {self._module_name}: {e}")
+                import traceback
+                traceback.print_exc()
+                # 更新占位符显示错误信息
+                self.placeholder.setText(f"❌ {self._module_name} 加载失败\n\n{e}")
+                self.placeholder.setStyleSheet("""
+                    color: #ff5555;
+                    font-size: 14px;
+                    padding: 40px;
+                """)
 
             return self._real_instance
 
@@ -145,8 +160,8 @@ def _lazy_shared_brain() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.business.global_model_router import get_global_router
-                from client.src.presentation.panels.streaming_thought_demo_panel import StreamingThoughtDemoPanel
+                from business.global_model_router import get_global_router
+                from presentation.panels.streaming_thought_demo_panel import StreamingThoughtDemoPanel
 
                 model_router = get_global_router()
                 real_panel = StreamingThoughtDemoPanel(model_router, self)
@@ -178,7 +193,7 @@ def _lazy_finance() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.presentation.panels.finance_hub_panel import FinanceHubPanel
+                from presentation.panels.finance_hub_panel import FinanceHubPanel
 
                 real_panel = FinanceHubPanel(self)
 
@@ -209,7 +224,7 @@ def _lazy_game() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.presentation.panels.game_hub_panel import GameHubPanel
+                from presentation.panels.game_hub_panel import GameHubPanel
 
                 real_panel = GameHubPanel(self)
 
@@ -273,7 +288,7 @@ def _lazy_model_monitor() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.presentation.panels.model_router_monitor_panel import ModelRouterMonitorPanel
+                from presentation.panels.model_router_monitor_panel import ModelRouterMonitorPanel
 
                 real_panel = ModelRouterMonitorPanel(self)
 
@@ -400,7 +415,7 @@ def _create_evolution_panel() -> type:
     返回 EvolutionPanel 类
     """
     try:
-        from client.src.presentation.panels.evolution_panel import EvolutionPanel
+        from presentation.panels.evolution_panel import EvolutionPanel
         return EvolutionPanel
     except Exception as e:
         print(f"[_create_evolution_panel] Failed to import: {e}")
@@ -412,7 +427,7 @@ def _create_plugin_manager_panel() -> type:
     返回 PluginManagerPanel 类
     """
     try:
-        from client.src.presentation.panels.plugin_manager_panel import PluginManagerPanel
+        from presentation.panels.plugin_manager_panel import PluginManagerPanel
         return PluginManagerPanel
     except Exception as e:
         print(f"[_create_plugin_manager_panel] Failed to import: {e}")
@@ -424,7 +439,7 @@ def _create_marketplace_panel() -> type:
     返回 MarketplacePanel 类
     """
     try:
-        from client.src.presentation.panels.marketplace_panel import MarketplacePanel
+        from presentation.panels.marketplace_panel import MarketplacePanel
         return MarketplacePanel
     except Exception as e:
         print(f"[_create_marketplace_panel] Failed to import: {e}")
@@ -436,7 +451,7 @@ def _create_profile_panel() -> type:
     返回 ProfilePanel 类
     """
     try:
-        from client.src.presentation.panels.profile_panel import ProfilePanel
+        from presentation.panels.profile_panel import ProfilePanel
         return ProfilePanel
     except Exception as e:
         print(f"[_create_profile_panel] Failed to import: {e}")
@@ -448,7 +463,7 @@ def _create_skills_panel() -> type:
     返回 SkillsPanel 类（技能与专家角色管理）
     """
     try:
-        from client.src.presentation.panels.skills_panel import SkillsPanel
+        from presentation.panels.skills_panel import SkillsPanel
         return SkillsPanel
     except Exception as e:
         print(f"[_create_skills_panel] Failed to import: {e}")
@@ -460,7 +475,7 @@ def _create_llm_wiki_panel() -> type:
     返回 LLMWikiPanel 类（LLM Wiki 知识库管理）
     """
     try:
-        from client.src.presentation.panels.llm_wiki_panel import LLMWikiPanel
+        from presentation.panels.llm_wiki_panel import LLMWikiPanel
         return LLMWikiPanel
     except Exception as e:
         print(f"[_create_llm_wiki_panel] Failed to import: {e}")
@@ -477,7 +492,7 @@ def _create_evorag_panel() -> type:
     3. 混合优先级检索
     """
     try:
-        from client.src.presentation.panels.evorag_panel import EvoRAGPanel
+        from presentation.panels.evorag_panel import EvoRAGPanel
         return EvoRAGPanel
     except Exception as e:
         print(f"[_create_evorag_panel] Failed to import: {e}")
@@ -496,7 +511,7 @@ def _create_opik_panel() -> type:
     5. 配置管理
     """
     try:
-        from client.src.presentation.panels.opik_panel import OpikDashboardPanel
+        from presentation.panels.opik_panel import OpikDashboardPanel
         return OpikDashboardPanel
     except Exception as e:
         print(f"[_create_opik_panel] Failed to import: {e}")
@@ -515,7 +530,7 @@ def _lazy_ei_wizard() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.presentation.wizards.ei_wizard_chat import EIWizardChat
+                from presentation.wizards.ei_wizard_chat import EIWizardChat
 
                 real_panel = EIWizardChat(self)
 
@@ -552,7 +567,7 @@ def _lazy_opencode_ide() -> type:
         def _load_real_panel(self):
             """加载真实面板"""
             try:
-                from client.src.presentation.modules.ide.opencode_ide_panel import OpenCodeIDEPanel
+                from presentation.modules.ide.opencode_ide_panel import OpenCodeIDEPanel
 
                 real_panel = OpenCodeIDEPanel(self)
 

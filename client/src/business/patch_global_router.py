@@ -41,8 +41,8 @@ content = content.replace('elif model.backend == ModelBackend.LLMCORE:',
 
 # 8. Import: LLMCoreAdapter -> LTAIAdapter
 content = content.replace(
-    'from client.src.business.llmcore.adapter import LLMCoreAdapter',
-    'from client.src.business.llmcore.adapter import LTAIAdapter'
+    'from business.llmcore.adapter import LLMCoreAdapter',
+    'from business.llmcore.adapter import LTAIAdapter'
 )
 
 # 9. Adapter instantiation: LLMCoreAdapter( -> LTAIAdapter(

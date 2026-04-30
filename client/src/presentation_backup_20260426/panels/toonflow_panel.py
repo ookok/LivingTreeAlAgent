@@ -508,7 +508,7 @@ class ToonflowPanel(QWidget):
         """检测运行环境"""
         if not self.runner:
             try:
-                from client.src.business.toonflow_runner import get_toonflow_runner
+                from .business.toonflow_runner import get_toonflow_runner
                 self.runner = get_toonflow_runner()
             except Exception as e:
                 logger.error(f"Failed to get runner: {e}")
@@ -586,8 +586,8 @@ class ToonflowPanel(QWidget):
             # 初始化客户端
             if not self.client:
                 try:
-                    from client.src.business.toonflow_client import get_toonflow_client
-                    from client.src.business.toonflow_client import ToonflowConfig
+                    from .business.toonflow_client import get_toonflow_client
+                    from .business.toonflow_client import ToonflowConfig
                     config = ToonflowConfig(port=self.runner.config.port)
                     self.client = get_toonflow_client(config)
                     await self.client.connect()
@@ -632,7 +632,7 @@ class ToonflowPanel(QWidget):
         """执行安装"""
         if not self.runner:
             try:
-                from client.src.business.toonflow_runner import get_toonflow_runner
+                from .business.toonflow_runner import get_toonflow_runner
                 self.runner = get_toonflow_runner()
             except Exception as e:
                 self._log(f"❌ 获取 Runner 失败: {e}")
@@ -683,7 +683,7 @@ class ToonflowPanel(QWidget):
         self._log(f"📝 创建项目: {title}")
 
         try:
-            from client.src.business.toonflow_client import NovelContent
+            from .business.toonflow_client import NovelContent
 
             novel = NovelContent(
                 title=title,

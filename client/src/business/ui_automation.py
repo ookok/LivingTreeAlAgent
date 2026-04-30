@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 # 配置管理
-from client.src.business.config import UnifiedConfig
+from business.config import UnifiedConfig
 
 # 屏幕截图依赖
 try:

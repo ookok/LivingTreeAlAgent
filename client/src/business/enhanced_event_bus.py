@@ -1,6 +1,6 @@
 """增强事件总线 - 添加缺失功能"""
 
-from .shared.event_bus import EventBus, Event
+from client.src.business.shared.event_bus import EventBus, Event
 from typing import Dict, Callable, Any, Optional, List
 import time
 

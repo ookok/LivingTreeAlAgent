@@ -8,7 +8,7 @@ import asyncio
 import sys
 sys.path.insert(0, 'f:/mhzyapp/LivingTreeAlAgent')
 
-from client.src.business.world_model_simulator import (
+from business.world_model_simulator import (
     WorldModel,
     SimulationEngine,
     Entity,

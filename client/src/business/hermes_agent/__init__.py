@@ -460,14 +460,14 @@ def get_current_user_context(max_history: int = 10) -> str:
 # ==================== 意图识别与澄清 ====================
 # 从架构指南 Phase A 新增 (2026-04-28)
 
-from client.src.business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
-from client.src.business.hermes_agent.intent_clarifier import AdaptiveClarifier, ClarificationResult, ClarificationStrategy
-from client.src.business.hermes_agent.progressive_ui_renderer import ProgressiveUIRenderer, UIRenderState, RenderPriority
+from business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
+from business.hermes_agent.intent_clarifier import AdaptiveClarifier, ClarificationResult, ClarificationStrategy
+from business.hermes_agent.progressive_ui_renderer import ProgressiveUIRenderer, UIRenderState, RenderPriority
 
 # ==================== 自适应学习循环 ====================
 # 从架构指南 Phase C 新增 (2026-04-28)
 
-from client.src.business.hermes_agent.adaptive_learning_loop import (
+from business.hermes_agent.adaptive_learning_loop import (
     AdaptiveLearningLoop,
     LearningSample,
     Policy,
@@ -477,7 +477,7 @@ from client.src.business.hermes_agent.adaptive_learning_loop import (
 # ==================== 多Agent编排 ====================
 # 从架构指南 Phase C 新增 (2026-04-28)
 
-from client.src.business.hermes_agent.multi_agent_orchestrator import (
+from business.hermes_agent.multi_agent_orchestrator import (
     MultiAgentOrchestrator,
     Agent,
     SubTask,

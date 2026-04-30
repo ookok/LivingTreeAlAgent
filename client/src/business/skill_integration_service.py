@@ -368,15 +368,15 @@ class SkillIntegrationService:
     def _lazy_load_components(self):
         """延迟加载组件"""
         if self._skill_discovery is None:
-            from client.src.business.skill_discovery import create_skill_discovery
+            from business.skill_discovery import create_skill_discovery
             self._skill_discovery = create_skill_discovery()
         
         if self._skill_matcher is None:
-            from client.src.business.skill_matcher import create_skill_matcher
+            from business.skill_matcher import create_skill_matcher
             self._skill_matcher = create_skill_matcher()
         
         if self._skill_graph is None:
-            from client.src.business.skill_graph import create_skill_graph
+            from business.skill_graph import create_skill_graph
             self._skill_graph = create_skill_graph()
     
     def _skill_to_dict(self, skill) -> dict:

@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QDir
 from PyQt6.QtGui import QIcon, QFont
 
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 
 # ── 文件类型图标映射 ──────────────────────────────────────────────

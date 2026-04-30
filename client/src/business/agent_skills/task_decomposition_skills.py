@@ -20,7 +20,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from enum import Enum
 
-from client.src.business.agent_skills.skill_registry import (
+from business.agent_skills.skill_registry import (
     SkillManifest,
     SkillCategory,
     SkillInput,
@@ -29,7 +29,7 @@ from client.src.business.agent_skills.skill_registry import (
     OutputType,
     SkillEvolution,
 )
-from client.src.business.task_decomposer import (
+from business.task_decomposer import (
     TaskDecomposer,
     DecomposedTask,
     ProcessType,

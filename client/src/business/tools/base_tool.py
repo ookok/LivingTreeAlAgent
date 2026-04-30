@@ -37,7 +37,7 @@ from enum import Enum
 
 # ── Opik 监控支持 ─────────────────────────────────────────
 try:
-    from client.src.business.opik_monitor import get_monitor, monitor_tool
+    from business.opik_monitor import get_monitor, monitor_tool
     OPIK_MONITOR_AVAILABLE = True
 except ImportError:
     logger.warning("Opik 监控模块导入失败，监控功能将不可用")

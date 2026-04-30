@@ -41,7 +41,7 @@ from .idea_generator import IdeaGenerator, GenerationResult
 
 # 长任务管理集成（延迟导入避免循环依赖）
 try:
-    from client.src.business.long_task import get_long_task_integration, LongTaskIntegration
+    from business.long_task import get_long_task_integration, LongTaskIntegration
     _long_task_available = True
 except ImportError:
     _long_task_available = False

@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QSizePolicy, QSplitter,
     QStatusBar, QMenuBar, QMenu,
 )
-from client.src.presentation.panels.components import QSpinner
+from .presentation.panels.components import QSpinner
 from PyQt6.QtGui import QFont, QAction, QPalette, QColor, QIcon
 
 # 图标 (使用 emoji 作为占位)
@@ -486,7 +486,7 @@ class GitHubStorePanel(QWidget):
     def _init_store(self):
         """初始化商店"""
         try:
-            from client.src.business.github_store import get_github_store
+            from .business.github_store import get_github_store
             self._store = get_github_store()
             self.status_bar.setText("✅ GitHub Store 已就绪")
             self._load_trending()

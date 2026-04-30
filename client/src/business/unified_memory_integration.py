@@ -20,7 +20,7 @@ import threading
 
 # 避免循环导入
 if TYPE_CHECKING:
-    from client.src.business.unified_memory import MemoryRouter, MemoryItem, MemoryQuery, MemoryResult, MemoryType, MemoryPriority
+    from business.unified_memory import MemoryRouter, MemoryItem, MemoryQuery, MemoryResult, MemoryType, MemoryPriority
 
 # 全局路由器实例
 _router_instance: Optional['MemoryRouter'] = None
@@ -44,7 +44,7 @@ def get_unified_memory_router() -> Optional['MemoryRouter']:
             return _router_instance
         
         try:
-            from client.src.business.unified_memory import MemoryRouter
+            from business.unified_memory import MemoryRouter
             _router_instance = MemoryRouter.get_instance()
             return _router_instance
         except ImportError as e:
@@ -113,7 +113,7 @@ class UnifiedMemoryMixin:
             return {}
         
         try:
-            from client.src.business.unified_memory import MemoryItem, MemoryType, MemoryPriority as UnifiedPriority
+            from business.unified_memory import MemoryItem, MemoryType, MemoryPriority as UnifiedPriority
             
             # 转换类型
             type_map = {
@@ -179,7 +179,7 @@ class UnifiedMemoryMixin:
             return {"items": [], "total": 0, "sources": []}
         
         try:
-            from client.src.business.unified_memory import MemoryQuery, MemoryType
+            from business.unified_memory import MemoryQuery, MemoryType
             
             # 转换类型
             type_map = {
@@ -450,7 +450,7 @@ def quick_store(content: str, memory_type: str = "session") -> bool:
     
     用法：
     ```python
-    from client.src.business.unified_memory_integration import quick_store
+    from business.unified_memory_integration import quick_store
     quick_store("用户偏好深色主题", "semantic")
     ```
     """
@@ -459,7 +459,7 @@ def quick_store(content: str, memory_type: str = "session") -> bool:
         return False
     
     try:
-        from client.src.business.unified_memory import MemoryItem, MemoryType
+        from business.unified_memory import MemoryItem, MemoryType
         
         type_map = {
             "working": MemoryType.WORKING,
@@ -488,7 +488,7 @@ def quick_retrieve(query: str, memory_type: str = None) -> List[Dict]:
     
     用法：
     ```python
-    from client.src.business.unified_memory_integration import quick_retrieve
+    from business.unified_memory_integration import quick_retrieve
     results = quick_retrieve("用户偏好", "semantic")
     ```
     """
@@ -497,7 +497,7 @@ def quick_retrieve(query: str, memory_type: str = None) -> List[Dict]:
         return []
     
     try:
-        from client.src.business.unified_memory import MemoryQuery, MemoryType
+        from business.unified_memory import MemoryQuery, MemoryType
         
         type_map = {
             "working": MemoryType.WORKING,

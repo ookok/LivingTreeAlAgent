@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 
@@ -381,7 +381,7 @@ class AermodTool(BaseTool):
 def _auto_register():
     """自动注册工具到 ToolRegistry"""
     try:
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         registry = ToolRegistry.get_instance()
         
         tool = AermodTool()

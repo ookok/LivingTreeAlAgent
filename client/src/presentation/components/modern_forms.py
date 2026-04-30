@@ -48,7 +48,6 @@ class ModernTextField(QWidget):
             QLineEdit:focus {
                 border-color: #6366f1;
                 outline: none;
-                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
             }
             QLineEdit:hover {
                 border-color: #9ca3af;
@@ -102,7 +101,6 @@ class ModernTextArea(QWidget):
             QTextEdit:focus {
                 border-color: #6366f1;
                 outline: none;
-                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
             }
         """)
         self._text_edit.textChanged.connect(lambda: self.text_changed.emit(self._text_edit.toPlainText()))

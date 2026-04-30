@@ -527,7 +527,7 @@ def main():
     # 加载主窗口
     print("🖼️ 加载主窗口...")
     
-    from presentation.layouts.main_window import MainWindow
+    from presentation.layouts import MainWindow
     from business.config import UnifiedConfig
     
     config = UnifiedConfig.get_instance()
@@ -538,6 +538,8 @@ def main():
         window.startup_result = startup_result
     
     window.show()
+    window.activateWindow()
+    window.raise_()
     
     print("✅ 客户端已启动")
     sys.exit(app.exec())

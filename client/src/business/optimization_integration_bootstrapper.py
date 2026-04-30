@@ -192,7 +192,7 @@ class OptimizationIntegrationBootstrapper:
     async def _enable_optimization_bootstrapper(self) -> Dict[str, Any]:
         """启用优化引导器"""
         try:
-            from client.src.business.optimization_bootstrapper import enable_all_optimizations
+            from business.optimization_bootstrapper import enable_all_optimizations
             
             result = enable_all_optimizations()
             
@@ -209,7 +209,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_intelligent_engine(self) -> Dict[str, Any]:
         """初始化智能优化引擎"""
         try:
-            from client.src.business.intelligent_optimization_engine import get_intelligent_optimization_engine
+            from business.intelligent_optimization_engine import get_intelligent_optimization_engine
             
             self._intelligent_engine = get_intelligent_optimization_engine()
             self._intelligent_engine.set_profile("default")
@@ -224,7 +224,7 @@ class OptimizationIntegrationBootstrapper:
     async def _register_system_hooks(self) -> Dict[str, Any]:
         """注册系统钩子"""
         try:
-            from client.src.business.optimization_hook_manager import (
+            from business.optimization_hook_manager import (
                 get_hook_manager,
                 HookPoint,
                 HookContext,
@@ -278,7 +278,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_evolution_engine(self) -> Dict[str, Any]:
         """初始化自我进化引擎"""
         try:
-            from client.src.business.self_evolution_engine import get_self_evolution_engine
+            from business.self_evolution_engine import get_self_evolution_engine
             
             self._evolution_engine = get_self_evolution_engine()
             
@@ -292,7 +292,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_open_evolution(self) -> Dict[str, Any]:
         """初始化开放式进化"""
         try:
-            from client.src.business.open_ended_evolution import create_open_ended_evolution
+            from business.open_ended_evolution import create_open_ended_evolution
             
             self._open_evolution = create_open_ended_evolution()
             
@@ -306,7 +306,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_rl_improvement(self) -> Dict[str, Any]:
         """初始化强化学习改进"""
         try:
-            from client.src.business.rl_driven_improvement import create_rl_improvement, RLAlgorithm
+            from business.rl_driven_improvement import create_rl_improvement, RLAlgorithm
             
             self._rl_improvement = create_rl_improvement(RLAlgorithm.REINFORCE)
             
@@ -320,7 +320,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_evolution_integration(self) -> Dict[str, Any]:
         """初始化进化集成层"""
         try:
-            from client.src.business.evolution_integration_layer import (
+            from business.evolution_integration_layer import (
                 get_evolution_integration_layer,
                 initialize_evolution_integration,
             )
@@ -426,7 +426,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_skill_discovery(self) -> Dict[str, Any]:
         """初始化技能发现引擎"""
         try:
-            from client.src.business.skill_discovery import create_skill_discovery
+            from business.skill_discovery import create_skill_discovery
             
             self._skill_discovery = create_skill_discovery()
             
@@ -443,7 +443,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_skill_matcher(self) -> Dict[str, Any]:
         """初始化技能匹配引擎"""
         try:
-            from client.src.business.skill_matcher import create_skill_matcher
+            from business.skill_matcher import create_skill_matcher
             
             self._skill_matcher = create_skill_matcher()
             
@@ -457,7 +457,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_skill_graph(self) -> Dict[str, Any]:
         """初始化技能图谱"""
         try:
-            from client.src.business.skill_graph import create_skill_graph
+            from business.skill_graph import create_skill_graph
             
             self._skill_graph = create_skill_graph()
             
@@ -484,7 +484,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_skill_integration_service(self) -> Dict[str, Any]:
         """初始化技能集成服务"""
         try:
-            from client.src.business.skill_integration_service import get_skill_integration_service
+            from business.skill_integration_service import get_skill_integration_service
             
             self._skill_integration_service = get_skill_integration_service()
             
@@ -507,7 +507,7 @@ class OptimizationIntegrationBootstrapper:
             if not self._hook_manager:
                 return {"success": False, "message": "钩子管理器未初始化"}
             
-            from client.src.business.optimization_hook_manager import HookPoint, HookContext, HookResult
+            from business.optimization_hook_manager import HookPoint, HookContext, HookResult
             
             # 注册技能匹配钩子
             async def skill_matching_hook(context: HookContext) -> HookResult:
@@ -578,7 +578,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_llm_verifier(self) -> Dict[str, Any]:
         """初始化LLM验证器"""
         try:
-            from client.src.business.llm_verifier import create_llm_verifier
+            from business.llm_verifier import create_llm_verifier
             
             self._llm_verifier = create_llm_verifier()
             
@@ -592,7 +592,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_verifier_integration_service(self) -> Dict[str, Any]:
         """初始化验证器集成服务"""
         try:
-            from client.src.business.verifier_integration_service import get_verifier_integration_service
+            from business.verifier_integration_service import get_verifier_integration_service
             
             self._verifier_integration_service = get_verifier_integration_service()
             
@@ -609,7 +609,7 @@ class OptimizationIntegrationBootstrapper:
             if not self._hook_manager:
                 return {"success": False, "message": "钩子管理器未初始化"}
             
-            from client.src.business.optimization_hook_manager import HookPoint, HookContext, HookResult
+            from business.optimization_hook_manager import HookPoint, HookContext, HookResult
             
             # 注册代码验证钩子
             async def code_verification_hook(context: HookContext) -> HookResult:
@@ -678,7 +678,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_intelligent_search_engine(self) -> Dict[str, Any]:
         """初始化智能搜索引擎"""
         try:
-            from client.src.business.intelligent_search_engine import get_intelligent_search_engine
+            from business.intelligent_search_engine import get_intelligent_search_engine
             
             self._intelligent_search_engine = get_intelligent_search_engine()
             
@@ -692,7 +692,7 @@ class OptimizationIntegrationBootstrapper:
     async def _initialize_web_scraper(self) -> Dict[str, Any]:
         """初始化网页抓取器"""
         try:
-            from client.src.business.web_scraper import create_web_scraper
+            from business.web_scraper import create_web_scraper
             
             self._web_scraper = create_web_scraper()
             
@@ -709,7 +709,7 @@ class OptimizationIntegrationBootstrapper:
             if not self._hook_manager:
                 return {"success": False, "message": "钩子管理器未初始化"}
             
-            from client.src.business.optimization_hook_manager import HookPoint, HookContext, HookResult
+            from business.optimization_hook_manager import HookPoint, HookContext, HookResult
             
             # 注册搜索增强钩子
             async def search_enhancement_hook(context: HookContext) -> HookResult:

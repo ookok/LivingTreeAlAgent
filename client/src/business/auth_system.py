@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Callable, Dict
 from enum import Enum
 
-from client.src.business.nanochat_config import config
+from business.nanochat_config import config
 
 
 class UserRole(Enum):

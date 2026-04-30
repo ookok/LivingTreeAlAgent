@@ -11,8 +11,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QIcon
 
-from client.src.business.model_manager import ModelManager, ModelInfo
-from client.src.business.config import AppConfig
+from .business.model_manager import ModelManager, ModelInfo
+from .business.config import AppConfig
 
 
 class DownloadThread(QThread):
@@ -308,7 +308,7 @@ class ModelSelectorDialog(QDialog):
             
             if reply == QMessageBox.StandardButton.Yes:
                 # 显示下载进度对话框
-                from client.src.presentation.panels.model_download_progress import ModelDownloadProgress
+                from .presentation.panels.model_download_progress import ModelDownloadProgress
                 download_progress = ModelDownloadProgress(model_name, self)
                 download_progress.download_cancelled.connect(self.on_download_cancelled)
                 download_progress.download_paused.connect(self.on_download_paused)
@@ -341,7 +341,7 @@ class ModelSelectorDialog(QDialog):
     def on_download_paused(self):
         """下载暂停"""
         # 从系统下载中心暂停下载
-        from client.src.business.unified_downloader import get_download_center
+        from .business.unified_downloader import get_download_center
         download_center = get_download_center()
         tasks = download_center.list_tasks()
         for task in tasks:
@@ -352,7 +352,7 @@ class ModelSelectorDialog(QDialog):
     def on_download_resumed(self):
         """下载继续"""
         # 从系统下载中心继续下载
-        from client.src.business.unified_downloader import get_download_center
+        from .business.unified_downloader import get_download_center
         download_center = get_download_center()
         tasks = download_center.list_tasks()
         for task in tasks:

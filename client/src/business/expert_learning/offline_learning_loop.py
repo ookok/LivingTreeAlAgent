@@ -53,7 +53,7 @@ from enum import Enum
 from pathlib import Path
 from collections import defaultdict, deque
 import re
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('expert_learning.offline_learning_loop')
 
 

@@ -19,9 +19,9 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.tools.tool_registry import ToolRegistry
 
 
 # ============================================================
@@ -77,7 +77,7 @@ def create_simple_tool_wrapper(
 
 def migrate_task_decomposer():
     """迁移 task_decomposer"""
-    from client.src.business.task_decomposer import TaskDecomposer
+    from business.task_decomposer import TaskDecomposer
     
     def execute(question: str, max_steps: int = 10, **kwargs) -> ToolResult:
         try:
@@ -106,7 +106,7 @@ def migrate_task_decomposer():
 
 def migrate_knowledge_graph():
     """迁移 knowledge_graph"""
-    from client.src.business.knowledge_graph import KnowledgeGraph
+    from business.knowledge_graph import KnowledgeGraph
     
     def execute(operation: str, **kwargs) -> ToolResult:
         try:
@@ -146,7 +146,7 @@ def migrate_knowledge_graph():
 
 def migrate_vector_database():
     """迁移 vector_database"""
-    from client.src.business.knowledge_vector_db import VectorDatabase
+    from business.knowledge_vector_db import VectorDatabase
     
     def execute(operation: str, **kwargs) -> ToolResult:
         try:
@@ -180,7 +180,7 @@ def migrate_vector_database():
 
 def migrate_web_crawler():
     """迁移 web_crawler"""
-    from client.src.business.web_crawler.engine import ScraplingEngine
+    from business.web_crawler.engine import ScraplingEngine
     
     def execute(url: str, selector: Optional[str] = None, **kwargs) -> ToolResult:
         try:
@@ -209,7 +209,7 @@ def migrate_web_crawler():
 
 def migrate_deep_search():
     """迁移 deep_search"""
-    from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
+    from business.deep_search_wiki.wiki_generator import WikiGenerator
     
     def execute(topic: str, **kwargs) -> ToolResult:
         try:

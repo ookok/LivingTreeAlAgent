@@ -33,9 +33,9 @@ from .parsers import LLMDocumentParser, PaperParser, CodeExtractor
 
 # 尝试导入 FusionRAG 模块
 try:
-    from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
-    from client.src.business.fusion_rag.chunk_optimizer import ChunkOptimizer
-    from client.src.business.fusion_rag.fusion_engine import FusionEngine
+    from business.fusion_rag.knowledge_base import KnowledgeBaseLayer
+    from business.fusion_rag.chunk_optimizer import ChunkOptimizer
+    from business.fusion_rag.fusion_engine import FusionEngine
     FUSION_RAG_AVAILABLE = True
     logger.info("FusionRAG 模块导入成功")
 except ImportError as e:
@@ -67,7 +67,7 @@ class LLMWikiIntegration:
             
             # 集成 FusionRAG 行业治理模块
             try:
-                from client.src.business.fusion_rag import (
+                from business.fusion_rag import (
                     create_industry_governance,
                     create_knowledge_tier_manager,
                     create_industry_filter,
@@ -86,7 +86,7 @@ class LLMWikiIntegration:
                 self.triple_chain_engine = create_triple_chain_engine()
                 
                 # 集成 DeepKE-LLM 术语抽取器
-                from client.src.business.fusion_rag import (
+                from business.fusion_rag import (
                     get_term_extractor,
                     get_dict_builder
                 )
@@ -95,7 +95,7 @@ class LLMWikiIntegration:
                 
                 # 集成 VimRAG 多模态记忆图引擎
                 try:
-                    from client.src.business.memory_graph_engine import (
+                    from business.memory_graph_engine import (
                         get_memory_graph_engine,
                         NodeType,
                         RelationType

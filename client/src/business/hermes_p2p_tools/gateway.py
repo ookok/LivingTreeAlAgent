@@ -132,12 +132,12 @@ class HermesGateway:
         """
         with self._lock:
             # 初始化P2P工具
-            from client.src.business.hermes_p2p_tools import register_p2p_tools
+            from business.hermes_p2p_tools import register_p2p_tools
             register_p2p_tools()
 
             # 初始化自适应引导
             if self._enable_auto_guide:
-                from client.src.business.adaptive_guide import get_guide_manager
+                from business.adaptive_guide import get_guide_manager
                 self._adaptive_guide = get_guide_manager()
 
             # 关联Agent
@@ -454,7 +454,7 @@ class HermesGateway:
 
             # 重要交互才保存
             if intent in ("configure", "enable_feature") and response.get("success"):
-                from client.src.business.memory_manager import MemoryManager
+                from business.memory_manager import MemoryManager
                 mm = MemoryManager()
                 mm.append_memory(
                     f"用户完成了{intent}操作: {event_type}。"

@@ -55,16 +55,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 try:
-    from client.src.business.living_tree_ai.eia_system.generation_monitor import (
+    from business.living_tree_ai.eia_system.generation_monitor import (
         GenerationMonitor, GenerationStage, StageStatus, StepStatus,
         GenerationStep, StageProgress, get_or_create_monitor,
         start_report_generation, update_stage, update_step
     )
-    from client.src.business.living_tree_ai.eia_system.report_completeness_auditor import (
+    from business.living_tree_ai.eia_system.report_completeness_auditor import (
         ReportCompletenessAuditor, MissingItem, MissingLevel, MissingCategory,
         AuditResult, get_auditor, audit_report_completeness
     )
-    from client.src.business.living_tree_ai.eia_system.computation_fingerprint import (
+    from business.living_tree_ai.eia_system.computation_fingerprint import (
         create_fingerprint_generator
     )
     EIA_SYSTEM_AVAILABLE = True

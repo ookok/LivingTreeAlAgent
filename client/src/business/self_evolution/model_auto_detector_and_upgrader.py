@@ -154,7 +154,7 @@ class ModelAutoDetectorAndUpgrader:
     def _load_current_config(self):
         """从系统配置加载当前模型配置"""
         try:
-            from client.src.business.nanochat_config import config
+            from business.nanochat_config import config
             ollama_url = config.ollama.url
 
             if ollama_url:
@@ -185,7 +185,7 @@ class ModelAutoDetectorAndUpgrader:
         """加载当前选举的 L0/L3/L4 模型"""
         # 尝试从 GlobalModelRouter 获取当前模型
         try:
-            from client.src.business.global_model_router import get_global_router
+            from business.global_model_router import get_global_router
             router = get_global_router()
             if router and hasattr(router, '_tier_models'):
                 self._current_models = dict(router._tier_models)
@@ -204,7 +204,7 @@ class ModelAutoDetectorAndUpgrader:
     def _get_ollama_url(self) -> str:
         """获取 Ollama URL（从系统配置）"""
         try:
-            from client.src.business.nanochat_config import config
+            from business.nanochat_config import config
             return config.ollama.url or "http://localhost:11434"
         except Exception:
             return "http://localhost:11434"
@@ -621,7 +621,7 @@ class ModelAutoDetectorAndUpgrader:
         self._logger.info(f"请求用户确认升级 {decision.level}: {decision.new_model}")
 
         try:
-            from client.src.business.self_evolution.user_clarification_requester import (
+            from business.self_evolution.user_clarification_requester import (
                 UserClarificationRequester
             )
             requester = UserClarificationRequester()
@@ -663,7 +663,7 @@ class ModelAutoDetectorAndUpgrader:
 
         # 尝试更新 GlobalModelRouter
         try:
-            from client.src.business.global_model_router import get_global_router
+            from business.global_model_router import get_global_router
             router = get_global_router()
             if router and hasattr(router, '_tier_models'):
                 router._tier_models[decision.level] = decision.new_model

@@ -28,7 +28,7 @@ Structured Logger - 结构化日志记录器
 - structlog: 结构化日志（可选）
 
 Usage:
-    from client.src.business.intelligent_diagnosis import get_logger
+    from business.intelligent_diagnosis import get_logger
 
     logger = get_logger("network")
     logger.error("Connection failed",

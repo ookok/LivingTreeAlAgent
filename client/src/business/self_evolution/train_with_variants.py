@@ -94,7 +94,7 @@ class VariantTrainer:
         """懒加载 ToolRegistry"""
         if self._tool_registry is None:
             try:
-                from client.src.business.tools.tool_registry import ToolRegistry
+                from business.tools.tool_registry import ToolRegistry
                 self._tool_registry = ToolRegistry.get_instance()
             except Exception as e:
                 self._logger.warning(f"无法加载 ToolRegistry: {e}")

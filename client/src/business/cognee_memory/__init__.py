@@ -5,7 +5,7 @@ Cognee 记忆增强适配器模块
 架构指南参考: docs/LIVINGTREE_ARCHITECTURE_GUIDE.md (章节 5.3.1)
 """
 
-from client.src.business.cognee_memory.cognee_memory_adapter import (
+from business.cognee_memory.cognee_memory_adapter import (
     CogneeMemoryAdapter,
     Memory,
     RecallResult,

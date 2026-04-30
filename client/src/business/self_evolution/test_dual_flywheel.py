@@ -30,14 +30,14 @@ import json
 import os
 from loguru import logger
 
-from client.src.business.self_evolution.tool_self_repairer import (
+from business.self_evolution.tool_self_repairer import (
     ToolSelfRepairer,
     RepairStrategy,
 )
-from client.src.business.self_evolution.hard_variant_generator import (
+from business.self_evolution.hard_variant_generator import (
     HardVariantGenerator,
 )
-from client.src.business.self_evolution.train_with_variants import (
+from business.self_evolution.train_with_variants import (
     VariantTrainer,
     DifficultyLevel,
     ConstraintType,

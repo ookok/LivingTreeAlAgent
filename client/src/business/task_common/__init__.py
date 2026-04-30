@@ -235,15 +235,15 @@ def create_decomposer(
         对应的任务分解器实例
     """
     if decomposer_type == DecomposerType.BASIC:
-        from client.src.business.task_decomposer import TaskDecomposer
+        from business.task_decomposer import TaskDecomposer
         return TaskDecomposer()
     
     elif decomposer_type == DecomposerType.DYNAMIC:
-        from client.src.business.multi_agent.workflow_engine import DynamicTaskDecomposer
+        from business.multi_agent.workflow_engine import DynamicTaskDecomposer
         return DynamicTaskDecomposer()
     
     elif decomposer_type == DecomposerType.SMART:
-        from client.src.business.task_execution_engine import SmartDecomposer
+        from business.task_execution_engine import SmartDecomposer
         return SmartDecomposer(**kwargs)
     
     else:

@@ -159,7 +159,7 @@ class DatabaseBrowser:
     def _setup_llm_client(self):
         """设置 LLM 客户端"""
         try:
-            from client.src.business.system_brain import SystemBrain
+            from business.system_brain import SystemBrain
             brain = SystemBrain()
             self.sql_generator.set_llm_client(brain)
             logger.info("DatabaseBrowser LLM 客户端已设置")

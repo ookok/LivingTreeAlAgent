@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QIcon, QAction
 
-from client.src.business.recommendation import (
+from .business.recommendation import (
     get_profile_manager,
     get_recall_engine,
     get_ranking_engine,
@@ -24,7 +24,7 @@ from client.src.business.recommendation import (
     UnifiedItem
 )
 from core.recommendation.user_profile import UserProfileManager
-from client.src.presentation.panels.recommendation_card import RecommendationCard, EmptyRecommendationCard
+from .presentation.panels.recommendation_card import RecommendationCard, EmptyRecommendationCard
 
 
 class RecommendationWorker(QThread):

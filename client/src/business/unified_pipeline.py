@@ -22,7 +22,7 @@ Author: Hermes Desktop Team
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('unified_pipeline')
 
 
@@ -152,7 +152,7 @@ class UnifiedPipeline:
         **kwargs
     ):
         # 从配置模块获取默认值
-        from client.src.business.config_provider import (
+        from business.config_provider import (
             get_ollama_url, get_l0_model, get_l3_model,
             get_l4_model, get_embedding_model
         )
@@ -179,7 +179,7 @@ class UnifiedPipeline:
 
     def _init_config(self, **kwargs):
         """初始化配置"""
-        from client.src.business.config_provider import get_default_model
+        from business.config_provider import get_default_model
         self.ollama_url = kwargs.get("ollama_url", get_ollama_url())
         self.embed_model = kwargs.get("embed_model", "nomic-embed-text")
         self.l0_model = kwargs.get("l0_model", get_default_model("l0"))
@@ -193,7 +193,7 @@ class UnifiedPipeline:
     def intent_classifier(self):
         """L0 意图分类器"""
         if self._intent_classifier is None:
-            from client.src.business.fusion_rag.intent_classifier import QueryIntentClassifier
+            from business.fusion_rag.intent_classifier import QueryIntentClassifier
             self._intent_classifier = QueryIntentClassifier()
         return self._intent_classifier
     
@@ -201,7 +201,7 @@ class UnifiedPipeline:
     def router(self):
         """智能路由器"""
         if self._router is None:
-            from client.src.business.fusion_rag.intelligent_router import IntelligentRouter
+            from business.fusion_rag.intelligent_router import IntelligentRouter
             self._router = IntelligentRouter()
         return self._router
     
@@ -209,7 +209,7 @@ class UnifiedPipeline:
     def knowledge_base(self):
         """知识库"""
         if self._knowledge_base is None:
-            from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
+            from business.fusion_rag.knowledge_base import KnowledgeBaseLayer
             self._knowledge_base = KnowledgeBaseLayer()
         return self._knowledge_base
     
@@ -225,7 +225,7 @@ class UnifiedPipeline:
     def wiki_generator(self):
         """Wiki 生成器"""
         if self._wiki_generator is None:
-            from client.src.business.deep_search_wiki.wiki_generator import WikiGenerator
+            from business.deep_search_wiki.wiki_generator import WikiGenerator
             self._wiki_generator = WikiGenerator()
         return self._wiki_generator
     
@@ -233,7 +233,7 @@ class UnifiedPipeline:
     def skill_agent(self):
         """技能进化 Agent"""
         if self._skill_agent is None:
-            from client.src.business.skill_evolution.agent_loop import SkillEvolutionAgent
+            from business.skill_evolution.agent_loop import SkillEvolutionAgent
             self._skill_agent = SkillEvolutionAgent()
         return self._skill_agent
     
@@ -241,7 +241,7 @@ class UnifiedPipeline:
     def clarifier(self):
         """需求澄清器"""
         if self._clarifier is None:
-            from client.src.business.conversational_clarifier import ConversationalClarifier
+            from business.conversational_clarifier import ConversationalClarifier
             self._clarifier = ConversationalClarifier()
         return self._clarifier
     
@@ -249,7 +249,7 @@ class UnifiedPipeline:
     def memory_palace(self):
         """记忆宫殿"""
         if self._memory_palace is None:
-            from client.src.business.memory_palace.models import MemoryPalace
+            from business.memory_palace.models import MemoryPalace
             self._memory_palace = MemoryPalace()
         return self._memory_palace
     
@@ -671,7 +671,7 @@ class UnifiedPipeline:
         
         try:
             # 使用全局模型路由器（同步调用）
-            from client.src.business.global_model_router import call_model_sync, ModelCapability
+            from business.global_model_router import call_model_sync, ModelCapability
             
             # 根据是否流式选择能力
             if stream:

@@ -271,7 +271,7 @@ class IntentEvolutionEngine:
         将当前模糊意图 + 已收集的上下文 发送给 AI，
         让 AI 输出澄清后的意图。
         """
-        from client.src.business.global_model_router import get_global_router, ModelCapability
+        from business.global_model_router import get_global_router, ModelCapability
         
         current_intent = graph.get_latest_intent() or graph.root_intent
         context = graph.get_context()

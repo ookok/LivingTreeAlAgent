@@ -32,20 +32,20 @@ v4 性能优化层（2026-04-29）：
 核心原则：不预置逻辑和模板，一切通过学习、交互和反馈不断进化
 """
 
-from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
-from client.src.business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
-from client.src.business.self_evolution.active_learning_loop import ActiveLearningLoop
-from client.src.business.self_evolution.self_reflection_engine import SelfReflectionEngine
-from client.src.business.self_evolution.user_clarification_requester import UserClarificationRequester
-from client.src.business.self_evolution.safe_autonomous_tool_creator import SafeAutonomousToolCreator
-from client.src.business.self_evolution.proxy_source_manager import ProxySourceManager
-from client.src.business.self_evolution.cli_tool_discoverer import CLIToolDiscoverer
-from client.src.business.self_evolution.model_auto_detector_and_upgrader import (
+from business.self_evolution.tool_missing_detector import ToolMissingDetector
+from business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
+from business.self_evolution.active_learning_loop import ActiveLearningLoop
+from business.self_evolution.self_reflection_engine import SelfReflectionEngine
+from business.self_evolution.user_clarification_requester import UserClarificationRequester
+from business.self_evolution.safe_autonomous_tool_creator import SafeAutonomousToolCreator
+from business.self_evolution.proxy_source_manager import ProxySourceManager
+from business.self_evolution.cli_tool_discoverer import CLIToolDiscoverer
+from business.self_evolution.model_auto_detector_and_upgrader import (
     ModelAutoDetectorAndUpgrader,
     ModelProfile,
     UpgradeDecision,
 )
-from client.src.business.self_evolution.deterministic_executor import (
+from business.self_evolution.deterministic_executor import (
     DeterministicExecutor,
     ExecutionStatus,
     InterventionType,
@@ -53,23 +53,23 @@ from client.src.business.self_evolution.deterministic_executor import (
     ExecutionStep,
     ExecutionContext,
 )
-from client.src.business.self_evolution.model_native_dsl import (
+from business.self_evolution.model_native_dsl import (
     ModelNativeDSL,
     DSLTokenType,
     DSLCommand,
     DSLToken,
     DSLNode,
 )
-from client.src.business.self_evolution.anti_rationalization_table import (
+from business.self_evolution.anti_rationalization_table import (
     AntiRationalizationTable,
     AntiRationalizationRule,
 )
-from client.src.business.self_evolution.project_structure_scanner import ProjectStructureScanner
-from client.src.business.self_evolution.knowledge_ingestion_pipeline import KnowledgeIngestionPipeline
-from client.src.business.self_evolution.code_evolution_planner import CodeEvolutionPlanner
-from client.src.business.self_evolution.code_evolution_executor import CodeEvolutionExecutor
-from client.src.business.self_evolution.self_evolution_orchestrator import SelfEvolutionOrchestrator
-from client.src.business.self_evolution.serena_adapter import (
+from business.self_evolution.project_structure_scanner import ProjectStructureScanner
+from business.self_evolution.knowledge_ingestion_pipeline import KnowledgeIngestionPipeline
+from business.self_evolution.code_evolution_planner import CodeEvolutionPlanner
+from business.self_evolution.code_evolution_executor import CodeEvolutionExecutor
+from business.self_evolution.self_evolution_orchestrator import SelfEvolutionOrchestrator
+from business.self_evolution.serena_adapter import (
     SerenaAdapter,
     SymbolInfo,
     DiagnosticInfo,
@@ -77,7 +77,7 @@ from client.src.business.self_evolution.serena_adapter import (
     SerenaStatus,
     ASTFallbackEngine,
 )
-from client.src.business.self_evolution.code_tool import (
+from business.self_evolution.code_tool import (
     CodeTool,
     CodeAction,
     WriteResult,
@@ -87,7 +87,7 @@ from client.src.business.self_evolution.code_tool import (
     PlanStep,
     CodeToolSession,
 )
-from client.src.business.self_evolution.performance_layer import (
+from business.self_evolution.performance_layer import (
     LRUCache,
     FileContentCache,
     ASTCache,

@@ -20,7 +20,7 @@ from enum import Enum
 from uuid import uuid4
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     EventBus,
     CacheLayer,
     get_event_bus,
@@ -218,7 +218,7 @@ class MemoryGraphEngine:
         
         # 导入三重链引擎
         try:
-            from client.src.business.fusion_rag import create_triple_chain_engine
+            from business.fusion_rag import create_triple_chain_engine
             self.triple_chain_engine = create_triple_chain_engine()
         except:
             self.triple_chain_engine = None

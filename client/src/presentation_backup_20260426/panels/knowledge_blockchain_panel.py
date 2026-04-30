@@ -32,7 +32,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from client.src.business.knowledge_blockchain import (
+from .business.knowledge_blockchain import (
     KnowledgeBlockchain, KnowledgeUnit, Block,
     ConsensusEngine, ReputationSystem,
     KnowledgeGraph, DialogueSystem

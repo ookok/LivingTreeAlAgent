@@ -10,7 +10,7 @@ import json
 from typing import Dict, Any, Optional, List
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
+from business.tools.base_tool import BaseTool
 
 
 class ToolClass(BaseTool):

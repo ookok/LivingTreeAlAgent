@@ -2,8 +2,8 @@
 主题系统包 - 统一主题管理
 
 使用方式：
-    from client.src.presentation.theme import theme_manager, LIGHT, DARK
-    from client.src.presentation.theme.colors import get_button_primary_style
+    from presentation.theme import theme_manager, LIGHT, DARK
+    from presentation.theme.colors import get_button_primary_style
 
     # 应用主题
     theme_manager.set_theme("dark")

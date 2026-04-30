@@ -118,7 +118,7 @@ class DocumentSummarizer:
     async def _abstractive_summary(self, text: str, max_length: int) -> str:
         """抽象式摘要：使用 LLM 生成新摘要"""
         try:
-            from client.src.business.global_model_router import GlobalModelRouter, ModelCapability
+            from business.global_model_router import GlobalModelRouter, ModelCapability
             
             router = GlobalModelRouter()
             prompt = f"""

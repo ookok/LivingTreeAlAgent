@@ -14,15 +14,15 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # 添加项目根目录到路径
 sys.path.insert(0, 'd:/mhzyapp/hermes-desktop')
 
-from client.src.business.md_to_doc import (
+from business.md_to_doc import (
     ConversionConfig, TargetFormat, ImageMode, LinkMode, CodeHighlight,
     Task, TaskStatus, DocumentNode, DocumentElement, ElementType,
     parse_markdown, get_builtin_templates, create_progress_info,
     StepStatus
 )
-from client.src.business.md_to_doc.converter import ConversionEngine, quick_convert, generate_docx
-from client.src.business.md_to_doc.docx_generator import DOCXGenerator
-from client.src.business.md_to_doc.markdown_parser import MarkdownParser
+from business.md_to_doc.converter import ConversionEngine, quick_convert, generate_docx
+from business.md_to_doc.docx_generator import DOCXGenerator
+from business.md_to_doc.markdown_parser import MarkdownParser
 
 
 def test_markdown_parser():
@@ -279,7 +279,7 @@ def test_knowledge_base():
     print("测试7: 知识库集成")
     print("="*60)
 
-    from client.src.business.md_to_doc.knowledge_base import (
+    from business.md_to_doc.knowledge_base import (
         KnowledgeBaseManager, create_local_source,
         LocalFolderConnector
     )

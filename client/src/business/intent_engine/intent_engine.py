@@ -237,7 +237,7 @@ class IntentEngine:
         
         # 从系统配置读取对应层级的模型
         try:
-            from client.src.business.config_provider import get_l1_model, get_l3_model, get_l4_model
+            from business.config_provider import get_l1_model, get_l3_model, get_l4_model
             if intent.intent_type in simple_intents:
                 return get_l1_model()
             elif intent.intent_type in medium_intents:

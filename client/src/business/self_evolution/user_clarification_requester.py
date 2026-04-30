@@ -13,7 +13,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.agent_progress import AgentProgress, ProgressPhase
+from business.agent_progress import AgentProgress, ProgressPhase
 
 
 class UserClarificationRequester:

@@ -30,7 +30,7 @@ from loguru import logger
 from .models import DocumentChunk
 
 # 导入 KnowledgeGraph 核心类
-from client.src.business.knowledge_graph.graph import (
+from business.knowledge_graph.graph import (
     KnowledgeGraph,
     KnowledgeNode,
     KnowledgeRelation

@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout
-from client.src.presentation.modules.settings.panel import Panel
+from presentation.modules.settings.panel import Panel
 
 
 def main():

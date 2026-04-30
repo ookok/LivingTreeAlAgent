@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 
-from client.src.business.gbrain_memory.models import (
+from business.gbrain_memory.models import (
     BrainPage, MemoryCategory, MemoryQuery, MemorySearchResult
 )
 
@@ -37,7 +37,7 @@ class SearchEngine:
     """
 
     def __init__(self, brain_dir: str | Path = None):
-        from client.src.business.config import get_config_dir
+        from business.config import get_config_dir
 
         if brain_dir is None:
             brain_dir = get_config_dir() / "gbrain"

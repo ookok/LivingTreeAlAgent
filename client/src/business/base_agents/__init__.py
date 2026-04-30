@@ -12,19 +12,19 @@ Base Agents 模块 (base_agents)
 注意：模块名 base_agents（区别于 agent/ 目录）
 """
 
-from client.src.business.base_agents.base_agent import (
+from business.base_agents.base_agent import (
     BaseToolAgent,
     ToolCallResult,
     create_base_agent,
 )
 
-from client.src.business.base_agents.hermes_agent import (
+from business.base_agents.hermes_agent import (
     HermesToolAgent,
     create_hermes_tool_agent,
     get_hermes_tool_descriptions,
 )
 
-from client.src.business.base_agents.ei_agent import (
+from business.base_agents.ei_agent import (
     EIToolAgent,
     create_ei_tool_agent,
     get_ei_tool_descriptions,

@@ -25,25 +25,25 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(o
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from client.src.business.agent_orchestration import (
+from business.agent_orchestration import (
     AgentType, AgentCapability, Agent, AgentFactory,
     AgentOrchestrator, TaskContext, TaskStatus, TaskPriority,
     get_orchestrator,
     TaskExecutor  # 正确的基类名称
 )
-from client.src.business.nanochat_config import config as app_config
+from business.nanochat_config import config as app_config
 
 # 导入统一工具层（Phase 3 新增）
-from client.src.business.base_agents.base_agent import BaseToolAgent, ToolCallResult
-from client.src.business.tools.register_all_tools import register_all_tools
+from business.base_agents.base_agent import BaseToolAgent, ToolCallResult
+from business.tools.register_all_tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
 # 导入自我进化引擎
 try:
-    from client.src.business.self_evolution import SelfEvolutionEngine
-    from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
-    from client.src.business.self_evolution.self_reflection_engine import SelfReflectionEngine
+    from business.self_evolution import SelfEvolutionEngine
+    from business.self_evolution.tool_missing_detector import ToolMissingDetector
+    from business.self_evolution.self_reflection_engine import SelfReflectionEngine
     SELF_EVOLUTION_AVAILABLE = True
     print('[EIAgent] 自我进化引擎导入成功')
 except ImportError as e:
@@ -78,7 +78,7 @@ class EIAgentExecutor(TaskExecutor):
 
         # 初始化 FusionRAG 知识库
         try:
-            from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
+            from business.fusion_rag.knowledge_base import KnowledgeBaseLayer
             self.knowledge_base = KnowledgeBaseLayer()
             logger.info("[EIAgentExecutor] FusionRAG KnowledgeBase 初始化成功")
         except Exception as e:
@@ -87,7 +87,7 @@ class EIAgentExecutor(TaskExecutor):
 
         # 初始化 TrainingAgent（专家训练）
         try:
-            from client.src.business.training_agent import TrainingAgent
+            from business.training_agent import TrainingAgent
             self.training_agent = TrainingAgent(config=app_config)
             logger.info("[EIAgentExecutor] TrainingAgent 初始化成功")
         except Exception as e:
@@ -97,7 +97,7 @@ class EIAgentExecutor(TaskExecutor):
         # 初始化自我进化引擎
         if 'SELF_EVOLUTION_AVAILABLE' in globals() and SELF_EVOLUTION_AVAILABLE:
             try:
-                from client.src.business.self_evolution import SelfEvolutionEngine
+                from business.self_evolution import SelfEvolutionEngine
                 self.self_evolution_engine = SelfEvolutionEngine()
                 self.self_evolution_enabled = True
                 logger.info("[EIAgentExecutor] 自我进化引擎初始化成功")
@@ -167,7 +167,7 @@ class EIAgentExecutor(TaskExecutor):
         self.self_evolution_enabled = enabled
         if enabled and self.self_evolution_engine is None:
             try:
-                from client.src.business.self_evolution import SelfEvolutionEngine
+                from business.self_evolution import SelfEvolutionEngine
                 self.self_evolution_engine = SelfEvolutionEngine()
                 logger.info("[EIAgentExecutor] 自我进化引擎已启用")
             except Exception as e:
@@ -681,7 +681,7 @@ class EIAgentAdapter:
     def _register_to_agent_registry(self):
         """注册到 AgentRegistry，接收技能和专家角色变化通知"""
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             registry.register("ei_agent", self, {
                 "type": "ei_specialist",
@@ -740,7 +740,7 @@ class EIAgentAdapter:
     def _load_skill(self, skill_name: str) -> bool:
         """加载单个技能"""
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             content = registry.load_content(skill_name, content_type="skill")
             
@@ -758,7 +758,7 @@ class EIAgentAdapter:
     def _load_agent(self, agent_name: str) -> bool:
         """加载单个专家角色"""
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             content = registry.load_content(agent_name, content_type="agent")
             

@@ -71,7 +71,7 @@ class UnifiedKnowledgeGraphService:
         """初始化知识图谱组件"""
         # 1. 集成 LLMWikiKnowledgeGraphIntegratorV4（EvoRAG版）
         try:
-            from client.src.business.llm_wiki.knowledge_graph_integrator_v4 import (
+            from business.llm_wiki.knowledge_graph_integrator_v4 import (
                 LLMWikiKnowledgeGraphIntegratorV4
             )
             self._llm_wiki_integrator = LLMWikiKnowledgeGraphIntegratorV4()
@@ -81,7 +81,7 @@ class UnifiedKnowledgeGraphService:
         
         # 2. 集成 KnowledgeGraphManager
         try:
-            from client.src.business.knowledge_graph.knowledge_graph_manager import (
+            from business.knowledge_graph.knowledge_graph_manager import (
                 KnowledgeGraphManager
             )
             self._knowledge_graph_manager = KnowledgeGraphManager()

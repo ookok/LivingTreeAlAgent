@@ -18,7 +18,7 @@ async def example_discovery():
     """
     示例：节点发现
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         NodeDiscovery,
         DiscoveryType,
     )
@@ -51,7 +51,7 @@ async def example_transport():
     """
     示例：传输层连接
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         NodeConnection,
         NodeEndpoint,
         ConnectionStrategy,
@@ -103,7 +103,7 @@ async def example_rpc():
     """
     示例：RPC调用
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         NodeRPCServer,
         NodeRPCClient,
     )
@@ -153,7 +153,7 @@ async def example_security():
     """
     示例：端到端加密
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         NoiseProtocol,
     )
 
@@ -187,7 +187,7 @@ async def example_server():
     """
     示例：启动服务器
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         LifeTreeServer,
         ServerConfig,
     )
@@ -215,7 +215,7 @@ async def example_client():
     """
     示例：客户端连接
     """
-    from client.src.business.living_tree_ai.communication import LifeTreeClient
+    from business.living_tree_ai.communication import LifeTreeClient
 
     # 创建客户端
     client = LifeTreeClient(
@@ -239,7 +239,7 @@ async def example_full_stack():
     """
     完整示例：整合所有层
     """
-    from client.src.business.living_tree_ai.communication import (
+    from business.living_tree_ai.communication import (
         NodeDiscovery,
         NodeConnection,
         NodeEndpoint,

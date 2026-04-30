@@ -12,7 +12,7 @@
 5. 定时触发 → GC + 遗忘衰减
 
 使用方式：
-    from client.src.business.knowledge_hooks import setup_knowledge_hooks
+    from business.knowledge_hooks import setup_knowledge_hooks
 
     # 在HermesAgent初始化后调用
     agent = HermesAgent(config)
@@ -70,9 +70,9 @@ class KnowledgeHookManager:
     def _lazy_imports(self):
         """延迟导入知识库模块"""
         try:
-            from client.src.business.knowledge_auto_ingest import get_kb_ingest, get_kb_gc
-            from client.src.business.deep_search_kb_integration import get_ds_kb_integration
-            from client.src.business.knowledge_innovation import (
+            from business.knowledge_auto_ingest import get_kb_ingest, get_kb_gc
+            from business.deep_search_kb_integration import get_ds_kb_integration
+            from business.knowledge_innovation import (
                 get_semantic_dedup,
                 get_value_scorer,
                 get_active_learner,

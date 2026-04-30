@@ -7,9 +7,9 @@ TaskDecomposerTool - 任务分解工具（BaseTool 包装器）
 from typing import Any, Dict, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
-from client.src.business.task_decomposer import TaskDecomposer, DecomposedTask
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
+from business.task_decomposer import TaskDecomposer, DecomposedTask
 
 
 class TaskDecomposerTool(BaseTool):
@@ -160,7 +160,7 @@ def _auto_register():
         _tool_instance = TaskDecomposerTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

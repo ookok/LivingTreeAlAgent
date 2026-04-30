@@ -299,7 +299,7 @@ class AIScriptPanel(QWidget):
     def _init_components(self):
         """初始化组件"""
         try:
-            from client.src.business.ai_script_generator import (
+            from .business.ai_script_generator import (
                 get_ai_script_engine,
                 get_script_sandbox,
                 get_script_market

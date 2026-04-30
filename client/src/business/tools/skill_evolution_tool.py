@@ -4,12 +4,12 @@ SkillEvolutionEngine Tool Wrapper
 Auto-generated BaseTool wrapper for SkillEvolutionEngine
 """
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 try:
-    from client.src.business.skill_evolution.evolution_engine import SkillEvolutionEngine
+    from business.skill_evolution.evolution_engine import SkillEvolutionEngine
 except ImportError:
     logger.warning(f"Could not import {class_name} from {module_path}")
     SkillEvolutionEngine = None
@@ -81,7 +81,7 @@ class SkillEvolutionEngineTool(BaseTool):
 
 def register_skill_evolution_tool():
     """注册 skill_evolution 工具"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     
     registry = ToolRegistry.get_instance()
     tool = SkillEvolutionEngineTool()
@@ -113,7 +113,7 @@ def _auto_register():
         _tool_instance = SkillEvolutionEngineTool()
         
         # 获取 ToolRegistry 单例
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         _registry = ToolRegistry.get_instance()
         
         # 注册工具

@@ -312,7 +312,7 @@ class TrainingTool:
 def register_training_tool():
     """注册训练工具到系统工具注册表"""
     try:
-        from client.src.business.tools.tool_registry import ToolRegistry, ToolDefinition
+        from .business.tools.tool_registry import ToolRegistry, ToolDefinition
         
         tool_info = TrainingTool.get_tool_info()
         

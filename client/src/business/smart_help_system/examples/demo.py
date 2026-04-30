@@ -17,7 +17,7 @@ from datetime import datetime
 # 添加项目根目录到路径
 sys.path.insert(0, 'd:/mhzyapp/hermes-desktop')
 
-from client.src.business.smart_help_system import (
+from business.smart_help_system import (
     SmartHelpController,
     QuestionSanitizer,
     PlatformSelector,
@@ -172,7 +172,7 @@ def demo_answer_aggregator():
     aggregator = AnswerAggregator()
 
     # Simulate posts with answers
-    from client.src.business.smart_help_system.answer_monitor import MonitoredPost, Answer, MonitorStatus
+    from business.smart_help_system.answer_monitor import MonitoredPost, Answer, MonitorStatus
 
     # Create simulated posts
     post1 = MonitoredPost(

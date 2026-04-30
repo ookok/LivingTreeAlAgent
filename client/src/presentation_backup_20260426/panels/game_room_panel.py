@@ -32,7 +32,7 @@ import os
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from client.src.business.smart_ide_game import (
+from .business.smart_ide_game import (
     SmartIDEGameSystem, RoomManager, GameRoom,
     GameShare, ShareLink, ShareMode,
     create_room_settings, GameType

@@ -36,7 +36,7 @@ from loguru import logger
 
 # 导入 EvolutionPlanner 的类型
 try:
-    from client.src.business.self_evolution.code_evolution_planner import (
+    from business.self_evolution.code_evolution_planner import (
         EvolutionAction, EvolutionPlan, EvolutionStatus, EvolutionType,
     )
 except ImportError:
@@ -389,7 +389,7 @@ class CodeEvolutionExecutor:
     def _register_tool(self, action: EvolutionAction):
         """注册工具到 ToolRegistry"""
         try:
-            from client.src.business.tools.tool_registry import ToolRegistry
+            from business.tools.tool_registry import ToolRegistry
             # 重新加载模块以注册新工具
             for fpath in action.target_files:
                 if fpath.endswith(".py"):
@@ -449,7 +449,7 @@ class CodeEvolutionExecutor:
     async def _call_llm(self, prompt: str) -> str:
         """通过 GlobalModelRouter 调用 LLM"""
         try:
-            from client.src.business.global_model_router import GlobalModelRouter
+            from business.global_model_router import GlobalModelRouter
             router = GlobalModelRouter.get_instance()
 
             response = await router.call_model(

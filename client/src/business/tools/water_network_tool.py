@@ -11,8 +11,8 @@ import math
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 
 
 # ============================================================

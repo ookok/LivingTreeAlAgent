@@ -26,7 +26,7 @@ from typing import Dict, List, Any, Optional, Callable, Union
 from enum import Enum
 from datetime import datetime
 
-from client.src.business.task_decomposer import (
+from business.task_decomposer import (
     DecomposedTask,
     TaskStep,
     StepStatus,
@@ -34,12 +34,12 @@ from client.src.business.task_decomposer import (
     TaskDecomposer,
     ChainOfThoughtExecutor,
 )
-from client.src.business.agent_skills.task_decomposition_skills import (
+from business.agent_skills.task_decomposition_skills import (
     DecompositionSkillType,
     DecompositionSkillFactory,
     BaseDecompositionSkill,
 )
-from client.src.business.task_planning import (
+from business.task_planning import (
     TaskPlanner,
     TaskExecutor,
     TaskTree,
@@ -385,7 +385,7 @@ class SoloPlanManager:
         
         try:
             # 构建完整指令
-            from client.src.business.task_decomposer import ChainOfThoughtExecutor
+            from business.task_decomposer import ChainOfThoughtExecutor
             full_instruction = self._inject_context(task, next_step)
             
             # 调用 LLM
@@ -394,7 +394,7 @@ class SoloPlanManager:
             else:
                 # 使用默认调用
                 try:
-                    from client.src.business.global_model_router import call_model_sync, ModelCapability
+                    from business.global_model_router import call_model_sync, ModelCapability
                     output = call_model_sync(ModelCapability.CHAT, full_instruction)
                 except Exception as e:
                     output = f"[Error: {str(e)}]"

@@ -52,7 +52,7 @@ class MatchWorker(QThread):
 
     def run(self) -> None:
         try:
-            from client.src.business.semantic_skill_matcher import SemanticSkillMatcher
+            from business.semantic_skill_matcher import SemanticSkillMatcher
             matcher = SemanticSkillMatcher()
             results = matcher.match(self._text, top_k=self._top_k)
             self.result_ready.emit(results)
@@ -78,7 +78,7 @@ class ExtractWorker(QThread):
 
     def run(self) -> None:
         try:
-            from client.src.business.document_skill_extractor import DocumentSkillExtractor
+            from business.document_skill_extractor import DocumentSkillExtractor
             extractor = DocumentSkillExtractor()
             success, msg = extractor.extract_skill(
                 document_text=self._text,

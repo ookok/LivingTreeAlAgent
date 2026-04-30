@@ -21,12 +21,12 @@ from typing import Optional, Dict, Any, List, Callable
 from enum import Enum, auto
 
 # 导入 Phase 2 模块
-from client.src.business.evolution_engine.evolution_integrator import (
+from business.evolution_engine.evolution_integrator import (
     EvolutionConfigIntegrator,
     ConfigResult,
     OptimizationResult,
 )
-from client.src.business.evolution_engine.pipeline_optimizer import (
+from business.evolution_engine.pipeline_optimizer import (
     PipelineOptimizer,
     PipelineExecutor,
     PipelineConfig,
@@ -34,7 +34,7 @@ from client.src.business.evolution_engine.pipeline_optimizer import (
     create_pipeline_optimizer,
     create_pipeline_executor,
 )
-from client.src.business.evolution_engine.dynamic_config_adjuster import (
+from business.evolution_engine.dynamic_config_adjuster import (
     DynamicConfigAdjuster,
     AdaptiveTimeoutController,
     AdjustmentStrategy,

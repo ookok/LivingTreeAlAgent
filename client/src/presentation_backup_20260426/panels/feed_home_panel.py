@@ -328,7 +328,7 @@ class FeedHomePanel(QWidget):
     def _ensure_system(self):
         if self.system is None:
             try:
-                from client.src.business.feed_aggregator import get_feed_system
+                from .business.feed_aggregator import get_feed_system
                 self.system = get_feed_system()
             except ImportError:
                 self.system = None

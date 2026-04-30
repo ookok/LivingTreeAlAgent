@@ -114,7 +114,7 @@ from .model_routing import (
 )
 
 # 事件总线
-from .shared.event_bus import EventBus, Event, EVENTS, get_event_bus, subscribe_event, publish_event
+from business.shared.event_bus import EventBus, Event, EVENTS, get_event_bus, subscribe_event, publish_event
 
 # 微内核
 from .microkernel.kernel import Microkernel, get_kernel, init_kernel, shutdown_kernel

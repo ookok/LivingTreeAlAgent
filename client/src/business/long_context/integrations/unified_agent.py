@@ -36,7 +36,7 @@ ProgressiveUnderstanding 集成层
 └─────────────────────────────────────────────────────────────────────────────┘
 
 使用示例:
-    from client.src.business.long_context.integrations import UnifiedAgent
+    from business.long_context.integrations import UnifiedAgent
 
     # 创建统一智能体
     agent = UnifiedAgent(depth="deep")
@@ -59,7 +59,7 @@ from typing import Dict, List, Optional, Any, Callable, Awaitable
 from enum import Enum
 
 # Phase 1-4 组件
-from client.src.business.long_context.progressive_understanding_impl import (
+from business.long_context.progressive_understanding_impl import (
     ProgressiveUnderstanding,
     ProgressiveResult,
     UnderstandingConfig,
@@ -71,7 +71,7 @@ from client.src.business.long_context.progressive_understanding_impl import (
 )
 
 # Agent Chat 组件
-from client.src.business.agent_chat_enhancer import (
+from business.agent_chat_enhancer import (
     EnhancedAgentChat,
     ChatIntentClassifier,
     ChatContextManager,
@@ -83,22 +83,22 @@ from client.src.business.agent_chat_enhancer import (
 
 # 知识库组件
 try:
-    from client.src.business.fusion_rag.knowledge_base import KnowledgeBaseLayer
-    from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
+    from business.fusion_rag.knowledge_base import KnowledgeBaseLayer
+    from business.knowledge_vector_db import KnowledgeBaseVectorStore
     KB_AVAILABLE = True
 except ImportError:
     KB_AVAILABLE = False
 
 # 深度搜索组件
 try:
-    from client.src.business.deep_search_wiki import DeepSearchWikiSystem, WikiPage
+    from business.deep_search_wiki import DeepSearchWikiSystem, WikiPage
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
 
 # 技能进化组件
 try:
-    from client.src.business.skill_evolution import (
+    from business.skill_evolution import (
         SkillEvolutionAgent,
         EvolutionEngine,
         TaskContext,

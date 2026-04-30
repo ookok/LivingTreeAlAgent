@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QCheckBox, QFrame, QScrollArea, QProgressDialog,
     QMessageBox, QInputDialog, QDialog
 )
-from client.src.presentation.panels.components import QCardWidget
+from .presentation.panels.components import QCardWidget
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
 
@@ -356,8 +356,8 @@ class ModelStorePanel(QWidget):
     def _load_models(self):
         """加载模型数据"""
         try:
-            from client.src.business.model_store import get_store_manager
-            from client.src.business.config import load_config
+            from .business.model_store import get_store_manager
+            from .business.config import load_config
 
             # 加载配置获取中继服务器
             cfg = load_config()

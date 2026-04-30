@@ -8,8 +8,8 @@ import math
 from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.tools.tool_result import ToolResult
+from business.tools.base_tool import BaseTool
+from business.tools.tool_result import ToolResult
 from loguru import logger
 
 
@@ -434,7 +434,7 @@ class DistanceTool(BaseTool):
 def _auto_register():
     """自动注册工具到 ToolRegistry"""
     try:
-        from client.src.business.tools.tool_registry import ToolRegistry
+        from business.tools.tool_registry import ToolRegistry
         registry = ToolRegistry.get_instance()
         
         tool = DistanceTool()

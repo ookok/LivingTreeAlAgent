@@ -9,7 +9,7 @@
 3. 简化配置，无需到处设置环境变量
 
 使用方式：
-    from client.src.business.unified_proxy_config import UnifiedProxyConfig
+    from business.unified_proxy_config import UnifiedProxyConfig
 
     # 获取全局实例
     config = UnifiedProxyConfig.get_instance()

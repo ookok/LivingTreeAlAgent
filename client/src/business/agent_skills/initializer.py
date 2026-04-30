@@ -13,16 +13,16 @@ Agent Skills 初始化
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from client.src.business.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
-from client.src.business.agent_skills.skill_loader import SkillLoader
-from client.src.business.agent_skills.skill_executor import SkillExecutor
-from client.src.business.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
-from client.src.business.agent_skills.context_aware import ContextAwareLoader
-from client.src.business.agent_skills.workflows.spec_driven import SpecDrivenWorkflow
-from client.src.business.agent_skills.workflows.test_driven import TestDrivenWorkflow
-from client.src.business.agent_skills.workflows.code_review import CodeReviewWorkflow
-from client.src.business.agent_skills.workflows.security import SecurityWorkflow
-from client.src.business.agent_skills.task_decomposition_skills import (
+from business.agent_skills.skill_registry import SkillRegistry, SkillManifest, SkillCategory
+from business.agent_skills.skill_loader import SkillLoader
+from business.agent_skills.skill_executor import SkillExecutor
+from business.agent_skills.slash_commands import SlashCommandRegistry, SlashCommand
+from business.agent_skills.context_aware import ContextAwareLoader
+from business.agent_skills.workflows.spec_driven import SpecDrivenWorkflow
+from business.agent_skills.workflows.test_driven import TestDrivenWorkflow
+from business.agent_skills.workflows.code_review import CodeReviewWorkflow
+from business.agent_skills.workflows.security import SecurityWorkflow
+from business.agent_skills.task_decomposition_skills import (
     DecompositionSkillFactory,
     register_decomposition_skills,
     get_architecture_designer,
@@ -379,7 +379,7 @@ class AgentSkillsInitializer:
     
     def _handle_plan_command(self, args: Dict) -> Dict:
         """处理 /plan 命令 - 进入 SOLO Plan 模式"""
-        from client.src.business.solo_plan_manager import get_solo_plan_manager
+        from business.solo_plan_manager import get_solo_plan_manager
         
         manager = get_solo_plan_manager()
         manager.enter_plan_mode()

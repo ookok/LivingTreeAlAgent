@@ -28,19 +28,19 @@ from uuid import uuid4
 from enum import Enum
 
 # 导入共享基础设施
-from client.src.business.shared import (
+from business.shared import (
     EventBus,
     get_event_bus,
     EVENTS
 )
 
 # 导入现有模块
-from client.src.business.memory_graph_engine import (
+from business.memory_graph_engine import (
     get_memory_graph_engine,
     NodeType,
     RelationType
 )
-from client.src.business.knowledge_base_manager import (
+from business.knowledge_base_manager import (
     get_knowledge_manager
 )
 

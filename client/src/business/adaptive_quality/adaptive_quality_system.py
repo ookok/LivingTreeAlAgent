@@ -16,7 +16,7 @@ Date: 2026-04-24
 from __future__ import annotations
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('adaptive_quality.adaptive_quality_system')
 
 
@@ -79,7 +79,7 @@ class AdaptiveQualitySystem:
     
     使用方式：
     ```python
-    from client.src.business.adaptive_quality import AdaptiveQualitySystem
+    from business.adaptive_quality import AdaptiveQualitySystem
     
     # 初始化
     aqs = AdaptiveQualitySystem()
@@ -181,7 +181,7 @@ class AdaptiveQualitySystem:
     def _register_to_expert_learning(self):
         """注册到 ExpertLearning 系统"""
         try:
-            from client.src.business.expert_learning.auto_model_selector import AutoModelSelector
+            from business.expert_learning.auto_model_selector import AutoModelSelector
             
             selector = AutoModelSelector()
             for level, config in self.models.items():

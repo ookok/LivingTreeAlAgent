@@ -20,11 +20,18 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QKeyEvent, QTextCursor
 
 # 导入业务逻辑
-from client.src.business.unified_chat.chat_hub import get_chat_hub, ChatHub
-from client.src.business.unified_chat.models import (
-    UnifiedMessage, MessageType, MessageStatus
-)
-from client.src.business.smart_config_detector import get_config_detector
+try:
+    from business.unified_chat.chat_hub import get_chat_hub, ChatHub
+    from business.unified_chat.models import (
+        UnifiedMessage, MessageType, MessageStatus
+    )
+    from business.smart_config_detector import get_config_detector
+except ImportError:
+    from src.business.unified_chat.chat_hub import get_chat_hub, ChatHub
+    from src.business.unified_chat.models import (
+        UnifiedMessage, MessageType, MessageStatus
+    )
+    from src.business.smart_config_detector import get_config_detector
 
 # 导入新的现代化组件
 from ..components.smart_message_bubble import MessageBubble as ModernMessageBubble
@@ -349,7 +356,7 @@ class UnifiedChatPanel(QWidget):
     def _init_clarifier(self):
         """初始化需求澄清器"""
         try:
-            from client.src.business.conversational_clarifier import get_conversational_clarifier
+            from business.conversational_clarifier import get_conversational_clarifier
             self._clarifier = get_conversational_clarifier()
         except ImportError:
             self._clarifier = None

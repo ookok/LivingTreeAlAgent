@@ -37,7 +37,7 @@ logger = MockLogger()
 # ============= 尝试导入 optimal_config =============
 
 try:
-    from client.src.business.optimal_config import compute_optimal_config, compute_optimal_config_for_task
+    from business.optimal_config import compute_optimal_config, compute_optimal_config_for_task
     OPTIMAL_CONFIG_AVAILABLE = True
 except ImportError:
     # Fallback 实现

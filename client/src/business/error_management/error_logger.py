@@ -12,7 +12,7 @@ Error Logger - 错误日志管理系统
 5. 与智能诊断引擎集成
 
 使用方式：
-    from client.src.business.error_management import get_error_logger
+    from business.error_management import get_error_logger
     
     error_logger = get_error_logger()
     try:
@@ -33,8 +33,8 @@ from typing import Any, Dict, Optional, List, Tuple
 from pathlib import Path
 
 # 导入现有的日志系统
-from client.src.business.intelligent_diagnosis.structured_logger import get_logger, ErrorCategory
-from client.src.business.intelligent_diagnosis.diagnosis_engine import get_diagnosis_engine, DiagnosisResult
+from business.intelligent_diagnosis.structured_logger import get_logger, ErrorCategory
+from business.intelligent_diagnosis.diagnosis_engine import get_diagnosis_engine, DiagnosisResult
 
 # 全局错误日志目录
 _ERROR_LOG_DIR = Path.home() / ".living_tree_ai" / "errors"

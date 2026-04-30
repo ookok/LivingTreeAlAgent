@@ -21,7 +21,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QIcon, QFont, QPalette, QColor
 
 from ...theme import theme_manager
-from client.src.business.model_switcher import ModelSwitcher, ModelConfig, SwitchResult
+from business.model_switcher import ModelSwitcher, ModelConfig, SwitchResult
 
 
 class ModelSwitchWorker(QThread):

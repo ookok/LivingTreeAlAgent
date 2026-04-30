@@ -21,7 +21,7 @@ from abc import ABC, abstractmethod
 
 # 导入 VibeVoice 适配器
 try:
-    from client.src.business.vibe_voice_adapter import (
+    from business.vibe_voice_adapter import (
         get_vibe_voice_adapter,
         VoiceSynthesisRequest
     )
@@ -202,7 +202,7 @@ class VirtualConferenceSystem:
         self.is_active: bool = False
 
         # 共享工作空间
-        from client.src.business.living_tree_ai.agency_integration.shared_workspace import SharedWorkspace
+        from business.living_tree_ai.agency_integration.shared_workspace import SharedWorkspace
         self.workspace = SharedWorkspace(workspace_id=f"conference_{uuid.uuid4()}")
         self.workspace_name = f"conference_{uuid.uuid4()}"
 

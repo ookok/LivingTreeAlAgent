@@ -11,7 +11,7 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
 
-from client.src.business.fusion_rag import PageIndex, ChromaAdapter, get_chroma
+from business.fusion_rag import PageIndex, ChromaAdapter, get_chroma
 
 
 def test_page_index():

@@ -387,7 +387,7 @@ def get_provider(name: str) -> Optional[ProviderDef]:
 def get_api_key(provider_id: str) -> Optional[str]:
     """获取提供商的 API Key"""
     import os
-    from client.src.business.config import get_hermes_home
+    from business.config import get_hermes_home
     
     provider = get_provider(provider_id)
     if not provider:

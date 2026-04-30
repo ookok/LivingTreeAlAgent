@@ -13,7 +13,7 @@ from typing import Dict, Any
 from loguru import logger
 
 try:
-    from client.src.business.tools.base_tool import BaseTool, ToolResult
+    from business.tools.base_tool import BaseTool, ToolResult
 except ImportError:
     from tools.base_tool import BaseTool, ToolResult
 

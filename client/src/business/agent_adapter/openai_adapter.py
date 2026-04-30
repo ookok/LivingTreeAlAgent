@@ -102,7 +102,7 @@ class OpenAIAdapter(BaseAgentAdapter):
         从配置中心动态获取，避免硬编码
         """
         try:
-            from client.src.business.shared.config_center import ConfigCenter
+            from business.shared.config_center import ConfigCenter
             
             config_center = ConfigCenter()
             models = config_center.get("agents.openai.models", [])

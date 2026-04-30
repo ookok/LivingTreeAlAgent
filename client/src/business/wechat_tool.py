@@ -135,7 +135,7 @@ class WeChatTool:
         """延迟加载知识库"""
         if self._knowledge_base is None:
             try:
-                from client.src.business.fusion_rag import FusionRAG
+                from business.fusion_rag import FusionRAG
                 self._knowledge_base = FusionRAG()
                 logger.info("[WeChatTool] 知识库加载成功")
             except Exception as e:

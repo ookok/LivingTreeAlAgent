@@ -30,7 +30,7 @@ class KnowledgeQuery:
         
         try:
             # 尝试导入知识库
-            from client.src.business.knowledge_base.unified_kb import get_knowledge_base
+            from business.knowledge_base.unified_kb import get_knowledge_base
             self._knowledge_base = await get_knowledge_base()
             self._initialized = True
             logger.info("知识库查询器初始化成功")

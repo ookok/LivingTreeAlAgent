@@ -113,15 +113,15 @@ class DeepSearchProxyIntegration:
             return
 
         try:
-            from client.src.business.proxy_search.config import get_config
-            from client.src.business.proxy_search.url_router import get_router
+            from business.proxy_search.config import get_config
+            from business.proxy_search.url_router import get_router
 
             self._config = get_config()
             self._router = get_router()
 
             # 尝试导入浏览器适配器
             try:
-                from client.src.business.browser_gateway.browser_use_adapter import BrowserUseAdapter
+                from business.browser_gateway.browser_use_adapter import BrowserUseAdapter
                 self._browser_adapter = BrowserUseAdapter()
             except ImportError:
                 self._browser_adapter = None
@@ -171,7 +171,7 @@ class DeepSearchProxyIntegration:
         self._lazy_init()
         if self._router:
             try:
-                from client.src.business.proxy_search.config import should_use_proxy
+                from business.proxy_search.config import should_use_proxy
                 result = should_use_proxy(url)
                 return result is None  # None 表示被阻止
             except Exception:
@@ -247,7 +247,7 @@ class DeepSearchProxyIntegration:
         """判断URL是否应使用代理"""
         self._lazy_init()
         try:
-            from client.src.business.proxy_search.config import should_use_proxy
+            from business.proxy_search.config import should_use_proxy
             result = should_use_proxy(url)
             return result is True
         except Exception:
@@ -310,7 +310,7 @@ class DeepSearchProxyIntegration:
     async def _proxy_request(self, url: str) -> SearchResult:
         """使用代理请求"""
         try:
-            from client.src.business.proxy_search.proxy_middleware import get_middleware
+            from business.proxy_search.proxy_middleware import get_middleware
             middleware = get_middleware()
             response = middleware.get(url, timeout=30)
             return SearchResult(

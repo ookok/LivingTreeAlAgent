@@ -194,7 +194,7 @@ class UnifiedPublisher:
         # 尝试导入并初始化各平台
         try:
             # 导入邮箱模块
-            from client.src.business.decentralized_mailbox import MailboxHub
+            from business.decentralized_mailbox import MailboxHub
             self.mailbox = MailboxHub.get_instance()
             logger.info("Mailbox module initialized")
         except Exception as e:
@@ -203,7 +203,7 @@ class UnifiedPublisher:
 
         try:
             # 导入论坛模块
-            from client.src.business.forum import ForumHub
+            from business.forum import ForumHub
             self.forum = ForumHub()
             logger.info("Forum module initialized")
         except Exception as e:
@@ -303,7 +303,7 @@ class UnifiedPublisher:
 
         try:
             # 构建邮件消息
-            from client.src.business.decentralized_mailbox.models import MailMessage, MailboxAddress
+            from business.decentralized_mailbox.models import MailMessage, MailboxAddress
 
             msg = MailMessage(
                 message_id=str(uuid.uuid4()),
@@ -363,7 +363,7 @@ class UnifiedPublisher:
         # 使用 Forum 模型发布博客文章
 
         try:
-            from client.src.business.forum.models import (
+            from business.forum.models import (
                 ForumPost, Author, PostContent, ContentType,
                 PostStatus, generate_post_id
             )
@@ -419,7 +419,7 @@ class UnifiedPublisher:
     ) -> PublishResult:
         """发布论坛帖子"""
         try:
-            from client.src.business.forum.models import (
+            from business.forum.models import (
                 ForumPost, Author, PostContent, ContentType,
                 PostStatus, generate_post_id
             )

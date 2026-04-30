@@ -11,7 +11,7 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", colorize=False)
 
-from client.src.business.pask_integration import (
+from business.pask_integration import (
     HybridMemory,
     DemandDetector,
     ProactiveAgent,

@@ -56,7 +56,7 @@ def _get_registry():
 def _register_network_tools(registry):
     """注册网络与搜索工具"""
     try:
-        from client.src.business.web_crawler.engine import ScraplingEngine
+        from business.web_crawler.engine import ScraplingEngine
         from .tool_registry import ToolDefinition
         
         # 注册网页爬虫工具
@@ -76,7 +76,7 @@ def _register_network_tools(registry):
 def _register_document_tools(registry):
     """注册文档处理工具"""
     try:
-        from client.src.business.bilingual_doc.document_parser import DocumentParser
+        from business.bilingual_doc.document_parser import DocumentParser
         from .tool_registry import ToolDefinition
         
         # 注册文档解析工具
@@ -92,7 +92,7 @@ def _register_document_tools(registry):
         
         # 注册 Markdown 转换工具
         try:
-            from client.src.business.tools.markdown_tool.markdown_converter import MarkdownConverter
+            from business.tools.markdown_tool.markdown_converter import MarkdownConverter
             converter = MarkdownConverter()
             registry.register(ToolDefinition(
                 name="markdown_converter",
@@ -111,8 +111,8 @@ def _register_document_tools(registry):
 def _register_database_tools(registry):
     """注册数据存储与检索工具"""
     try:
-        from client.src.business.knowledge_vector_db import VectorDatabase
-        from client.src.business.knowledge_graph import KnowledgeGraph
+        from business.knowledge_vector_db import VectorDatabase
+        from business.knowledge_graph import KnowledgeGraph
         from .tool_registry import ToolDefinition
         
         # 注册向量数据库工具
@@ -143,8 +143,8 @@ def _register_database_tools(registry):
 def _register_task_tools(registry):
     """注册任务与流程工具"""
     try:
-        from client.src.business.task_decomposer import TaskDecomposer
-        from client.src.business.task_queue import TaskQueue
+        from business.task_decomposer import TaskDecomposer
+        from business.task_queue import TaskQueue
         from .tool_registry import ToolDefinition
         
         # 注册任务分解工具
@@ -175,8 +175,8 @@ def _register_task_tools(registry):
 def _register_learning_tools(registry):
     """注册学习与进化工具"""
     try:
-        from client.src.business.expert_learning import ExpertGuidedLearningSystem
-        from client.src.business.skill_evolution import SkillEvolutionAgent
+        from business.expert_learning import ExpertGuidedLearningSystem
+        from business.skill_evolution import SkillEvolutionAgent
         from .tool_registry import ToolDefinition
         
         # 注册专家学习工具
@@ -211,7 +211,7 @@ def _register_geo_tools(registry):
         
         # 注册距离计算工具
         try:
-            from client.src.business.tools.distance_calculator import DistanceCalculator
+            from business.tools.distance_calculator import DistanceCalculator
             calculator = DistanceCalculator()
             registry.register(ToolDefinition(
                 name="distance_calculator",
@@ -226,7 +226,7 @@ def _register_geo_tools(registry):
         
         # 注册高程数据工具
         try:
-            from client.src.business.tools.elevation_tool import ElevationTool
+            from business.tools.elevation_tool import ElevationTool
             elevation = ElevationTool()
             registry.register(ToolDefinition(
                 name="elevation_tool",
@@ -241,7 +241,7 @@ def _register_geo_tools(registry):
         
         # 注册地图 API 工具
         try:
-            from client.src.business.tools.map_api_tool import MapAPITool
+            from business.tools.map_api_tool import MapAPITool
             map_api = MapAPITool()
             registry.register(ToolDefinition(
                 name="map_api_tool",
@@ -264,7 +264,7 @@ def _register_simulation_tools(registry):
         
         # 注册大气扩散模型工具
         try:
-            from client.src.business.tools.aermod_tool import AERMODTool
+            from business.tools.aermod_tool import AERMODTool
             aermod = AERMODTool()
             registry.register(ToolDefinition(
                 name="aermod_tool",
@@ -283,7 +283,7 @@ def _register_simulation_tools(registry):
 def _register_text_tools(registry):
     """注册文本处理工具"""
     try:
-        from client.src.business.tools.text_correction_tool import TextCorrectionTool
+        from business.tools.text_correction_tool import TextCorrectionTool
         from .tool_registry import ToolDefinition
         
         # 注册错别字纠正工具

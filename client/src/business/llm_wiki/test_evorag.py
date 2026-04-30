@@ -16,19 +16,19 @@ sys.path.insert(0, project_root)
 from loguru import logger
 
 # 导入EvoRAG组件
-from client.src.business.llm_wiki.feedback_manager import (
+from business.llm_wiki.feedback_manager import (
     FeedbackManager, FeedbackRecord, TripletScore
 )
-from client.src.business.llm_wiki.kg_self_evolver import (
+from business.llm_wiki.kg_self_evolver import (
     KnowledgeGraphSelfEvolver, ShortcutEdge
 )
-from client.src.business.llm_wiki.hybrid_retriever import (
+from business.llm_wiki.hybrid_retriever import (
     HybridRetriever, RetrievalResult
 )
-from client.src.business.llm_wiki.knowledge_graph_integrator_v4 import (
+from business.llm_wiki.knowledge_graph_integrator_v4 import (
     LLMWikiKnowledgeGraphIntegratorV4, EvoRAGConfig, integrate_llm_wiki_to_graph_v4
 )
-from client.src.business.llm_wiki.models import DocumentChunk
+from business.llm_wiki.models import DocumentChunk
 
 
 def test_feedback_manager():

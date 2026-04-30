@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QColor, QPalette, QBrush, QPainter, QPen
 
-from client.src.business.decision_engine import (
+from .business.decision_engine import (
     MarketScenario, InvestmentStrategy, RiskRewardMetric,
     UserProfile, ScenarioType, StrategyType, RiskLevel
 )

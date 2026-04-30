@@ -180,7 +180,7 @@ class EmotionPerception:
         """延迟加载GlobalModelRouter"""
         if self._model_router is None:
             try:
-                from client.src.business.global_model_router import GlobalModelRouter
+                from business.global_model_router import GlobalModelRouter
                 self._model_router = GlobalModelRouter()
             except ImportError as e:
                 logger.warning(f"无法导入GlobalModelRouter: {e}")
@@ -217,7 +217,7 @@ class EmotionPerception:
         prompt = self.EMOTION_PROMPT_TEMPLATE.format(user_message=user_message)
         
         # 调用LLM
-        from client.src.business.global_model_router import ModelCapability
+        from business.global_model_router import ModelCapability
         response = await router.call_model(
             capability=ModelCapability.CHAT,
             prompt=prompt,

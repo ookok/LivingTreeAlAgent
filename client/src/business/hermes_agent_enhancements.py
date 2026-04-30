@@ -5,7 +5,7 @@ HermesAgent Enhancements - 三个核心能力的集成
 集成到 HermesAgent 主流程。
 
 使用方法：
-    from client.src.business.hermes_agent_enhancements import enhance_hermes_agent
+    from business.hermes_agent_enhancements import enhance_hermes_agent
     enhance_hermes_agent(agent)
 """
 
@@ -14,10 +14,10 @@ import json
 import threading
 from typing import Any, Dict, List, Optional
 
-from client.src.business.hermes_agent.proactive_discovery_agent import ProactiveDiscoveryAgent
-from client.src.business.tool_chain_orchestrator import ToolChainOrchestrator
-from client.src.business.self_evolution.self_reflection_engine import SelfReflectionEngine
-from client.src.business.self_evolution.tool_self_repairer import ToolSelfRepairer
+from business.hermes_agent.proactive_discovery_agent import ProactiveDiscoveryAgent
+from business.tool_chain_orchestrator import ToolChainOrchestrator
+from business.self_evolution.self_reflection_engine import SelfReflectionEngine
+from business.self_evolution.tool_self_repairer import ToolSelfRepairer
 
 
 def enhance_hermes_agent(agent):

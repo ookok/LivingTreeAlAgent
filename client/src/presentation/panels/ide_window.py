@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTextEdit, QLabel
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from .components.smart_code_editor import SmartCodeEditor
+from ..components.smart_code_editor import SmartCodeEditor
 
 class IDEWindow(QFrame):
     """IDE窗口面板"""

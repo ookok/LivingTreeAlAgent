@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor, QTextCursor
 
-from client.src.business.creative_review_system import (
+from .business.creative_review_system import (
     create_integrated_system, CreativeReviewIntegratedSystem,
     ReviewDomain, ReviewLevel
 )

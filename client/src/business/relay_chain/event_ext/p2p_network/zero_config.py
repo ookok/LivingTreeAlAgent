@@ -17,7 +17,7 @@ python -m core.relay_chain.event_ext.p2p_network.zero_config --capabilities gpu,
 或者在代码中使用：
 
 ```python
-from client.src.business.relay_chain.event_ext.p2p_network.zero_config import start_node
+from business.relay_chain.event_ext.p2p_network.zero_config import start_node
 
 # 一行启动
 node = start_node()
@@ -108,7 +108,7 @@ def start_node(
 
     Example:
         ```python
-        from client.src.business.relay_chain.event_ext.p2p_network.zero_config import start_node
+        from business.relay_chain.event_ext.p2p_network.zero_config import start_node
 
         # 最简启动
         node = start_node()

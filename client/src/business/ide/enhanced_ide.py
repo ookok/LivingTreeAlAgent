@@ -20,7 +20,7 @@ from enum import Enum
 
 # GlobalModelRouter 导入
 try:
-    from client.src.business.global_model_router import (
+    from business.global_model_router import (
         get_global_router, 
         ModelCapability,
         ModelRoute
@@ -34,8 +34,8 @@ except ImportError:
 
 # 意图引擎导入（可选）
 try:
-    from client.src.business.intent_engine import IntentEngine
-    from client.src.business.intent_engine.intent_types import Intent, IntentType
+    from business.intent_engine import IntentEngine
+    from business.intent_engine.intent_types import Intent, IntentType
 except ImportError:
     IntentEngine = None
     Intent = None
@@ -323,7 +323,7 @@ class EnhancedIDEGenenerator:
         """使用模板生成代码（降级方案）"""
         # 这里可以调用原有的 IntentCodeGenerator
         try:
-            from client.src.business.ide.code_generator import IntentCodeGenerator
+            from business.ide.code_generator import IntentCodeGenerator
             generator = IntentCodeGenerator()
             result = generator.generate(request.intent, language=request.language)
             if result.success:

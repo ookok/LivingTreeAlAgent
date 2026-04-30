@@ -7,7 +7,7 @@ import os
 import re
 import json
 from pathlib import Path
-from client.src.business.tools_registry import ToolRegistry, tool, SCHEMA
+from business.tools_registry import ToolRegistry, tool, SCHEMA
 
 
 def _safe_path(path: str) -> Path:

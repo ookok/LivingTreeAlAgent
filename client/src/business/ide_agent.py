@@ -37,18 +37,18 @@ from datetime import datetime
 # ============= 复用现有架构 =============
 
 # 意图识别引擎
-from client.src.business.base_intent_engine import BaseIntentEngine, IntentResult
-from client.src.business.intent_engine import IntentEngine
+from business.base_intent_engine import BaseIntentEngine, IntentResult
+from business.intent_engine import IntentEngine
 
 # 全局模型路由器
-from client.src.business.global_model_router import (
+from business.global_model_router import (
     GlobalModelRouter,
     ModelCapability,
     RoutingStrategy,
 )
 
 # HermesAgent 回调定义
-from client.src.business.agent import AgentCallbacks
+from business.agent import AgentCallbacks
 
 # ============= IDE Agent 核心类 =============
 
@@ -60,7 +60,7 @@ class IDEAgent:
     架构：UI → Agent → IntentEngine + GlobalModelRouter → Service
 
     Usage:
-        from client.src.business.ide_agent import get_ide_agent
+        from business.ide_agent import get_ide_agent
 
         agent = get_ide_agent()
 
@@ -125,7 +125,7 @@ class IDEAgent:
 
     def _init_service(self):
         """初始化服务层"""
-        from client.src.business.ide_service import IDEService
+        from business.ide_service import IDEService
         self._service = IDEService(self.config)
 
     # ============= v3: CodeTool + Serena 初始化 =============
@@ -133,7 +133,7 @@ class IDEAgent:
     def _init_code_tool(self):
         """初始化 CodeTool v3（自动写/测/修/发布）"""
         try:
-            from client.src.business.self_evolution.code_tool import CodeTool
+            from business.self_evolution.code_tool import CodeTool
             self._code_tool = CodeTool()
             self._use_code_tool = True
             print("[IDEAgent] CodeTool v3 初始化成功")
@@ -145,7 +145,7 @@ class IDEAgent:
     def _init_serena(self):
         """初始化 SerenaAdapter（LSP 代码操作）"""
         try:
-            from client.src.business.self_evolution.serena_adapter import (
+            from business.self_evolution.serena_adapter import (
                 SerenaAdapter, SerenaStatus
             )
             self._serena = SerenaAdapter()

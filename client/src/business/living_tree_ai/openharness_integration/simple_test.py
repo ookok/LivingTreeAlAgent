@@ -7,7 +7,7 @@ import os
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from client.src.business.living_tree_ai.node import LivingTreeNode, NodeType
+from business.living_tree_ai.node import LivingTreeNode, NodeType
 
 
 async def test_basic_integration():

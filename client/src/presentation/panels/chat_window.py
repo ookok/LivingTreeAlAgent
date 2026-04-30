@@ -5,9 +5,9 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QSplitter
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from .components.smart_message_bubble import MessageBubble, CodeMessageBubble, ImageMessageBubble, MessageType
-from .components.context_panel import ContextPanel
-from .components.smart_input_field import SmartInputField
+from ..components.smart_message_bubble import MessageBubble, CodeMessageBubble, ImageMessageBubble, MessageType
+from ..components.context_panel import ContextPanel
+from ..components.smart_input_field import SmartInputField
 
 class ChatWindow(QFrame):
     """聊天窗口面板"""

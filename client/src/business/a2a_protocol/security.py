@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 
 logger = get_logger('a2a_security')
 

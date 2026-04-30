@@ -15,7 +15,7 @@ Author: LivingTreeAI Team
 Date: 2026-04-24
 """
 
-from client.src.business.logger import get_logger
+from business.logger import get_logger
 logger = get_logger('ui_evolution.tfidf_predictor')
 
 import json
@@ -470,7 +470,7 @@ def predict_next(sequence: List[str]) -> PredictionResult:
     
     使用示例:
     ```python
-    from client.src.business.ui_evolution import predict_next
+    from business.ui_evolution import predict_next
 
     
     # 预测

@@ -484,7 +484,7 @@ def create_regulation_rag(
 ) -> RegulationRAG:
     """创建法规 RAG 引擎（便捷工厂函数）"""
 
-    from client.src.business.regulation_vector_db import create_regulation_db
+    from business.regulation_vector_db import create_regulation_db
 
     # 创建法规库
     regulation_db = create_regulation_db(

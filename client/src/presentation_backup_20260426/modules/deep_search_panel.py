@@ -24,7 +24,7 @@ try:
 except ImportError:
     QWebEngineView = None
 
-from client.src.presentation.theme import theme_manager
+from .presentation.theme import theme_manager
 
 
 class SearchPhaseIndicator(QWidget):

@@ -17,11 +17,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction, QIcon, QFont
 
-from client.src.business.plugin_framework.base_plugin import (
+from business.plugin_framework.base_plugin import (
     BasePlugin, PluginManifest, PluginType,
     ViewPreference, ViewMode
 )
-from client.src.business.plugin_framework.event_bus import Event
+from business.plugin_framework.event_bus import Event
 
 
 class DocumentItem:

@@ -581,8 +581,8 @@ class PollutionAssessmentReportGenerator:
     ) -> str:
         """生成DOCX格式报告"""
         try:
-            from client.src.business.md_to_doc.docx_generator import DOCXGenerator
-            from client.src.business.md_to_doc.models import DocumentNode, DocumentElement, ElementType
+            from business.md_to_doc.docx_generator import DOCXGenerator
+            from business.md_to_doc.models import DocumentNode, DocumentElement, ElementType
 
             # 生成Markdown内容
             md_content = self._generate_markdown_content(data, template)

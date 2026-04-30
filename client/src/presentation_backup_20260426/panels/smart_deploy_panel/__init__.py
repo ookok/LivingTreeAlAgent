@@ -33,7 +33,7 @@ sys.path.insert(0, str(__file__).rsplit('/ui/', 1)[0] if '/' in __file__ else ''
 sys.path.insert(0, str(__file__).rsplit('\\ui\\', 1)[0] if '\\ui\\' in __file__ else '')
 
 try:
-    from client.src.business.smart_deploy import (
+    from .business.smart_deploy import (
         IntentUnderstandingEngine, IntentType, TechStack, RiskLevel,
         EnvironmentAnalyzer, ServerInfo,
         StrategyGenerator, DeploymentStrategy, GeneratedScript,
@@ -46,7 +46,7 @@ try:
 except ImportError:
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-    from client.src.business.smart_deploy import (
+    from .business.smart_deploy import (
         IntentUnderstandingEngine, IntentType, TechStack, RiskLevel,
         EnvironmentAnalyzer, ServerInfo,
         StrategyGenerator, DeploymentStrategy, GeneratedScript,
@@ -265,7 +265,7 @@ class OverviewTab(QWidget):
     def refresh_status(self):
         """刷新状态"""
         try:
-            from client.src.business.smart_deploy import DeploymentEngine
+            from .business.smart_deploy import DeploymentEngine
             engine = DeploymentEngine()
             stats = engine.get_stats()
 
@@ -290,7 +290,7 @@ class OverviewTab(QWidget):
                 self.deploy_status.set_value("空闲", "#60a5fa")
 
             # 更新学习进度
-            from client.src.business.smart_deploy import LearningSystem
+            from .business.smart_deploy import LearningSystem
             learning = LearningSystem()
             progress = learning.get_progress()
             self.learning_status.set_value(f"Lv.{progress.level.value} {progress.level.name}", "#facc15")

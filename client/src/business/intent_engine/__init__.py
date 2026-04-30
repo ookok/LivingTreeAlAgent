@@ -3,7 +3,7 @@ IntentEngine - 意图驱动引擎
 核心模块：意图解析、分类、执行、桥接
 
 快速开始：
-    from client.src.business.intent_engine import IntentEngine
+    from business.intent_engine import IntentEngine
 
     engine = IntentEngine()
     intent = engine.parse("帮我写一个排序算法，用Python")
@@ -14,7 +14,7 @@ IntentEngine - 意图驱动引擎
     print(intent.action)         # 编写
 
     # ✅ 执行意图（新增能力！）
-    from client.src.business.intent_engine.intent_action_bridge import IntentActionBridge
+    from business.intent_engine.intent_action_bridge import IntentActionBridge
     bridge = IntentActionBridge(engine)
     result = bridge.execute(intent)
     print(result.output)          # 生成的排序算法代码
@@ -24,6 +24,7 @@ IntentEngine - 意图驱动引擎
     print(result.output)          # 装饰器的概念解释
 """
 
+from .intent_engine import IntentEngine
 from .intent_parser import IntentParser
 from .intent_classifier import IntentClassifier
 from .intent_executor import IntentExecutor
@@ -58,6 +59,7 @@ from .action_handlers import (
 
 __all__ = [
     # 核心引擎
+    'IntentEngine',
     'IntentParser',
     'IntentClassifier',
     'IntentExecutor',

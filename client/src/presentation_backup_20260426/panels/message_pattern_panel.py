@@ -52,7 +52,7 @@ except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from client.src.business.message_patterns import (
+    from .business.message_patterns import (
         MessagePattern, PatternManager, get_pattern_manager,
         VariableResolver, VariableDefinition, get_variable_resolver,
         PatternMatcher, MatchResult, get_pattern_matcher,

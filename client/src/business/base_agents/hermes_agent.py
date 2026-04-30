@@ -18,7 +18,7 @@ Date: 2026-04-27
 
 from typing import Any, Dict, List, Optional
 
-from client.src.business.base_agents.base_agent import (
+from business.base_agents.base_agent import (
     BaseToolAgent,
     ToolCallResult,
 )
@@ -129,7 +129,7 @@ def create_hermes_tool_agent(
     Returns:
         HermesToolAgent 实例
     """
-    from client.src.business.tools.register_all_tools import register_all_tools
+    from business.tools.register_all_tools import register_all_tools
 
     # 确保所有工具已注册
     register_all_tools()

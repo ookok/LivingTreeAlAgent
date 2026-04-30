@@ -18,9 +18,9 @@ import asyncio
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool
-from client.src.business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
-from client.src.business.chrome_bridge.website_adapter_registry import get_adapter_registry
+from business.tools.base_tool import BaseTool
+from business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
+from business.chrome_bridge.website_adapter_registry import get_adapter_registry
 
 
 class ChromeBridgeTool(BaseTool):
@@ -234,7 +234,7 @@ class ChromeBridgeTool(BaseTool):
 
 def register_chrome_bridge_tool():
     """注册 ChromeBridgeTool 到 ToolRegistry"""
-    from client.src.business.tools.tool_registry import ToolRegistry
+    from business.tools.tool_registry import ToolRegistry
     tool = ChromeBridgeTool()
     registry = ToolRegistry.get_instance()
     registry.register_tool(tool)

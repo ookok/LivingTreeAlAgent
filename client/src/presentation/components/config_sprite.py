@@ -2,8 +2,8 @@
 配置精灵助手 - 可爱的AI助手形象提供配置提示
 """
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPropertyAnimation
+from PyQt6.QtCore import Qt, QPropertyAnimation
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtGui import QFont
 
 

@@ -24,7 +24,7 @@ import logging
 from typing import Any, Optional, List, Dict, Callable
 from dataclasses import dataclass, field
 
-from client.src.business.unified_tool_registry import (
+from business.unified_tool_registry import (
     ToolRegistry,
     ToolResult,
     search_tools,
@@ -225,7 +225,7 @@ class BaseToolAgent:
             工具信息列表
         """
         if toolset:
-            from client.src.business.unified_tool_registry import CompatibleToolRegistry
+            from business.unified_tool_registry import CompatibleToolRegistry
             tools = CompatibleToolRegistry.get_by_toolset(toolset)
             return [
                 {"name": t.name, "description": t.description, "parameters": t.parameters}
@@ -251,7 +251,7 @@ class BaseToolAgent:
         Returns:
             OpenAI tools format 的 schema 列表
         """
-        from client.src.business.unified_tool_registry import CompatibleToolRegistry
+        from business.unified_tool_registry import CompatibleToolRegistry
         
         # 获取启用的工具
         tools = []
@@ -287,7 +287,7 @@ class BaseToolAgent:
         Returns:
             Markdown 格式的工具列表描述
         """
-        from client.src.business.unified_tool_registry import CompatibleToolRegistry
+        from business.unified_tool_registry import CompatibleToolRegistry
         
         tools = []
         for ts in self._enabled_toolsets:
@@ -316,7 +316,7 @@ class BaseToolAgent:
     
     def get_tool_stats(self) -> Dict[str, Any]:
         """获取工具使用统计"""
-        from client.src.business.unified_tool_registry import get_stats
+        from business.unified_tool_registry import get_stats
         
         registry_stats = get_stats()
         
@@ -344,7 +344,7 @@ def create_base_agent(enabled_toolsets: Optional[List[str]] = None) -> BaseToolA
     
     自动初始化工具注册中心（如果尚未初始化）。
     """
-    from client.src.business.tools.register_all_tools import register_all_tools
+    from business.tools.register_all_tools import register_all_tools
     
     # 确保所有工具已注册
     register_all_tools()

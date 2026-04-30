@@ -24,7 +24,7 @@ def test_superpowers_import():
     print("Superpowers Import Test")
     print("=" * 50)
     try:
-        from client.src.business.superpowers import (
+        from business.superpowers import (
             SuperpowerRegistry,
             WorkflowRecorder,
             WorkflowPlayer,
@@ -46,7 +46,7 @@ def test_hermes_agent_import():
     print("HermesAgent Import Test")
     print("=" * 50)
     try:
-        from client.src.business.hermes_agent import (
+        from business.hermes_agent import (
             UserProfileManager,
             UserProfile,
             UserPreference,
@@ -67,7 +67,7 @@ def test_superpowers_workflow():
     print("Superpowers Workflow Test")
     print("=" * 50)
 
-    from client.src.business.superpowers import (
+    from business.superpowers import (
         WorkflowRecorder,
         SuperpowerRegistry,
         Superpower,
@@ -125,7 +125,7 @@ def test_hermes_agent_profile():
     print("HermesAgent Profile Test")
     print("=" * 50)
 
-    from client.src.business.hermes_agent import (
+    from business.hermes_agent import (
         UserProfileManager,
         PreferenceType,
         get_profile_manager
@@ -175,7 +175,7 @@ async def test_superpowers_execution():
     print("Superpowers Execution Test")
     print("=" * 50)
 
-    from client.src.business.superpowers import (
+    from business.superpowers import (
         Workflow,
         WorkflowStep,
         WorkflowPlayer,

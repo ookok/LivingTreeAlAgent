@@ -6,7 +6,7 @@ Evolution Engine UI Integration - Evolution Dashboard 集成助手
 提供便捷的方法来初始化和连接 Evolution Engine 到 Dashboard
 
 Usage:
-    from client.src.business.evolution_engine.ui_integration import init_evolution_dashboard
+    from business.evolution_engine.ui_integration import init_evolution_dashboard
     
     # 在主窗口中调用
     dashboard = init_evolution_dashboard(project_root=".")
@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from client.src.business.evolution_engine import EvolutionEngine
-    from client.src.presentation.panels.evolution_dashboard import EvolutionDashboard
+    from business.evolution_engine import EvolutionEngine
+    from presentation.panels.evolution_dashboard import EvolutionDashboard
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def init_evolution_engine(
     global _evolution_engine
     
     try:
-        from client.src.business.evolution_engine import create_evolution_engine
+        from business.evolution_engine import create_evolution_engine
         
         _evolution_engine = create_evolution_engine(
             project_root=str(project_root)
@@ -98,7 +98,7 @@ def init_evolution_dashboard(
         EvolutionDashboard 实例
     """
     try:
-        from client.src.presentation.panels.evolution_dashboard import EvolutionDashboard
+        from presentation.panels.evolution_dashboard import EvolutionDashboard
         
         # 如果没有传入引擎，自动创建
         if engine is None:

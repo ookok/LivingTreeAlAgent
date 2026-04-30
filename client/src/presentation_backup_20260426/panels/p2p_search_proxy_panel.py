@@ -353,7 +353,7 @@ class P2PSearchProxyPanel(QWidget):
         """异步搜索"""
         try:
             if self.proxy:
-                from client.src.business.p2p_search_proxy import SearchEngineType
+                from .business.p2p_search_proxy import SearchEngineType
 
                 engine_type = SearchEngineType(engine)
                 task = await self.proxy.search(

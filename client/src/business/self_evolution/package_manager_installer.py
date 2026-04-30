@@ -728,7 +728,7 @@ class PackageManagerInstaller:
 
         if learn_depth in ("quick", "full", "deep"):
             # 解析帮助文档
-            from client.src.business.self_evolution.structured_help_parser import StructuredHelpParser
+            from business.self_evolution.structured_help_parser import StructuredHelpParser
             parser = StructuredHelpParser()
 
             spec = ALL_PACKAGE_PRESETS.get(package_name)
@@ -813,7 +813,7 @@ class PackageManagerInstaller:
             return install_result, False
 
         # 生成封装代码
-        from client.src.business.self_evolution.cli_tool_discoverer import CLIToolDiscoverer
+        from business.self_evolution.cli_tool_discoverer import CLIToolDiscoverer
         discoverer = CLIToolDiscoverer()
 
         spec = ALL_PACKAGE_PRESETS.get(package_name)
@@ -821,7 +821,7 @@ class PackageManagerInstaller:
             return install_result, False
 
         # 构建 CLIToolInfo
-        from client.src.business.self_evolution.cli_tool_discoverer import CLIToolInfo
+        from business.self_evolution.cli_tool_discoverer import CLIToolInfo
         info = CLIToolInfo(
             name=spec.tool_name,
             path=shutil.which(spec.tool_name) or spec.tool_name,

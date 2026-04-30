@@ -18,9 +18,9 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.self_evolution.tool_missing_detector import ToolMissingDetector
-from client.src.business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
-from client.src.business.tools.tool_registry import ToolRegistry
+from business.self_evolution.tool_missing_detector import ToolMissingDetector
+from business.self_evolution.autonomous_tool_creator import AutonomousToolCreator
+from business.tools.tool_registry import ToolRegistry
 
 
 class ActiveLearningLoop:
@@ -388,7 +388,7 @@ class ActiveLearningLoop:
     async def _search_knowledge_base(self, query: str) -> str:
         """搜索知识库"""
         try:
-            from client.src.business.knowledge_vector_db import VectorDatabase
+            from business.knowledge_vector_db import VectorDatabase
             db = VectorDatabase()
             results = db.search(query, top_k=3)
             return "\n".join([r.get("content", "") for r in results])
@@ -398,7 +398,7 @@ class ActiveLearningLoop:
     async def _deep_search(self, query: str, proxy: Optional[str] = None) -> str:
         """深度搜索"""
         try:
-            from client.src.business.deep_search_wiki.wiki_generator import LLMWikiGenerator
+            from business.deep_search_wiki.wiki_generator import LLMWikiGenerator
             generator = LLMWikiGenerator()
             result = await generator.generate_wiki(query)
             return result[:1000] if result else "深度搜索无结果"
@@ -408,7 +408,7 @@ class ActiveLearningLoop:
     async def _get_proxy(self) -> Optional[str]:
         """获取代理"""
         try:
-            from client.src.business.base_proxy_manager import ProxyManager
+            from business.base_proxy_manager import ProxyManager
             manager = ProxyManager()
             return manager.get_best_proxy()
         except Exception:
@@ -420,7 +420,7 @@ class ActiveLearningLoop:
             return await self._llm.chat(prompt, model="qwen3.6:35b-a3b")
         else:
             try:
-                from client.src.business.hermes_agent.llm_client import LLMClient
+                from business.hermes_agent.llm_client import LLMClient
                 llm = LLMClient()
                 return await llm.chat(prompt, model="qwen3.6:35b-a3b")
             except Exception as e:

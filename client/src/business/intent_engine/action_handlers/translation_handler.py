@@ -126,7 +126,7 @@ class TranslationHandler(BaseActionHandler):
                             source_lang: str, formality: str) -> str:
         """调用 GlobalModelRouter 执行翻译"""
         try:
-            from client.src.business.global_model_router import (
+            from business.global_model_router import (
                 get_global_router, ModelCapability,
             )
         except ImportError:

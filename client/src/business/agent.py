@@ -14,20 +14,20 @@ from pathlib import Path
 from typing import Callable, Iterator, Optional, List, Dict, Any, Set
 from dataclasses import dataclass
 
-from client.src.business.ollama_client import OllamaClient, ChatMessage, StreamChunk
-from client.src.business.unified_model_client import (
+from business.ollama_client import OllamaClient, ChatMessage, StreamChunk
+from business.unified_model_client import (
     UnifiedModelClient,
     UnifiedModelManager,
     create_local_client,
     LLAMA_CPP_AVAILABLE,
 )
-from client.src.business.session_db import SessionDB
-from client.src.business.memory_manager import MemoryManager
-from client.src.business.tools_registry import ToolRegistry, ToolDispatcher, SCHEMA
-from client.src.business.base_agents.base_agent import BaseToolAgent
-from client.src.business.config import AppConfig
-from client.src.business.session_stats import SessionStats, get_stats_tracker
-from client.src.business.model_priority_loader import (
+from business.session_db import SessionDB
+from business.memory_manager import MemoryManager
+from business.tools_registry import ToolRegistry, ToolDispatcher, SCHEMA
+from business.base_agents.base_agent import BaseToolAgent
+from business.config import AppConfig
+from business.session_stats import SessionStats, get_stats_tracker
+from business.model_priority_loader import (
     ModelBackend,
     LocalModelPriorityLoader,
     get_priority_loader,
@@ -35,18 +35,18 @@ from client.src.business.model_priority_loader import (
 )
 
 # 新增：主动工具发现、工具链编排、自我反思引擎
-from client.src.business.hermes_agent.proactive_discovery_agent import ProactiveDiscoveryAgent
-from client.src.business.tool_chain_orchestrator import ToolChainOrchestrator
-from client.src.business.self_evolution.self_reflection_engine import SelfReflectionEngine
-from client.src.business.self_evolution.tool_self_repairer import ToolSelfRepairer
+from business.hermes_agent.proactive_discovery_agent import ProactiveDiscoveryAgent
+from business.tool_chain_orchestrator import ToolChainOrchestrator
+from business.self_evolution.self_reflection_engine import SelfReflectionEngine
+from business.self_evolution.tool_self_repairer import ToolSelfRepairer
 
 # 搜索相关导入
 import asyncio
-from client.src.business.knowledge_vector_db import KnowledgeBaseVectorStore
-from client.src.business.knowledge_graph import KnowledgeGraph
-from client.src.business.search.tier_router import TierRouter
-from client.src.business.linkmind_router import LinkMindRouter, RouteRequest, ModelCapability
-from client.src.business.discourse_rag import DiscourseAwareRAG
+from business.knowledge_vector_db import KnowledgeBaseVectorStore
+from business.knowledge_graph import KnowledgeGraph
+from business.search.tier_router import TierRouter
+from business.linkmind_router import LinkMindRouter, RouteRequest, ModelCapability
+from business.discourse_rag import DiscourseAwareRAG
 
 
 # ── 回调定义 ────────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ class HermesAgent:
     def _register_to_agent_registry(self):
         """注册到 AgentRegistry，接收技能和专家角色变化通知"""
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             registry.register("hermes_agent", self, {
                 "type": "general",
@@ -394,7 +394,7 @@ class HermesAgent:
             是否成功加载
         """
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             content = registry.load_skill_content(skill_name)
             
@@ -420,7 +420,7 @@ class HermesAgent:
             是否成功加载
         """
         try:
-            from client.src.business.agent_registry import get_agent_registry
+            from business.agent_registry import get_agent_registry
             registry = get_agent_registry()
             content = registry.load_content(agent_name, content_type="agent")
             
@@ -493,7 +493,7 @@ class HermesAgent:
                 # 首先尝试使用统一模型客户端，这是最可靠的本地模型加载方式
                 print("[HermesAgent] 尝试使用统一模型客户端加载本地模型")
                 try:
-                    from client.src.business.unified_model_client import create_local_client
+                    from business.unified_model_client import create_local_client
                     self.model = create_local_client(model_path)
                     self._use_unified = True
                     self._current_backend = ModelBackend.LLAMA_CPP
@@ -553,7 +553,7 @@ class HermesAgent:
 
     def _get_default_gguf_model(self) -> Optional[str]:
         """获取默认 GGUF 模型路径"""
-        from client.src.business.model_manager import ModelManager
+        from business.model_manager import ModelManager
         model_manager = ModelManager(self.config)
         
         # 获取所有可用的本地模型
@@ -605,10 +605,10 @@ class HermesAgent:
 
     def _register_tools(self):
         """注册所有内置工具"""
-        from client.src.business.tools_file import register_file_tools
-        from client.src.business.tools_terminal import register_terminal_tools
-        from client.src.business.tools_writing import register_writing_tools
-        from client.src.business.tools_ollama import register_model_tools
+        from business.tools_file import register_file_tools
+        from business.tools_terminal import register_terminal_tools
+        from business.tools_writing import register_writing_tools
+        from business.tools_ollama import register_model_tools
 
         register_file_tools(self)
         register_terminal_tools(self)
@@ -692,7 +692,7 @@ class HermesAgent:
                     return
                 # 尝试使用 chat_stream 方法
                 elif hasattr(self.model, 'chat_stream'):
-                    from client.src.business.unified_model_client import Message as UnifiedMessage, GenerationConfig
+                    from business.unified_model_client import Message as UnifiedMessage, GenerationConfig
 
                     # 转换为统一格式
                     unified_messages = []
@@ -716,7 +716,7 @@ class HermesAgent:
                     return
                 # 尝试使用 generate_stream 方法（Nano-vLLM）
                 elif hasattr(self.model, 'generate_stream'):
-                    from client.src.business.nano_vllm import SamplingParams
+                    from business.nano_vllm import SamplingParams
                     
                     # 创建采样参数
                     sampling_params = SamplingParams(

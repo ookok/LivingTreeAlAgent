@@ -31,16 +31,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from loguru import logger
 
-from client.src.business.self_evolution.project_structure_scanner import (
+from business.self_evolution.project_structure_scanner import (
     ProjectStructureScanner, ScanResult, ScanDepth,
 )
-from client.src.business.self_evolution.knowledge_ingestion_pipeline import (
+from business.self_evolution.knowledge_ingestion_pipeline import (
     KnowledgeIngestionPipeline, KnowledgeEntry, KnowledgeSource, IngestionResult,
 )
-from client.src.business.self_evolution.code_evolution_planner import (
+from business.self_evolution.code_evolution_planner import (
     CodeEvolutionPlanner, EvolutionPlan, EvolutionAction, EvolutionStatus,
 )
-from client.src.business.self_evolution.code_evolution_executor import (
+from business.self_evolution.code_evolution_executor import (
     CodeEvolutionExecutor, ExecutionResult, ExecutionLog,
 )
 

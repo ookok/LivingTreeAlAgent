@@ -241,30 +241,30 @@ def create_evolution_engine(
         对应的进化引擎实例
     """
     if target == EvolutionTarget.SKILL:
-        from client.src.business.skill_evolution.engine import EvolutionEngine as SkillEE
+        from business.skill_evolution.engine import EvolutionEngine as SkillEE
         return SkillEE(database=kwargs.get("database"), **kwargs)
     
     elif target == EvolutionTarget.AGENT:
-        from client.src.business.evolving_community.evolution.evolution_engine import (
+        from business.evolving_community.evolution.evolution_engine import (
             EvolutionEngine as CommunityEE,
         )
         return CommunityEE(config=config.to_dict() if config else None, **kwargs)
     
     elif target == EvolutionTarget.CODE:
-        from client.src.business.evolution_engine.evolution_engine import (
+        from business.evolution_engine.evolution_engine import (
             EvolutionEngine as CodeEE,
         )
         return CodeEE(project_root=kwargs.get("project_root", "."), 
                      config=config.to_dict() if config else None)
     
     elif target == EvolutionTarget.KNOWLEDGE:
-        from client.src.business.knowledge_graph.evolution import (
+        from business.knowledge_graph.evolution import (
             EvolutionEngine as KnowledgeEE,
         )
         return KnowledgeEE(**kwargs)
     
     elif target == EvolutionTarget.REPORT:
-        from client.src.business.living_tree_ai.eia_system.report_evolution import (
+        from business.living_tree_ai.eia_system.report_evolution import (
             EvolutionEngine as ReportEE,
         )
         return ReportEE(**kwargs)

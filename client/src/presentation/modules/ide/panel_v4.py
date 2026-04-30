@@ -50,26 +50,26 @@ from PyQt6.QtGui import (
 )
 
 # Theme
-from client.src.presentation.modules.ide.theme import (
+from presentation.modules.ide.theme import (
     IDEThemeManager, ThemeColors, get_theme_manager
 )
 
 # Business layer (lazy imports to avoid circular dependency)
 try:
-    from client.src.business.ide_agent import IDEAgent
-    from client.src.business.ide_service import IntelligentIDEService
+    from business.ide_agent import IDEAgent
+    from business.ide_service import IntelligentIDEService
 except ImportError:
     IDEAgent = None
     IntelligentIDEService = None
 
 # Widgets (lazy imports)
 try:
-    from client.src.presentation.widgets.project_browser import ProjectBrowser
-    from client.src.presentation.widgets.global_search import GlobalSearchWidget
-    from client.src.presentation.widgets.test_integration import TestIntegrationWidget
-    from client.src.presentation.widgets.git_integration import GitIntegrationWidget
-    from client.src.presentation.widgets.syntax_highlighter import get_highlighter
-    from client.src.presentation.widgets.code_completer import get_completer
+    from presentation.widgets.project_browser import ProjectBrowser
+    from presentation.widgets.global_search import GlobalSearchWidget
+    from presentation.widgets.test_integration import TestIntegrationWidget
+    from presentation.widgets.git_integration import GitIntegrationWidget
+    from presentation.widgets.syntax_highlighter import get_highlighter
+    from presentation.widgets.code_completer import get_completer
 except ImportError:
     ProjectBrowser = None
     GlobalSearchWidget = None
@@ -1177,7 +1177,7 @@ class ProvidersPanel(QWidget):
     def _load_providers(self):
         """Load provider list from registry."""
         try:
-            from client.src.business.providers.provider_registry import get_provider_registry
+            from business.providers.provider_registry import get_provider_registry
             registry = get_provider_registry()
             for pid, pconfig in registry.get_all_providers().items():
                 status = "[Connected]" if pconfig.get("api_key") else ""

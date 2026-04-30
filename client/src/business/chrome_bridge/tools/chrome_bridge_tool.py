@@ -18,11 +18,11 @@ import re
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from client.src.business.tools.base_tool import BaseTool, AgentCallResult
-from client.src.business.tools.tool_registry import ToolRegistry, ToolDefinition
-from client.src.business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
-from client.src.business.chrome_bridge.credential_manager import get_credential_manager
-from client.src.business.chrome_bridge.website_adapter_registry import get_adapter_registry
+from business.tools.base_tool import BaseTool, AgentCallResult
+from business.tools.tool_registry import ToolRegistry, ToolDefinition
+from business.chrome_bridge.chrome_bridge import ChromeBridge, get_chrome_bridge
+from business.chrome_bridge.credential_manager import get_credential_manager
+from business.chrome_bridge.website_adapter_registry import get_adapter_registry
 
 
 # 模块级单例（避免重复创建）
@@ -374,7 +374,7 @@ class ChromeBridgeTool(BaseTool):
         elements = await bridge._cdp.evaluate(page_id, elements_js)
 
         # 2. 调用LLM生成操作序列
-        from client.src.business.global_model_router import get_model_router
+        from business.global_model_router import get_model_router
 
         router = get_model_router()
         prompt = f"""
@@ -488,7 +488,7 @@ class ChromeBridgeTool(BaseTool):
         try:
             # 方法1: 使用 BrowserManager（如果可用）
             try:
-                from client.src.business.chrome_bridge.browser_manager import BrowserManager
+                from business.chrome_bridge.browser_manager import BrowserManager
 
                 browser_manager = BrowserManager(
                     cdp_port=self.debug_port,
@@ -517,7 +517,7 @@ class ChromeBridgeTool(BaseTool):
 
             # 如果指定了use_builtin，需要重新创建bridge
             if use_builtin:
-                from client.src.business.chrome_bridge.chrome_bridge import ChromeBridge
+                from business.chrome_bridge.chrome_bridge import ChromeBridge
                 self._bridge = ChromeBridge(
                     debug_port=self.debug_port,
                     headless=headless,
@@ -583,7 +583,7 @@ class ChromeBridgeTool(BaseTool):
         try:
             # 尝试使用 BrowserManager
             try:
-                from client.src.business.chrome_bridge.browser_manager import BrowserManager
+                from business.chrome_bridge.browser_manager import BrowserManager
 
                 browser_manager = BrowserManager()
                 status = browser_manager.get_browser_status()

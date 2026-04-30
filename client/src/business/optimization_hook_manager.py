@@ -293,7 +293,7 @@ class OptimizationHookManager:
     def _lazy_load_engine(self):
         """延迟加载优化引擎"""
         try:
-            from client.src.business.intelligent_optimization_engine import get_intelligent_optimization_engine
+            from business.intelligent_optimization_engine import get_intelligent_optimization_engine
             self._optimization_engine = get_intelligent_optimization_engine()
             logger.info("[OptimizationHookManager] 智能优化引擎加载完成")
         except Exception as e:

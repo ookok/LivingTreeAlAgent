@@ -125,7 +125,7 @@ class ProxySourceManager:
     async def load_from_proxy_manager(self):
         """从已有的 BaseProxyManager 加载代理列表"""
         try:
-            from client.src.business.base_proxy_manager import BaseProxyManager
+            from business.base_proxy_manager import BaseProxyManager
             manager = BaseProxyManager()
             if hasattr(manager, 'get_all_proxies'):
                 proxies = manager.get_all_proxies()

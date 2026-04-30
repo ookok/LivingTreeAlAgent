@@ -19,26 +19,26 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Callable, Any
 from datetime import datetime
 
-from client.src.business.office_automation.document_context import (
+from business.office_automation.document_context import (
     DocumentContext, DocumentIntent, IntentParser, DocumentType, OutputFormat
 )
-from client.src.business.office_automation.design_system import DesignSystem, DocumentTheme
-from client.src.business.office_automation.template_router import TemplateRouter, TemplateMatch, CoverStyle
-from client.src.business.office_automation.model_router import ModelRouter, ModelCapability
-from client.src.business.office_automation.quality_checker import QualityChecker, QualityReport
-from client.src.business.office_automation.workflows import (
+from business.office_automation.design_system import DesignSystem, DocumentTheme
+from business.office_automation.template_router import TemplateRouter, TemplateMatch, CoverStyle
+from business.office_automation.model_router import ModelRouter, ModelCapability
+from business.office_automation.quality_checker import QualityChecker, QualityReport
+from business.office_automation.workflows import (
     CreateWorkflow, FillEditWorkflow, FormatApplyWorkflow,
     WorkflowType, WorkflowResult, WorkflowStatus,
 )
-from client.src.business.office_automation.engines import EngineFactory, EngineType
+from business.office_automation.engines import EngineFactory, EngineType
 
 # 格式理解引擎
-from client.src.business.office_automation.format_understanding.format_parser import FormatParser, FormatInfo
-from client.src.business.office_automation.format_understanding.format_graph import FormatGraph
-from client.src.business.office_automation.format_understanding.format_semantic import FormatSemanticModel
-from client.src.business.office_automation.format_understanding.format_evaluator import FormatEvaluator
-from client.src.business.office_automation.format_understanding.format_knowledge import FormatKnowledgeBase
-from client.src.business.office_automation.format_understanding.format_aware_workflow import FormatAwareWorkflow
+from business.office_automation.format_understanding.format_parser import FormatParser, FormatInfo
+from business.office_automation.format_understanding.format_graph import FormatGraph
+from business.office_automation.format_understanding.format_semantic import FormatSemanticModel
+from business.office_automation.format_understanding.format_evaluator import FormatEvaluator
+from business.office_automation.format_understanding.format_knowledge import FormatKnowledgeBase
+from business.office_automation.format_understanding.format_aware_workflow import FormatAwareWorkflow
 
 logger = logging.getLogger(__name__)
 

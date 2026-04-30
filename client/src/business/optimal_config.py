@@ -8,7 +8,7 @@ LivingTreeAI 极简配置系统
 核心理念：单参数调优 - 只需传入任务复杂度(depth)，其他所有参数自动计算
 
 使用示例:
-    from client.src.business.optimal_config import compute_optimal_config, get_depth
+    from business.optimal_config import compute_optimal_config, get_depth
     
     # 简单任务
     config = compute_optimal_config(depth=1)
@@ -322,7 +322,7 @@ def sync_to_unified_config(depth: int = 3) -> None:
         depth: 任务复杂度
     """
     try:
-        from client.src.business.config import get_unified_config
+        from business.config import get_unified_config
         
         config = compute_optimal_config(depth)
         cfg = get_unified_config()

@@ -24,7 +24,7 @@ from loguru import logger
 from collections import defaultdict
 
 # 导入统一意图定义
-from client.src.business.intent_definitions import Intent
+from business.intent_definitions import Intent
 
 
 @dataclass

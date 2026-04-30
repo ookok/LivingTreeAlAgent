@@ -43,7 +43,7 @@ class LongTaskIntegration:
         
         # 2. 集成自适应系统
         try:
-            from client.src.infrastructure.adaptive_system import AdaptiveSystem
+            from infrastructure.adaptive_system import AdaptiveSystem
             self._adaptive_system = AdaptiveSystem()
             self._logger.info("✓ 集成 AdaptiveSystem")
         except Exception as e:
@@ -51,7 +51,7 @@ class LongTaskIntegration:
         
         # 3. 集成进化引擎
         try:
-            from client.src.business.evolution_engine import EvolutionEngine
+            from business.evolution_engine import EvolutionEngine
             self._evolution_engine = EvolutionEngine()
             self._logger.info("✓ 集成 EvolutionEngine")
         except Exception as e:
@@ -59,7 +59,7 @@ class LongTaskIntegration:
         
         # 4. 集成记忆系统
         try:
-            from client.src.business.memory import get_memory_router
+            from business.memory import get_memory_router
             self._memory_router = get_memory_router()
             self._logger.info("✓ 集成 MemoryRouter")
         except Exception as e:
@@ -67,7 +67,7 @@ class LongTaskIntegration:
         
         # 5. 集成学习系统
         try:
-            from client.src.business.learning import get_adaptive_learning_manager
+            from business.learning import get_adaptive_learning_manager
             self._learning_manager = get_adaptive_learning_manager()
             self._logger.info("✓ 集成 AdaptiveLearningManager")
         except Exception as e:

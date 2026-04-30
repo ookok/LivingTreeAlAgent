@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
 # 导入统一接口
-from client.src.business.unified_knowledge_interface import (
+from business.unified_knowledge_interface import (
     IKnowledgeRetriever,
     SearchResult,
     TripleChainResult,

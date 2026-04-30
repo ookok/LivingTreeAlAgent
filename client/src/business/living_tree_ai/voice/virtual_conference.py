@@ -2,6 +2,12 @@
 虚拟会议系统
 
 实现虚拟会议角色系统，支持多种场景（评审会、法庭、课堂等）
+
+集成 VibeVoice：
+- 低延迟实时语音识别（ASR）
+- 流式语音合成（TTS）
+- 语音活动检测（VAD）
+- 与现有会议系统无缝集成
 """
 
 import asyncio
@@ -12,6 +18,16 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC, abstractmethod
+
+# 导入 VibeVoice 适配器
+try:
+    from client.src.business.vibe_voice_adapter import (
+        get_vibe_voice_adapter,
+        VoiceSynthesisRequest
+    )
+    VIBE_VOICE_AVAILABLE = True
+except ImportError:
+    VIBE_VOICE_AVAILABLE = False
 
 
 class RoleType(Enum):
@@ -173,7 +189,7 @@ class VirtualAgent:
 
 
 class VirtualConferenceSystem:
-    """虚拟会议系统 - 集成共享工作空间"""
+    """虚拟会议系统 - 集成共享工作空间和 VibeVoice"""
 
     def __init__(self, scenario: ScenarioType = ScenarioType.REVIEW_MEETING):
         self.scenario = scenario
@@ -197,6 +213,21 @@ class VirtualConferenceSystem:
 
         # 注册工作空间事件
         self._setup_workspace_events()
+
+        # 集成 VibeVoice 语音服务
+        self._init_vibe_voice()
+    
+    def _init_vibe_voice(self):
+        """初始化 VibeVoice 语音服务"""
+        if VIBE_VOICE_AVAILABLE:
+            try:
+                self.vibe_voice = get_vibe_voice_adapter()
+                print("[VirtualConference] VibeVoice 集成完成")
+            except Exception as e:
+                print(f"[VirtualConference] VibeVoice 初始化失败: {e}")
+                self.vibe_voice = None
+        else:
+            self.vibe_voice = None
 
     def _setup_workspace_events(self):
         """设置工作空间事件处理"""
@@ -352,6 +383,9 @@ class VirtualConferenceSystem:
             topics=self.topics.copy()
         )
         
+        # 启动 VibeVoice 语音会话
+        await self._start_vibe_voice_session()
+        
         await self._notify_message({
             "type": "meeting_started",
             "title": title,
@@ -359,9 +393,35 @@ class VirtualConferenceSystem:
             "participants": [p.name for p in self.participants.values()]
         })
     
+    async def _start_vibe_voice_session(self):
+        """启动 VibeVoice 语音会话"""
+        if not self.vibe_voice:
+            return
+        
+        try:
+            # 连接到 VibeVoice 服务
+            if not self.vibe_voice.is_connected():
+                await self.vibe_voice.connect()
+            
+            # 开始语音会话
+            session_id = self.vibe_voice.start_session(self.meeting_record.meeting_id)
+            
+            # 添加参与者到语音会话
+            for participant_id, participant in self.participants.items():
+                voice_profile = participant.voice_profile or "default"
+                self.vibe_voice.add_participant(participant_id, participant.name, voice_profile)
+            
+            print(f"[VirtualConference] VibeVoice 会话已启动: {session_id}")
+            
+        except Exception as e:
+            print(f"[VirtualConference] VibeVoice 会话启动失败: {e}")
+    
     async def end_meeting(self):
         """结束会议"""
         self.is_active = False
+        
+        # 停止 VibeVoice 语音会话
+        await self._stop_vibe_voice_session()
         
         if self.meeting_record:
             self.meeting_record.end_time = time.time()
@@ -370,6 +430,17 @@ class VirtualConferenceSystem:
             "type": "meeting_ended",
             "duration": time.time() - self.meeting_record.start_time if self.meeting_record else 0
         })
+    
+    async def _stop_vibe_voice_session(self):
+        """停止 VibeVoice 语音会话"""
+        if not self.vibe_voice:
+            return
+        
+        try:
+            await self.vibe_voice.stop_session()
+            print("[VirtualConference] VibeVoice 会话已停止")
+        except Exception as e:
+            print(f"[VirtualConference] VibeVoice 会话停止失败: {e}")
     
     async def ai_participant_speak(
         self,
@@ -399,6 +470,9 @@ class VirtualConferenceSystem:
             # AI 生成回复
             response = await agent.think(prompt)
             
+            # 使用 VibeVoice 合成语音
+            await self._synthesize_speech(participant_id, response)
+            
             # 记录到会议记录
             if self.meeting_record:
                 self.meeting_record.transcript.append({
@@ -418,6 +492,29 @@ class VirtualConferenceSystem:
             })
             
             return response
+    
+    async def _synthesize_speech(self, participant_id: str, text: str):
+        """使用 VibeVoice 合成语音"""
+        if not self.vibe_voice:
+            return
+        
+        try:
+            participant = self.participants.get(participant_id)
+            voice_name = participant.voice_profile or "default"
+            
+            # 使用 VibeVoice 进行语音合成
+            request = VoiceSynthesisRequest(
+                text=text,
+                voice_name=voice_name,
+                rate=1.0,
+                pitch=0.0
+            )
+            
+            await self.vibe_voice.synthesize_speech(request)
+            print(f"[VirtualConference] 语音合成完成: {participant.name}")
+            
+        except Exception as e:
+            print(f"[VirtualConference] 语音合成失败: {e}")
             
         finally:
             # 标记为停止发言

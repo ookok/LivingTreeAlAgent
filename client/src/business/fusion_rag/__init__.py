@@ -132,6 +132,16 @@ from .triple_chain_engine import (
     create_triple_chain_engine
 )
 
+# DeepKE-LLM 术语抽取器（2026-04-30 新增）
+from .deepke_term_extractor import (
+    ExtractedTerm,
+    TermRelation,
+    DeepKETermExtractor,
+    IndustryDictBuilder,
+    get_term_extractor,
+    get_dict_builder
+)
+
 
 __all__ = [
     # 基础缓存层
@@ -201,6 +211,12 @@ __all__ = [
     "ReasoningStep",
     "Evidence",
     "TripleChainResult",
+    
+    # DeepKE-LLM 术语抽取器
+    "ExtractedTerm",
+    "TermRelation",
+    "DeepKETermExtractor",
+    "IndustryDictBuilder",
 
     # 工具函数
     "get_l4_executor",
@@ -214,7 +230,9 @@ __all__ = [
     "create_feedback_learner",
     "create_industry_dialect_dict",
     "create_industrial_knowledge_discovery",
-    "create_triple_chain_engine"
+    "create_triple_chain_engine",
+    "get_term_extractor",
+    "get_dict_builder"
 ]
 
 __version__ = "2.2.0"

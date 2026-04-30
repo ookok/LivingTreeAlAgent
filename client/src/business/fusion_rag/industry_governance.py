@@ -12,9 +12,11 @@
 - 统一术语模型：使用共享的 Term 类
 - 事件总线：发布治理相关事件
 - 缓存层：缓存术语映射和标签
+- DeepKE-LLM：智能术语抽取和关系构建
 """
 
 import re
+import asyncio
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -28,6 +30,9 @@ from client.src.business.shared import (
     get_cache,
     EVENTS
 )
+
+# 导入 DeepKE 术语抽取器
+from .deepke_term_extractor import get_term_extractor, get_dict_builder
 
 
 @dataclass
@@ -61,17 +66,23 @@ class IndustryGovernance:
     - 数据准入控制
     - 元数据标签管理
     - 术语归一化
+    - 智能术语抽取（基于 DeepKE-LLM）
     
     集成共享基础设施：
     - 统一术语模型：使用共享的 Term 类存储术语
     - 事件总线：发布术语添加、文档验证等事件
     - 缓存层：缓存术语映射，提升查询性能
+    - DeepKE-LLM：智能术语抽取和关系构建
     """
     
     def __init__(self):
         # 获取共享基础设施
         self.event_bus = get_event_bus()
         self.cache = get_cache()
+        
+        # DeepKE-LLM 术语抽取器
+        self.term_extractor = get_term_extractor()
+        self.dict_builder = get_dict_builder()
         
         # 行业术语表（使用统一的 Term 模型）
         self.term_tables: Dict[str, Dict[str, Term]] = {}
@@ -114,7 +125,7 @@ class IndustryGovernance:
         # 加载预置术语
         self._load_preset_terms()
         
-        print("[IndustryGovernance] 初始化完成（已集成统一术语模型、事件总线、缓存层）")
+        print("[IndustryGovernance] 初始化完成（已集成统一术语模型、事件总线、缓存层、DeepKE-LLM）")
     
     def _load_preset_terms(self):
         """加载预置行业术语"""
@@ -246,6 +257,115 @@ class IndustryGovernance:
         for dialect_term, standard_term in synonyms.items():
             self.add_term(dialect_term, standard_term, industry)
         print(f"[IndustryGovernance] 加载 {industry} 同义词 {len(synonyms)} 条")
+    
+    def extract_terms_from_text(self, text: str, industry: str = "通用") -> List[Dict[str, Any]]:
+        """
+        使用 DeepKE-LLM 从文本中智能抽取术语
+        
+        Args:
+            text: 输入文本
+            industry: 目标行业
+            
+        Returns:
+            抽取的术语列表，包含术语名称、类别、定义等
+        """
+        # 异步调用术语抽取器
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        terms = loop.run_until_complete(self.term_extractor.extract_terms(text, industry))
+        loop.close()
+        
+        result = []
+        for term in terms:
+            result.append({
+                "term": term.term,
+                "category": term.category,
+                "definition": term.definition,
+                "confidence": term.confidence
+            })
+        
+        return result
+    
+    def extract_relations_from_text(self, text: str, industry: str = "通用") -> List[Dict[str, Any]]:
+        """
+        使用 DeepKE-LLM 从文本中抽取术语关系
+        
+        Args:
+            text: 输入文本
+            industry: 目标行业
+            
+        Returns:
+            抽取的关系列表
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        relations = loop.run_until_complete(self.term_extractor.extract_relations(text, industry))
+        loop.close()
+        
+        result = []
+        for rel in relations:
+            result.append({
+                "term1": rel.term1,
+                "relation_type": rel.relation_type,
+                "term2": rel.term2,
+                "confidence": rel.confidence
+            })
+        
+        return result
+    
+    def build_industry_dictionary(self, documents: List[str], industry: str, 
+                                  export_path: str = None) -> Dict[str, Any]:
+        """
+        使用 DeepKE-LLM 从文档集合构建行业词典
+        
+        Args:
+            documents: 文档列表
+            industry: 行业名称
+            export_path: 导出路径（可选）
+            
+        Returns:
+            行业词典
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dictionary = loop.run_until_complete(
+            self.dict_builder.build_and_export(documents, industry, export_path)
+        )
+        loop.close()
+        
+        # 将抽取的术语添加到术语表
+        for term_name, term_info in dictionary.get("terms", {}).items():
+            if term_info.get("confidence", 0) > 0.7:
+                standard_term = term_info.get("category", term_name)
+                self.add_term(term_name, standard_term, industry)
+        
+        return dictionary
+    
+    def update_dictionary_from_docs(self, documents: List[str], industry: str):
+        """
+        从新文档更新行业词典
+        
+        Args:
+            documents: 新文档列表
+            industry: 行业名称
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self.dict_builder.update_existing_dict(self, documents, industry))
+        loop.close()
+    
+    def generate_term_definition(self, term: str, industry: str) -> str:
+        """
+        使用 DeepKE-LLM 为术语生成定义
+        
+        Args:
+            term: 术语名称
+            industry: 行业领域
+            
+        Returns:
+            术语定义
+        """
+        return self.term_extractor.generate_term_definition(term, industry)
     
     def extract_source_type(self, doc_title: str, doc_content: str) -> str:
         """

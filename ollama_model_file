@@ -1,3 +1,0 @@
-FROM SmolLM2.gguf
-PARAMETER temperature 0.1
-PARAMETER num_ctx 2048

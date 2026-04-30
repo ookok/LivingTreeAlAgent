@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Type, Callable, Set
 
-# 从 plugin_framework 导入基础设施
-from core.plugin_framework.event_bus import EventBus, get_event_bus
+# 从业务层导入基础设施
+from ..enhanced_event_bus import EnhancedEventBus, get_enhanced_event_bus
 from core.plugin_framework.plugin_manager import PluginManager, get_plugin_manager
 from core.plugin_framework.base_plugin import BasePlugin, PluginManifest
 
@@ -73,7 +73,7 @@ class Microkernel:
         self._lock = threading.RLock()
 
         # 基础设施（由内核初始化）
-        self._event_bus: Optional[EventBus] = None
+        self._event_bus: Optional[EnhancedEventBus] = None
         self._plugin_manager: Optional[PluginManager] = None
         self._service_registry: Optional[ServiceRegistry] = None
         self._extension_manager: Optional[ExtensionPointManager] = None
@@ -153,9 +153,9 @@ class Microkernel:
 
     def _init_infrastructure(self) -> None:
         """初始化基础设施"""
-        # EventBus（全局单例）
-        self._event_bus = get_event_bus()
-        logger.debug("[Microkernel] EventBus initialized")
+        # EnhancedEventBus（全局单例）
+        self._event_bus = get_enhanced_event_bus()
+        logger.debug("[Microkernel] EnhancedEventBus initialized")
 
         # ServiceRegistry（内核拥有）
         from .service_registry import get_service_registry

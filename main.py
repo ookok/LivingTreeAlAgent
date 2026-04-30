@@ -4,14 +4,19 @@
 LivingTree AI Agent - Unified Entry Point
 
 Usage:
-    python main.py client      # Start desktop client
-    python main.py relay       # Start relay server
-    python main.py tracker     # Start tracker server
-    python main.py app         # Start enterprise app
-    python main.py bootstrap   # Auto-configure and deploy services (first run)
-    python main.py install     # Install as background service
-    python main.py uninstall   # Uninstall background service
-    python main.py status      # Check service status
+    python main.py client          # Start desktop client
+    python main.py relay           # Start relay server
+    python main.py tracker         # Start tracker server
+    python main.py app             # Start enterprise app
+    python main.py bootstrap       # Auto-configure and deploy services (first run)
+    python main.py install         # Install as background service
+    python main.py uninstall       # Uninstall background service
+    python main.py status          # Check service status
+    python main.py check           # Run environment check
+    python main.py update          # Check and apply updates
+    python main.py heal            # Start auto-heal monitoring
+    python main.py config          # Run configuration wizard
+    python main.py model <name>    # Ensure model is installed
 """
 
 import sys
@@ -67,7 +72,6 @@ def run_bootstrap():
     )
     
     try:
-        # 1. 初始化启动器
         bootstrapper = PlatformBootstrapper()
         config = bootstrapper.detect_and_configure()
         
@@ -79,20 +83,16 @@ def run_bootstrap():
         print(f"   推理引擎: {config['inference_engine']}")
         print(f"   模型: {config['ollama']['model']}")
         
-        # 2. 检查并安装 Ollama
         print("\n🔧 检查 Ollama 依赖...")
         bootstrapper._check_dependencies()
         
-        # 3. 下载模型
         print("\n📥 下载模型...")
         bootstrapper._download_model()
         
-        # 4. 设置虚拟环境
         print("\n🔨 设置虚拟环境...")
         env_manager = EnvironmentManager(config)
         env_manager.setup_environment()
         
-        # 5. 部署服务
         print("\n📦 部署服务...")
         deployer = ServiceDeployer(config)
         deployer.deploy_all()
@@ -102,7 +102,6 @@ def run_bootstrap():
         print("   日志目录: " + config['log_path'])
         print("   模型: " + config['ollama']['model'])
         
-        # 6. 启动客户端
         print("\n🌳 启动客户端...")
         start_client()
         
@@ -198,7 +197,7 @@ def run_status():
 
 
 def run_sync_models():
-    """Sync model list from external repositories (using index + shard strategy)"""
+    """Sync model list from external repositories"""
     print("🔄 Syncing model list from external repositories...")
     print("   使用索引+分片策略优化内存使用")
     
@@ -207,14 +206,12 @@ def run_sync_models():
     from client.src.infrastructure.model_registry import ModelRegistrySync, LazyModelRegistry
     
     try:
-        # 同步模型列表（生成索引 + 分片）
         sync = ModelRegistrySync()
         success = sync.sync_models()
         
         if success:
             print("✅ 模型列表同步成功")
             
-            # 加载索引查看统计信息
             registry = LazyModelRegistry()
             registry.load_index()
             
@@ -225,14 +222,12 @@ def run_sync_models():
             print(f"   共 {len(families)} 个模型系列")
             print(f"   系列列表: {families[:10]}...")
             
-            # 检查 Qwen 系列
             qwen_count = len(registry.get_models_by_family("qwen"))
             print(f"   Qwen 系列模型: {qwen_count} 个")
             
             registry_dir = sync.get_registry_dir()
             print(f"   注册表目录: {registry_dir}")
             
-            # 显示目录结构
             import glob
             index_files = glob.glob(str(registry_dir / "*.json"))
             shard_files = glob.glob(str(registry_dir / "*.json.gz"))
@@ -248,29 +243,91 @@ def run_sync_models():
         sys.exit(1)
 
 
+def run_check():
+    """Run environment check"""
+    from scripts.check import EnvironmentChecker
+    checker = EnvironmentChecker()
+    success = checker.run()
+    sys.exit(0 if success else 1)
+
+
+def run_update():
+    """Check and apply updates"""
+    from scripts.auto_update import AutoUpdater
+    updater = AutoUpdater()
+    success, message = updater.run(auto_apply=False)
+    print(message)
+    sys.exit(0 if success else 1)
+
+
+def run_heal():
+    """Start auto-heal monitoring"""
+    from scripts.auto_heal import AutoHealer
+    healer = AutoHealer()
+    healer.run()
+
+
+def run_config():
+    """Run configuration wizard"""
+    from scripts.config_wizard import ConfigWizard
+    wizard = ConfigWizard()
+    wizard.run()
+
+
+def run_model():
+    """Ensure model is installed"""
+    if len(sys.argv) < 3:
+        print("❌ 请指定模型名称")
+        print("Usage: python main.py model <model_name>")
+        sys.exit(1)
+    
+    model_name = sys.argv[2]
+    from scripts.model_manager import ModelManager
+    manager = ModelManager()
+    success = manager.ensure_model(model_name)
+    sys.exit(0 if success else 1)
+
+
+def _check_first_run():
+    """Check if this is the first run and run config wizard"""
+    from scripts.config_wizard import ConfigWizard
+    if not ConfigWizard.exists():
+        print("👋 首次启动，正在配置...")
+        wizard = ConfigWizard()
+        wizard.run()
+
+
+def _auto_update_check():
+    """Check for updates automatically"""
+    from scripts.config_wizard import ConfigWizard
+    config = ConfigWizard.load_config()
+    
+    if config.get("auto_update", True):
+        from scripts.auto_update import AutoUpdater
+        updater = AutoUpdater()
+        success, updates, _ = updater.check_updates()
+        if success and updates > 0:
+            print(f"📥 发现 {updates} 个更新")
+            try:
+                response = input("是否更新? (Y/N): ").strip().upper()
+                if response == 'Y':
+                    updater.apply_update()
+            except KeyboardInterrupt:
+                pass
+
+
 def main():
     if len(sys.argv) < 2:
-        print("🌳 LivingTree AI Agent - Unified Entry Point")
-        print()
-        print("Usage:")
-        print("  python main.py client      # Start desktop client")
-        print("  python main.py relay       # Start relay server")
-        print("  python main.py tracker     # Start tracker server")
-        print("  python main.py app         # Start enterprise app")
-        print("  python main.py bootstrap   # Auto-configure and deploy (first run)")
-        print("  python main.py install     # Install as background service")
-        print("  python main.py uninstall   # Uninstall background service")
-        print("  python main.py status      # Check service status")
-        print("  python main.py sync-models # Sync model list from external repos")
-        print()
-        print("Default: client")
-        
+        _check_first_run()
+        _auto_update_check()
         start_client()
         return
 
     command = sys.argv[1].lower()
 
     if command == 'client':
+        _check_first_run()
+        _auto_update_check()
         start_client()
     elif command == 'relay':
         start_relay()
@@ -288,9 +345,19 @@ def main():
         run_status()
     elif command == 'sync-models':
         run_sync_models()
+    elif command == 'check':
+        run_check()
+    elif command == 'update':
+        run_update()
+    elif command == 'heal':
+        run_heal()
+    elif command == 'config':
+        run_config()
+    elif command == 'model':
+        run_model()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: client, relay, tracker, app, bootstrap, install, uninstall, status, sync-models")
+        print("Available commands: client, relay, tracker, app, bootstrap, install, uninstall, status, sync-models, check, update, heal, config, model")
         sys.exit(1)
 
 

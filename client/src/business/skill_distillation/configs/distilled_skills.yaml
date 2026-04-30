@@ -1,0 +1,208 @@
+auto_update: false
+default_install_dir: ~/LivingTreeAI/distilled_skills
+sources:
+- author: alchaincyf
+  category: creative
+  description: 女娲技能 - 创意生成与设计辅助
+  enabled: true
+  name: nuwa-skill
+  tags:
+  - creative
+  - design
+  - generation
+  type: github
+  url: https://github.com/alchaincyf/nuwa-skill
+  version: latest
+- author: notdog1998
+  category: thinking
+  description: 自我认知与个人成长技能
+  enabled: true
+  name: yourself-skill
+  tags:
+  - self
+  - growth
+  - psychology
+  type: github
+  url: https://github.com/notdog1998/yourself-skill
+  version: latest
+- author: leilei926524-tech
+  category: utility
+  description: 反蒸馏防御技术
+  enabled: true
+  name: anti-distill
+  tags:
+  - security
+  - defense
+  - privacy
+  type: github
+  url: https://github.com/leilei926524-tech/anti-distill
+  version: latest
+- author: perkfly
+  category: thinking
+  description: 专家技能框架
+  enabled: true
+  name: ex-skill
+  tags:
+  - expert
+  - knowledge
+  - framework
+  type: github
+  url: https://github.com/perkfly/ex-skill
+  version: latest
+- author: jinchenma94
+  category: traditional
+  description: 八字命理技能
+  enabled: true
+  name: bazi-skill
+  tags:
+  - traditional
+  - fengshui
+  - astrology
+  type: github
+  url: https://github.com/jinchenma94/bazi-skill
+  version: latest
+- author: alchaincyf
+  category: business
+  description: 乔布斯思维模型
+  enabled: true
+  name: steve-jobs-skill
+  tags:
+  - business
+  - innovation
+  - design
+  type: github
+  url: https://github.com/alchaincyf/steve-jobs-skill
+  version: latest
+- author: alchaincyf
+  category: mentor
+  description: 导师指导技能
+  enabled: true
+  name: x-mentor-skill
+  tags:
+  - mentor
+  - coaching
+  - guidance
+  type: github
+  url: https://github.com/alchaincyf/x-mentor-skill
+  version: latest
+- author: alchaincyf
+  category: utility
+  description: 技能管理大师
+  enabled: true
+  name: master-skill
+  tags:
+  - management
+  - skill
+  - master
+  type: github
+  url: https://github.com/alchaincyf/master-skill
+  version: latest
+- author: vogtsw
+  category: business
+  description: 老板技能集
+  enabled: true
+  name: boss-skills
+  tags:
+  - business
+  - leadership
+  - management
+  type: github
+  url: https://github.com/vogtsw/boss-skills
+  version: latest
+- author: alchaincyf
+  category: business
+  description: 马斯克思维模型
+  enabled: true
+  name: elon-musk-skill
+  tags:
+  - business
+  - innovation
+  - space
+  type: github
+  url: https://github.com/alchaincyf/elon-musk-skill
+  version: latest
+- author: alchaincyf
+  category: thinking
+  description: 芒格思维模型
+  enabled: true
+  name: munger-skill
+  tags:
+  - thinking
+  - investing
+  - mental-models
+  type: github
+  url: https://github.com/alchaincyf/munger-skill
+  version: latest
+- author: alchaincyf
+  category: philosophy
+  description: 纳瓦尔智慧
+  enabled: true
+  name: naval-skill
+  tags:
+  - philosophy
+  - wisdom
+  - life
+  type: github
+  url: https://github.com/alchaincyf/naval-skill
+  version: latest
+- author: alchaincyf
+  category: science
+  description: 费曼学习法
+  enabled: true
+  name: feynman-skill
+  tags:
+  - science
+  - learning
+  - method
+  type: github
+  url: https://github.com/alchaincyf/feynman-skill
+  version: latest
+- author: alchaincyf
+  category: philosophy
+  description: 塔勒布反脆弱思维
+  enabled: true
+  name: taleb-skill
+  tags:
+  - philosophy
+  - risk
+  - antifragile
+  type: github
+  url: https://github.com/alchaincyf/taleb-skill
+  version: latest
+- author: alchaincyf
+  category: business
+  description: 张一鸣管理哲学
+  enabled: true
+  name: zhang-yiming-skill
+  tags:
+  - business
+  - management
+  - tech
+  type: github
+  url: https://github.com/alchaincyf/zhang-yiming-skill
+  version: latest
+- author: stallone0000
+  category: thinking
+  description: 推理技能框架
+  enabled: true
+  name: reasoning-skill
+  tags:
+  - reasoning
+  - logic
+  - thinking
+  type: github
+  url: https://github.com/stallone0000/Reasoning-Skill
+  version: latest
+- author: KKKKhazix
+  category: utility
+  description: Khazix 技能集
+  enabled: true
+  name: khazix-skills
+  tags:
+  - skills
+  - utility
+  - toolkit
+  type: github
+  url: https://github.com/KKKKhazix/khazix-skills
+  version: latest
+update_interval_hours: 24

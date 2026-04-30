@@ -3,6 +3,11 @@ Agent Skills 初始化
 =================
 
 将所有 Agent Skills 注册到系统中，并集成到现有工作流
+
+自动集成 Trae 任务拆解 SKILL：
+- ArchitectureDesignerSkill（架构设计与系统规划）
+- CodeRefactorerSkill（代码重构与优化）
+- TaskSplitterProSkill（智能任务拆解大师）
 """
 
 import logging
@@ -17,6 +22,13 @@ from client.src.business.agent_skills.workflows.spec_driven import SpecDrivenWor
 from client.src.business.agent_skills.workflows.test_driven import TestDrivenWorkflow
 from client.src.business.agent_skills.workflows.code_review import CodeReviewWorkflow
 from client.src.business.agent_skills.workflows.security import SecurityWorkflow
+from client.src.business.agent_skills.task_decomposition_skills import (
+    DecompositionSkillFactory,
+    register_decomposition_skills,
+    get_architecture_designer,
+    get_code_refactorer,
+    get_task_splitter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +62,16 @@ class AgentSkillsInitializer:
             # 1. 注册内置技能
             self._register_builtin_skills()
             
-            # 2. 加载 Markdown 技能文件
+            # 2. 自动注册 Trae 任务拆解技能（新增）
+            self._register_decomposition_skills()
+            
+            # 3. 加载 Markdown 技能文件
             self._load_markdown_skills()
             
-            # 3. 配置斜杠命令
+            # 4. 配置斜杠命令（包含拆解技能）
             self._setup_slash_commands()
             
-            # 4. 注册工作流处理器
+            # 5. 注册工作流处理器（包含拆解技能）
             self._register_workflow_handlers()
             
             logger.info("[AgentSkills] 初始化完成")
@@ -73,6 +88,27 @@ class AgentSkillsInitializer:
                 "success": False,
                 "error": str(e),
             }
+    
+    def _register_decomposition_skills(self):
+        """
+        自动注册 Trae 任务拆解技能
+        
+        包括：
+        - ArchitectureDesignerSkill（架构设计与系统规划）
+        - CodeRefactorerSkill（代码重构与优化）
+        - TaskSplitterProSkill（智能任务拆解大师）
+        """
+        logger.info("[AgentSkills] 注册 Trae 任务拆解技能")
+        
+        # 使用工厂函数注册所有拆解技能
+        register_decomposition_skills(self.registry)
+        
+        # 验证注册结果
+        arch_skill = get_architecture_designer()
+        ref_skill = get_code_refactorer()
+        split_skill = get_task_splitter()
+        
+        logger.info(f"[AgentSkills] 已注册拆解技能: {arch_skill.get_manifest().name}, {ref_skill.get_manifest().name}, {split_skill.get_manifest().name}")
     
     def _register_builtin_skills(self):
         """注册内置技能"""
@@ -186,6 +222,34 @@ class AgentSkillsInitializer:
                 handler=self._handle_skills_list_command,
                 category="general",
             ),
+            # Trae 任务拆解技能斜杠命令（新增）
+            SlashCommand(
+                command="arch",
+                description="激活架构设计与系统规划 SKILL",
+                handler=self._handle_arch_command,
+                skill_id="architecture_designer",
+                category="planning",
+            ),
+            SlashCommand(
+                command="refactor",
+                description="激活代码重构与优化 SKILL",
+                handler=self._handle_refactor_command,
+                skill_id="code_refactorer",
+                category="development",
+            ),
+            SlashCommand(
+                command="decompose",
+                description="激活智能任务拆解大师 SKILL",
+                handler=self._handle_decompose_command,
+                skill_id="task_splitter_pro",
+                category="planning",
+            ),
+            SlashCommand(
+                command="plan",
+                description="进入 SOLO Plan 模式",
+                handler=self._handle_plan_command,
+                category="planning",
+            ),
         ]
         
         for cmd in commands:
@@ -269,6 +333,66 @@ class AgentSkillsInitializer:
                     "category": s.category.value,
                 }
                 for s in skills
+            ],
+        }
+    
+    # ─── Trae 任务拆解技能命令处理器（新增）───────────────────────────
+    
+    def _handle_arch_command(self, args: Dict) -> Dict:
+        """处理 /arch 命令 - 激活架构设计与系统规划 SKILL"""
+        skill = get_architecture_designer()
+        manifest = skill.get_manifest()
+        return {
+            "command": "/arch",
+            "action": f"激活【{manifest.name}】SKILL",
+            "skill_id": manifest.id,
+            "description": manifest.description,
+            "examples": manifest.examples,
+            "status": "ready",
+        }
+    
+    def _handle_refactor_command(self, args: Dict) -> Dict:
+        """处理 /refactor 命令 - 激活代码重构与优化 SKILL"""
+        skill = get_code_refactorer()
+        manifest = skill.get_manifest()
+        return {
+            "command": "/refactor",
+            "action": f"激活【{manifest.name}】SKILL",
+            "skill_id": manifest.id,
+            "description": manifest.description,
+            "examples": manifest.examples,
+            "status": "ready",
+        }
+    
+    def _handle_decompose_command(self, args: Dict) -> Dict:
+        """处理 /decompose 命令 - 激活智能任务拆解大师 SKILL"""
+        skill = get_task_splitter()
+        manifest = skill.get_manifest()
+        return {
+            "command": "/decompose",
+            "action": f"激活【{manifest.name}】SKILL",
+            "skill_id": manifest.id,
+            "description": manifest.description,
+            "examples": manifest.examples,
+            "status": "ready",
+        }
+    
+    def _handle_plan_command(self, args: Dict) -> Dict:
+        """处理 /plan 命令 - 进入 SOLO Plan 模式"""
+        from client.src.business.solo_plan_manager import get_solo_plan_manager
+        
+        manager = get_solo_plan_manager()
+        manager.enter_plan_mode()
+        
+        return {
+            "command": "/plan",
+            "action": "进入 SOLO Plan 模式",
+            "status": "plan_mode_active",
+            "tips": [
+                "Plan 模式下禁止直接执行代码",
+                "使用 /arch /refactor /decompose 激活拆解技能",
+                "拆解完成后审阅修改",
+                "分步执行并验收",
             ],
         }
     

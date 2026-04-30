@@ -1,0 +1,115 @@
+"""
+技能模块 - {{ module_name }}
+
+自动生成于: {{ timestamp }}
+
+包含以下技能:
+{% for tool in tools %}
+- {{ tool.name }}: {{ tool.description }}
+{% endfor %}
+"""
+
+from typing import Dict, Any, Optional, List
+
+# 导入依赖
+from client.src.business.tools.base_tool import BaseTool
+from loguru import logger
+
+
+{% for tool in tools %}
+class {{ tool.name.capitalize().replace("_", "") }}Tool(BaseTool):
+    """{{ tool.description }}"""
+    
+    def __init__(self):
+        super().__init__()
+        self._logger = logger.bind(component="{{ tool.name.capitalize().replace('_', '') }}Tool")
+    
+    @property
+    def name(self) -> str:
+        return "{{ tool.name }}"
+    
+    @property
+    def description(self) -> str:
+        return "{{ tool.description }}"
+    
+    @property
+    def category(self) -> str:
+        return "{{ tool.category }}"
+    
+    @property
+    def node_type(self) -> str:
+        return "{{ tool.node_type }}"
+    
+    async def execute(
+        self,
+        {% for param in tool.parameters %}
+        {{ param.name }}: {{ param.type }}{% if not param.required %} = None{% endif %}{% if not loop.last %},{% endif %}
+        {% endfor %}
+        **kwargs
+    ) -> Dict[str, Any]:
+        try:
+            # 参数验证
+            {% for param in tool.parameters %}
+            {% if param.required %}
+            if {{ param.name }} is None:
+                return {"success": False, "message": "缺少必需参数: {{ param.name }}", "data": None}
+            {% endif %}
+            {% endfor %}
+            
+            # 执行逻辑
+            result_data = {
+                {% for param in tool.parameters %}
+                "{{ param.name }}": {{ param.name }},
+                {% endfor %}
+                "tool": "{{ tool.name }}",
+                "message": "执行成功"
+            }
+            
+            return {
+                "success": True,
+                "message": "{{ tool.name.replace('_', ' ').title() }} 执行成功",
+                "data": result_data
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": str(e), "data": None}
+
+{% endfor %}
+
+
+# 工具实例列表
+_TOOLS = [
+    {% for tool in tools %}
+    {{ tool.name.capitalize().replace("_", "") }}Tool(),
+    {% endfor %}
+]
+
+
+def get_tools() -> List[BaseTool]:
+    """获取所有工具实例"""
+    return _TOOLS
+
+
+def get_tool_by_name(name: str) -> Optional[BaseTool]:
+    """根据名称获取工具"""
+    for tool in _TOOLS:
+        if tool.name == name:
+            return tool
+    return None
+
+
+def register_all():
+    """注册所有工具到注册中心"""
+    from client.src.business.tools.tool_registry import ToolRegistry
+    
+    registry = ToolRegistry.get_instance()
+    for tool in _TOOLS:
+        try:
+            tool.register()
+            print(f"已注册: {tool.name}")
+        except Exception as e:
+            print(f"注册失败 {tool.name}: {e}")
+
+
+if __name__ == "__main__":
+    register_all()

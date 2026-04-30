@@ -1,0 +1,31 @@
+tools:
+- author: system
+  category: general
+  description: 查询股票信息
+  examples: []
+  icon: null
+  name: stock_query
+  node_type: deterministic
+  parameters:
+  - description: 股票代码
+    name: symbol
+    required: true
+    type: string
+  returns: ToolResult
+  tags: []
+  version: '1.0'
+- author: system
+  category: utility
+  description: 计算器工具
+  examples: []
+  icon: null
+  name: calculator
+  node_type: deterministic
+  parameters:
+  - description: 数学表达式
+    name: expression
+    required: true
+    type: string
+  returns: ToolResult
+  tags: []
+  version: '1.0'

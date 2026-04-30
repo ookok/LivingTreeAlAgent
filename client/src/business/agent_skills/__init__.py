@@ -60,6 +60,18 @@ from client.src.business.agent_skills.cron_scheduler import (
     NaturalLanguageScheduler,
     ExecutionRecord,
 )
+from client.src.business.agent_skills.task_decomposition_skills import (
+    DecompositionSkillType,
+    BaseDecompositionSkill,
+    ArchitectureDesignerSkill,
+    CodeRefactorerSkill,
+    TaskSplitterProSkill,
+    DecompositionSkillFactory,
+    get_architecture_designer,
+    get_code_refactorer,
+    get_task_splitter,
+    register_decomposition_skills,
+)
 
 __all__ = [
     # 注册中心
@@ -103,4 +115,15 @@ __all__ = [
     "CronParser",
     "NaturalLanguageScheduler",
     "ExecutionRecord",
+    # 任务拆解技能（Trae SKILL 风格）
+    "DecompositionSkillType",
+    "BaseDecompositionSkill",
+    "ArchitectureDesignerSkill",
+    "CodeRefactorerSkill",
+    "TaskSplitterProSkill",
+    "DecompositionSkillFactory",
+    "get_architecture_designer",
+    "get_code_refactorer",
+    "get_task_splitter",
+    "register_decomposition_skills",
 ]

@@ -142,6 +142,20 @@ from .deepke_term_extractor import (
     get_dict_builder
 )
 
+# 无向量检索与向量存储（2026-04-30 新增）
+from .page_index import PageIndex
+from .chroma_adapter import ChromaAdapter, get_chroma
+from .vector_store import (
+    VectorStore,
+    ChromaVectorStore,
+    QdrantVectorStore,
+    VectorStoreManager,
+    PerformanceMonitor,
+    get_vector_store,
+    switch_to_chroma,
+    switch_to_qdrant
+)
+
 
 __all__ = [
     # 基础缓存层
@@ -217,6 +231,15 @@ __all__ = [
     "TermRelation",
     "DeepKETermExtractor",
     "IndustryDictBuilder",
+    
+    # 无向量检索与向量存储
+    "PageIndex",
+    "ChromaAdapter",
+    "VectorStore",
+    "ChromaVectorStore",
+    "QdrantVectorStore",
+    "VectorStoreManager",
+    "PerformanceMonitor",
 
     # 工具函数
     "get_l4_executor",
@@ -232,7 +255,11 @@ __all__ = [
     "create_industrial_knowledge_discovery",
     "create_triple_chain_engine",
     "get_term_extractor",
-    "get_dict_builder"
+    "get_dict_builder",
+    "get_chroma",
+    "get_vector_store",
+    "switch_to_chroma",
+    "switch_to_qdrant"
 ]
 
 __version__ = "2.2.0"

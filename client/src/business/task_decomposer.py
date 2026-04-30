@@ -318,6 +318,115 @@ class TaskDecomposer:
                     "prompt": "验证以下回答：\n{answer}\n\n检查：1. 是否完整回答了问题 2. 是否有遗漏 3. 是否有错误"
                 }
             ]
+        },
+        "architecture": {
+            "name": "架构设计任务",
+            "max_steps": 5,
+            "process_type": ProcessType.HIERARCHICAL,
+            "steps": [
+                {
+                    "id": "requirements",
+                    "title": "需求分析",
+                    "desc": "深入分析业务需求和约束条件",
+                    "prompt": "分析以下架构设计需求：\n{question}\n\n详细列出：1. 核心目标 2. 功能需求清单 3. 非功能需求（性能/安全/高可用/扩展性）4. 技术约束"
+                },
+                {
+                    "id": "system_architecture",
+                    "title": "系统架构设计",
+                    "desc": "设计整体系统架构图",
+                    "prompt": "基于需求分析：\n{requirements}\n\n输出系统架构图描述，包括：1. 分层架构（展示层/服务层/数据层）2. 核心模块划分 3. 关键数据流 4. 外部系统集成点",
+                    "async_execution": True
+                },
+                {
+                    "id": "service_split",
+                    "title": "服务拆分清单",
+                    "desc": "微服务拆分与边界定义",
+                    "prompt": "基于架构设计：\n{system_architecture}\n\n列出服务拆分清单：1. 每个服务的职责边界 2. 服务间接口定义 3. 调用关系图 4. 数据一致性策略",
+                    "async_execution": True
+                },
+                {
+                    "id": "tech_selection",
+                    "title": "核心技术选型",
+                    "desc": "按模块推荐适配技术栈",
+                    "prompt": "基于服务拆分：\n{service_split}\n\n给出技术选型方案：1. 语言与框架选择 2. 数据库选型（主从/分片策略）3. 中间件（缓存/MQ/网关）4. 部署架构（容器/K8s/云原生）"
+                },
+                {
+                    "id": "implementation",
+                    "title": "实施计划与风险",
+                    "desc": "制定实施步骤、时间线与风险预案",
+                    "prompt": "综合以上分析：\n{tech_selection}\n\n输出实施计划：1. 分阶段实施步骤（不超过5步）2. 每步预期产出 3. 高风险点识别与应对方案 4. 验收标准"
+                }
+            ]
+        },
+        "refactoring": {
+            "name": "代码重构任务",
+            "max_steps": 4,
+            "process_type": ProcessType.SEQUENTIAL,
+            "steps": [
+                {
+                    "id": "analysis",
+                    "title": "代码分析",
+                    "desc": "分析代码结构、复杂度和问题点",
+                    "prompt": "分析以下代码或描述：\n{question}\n\n输出分析结果：1. 代码结构概览 2. 复杂度分析（圈复杂度/嵌套深度）3. 重复代码识别 4. 潜在问题点（耦合度/可维护性/可测试性）"
+                },
+                {
+                    "id": "decomposition",
+                    "title": "逻辑拆解",
+                    "desc": "拆解复杂逻辑为独立函数/模块",
+                    "prompt": "基于代码分析：\n{analysis}\n\n进行逻辑拆解：1. 识别可提取的公共方法 2. 拆分复杂函数为小函数 3. 消除重复代码 4. 定义函数职责边界"
+                },
+                {
+                    "id": "decoupling",
+                    "title": "依赖解耦",
+                    "desc": "拆解模块间强耦合关系",
+                    "prompt": "基于逻辑拆解：\n{decomposition}\n\n进行依赖解耦：1. 识别模块间强耦合点 2. 设计独立接口 3. 引入依赖注入 4. 降低模块间关联度"
+                },
+                {
+                    "id": "optimization",
+                    "title": "分层优化",
+                    "desc": "按架构分层优化代码结构",
+                    "prompt": "基于依赖解耦：\n{decoupling}\n\n进行分层优化：1. 按控制器-服务-数据层重新组织 2. 添加接口定义 3. 优化错误处理 4. 添加类型注解和文档 5. 保持原有业务逻辑不变"
+                }
+            ]
+        },
+        "task_split": {
+            "name": "任务拆解任务",
+            "max_steps": 5,
+            "process_type": ProcessType.HIERARCHICAL,
+            "steps": [
+                {
+                    "id": "phase_decompose",
+                    "title": "分阶段拆解",
+                    "desc": "将大型任务分解为阶段",
+                    "prompt": "分析以下任务：\n{question}\n\n进行分阶段拆解：1. 需求分析阶段 2. 设计阶段 3. 开发阶段 4. 测试阶段 5. 部署阶段，每个阶段的核心产出"
+                },
+                {
+                    "id": "priority",
+                    "title": "优先级排序",
+                    "desc": "为任务分配优先级",
+                    "prompt": "基于阶段拆解：\n{phase_decompose}\n\n进行优先级排序：1. 核心任务（必须优先完成）2. 次要任务（重要但非紧急）3. 边缘任务（锦上添花），说明优先级依据",
+                    "async_execution": True
+                },
+                {
+                    "id": "dependencies",
+                    "title": "依赖关系梳理",
+                    "desc": "梳理任务间的依赖关系",
+                    "prompt": "基于阶段拆解：\n{phase_decompose}\n\n梳理依赖关系：1. 任务间依赖图 2. 并行任务识别 3. 关键路径分析 4. 前置条件清单",
+                    "async_execution": True
+                },
+                {
+                    "id": "risk",
+                    "title": "风险识别",
+                    "desc": "识别高风险任务和应对方案",
+                    "prompt": "基于任务清单：\n{priority}\n\n识别风险：1. 高风险任务（如第三方接口对接/复杂算法）2. 风险等级评估 3. 应对方案 4. 备选方案"
+                },
+                {
+                    "id": "task_list",
+                    "title": "生成任务清单",
+                    "desc": "输出可直接执行的任务清单",
+                    "prompt": "综合以上分析：\n{dependencies}\n{risk}\n\n输出可执行任务清单：1. 任务ID 2. 任务名称 3. 描述 4. 优先级 5. 依赖任务ID 6. 预估时间 7. 负责人（可选）"
+                }
+            ]
         }
     }
     
@@ -339,9 +448,24 @@ class TaskDecomposer:
             question: 用户问题
             
         Returns:
-            任务类型: analysis / design / writing / decision / general
+            任务类型: analysis / design / writing / decision / architecture / refactoring / task_split / general
         """
         question_lower = question.lower()
+        
+        # 架构设计类关键词（优先级最高）
+        architecture_keywords = ["架构设计", "系统规划", "微服务", "高可用", "并发", "架构师"]
+        if any(k in question_lower for k in architecture_keywords):
+            return "architecture"
+        
+        # 任务拆解类关键词（优先级高于重构，因为更具体）
+        task_split_keywords = ["任务分解", "任务规划", "分解任务", "任务清单", "拆解任务"]
+        if any(k in question_lower for k in task_split_keywords):
+            return "task_split"
+        
+        # 代码重构类关键词
+        refactoring_keywords = ["重构", "优化", "拆解", "解耦", "重构代码", "代码优化"]
+        if any(k in question_lower for k in refactoring_keywords):
+            return "refactoring"
         
         # 分析类关键词
         analysis_keywords = ["分析", "评估", "比较", "对比", "预测", "研究", "检查"]
@@ -889,6 +1013,75 @@ def create_parallel_task(
     )
 
 
+def create_architecture_task(
+    question: str,
+    max_steps: int = 5
+) -> DecomposedTask:
+    """
+    创建架构设计任务（Trae 架构设计与系统规划 SKILL）
+    
+    Args:
+        question: 用户需求描述
+        max_steps: 最大步骤数
+        
+    Returns:
+        DecomposedTask
+    """
+    decomposer = TaskDecomposer(default_process_type=ProcessType.HIERARCHICAL)
+    return decomposer.decompose(
+        question=question,
+        task_type="architecture",
+        max_steps=max_steps,
+        process_type=ProcessType.HIERARCHICAL
+    )
+
+
+def create_refactoring_task(
+    question: str,
+    max_steps: int = 4
+) -> DecomposedTask:
+    """
+    创建代码重构任务（Trae 代码重构与优化 SKILL）
+    
+    Args:
+        question: 代码描述或代码片段
+        max_steps: 最大步骤数
+        
+    Returns:
+        DecomposedTask
+    """
+    decomposer = TaskDecomposer(default_process_type=ProcessType.SEQUENTIAL)
+    return decomposer.decompose(
+        question=question,
+        task_type="refactoring",
+        max_steps=max_steps,
+        process_type=ProcessType.SEQUENTIAL
+    )
+
+
+def create_task_split_task(
+    question: str,
+    max_steps: int = 5
+) -> DecomposedTask:
+    """
+    创建任务拆解任务（Trae 智能任务拆解大师 SKILL）
+    
+    Args:
+        question: 用户需求描述
+        max_steps: 最大步骤数
+        
+    Returns:
+        DecomposedTask
+    """
+    decomposer = TaskDecomposer(default_process_type=ProcessType.HIERARCHICAL)
+    return decomposer.decompose(
+        question=question,
+        task_type="task_split",
+        max_steps=max_steps,
+        process_type=ProcessType.HIERARCHICAL
+    )
+
+
 # 导出
 __all__ = [
     'ProcessType',
@@ -899,5 +1092,8 @@ __all__ = [
     'ChainOfThoughtExecutor',
     'create_sequential_task',
     'create_hierarchical_task',
-    'create_parallel_task'
+    'create_parallel_task',
+    'create_architecture_task',
+    'create_refactoring_task',
+    'create_task_split_task'
 ]

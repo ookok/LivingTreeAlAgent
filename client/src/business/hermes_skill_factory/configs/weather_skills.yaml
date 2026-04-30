@@ -1,0 +1,25 @@
+tools:
+- author: system
+  category: general
+  description: 查询天气信息
+  examples:
+  - description: 查询北京指定日期的天气
+    input:
+      city: 北京
+      date: '2024-01-15'
+  icon: null
+  name: weather_query
+  node_type: deterministic
+  parameters:
+  - description: 城市名称
+    name: city
+    required: true
+    type: string
+  - default: today
+    description: 查询日期（格式：YYYY-MM-DD）
+    name: date
+    required: false
+    type: string
+  returns: ToolResult
+  tags: []
+  version: '1.0'

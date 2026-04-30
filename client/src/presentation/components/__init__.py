@@ -1,94 +1,132 @@
 """
-通用组件库 - 统一导出
+UI组件模块
 
-使用方式：
-    from client.src.presentation.components import PrimaryButton, SearchInput, InfoCard
-    from client.src.presentation.components import UIDescriptorProtocol, SemanticParser, ControlFactory
-    from client.src.presentation.components import FilePreviewer, URLPreviewer, CodeHighlighterWidget
-    from client.src.presentation.components import StreamingThoughtWidget, ThinkingIndicator
+包含智能消息气泡、上下文面板、代码编辑器等创新组件
 """
 
-from .buttons import PrimaryButton, SecondaryButton, IconButton, DangerButton
-from .inputs import PrimaryLineEdit, SearchInput, PrimaryTextEdit, LabeledInput
-from .cards import Card, InfoCard, StatsCard, ActionCard
-from .dialogs import DialogService, BaseDialog, ConfirmDialog
-from .command_palette import CommandPalette, Command, CommandCategory
-from .ui_descriptor import (
-    UIDescriptorProtocol, UIComponent, UIResponse,
-    ControlType, LayoutType, ActionType,
-    FormField, ActionButton, ClarificationRequest,
-    ClarificationOption, ValidationRule
+# 消息气泡组件
+from .smart_message_bubble import (
+    MessageBubble,
+    CodeMessageBubble,
+    ImageMessageBubble,
+    MessageType,
 )
-from .semantic_parser import SemanticParser
-from .control_factory import ControlFactory
-from .layout_engine import LayoutEngine
-from .markdown_renderer import MarkdownRenderer
-from .code_highlighter import CodeHighlighterWidget, CodeBlockRenderer, SyntaxHighlighter, highlight_code
-from .file_previewer import FilePreviewer, URLPreviewer, preview_file_or_url
-from .streaming_thought import (
-    StreamingThoughtWidget, ThinkingIndicator, ToolCallAnimation,
-    DataFlowAnimation, ProgressRing, create_thinking_bubble, create_tool_call_animation
+
+# 上下文面板
+from .context_panel import (
+    ContextPanel,
+)
+
+# 代码编辑器
+from .smart_code_editor import (
+    SmartCodeEditor,
+)
+
+# 智能输入框
+from .smart_input_field import (
+    SmartInputField,
+)
+
+# 现代化表单组件
+from .modern_forms import (
+    ModernTextField,
+    ModernTextArea,
+    ModernComboBox,
+    ModernCheckBox,
+    ModernRadioGroup,
+    ModernForm,
+)
+
+# 文件操作组件
+from .file_operations import (
+    FileUploader,
+    FileViewer,
+    MediaPlayer,
+)
+
+# 工具面板组件
+from .tool_panels import (
+    ToolPanel,
+    ToolResultPanel,
+    DrawingCanvas,
+)
+
+# 现代化对话框
+from .modern_dialogs import (
+    ModernDialog,
+    ConfirmationDialog,
+    ProgressDialog,
+    ToastNotification,
+)
+
+# 配置引导组件
+from .config_dashboard import (
+    ConfigDashboard,
+)
+
+from .config_tutorial_card import (
+    ConfigTutorialCard,
+)
+
+# 聊天内联配置组件
+from .inline_config_card import (
+    InlineConfigCard,
+)
+
+from .config_sprite import (
+    ConfigSprite,
+)
+
+from .config_success_banner import (
+    ConfigSuccessBanner,
 )
 
 __all__ = [
-    # 按钮
-    "PrimaryButton",
-    "SecondaryButton",
-    "IconButton",
-    "DangerButton",
-    # 输入框
-    "PrimaryLineEdit",
-    "SearchInput",
-    "PrimaryTextEdit",
-    "LabeledInput",
-    # 卡片
-    "Card",
-    "InfoCard",
-    "StatsCard",
-    "ActionCard",
-    # 对话框
-    "DialogService",
-    "BaseDialog",
-    "ConfirmDialog",
-    # 命令面板
-    "CommandPalette",
-    "Command",
-    "CommandCategory",
-    # UI描述符协议
-    "UIDescriptorProtocol",
-    "UIComponent",
-    "UIResponse",
-    "ControlType",
-    "LayoutType",
-    "ActionType",
-    "FormField",
-    "ActionButton",
-    "ClarificationRequest",
-    "ClarificationOption",
-    "ValidationRule",
-    # 语义解析器
-    "SemanticParser",
-    # 控件工厂
-    "ControlFactory",
-    # 布局引擎
-    "LayoutEngine",
-    # Markdown渲染器
-    "MarkdownRenderer",
-    # 代码高亮
-    "CodeHighlighterWidget",
-    "CodeBlockRenderer",
-    "SyntaxHighlighter",
-    "highlight_code",
-    # 文件预览
-    "FilePreviewer",
-    "URLPreviewer",
-    "preview_file_or_url",
-    # 流式思考
-    "StreamingThoughtWidget",
-    "ThinkingIndicator",
-    "ToolCallAnimation",
-    "DataFlowAnimation",
-    "ProgressRing",
-    "create_thinking_bubble",
-    "create_tool_call_animation",
+    # 消息气泡组件
+    'MessageBubble',
+    'CodeMessageBubble',
+    'ImageMessageBubble',
+    'MessageType',
+    
+    # 上下文面板
+    'ContextPanel',
+    
+    # 代码编辑器
+    'SmartCodeEditor',
+    
+    # 智能输入框
+    'SmartInputField',
+    
+    # 现代化表单组件
+    'ModernTextField',
+    'ModernTextArea',
+    'ModernComboBox',
+    'ModernCheckBox',
+    'ModernRadioGroup',
+    'ModernForm',
+    
+    # 文件操作组件
+    'FileUploader',
+    'FileViewer',
+    'MediaPlayer',
+    
+    # 工具面板组件
+    'ToolPanel',
+    'ToolResultPanel',
+    'DrawingCanvas',
+    
+    # 现代化对话框
+    'ModernDialog',
+    'ConfirmationDialog',
+    'ProgressDialog',
+    'ToastNotification',
+    
+    # 配置引导组件
+    'ConfigDashboard',
+    'ConfigTutorialCard',
+    
+    # 聊天内联配置组件
+    'InlineConfigCard',
+    'ConfigSprite',
+    'ConfigSuccessBanner',
 ]

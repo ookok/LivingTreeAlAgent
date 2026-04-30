@@ -108,7 +108,29 @@ class LocalModelAdapter(BaseAgentAdapter):
         )
     
     def get_supported_models(self) -> List[str]:
-        """获取支持的模型列表"""
+        """获取支持的模型列表
+        
+        动态从 ModelManager 获取可用模型，避免硬编码
+        """
+        try:
+            from client.src.business.model_manager import ModelManager
+            from client.src.business.config import AppConfig, get_config
+            
+            config = get_config()
+            manager = ModelManager(config)
+            models = manager.get_available_models()
+            
+            model_names = []
+            for model in models:
+                if model.backend is not None:
+                    model_names.append(model.name)
+            
+            if model_names:
+                return model_names
+            
+        except Exception as e:
+            print(f"[LocalModelAdapter] 获取模型列表失败，使用默认列表: {e}")
+        
         return [
             "Qwen/Qwen2.5-7B-Instruct",
             "Qwen/Qwen2.5-14B-Instruct",

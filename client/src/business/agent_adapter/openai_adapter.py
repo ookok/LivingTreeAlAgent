@@ -97,7 +97,22 @@ class OpenAIAdapter(BaseAgentAdapter):
                 yield chunk.choices[0].delta.content
     
     def get_supported_models(self) -> List[str]:
-        """获取支持的模型列表"""
+        """获取支持的模型列表
+        
+        从配置中心动态获取，避免硬编码
+        """
+        try:
+            from client.src.business.shared.config_center import ConfigCenter
+            
+            config_center = ConfigCenter()
+            models = config_center.get("agents.openai.models", [])
+            
+            if models and isinstance(models, list):
+                return models
+            
+        except Exception as e:
+            print(f"[OpenAIAdapter] 获取模型列表失败，使用默认列表: {e}")
+        
         return [
             "gpt-4o",
             "gpt-4-turbo",

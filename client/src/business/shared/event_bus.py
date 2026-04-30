@@ -174,9 +174,17 @@ EVENTS = {
     "RETRIEVAL_PERFORMED": "retrieval_performed",
     "KNOWLEDGE_DISCOVERED": "knowledge_discovered",
     
+    # 知识库相关
+    "KNOWLEDGE_INGESTED": "knowledge_ingested",
+    "KNOWLEDGE_QUERIED": "knowledge_queried",
+    "KNOWLEDGE_LINTED": "knowledge_linted",
+    "WIKI_PAGE_CREATED": "wiki_page_created",
+    "WIKI_PAGE_UPDATED": "wiki_page_updated",
+    
     # 系统相关
     "CONFIG_UPDATED": "config_updated",
-    "SYSTEM_INITIALIZED": "system_initialized"
+    "SYSTEM_INITIALIZED": "system_initialized",
+    "CHAT_CLEAR": "chat_clear"
 }
 
 

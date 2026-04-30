@@ -69,10 +69,14 @@ class CommandProcessor:
             "/llmfit": self._handle_llmfit_command,
             "/help": self._handle_help_command,
             "/clear": self._handle_clear_command,
-            "/stats": self._handle_stats_command
+            "/stats": self._handle_stats_command,
+            "/ingest": self._handle_ingest_command,
+            "/query": self._handle_query_command,
+            "/lint": self._handle_lint_command,
+            "/kb": self._handle_kb_command
         }
         
-        print("[CommandProcessor] 初始化完成")
+        print("[CommandProcessor] 初始化完成（含知识库命令）")
     
     def is_command(self, message: str) -> bool:
         """判断消息是否为命令"""
@@ -344,11 +348,18 @@ class CommandProcessor:
         """处理 /help 命令 - 显示帮助信息"""
         result = "📋 聊天命令帮助:\n"
         result += "──────────────────────────\n"
-        result += "\n/model - 查看连接的 LLM 模型信息和状态\n"
-        result += "\n/llmfit - 扫描硬件并推荐最适合的本地 LLM 及量化版本\n"
-        result += "\n/stats - 查看系统统计信息\n"
-        result += "\n/clear - 清空聊天记录\n"
-        result += "\n/help - 显示此帮助信息\n"
+        result += "\n【系统命令】\n"
+        result += "/model - 查看连接的 LLM 模型信息和状态\n"
+        result += "/llmfit - 扫描硬件并推荐最适合的本地 LLM 及量化版本\n"
+        result += "/stats - 查看系统统计信息\n"
+        result += "/clear - 清空聊天记录\n"
+        result += "/help - 显示此帮助信息\n"
+        result += "\n【知识库命令】\n"
+        result += "/kb init - 初始化知识库规则\n"
+        result += "/kb status - 查看知识库状态\n"
+        result += "/ingest - 从 raw/ 摄入资料到 wiki/\n"
+        result += "/query <问题> - 查询知识库并返回带引用的答案\n"
+        result += "/lint - 知识库健康检查（找矛盾、补缺口、清孤儿页面）\n"
         result += "\n──────────────────────────\n"
         result += "提示：输入命令时无需加引号，直接输入即可"
         return result
@@ -397,6 +408,136 @@ class CommandProcessor:
         
         except Exception as e:
             return f"获取统计信息失败: {e}"
+    
+    async def _handle_ingest_command(self, args: str) -> str:
+        """处理 /ingest 命令 - 从 raw/ 摄入资料到 wiki/"""
+        try:
+            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            
+            kb_manager = get_knowledge_manager()
+            result = await kb_manager.ingest_from_raw()
+            
+            response = "📥 资料摄入完成!\n"
+            response += "──────────────────────────\n"
+            response += f"处理文件数: {result.files_processed}\n"
+            response += f"抽取术语数: {result.terms_extracted}\n"
+            response += f"更新页面数: {result.pages_updated}\n"
+            response += f"新建页面数: {result.new_pages_created}\n"
+            
+            if result.errors:
+                response += f"\n❌ 错误: {len(result.errors)} 个"
+            
+            return response
+        
+        except Exception as e:
+            return f"资料摄入失败: {e}"
+    
+    async def _handle_query_command(self, args: str) -> str:
+        """处理 /query 命令 - 查询知识库"""
+        try:
+            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            
+            if not args:
+                return "请输入查询内容，例如: /query 工业AI应用场景"
+            
+            kb_manager = get_knowledge_manager()
+            result = await kb_manager.query(args)
+            
+            response = "📚 查询结果:\n"
+            response += "──────────────────────────\n"
+            response += f"\n{result.answer}\n"
+            
+            if result.sources:
+                response += "\n📖 来源:\n"
+                for source in result.sources[:3]:
+                    response += f"- {source.get('title', '')}\n"
+            
+            if result.related_topics:
+                response += "\n🔗 关联主题:\n"
+                for topic in result.related_topics[:5]:
+                    response += f"- [[{topic}]]\n"
+            
+            return response
+        
+        except Exception as e:
+            return f"查询失败: {e}"
+    
+    async def _handle_lint_command(self, args: str) -> str:
+        """处理 /lint 命令 - 知识库健康检查"""
+        try:
+            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            
+            kb_manager = get_knowledge_manager()
+            issues = await kb_manager.lint()
+            
+            # 统计各类问题
+            issue_counts = {
+                "contradictions": 0,
+                "gaps": 0,
+                "orphans": 0,
+                "outdated": 0
+            }
+            
+            for issue in issues:
+                issue_counts[issue.issue_type] += 1
+            
+            response = "🔍 知识库健康检查完成!\n"
+            response += "──────────────────────────\n"
+            response += f"知识矛盾: {issue_counts['contradictions']}\n"
+            response += f"内容缺口: {issue_counts['gaps']}\n"
+            response += f"孤儿页面: {issue_counts['orphans']}\n"
+            response += f"过期信息: {issue_counts['outdated']}\n"
+            
+            if issues:
+                response += "\n📋 问题详情:\n"
+                for issue in issues[:5]:
+                    severity = "🔴" if issue.severity == "high" else "🟡" if issue.severity == "medium" else "🟢"
+                    response += f"{severity} {issue.page_title}: {issue.description}\n"
+            
+            # 自动修复
+            if issues:
+                fixed = await kb_manager.auto_fix(issues)
+                response += f"\n✅ 自动修复: {fixed}/{len(issues)} 个问题"
+            
+            return response
+        
+        except Exception as e:
+            return f"健康检查失败: {e}"
+    
+    async def _handle_kb_command(self, args: str) -> str:
+        """处理 /kb 命令 - 知识库管理"""
+        try:
+            from client.src.business.knowledge_base_manager import get_knowledge_manager
+            
+            kb_manager = get_knowledge_manager()
+            
+            if args == "init":
+                kb_manager.create_default_rules()
+                return "✅ 知识库规则已创建! 路径: knowledge_base/KNOWLEDGE_RULES.md"
+            
+            elif args == "status":
+                # 统计 wiki 页面数量
+                pages = list(kb_manager.wiki_path.glob("*.md"))
+                raw_files = list(kb_manager.raw_path.glob("**/*.md")) + list(kb_manager.raw_path.glob("**/*.txt"))
+                
+                response = "📊 知识库状态:\n"
+                response += "──────────────────────────\n"
+                response += f"wiki/ 页面数: {len(pages)}\n"
+                response += f"raw/ 文件数: {len(raw_files)}\n"
+                response += f"规则文件: {'存在' if kb_manager.rules_file.exists() else '不存在'}\n"
+                
+                return response
+            
+            else:
+                return "📋 知识库命令:\n" \
+                       "- /kb init: 初始化知识库规则\n" \
+                       "- /kb status: 查看知识库状态\n" \
+                       "- /ingest: 摄入资料\n" \
+                       "- /query <问题>: 查询知识库\n" \
+                       "- /lint: 健康检查"
+        
+        except Exception as e:
+            return f"知识库操作失败: {e}"
 
 
 # 创建全局实例

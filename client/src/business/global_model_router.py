@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ── Opik 追踪支持 ─────────────────────────────────────────────────
 try:
-    from client.src.business.opik_tracer import (
+    from business.opik_tracer import (
         is_opik_enabled,
         start_trace,
         log_trace,
@@ -54,7 +54,7 @@ def _get_expert_thinking_controller():
     global _expert_thinking_controller
     if _expert_thinking_controller is None:
         try:
-            from client.src.business.ei_agent.expert_thinking_mode import (
+            from business.ei_agent.expert_thinking_mode import (
                 get_expert_thinking_controller
             )
             _expert_thinking_controller = get_expert_thinking_controller()
@@ -403,6 +403,80 @@ class GlobalModelRouter:
         # 启动心跳检测和健康检查
         self.start_heartbeat()
         self.start_health_check()
+    
+    def _check_caveman_availability(self):
+        """检查 caveman 是否可用"""
+        try:
+            from business.tools.caveman_tool import CavemanTool
+            self._caveman_tool = CavemanTool()
+            self._caveman_available = self._caveman_tool.is_available()
+            
+            if self._caveman_available:
+                logger.info("✅ caveman 压缩工具可用")
+            else:
+                logger.warning("⚠️ caveman 压缩工具不可用，请安装: pip install caveman")
+                
+        except ImportError as e:
+            logger.warning(f"⚠️ 无法加载 CavemanTool: {e}")
+            self._caveman_available = False
+
+    def is_caveman_available(self) -> bool:
+        """检查 caveman 是否可用"""
+        return self._caveman_available
+
+    def enable_caveman(self, enable: bool):
+        """启用/禁用 caveman 压缩"""
+        if enable and not self._caveman_available:
+            logger.warning("无法启用 caveman 压缩：caveman 不可用")
+            return
+        self._caveman_enabled = enable
+        if enable:
+            logger.info("🗜️ caveman token 压缩已启用")
+        else:
+            logger.info("🗜️ caveman token 压缩已禁用")
+
+    def is_caveman_enabled(self) -> bool:
+        """检查是否启用了 caveman 压缩"""
+        return self._caveman_enabled and self._caveman_available
+
+    def set_caveman_level(self, level):
+        """设置 caveman 压缩级别"""
+        if isinstance(level, str):
+            try:
+                self._caveman_level = CompressionLevel(level.lower())
+            except ValueError:
+                logger.warning(f"无效的压缩级别: {level}，使用默认级别")
+                self._caveman_level = CompressionLevel.FULL
+        elif isinstance(level, CompressionLevel):
+            self._caveman_level = level
+        logger.info(f"🗜️ caveman 压缩级别已设置为: {self._caveman_level.value}")
+
+    def get_caveman_level(self) -> CompressionLevel:
+        """获取当前压缩级别"""
+        return self._caveman_level
+
+    async def _compress_with_caveman(self, text: str) -> str:
+        """使用 caveman 压缩文本"""
+        if not self.is_caveman_enabled():
+            return text
+        if len(text) < self._caveman_min_tokens:
+            return text
+        try:
+            result = await self._caveman_tool.execute(
+                text=text,
+                level=self._caveman_level.value
+            )
+            if result.get("success", False):
+                compressed = result.get("compressed_text", text)
+                ratio = result.get("compression_ratio", 0)
+                logger.debug(f"🗜️ 压缩完成: {len(text)} → {len(compressed)} ({ratio:.1%})")
+                return compressed
+            else:
+                logger.warning(f"🗜️ 压缩失败: {result.get('message', 'unknown error')}")
+                return text
+        except Exception as e:
+            logger.error(f"🗜️ 压缩过程中发生错误: {e}")
+            return text
 
     # ------------------------------------------------------------------ #
     #  _setup_default_tier_routing  <<  自动分配 L0-L4 层级  >>
@@ -410,43 +484,77 @@ class GlobalModelRouter:
     def _setup_default_tier_routing(self):
         """
         根据已加载的模型，自动分配 L0-L4 分层路由。
+        
+        采用逻辑：
+        1. 如果只有一个可用模型：L0-L4 都使用它
+        2. 如果有多个可用模型：自动选举分配到不同层级
+        
         匹配规则（按 model_id / name 关键词）：
-          L0  → 最快最轻量（qwen2.5:1.5b / smollm2 等）
+          L0  → 最快最轻量（smollm2 / qwen2.5:1.5b / qwen2.5:0.5b 等）
           L1  → 基础理解（qwen3.5:2b 等）
           L2  → 中级推理（qwen3.5:4b 等）
           L3  → 高级推理（qwen3.5:9b / qwen3.6:35b 等）
-          L4  → 深度生成（最大 / 思考模型）
+          L4  → 深度生成（最大模型 / DeepSeek-V4 / 思考模型）
         """
         # 清空旧配置
         self.tier_routing.clear()
 
-        # 关键词 → 层级 映射（按优先级从高到低，后匹配的覆盖先匹配的）
+        # 获取所有可用模型
+        available_models = [m for m in self.models.values() if m.is_available]
+        available_count = len(available_models)
+
+        # 规则1：只有一个模型可用时，所有层级都用它
+        if available_count == 1:
+            model = available_models[0]
+            for tier in ["L0", "L1", "L2", "L3", "L4"]:
+                self.tier_routing[tier] = model.model_id
+            logger.info(f"[分层路由] 仅有一个可用模型，L0-L4 均使用: {model.name}")
+            return
+
+        # 规则2：多个模型可用时，自动选举分配
+        # 关键词 → 层级 映射（按优先级从高到低）
         tier_keywords = [
             ("L0", ["smollm2", "qwen2.5:1.5b", "qwen2.5:0.5b", "1.5b", "0.5b"]),
             ("L1", ["qwen3.5:2b", "2b"]),
             ("L2", ["qwen3.5:4b", "4b"]),
             ("L3", ["qwen3.5:9b", "qwen3.6:35b", "9b", "35b"]),
-            ("L4", ["qwen3.6", "deepseek-v4", "deepseek", "thinking"]),
+            ("L4", ["qwen3.6", "deepseek-v4", "deepseek-v4-flash", "deepseek-v4-pro", "deepseek", "thinking"]),
         ]
 
-        for model in self.models.values():
-            if not model.is_available:
-                continue
-            text = (model.model_id + " " + model.name).lower()
-            assigned_tier = None
-            for tier_str, keywords in tier_keywords:
-                if any(kw in text for kw in keywords):
-                    assigned_tier = tier_str
-                    break  # 命中即停止（按列表顺序 = 优先匹配 L0）
-            if assigned_tier and assigned_tier not in self.tier_routing:
-                self.tier_routing[assigned_tier] = model.model_id
-                logger.info(f"[分层路由] {assigned_tier} → {model.name}")
+        # 已分配的模型ID集合（避免重复分配）
+        assigned_models = set()
 
-        # 保底：如果有模型但没有匹配任何层级，把第一个可用模型分配给 L0
-        if not self.tier_routing and self.models:
-            first_id = next(iter(self.models))
-            self.tier_routing["L0"] = first_id
-            logger.warning(f"[分层路由] 保底分配 L0 → {first_id}")
+        for tier_str, keywords in tier_keywords:
+            for model in available_models:
+                if model.model_id in assigned_models:
+                    continue
+                text = (model.model_id + " " + model.name).lower()
+                if any(kw in text for kw in keywords):
+                    self.tier_routing[tier_str] = model.model_id
+                    assigned_models.add(model.model_id)
+                    logger.info(f"[分层路由] {tier_str} → {model.name}")
+                    break
+
+        # 规则3：如果某些层级未分配，使用剩余可用模型填充
+        unassigned_models = [m for m in available_models if m.model_id not in assigned_models]
+        tiers = ["L0", "L1", "L2", "L3", "L4"]
+        
+        for tier_str in tiers:
+            if tier_str not in self.tier_routing and unassigned_models:
+                model = unassigned_models.pop(0)
+                self.tier_routing[tier_str] = model.model_id
+                assigned_models.add(model.model_id)
+                logger.info(f"[分层路由] 自动填充 {tier_str} → {model.name}")
+
+        # 规则4：如果还有层级未分配，复用已分配的模型（优先高优先级模型）
+        for tier_str in tiers:
+            if tier_str not in self.tier_routing:
+                # 使用第一个已分配的模型
+                if assigned_models:
+                    first_assigned = next(iter(assigned_models))
+                    self.tier_routing[tier_str] = first_assigned
+                    model_name = self.models[first_assigned].name
+                    logger.info(f"[分层路由] 复用 {tier_str} → {model_name}")
 
         logger.info(f"[分层路由] 当前配置: {self.tier_routing}")
 
@@ -485,7 +593,7 @@ class GlobalModelRouter:
         """
         logger.warning("加密配置中无模型，正在初始化默认配置...")
         try:
-            from client.src.business.encrypted_config import setup_default_configs
+            from business.encrypted_config import setup_default_configs
             setup_default_configs()
             self._load_models_from_encrypted_config()
             logger.info("✅ 默认配置初始化完成")
@@ -502,7 +610,7 @@ class GlobalModelRouter:
         代码中无任何硬编码的模型/URL/Api_key。
         """
         try:
-            from client.src.business.encrypted_config import load_model_config
+            from business.encrypted_config import load_model_config
 
             # ── 1. Ollama 配置（支持多地址）────────────────
             ollama_cfg = load_model_config("ollama") or {}
@@ -1062,7 +1170,7 @@ class GlobalModelRouter:
         # ── RYS 层重复推理增强 ─────────────────────────────
         if rys_config:
             try:
-                from client.src.business.rys_engine import (
+                from business.rys_engine import (
                     RYSConfig, get_rys_engine, validate_rys_config
                 )
                 rc = RYSConfig.from_dict(rys_config) if isinstance(rys_config, dict) else rys_config
@@ -1691,7 +1799,7 @@ class GlobalModelRouter:
         通过 LTAIAdapter 加载本地 nanoGPT checkpoint 做推理。
         """
         try:
-            from client.src.business.llmcore.adapter import LTAIAdapter, ChatMessage
+            from business.llmcore.adapter import LTAIAdapter, ChatMessage
 
             cell_name = model.config.get("cell_name", "table_cell")
             checkpoint_path = model.config.get("checkpoint_path", "")
@@ -1739,7 +1847,7 @@ class GlobalModelRouter:
         通过 LTAIAdapter.chat_stream() 流式 yield 文本片段。
         """
         try:
-            from client.src.business.llmcore.adapter import LTAIAdapter
+            from business.llmcore.adapter import LTAIAdapter
 
             cell_name = model.config.get("cell_name", "table_cell")
             checkpoint_path = model.config.get("checkpoint_path", "")
@@ -2977,121 +3085,6 @@ def call_model_sync(capability: ModelCapability,
             router.call_model(capability, prompt, system_prompt, strategy, context_length, use_cache, model_id, tier, expert_type, thinking_mode, rys_config=rys_config, verify=verify)
         )
 
-    # ============= caveman 压缩功能 =============
-
-    def _check_caveman_availability(self):
-        """检查 caveman 是否可用"""
-        try:
-            from client.src.business.tools.caveman_tool import CavemanTool
-            self._caveman_tool = CavemanTool()
-            self._caveman_available = self._caveman_tool.is_available()
-            
-            if self._caveman_available:
-                logger.info("✅ caveman 压缩工具可用")
-            else:
-                logger.warning("⚠️ caveman 压缩工具不可用，请安装: pip install caveman")
-                
-        except ImportError as e:
-            logger.warning(f"⚠️ 无法加载 CavemanTool: {e}")
-            self._caveman_available = False
-
-    def is_caveman_available(self) -> bool:
-        """检查 caveman 是否可用"""
-        return self._caveman_available
-
-    def enable_caveman(self, enable: bool):
-        """
-        启用/禁用 caveman 压缩
-        
-        Args:
-            enable: 是否启用压缩
-        """
-        if enable and not self._caveman_available:
-            logger.warning("无法启用 caveman 压缩：caveman 不可用")
-            return
-        
-        self._caveman_enabled = enable
-        
-        if enable:
-            logger.info("🗜️ caveman token 压缩已启用")
-        else:
-            logger.info("🗜️ caveman token 压缩已禁用")
-
-    def is_caveman_enabled(self) -> bool:
-        """检查是否启用了 caveman 压缩"""
-        return self._caveman_enabled and self._caveman_available
-
-    def set_caveman_level(self, level: Union[str, CompressionLevel]):
-        """
-        设置 caveman 压缩级别
-        
-        Args:
-            level: 压缩级别（lite/full/ultra/wenyan 或 CompressionLevel 枚举）
-        """
-        if isinstance(level, str):
-            try:
-                self._caveman_level = CompressionLevel(level.lower())
-            except ValueError:
-                logger.warning(f"无效的压缩级别: {level}，使用默认级别")
-                self._caveman_level = CompressionLevel.FULL
-        elif isinstance(level, CompressionLevel):
-            self._caveman_level = level
-        
-        logger.info(f"🗜️ caveman 压缩级别已设置为: {self._caveman_level.value}")
-
-    def get_caveman_level(self) -> CompressionLevel:
-        """获取当前压缩级别"""
-        return self._caveman_level
-
-    def set_caveman_min_tokens(self, min_tokens: int):
-        """
-        设置触发压缩的最小 token 数
-        
-        Args:
-            min_tokens: 最小 token 数
-        """
-        self._caveman_min_tokens = max(0, min_tokens)
-        logger.info(f"🗜️ caveman 最小 token 数已设置为: {self._caveman_min_tokens}")
-
-    def get_caveman_min_tokens(self) -> int:
-        """获取触发压缩的最小 token 数"""
-        return self._caveman_min_tokens
-
-    async def _compress_with_caveman(self, text: str) -> str:
-        """
-        使用 caveman 压缩文本
-        
-        Args:
-            text: 需要压缩的文本
-            
-        Returns:
-            压缩后的文本（如果压缩失败则返回原始文本）
-        """
-        if not self.is_caveman_enabled():
-            return text
-        
-        if len(text) < self._caveman_min_tokens:
-            return text
-        
-        try:
-            result = await self._caveman_tool.execute(
-                text=text,
-                level=self._caveman_level.value
-            )
-            
-            if result.get("success", False):
-                compressed = result.get("compressed_text", text)
-                ratio = result.get("compression_ratio", 0)
-                logger.debug(f"🗜️ 压缩完成: {len(text)} → {len(compressed)} ({ratio:.1%})")
-                return compressed
-            else:
-                logger.warning(f"🗜️ 压缩失败: {result.get('message', 'unknown error')}")
-                return text
-                
-        except Exception as e:
-            logger.error(f"🗜️ 压缩过程中发生错误: {e}")
-            return text
-
 
 # ============= Handler 体系 =============
 
@@ -3491,7 +3484,7 @@ async def call_model_with_emotion(
     # 如果启用自动情绪感知
     if auto_emotion and expert_type:
         try:
-            from client.src.business.emotion_thinking_integrator import (
+            from business.emotion_thinking_integrator import (
                 get_emotion_thinking_integrator
             )
             
@@ -3589,3 +3582,20 @@ def call_model_with_emotion_sync(
                 expert_type, auto_emotion, **kwargs
             )
         )
+
+
+# ============= 全局单例 =============
+
+_global_router_instance = None
+
+def get_router() -> GlobalModelRouter:
+    """
+    获取全局模型路由器单例
+    
+    Returns:
+        GlobalModelRouter 实例
+    """
+    global _global_router_instance
+    if _global_router_instance is None:
+        _global_router_instance = GlobalModelRouter()
+    return _global_router_instance

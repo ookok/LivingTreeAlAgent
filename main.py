@@ -34,10 +34,20 @@ def safe_print(msg):
 
 
 def start_client():
-    """Start desktop client"""
+    """Start desktop client (PyQt6)"""
     safe_print("🌳 Starting LivingTree AI Agent Client...")
     client_main = os.path.join(os.path.dirname(__file__), 'client', 'src', 'main.py')
-    os.execv(sys.executable, [sys.executable, client_main])
+    # 传递额外命令行参数
+    args = [sys.executable, client_main] + sys.argv[2:]
+    os.execv(sys.executable, args)
+
+
+def start_edifice_client():
+    """Start desktop client (Edifice)"""
+    safe_print("🌳 Starting LivingTree AI Agent Client (Edifice)...")
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'client'))
+    from client.src.presentation.edifice_app import run_edifice_app
+    run_edifice_app()
 
 
 def start_relay():
@@ -329,6 +339,9 @@ def main():
         _check_first_run()
         _auto_update_check()
         start_client()
+    elif command == 'edifice':
+        _check_first_run()
+        start_edifice_client()
     elif command == 'relay':
         start_relay()
     elif command == 'tracker':

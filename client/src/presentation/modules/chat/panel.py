@@ -29,55 +29,130 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QScrollArea, QFrame,
     QListWidget, QListWidgetItem, QToolButton, QMenu,
     QSizePolicy, QApplication, QSplitter, QFileDialog,
-    QTreeWidget, QTreeWidgetItem
+    QTreeWidget, QTreeWidgetItem, QTabWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QTimer, QPoint, QMimeData
 from PyQt6.QtGui import QTextCursor, QFont, QColor, QIcon, QDragEnterEvent, QDropEvent
 
-from client.src.business.nanochat_config import config
-from client.src.business.vector_db_integration import get_tool_registry
-from client.src.business.function_knowledge import get_knowledge_base, FunctionModule
-from client.src.presentation.components.ui_descriptor import (
+from business.nanochat_config import config
+from business.vector_db_integration import get_tool_registry
+from business.function_knowledge import get_knowledge_base, FunctionModule
+from business.global_model_router import get_router, ModelCapability
+from presentation.components.ui_descriptor import (
     UIResponse, UIComponent, ClarificationRequest, ControlType,
     UIDescriptorProtocol
 )
-from client.src.presentation.components.semantic_parser import SemanticParser
-from client.src.presentation.components.control_factory import ControlFactory
-from client.src.presentation.components.layout_engine import LayoutEngine
-from client.src.presentation.components.markdown_renderer import MarkdownRenderer
-from client.src.presentation.components.code_highlighter import CodeHighlighterWidget, CodeBlockRenderer
-from client.src.presentation.components.file_previewer import FilePreviewer, URLPreviewer, preview_file_or_url
-from client.src.presentation.components.streaming_thought import StreamingThoughtWidget, ThinkingIndicator, ToolCallAnimation
-from client.src.presentation.components.command_palette import CommandPalette
-from client.src.presentation.components.task_widget import Task, TaskItem, TaskDetailPanel, TaskListWidget, create_sample_tasks
-from client.src.presentation.components.voice_input import VoiceInputWidget, VoiceMessageBubble
+from presentation.components.semantic_parser import SemanticParser
+from presentation.components.control_factory import ControlFactory
+from presentation.components.layout_engine import LayoutEngine
+from presentation.components.markdown_renderer import MarkdownRenderer
+from presentation.components.code_highlighter import CodeHighlighterWidget, CodeBlockRenderer
+from presentation.components.file_previewer import FilePreviewer, URLPreviewer, preview_file_or_url
+from presentation.components.streaming_thought import StreamingThoughtWidget, ThinkingIndicator, ToolCallAnimation
+from presentation.components.command_palette import CommandPalette
+from presentation.components.task_widget import Task, TaskItem, TaskDetailPanel, TaskListWidget, create_sample_tasks
+from presentation.components.voice_input import VoiceInputWidget, VoiceMessageBubble
 
 
-# ── 工作线程：Ollama API 调用 ───────────────────────────────────────────────
+# ── 工作线程：模型 API 调用（支持多种后端）─────────────────────────────────
 
-class OllamaWorker(QThread):
-    """Ollama API 工作线程（支持流式响应）"""
+class ModelWorker(QThread):
+    """模型 API 工作线程（支持流式响应，兼容 Ollama、OpenAI/DeepSeek）"""
 
     chunk_received = pyqtSignal(str)  # 收到一个文本块
     finished = pyqtSignal(str)         # 完成（完整响应）
     error = pyqtSignal(str)            # 错误
     tool_call = pyqtSignal(dict)       # 工具调用
 
-    def __init__(self, base_url: str, model: str, messages: List[Dict], parent=None):
+    def __init__(self, model_info, messages: List[Dict], parent=None):
         super().__init__(parent)
-        self.base_url = base_url
-        self.model = model
+        self.model_info = model_info
         self.messages = messages
         self._stop_requested = False
+        
+        # 从模型信息中提取配置
+        if model_info:
+            self.base_url = model_info.config.get("base_url", "http://localhost:11434")
+            self.model_name = model_info.config.get("model", model_info.name)
+            self.api_key = model_info.config.get("api_key", "")
+            self.backend = model_info.backend.value
+        else:
+            # 降级到默认 Ollama 配置
+            self.base_url = config.ollama.url
+            self.model_name = "qwen3.5:4b"
+            self.api_key = ""
+            self.backend = "ollama"
 
     def run(self):
+        try:
+            if self.backend == "openai":
+                self._call_openai_api()
+            else:
+                # 默认使用 Ollama 协议
+                self._call_ollama_api()
+                
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _call_ollama_api(self):
+        """调用 Ollama API"""
         try:
             url = f"{self.base_url}/chat/completions"
             headers = {"Content-Type": "application/json"}
             payload = {
-                "model": self.model,
+                "model": self.model_name,
                 "messages": self.messages,
                 "stream": True,
+            }
+
+            response = requests.post(url, json=payload, headers=headers, stream=True, timeout=120)
+            response.raise_for_status()
+
+            full_content = ""
+            for line in response.iter_lines():
+                if self._stop_requested:
+                    break
+                if line:
+                    line = line.decode("utf-8")
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            choices = data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    full_content += content
+                                    self.chunk_received.emit(content)
+                                
+                                tool_calls = delta.get("tool_calls", [])
+                                if tool_calls:
+                                    for tool_call in tool_calls:
+                                        self.tool_call.emit(tool_call)
+                        except json.JSONDecodeError:
+                            continue
+
+            self.finished.emit(full_content)
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _call_openai_api(self):
+        """调用 OpenAI/DeepSeek API"""
+        try:
+            url = f"{self.base_url}/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            payload = {
+                "model": self.model_name,
+                "messages": self.messages,
+                "stream": True,
+                "temperature": 0.7,
             }
 
             response = requests.post(url, json=payload, headers=headers, stream=True, timeout=120)
@@ -464,9 +539,8 @@ class CommandSuggestionPopup(QFrame):
         self.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border: 1px solid #e0e0e0;
+                border: 2px solid #e0e0e0;
                 border-radius: 8px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             }
         """)
 
@@ -707,7 +781,7 @@ class Panel(QWidget):
         self.knowledge_base = get_knowledge_base()
         
         # 集成系统命令处理器
-        from client.src.business.chat_command_processor import get_command_processor
+        from business.chat_command_processor import get_command_processor
         self.chat_command_processor = get_command_processor()
         
         self._init_default_data()
@@ -919,13 +993,32 @@ class Panel(QWidget):
         self.command_menu_btn.setMenu(menu)
 
     def _setup_models(self):
-        model_name = "qwen3.5:4b"
-        self.model_name = model_name
-        self.model_label.setText(f"模型: {model_name}")
-
-        self.base_url = config.ollama.url
-        print(f"[Chat] Ollama URL: {self.base_url}")
-        print(f"[Chat] Model: {self.model_name}")
+        # 使用 GlobalModelRouter 获取可用模型
+        router = get_router()
+        
+        # 路由到适合聊天的模型
+        model_info = router.route(ModelCapability.CHAT)
+        
+        if model_info:
+            self.model_name = model_info.config.get("model", model_info.name)
+            self.base_url = model_info.config.get("base_url", config.ollama.url)
+            self.model_label.setText(f"模型: {model_info.name}")
+            
+            # 保存模型配置供后续使用
+            self.current_model_info = model_info
+            
+            print(f"[Chat] 使用模型: {model_info.name}")
+            print(f"[Chat] 后端类型: {model_info.backend.value}")
+            print(f"[Chat] Base URL: {self.base_url}")
+            print(f"[Chat] Model: {self.model_name}")
+        else:
+            # 降级到默认配置
+            self.model_name = "qwen3.5:4b"
+            self.base_url = config.ollama.url
+            self.model_label.setText(f"模型: {self.model_name}")
+            self.current_model_info = None
+            print(f"[Chat] 使用默认模型: {self.model_name}")
+            print(f"[Chat] Ollama URL: {self.base_url}")
 
     def _toggle_tool_panel(self):
         if self.tool_panel.isVisible():
@@ -1216,7 +1309,8 @@ class Panel(QWidget):
 
         self._show_thinking()
 
-        self.worker = OllamaWorker(self.base_url, self.model_name, self.messages)
+        # 通过 GlobalModelRouter 调用模型（支持多种后端）
+        self.worker = ModelWorker(self.current_model_info, self.messages)
         self.worker.chunk_received.connect(self._on_chunk_received)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)

@@ -1,881 +1,655 @@
-# LivingTreeAI 架构文档
+# 🏗️ LivingTreeAI 系统架构设计文档
 
-> 版本：v2.1 | 更新时间：2026-04-28 | 架构师：LivingTreeAI Team
-
----
-
-## 📚 核心文档索引
-
-| 文档 | 用途 | 路径 |
-|------|------|------|
-| **LIVINGTREE_ARCHITECTURE_GUIDE.md** | 完整架构指南 | `docs/LIVINGTREE_ARCHITECTURE_GUIDE.md` |
-| **LIVINGTREE_DEVELOPMENT_GUIDE.md** | 功能开发指南 | `docs/LIVINGTREE_DEVELOPMENT_GUIDE.md` |
-| **AGENTS.md** | AI开发规范 | `AGENTS.md` |
-
-### 快速导航
-
-- **架构设计** → `docs/LIVINGTREE_ARCHITECTURE_GUIDE.md`
-- **功能开发** → `docs/LIVINGTREE_DEVELOPMENT_GUIDE.md`
-- **技术细节** → 本文档 (`ARCHITECTURE.md`)
+> **版本**: v1.0.0  
+> **状态**: 全面测试阶段  
+> **最后更新**: 2026-04-30
 
 ---
 
 ## 📋 目录
 
-1. [架构概览](#架构概览)
-2. [技术栈](#技术栈)
-3. [项目结构](#项目结构)
-4. [核心模块](#核心模块)
-5. [数据流](#数据流)
-6. [设计模式](#设计模式)
-7. [配置系统](#配置系统)
-8. [部署架构](#部署架构)
-9. [性能优化](#性能优化)
-10. [安全设计](#安全设计)
+1. [架构概述](#1-架构概述)
+2. [核心架构原则](#2-核心架构原则)
+3. [三层架构设计](#3-三层架构设计)
+4. [核心模块详解](#4-核心模块详解)
+5. [数据流与交互](#5-数据流与交互)
+6. [数据库设计](#6-数据库设计)
+7. [API 设计](#7-api-设计)
+8. [部署架构](#8-部署架构)
+9. [安全架构](#9-安全架构)
 
 ---
 
-## 架构概览
+## 1. 架构概述
 
-### 核心理念
+LivingTreeAI 采用**清晰的三层架构**设计，将业务逻辑、数据访问和用户界面分离，实现高内聚低耦合的软件设计目标。
 
-LivingTreeAI 采用 **"生命之树"** 架构理念：
+### 1.1 架构风格
 
-```
-        用户意图
-           │
-           ▼
-    ┌─────────────┐
-    │  意图驱动层  │ ← 理解用户想做什么
-    └─────────────┘
-           │
-           ▼
-    ┌─────────────┐
-    │  智能代理层  │ ← 多Agent协作执行
-    └─────────────┘
-           │
-           ▼
-    ┌─────────────┐
-    │  自我进化层  │ ← 测试、诊断、修复
-    └─────────────┘
-           │
-           ▼
-    ┌─────────────┐
-    │  基础设施层  │ ← 配置、网络、存储
-    └─────────────┘
-```
+- **集成式单体应用 (Integrated Monolith)**: 所有核心功能集成在一个应用中，便于部署和维护
+- **插件化架构**: 支持动态加载插件和技能扩展
+- **事件驱动**: 通过事件总线实现模块间解耦
+- **微内核架构**: 核心框架 + 可扩展插件
 
-### 架构特点
-
-| 特点 | 说明 | 优势 |
-|------|------|------|
-| 🌱 **自我生长** | 从经验中学习，持续优化 | 系统越用越智能 |
-| 🔄 **自我修复** | 自动检测并修复问题 | 减少人工维护成本 |
-| 💡 **意图驱动** | 听懂用户意图，而非指令 | 降低使用门槛 |
-| 🤝 **协作进化** | 多智能体协同工作 | 复杂任务分解执行 |
-| 📊 **可视化** | 所有过程可视化追踪 | 易于调试和理解 |
-
----
-
-## 技术栈
-
-### 后端技术
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| **Python** | 3.11+ | 主力开发语言 |
-| **PyQt6** | 6.0+ | 桌面 GUI 框架 |
-| **FastAPI** | 0.104+ | 服务器 API 框架 |
-| **SQLite** | 3.35+ | 本地数据库 |
-| **PostgreSQL** | 14+ | 服务器数据库（可选） |
-
-### AI/ML 技术
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| **Ollama** | 0.1.0+ | 本地 LLM 运行框架 |
-| **Qwen** | 3.5:4b | 默认推理模型 |
-| **LangChain** | 0.0.340+ | Agent 开发框架 |
-| **ChromaDB** | 0.4.0+ | 向量数据库 |
-
-### 前端技术
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| **PyQt6** | 6.0+ | UI 组件库 |
-| **QSS** | - | 样式表（类似 CSS） |
-| **Matplotlib** | 3.8+ | 图表绘制 |
-
----
-
-## 项目结构
-
-### 完整目录树
+### 1.2 设计理念
 
 ```
-LivingTreeAlAgent/
-├── client/                          # 客户端（可编辑安装）
-│   └── src/
-│       ├── main.py                  # PyQt6 入口 → HomePage
-│       ├── business/                # 业务逻辑层（340+ 文件）
-│       │   ├── config.py           # UnifiedConfig 兼容层
-│       │   ├── nanochat_config.py  # NanochatConfig（推荐）
-│       │   ├── optimal_config.py   # OptimalConfig
-│       │   ├── intent_engine/      # 意图驱动引擎
-│       │   ├── evolution_engine/   # 进化引擎（71 文件）
-│       │   ├── hermes_agent/       # Hermes Agent 框架
-│       │   ├── amphiloop/          # 双向调度系统
-│       │   ├── optimization/       # PRISM 优化
-│       │   ├── enterprise/         # P2P 存储 & 任务调度
-│       │   ├── digital_twin/      # 数字孪生
-│       │   ├── credit_economy/     # 积分系统
-│       │   ├── decommerce/         # 电子商务（22 文件）
-│       │   ├── living_tree_ai/     # 语音、浏览器、会议（300 文件）
-│       │   ├── fusion_rag/         # 多源检索
-│       │   ├── knowledge_graph/    # 知识图谱
-│       │   ├── plugin_framework/   # 插件框架
-│       │   ├── p2p_*/             # P2P 网络（多个模块）
-│       │   ├── personal_mode/     # 个人模式
-│       │   ├── ecc_*/              # Agent 本能/技能（多个模块）
-│       │   ├── evolving_community/ # 进化社区
-│       │   ├── intelligent_hints/  # 智能提示
-│       │   ├── office_automation/  # 办公自动化
-│       │   └── ...                # 其他 300+ 模块
-│       ├── infrastructure/          # 基础设施层
-│       │   ├── database/           # 数据库迁移（v1-v14）
-│       │   ├── config/             # 配置管理
-│       │   ├── network/            # 网络通信
-│       │   ├── model/              # 模型管理
-│       │   └── storage/            # 存储管理
-│       ├── presentation/           # 表现层（200+ 文件）
-│       │   ├── panels/             # 所有面板（102+ 文件）
-│       │   │   ├── finance_hub_panel.py
-│       │   │   ├── game_hub_panel.py
-│       │   │   └── ...
-│       │   ├── components/         # 可复用组件
-│       │   ├── widgets/            # 自定义控件
-│       │   ├── dialogs/            # 对话框
-│       │   ├── modules/            # 子模块
-│       │   ├── layouts/            # 布局管理
-│       │   ├── resources/          # 资源文件
-│       │   ├── router/             # 路由管理
-│       │   └── theme/              # 主题管理
-│       └── shared/                 # 共享工具
-│           ├── utils/              # 工具函数
-│           ├── constants/          # 常量定义
-│           └── types/              # 类型定义
-├── server/                         # 服务器层
-│   ├── relay_server/               # FastAPI Relay（46 文件）
-│   │   ├── api/                   # API 路由（9 文件）
-│   │   ├── cluster/               # 集群管理
-│   │   ├── database/              # 数据库操作
-│   │   ├── middleware/            # 中间件
-│   │   ├── services/              # 业务服务（11 文件）
-│   │   ├── web/                   # Web 界面
-│   │   ├── main.py                # 服务器入口
-│   │   └── ...
-│   ├── tracker_server.py           # P2P Tracker
-│   ├── shared/                    # 共享模块
-│   └── web/                       # Web 前端
-├── app/                            # 独立企业应用（23 文件）
-├── mobile/                         # PWA/移动端（7 文件）
-│   ├── main.py
-│   ├── screens/
-│   ├── adaptive_layout/
-│   └── pwa_integration/
-├── packages/                       # 共享库
-│   ├── living_tree_naming/         # 命名规范
-│   └── shared/                    # 共享代码
-├── config/                         # 配置文件
-├── tests/                          # 测试文件（30+ 文件）
-│   ├── test_provider.py            # 唯一有效测试
-│   └── test_*.py                  # 其他测试（部分过期）
-├── assets/                         # 静态资源
-├── main.py                         # CLI 入口
-├── run.bat                         # Windows 快速启动
-├── pyproject.toml                  # 项目配置
-├── pytest.ini                      # 测试配置
-├── README.md                       # 项目说明
-├── AGENTS.md                       # AI 指引文档
-├── ARCHITECTURE.md                # 架构文档（本文件）
-├── TODO.md                         # 待办任务清单
-└── .workbuddy/                     # WorkBuddy 配置
-    └── memory/                     # 工作记忆
+┌─────────────────────────────────────────────────────────────┐
+│                    用户层 (User Layer)                      │
+├─────────────────────────────────────────────────────────────┤
+│   Presentation Layer (表示层) - PyQt6 UI                   │
+├─────────────────────────────────────────────────────────────┤
+│   Business Layer (业务层) - Python 业务逻辑                 │
+├─────────────────────────────────────────────────────────────┤
+│   Infrastructure Layer (基础设施层) - DB/Network           │
+├─────────────────────────────────────────────────────────────┤
+│                      外部服务层                            │
+│   Ollama │ PostgreSQL │ Redis │ P2P Network │ Web API      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 核心模块
+## 2. 核心架构原则
 
-### 1. 意图驱动引擎（IntentEngine）
-
-**路径**：`client/src/business/intent_engine/`
-
-**功能**：
-- 自然语言理解
-- 意图分类
-- 实体提取
-- 上下文管理
-
-**核心类**：
-```python
-class IntentEngine:
-    def parse(self, text: str) -> Intent
-    def execute(self, intent: Intent) -> Result
-    def learn(self, feedback: Feedback) -> None
-```
-
-**使用示例**：
-```python
-from client.src.business.intent_engine import IntentEngine
-
-engine = IntentEngine()
-intent = engine.parse("帮我写一个用户登录接口，要用 FastAPI")
-result = engine.execute(intent)
-```
+| 原则 | 说明 |
+|-----|------|
+| **单一职责** | 每个模块只负责一个功能领域 |
+| **依赖倒置** | 高层模块不依赖低层模块，都依赖抽象 |
+| **接口隔离** | 使用细粒度接口，避免不必要的依赖 |
+| **开闭原则** | 对扩展开放，对修改关闭 |
+| **里氏替换** | 子类可以替换父类而不影响功能 |
+| **迪米特法则** | 每个模块只与直接朋友通信 |
 
 ---
 
-### 2. 进化引擎（EvolutionEngine）
+## 3. 三层架构设计
 
-**路径**：`client/src/business/evolution_engine/` (71 文件)
+### 3.1 Presentation Layer (表示层)
 
-**功能**：
-- 遗传算法优化
-- NSGA-II 多目标优化
-- 自适应进化策略
-- 表观遗传（Lamarckian + Baldwinian）
+**职责**: UI 展示、用户交互、视图管理
 
-**核心类**：
-```python
-class EvolutionEngine:
-    def evolve(self, population: List[Individual]) -> List[Individual]
-    def evaluate(self, individual: Individual) -> Fitness
-    def mutate(self, individual: Individual) -> Individual
-    def crossover(self, parent1: Individual, parent2: Individual) -> Individual
-```
+**位置**: `client/src/presentation/`
 
-**子模块**：
-- `NSGA2Engine` - 多目标优化
-- `AdaptiveEvolutionEngine` - 自适应策略
-- `EpigeneticEngine` - 表观遗传
-- `CrossoverEngine` - 交叉遗传（7种策略）
+**子模块**:
 
----
+| 模块 | 职责 | 文件数 |
+|-----|------|-------|
+| `panels/` | 主面板组件 | ~102+ |
+| `components/` | 可复用 UI 组件 | ~50+ |
+| `widgets/` | 自定义 Qt 部件 | ~30+ |
+| `dialogs/` | 对话框窗口 | ~20+ |
+| `modules/` | 功能子模块 | ~10+ |
 
-### 3. 智能代理框架（HermesAgent）
+**核心组件**:
 
-**路径**：`client/src/business/hermes_agent/`
+- **ChatWindow**: 聊天窗口组件
+- **IDEPanel**: IDE 集成面板
+- **SkillPanel**: 技能管理面板
+- **ConfigPanel**: 配置面板
+- **StatusBar**: 状态栏
+- **NotificationCenter**: 通知中心
 
-**功能**：
-- 多智能体协作
-- 任务分解与调度
-- 知识共享
-- 通信协议（A2A）
+### 3.2 Business Layer (业务层)
 
-**核心类**：
-```python
-class HermesAgent:
-    def assign_task(self, task: Task) -> None
-    def collaborate(self, other_agent: HermesAgent) -> None
-    def share_knowledge(self, knowledge: Knowledge) -> None
-```
+**职责**: 业务逻辑处理、智能体管理、任务编排
 
-**子模块**：
-- `agent_skills/` - Agent 技能管理（17 文件）
-- `a2a_protocol/` - Agent-to-Agent 协议（10 文件）
-- `task_decomposer/` - 任务分解器
-- `agent_memory/` - Agent 记忆管理
+**位置**: `client/src/business/`
 
----
+**子模块**:
 
-### 4. 自我进化系统（SelfEvolution）
+| 模块 | 职责 | 文件数 |
+|-----|------|-------|
+| `hermes_agent/` | 智能体框架 | ~50+ |
+| `fusion_rag/` | 多源检索增强生成 | ~30+ |
+| `knowledge_graph/` | 知识图谱 | ~20+ |
+| `amphiloop/` | 双向调度引擎 | ~20+ |
+| `optimization/` | PRISM 优化 | ~15+ |
+| `enterprise/` | P2P 存储 | ~20+ |
+| `digital_twin/` | 数字孪生 | ~15+ |
+| `credit_economy/` | 信用经济 | ~15+ |
+| `decommerce/` | 电子商务 | ~10+ |
+| `living_tree_ai/` | 核心 AI 能力 | ~300+ |
 
-**路径**：`client/src/business/self_evolution.py` + `evolution_engine/`
+**核心服务**:
 
-**功能**：
-- 零干扰后台自动升级
-- 自我测试与诊断
-- 热修复引擎
-- 根因追踪
+| 服务 | 职责 | 文件 |
+|-----|------|------|
+| **AgentManager** | 智能体生命周期管理 | `agent_registry.py` |
+| **ModelRouter** | LLM 模型路由 | `model_router.py` |
+| **MemorySystem** | 记忆系统 | `memory_manager.py` |
+| **SkillSystem** | 技能管理 | `skill_manager.py` |
+| **TaskOrchestrator** | 任务编排 | `task_orchestrator.py` |
+| **KnowledgeGraph** | 知识图谱管理 | `knowledge_graph.py` |
+| **RAGEngine** | 检索增强生成 | `fusion_rag/` |
+| **EventBus** | 事件总线 | `event_bus.py` |
 
-**核心组件**：
-- `MirrorLauncher` - 镜像启动器（沙盒测试环境）
-- `ComponentScanner` - 组件扫描器
-- `ProblemDetector` - 问题检测器
-- `HotFixEngine` - 热修复引擎
-- `AutoTester` - 自动测试执行器
-- `RootCauseTracer` - 根因追踪器
-- `DeploymentManager` - 部署管理器
-- `BackupManager` - 备份管理器
+### 3.3 Infrastructure Layer (基础设施层)
 
----
+**职责**: 数据存储、网络通信、配置管理
 
-### 5. 融合RAG（FusionRAG）
+**位置**: `client/src/infrastructure/`
 
-**路径**：`client/src/business/fusion_rag/`
+**子模块**:
 
-**功能**：
-- 多源数据检索
-- 向量检索
-- 图谱检索
-- 混合检索
-
-**核心类**：
-```python
-class FusionRAG:
-    def retrieve(self, query: str) -> List[Document]
-    def index(self, documents: List[Document]) -> None
-    def rerank(self, results: List[Document]) -> List[Document]
-```
-
-**三层架构**：
-- L1: 向量检索（Dense Retrieval）
-- L2: 图谱检索（Graph Retrieval）
-- L3: 混合检索（Hybrid Retrieval）
+| 模块 | 职责 |
+|-----|------|
+| `database/` | 数据库管理与迁移 (v1-v14) |
+| `config/` | 配置管理 |
+| `network/` | 网络通信 |
+| `model/` | 数据模型定义 |
+| `storage/` | 文件存储 |
 
 ---
 
-### 6. 领域面板（Domain Panels）
+## 4. 核心模块详解
 
-**路径**：`client/src/presentation/panels/`
+### 4.1 Agent Framework (智能体框架)
 
-**已完成的面板**：
-- `FinanceHubPanel` - 金融面板
-  - Dashboard - 仪表板
-  - Investment - 投资分析
-  - Payment - 支付集成
-  - Credit - 信用评估
-  - Project - 项目管理
-  - Economics - 经济指标
-
-- `GameHubPanel` - 游戏面板
-  - Library - 游戏库
-  - Session - 游戏会话
-  - Achievement - 成就系统
-  - Stats - 统计数据
-
-**规划中的面板**：
-- `HealthHubPanel` - 健康面板
-- `EducationHubPanel` - 教育面板
-- `EnterpriseHubPanel` - 企业面板
-
----
-
-### 7. P2P 网络（P2P Networking）
-
-**路径**：`client/src/business/p2p_*/`
-
-**功能**：
-- 分布式存储
-- 节点发现
-- 数据同步
-- 去中心化知识库
-
-**核心模块**：
-- `p2p_network/` - P2P 网络核心
-- `p2p_storage/` - P2P 存储
-- `p2p_sync/` - 数据同步
-- `p2p_discovery/` - 节点发现
-
----
-
-### 8. 数字孪生（Digital Twin）
-
-**路径**：`client/src/business/digital_twin/`
-
-**功能**：
-- 数字化身
-- 行为模拟
-- 虚拟会议
-- 虚拟云引擎
-
-**核心类**：
-```python
-class DigitalTwin:
-    def simulate(self, behavior: Behavior) -> Result
-    def interact(self, user: User) -> Response
-    def update(self, feedback: Feedback) -> None
-```
-
----
-
-## 数据流
-
-### 用户请求处理流程
+**架构**:
 
 ```
-用户输入
-    │
-    ▼
-┌─────────────────┐
-│ IntentEngine    │ ← 意图识别
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ TaskDecomposer  │ ← 任务分解
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ AgentOrchestrator│ ← Agent 编排
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ HermesAgent     │ ← 任务执行
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ ResultAggregator│ ← 结果聚合
-└─────────────────┘
-    │
-    ▼
-用户输出
+Agent Framework
+├── AgentRegistry        # 智能体注册中心
+├── AgentManager         # 智能体生命周期管理
+├── AgentWorker          # 智能体执行器
+├── AgentHub             # 智能体中心
+├── AgentAdapter         # 智能体适配器
+├── AgentProgress        # 智能体进度追踪
+└── SkillsAdapter        # 技能适配器
 ```
 
-### 自我进化流程
-
-```
-系统运行
-    │
-    ▼
-┌─────────────────┐
-│ ProblemDetector │ ← 问题检测
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ RootCauseTracer │ ← 根因分析
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ HotFixEngine    │ ← 热修复
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ MirrorLauncher  │ ← 沙盒测试
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ AutoTester      │ ← 自动测试
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ DeploymentMgr   │ ← 部署/回滚
-└─────────────────┘
-    │
-    ▼
-系统更新
-```
-
----
-
-## 设计模式
-
-### 1. 分层架构（Layered Architecture）
-
-```
-┌─────────────────────┐
-│   Presentation Layer  │ ← PyQt6 UI
-├─────────────────────┤
-│   Business Layer     │ ← 业务逻辑
-├─────────────────────┤
-│   Infrastructure Lay │ ← 基础设施
-├─────────────────────┤
-│   Data Access Layer  │ ← 数据访问
-└─────────────────────┘
-```
-
-### 2. 插件架构（Plugin Architecture）
+**核心类**:
 
 ```python
-# 插件接口
-class Plugin:
-    def initialize(self) -> None
-    def execute(self, context: Context) -> Result
-    def shutdown(self) -> None
-
-# 插件管理器
-class PluginManager:
-    def load_plugin(self, path: str) -> Plugin
-    def unload_plugin(self, name: str) -> None
-    def list_plugins(self) -> List[Plugin]
+class BaseAgent:
+    def __init__(self, agent_id: str, config: dict):
+        self.agent_id = agent_id
+        self.config = config
+        self.status = "idle"
+    
+    async def execute(self, task: Task) -> TaskResult:
+        """执行任务"""
+        pass
+    
+    async def learn(self, feedback: Feedback):
+        """从反馈中学习"""
+        pass
 ```
 
-### 3. 观察者模式（Observer Pattern）
+### 4.2 Model Router (模型路由)
+
+**功能**: 根据任务类型和资源情况选择最优 LLM 模型
+
+**路由策略**:
+
+| 策略 | 说明 |
+|-----|------|
+| **性能优先** | 选择响应最快的模型 |
+| **质量优先** | 选择质量最高的模型 |
+| **成本优先** | 选择成本最低的模型 |
+| **混合策略** | 综合考虑各项指标 |
+
+**路由流程**:
+
+```
+任务请求 → 分析任务类型 → 评估可用模型 → 选择最优模型 → 执行任务 → 返回结果
+```
+
+### 4.3 Memory System (记忆系统)
+
+**三层记忆架构**:
+
+```
+Memory System
+├── ShortTermMemory    # 短期记忆 (当前会话)
+├── MidTermMemory      # 中期记忆 (近期历史)
+└── LongTermMemory     # 长期记忆 (持久化知识)
+```
+
+**记忆类型**:
+
+| 类型 | 存储位置 | 保留时间 | 用途 |
+|-----|---------|---------|------|
+| 短期记忆 | 内存 | 会话期间 | 当前对话上下文 |
+| 中期记忆 | SQLite | 7-30天 | 用户习惯学习 |
+| 长期记忆 | PostgreSQL | 永久 | 知识库、技能、偏好 |
+
+### 4.4 Skill System (技能系统)
+
+**技能生命周期**:
+
+```
+技能注册 → 技能发现 → 技能匹配 → 技能执行 → 技能评估 → 技能进化
+```
+
+**技能分类**:
+
+| 类别 | 说明 | 示例 |
+|-----|------|------|
+| **工具技能** | 调用外部工具 | 文件操作、浏览器自动化 |
+| **知识技能** | 知识检索与问答 | RAG、知识库查询 |
+| **创作技能** | 内容生成 | 写作、代码生成 |
+| **分析技能** | 数据分析与处理 | 报表生成、趋势分析 |
+
+**技能注册机制**:
 
 ```python
-# 事件总线
+class SkillRegistry:
+    def register(self, skill: BaseSkill):
+        """注册技能"""
+        pass
+    
+    def discover(self, query: str) -> List[SkillMatch]:
+        """根据查询发现相关技能"""
+        pass
+    
+    def match(self, intent: Intent) -> SkillMatch:
+        """匹配最优技能"""
+        pass
+```
+
+### 4.5 Task Orchestrator (任务编排)
+
+**任务状态机**:
+
+```
+Pending → Queued → Processing → Completed/Failed → Archived
+     ↓      ↓          ↓              ↓
+   重试   取消      暂停/继续      重试/归档
+```
+
+**编排策略**:
+
+| 策略 | 说明 |
+|-----|------|
+| **串行执行** | 任务按顺序执行 |
+| **并行执行** | 任务同时执行 |
+| **条件执行** | 根据条件决定执行路径 |
+| **循环执行** | 重复执行直到条件满足 |
+
+### 4.6 Fusion RAG (多源检索增强生成)
+
+**检索流程**:
+
+```
+用户查询 → 查询分析 → 多源检索 → 结果融合 → LLM 生成 → 结果返回
+            ↓               ↓
+      意图识别      知识库/网页/文档
+```
+
+**检索源**:
+
+| 源类型 | 说明 | 优先级 |
+|-----|------|-------|
+| **内部知识库** | 项目文档、代码注释 | 高 |
+| **外部知识库** | 互联网搜索、文档库 | 中 |
+| **用户记忆** | 历史对话、用户偏好 | 高 |
+| **技能文档** | 技能描述、使用说明 | 中 |
+
+### 4.7 Knowledge Graph (知识图谱)
+
+**实体类型**:
+
+| 实体 | 说明 | 属性 |
+|-----|------|------|
+| **Agent** | 智能体 | 名称、类型、能力 |
+| **Skill** | 技能 | 名称、描述、参数 |
+| **Knowledge** | 知识 | 内容、标签、来源 |
+| **User** | 用户 | 偏好、历史、权限 |
+| **Task** | 任务 | 状态、优先级、结果 |
+
+**关系类型**:
+
+| 关系 | 说明 | 示例 |
+|-----|------|------|
+| **has_skill** | 智能体拥有技能 | Agent → Skill |
+| **knows** | 智能体知道知识 | Agent → Knowledge |
+| **performed** | 用户执行任务 | User → Task |
+| **uses** | 任务使用技能 | Task → Skill |
+
+### 4.8 Event Bus (事件总线)
+
+**事件类型**:
+
+| 类别 | 事件 | 说明 |
+|-----|------|------|
+| **Agent Events** | `agent_created`, `agent_updated`, `agent_deleted` | 智能体生命周期 |
+| **Task Events** | `task_created`, `task_updated`, `task_completed` | 任务状态变化 |
+| **Skill Events** | `skill_registered`, `skill_updated`, `skill_executed` | 技能事件 |
+| **System Events** | `system_started`, `system_shutdown`, `config_changed` | 系统事件 |
+
+**事件订阅机制**:
+
+```python
 class EventBus:
-    def subscribe(self, event: str, handler: Callable) -> None
-    def unsubscribe(self, event: str, handler: Callable) -> None
-    def publish(self, event: str, data: Any) -> None
-```
-
-### 4. 策略模式（Strategy Pattern）
-
-```python
-# 进化策略
-class EvolutionStrategy(ABC):
-    @abstractmethod
-    def evolve(self, population: List[Individual]) -> List[Individual]
-
-# 具体策略
-class NSGA2Strategy(EvolutionStrategy):
-    def evolve(self, population: List[Individual]) -> List[Individual]:
-        # NSGA-II 算法
+    def subscribe(self, event_type: str, handler: Callable):
+        """订阅事件"""
         pass
-
-class AdaptiveStrategy(EvolutionStrategy):
-    def evolve(self, population: List[Individual]) -> List[Individual]:
-        # 自适应算法
+    
+    def publish(self, event: Event):
+        """发布事件"""
+        pass
+    
+    def unsubscribe(self, event_type: str, handler: Callable):
+        """取消订阅"""
         pass
 ```
 
 ---
 
-## 配置系统
+## 5. 数据流与交互
 
-### NanochatConfig（推荐）
+### 5.1 核心数据流
 
-**路径**：`client/src/business/nanochat_config.py`
-
-**特点**：
-- Dataclass 风格
-- 直接属性访问
-- 类型安全
-- 性能提升 10x
-
-**使用示例**：
-```python
-from client.src.business.nanochat_config import config
-
-# 直接属性访问
-url = config.ollama.url
-timeout = config.timeouts.default
-max_retries = config.retries.default
-
-# 配置结构
-"""
-NanochatConfig
-├── ollama: EndpointConfig
-├── timeouts: TimeoutConfig
-├── retries: RetryConfig
-├── delays: DelayConfig
-├── agent: AgentConfig
-├── llm: LLMConfig
-├── api_keys: ApiKeysConfig
-├── paths: PathsConfig
-└── limits: LimitsConfig
-"""
-```
-
-### UnifiedConfig（兼容层）
-
-**路径**：`client/src/business/config.py`
-
-**特点**：
-- 字典风格访问
-- 兼容旧代码
-- 已弃用（显示警告）
-
-**使用示例**：
-```python
-from client.src.business.config import UnifiedConfig
-
-config = UnifiedConfig.get_instance()
-url = config.get("endpoints.ollama.url")
-```
-
-**迁移指南**：
-1. 查找所有 `from client.src.business.config import UnifiedConfig`
-2. 替换为 `from client.src.business.nanochat_config import config`
-3. 将 `config.get("endpoints.ollama.url")` 替换为 `config.ollama.url`
-4. 测试确保功能正常
-
----
-
-## 部署架构
-
-### 桌面客户端部署
+**用户请求流程**:
 
 ```
-┌─────────────────────────────────────┐
-│         用户桌面环境                  │
-│  ┌─────────────────────────────┐   │
-│  │    LivingTreeAI Client      │   │
-│  │  ┌─────────────────────┐   │   │
-│  │  │   PyQt6 GUI          │   │   │
-│  │  ├─────────────────────┤   │   │
-│  │  │   Business Logic    │   │   │
-│  │  ├─────────────────────┤   │   │
-│  │  │   Local DB (SQLite) │   │   │
-│  │  └─────────────────────┘   │   │
-│  └─────────────────────────────┘   │
-│                                     │
-│  ┌─────────────────────────────┐   │
-│  │    Ollama (Local LLM)       │   │
-│  └─────────────────────────────┘   │
-└─────────────────────────────────────┘
+[用户界面] → [事件总线] → [任务编排器] → [智能体管理器]
+                                          ↓
+                                   [模型路由器] → [LLM]
+                                          ↓
+                                   [技能系统] → [工具执行]
+                                          ↓
+                                   [记忆系统] → [知识检索]
+                                          ↓
+                                   [结果返回] → [用户界面]
 ```
 
-### 服务器部署
+### 5.2 模块交互图
 
 ```
-┌─────────────────────────────────────┐
-│           Load Balancer             │
-│         (Nginx/HAProxy)            │
-└─────────────────┬───────────────────┘
-                  │
-        ┌─────────┴─────────┐
-        │                   │
-┌───────▼────────┐  ┌───────▼────────┐
-│ Relay Server 1 │  │ Relay Server 2 │
-│  (FastAPI)     │  │  (FastAPI)     │
-└───────┬────────┘  └───────┬────────┘
-        │                   │
-        └─────────┬─────────┘
-                  │
-        ┌─────────▼─────────┐
-        │   PostgreSQL DB     │
-        └────────────────────┘
-```
-
-### Docker 部署
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  client:
-    build: ./client
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/app/data
-  
-  relay-server:
-    build: ./server/relay_server
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-  
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_DB: livingtree
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+┌────────────────────────────────────────────────────────────┐
+│                     Presentation Layer                     │
+│   [ChatWindow]  [IDEPanel]  [SkillPanel]  [ConfigPanel]   │
+│         ↓            ↓            ↓            ↓          │
+├────────────────────────────────────────────────────────────┤
+│                        Event Bus                           │
+│         ↓            ↓            ↓            ↓          │
+├────────────────────────────────────────────────────────────┤
+│                     Business Layer                         │
+│   ┌───────────┐  ┌───────────┐  ┌───────────┐            │
+│   │TaskOrch   │→│AgentMgr   │→│ModelRouter│            │
+│   └───────────┘  └────┬──────┘  └────┬──────┘            │
+│                       │              │                    │
+│                       ↓              ↓                    │
+│               ┌───────────┐  ┌───────────┐               │
+│               │SkillSystem│  │MemorySystem│              │
+│               └───────────┘  └───────────┘               │
+│                       │              │                    │
+├────────────────────────────────────────────────────────────┤
+│                   Infrastructure Layer                     │
+│           ┌─────────────┐  ┌─────────────┐                │
+│           │  Database   │  │   Network   │                │
+│           └─────────────┘  └─────────────┘                │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 性能优化
+## 6. 数据库设计
 
-### 1. 配置系统优化
+### 6.1 数据库架构
 
-**问题**：UnifiedConfig 使用 YAML 解析 + 字典查找，性能差
+**数据库类型**: SQLite (默认) / PostgreSQL (生产环境)
 
-**解决方案**：NanochatConfig 使用 dataclass，性能提升 10x
+**数据库迁移**: `client/src/infrastructure/database/` (v1-v14)
 
-**对比**：
-```
-UnifiedConfig:
-- 加载时间: ~100ms
-- 访问时间: ~1ms/次
-- 内存占用: ~10MB
+### 6.2 核心数据表
 
-NanochatConfig:
-- 加载时间: ~10ms
-- 访问时间: ~0.1ms/次
-- 内存占用: ~1MB
-```
+#### 6.2.1 agents 表
 
-### 2. 数据库优化
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | UUID | 主键 |
+| `name` | VARCHAR | 智能体名称 |
+| `type` | VARCHAR | 智能体类型 |
+| `config` | JSON | 配置信息 |
+| `status` | VARCHAR | 状态 |
+| `created_at` | TIMESTAMP | 创建时间 |
+| `updated_at` | TIMESTAMP | 更新时间 |
 
-**索引优化**：
-```sql
--- 用户表索引
-CREATE INDEX idx_user_email ON users(email);
-CREATE INDEX idx_user_created_at ON users(created_at);
+#### 6.2.2 skills 表
 
--- 会话表索引
-CREATE INDEX idx_session_user_id ON sessions(user_id);
-CREATE INDEX idx_session_updated_at ON sessions(updated_at);
-```
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | UUID | 主键 |
+| `name` | VARCHAR | 技能名称 |
+| `description` | TEXT | 技能描述 |
+| `type` | VARCHAR | 技能类型 |
+| `metadata` | JSON | 元数据 |
+| `created_at` | TIMESTAMP | 创建时间 |
 
-**查询优化**：
-```python
-# 差：N+1 查询
-users = User.query.all()
-for user in users:
-    print(user.sessions.count())
+#### 6.2.3 tasks 表
 
-# 好：JOIN 查询
-users = User.query.options(joinedload(User.sessions)).all()
-for user in users:
-    print(len(user.sessions))
-```
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | UUID | 主键 |
+| `agent_id` | UUID | 关联智能体 |
+| `status` | VARCHAR | 任务状态 |
+| `priority` | INTEGER | 优先级 |
+| `input` | JSON | 输入数据 |
+| `output` | JSON | 输出数据 |
+| `error` | TEXT | 错误信息 |
+| `created_at` | TIMESTAMP | 创建时间 |
+| `completed_at` | TIMESTAMP | 完成时间 |
 
-### 3. 缓存策略
+#### 6.2.4 memories 表
 
-**内存缓存**：
-```python
-from functools import lru_cache
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | UUID | 主键 |
+| `user_id` | UUID | 用户ID |
+| `type` | VARCHAR | 记忆类型 (short/mid/long) |
+| `content` | TEXT | 记忆内容 |
+| `metadata` | JSON | 元数据 |
+| `created_at` | TIMESTAMP | 创建时间 |
+| `accessed_at` | TIMESTAMP | 访问时间 |
 
-@lru_cache(maxsize=128)
-def get_user_profile(user_id: int) -> dict:
-    return db.query(User).filter_by(id=user_id).first()
-```
+#### 6.2.5 knowledge_graph 表
 
-**Redis 缓存**：
-```python
-import redis
-
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
-def get_cached(key: str, fetch_func: Callable) -> Any:
-    value = redis_client.get(key)
-    if value is None:
-        value = fetch_func()
-        redis_client.setex(key, 3600, value)
-    return value
-```
-
----
-
-## 安全设计
-
-### 1. 沙箱隔离
-
-**目的**：防止恶意代码执行
-
-**实现**：
-```python
-import subprocess
-import resource
-
-def run_in_sandbox(code: str) -> str:
-    # 限制 CPU 时间
-    resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
-    
-    # 限制内存
-    resource.setrlimit(resource.RLIMIT_AS, (128 * 1024 * 1024, 128 * 1024 * 1024))
-    
-    # 限制文件大小
-    resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))
-    
-    # 执行代码
-    result = subprocess.run(['python', '-c', code], capture_output=True, timeout=5)
-    return result.stdout.decode()
-```
-
-### 2. 权限控制
-
-**RBAC（基于角色的访问控制）**：
-```python
-class Permission(Enum):
-    READ = 'read'
-    WRITE = 'write'
-    EXECUTE = 'execute'
-    ADMIN = 'admin'
-
-class Role:
-    def __init__(self, name: str, permissions: List[Permission]):
-        self.name = name
-        self.permissions = permissions
-
-# 预定义角色
-ROLES = {
-    'user': Role('user', [Permission.READ, Permission.WRITE]),
-    'admin': Role('admin', [Permission.READ, Permission.WRITE, Permission.EXECUTE, Permission.ADMIN]),
-    'guest': Role('guest', [Permission.READ])
-}
-```
-
-### 3. 数据加密
-
-**传输加密（TLS）**：
-```python
-# FastAPI 配置 TLS
-import uvicorn
-
-if __name__ == '__main__':
-    uvicorn.run(
-        app,
-        host='0.0.0.0',
-        port=8000,
-        ssl_keyfile='/path/to/key.pem',
-        ssl_certfile='/path/to/cert.pem'
-    )
-```
-
-**存储加密（AES）**：
-```python
-from cryptography.fernet import Fernet
-
-# 生成密钥
-key = Fernet.generate_key()
-cipher = Fernet(key)
-
-# 加密
-encrypted = cipher.encrypt(b'Sensitive data')
-
-# 解密
-decrypted = cipher.decrypt(encrypted)
-```
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | UUID | 主键 |
+| `entity_type` | VARCHAR | 实体类型 |
+| `entity_id` | UUID | 实体ID |
+| `relation` | VARCHAR | 关系类型 |
+| `target_entity_type` | VARCHAR | 目标实体类型 |
+| `target_entity_id` | UUID | 目标实体ID |
+| `created_at` | TIMESTAMP | 创建时间 |
 
 ---
 
-## 附录
+## 7. API 设计
 
-### A. 常见问题（FAQ）
+### 7.1 REST API 端点
 
-**Q1: 为什么选择 PyQt6 而不是 Web 技术？**
+**基础路径**: `/api/v1/`
 
-A: PyQt6 提供更好的桌面集成、性能和离线能力。
+#### 7.1.1 智能体 API
 
-**Q2: 为什么使用 Python 3.11+？**
+| 端点 | 方法 | 说明 |
+|-----|------|------|
+| `/agents` | GET | 获取智能体列表 |
+| `/agents/{id}` | GET | 获取单个智能体 |
+| `/agents` | POST | 创建智能体 |
+| `/agents/{id}` | PUT | 更新智能体 |
+| `/agents/{id}` | DELETE | 删除智能体 |
+| `/agents/{id}/execute` | POST | 执行智能体任务 |
 
-A: Python 3.11 引入了更好的错误处理和性能优化。
+#### 7.1.2 技能 API
 
-**Q3: 如何贡献代码？**
+| 端点 | 方法 | 说明 |
+|-----|------|------|
+| `/skills` | GET | 获取技能列表 |
+| `/skills/{id}` | GET | 获取技能详情 |
+| `/skills` | POST | 注册技能 |
+| `/skills/{id}` | DELETE | 删除技能 |
+| `/skills/search` | GET | 搜索技能 |
 
-A: 参考 `AGENTS.md` 了解项目规范，然后提交 PR。
+#### 7.1.3 任务 API
 
-### B. 参考资源
+| 端点 | 方法 | 说明 |
+|-----|------|------|
+| `/tasks` | GET | 获取任务列表 |
+| `/tasks/{id}` | GET | 获取任务详情 |
+| `/tasks` | POST | 创建任务 |
+| `/tasks/{id}` | PUT | 更新任务 |
+| `/tasks/{id}` | DELETE | 删除任务 |
+| `/tasks/{id}/cancel` | POST | 取消任务 |
 
-- [PyQt6 文档](https://www.riverbankcomputing.com/static/Docs/PyQt6/)
-- [FastAPI 文档](https://fastapi.tiangolo.com/)
-- [Ollama 文档](https://ollama.ai/docs)
-- [LangChain 文档](https://python.langchain.com/docs)
+#### 7.1.4 记忆 API
 
-### C. 更新日志
+| 端点 | 方法 | 说明 |
+|-----|------|------|
+| `/memories` | GET | 获取记忆列表 |
+| `/memories/{id}` | GET | 获取记忆详情 |
+| `/memories` | POST | 创建记忆 |
+| `/memories/{id}` | DELETE | 删除记忆 |
+| `/memories/search` | GET | 搜索记忆 |
 
-**v2.0 (2026-04-26)**
-- ✅ 完成 `core/` → `client/src/business/` 迁移
-- ✅ 完成 `ui/` → `client/src/presentation/` 迁移
-- ✅ 引入 NanochatConfig 配置系统
-- ✅ 重写 README 和架构文档
+### 7.2 WebSocket API
 
-**v1.0 (2026-04-24)**
-- ✅ 项目启动
-- ✅ Phase 1-4 完成
-- ✅ 基础功能实现
+**端点**: `/ws/v1/`
+
+**消息类型**:
+
+| 类型 | 说明 |
+|-----|------|
+| `task_update` | 任务状态更新 |
+| `agent_status` | 智能体状态变化 |
+| `system_event` | 系统事件 |
+| `notification` | 通知消息 |
 
 ---
 
-*最后更新：2026-04-26 | 如有问题，请提交 Issue*
+## 8. 部署架构
+
+### 8.1 单机部署
+
+```
+┌─────────────────────────────────────────────┐
+│           LivingTreeAI Desktop Client      │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐    │
+│  │  UI     │  │ Business│  │ Storage │    │
+│  │ Layer   │  │  Layer  │  │ Layer   │    │
+│  └────┬────┘  └────┬────┘  └────┬────┘    │
+└───────┼────────────┼────────────┼──────────┘
+        │            │            │
+        ↓            ↓            ↓
+┌─────────────────────────────────────────────┐
+│              External Services              │
+│   Ollama    │  PostgreSQL  │   Redis       │
+└─────────────────────────────────────────────┘
+```
+
+### 8.2 分布式部署
+
+```
+                    ┌─────────────────┐
+                    │   Load Balancer │
+                    └────────┬────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        ↓                    ↓                    ↓
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│   Relay       │    │   Relay       │    │   Relay       │
+│   Server 1    │    │   Server 2    │    │   Server 3    │
+└───────┬───────┘    └───────┬───────┘    └───────┬───────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        ↓                    ↓                    ↓
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│  PostgreSQL   │    │    Redis      │    │  P2P Network │
+│   (Master)    │    │   Cluster     │    │   Tracker    │
+└───────────────┘    └───────────────┘    └───────────────┘
+```
+
+### 8.3 Docker 部署
+
+**容器组件**:
+
+| 容器 | 镜像 | 端口 |
+|-----|------|------|
+| `livingtree` | `livingtreeai:latest` | 8000 |
+| `postgres` | `postgres:15-alpine` | 5432 |
+| `redis` | `redis:7-alpine` | 6379 |
+| `nginx` | `nginx:alpine` | 80, 443 |
+
+### 8.4 Kubernetes 部署
+
+**资源配置**:
+
+| 资源 | 配置 |
+|-----|------|
+| **Deployment** | 3 副本, RollingUpdate |
+| **Service** | ClusterIP, 端口 8000 |
+| **Ingress** | HTTPS, TLS 证书 |
+| **HPA** | 基于 CPU/Memory, 2-10 副本 |
+| **PVC** | 数据卷 10Gi, 日志卷 5Gi |
+
+---
+
+## 9. 安全架构
+
+### 9.1 安全原则
+
+| 原则 | 说明 |
+|-----|------|
+| **最小权限** | 每个模块只拥有必要的权限 |
+| **数据加密** | 敏感数据加密存储和传输 |
+| **输入验证** | 所有输入进行严格验证 |
+| **审计日志** | 记录所有关键操作 |
+| **安全隔离** | 进程隔离和沙箱执行 |
+
+### 9.2 安全组件
+
+| 组件 | 职责 |
+|-----|------|
+| **AuthSystem** | 用户认证和授权 |
+| **SecurityPolicy** | 安全策略管理 |
+| **EncryptedConfig** | 配置加密 |
+| **SandboxRuntimes** | 沙箱运行时 |
+| **ErrorLogger** | 安全审计日志 |
+
+### 9.3 数据保护
+
+**加密策略**:
+
+| 数据类型 | 加密方式 |
+|-----|------|
+| **配置文件** | AES-256 |
+| **数据库** | 字段级加密 |
+| **网络传输** | TLS 1.3 |
+| **API 通信** | JWT 令牌 |
+
+---
+
+## 📊 架构指标
+
+| 指标 | 当前值 | 目标值 |
+|-----|-------|-------|
+| **模块数量** | ~340 (业务层) | 持续优化 |
+| **代码行数** | ~100K+ | 持续优化 |
+| **测试覆盖率** | 60% | 80%+ |
+| **构建时间** | ~3min | <2min |
+| **启动时间** | ~15s | <10s |
+| **响应时间** | <500ms | <200ms |
+
+---
+
+## 🔮 未来演进
+
+1. **微服务拆分**: 将核心服务拆分为独立微服务
+2. **边缘部署**: 支持边缘计算节点部署
+3. **AI 优化**: 引入更多 AI 驱动的优化
+4. **多云支持**: 支持多云平台部署
+5. **可观测性**: 增强监控和可观测性能力
+
+---
+
+**文档版本**: v1.0.0  
+**最后更新**: 2026-04-30  
+**维护团队**: LivingTreeAI Team

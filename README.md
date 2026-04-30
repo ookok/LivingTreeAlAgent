@@ -1,168 +1,268 @@
-# LivingTreeAlAgent - 自我进化智能代理平台
+# 🌳 LivingTreeAI Agent Platform
 
-> *「根系装配园开放，每一位开发者都是嫁接者，将创新的枝条接入生命之树。」*
+> **新一代 AI 智能体平台** - 构建未来的 AI 编码体验
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![PyQt6](https://img.shields.io/badge/PyQt6-6.0+-green.svg)](https://pypi.org/project/PyQt6/)
+LivingTreeAI 是一个基于 PyQt6 的桌面 AI 智能体平台，采用清晰的三层架构设计，具备多代理系统、P2P 存储、数字孪生、信用经济、电子商务、浏览器自动化、虚拟会议等核心能力。
 
 ---
 
-## 核心理念
+## 📋 项目状态
 
-LivingTreeAlAgent 是一个具备**自我进化**能力的智能代理平台，遵循**极简设计**原则：
+**阶段**: **全面测试阶段** (Phase 1 Complete)
 
-```
-会话交互 → 需求澄清 → 渐进渲染UI
-```
-
-### 三大设计原则
-
-| 原则 | 说明 | 实践 |
-|------|------|------|
-| **会话优先** | 自然语言驱动一切交互 | 用户说意图，系统理解并执行 |
-| **需求澄清** | 不猜，多问，直到确定 | IntentClarifier 主动澄清模糊需求 |
-| **渐进渲染** | 先给轮廓，逐步完善 | ProgressiveUIRenderer 按需加载 |
-
-### 自我进化三禁止
-
-```
-┌─────────────────────────────────────────────────────┐
-│  ❌ 禁止预置          ✅ 鼓励学习                    │
-│  - 固定模板           - 从样本学习                   │
-│  - 硬编码规则         - 动态知识图谱                 │
-│  - 不可变流程         - 可演进工作流                 │
-└─────────────────────────────────────────────────────┘
-```
+所有核心功能已开发完成，进入质量保证和集成测试阶段。
 
 ---
 
-## 核心特性
+## ✨ 核心功能
 
-### 1. LLM分层推理 (L0-L4)
+### 🎯 多代理系统 (Multi-Agent System)
+- **Hermes Agent Framework**: 灵活的智能体框架，支持多种智能体类型
+- **Agent Orchestration**: 智能体协作编排引擎
+- **Skill System**: 技能系统，支持技能发现、匹配和执行
 
-```
-L0: 路由判断 → L3: 深度推理 → L4: 生成优化
-```
+### 🔄 P2P 网络 (Peer-to-Peer Networking)
+- **P2P CDN**: 分布式内容分发网络
+- **P2P Storage**: 去中心化存储系统
+- **Node Tracker**: 节点追踪和发现
 
-| 模型 | 用途 | 特点 |
-|------|------|------|
-| qwen3.5:2b | L0路由 | 快速响应 |
-| qwen3.5:4b | L3推理 | 深度思考 |
-| qwen3.6:35b | L4生成 | 高质量输出 |
+### 🤖 数字孪生 (Digital Twin)
+- **Digital Avatar**: 数字化身系统
+- **Virtual Conference**: 虚拟会议支持
+- **Real-time Collaboration**: 实时协作能力
 
-### 2. 环评EIA专业系统 (96%匹配)
+### 💰 信用经济 (Credit Economy)
+- **Points System**: 积分和信用系统
+- **Reward Mechanism**: 奖励机制
+- **Economic Model**: 经济模型
 
-35个核心模块，覆盖环境影响评价全流程：
-- 📊 工作台 / 合规检查 / 报告生成
-- 🌫️ AERMOD大气扩散 / 💧 Mike21水动力
-- 🌍 地下水模拟 / 🌧️ 暴雨排水
+### 🛒 电子商务 (E-commerce)
+- **DecCommerce**: 去中心化电商模块
+- **Marketplace**: 市场和交易平台
+- **Smart Contracts**: 智能合约支持
 
-### 3. 统一工具层
+### 🌐 浏览器自动化 (Browser Automation)
+- **Web Automation**: 网页自动化操作
+- **Browser Integration**: 浏览器深度集成
+- **Web Scraping**: 智能网页抓取
 
-```
-ToolRegistry (语义搜索) ← BaseTool (抽象基类) ← 20+工具实现
-```
+### ⏰ 智能调度 (Smart Scheduling)
+- **AmphiLoop**: 双向调度引擎
+- **Task Planning**: 任务规划系统
+- **Resource Management**: 资源管理
 
-| 类别 | 工具 |
-|------|------|
-| 🌐 网络 | WebCrawler, DeepSearch, TierRouter |
-| 📄 文档 | DocumentParser, IntelligentOCR |
-| 💾 存储 | VectorDB, KnowledgeGraph, Memory |
-| 📋 任务 | TaskDecomposer, ExecutionEngine |
-
-### 4. 技能系统
-
-220+专家角色，涵盖工程、法律、金融等20+领域：
-
-```python
-# 使用技能
-/skill chemical-expert    # 化工专家
-/skill EIA-wizard         # 环评向导
-/skill legal-consultant   # 法律顾问
-```
-
-### 5. 自我进化引擎
-
-- 🔍 **ToolSelfRepairer**: 自动修复工具执行错误
-- 📚 **HardVariantGenerator**: 从错题生成更难变体
-- 🧪 **ExperimentLoop**: 双数据飞轮训练
+### 🧠 智能优化 (AI Optimization)
+- **PRISM**: 上下文优化系统
+- **Fusion RAG**: 多源检索增强生成
+- **Knowledge Graph**: 知识图谱
 
 ---
 
-## 技术架构
+## 🚀 快速开始
 
-```
-LivingTreeAlAgent/
-├── client/src/                    # 核心代码
-│   ├── business/                  # 业务逻辑 (~340+ 文件)
-│   │   ├── hermes_agent/         # Agent框架
-│   │   ├── tools/                # 统一工具层
-│   │   ├── self_evolution/       # 自我进化
-│   │   ├── global_model_router.py # LLM路由
-│   │   └── eia_workbench/        # 环评系统
-│   └── presentation/             # PyQt6 UI (~200+ 文件)
-├── docs/                          # 核心文档
-│   ├── LIVINGTREE_ARCHITECTURE_GUIDE.md  # 架构指南
-│   └── LIVINGTREE_DEVELOPMENT_GUIDE.md   # 开发指南
-└── server/                       # FastAPI服务器
+### 系统要求
+
+- **Python**: 3.11+
+- **操作系统**: Windows 10+, macOS 10.15+, Linux (Ubuntu 20.04+)
+- **内存**: 建议 8GB+
+- **存储**: 至少 10GB 可用空间
+
+### 一键启动
+
+**Windows**:
+```bash
+双击 run.bat
 ```
 
----
+**Linux/Mac**:
+```bash
+chmod +x run.sh
+./run.sh
+```
 
-## 快速开始
-
-### 环境要求
-
-- Python 3.11+
-- PyQt6 6.0+
-- Ollama (本地LLM)
-
-### 安装
+### 手动安装
 
 ```bash
-git clone https://github.com/ookok/LivingTreeAlAgent.git
-cd LivingTreeAlAgent
+# 安装客户端
 pip install -e ./client
-```
 
-### 启动
+# 安装服务端
+pip install -e ./server/relay_server
 
-```bash
+# 启动客户端
 python main.py client
 ```
 
----
+### 启动命令
 
-## 开源项目借鉴
-
-高匹配度项目逐一借鉴：
-
-| 项目 | 匹配度 | 借鉴价值 |
-|------|--------|----------|
-| EIA报告系统 | 96% | 任务驱动工作流 |
-| 内置LLM方案 | 93% | nanoGPT+增量学习 |
-| AnyDoc通用文档 | 92% | 通用引擎+领域插件 |
-| 渐进式UI范式 | 82% | 会话式+渐进渲染 |
-| cognee记忆 | 80% | remember/recall/forget/improve |
-
----
-
-## 文档导航
-
-| 文档 | 用途 |
-|------|------|
-| [架构指南](./docs/LIVINGTREE_ARCHITECTURE_GUIDE.md) | 核心架构、自我进化、开源借鉴 |
-| [开发指南](./docs/LIVINGTREE_DEVELOPMENT_GUIDE.md) | 功能开发规范 |
-| [工具开发指南](./docs/统一工具层开发指南.md) | BaseTool/ToolRegistry规范 |
-| [归档文档](./docs/_archive/) | 历史文档、详细分析 |
+```bash
+python main.py client          # 启动桌面客户端（默认）
+python main.py relay           # 启动中继服务器
+python main.py tracker         # 启动 P2P 追踪器
+python main.py app             # 启动企业应用
+python main.py check           # 环境自检
+python main.py update          # 检查更新
+python main.py config          # 运行配置向导
+python main.py model <name>    # 确保模型已安装
+```
 
 ---
 
-## License
+## 📁 项目结构
 
-MIT License
+```
+LivingTreeAlAgent/
+├── client/
+│   └── src/
+│       ├── business/          # 业务逻辑层 (~340+ 文件)
+│       │   ├── hermes_agent/  # 智能体框架
+│       │   ├── fusion_rag/    # 多源检索
+│       │   ├── knowledge_graph/ # 知识图谱
+│       │   ├── amphiloop/     # 调度引擎
+│       │   ├── optimization/  # PRISM 优化
+│       │   ├── enterprise/    # P2P 存储
+│       │   ├── digital_twin/  # 数字孪生
+│       │   ├── credit_economy/ # 信用经济
+│       │   ├── decommerce/    # 电子商务
+│       │   └── living_tree_ai/ # 核心 AI
+│       ├── presentation/      # 表示层 (~200+ 文件)
+│       │   ├── panels/        # UI 面板
+│       │   ├── components/    # 可复用组件
+│       │   ├── widgets/       # 自定义部件
+│       │   └── dialogs/       # 对话框
+│       ├── infrastructure/    # 基础设施层
+│       │   ├── database/      # 数据库 (v1-v14)
+│       │   ├── config/        # 配置管理
+│       │   └── network/       # 网络通信
+│       └── shared/            # 共享工具
+├── server/                    # 服务端
+│   ├── relay_server/          # FastAPI 中继
+│   └── tracker_server.py      # P2P 节点追踪
+├── app/                       # 企业应用
+├── deploy/                    # 部署配置
+│   ├── docker/                # Docker 配置
+│   └── k8s/                   # Kubernetes 配置
+└── scripts/                   # 辅助脚本
+    ├── check.py               # 环境自检
+    ├── config_wizard.py       # 配置向导
+    ├── auto_update.py         # 自动更新
+    ├── auto_heal.py           # 自动修复
+    └── model_manager.py       # 模型管理
+```
 
 ---
 
-*LivingTree AI - 让智能体像生命一样进化* 🌱
+## 🏗️ 架构设计
+
+### 三层架构
+
+| 层级 | 职责 | 技术栈 |
+|-----|------|-------|
+| **Presentation Layer** | UI 展示和用户交互 | PyQt6 |
+| **Business Layer** | 业务逻辑处理 | Python |
+| **Infrastructure Layer** | 数据存储和网络 | SQLite/PostgreSQL, Redis |
+
+### 核心模块
+
+1. **Agent Framework**: 智能体生命周期管理
+2. **Model Router**: LLM 模型路由和选择
+3. **Memory System**: 长短期记忆系统
+4. **Skill System**: 技能注册和执行
+5. **Task Orchestrator**: 任务编排引擎
+6. **Knowledge Graph**: 知识图谱管理
+7. **RAG Engine**: 检索增强生成
+8. **Event Bus**: 事件总线
+
+---
+
+## 🔧 配置
+
+### 配置文件
+
+配置文件位于 `config/` 目录：
+
+- `config.yaml`: 主配置文件
+- `unified.yaml`: 统一配置
+- `logging.yaml`: 日志配置
+- `tools_manifest.json`: 工具清单
+
+### 使用 NanochatConfig (推荐)
+
+```python
+from client.src.business.nanochat_config import config
+
+# 直接属性访问
+url = config.ollama.url
+timeout = config.timeouts.default
+```
+
+### 使用 UnifiedConfig (兼容模式)
+
+```python
+from client.src.business.config import UnifiedConfig
+
+config = UnifiedConfig.get_instance()
+url = config.get("endpoints.ollama.url")
+```
+
+---
+
+## 🧪 测试
+
+```bash
+# 运行所有测试
+pytest
+
+# 运行单元测试
+pytest -m unit
+
+# 运行集成测试
+pytest -m integration
+
+# 运行 UI 测试
+pytest -m ui
+
+# 运行指定测试文件
+pytest tests/test_provider.py -v
+```
+
+---
+
+## 📦 部署
+
+### Docker 部署
+
+```bash
+cd deploy/docker
+docker-compose up -d
+```
+
+### Kubernetes 部署
+
+```bash
+kubectl apply -f deploy/k8s/deployment.yml
+```
+
+---
+
+## 🤝 贡献
+
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+---
+
+## 📄 许可证
+
+本项目采用 MIT 许可证，详见 LICENSE 文件。
+
+---
+
+## 📞 联系方式
+
+- **项目主页**: https://github.com/ookok/LivingTreeAlAgent

@@ -11,6 +11,11 @@
 - 使用知识图谱推理验证因果关系
 - 支持跨文档引用追溯
 
+基于 VimRAG 扩展：
+- 多模态记忆图：将推理过程建模为动态有向无环图
+- 图调制编码：基于拓扑位置评估节点重要性
+- 细粒度信用分配：分离步骤有效性与轨迹级奖励
+
 核心原则：显式化、可追溯、一致性、谨慎性、透明性
 """
 
@@ -29,6 +34,17 @@ try:
     LLM_WIKI_AVAILABLE = True
 except ImportError:
     LLM_WIKI_AVAILABLE = False
+
+# 集成记忆图引擎（VimRAG 扩展）
+try:
+    from client.src.business.memory_graph_engine import (
+        get_memory_graph_engine,
+        NodeType,
+        RelationType
+    )
+    MEMORY_GRAPH_AVAILABLE = True
+except ImportError:
+    MEMORY_GRAPH_AVAILABLE = False
 
 
 @dataclass
@@ -109,7 +125,22 @@ class TripleChainEngine:
         # 集成 LLM Wiki
         self._init_llm_wiki()
         
-        print("[TripleChainEngine] 初始化完成")
+        # 集成记忆图引擎（VimRAG 扩展）
+        self._init_memory_graph()
+        
+        print("[TripleChainEngine] 初始化完成（含 VimRAG 扩展）")
+    
+    def _init_memory_graph(self):
+        """初始化记忆图引擎（VimRAG 扩展）"""
+        if MEMORY_GRAPH_AVAILABLE:
+            try:
+                self.memory_graph_engine = get_memory_graph_engine()
+                print("[TripleChainEngine] 记忆图引擎集成完成")
+            except Exception as e:
+                print(f"[TripleChainEngine] 记忆图引擎初始化失败: {e}")
+                self.memory_graph_engine = None
+        else:
+            self.memory_graph_engine = None
     
     def _init_llm_wiki(self):
         """初始化 LLM Wiki 集成组件"""
@@ -164,6 +195,9 @@ class TripleChainEngine:
         # 9. 生成最终回答
         answer = self._generate_answer(reasoning_steps)
         
+        # 10. 构建记忆图（VimRAG 扩展）
+        graph_id = self._build_memory_graph(query, reasoning_steps, evidences, answer)
+        
         return TripleChainResult(
             answer=answer,
             reasoning_steps=reasoning_steps,
@@ -172,6 +206,49 @@ class TripleChainEngine:
             uncertainty_note=uncertainty_note,
             validation_passed=validation_passed
         )
+    
+    def _build_memory_graph(self, query: str, reasoning_steps: List[Any], 
+                           evidences: List[Any], conclusion: str) -> Optional[str]:
+        """
+        构建多模态记忆图（VimRAG 扩展）
+        
+        将推理过程建模为动态有向无环图，支持：
+        - 图调制编码：基于拓扑位置评估节点重要性
+        - 细粒度信用分配：分离步骤有效性与轨迹级奖励
+        """
+        if not self.memory_graph_engine:
+            return None
+        
+        try:
+            # 准备证据列表
+            evidence_list = [{
+                "content": e.content_snippet,
+                "confidence": e.confidence,
+                "modalities": ["text"]
+            } for e in evidences]
+            
+            # 准备推理步骤
+            step_contents = [step.content for step in reasoning_steps]
+            
+            # 构建记忆图
+            graph_id = self.memory_graph_engine.build_reasoning_graph(
+                query=query,
+                evidences=evidence_list,
+                reasoning_steps=step_contents,
+                conclusion=conclusion
+            )
+            
+            # 计算节点重要性（图调制编码）
+            graph = self.memory_graph_engine.get_graph(graph_id)
+            if graph:
+                graph.calculate_importance()
+            
+            print(f"[TripleChainEngine] 记忆图构建完成: {graph_id}")
+            return graph_id
+            
+        except Exception as e:
+            print(f"[TripleChainEngine] 记忆图构建失败: {e}")
+            return None
     
     def _enhance_with_wiki(self, query: str, retrieved_docs: List[Dict]) -> List[Dict]:
         """使用 LLM Wiki 知识图谱增强检索结果"""

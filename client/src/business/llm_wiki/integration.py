@@ -7,10 +7,15 @@ LLM Wiki 集成模块 - 将 Phase 1 解析器集成到现有 FusionRAG 系统
 2. PaperParser → FusionRAG KnowledgeBase
 3. CodeExtractor → FusionRAG KnowledgeBase (代码块索引)
 4. 提供统一的搜索接口（复用 FusionRAG 四层架构）
+5. DeepKE-LLM 术语抽取器集成
+
+功能对等 FusionRAG：
+- 行业治理、分层检索、行业过滤、相关性打分、负反馈学习
+- 方言词典、三重链验证、智能术语抽取
 
 作者: LivingTreeAI Team
-日期: 2026-04-29
-版本: 1.0.0 (Phase 1)
+日期: 2026-04-30
+版本: 2.0.0 (Phase 1 + FusionRAG Full Integration + DeepKE-LLM)
 """
 
 import os
@@ -78,7 +83,15 @@ class LLMWikiIntegration:
                 self.dialect = create_industry_dialect_dict()
                 self.triple_chain_engine = create_triple_chain_engine()
                 
-                logger.info("FusionRAG 治理模块集成完成")
+                # 集成 DeepKE-LLM 术语抽取器
+                from client.src.business.fusion_rag import (
+                    get_term_extractor,
+                    get_dict_builder
+                )
+                self.term_extractor = get_term_extractor()
+                self.dict_builder = get_dict_builder()
+                
+                logger.info("FusionRAG 治理模块集成完成（含 DeepKE-LLM）")
             except ImportError as e:
                 logger.warning(f"FusionRAG 治理模块导入失败: {e}")
                 self.governance = None
@@ -88,6 +101,8 @@ class LLMWikiIntegration:
                 self.learner = None
                 self.dialect = None
                 self.triple_chain_engine = None
+                self.term_extractor = None
+                self.dict_builder = None
         else:
             self.knowledge_base = None
             self.chunk_optimizer = None
@@ -99,6 +114,8 @@ class LLMWikiIntegration:
             self.learner = None
             self.dialect = None
             self.triple_chain_engine = None
+            self.term_extractor = None
+            self.dict_builder = None
             logger.warning("FusionRAG 不可用，将使用基础索引")
         
         # Phase 1 解析器
@@ -638,6 +655,80 @@ class LLMWikiIntegration:
         if self.tier_manager:
             # 在分层管理器中标记优先文档
             logger.info(f"钉选文档: {title} (优先级: {priority})")
+    
+    def extract_terms_from_text(self, text: str, industry: str = None) -> List[Dict[str, Any]]:
+        """
+        使用 DeepKE-LLM 从文本中智能抽取术语（与 FusionRAG 对等）
+        
+        Args:
+            text: 输入文本
+            industry: 目标行业
+            
+        Returns:
+            抽取的术语列表，包含术语名称、类别、定义等
+        """
+        if not self.governance:
+            logger.warning("IndustryGovernance 不可用")
+            return []
+        
+        target_industry = industry or self.target_industry
+        return self.governance.extract_terms_from_text(text, target_industry)
+    
+    def extract_relations_from_text(self, text: str, industry: str = None) -> List[Dict[str, Any]]:
+        """
+        使用 DeepKE-LLM 从文本中抽取术语关系（与 FusionRAG 对等）
+        
+        Args:
+            text: 输入文本
+            industry: 目标行业
+            
+        Returns:
+            抽取的关系列表
+        """
+        if not self.governance:
+            logger.warning("IndustryGovernance 不可用")
+            return []
+        
+        target_industry = industry or self.target_industry
+        return self.governance.extract_relations_from_text(text, target_industry)
+    
+    def build_industry_dictionary(self, documents: List[str], industry: str = None, 
+                                  export_path: str = None) -> Dict[str, Any]:
+        """
+        使用 DeepKE-LLM 从文档集合构建行业词典（与 FusionRAG 对等）
+        
+        Args:
+            documents: 文档列表
+            industry: 行业名称
+            export_path: 导出路径（可选）
+            
+        Returns:
+            行业词典
+        """
+        if not self.governance:
+            logger.warning("IndustryGovernance 不可用")
+            return {}
+        
+        target_industry = industry or self.target_industry
+        return self.governance.build_industry_dictionary(documents, target_industry, export_path)
+    
+    def generate_term_definition(self, term: str, industry: str = None) -> str:
+        """
+        使用 DeepKE-LLM 为术语生成定义（与 FusionRAG 对等）
+        
+        Args:
+            term: 术语名称
+            industry: 行业领域
+            
+        Returns:
+            术语定义
+        """
+        if not self.governance:
+            logger.warning("IndustryGovernance 不可用")
+            return f"{term} 是专业术语。"
+        
+        target_industry = industry or self.target_industry
+        return self.governance.generate_term_definition(term, target_industry)
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取统计信息"""

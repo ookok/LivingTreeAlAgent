@@ -706,6 +706,10 @@ class Panel(QWidget):
         self.tool_registry = get_tool_registry()
         self.knowledge_base = get_knowledge_base()
         
+        # 集成系统命令处理器
+        from client.src.business.chat_command_processor import get_command_processor
+        self.chat_command_processor = get_command_processor()
+        
         self._init_default_data()
         self._setup_ui()
         self._setup_models()
@@ -1155,31 +1159,44 @@ class Panel(QWidget):
 
         # 检查是否是命令
         if text.startswith("/"):
-            # 提取命令部分
+            # 优先检查系统命令 (/model, /llmfit, /stats, /clear, /help)
+            import asyncio
+            system_result = asyncio.run(self.chat_command_processor.execute_command(text))
+            
+            if system_result and "未知命令" not in system_result:
+                # 系统命令执行成功，直接显示结果
+                self._add_message("assistant", system_result)
+                self.input_field.clear()
+                return
+            
+            # 尝试解析并执行普通命令
+            parsed_command = self.command_palette.parse_command(text)
+            if parsed_command:
+                result = self.command_palette.execute_command(text)
+                if result:
+                    # 判断是否是系统命令（返回字符串结果）
+                    if isinstance(result, str):
+                        # 系统命令直接显示结果
+                        self._add_message("assistant", result)
+                    else:
+                        # 其他命令显示执行信息
+                        self._add_system_message(f"执行命令: {text}")
+                        self._add_system_message(f"结果: {result}")
+                self.input_field.clear()
+                return
+            
+            # 如果没有找到命令，显示帮助信息
             cmd_parts = text.split()
             cmd = cmd_parts[0]
-            has_params = len(cmd_parts) > 1
-
-            # 如果没有参数，显示命令帮助
-            if not has_params:
-                help_info = self.knowledge_base.get_command_help(cmd)
-                if help_info:
-                    self._add_message("assistant", help_info)
-                    self.input_field.clear()
-                    return
-                else:
-                    # 如果没有找到命令帮助，显示所有可用命令
-                    all_commands = self.knowledge_base.format_all_command_help()
-                    self._add_message("assistant", all_commands)
-                    self.input_field.clear()
-                    return
-
-        parsed_command = self.command_palette.parse_command(text)
-        if parsed_command:
-            result = self.command_palette.execute_command(text)
-            if result:
-                self._add_system_message(f"执行命令: {text}")
-                self._add_system_message(f"结果: {result}")
+            
+            help_info = self.knowledge_base.get_command_help(cmd)
+            if help_info:
+                self._add_message("assistant", help_info)
+            else:
+                # 显示所有可用命令
+                all_commands = self.knowledge_base.format_all_command_help()
+                self._add_message("assistant", all_commands)
+            
             self.input_field.clear()
             return
 

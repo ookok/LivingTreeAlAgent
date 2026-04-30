@@ -134,6 +134,80 @@ class LimitsConfig:
     max_level: int = 4
 
 
+@dataclass
+class CognitiveConfig:
+    """认知框架配置"""
+    # 心理表征配置
+    mental_model_enabled: bool = True
+    embedding_dim: int = 384
+    
+    # 注意力控制配置
+    attention_enabled: bool = True
+    focus_stack_max_depth: int = 10
+    default_priority: str = "medium"
+    
+    # 元认知监控配置
+    meta_reasoning_enabled: bool = True
+    confidence_threshold: float = 0.6
+    fallback_on_low_confidence: bool = True
+    
+    # 经验档案配置
+    experience_manager_enabled: bool = True
+    similarity_threshold: float = 0.7
+    max_cases_per_query: int = 10
+    
+    # 创意引擎配置
+    idea_generator_enabled: bool = True
+    default_num_ideas: int = 5
+    diversity_weight: float = 0.3
+
+
+@dataclass
+class IndustryGovernanceConfig:
+    """行业知识治理配置"""
+    
+    # 目标行业
+    target_industry: str = "通用"
+    
+    # 来源白名单（仅索引这些来源）
+    source_whitelist: List[str] = field(default_factory=lambda: [
+        "国标", "行标", "技术手册", "专利", "权威论文", "内部项目文档"
+    ])
+    
+    # 来源黑名单（排除这些来源）
+    source_blacklist: List[str] = field(default_factory=lambda: [
+        "通用百科", "新闻", "论坛帖子", "博客", "社交媒体"
+    ])
+    
+    # 最小权威等级要求 (1-5)
+    min_authority_level: int = 2
+    
+    # 是否允许过期文档
+    allow_outdated_docs: bool = False
+    
+    # 相关性打分权重
+    domain_weight: float = 0.35
+    timeliness_weight: float = 0.25
+    authority_weight: float = 0.25
+    confidence_weight: float = 0.15
+    
+    # 相关性阈值
+    pass_threshold: float = 0.6
+    warning_threshold: float = 0.4
+    
+    # 是否向用户暴露来源
+    source_visibility: bool = True
+    
+    # 层级权重配置
+    tier_l1_weight: float = 0.55  # 核心层（企业私有）
+    tier_l2_weight: float = 0.35  # 行业层（公开标准）
+    tier_l3_weight: float = 0.10  # 通用层（百科）
+    
+    # 行业方言支持
+    dialect_enabled: bool = True
+    default_region: str = "南京"
+
+
 # ── 主配置类 ───────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -219,6 +293,12 @@ class NanochatConfig:
     
     # 资源限制
     limits: LimitsConfig = field(default_factory=LimitsConfig)
+    
+    # 认知框架配置
+    cognitive: CognitiveConfig = field(default_factory=CognitiveConfig)
+    
+    # 行业知识治理配置
+    industry_governance: IndustryGovernanceConfig = field(default_factory=IndustryGovernanceConfig)
     
     # ── 常用快捷属性 ─────────────────────────────────────────────────────────
     
@@ -484,6 +564,7 @@ def set_unified_config(config: UnifiedConfig):
 # 导出
 __all__ = ['config', 'NanochatConfig', 'EndpointConfig', 'RetryConfig', 
            'TimeoutConfig', 'DelayConfig', 'AgentConfig', 'LLMConfig', 
-           'ApiKeysConfig', 'PathsConfig', 'LimitsConfig',
+           'ApiKeysConfig', 'PathsConfig', 'LimitsConfig', 'CognitiveConfig',
+           'IndustryGovernanceConfig',
            # 兼容层（已废弃）
            'UnifiedConfig', 'get_unified_config', 'set_unified_config']

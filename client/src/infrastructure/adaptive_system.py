@@ -1,19 +1,26 @@
 """
 自适应进化系统 - Self-Evolution Pipeline
 
-整合硬件感知、模型路由、RAG、模型训练、自适应能力于一体，
-实现用户无感知的静默进化。
+与现有系统架构集成：
+- 使用现有的 ModelFitter 进行硬件自适应模型选择（不硬编码）
+- 使用现有的 SelfEvolutionOrchestrator 进行自我进化协调
+- 使用现有的 EvolutionEvaluator 进行模型评估
+- 使用现有的 LearningEngine 进行数据收集（数据飞轮）
+- 使用现有的 ActiveLearningLoop 进行主动学习
 
 四层架构：
 1. 感知层 - 硬件指纹 + 意图识别 + 系统监控
 2. 决策层 - 资源仲裁 + 任务路由 + 训练调度
 3. 执行层 - 推理引擎 + RAG引擎 + 训练引擎
 4. 进化层 - 数据飞轮 + 模型评估 + 热替换部署
+
+自动进化窗口：凌晨 2:00 - 6:00
 """
 
 import asyncio
 import json
 import time
+import platform
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -22,41 +29,51 @@ from datetime import datetime, timedelta
 
 
 @dataclass
+class HardwareProfile:
+    """硬件配置文件"""
+    os_type: str = ""
+    gpu_name: str = ""
+    gpu_vram_gb: int = 0
+    cpu_cores: int = 0
+    ram_gb: int = 0
+    arch: str = ""
+
+
+@dataclass
 class SystemState:
     """系统状态"""
-    hardware_profile: Dict = field(default_factory=dict)
+    hardware_profile: HardwareProfile = field(default_factory=HardwareProfile)
     system_load: Dict = field(default_factory=dict)
     current_model: str = ""
     active_tasks: List[str] = field(default_factory=list)
-    training_queue: List[str] = field(default_factory=list)
-    evolution_status: str = "idle"  # idle, collecting, evaluating, deploying
+    evolution_status: str = "idle"
     last_evolution_time: Optional[datetime] = None
-    data_flywheel_count: int = 0
+    evaluation_metrics: Dict = field(default_factory=dict)
+    model_fit_results: List = field(default_factory=list)
 
 
 @dataclass
 class EvolutionConfig:
     """进化配置"""
     enabled: bool = True
-    data_collection_threshold: int = 100  # 触发训练的数据量阈值
+    data_collection_threshold: int = 100
     evaluation_interval_hours: int = 24
-    deployment_window_start: int = 2  # 部署窗口开始时间（凌晨2点）
-    deployment_window_end: int = 6  # 部署窗口结束时间（凌晨6点）
-    min_idle_time_minutes: int = 60  # 最小空闲时间要求
-    auto_deploy: bool = True  # 是否自动部署
-    rollback_on_failure: bool = True  # 失败时是否回滚
+    deployment_window_start: int = 2
+    deployment_window_end: int = 6
+    min_idle_time_minutes: int = 60
+    auto_deploy: bool = True
+    rollback_on_failure: bool = True
 
 
 class AdaptiveSystem:
     """
     自适应进化系统
     
-    实现用户无感知的静默进化：
-    1. 持续收集高质量交互数据
-    2. 自动判断是否需要训练
-    3. 在系统空闲时执行训练
-    4. 自动评估新模型
-    5. 无缝热替换部署
+    核心特性：
+    - 使用 ModelFitter 进行硬件自适应模型选择（完全动态，不硬编码）
+    - 集成现有 SelfEvolutionOrchestrator、EvolutionEvaluator、LearningEngine
+    - 支持凌晨 2-6 点静默进化窗口
+    - 完整的数据飞轮和模型评估集成
     """
     
     def __init__(self):
@@ -77,72 +94,186 @@ class AdaptiveSystem:
         self._logger.info("自适应进化系统初始化完成")
     
     def _init_perception_layer(self):
-        """初始化感知层"""
-        from .system_resources import SystemResources
-        from .intent_classifier import IntentClassifier
+        """初始化感知层 - 使用 ModelFitter 的 SystemResources"""
+        from infrastructure.model_fitter import SystemResources
         
         self._hardware_profiler = SystemResources()
-        self._intent_classifier = IntentClassifier()
         
-        # 生成初始硬件指纹
-        self._state.hardware_profile = self._hardware_profiler.get_hardware_profile()
-        self._logger.info(f"硬件指纹生成完成: {self._state.hardware_profile.get('gpu_name', 'Unknown')}")
+        sys = self._hardware_profiler
+        self._state.hardware_profile = HardwareProfile(
+            os_type=sys.os_type,
+            gpu_name=self._detect_gpu_name(),
+            gpu_vram_gb=int(sys.gpu_vram_gb),
+            cpu_cores=sys.cpu_cores,
+            ram_gb=int(sys.ram_gb),
+            arch=platform.machine()
+        )
+        self._logger.info(f"硬件指纹: {self._state.hardware_profile.gpu_name} ({self._state.hardware_profile.gpu_vram_gb}GB VRAM, {self._state.hardware_profile.ram_gb}GB RAM)")
+    
+    def _detect_gpu_name(self) -> str:
+        """检测 GPU 名称"""
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            name = pynvml.nvmlDeviceGetName(handle).decode('utf-8')
+            pynvml.nvmlShutdown()
+            return name
+        except:
+            pass
+        
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except:
+            pass
+        
+        return "Unknown"
     
     def _init_decision_layer(self):
-        """初始化决策层"""
-        from .training.ms_swift_integration import TrainingScheduler
+        """初始化决策层 - 使用 ModelFitter 进行硬件自适应模型选择"""
+        from infrastructure.model_fitter import get_model_fitter
         
-        self._training_scheduler = TrainingScheduler()
+        self._model_fitter = get_model_fitter()
         
-        # 加载配置预设
-        self._load_config_preset()
+        # 使用 ModelFitter 动态选择最佳模型（不硬编码）
+        self._select_optimal_model()
+    
+    def _select_optimal_model(self):
+        """使用 ModelFitter 动态选择最佳模型（完全不硬编码）"""
+        try:
+            # 获取所有适配的模型及其评分
+            fit_results = self._model_fitter.fit("qwen")
+            self._state.model_fit_results = fit_results
+            
+            if fit_results:
+                # 选择评分最高的模型
+                best_model, score, reason = fit_results[0]
+                self._state.current_model = best_model
+                self._logger.info(f"ModelFitter 选择最佳模型: {best_model} (评分: {score}/100)")
+                self._logger.info(f"选择原因: {reason}")
+                
+                # 记录备选模型
+                for model, s, r in fit_results[1:3]:
+                    self._logger.info(f"  备选: {model} ({s}/100) - {r}")
+            else:
+                # 降级方案：使用默认模型
+                self._state.current_model = "qwen3.5:latest"
+                self._logger.warning("ModelFitter 未找到适配模型，使用默认: qwen3.5:latest")
+                
+        except Exception as e:
+            self._logger.error(f"ModelFitter 模型选择失败: {e}")
+            self._state.current_model = "qwen3.5:latest"
     
     def _init_execution_layer(self):
         """初始化执行层"""
-        from .ollama_runner import OllamaRunner
-        from ..business.fusion_rag.rag_engine import RAGEngine
+        try:
+            from client.src.business.smolllm2.ollama_runner import OllamaRunner
+            self._inference_engine = OllamaRunner()
+            self._logger.info("✓ 集成 OllamaRunner")
+        except Exception as e:
+            self._logger.warning(f"OllamaRunner 加载失败: {e}")
+            self._inference_engine = None
         
-        self._inference_engine = OllamaRunner()
-        self._rag_engine = RAGEngine()
+        try:
+            from client.src.business.fusion_rag.rag_engine import RAGEngine
+            self._rag_engine = RAGEngine()
+            self._logger.info("✓ 集成 RAGEngine")
+        except Exception as e:
+            self._logger.warning(f"RAGEngine 加载失败: {e}")
+            self._rag_engine = None
     
     def _init_evolution_layer(self):
-        """初始化进化层"""
-        from .evolution.data_flywheel import DataFlywheel
-        from .evolution.model_evaluator import ModelEvaluator
-        from .evolution.hotswap_deployer import HotswapDeployer
+        """初始化进化层 - 集成现有组件"""
+        self._logger.info("初始化进化层组件...")
         
-        self._data_flywheel = DataFlywheel()
-        self._model_evaluator = ModelEvaluator()
-        self._hotswap_deployer = HotswapDeployer()
+        # 1. 自我进化协调器 - 核心进化引擎
+        try:
+            from client.src.business.self_evolution.self_evolution_orchestrator import (
+                SelfEvolutionOrchestrator
+            )
+            self._evolution_orchestrator = SelfEvolutionOrchestrator(
+                project_root=str(Path.cwd()),
+                auto_approve=False
+            )
+            self._logger.info("✓ 集成 SelfEvolutionOrchestrator")
+        except Exception as e:
+            self._logger.warning(f"SelfEvolutionOrchestrator 加载失败: {e}")
+            self._evolution_orchestrator = None
         
-        # 加载数据飞轮统计
-        self._state.data_flywheel_count = self._data_flywheel.get_record_count()
-    
-    def _load_config_preset(self):
-        """加载硬件匹配的配置预设"""
-        profile = self._state.hardware_profile
-        gpu_vram = profile.get("gpu_vram_gb", 0)
-        ram_gb = profile.get("ram_gb", 0)
+        # 2. 量化评估框架 - 模型评估（修复导入路径）
+        try:
+            import sys
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            
+            from business.evolution_engine.evaluator.evolution_evaluator import (
+                EvolutionEvaluator, EvaluationMode
+            )
+            self._evaluator = EvolutionEvaluator(str(Path.cwd()))
+            self._evaluation_mode = EvaluationMode
+            self._logger.info("✓ 集成 EvolutionEvaluator")
+        except Exception as e:
+            self._logger.warning(f"EvolutionEvaluator 加载失败: {e}")
+            self._evaluator = None
         
-        # 根据硬件选择预设
-        if gpu_vram >= 48:
-            preset = "performance_high"
-            model = "Qwen3.6-35B-A3B-Q4_K_M"
-        elif gpu_vram >= 16:
-            preset = "performance"
-            model = "Qwen3.6-14B-A3B-Q4_K_M"
-        elif gpu_vram >= 8:
-            preset = "balanced"
-            model = "Qwen3.5-7B-Q4_K_M"
-        elif ram_gb >= 32:
-            preset = "balanced"
-            model = "Qwen3.5-4B-Q4_K_M"
-        else:
-            preset = "lightweight"
-            model = "Qwen3.5-2B-Q4_K_M"
+        # 3. 强化学习引擎 - 数据飞轮核心
+        try:
+            from client.src.business.evolution_engine.memory.learning_engine import (
+                get_learning_engine
+            )
+            self._learning_engine = get_learning_engine()
+            self._logger.info("✓ 集成 LearningEngine (数据飞轮)")
+        except Exception as e:
+            self._logger.warning(f"LearningEngine 加载失败: {e}")
+            self._learning_engine = None
         
-        self._state.current_model = model
-        self._logger.info(f"硬件匹配预设: {preset}, 模型: {model}")
+        # 4. 主动学习循环
+        try:
+            from client.src.business.self_evolution.active_learning_loop import (
+                ActiveLearningLoop
+            )
+            self._active_learning_loop = ActiveLearningLoop()
+            self._logger.info("✓ 集成 ActiveLearningLoop")
+        except Exception as e:
+            self._logger.warning(f"ActiveLearningLoop 加载失败: {e}")
+            self._active_learning_loop = None
+        
+        # 5. 训练调度器 - MS-SWIFT集成
+        try:
+            from .training.ms_swift_integration import get_training_scheduler
+            self._training_scheduler = get_training_scheduler()
+            self._logger.info("✓ 集成 TrainingScheduler (MS-SWIFT)")
+        except Exception as e:
+            self._logger.warning(f"TrainingScheduler 加载失败: {e}")
+            self._training_scheduler = None
+        
+        # 6. 双数据飞轮组件（修复导入路径）
+        try:
+            from client.src.business.self_evolution.hard_variant_generator import (
+                HardVariantGenerator
+            )
+            from client.src.business.self_evolution.train_with_variants import (
+                VariantTrainer
+            )
+            from client.src.business.self_evolution.tool_self_repairer import (
+                ToolSelfRepairer
+            )
+            self._variant_generator = HardVariantGenerator()
+            self._variant_trainer = VariantTrainer()
+            self._tool_repairer = ToolSelfRepairer()
+            self._logger.info("✓ 集成双数据飞轮组件")
+        except Exception as e:
+            self._logger.warning(f"双数据飞轮组件加载失败: {e}")
+            self._variant_generator = None
+            self._variant_trainer = None
+            self._tool_repairer = None
+        
+        self._logger.info("进化层初始化完成")
     
     def _start_background_tasks(self):
         """启动后台任务"""
@@ -153,27 +284,31 @@ class AdaptiveSystem:
             loop.create_task(self._monitor_system())
         )
         
-        # 数据收集任务（持续运行）
-        self._background_tasks.append(
-            loop.create_task(self._collect_data())
-        )
-        
-        # 进化调度任务（每小时检查）
+        # 进化调度任务（每小时检查，凌晨 2-6 点执行）
         self._background_tasks.append(
             loop.create_task(self._schedule_evolution())
         )
         
-        self._logger.info("后台任务启动完成")
+        # 数据收集任务（每10分钟）
+        self._background_tasks.append(
+            loop.create_task(self._collect_data_periodically())
+        )
+        
+        # 评估任务（每天凌晨3点执行）
+        self._background_tasks.append(
+            loop.create_task(self._schedule_evaluation())
+        )
+        
+        self._logger.info(f"后台任务启动完成（进化窗口: {self._config.deployment_window_start}:00 - {self._config.deployment_window_end}:00）")
     
     async def _monitor_system(self):
         """系统监控任务"""
         while True:
             try:
-                # 更新系统负载
                 self._state.system_load = {
-                    "cpu": self._hardware_profiler.get_cpu_usage(),
-                    "memory": self._hardware_profiler.get_memory_usage(),
-                    "gpu": self._hardware_profiler.get_gpu_usage() if self._hardware_profiler.has_gpu() else 0,
+                    "cpu": self._hardware_profiler.cpu_percent() if hasattr(self._hardware_profiler, 'cpu_percent') else 0,
+                    "memory": self._hardware_profiler.virtual_memory().percent if hasattr(self._hardware_profiler, 'virtual_memory') else 0,
+                    "gpu": self._hardware_profiler.gpu_vram_gb,
                     "timestamp": datetime.now().isoformat()
                 }
                 
@@ -182,59 +317,59 @@ class AdaptiveSystem:
                 self._logger.error(f"系统监控异常: {e}")
                 await asyncio.sleep(60)
     
-    async def _collect_data(self):
-        """数据收集任务"""
+    async def _collect_data_periodically(self):
+        """定期收集数据（数据飞轮）"""
         while True:
             try:
-                # 收集交互数据
-                new_records = self._data_flywheel.collect_recent_interactions()
-                if new_records > 0:
-                    self._state.data_flywheel_count += new_records
-                    self._logger.debug(f"收集到 {new_records} 条新数据，累计 {self._state.data_flywheel_count} 条")
+                if self._learning_engine:
+                    stats = self._learning_engine.get_statistics()
+                    self._logger.debug(f"数据飞轮统计: {stats}")
                 
-                await asyncio.sleep(60)
+                await asyncio.sleep(600)
             except Exception as e:
                 self._logger.error(f"数据收集异常: {e}")
-                await asyncio.sleep(300)
+                await asyncio.sleep(600)
     
-    async def _schedule_evolution(self):
-        """进化调度任务"""
+    async def _schedule_evaluation(self):
+        """评估调度任务（每天凌晨3点）"""
         while True:
             try:
-                # 检查是否满足进化条件
+                now = datetime.now()
+                
+                if now.hour == 3 and now.minute < 10:
+                    await self._execute_evaluation()
+                
+                await asyncio.sleep(3600)
+            except Exception as e:
+                self._logger.error(f"评估调度异常: {e}")
+                await asyncio.sleep(3600)
+    
+    async def _schedule_evolution(self):
+        """进化调度任务（凌晨2-6点静默窗口）"""
+        while True:
+            try:
                 if self._check_evolution_ready():
                     await self._execute_evolution_pipeline()
                 
-                await asyncio.sleep(3600)  # 每小时检查一次
+                await asyncio.sleep(3600)
             except Exception as e:
                 self._logger.error(f"进化调度异常: {e}")
                 await asyncio.sleep(3600)
     
     def _check_evolution_ready(self) -> bool:
         """检查是否满足进化条件"""
-        # 检查是否启用进化
         if not self._config.enabled:
             return False
         
-        # 检查数据量阈值
-        if self._state.data_flywheel_count < self._config.data_collection_threshold:
-            return False
-        
-        # 检查时间窗口（凌晨2-6点）
         now = datetime.now()
         hour = now.hour
+        
+        # 检查是否在静默进化窗口内（凌晨2-6点）
         if not (self._config.deployment_window_start <= hour < self._config.deployment_window_end):
             return False
         
-        # 检查系统是否空闲
         if not self._is_system_idle():
             return False
-        
-        # 检查距离上次进化的时间
-        if self._state.last_evolution_time:
-            time_since_last = datetime.now() - self._state.last_evolution_time
-            if time_since_last < timedelta(hours=self._config.evaluation_interval_hours):
-                return False
         
         return True
     
@@ -248,226 +383,171 @@ class AdaptiveSystem:
         )
     
     async def _execute_evolution_pipeline(self):
-        """执行进化流水线"""
-        self._logger.info("========== 开始进化流水线 ==========")
-        self._state.evolution_status = "collecting"
+        """执行完整进化流水线（静默进化窗口内执行）"""
+        self._logger.info("========== 开始静默进化流水线 ==========")
+        self._state.evolution_status = "running"
         
         try:
-            # 阶段1: 数据准备
-            self._logger.info("阶段1: 数据准备")
-            dataset_path = await self._prepare_training_data()
+            self._logger.info(f"[阶段1] 数据飞轮: 收集交互数据")
+            if self._learning_engine:
+                stats = self._learning_engine.get_statistics()
+                self._logger.info(f"  学习统计: {stats.get('total_samples', 0)} 样本")
             
-            # 阶段2: 模型训练
-            self._state.evolution_status = "training"
-            self._logger.info("阶段2: 模型训练")
-            trained_model_path = await self._execute_training(dataset_path)
+            self._logger.info("[阶段2] 自我进化: 执行进化计划")
+            if self._evolution_orchestrator:
+                session = await self._evolution_orchestrator.auto_evolve_once()
+                self._logger.info(f"  进化完成: {session.phase}")
             
-            if not trained_model_path:
-                self._logger.warning("训练失败，跳过后续步骤")
-                return
+            self._logger.info("[阶段3] 双数据飞轮: 变体生成与训练")
+            if self._variant_generator and self._variant_trainer:
+                variants = await self._variant_generator.generate_variants(max_cases=5)
+                self._logger.info(f"  生成了 {len(variants)} 个变体")
+                
+                report = await self._variant_trainer.train(max_variants=5)
+                self._logger.info(f"  训练准确率: {report.get('accuracy', 0):.1%}")
             
-            # 阶段3: 模型评估
-            self._state.evolution_status = "evaluating"
-            self._logger.info("阶段3: 模型评估")
-            evaluation_result = await self._evaluate_model(trained_model_path)
+            self._logger.info("[阶段4] 模型评估")
+            await self._execute_evaluation()
             
-            if not evaluation_result.get("success"):
-                self._logger.warning("评估未通过，跳过部署")
-                return
+            self._logger.info("[阶段5] 主动学习")
+            if self._active_learning_loop:
+                await self._active_learning_loop.learn_specific_topic("系统优化")
             
-            # 阶段4: 热替换部署
-            self._state.evolution_status = "deploying"
-            self._logger.info("阶段4: 热替换部署")
-            deployment_result = await self._deploy_model(trained_model_path)
-            
-            if deployment_result.get("success"):
-                self._logger.info("✅ 进化完成！")
-                self._state.last_evolution_time = datetime.now()
-                self._state.data_flywheel_count = 0  # 重置计数器
+            self._state.last_evolution_time = datetime.now()
+            self._logger.info("进化流水线完成")
             
         except Exception as e:
             self._logger.error(f"进化流水线异常: {e}")
-            import traceback
-            traceback.print_exc()
-        
         finally:
             self._state.evolution_status = "idle"
             self._logger.info("========== 进化流水线结束 ==========")
     
-    async def _prepare_training_data(self) -> str:
-        """准备训练数据"""
-        self._logger.info("清洗和格式化训练数据...")
-        dataset_path = self._data_flywheel.prepare_training_dataset()
-        self._logger.info(f"训练数据集准备完成: {dataset_path}")
-        return dataset_path
-    
-    async def _execute_training(self, dataset_path: str) -> Optional[str]:
-        """执行模型训练"""
-        self._logger.info(f"开始训练，数据集: {dataset_path}")
+    async def _execute_evaluation(self):
+        """执行模型评估"""
+        if not self._evaluator:
+            self._logger.warning("评估器不可用")
+            return
         
-        from .training.ms_swift_integration import TrainingConfig
-        
-        config = TrainingConfig(
-            model_name=self._get_base_model_for_training(),
-            dataset_name=dataset_path,
-            output_dir="./output/evolution",
-            training_type="lora",
-            epochs=3,
-            batch_size=8
-        )
-        
-        result = self._training_scheduler.schedule_training(config)
-        
-        # 等待训练完成（最多24小时）
-        timeout = 24 * 60 * 60
-        start_time = time.time()
-        
-        while self._training_scheduler.is_training():
-            if time.time() - start_time > timeout:
-                self._logger.error("训练超时")
-                return None
-            await asyncio.sleep(60)
-        
-        # 检查结果
-        if result.get("success"):
-            return result.get("model_path")
-        else:
-            self._logger.error(f"训练失败: {result.get('error')}")
-            return None
-    
-    def _get_base_model_for_training(self) -> str:
-        """获取用于训练的基础模型"""
-        # 根据当前模型选择合适的训练模型
-        current = self._state.current_model
-        
-        if "35B" in current or "32B" in current:
-            return "Qwen/Qwen3.5-4B"
-        elif "14B" in current:
-            return "Qwen/Qwen3.5-4B"
-        elif "8B" in current or "7B" in current:
-            return "Qwen/Qwen3.5-2B"
-        else:
-            return "Qwen/Qwen3.5-2B"
-    
-    async def _evaluate_model(self, model_path: str) -> Dict:
-        """评估新模型"""
-        self._logger.info(f"评估模型: {model_path}")
-        
-        result = self._model_evaluator.evaluate(
-            model_path,
-            self._state.current_model
-        )
-        
-        if result.get("winner") == "new":
-            self._logger.info("新模型胜出！")
-            return {"success": True, **result}
-        else:
-            self._logger.info("新模型未胜出")
-            return {"success": False, **result}
-    
-    async def _deploy_model(self, model_path: str) -> Dict:
-        """部署新模型"""
-        self._logger.info(f"部署模型: {model_path}")
-        
-        result = self._hotswap_deployer.deploy(
-            model_path,
-            rollback_on_failure=self._config.rollback_on_failure
-        )
-        
-        if result.get("success"):
-            # 更新当前模型
-            self._state.current_model = result.get("new_model_name", self._state.current_model)
-            self._logger.info(f"模型更新为: {self._state.current_model}")
-        
-        return result
+        try:
+            self._logger.info("执行模型评估...")
+            result = self._evaluator.evaluate(mode=self._evaluation_mode.QUICK)
+            
+            self._state.evaluation_metrics = {
+                "timestamp": datetime.now().isoformat(),
+                "evaluators": self._evaluator.get_stats(),
+                "capability_report": self._evaluator.get_capability_report()
+            }
+            
+            self._logger.info(f"评估完成: {len(result.metrics)} 指标")
+            
+        except Exception as e:
+            self._logger.error(f"评估执行失败: {e}")
     
     def process_query(self, query: str) -> Dict:
-        """处理用户查询（完整流程）"""
-        # 1. 意图识别
-        intent = self._intent_classifier.classify(query)
+        """处理用户查询"""
+        intent = self._classify_intent(query)
         
-        # 2. 路由决策
-        if intent == "document_query":
-            # RAG 查询
+        if intent == "document_query" and self._rag_engine:
             result = self._rag_engine.query(query)
             source = "RAG"
-        elif intent == "simple_qa":
-            # 尝试 RAG 回答
+        elif intent == "simple_qa" and self._rag_engine:
             rag_result = self._rag_engine.query(query)
             if rag_result.get("success") and rag_result.get("confidence", 0) > 0.7:
                 result = rag_result
                 source = "RAG"
-            else:
-                # 回退到 LLM
-                result = self._inference_engine.generate(query)
+            elif self._inference_engine:
+                result = self._inference_engine.generate(query, model_name=self._state.current_model)
                 source = "LLM"
-        else:
-            # complex_reasoning, code_generation
-            result = self._inference_engine.generate(query)
+            else:
+                result = {"response": "暂无法处理查询"}
+                source = "fallback"
+        elif self._inference_engine:
+            result = self._inference_engine.generate(query, model_name=self._state.current_model)
             source = "LLM"
+        else:
+            result = {"response": "暂无法处理查询"}
+            source = "fallback"
         
-        # 3. 收集交互数据（用于进化）
-        self._data_flywheel.record_interaction({
-            "query": query,
-            "intent": intent,
-            "source": source,
-            "response": result.get("response", ""),
-            "timestamp": datetime.now().isoformat()
-        })
+        if self._learning_engine:
+            self._learning_engine.record_interaction({
+                "query": query,
+                "intent": intent,
+                "source": source,
+                "response": result.get("response", ""),
+                "timestamp": datetime.now().isoformat()
+            })
         
         return {
             "response": result.get("response", ""),
             "intent": intent,
-            "source": source,
-            "confidence": result.get("confidence", 0)
+            "source": source
         }
+    
+    def _classify_intent(self, query: str) -> str:
+        """意图分类"""
+        query_lower = query.lower()
+        
+        if any(keyword in query_lower for keyword in ["文档", "文件", "查找", "搜索", "知识库"]):
+            return "document_query"
+        elif any(keyword in query_lower for keyword in ["写代码", "代码", "编程", "python", "java", "function"]):
+            return "code_generation"
+        elif any(keyword in query_lower for keyword in ["解释", "分析", "为什么", "原理", "复杂"]):
+            return "complex_reasoning"
+        else:
+            return "simple_qa"
+    
+    def start_evolution_engine(self):
+        """启动进化引擎"""
+        if self._evolution_orchestrator:
+            self._evolution_orchestrator.start_auto_evolution(interval_hours=24)
+    
+    def stop_evolution_engine(self):
+        """停止进化引擎"""
+        if self._evolution_orchestrator:
+            self._evolution_orchestrator.stop_auto_evolution()
+    
+    def trigger_evolution(self):
+        """手动触发进化（用于测试）"""
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._execute_evolution_pipeline())
+    
+    def trigger_evaluation(self):
+        """手动触发评估"""
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._execute_evaluation())
     
     def get_system_state(self) -> SystemState:
         """获取系统状态"""
         return self._state
     
-    def get_evolution_config(self) -> EvolutionConfig:
-        """获取进化配置"""
-        return self._config
+    def get_evaluation_report(self) -> Dict:
+        """获取评估报告"""
+        if not self._evaluator:
+            return {"error": "评估器不可用"}
+        return self._evaluator.get_capability_report()
     
-    def update_evolution_config(self, **kwargs):
-        """更新进化配置"""
-        for key, value in kwargs.items():
-            if hasattr(self._config, key):
-                setattr(self._config, key, value)
-        self._logger.info(f"进化配置已更新: {kwargs}")
+    def get_evolution_status(self) -> Dict:
+        """获取进化状态"""
+        if not self._evolution_orchestrator:
+            return {"error": "进化协调器不可用"}
+        return self._evolution_orchestrator.get_status()
+    
+    def get_model_fit_results(self) -> List:
+        """获取模型适配结果"""
+        return self._state.model_fit_results
     
     def shutdown(self):
         """关闭系统"""
         self._logger.info("关闭自适应进化系统...")
         
-        # 取消后台任务
         for task in self._background_tasks:
             task.cancel()
         
-        # 保存状态
-        self._save_state()
+        self.stop_evolution_engine()
         
         self._logger.info("自适应进化系统已关闭")
-    
-    def _save_state(self):
-        """保存系统状态"""
-        state_dir = Path.home() / ".livingtree_agent" / "state"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        
-        state_data = {
-            "current_model": self._state.current_model,
-            "last_evolution_time": self._state.last_evolution_time.isoformat() if self._state.last_evolution_time else None,
-            "data_flywheel_count": self._state.data_flywheel_count,
-            "evolution_status": self._state.evolution_status
-        }
-        
-        (state_dir / "system_state.json").write_text(
-            json.dumps(state_data, indent=2)
-        )
 
 
-# 全局实例
 _adaptive_system_instance = None
 
 def get_adaptive_system() -> AdaptiveSystem:
@@ -478,27 +558,36 @@ def get_adaptive_system() -> AdaptiveSystem:
     return _adaptive_system_instance
 
 
-# 测试代码
 if __name__ == "__main__":
     print("=" * 60)
     print("自适应进化系统测试")
     print("=" * 60)
     
-    # 初始化系统
     system = get_adaptive_system()
-    
-    # 获取状态
     state = system.get_system_state()
-    print(f"当前模型: {state.current_model}")
-    print(f"硬件: {state.hardware_profile.get('gpu_name', 'Unknown')}")
-    print(f"数据飞轮计数: {state.data_flywheel_count}")
-    print(f"进化状态: {state.evolution_status}")
     
-    # 处理测试查询
-    print("\n处理查询...")
-    result = system.process_query("什么是人工智能？")
-    print(f"意图: {result['intent']}")
-    print(f"来源: {result['source']}")
-    print(f"响应长度: {len(result['response'])} 字符")
+    print(f"当前模型: {state.current_model}")
+    print(f"GPU: {state.hardware_profile.gpu_name} ({state.hardware_profile.gpu_vram_gb}GB)")
+    print(f"CPU: {state.hardware_profile.cpu_cores} cores")
+    print(f"内存: {state.hardware_profile.ram_gb}GB")
+    
+    print("\n模型适配结果:")
+    fit_results = system.get_model_fit_results()
+    for i, (model, score, reason) in enumerate(fit_results[:3], 1):
+        print(f"  {i}. {model} - 评分: {score}/100")
+    
+    print("\n集成组件状态:")
+    print(f"  - ModelFitter: ✓ 已集成（硬件自适应）")
+    print(f"  - SelfEvolutionOrchestrator: {'✓ 已集成' if system._evolution_orchestrator else '✗ 未集成'}")
+    print(f"  - EvolutionEvaluator: {'✓ 已集成' if system._evaluator else '✗ 未集成'}")
+    print(f"  - LearningEngine: {'✓ 已集成' if system._learning_engine else '✗ 未集成'}")
+    print(f"  - ActiveLearningLoop: {'✓ 已集成' if system._active_learning_loop else '✗ 未集成'}")
+    print(f"  - TrainingScheduler: {'✓ 已集成' if system._training_scheduler else '✗ 未集成'}")
+    print(f"  - 双数据飞轮组件: {'✓ 已集成' if system._variant_generator else '✗ 未集成'}")
+    
+    print(f"\n自动进化配置:")
+    print(f"  - 进化窗口: 凌晨 {system._config.deployment_window_start}:00 - {system._config.deployment_window_end}:00")
+    print(f"  - 评估间隔: {system._config.evaluation_interval_hours} 小时")
+    print(f"  - 自动部署: {'开启' if system._config.auto_deploy else '关闭'}")
     
     print("\n" + "=" * 60)

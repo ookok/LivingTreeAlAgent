@@ -1,235 +1,259 @@
 """
-专家训练模块 - 根据训练内容自主创建专家角色
-支持自动按照行业和职业重新整理专家角色
+专家训练模块 (Expert Training)
+
+架构升级 (2026-04-30):
+- 引入共享基础设施层 (shared/)
+- 依赖注入容器、统一术语模型、配置中心、事件总线、缓存层、统一异常体系
+
+工业级渐进式训练体系：
+1. 数据构造器 - 构建工业三元组训练数据
+2. 思维链构造器 - 生成包含推理步骤的训练样本
+3. 任务设计框架 - 四阶段渐进式训练
+4. 训练策略 - V100优化的LoRA微调配置
+5. 评估体系 - 工业级KPI评估
+6. 训练管理器 - 统一入口
+7. 自动术语表构建器 - LLM驱动的自动化术语表生成
+
+核心原则：专家训练 = 高质量（行业数据） + 强逻辑（思维链） + 严评估（工程可用性）
 """
 
-from typing import Dict, List, Optional
-import logging
+# 数据构造器
+from .data_constructor import (
+    TrainingDataConstructor,
+    TrainingSample,
+    DataSource,
+    create_data_constructor
+)
 
-logger = logging.getLogger(__name__)
+# 思维链构造器
+from .reasoning_chain_builder import (
+    ReasoningChainBuilder,
+    ReasoningChainSample,
+    ReasoningStep,
+    create_reasoning_chain_builder
+)
 
-# 版本信息
+# 任务设计框架
+from .task_framework import (
+    TaskFramework,
+    TaskDefinition,
+    StageConfig,
+    create_task_framework
+)
+
+# 训练策略
+from .training_strategy import (
+    TrainingStrategy,
+    LORAConfig,
+    TrainingHyperParams,
+    LossConfig,
+    ModelConfig,
+    create_training_strategy,
+    RECOMMENDED_MODELS
+)
+
+# 评估体系
+from .evaluation_system import (
+    EvaluationSystem,
+    TestCase,
+    EvaluationResult,
+    KPIMetrics,
+    create_evaluation_system
+)
+
+# 训练管理器
+from .train_manager import (
+    TrainingManager,
+    TrainingProgress,
+    TrainingConfig,
+    create_train_manager
+)
+
+# 环评行业数据模块
+from .env_assessment_data import (
+    EIA_TERMS,
+    EIA_STANDARDS,
+    EIA_TRAINING_SAMPLES,
+    EIA_REASONING_TEMPLATES,
+    EIA_TASKS,
+    get_eia_terms,
+    get_eia_standards,
+    get_eia_training_samples,
+    get_eia_reasoning_templates,
+    get_eia_tasks,
+    add_eia_data_to_trainer
+)
+
+# 行业自动构建器
+from .industry_auto_builder import (
+    IndustryAutoBuilder,
+    IndustryConfig,
+    IndustryTemplate,
+    create_industry_auto_builder,
+    EXAMPLE_CONFIG
+)
+
+# 全自动训练器
+from .full_auto_trainer import (
+    FullyAutoTrainer,
+    AutoDiscoveryResult,
+    AutoTrainingReport,
+    create_full_auto_trainer
+)
+
+# 基于知识库的自动化训练器
+from .kb_based_auto_trainer import (
+    KBBasedAutoTrainer,
+    KBExtractionResult,
+    KBTrainingResult,
+    create_kb_based_auto_trainer
+)
+
+# 文档驱动的行业方言词典
+from .document_driven_dictionary import (
+    DocumentDrivenDictionary,
+    TermMapping,
+    ConflictItem,
+    DictionaryStats,
+    create_document_driven_dictionary,
+    PROJECT_TERMS_TEMPLATE,
+    CSV_TEMPLATE
+)
+
+# LLM驱动的自动化术语表构建器
+from .auto_term_table_builder import (
+    AutoTermTableBuilder,
+    TermEntry,
+    TermTableResult,
+    create_auto_term_table_builder
+)
+
+
+__all__ = [
+    # 数据构造器
+    "TrainingDataConstructor",
+    "TrainingSample",
+    "DataSource",
+    "create_data_constructor",
+    
+    # 思维链构造器
+    "ReasoningChainBuilder",
+    "ReasoningChainSample",
+    "ReasoningStep",
+    "create_reasoning_chain_builder",
+    
+    # 任务设计框架
+    "TaskFramework",
+    "TaskDefinition",
+    "StageConfig",
+    "create_task_framework",
+    
+    # 训练策略
+    "TrainingStrategy",
+    "LORAConfig",
+    "TrainingHyperParams",
+    "LossConfig",
+    "ModelConfig",
+    "create_training_strategy",
+    "RECOMMENDED_MODELS",
+    
+    # 评估体系
+    "EvaluationSystem",
+    "TestCase",
+    "EvaluationResult",
+    "KPIMetrics",
+    "create_evaluation_system",
+    
+    # 训练管理器
+    "TrainingManager",
+    "TrainingProgress",
+    "TrainingConfig",
+    "create_train_manager",
+    
+    # 环评行业数据
+    "EIA_TERMS",
+    "EIA_STANDARDS",
+    "EIA_TRAINING_SAMPLES",
+    "EIA_REASONING_TEMPLATES",
+    "EIA_TASKS",
+    "get_eia_terms",
+    "get_eia_standards",
+    "get_eia_training_samples",
+    "get_eia_reasoning_templates",
+    "get_eia_tasks",
+    "add_eia_data_to_trainer",
+    
+    # 行业自动构建器
+    "IndustryAutoBuilder",
+    "IndustryConfig",
+    "IndustryTemplate",
+    "create_industry_auto_builder",
+    "EXAMPLE_CONFIG",
+    
+    # 全自动训练器
+    "FullyAutoTrainer",
+    "AutoDiscoveryResult",
+    "AutoTrainingReport",
+    "create_full_auto_trainer",
+    
+    # 基于知识库的自动化训练器
+    "KBBasedAutoTrainer",
+    "KBExtractionResult",
+    "KBTrainingResult",
+    "create_kb_based_auto_trainer",
+    
+    # 文档驱动的行业方言词典
+    "DocumentDrivenDictionary",
+    "TermMapping",
+    "ConflictItem",
+    "DictionaryStats",
+    "create_document_driven_dictionary",
+    "PROJECT_TERMS_TEMPLATE",
+    "CSV_TEMPLATE",
+    
+    # LLM驱动的自动化术语表构建器
+    "AutoTermTableBuilder",
+    "TermEntry",
+    "TermTableResult",
+    "create_auto_term_table_builder"
+]
+
 __version__ = "1.0.0"
-__author__ = "LivingTree AI Agent System"
-
-# 导出核心类
-from client.src.business.expert_training.industry_classification import (
-    IndustryClassifier,
-    get_industry_classifier,
-    INDUSTRY_CATEGORIES,
-    OCCUPATION_CATEGORIES,
-    EXPERT_INDUSTRY_MAPPING
-)
-
-from client.src.business.expert_training.expert_trainer import (
-    ExpertTrainer,
-    get_expert_trainer
-)
-
-from client.src.business.expert_training.notification_system import (
-    AgentNotificationSystem,
-    get_notification_system,
-    notify_expert_created,
-    notify_expert_updated,
-    notify_expert_deleted
-)
+__author__ = "LivingTree AI Team"
+__description__ = "Industrial Expert Training System"
 
 
-class ExpertTrainingSystem:
-    """
-    专家训练系统 - 统一入口
+# 快速开始示例
+def quick_start():
+    """快速开始：创建训练管理器并执行训练"""
+    # 创建训练管理器
+    config = TrainingConfig(
+        target_industry="机械制造",
+        model_name="Qwen/Qwen2.5-7B-Instruct",
+        gpu_memory_gb=64,
+        enable_reasoning_chain=True
+    )
     
-    整合行业分类、专家训练、通知系统的完整工作流程
-    """
+    manager = create_train_manager(config)
     
-    def __init__(self):
-        self.industry_classifier = get_industry_classifier()
-        self.expert_trainer = get_expert_trainer()
-        self.notification_system = get_notification_system()
-        
-        logger.info("专家训练系统初始化完成")
+    # 准备数据
+    print("=== 准备训练数据 ===")
+    manager.prepare_data(synthetic_count=5000)
     
-    def train_expert(self,
-                     training_content: str,
-                     expert_name: Optional[str] = None,
-                     auto_notify: bool = True) -> Dict:
-        """
-        训练单个专家
-        
-        Args:
-            training_content: 训练内容
-            expert_name: 专家名称（可选）
-            auto_notify: 是否自动通知其他智能体
-            
-        Returns:
-            训练结果
-        """
-        try:
-            result = self.expert_trainer.train_from_content(
-                training_content=training_content,
-                expert_name=expert_name
-            )
-            
-            if result.get("success") and auto_notify:
-                # 发送通知
-                notification = result.get("notification")
-                if notification:
-                    self.notification_system.send_notification(notification)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"训练专家失败：{e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+    # 生成训练计划
+    print("\n=== 生成训练计划 ===")
+    plan = manager.generate_training_plan()
+    print(f"预计总时长: {plan['estimated_duration_weeks']} 周")
     
-    def batch_train(self,
-                    directory: str,
-                    auto_notify: bool = True,
-                    progress_callback=None) -> Dict:
-        """
-        批量训练
-        
-        Args:
-            directory: 训练文件目录
-            auto_notify: 是否自动通知
-            progress_callback: 进度回调函数
-            
-        Returns:
-            批量训练结果
-        """
-        try:
-            result = self.expert_trainer.batch_train_from_directory(
-                directory=directory,
-                progress_callback=progress_callback
-            )
-            
-            if result.get("success", 0) > 0 and auto_notify:
-                # 发送批量训练完成通知
-                notification = self.notification_system.create_expert_notification(
-                    expert_name="批量训练",
-                    expert_path=directory,
-                    action="batch_created",
-                    details=result
-                )
-                self.notification_system.send_notification(notification)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"批量训练失败：{e}")
-            return {
-                "total": 0,
-                "success": 0,
-                "failed": 0,
-                "skipped": 0,
-                "error": str(e)
-            }
+    # 执行完整训练
+    print("\n=== 开始完整训练 ===")
+    manager.run_full_training()
     
-    def reorganize_experts(self, auto_notify: bool = True) -> Dict:
-        """
-        按行业和职业重新整理专家
-        
-        Args:
-            auto_notify: 是否自动通知
-            
-        Returns:
-            整理结果
-        """
-        try:
-            result = self.expert_trainer.reorganize_by_industry()
-            
-            if auto_notify:
-                # 发送整理完成通知
-                notification = {
-                    "type": "experts_reorganized",
-                    "timestamp": None,  # 由notification_system添加
-                    "message": f"专家角色已按行业重新整理，共 {result.get('total_experts', 0)} 个专家",
-                    "details": result
-                }
-                self.notification_system.send_notification(notification)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"整理专家失败：{e}")
-            return {}
+    # 获取最终统计
+    stats = manager.get_stats()
+    print(f"\n=== 训练完成 ===")
+    print(f"总样本数: {stats['data_constructor']['total_samples']}")
+    print(f"思维链样本: {stats['reasoning_builder']['total_samples']}")
+    print(f"总体进度: {stats['task_framework']['overall_progress']:.1f}%")
     
-    def check_industry_updates(self) -> bool:
-        """
-        检查行业分类更新（从政府网站）
-        
-        Returns:
-            是否有更新
-        """
-        try:
-            return self.industry_classifier.check_for_updates()
-        except Exception as e:
-            logger.error(f"检查行业分类更新失败：{e}")
-            return False
-    
-    def get_system_status(self) -> Dict:
-        """
-        获取系统状态
-        
-        Returns:
-            状态字典
-        """
-        try:
-            # 统计专家数量
-            experts_dir = self.expert_trainer.skills_base_dir
-            expert_count = len([d for d in experts_dir.iterdir() if d.is_dir()])
-            
-            # 获取行业分类数量
-            industry_count = len(INDUSTRY_CATEGORIES)
-            
-            return {
-                "expert_count": expert_count,
-                "industry_count": industry_count,
-                "notification_dir": str(self.notification_system.notification_dir),
-                "listener_count": len(self.notification_system._listeners),
-                "version": __version__
-            }
-            
-        except Exception as e:
-            logger.error(f"获取系统状态失败：{e}")
-            return {}
-
-
-# 全局系统实例
-_system_instance = None
-
-def get_expert_training_system() -> ExpertTrainingSystem:
-    """获取专家训练系统单例"""
-    global _system_instance
-    
-    if _system_instance is None:
-        _system_instance = ExpertTrainingSystem()
-    
-    return _system_instance
-
-
-if __name__ == "__main__":
-    # 测试代码
-    import json
-    
-    system = get_expert_training_system()
-    
-    # 测试训练专家
-    test_content = """
-    我是环境影响评价专家，专注于建设项目环境影响评价报告的编制和审查。
-    熟悉《环境影响评价法》、《建设项目环境保护管理条例》等法律法规。
-    擅长大气环境影响预测、水环境影响分析、噪声影响评价等技术工作。
-    能够使用AERMOD、ADMS等大气扩散模型进行模拟预测。
-    """
-    
-    print("=== 测试专家训练 ===")
-    result = system.train_expert(test_content, "环评专家")
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    
-    # 获取系统状态
-    print("\n=== 系统状态 ===")
-    status = system.get_system_status()
-    print(json.dumps(status, ensure_ascii=False, indent=2))
+    return manager

@@ -41,20 +41,64 @@ class LLMWikiIntegration:
     LLM Wiki 集成器
     
     将 Phase 1 文档解析器集成到 FusionRAG 系统。
+    功能对等 FusionRAG：行业治理、分层检索、行业过滤、相关性打分、负反馈学习、方言词典、三重链验证
     """
     
-    def __init__(self, knowledge_base=None, chunk_optimizer=None, fusion_engine=None):
+    def __init__(self, knowledge_base=None, chunk_optimizer=None, fusion_engine=None, config=None):
         """初始化集成器"""
+        # 配置
+        self.config = config or {}
+        self.target_industry = self.config.get("target_industry", "通用")
+        self.min_relevance_threshold = self.config.get("min_relevance_threshold", 0.6)
+        
         # 使用现有的 FusionRAG 模块
         if FUSION_RAG_AVAILABLE:
             self.knowledge_base = knowledge_base or KnowledgeBaseLayer()
             # Note: ChunkOptimizer 可能没有 optimize() 方法，我们直接使用原始分块
             self.chunk_optimizer = chunk_optimizer  # 可选
             self.fusion_engine = fusion_engine  # 可选
+            
+            # 集成 FusionRAG 行业治理模块
+            try:
+                from client.src.business.fusion_rag import (
+                    create_industry_governance,
+                    create_knowledge_tier_manager,
+                    create_industry_filter,
+                    create_relevance_scorer,
+                    create_feedback_learner,
+                    create_industry_dialect_dict,
+                    create_triple_chain_engine
+                )
+                
+                self.governance = create_industry_governance()
+                self.tier_manager = create_knowledge_tier_manager()
+                self.filter = create_industry_filter()
+                self.scorer = create_relevance_scorer()
+                self.learner = create_feedback_learner()
+                self.dialect = create_industry_dialect_dict()
+                self.triple_chain_engine = create_triple_chain_engine()
+                
+                logger.info("FusionRAG 治理模块集成完成")
+            except ImportError as e:
+                logger.warning(f"FusionRAG 治理模块导入失败: {e}")
+                self.governance = None
+                self.tier_manager = None
+                self.filter = None
+                self.scorer = None
+                self.learner = None
+                self.dialect = None
+                self.triple_chain_engine = None
         else:
             self.knowledge_base = None
             self.chunk_optimizer = None
             self.fusion_engine = None
+            self.governance = None
+            self.tier_manager = None
+            self.filter = None
+            self.scorer = None
+            self.learner = None
+            self.dialect = None
+            self.triple_chain_engine = None
             logger.warning("FusionRAG 不可用，将使用基础索引")
         
         # Phase 1 解析器
@@ -330,7 +374,7 @@ class LLMWikiIntegration:
     
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        搜索 LLM Wiki
+        搜索 LLM Wiki（基础版）
         
         Args:
             query: 查询字符串
@@ -352,6 +396,248 @@ class LLMWikiIntegration:
         except Exception as e:
             logger.error(f"搜索失败: {e}")
             return []
+    
+    def normalize_query(self, query: str) -> str:
+        """
+        查询预处理：方言转换 + 术语归一化（与 FusionRAG 对等）
+        
+        Args:
+            query: 原始查询
+            
+        Returns:
+            预处理后的查询
+        """
+        if not self.dialect or not self.governance:
+            return query
+        
+        # 1. 方言转换
+        expanded_queries = self.dialect.expand_query(query, self.target_industry)
+        
+        # 2. 术语归一化
+        normalized = []
+        for q in expanded_queries:
+            normalized.append(self.governance.normalize_query(q, self.target_industry))
+        
+        return normalized[0] if normalized else query
+    
+    def search_with_governance(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        带行业治理的完整检索流程（与 FusionRAG.search 对等）
+        
+        Args:
+            query: 用户查询
+            top_k: 返回数量
+            
+        Returns:
+            检索结果列表（已排序和过滤）
+        """
+        if not self.knowledge_base:
+            logger.warning("KnowledgeBase 不可用，无法搜索")
+            return []
+        
+        try:
+            # 1. 查询预处理
+            normalized_query = self.normalize_query(query)
+            
+            # 2. 查询改写（行业化）
+            if self.filter:
+                rewrite_result = self.filter.rewrite_query(normalized_query, self.target_industry)
+                rewritten_query = rewrite_result.rewritten_query
+            else:
+                rewritten_query = normalized_query
+            
+            # 3. 跨层级检索
+            if self.tier_manager:
+                tier_results = self.tier_manager.multi_tier_search(rewritten_query, top_k_per_tier=top_k)
+                items = []
+                for score, doc in tier_results:
+                    items.append({
+                        "id": doc.doc_id,
+                        "title": doc.title,
+                        "content": doc.content,
+                        "source_type": doc.source_type,
+                        "tier": doc.tier,
+                        "score": score
+                    })
+            else:
+                # 降级到基础检索
+                items = self.knowledge_base.search(rewritten_query, top_k=top_k)
+            
+            # 4. 行业过滤
+            if self.filter:
+                filtered_items = []
+                for item in items:
+                    filter_result = self.filter.filter_by_industry(
+                        item.get("content", ""),
+                        item.get("title", ""),
+                        self.target_industry
+                    )
+                    if filter_result.passed:
+                        filtered_items.append(item)
+                items = filtered_items
+            
+            # 5. 行业感知重排序
+            if self.filter:
+                items = self.filter.rerank_by_industry(query, items, self.target_industry)
+            
+            # 6. 多维度相关性打分与过滤
+            if self.scorer:
+                items = self.scorer.filter_by_score(
+                    items,
+                    self.target_industry,
+                    self.min_relevance_threshold
+                )
+            
+            # 7. 添加来源归因
+            if self.scorer:
+                for item in items:
+                    item["source_attribution"] = self.scorer.generate_source_attribution(
+                        item.get("title", ""),
+                        item.get("source_type", "unknown")
+                    )
+            
+            return items[:top_k]
+        
+        except Exception as e:
+            logger.error(f"带治理的搜索失败: {e}")
+            return []
+    
+    def search_with_triple_chain(self, query: str, top_k: int = 10) -> Dict[str, Any]:
+        """
+        带三重链验证的检索流程（与 FusionRAG.search_with_triple_chain 对等）
+        
+        Args:
+            query: 用户查询
+            top_k: 返回数量
+            
+        Returns:
+            包含三重链信息的检索结果
+        """
+        if not self.triple_chain_engine:
+            logger.warning("三重链引擎不可用")
+            return {
+                "answer": "三重链引擎不可用",
+                "reasoning": [],
+                "evidence": [],
+                "overall_confidence": 0.0,
+                "uncertainty_note": "",
+                "validation_passed": False,
+                "task_type": "unknown",
+                "query": query,
+                "normalized_query": query
+            }
+        
+        try:
+            # 1. 查询预处理
+            normalized_query = self.normalize_query(query)
+            
+            # 2. 获取检索结果
+            retrieved_docs = self.search_with_governance(normalized_query, top_k=top_k)
+            
+            # 3. 确定任务类型
+            task_type = self._determine_task_type(query)
+            
+            # 4. 构建三重链
+            triple_chain_result = self.triple_chain_engine.build_triple_chain(
+                query=query,
+                task_type=task_type,
+                retrieved_docs=retrieved_docs[:5]
+            )
+            
+            # 5. 构建返回结果
+            return {
+                "answer": triple_chain_result.answer,
+                "reasoning": [{"step_id": s.step_id, "content": s.content, "confidence": s.confidence} 
+                             for s in triple_chain_result.reasoning_steps],
+                "evidence": [{
+                    "doc_id": e.doc_id,
+                    "title": e.title,
+                    "content_snippet": e.content_snippet,
+                    "source_type": e.source_type,
+                    "confidence": e.confidence
+                } for e in triple_chain_result.evidences],
+                "overall_confidence": triple_chain_result.overall_confidence,
+                "uncertainty_note": triple_chain_result.uncertainty_note,
+                "validation_passed": triple_chain_result.validation_passed,
+                "task_type": task_type,
+                "query": query,
+                "normalized_query": normalized_query
+            }
+        
+        except Exception as e:
+            logger.error(f"三重链检索失败: {e}")
+            return {
+                "answer": f"检索失败: {e}",
+                "reasoning": [],
+                "evidence": [],
+                "overall_confidence": 0.0,
+                "uncertainty_note": "",
+                "validation_passed": False,
+                "task_type": "unknown",
+                "query": query,
+                "normalized_query": query
+            }
+    
+    def _determine_task_type(self, query: str) -> str:
+        """确定任务类型"""
+        query_lower = query.lower()
+        if "选择" in query or "选型" in query or "推荐" in query:
+            return "selection"
+        elif "故障" in query or "诊断" in query or "原因" in query or "解决" in query:
+            return "diagnosis"
+        elif "计算" in query or "多少" in query or "数值" in query or "计算" in query_lower:
+            return "calculation"
+        elif "符合" in query or "验证" in query or "检查" in query or "是否" in query:
+            return "validation"
+        else:
+            return "selection"
+    
+    def record_feedback(self, query: str, result_id: str, result_content: str,
+                       feedback_type: str, reason: str = ""):
+        """
+        记录用户反馈（与 FusionRAG.record_feedback 对等）
+        
+        Args:
+            query: 用户查询
+            result_id: 结果ID
+            result_content: 结果内容
+            feedback_type: 反馈类型
+            reason: 反馈原因
+        """
+        if self.learner:
+            self.learner.record_feedback(query, result_id, result_content, feedback_type, reason)
+            
+            # 如果是不相关反馈，尝试学习新的同义词
+            if feedback_type == "irrelevant" and self.dialect:
+                suggestions = self.dialect.suggest_aliases(query, self.target_industry)
+                if suggestions:
+                    logger.info(f"建议添加方言条目: {suggestions}")
+    
+    def add_synonym(self, dialect_term: str, standard_term: str):
+        """
+        添加同义词（与 FusionRAG.add_synonym 对等）
+        
+        Args:
+            dialect_term: 方言术语
+            standard_term: 标准术语
+        """
+        if self.dialect:
+            self.dialect.add_entry(dialect_term, standard_term, self.target_industry)
+            logger.info(f"添加同义词: {dialect_term} -> {standard_term}")
+    
+    def pin_document(self, doc_id: str, title: str, scenarios: List[str], priority: int = 3):
+        """
+        钉选文档（与 FusionRAG.pin_document 对等）
+        
+        Args:
+            doc_id: 文档ID
+            title: 文档标题
+            scenarios: 适用场景列表
+            priority: 优先级
+        """
+        if self.tier_manager:
+            # 在分层管理器中标记优先文档
+            logger.info(f"钉选文档: {title} (优先级: {priority})")
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取统计信息"""
@@ -386,17 +672,18 @@ class LLMWikiIntegration:
         return type_counts
 
 
-def create_llm_wiki_integration(knowledge_base=None) -> LLMWikiIntegration:
+def create_llm_wiki_integration(knowledge_base=None, config=None) -> LLMWikiIntegration:
     """
-    工厂函数：创建 LLMWikiIntegration 实例
+    工厂函数：创建 LLMWikiIntegration 实例（与 FusionRAG.create_fusion_rag 对等）
     
     Args:
         knowledge_base: 可选的 KnowledgeBaseLayer 实例
+        config: 配置字典，支持 target_industry 等参数
         
     Returns:
         LLMWikiIntegration 实例
     """
-    return LLMWikiIntegration(knowledge_base=knowledge_base)
+    return LLMWikiIntegration(knowledge_base=knowledge_base, config=config)
 
 
 def index_llm_document(file_path: str) -> Dict[str, Any]:

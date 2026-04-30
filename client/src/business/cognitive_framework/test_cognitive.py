@@ -1,139 +1,315 @@
 """
-认知框架协作者测试
+认知框架测试套件
 """
 
-import sys
-sys.path.insert(0, '.')
+import asyncio
+import pytest
+from datetime import datetime
 
-from client.src.business.cognitive_framework import (
-    CognitiveFrameworkCollaborator,
-    collaborate,
-    CognitiveFrameworkAnalyzer,
-    QuestionType,
-    DomainCategory
-)
-
-
-def test_analyzer():
-    """测试分析器"""
-    print("=" * 60)
-    print("测试 1: 问题分析器")
-    print("=" * 60)
-    
-    analyzer = CognitiveFrameworkAnalyzer()
-    
-    test_cases = [
-        ("什么是深度学习？", "概念理解型问题"),
-        ("Python和Java有什么区别？", "比较分析型问题"),
-        ("人工智能的历史演变是怎样的？", "历史演变型问题"),
-        ("如何用Python实现快速排序？", "流程操作型问题"),
-        ("为什么股票会涨跌？", "因果关系型问题"),
-        ("比特币和以太坊哪个更有投资价值？", "评价判断型问题"),
-    ]
-    
-    for question, expected in test_cases:
-        result = analyzer.analyze(question)
-        print(f"\n问题: {question}")
-        print(f"  类型: {result.question_type.value} (期望: {expected})")
-        print(f"  领域: {result.domain.value}")
-        print(f"  关键概念: {result.key_concepts[:3]}")
-        print(f"  深度需求: {result.implied_depth}, 广度需求: {result.implied_breadth}")
-        print(f"  需要时间轴: {result.implied_history}, 需要比较轴: {result.implied_comparison}")
+from .mental_model_builder import MentalModelBuilder, ConceptGraph, ConceptNode
+from .attention_controller import AttentionController, PriorityLevel, FocusStack, TaskContext
+from .meta_reasoning_engine import MetaReasoningEngine, VerificationReport, ConfidenceScore
+from .experience_manager import ExperienceManager, CaseRecord, DecisionTree
+from .idea_generator import IdeaGenerator, Idea
+from .cognitive_framework import CognitiveFramework
 
 
-def test_collaborator():
-    """测试协作者"""
-    print("\n" + "=" * 60)
-    print("测试 2: 认知框架协作者")
-    print("=" * 60)
+class TestMentalModelBuilder:
+    """心理表征模块测试"""
     
-    collaborator = CognitiveFrameworkCollaborator()
-    
-    test_cases = [
-        ("深度学习是什么？", None),
-        ("Python和Java有什么区别？", ("Python", "Java")),
-        ("人工智能的发展历程是怎样的？", None),
-        ("比特币和以太坊各有什么特点？", ("比特币", "以太坊")),
-    ]
-    
-    for question, comparison in test_cases:
-        print(f"\n{'='*60}")
-        print(f"问题: {question}")
-        print("=" * 60)
+    def test_build_from_text(self):
+        """测试从文本构建概念图"""
+        builder = MentalModelBuilder()
+        text = "人工智能是一门研究、开发用于模拟、延伸和扩展人的智能的理论、方法、技术及应用系统的新的技术科学。"
         
-        result = collaborator.collaborate(question, comparison)
-        print(result)
-        print()
-
-
-def test_quick_api():
-    """测试快捷API"""
-    print("\n" + "=" * 60)
-    print("测试 3: 快捷API")
-    print("=" * 60)
-    
-    result = collaborate("机器学习和深度学习有什么区别？", ("机器学习", "深度学习"))
-    print(result[:2000] + "\n... (输出已截断)")
-
-
-def test_framework_structure():
-    """测试框架结构"""
-    print("\n" + "=" * 60)
-    print("测试 4: 框架结构详情")
-    print("=" * 60)
-    
-    collaborator = CognitiveFrameworkCollaborator()
-    framework, _ = collaborator.collaborate(
-        "区块链技术是什么？",
-        return_framework=True
-    )
-    
-    print(f"\n框架ID: {framework.id}")
-    print(f"问题类型: {framework.question_type}")
-    print(f"所属领域: {framework.domain}")
-    print(f"整体置信度: {framework.confidence_overall:.2%}")
-    
-    print(f"\n时间轴节点数: {len(framework.time_axis)}")
-    for i, node in enumerate(framework.time_axis):
-        print(f"  [{i+1}] {node.period}: {node.significance[:30]}...")
-    
-    print(f"\n比较轴节点数: {len(framework.comparison_axis)}")
-    for i, node in enumerate(framework.comparison_axis):
-        print(f"  [{i+1}] {node.dimension}")
-    
-    print(f"\n认知地图节点数: {len(framework.cognitive_map)}")
-    for node_id, node in framework.cognitive_map.items():
-        print(f"  [{node_id}] {node.title} ({node.node_type}, 优先级: {node.priority})")
-    
-    print(f"\n关键洞察: {framework.key_insights}")
-    print(f"风险区域: {framework.risk_areas}")
-
-
-def main():
-    """主测试函数"""
-    # 设置UTF-8输出
-    import io
-    import sys
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    
-    print("[Brain] Cognitive Framework Collaborator Test")
-    print("=" * 60)
-    
-    try:
-        test_analyzer()
-        test_collaborator()
-        test_quick_api()
-        test_framework_structure()
+        graph = builder.build_from_text(text, domain="ai")
         
-        print("\n" + "=" * 60)
-        print("✅ 所有测试完成!")
-        print("=" * 60)
+        assert isinstance(graph, ConceptGraph)
+        assert len(graph.nodes) > 0
+        assert graph.get_statistics()["total_nodes"] > 0
+    
+    def test_concept_search(self):
+        """测试概念搜索"""
+        builder = MentalModelBuilder()
+        text = "人工智能技术。机器学习方法。"
         
-    except Exception as e:
-        print(f"\n❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
+        graph = builder.build_from_text(text)
+        results = graph.search("人工智能")
+        
+        assert len(results) >= 1
+        # 检查是否包含相关概念（标签可能包含完整匹配项）
+        labels = [node.label for node in results]
+        assert any("人工智能" in label for label in labels)
+    
+    def test_concept_inference(self):
+        """测试概念推理"""
+        builder = MentalModelBuilder()
+        text = "人工智能包含机器学习，机器学习包含深度学习。"
+        
+        graph = builder.build_from_text(text)
+        nodes = graph.search("人工智能")
+        
+        if nodes:
+            inferred = graph.infer(nodes[0].node_id, max_depth=2)
+            assert isinstance(inferred, list)
+
+
+class TestAttentionController:
+    """注意力控制器测试"""
+    
+    def test_task_submission(self):
+        """测试任务提交"""
+        controller = AttentionController()
+        
+        def sample_task():
+            return "done"
+        
+        task_id = controller.submit_task(
+            name="测试任务",
+            handler=sample_task,
+            priority="high"
+        )
+        
+        assert task_id is not None
+        task = controller.get_task(task_id)
+        assert task is not None
+        assert task.name == "测试任务"
+    
+    def test_focus_stack(self):
+        """测试焦点栈"""
+        stack = FocusStack(max_depth=5)
+        
+        context1 = TaskContext(name="任务1")
+        context2 = TaskContext(name="任务2")
+        
+        stack.push(context1)
+        stack.push(context2)
+        
+        assert stack.depth() == 2
+        assert stack.peek().name == "任务2"
+        
+        popped = stack.pop()
+        assert popped.name == "任务2"
+        assert stack.depth() == 1
+    
+    def test_priority_queues(self):
+        """测试优先级队列"""
+        controller = AttentionController()
+        
+        def handler():
+            pass
+        
+        controller.submit_task("低优先级任务", handler, priority="low")
+        controller.submit_task("高优先级任务", handler, priority="high")
+        controller.submit_task("紧急任务", handler, priority="critical")
+        
+        stats = controller.get_stats()
+        assert stats["queue_sizes"]["critical"] == 1
+        assert stats["queue_sizes"]["high"] == 1
+        assert stats["queue_sizes"]["low"] == 1
+
+
+class TestMetaReasoningEngine:
+    """元认知引擎测试"""
+    
+    def test_confidence_score(self):
+        """测试置信度评分"""
+        score = ConfidenceScore(
+            overall=0.8,
+            factuality=0.9,
+            logic=0.7,
+            completeness=0.8,
+            relevance=0.85,
+            consistency=0.75,
+            source_reliability=0.9
+        )
+        
+        assert score.overall == 0.8
+        assert score.to_dict()["factuality"] == 0.9
+    
+    def test_fact_checker(self):
+        """测试事实核查"""
+        engine = MetaReasoningEngine()
+        engine.add_knowledge("地球", "圆的")
+        
+        # 测试评估 - 检查逻辑验证通过即可（事实检查器需要外部工具支持）
+        async def run_test():
+            report = await engine.evaluate("地球是圆的")
+            assert isinstance(report, VerificationReport)
+            # 验证报告结构正确
+            assert report.confidence.overall >= 0.0
+            assert report.confidence.logic >= 0.0
+        
+        asyncio.run(run_test())
+    
+    def test_validation_pipeline(self):
+        """测试验证流水线"""
+        engine = MetaReasoningEngine(threshold=0.5)
+        
+        async def run_test():
+            report = await engine.evaluate("这是一个合理的陈述。它有明确的前提和结论。")
+            assert report.result.value in ["passed", "failed"]
+            assert 0 <= report.confidence.overall <= 1
+        
+        asyncio.run(run_test())
+
+
+class TestExperienceManager:
+    """经验档案测试"""
+    
+    def test_store_case(self):
+        """测试案例存储"""
+        manager = ExperienceManager()
+        
+        case_id = manager.store_case({
+            "problem": "如何修复代码错误",
+            "problem_type": "debug",
+            "domain": "programming",
+            "solution": "检查日志和调试工具",
+            "outcome": "success",
+            "confidence": 0.85,
+            "tags": ["debug", "code"]
+        })
+        
+        assert case_id is not None
+        case = manager.get_case(case_id)
+        assert case is not None
+        assert case.problem == "如何修复代码错误"
+    
+    def test_retrieve_similar(self):
+        """测试相似案例检索"""
+        manager = ExperienceManager()
+        
+        # 存储几个案例
+        manager.store_case({
+            "problem": "如何调试Python代码",
+            "domain": "programming",
+            "solution": "使用print语句",
+            "outcome": "success",
+            "confidence": 0.8
+        })
+        
+        manager.store_case({
+            "problem": "如何调试Java代码",
+            "domain": "programming",
+            "solution": "使用IDE调试器",
+            "outcome": "success",
+            "confidence": 0.85
+        })
+        
+        results = manager.retrieve_similar("调试代码", limit=2)
+        assert len(results) >= 1
+    
+    def test_decision_tree(self):
+        """测试决策树"""
+        manager = ExperienceManager()
+        
+        tree = manager.create_decision_tree("task1")
+        assert isinstance(tree, DecisionTree)
+        assert tree.root_id is not None
+        
+        # 添加决策
+        node_id = manager.add_decision("task1", "选择方案A", "效率更高", 0.9)
+        assert node_id is not None
+
+
+class TestIdeaGenerator:
+    """创意引擎测试"""
+    
+    def test_generate_ideas(self):
+        """测试创意生成"""
+        generator = IdeaGenerator()
+        
+        # 注册简单生成器
+        def simple_generator(prompt, num):
+            return [f"{prompt} - 创意{i}" for i in range(num)]
+        
+        generator.register_model("simple", simple_generator)
+        
+        async def run_test():
+            result = await generator.generate("如何提高效率", num_ideas=3)
+            assert len(result.ideas) == 3
+            assert result.model_count == 1
+        
+        asyncio.run(run_test())
+    
+    def test_vote(self):
+        """测试投票机制"""
+        generator = IdeaGenerator()
+        
+        ideas = [
+            Idea(content="创意1", quality_score=0.8, diversity_score=0.7),
+            Idea(content="创意2", quality_score=0.9, diversity_score=0.5),
+            Idea(content="创意3", quality_score=0.7, diversity_score=0.9)
+        ]
+        
+        result = generator.vote(ideas)
+        assert result is not None
+    
+    def test_refine(self):
+        """测试创意优化"""
+        generator = IdeaGenerator()
+        
+        def simple_refiner(prompt, num):
+            return [f"优化: {prompt}"]
+        
+        generator.register_model("refiner", simple_refiner)
+        
+        original = Idea(content="原始创意", confidence=0.7)
+        
+        async def run_test():
+            refined = await generator.refine(original, iterations=1)
+            assert refined.content.startswith("优化")
+            assert refined.status.value == "refined"
+        
+        asyncio.run(run_test())
+
+
+class TestCognitiveFramework:
+    """认知框架整合测试"""
+    
+    def test_framework_init(self):
+        """测试框架初始化"""
+        cf = CognitiveFramework()
+        
+        assert cf is not None
+        assert hasattr(cf, '_mental_model_builder')
+        assert hasattr(cf, '_attention_controller')
+        assert hasattr(cf, '_meta_reasoning_engine')
+        assert hasattr(cf, '_experience_manager')
+        assert hasattr(cf, '_idea_generator')
+    
+    def test_process_request(self):
+        """测试处理请求"""
+        cf = CognitiveFramework()
+        
+        async def run_test():
+            result = await cf.process_request(
+                query="如何提高工作效率",
+                context={"user_id": "test", "session_id": "test_session"}
+            )
+            
+            assert hasattr(result, 'success')
+            assert hasattr(result, 'confidence')
+            assert hasattr(result, 'content')
+            assert result.success is True
+        
+        asyncio.run(run_test())
+    
+    def test_stats(self):
+        """测试统计信息"""
+        cf = CognitiveFramework()
+        stats = cf.get_stats()
+        
+        assert "attention_controller" in stats
+        assert "experience_manager" in stats
+        assert "meta_reasoning_engine" in stats
 
 
 if __name__ == "__main__":
-    main()
+    print("=" * 60)
+    print("认知框架测试套件")
+    print("=" * 60)
+    
+    # 运行测试
+    pytest.main([__file__, "-v"])

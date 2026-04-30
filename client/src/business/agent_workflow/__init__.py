@@ -520,6 +520,16 @@ def get_workflow_engine() -> WorkflowEngine:
     return _workflow_engine
 
 
+# 导出自动化集成模块
+from .automation_integration import (
+    AutomationJob,
+    WorkflowScheduler,
+    AgentActionExecutor,
+    AutoWorkflowGenerator,
+    get_workflow_scheduler,
+    get_agent_executor
+)
+
 __all__ = [
     "WorkflowStatus",
     "NodeType",
@@ -534,5 +544,12 @@ __all__ = [
     "WorkflowEngine",
     "register_workflow",
     "execute_workflow",
-    "get_workflow_engine"
+    "get_workflow_engine",
+    # 自动化集成
+    "AutomationJob",
+    "WorkflowScheduler",
+    "AgentActionExecutor",
+    "AutoWorkflowGenerator",
+    "get_workflow_scheduler",
+    "get_agent_executor"
 ]

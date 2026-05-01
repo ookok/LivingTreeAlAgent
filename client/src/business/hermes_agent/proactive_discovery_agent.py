@@ -1,7 +1,7 @@
 """
 ProactiveDiscoveryAgent - 主动工具发现智能体
 
-HermesAgent 的增强版本，具备主动工具发现与安装能力。
+LivingTreeAgent 的增强版本，具备主动工具发现与安装能力。
 
 工作流程：
 1. 接收用户任务
@@ -19,7 +19,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from business.base_agents.hermes_agent import HermesToolAgent
+from business.base_agents.hermes_agent import LivingTreeToolAgent
 from business.self_evolution.natural_language_tool_adder import (
     NaturalLanguageToolAdder,
     add_tool_from_text,
@@ -28,11 +28,11 @@ from business.tools.tool_registry import ToolRegistry
 from loguru import logger
 
 
-class ProactiveDiscoveryAgent(HermesToolAgent):
+class ProactiveDiscoveryAgent(LivingTreeToolAgent):
     """
     主动工具发现智能体
     
-    继承自 HermesToolAgent，增加主动工具发现与安装能力。
+    继承自 LivingTreeToolAgent，增加主动工具发现与安装能力。
     
     用法：
         agent = ProactiveDiscoveryAgent()

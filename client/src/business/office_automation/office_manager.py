@@ -32,6 +32,9 @@ from business.office_automation.workflows import (
 )
 from business.office_automation.engines import EngineFactory, EngineType
 
+# 智能模块调度器
+from business.fusion_rag import get_smart_scheduler, TaskType, TaskContext
+
 # 格式理解引擎
 from business.office_automation.format_understanding.format_parser import FormatParser, FormatInfo
 from business.office_automation.format_understanding.format_graph import FormatGraph
@@ -315,6 +318,71 @@ class OfficeManager:
                 for cap, model in pipeline.items()
             },
         }
+    
+    async def analyze_document(self, document_path: str, query: str = None) -> dict:
+        """
+        使用智能模块调度器分析文档（统一调度）
+        
+        Args:
+            document_path: 文档路径
+            query: 分析查询（可选）
+            
+        Returns:
+            分析结果
+        """
+        logger.info(f"使用智能调度器分析文档: {document_path}")
+        
+        try:
+            # 获取智能调度器
+            scheduler = get_smart_scheduler()
+            
+            # 创建任务上下文
+            context = TaskContext(
+                task_type=TaskType.DOCUMENT_ANALYSIS,
+                query=query,
+                document_path=document_path,
+                required_capabilities=["document_processing", "multi_modal_analysis"]
+            )
+            
+            # 使用调度器执行任务
+            result = await scheduler.execute(context)
+            
+            if result.success:
+                return {
+                    "success": True,
+                    "module": result.module_name,
+                    "result": result.result,
+                    "latency": result.latency,
+                    "confidence": result.confidence
+                }
+            else:
+                # 回退到本地分析
+                return await self._local_document_analysis(document_path, query)
+                
+        except Exception as e:
+            logger.warning(f"智能调度器分析失败，回退到本地分析: {e}")
+            return await self._local_document_analysis(document_path, query)
+    
+    async def _local_document_analysis(self, document_path: str, query: str = None) -> dict:
+        """
+        本地文档分析（备用方案）
+        
+        Args:
+            document_path: 文档路径
+            query: 分析查询
+            
+        Returns:
+            分析结果
+        """
+        # 执行格式语义分析
+        semantic_result = self.analyze_format_semantic(document_path)
+        
+        return {
+            "success": True,
+            "module": "local",
+            "result": semantic_result,
+            "analysis_type": "format_semantic"
+        }
 
     def get_themes(self) -> list:
         """获取所有可用主题"""
@@ -594,7 +662,7 @@ class OfficeManager:
         """生成输出路径"""
         if not base_dir:
             base_dir = os.path.join(
-                os.path.expanduser("~"), "Documents", "HermesOffice"
+                os.path.expanduser("~"), "Documents", "LivingTreeOffice"
             )
         os.makedirs(base_dir, exist_ok=True)
 

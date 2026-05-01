@@ -17,7 +17,7 @@
 9. InfectionPropagation - 信息瘟疫传播
 10. DNASchema - DNA编码规范
 
-作者：Hermes Desktop V2.0
+作者：LivingTree Desktop V2.0
 版本：1.0.0
 """
 

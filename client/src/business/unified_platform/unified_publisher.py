@@ -10,7 +10,7 @@ Unified Publisher - 统一发布器
 - 论坛发帖
 - 富文本内容
 
-Author: Hermes Desktop Team
+Author: LivingTree Desktop Team
 """
 
 import json

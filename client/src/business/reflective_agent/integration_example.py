@@ -1,7 +1,7 @@
 """
 反思式Agent集成示例
 
-展示如何将 ReflectiveAgentLoop 集成到 HermesAgent
+展示如何将 ReflectiveAgentLoop 集成到 LivingTreeAgent
 """
 
 import asyncio
@@ -16,57 +16,57 @@ from business.reflective_agent import (
 )
 
 
-class HermesAgentWithReflection:
+class LivingTreeAgentWithReflection:
     """
-    集成反思能力的 HermesAgent
+    集成反思能力的 LivingTreeAgent
 
-    扩展原有 HermesAgent，添加执行-反思-改进循环
+    扩展原有 LivingTreeAgent，添加执行-反思-改进循环
     """
 
     def __init__(
         self,
-        hermes_agent,  # 原始 HermesAgent 实例
+        livingtree_agent,  # 原始 LivingTreeAgent 实例
         config: Optional[ReflectiveLoopConfig] = None
     ):
-        self._hermes = hermes_agent
+        self._livingtree = livingtree_agent
         self._config = config or ReflectiveLoopConfig()
         self._reflective_loop = ReflectiveAgentLoop(self._config)
 
-        # 注册 HermesAgent 的工具作为执行器
-        self._register_hermes_tools()
+        # 注册 LivingTreeAgent 的工具作为执行器
+        self._register_livingtree_tools()
 
         # 注册降级方案
         self._reflective_loop.register_fallback(self._fallback_handler)
 
-    def _register_hermes_tools(self):
-        """注册 HermesAgent 的工具"""
+    def _register_livingtree_tools(self):
+        """注册 LivingTreeAgent 的工具"""
 
         # 注册搜索工具
-        if hasattr(self._hermes, 'search'):
+        if hasattr(self._livingtree, 'search'):
             self._reflective_loop.register_executor(
                 'search',
-                self._wrap_tool(self._hermes.search)
+                self._wrap_tool(self._livingtree.search)
             )
 
         # 注册知识库工具
-        if hasattr(self._hermes, 'kb_search'):
+        if hasattr(self._livingtree, 'kb_search'):
             self._reflective_loop.register_executor(
                 'kb_search',
-                self._wrap_tool(self._hermes.kb_search)
+                self._wrap_tool(self._livingtree.kb_search)
             )
 
         # 注册 LLM 工具
-        if hasattr(self._hermes, 'llm_chat'):
+        if hasattr(self._livingtree, 'llm_chat'):
             self._reflective_loop.register_executor(
                 'llm_chat',
-                self._wrap_tool(self._hermes.llm_chat)
+                self._wrap_tool(self._livingtree.llm_chat)
             )
 
         # 注册文件工具
-        if hasattr(self._hermes, 'file_read'):
+        if hasattr(self._livingtree, 'file_read'):
             self._reflective_loop.register_executor(
                 'file_read',
-                self._wrap_tool(self._hermes.file_read)
+                self._wrap_tool(self._livingtree.file_read)
             )
 
     def _wrap_tool(self, tool_func: Callable) -> Callable:
@@ -81,18 +81,18 @@ class HermesAgentWithReflection:
         task: str,
         history: list
     ) -> Dict[str, Any]:
-        """降级处理器：当反思循环失败时使用原始 HermesAgent"""
-        # 使用原始 HermesAgent
-        return await self._hermes.send_message(task)
+        """降级处理器：当反思循环失败时使用原始 LivingTreeAgent"""
+        # 使用原始 LivingTreeAgent
+        return await self._livingtree.send_message(task)
 
     async def _plan_task(self, task: str) -> ExecutionPlan:
         """
         任务规划器
 
-        基于 HermesAgent 的意图分类和任务分解能力
+        基于 LivingTreeAgent 的意图分类和任务分解能力
         """
         plan = ExecutionPlan(
-            plan_id=f"hermes_{hash(task) % 10000}",
+            plan_id=f"livingtree_{hash(task) % 10000}",
             task=task,
             original_task=task
         )
@@ -136,7 +136,7 @@ class HermesAgentWithReflection:
     async def _classify_intent(self, task: str) -> str:
         """意图分类"""
         # 简单关键词匹配
-        # 实际应用中可以使用 HermesAgent 的 L0 意图分类
+        # 实际应用中可以使用 LivingTreeAgent 的 L0 意图分类
         task_lower = task.lower()
 
         if any(k in task_lower for k in ["搜索", "查找", "查一下", "search"]):
@@ -187,11 +187,11 @@ class HermesAgentWithReflection:
 
 async def main():
     """使用示例"""
-    # 假设 hermes_agent 是已初始化的 HermesAgent 实例
-    # hermes = HermesAgent(config)
+    # 假设 livingtree_agent 是已初始化的 LivingTreeAgent 实例
+    # livingtree = LivingTreeAgent(config)
 
     # 创建带反思的版本
-    # reflective_hermes = HermesAgentWithReflection(hermes)
+    # reflective_livingtree = LivingTreeAgentWithReflection(livingtree)
 
     # 或者单独使用 ReflectiveAgentLoop
     loop = ReflectiveAgentLoop(ReflectiveLoopConfig(verbose=True))

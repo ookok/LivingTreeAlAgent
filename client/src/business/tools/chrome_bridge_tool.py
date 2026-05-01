@@ -3,7 +3,7 @@ ChromeBridgeTool - Chrome 桥接工具（BaseTool 封装）
 ==================================================
 
 将 ChromeBridge 封装为标准的 BaseTool 子类，
-注册到 ToolRegistry，供 Hermes Agent 调用。
+注册到 ToolRegistry，供 LivingTree Agent 调用。
 
 支持的 actions：
 - navigate：导航到 URL
@@ -223,7 +223,7 @@ class ChromeBridgeTool(BaseTool):
         """
         智能体调用接口（结构化 JSON 输出）
 
-        供 Hermes Agent 直接调用，返回标准格式。
+        供 LivingTree Agent 直接调用，返回标准格式。
         """
         return self.execute(action=action, **kwargs)
 

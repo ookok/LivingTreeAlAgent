@@ -26,7 +26,7 @@ class SmartIDEGameSystem:
     """智能IDE与游戏分享系统核心"""
 
     def __init__(self, storage_path: str = None):
-        self.storage_path = storage_path or os.path.expanduser("~/.hermes-desktop/smart_ide_game")
+        self.storage_path = storage_path or os.path.expanduser("~/.livingtree-desktop/smart_ide_game")
         os.makedirs(self.storage_path, exist_ok=True)
 
         # IDE 组件
@@ -61,7 +61,7 @@ class SmartIDEGameSystem:
         await self.room_manager.start()
 
         # 设置游戏分享服务器
-        self.game_share.set_relay_server("https://share.hermes.local")
+        self.game_share.set_relay_server("https://share.livingtree.local")
 
     async def stop(self):
         """停止系统"""

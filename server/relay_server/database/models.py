@@ -87,7 +87,7 @@ class Session(Base):
     
     # 上下文
     context = Column(JSON, default=dict)  # 存储额外上下文
-    metadata = Column(JSON, default=dict)
+    meta_data = Column(JSON, default=dict)
     
     # 状态
     is_active = Column(Boolean, default=True)
@@ -146,7 +146,7 @@ class Message(Base):
     # 元数据
     model = Column(String(64), nullable=True)  # 使用的模型
     tokens_used = Column(Integer, default=0)
-    metadata = Column(JSON, default=dict)
+    meta_data = Column(JSON, default=dict)
     
     # 关联
     related_memories = Column(JSON, default=list)  # 关联的记忆 ID

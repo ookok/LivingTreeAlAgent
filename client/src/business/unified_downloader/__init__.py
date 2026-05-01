@@ -4,6 +4,9 @@
 Unified Download System
 
 导出核心组件和快捷函数
+
+注意：本系统已不再支持本地模型文件下载（GGUF/BIN/Safetensors格式），
+所有模型调用均通过远程 URL 进行。推荐使用 FlowyAIPC Herdsman 引擎。
 """
 
 from .download_center import (
@@ -13,7 +16,6 @@ from .download_center import (
     SourceType,
     get_download_center,
     download_file,
-    download_model,
 )
 
 __all__ = [
@@ -23,5 +25,4 @@ __all__ = [
     "SourceType",
     "get_download_center",
     "download_file",
-    "download_model",
 ]

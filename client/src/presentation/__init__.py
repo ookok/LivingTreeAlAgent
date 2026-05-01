@@ -1,57 +1,17 @@
 """
-Presentation Layer - UI展示层
+Presentation Layer - 表示层
 
-包含所有UI组件、面板和服务
+功能：
+1. UI组件管理
+2. Web UI集成
+3. QWebChannel通信
 """
 
-# 组件
-from .components import (
-    MessageBubble,
-    CodeMessageBubble,
-    ImageMessageBubble,
-    MessageType,
-    ContextPanel,
-    SmartCodeEditor,
-    SmartInputField,
-)
-
-# 面板
-from .panels import (
-    ChatWindow,
-    IDEWindow,
-    PreviewPanel,
-)
-
-# 服务
-from .services import (
-    ThemeSystem,
-    get_theme_system,
-    ThemeColors,
-    FontConfig,
-    I18nService,
-    get_i18n_service,
-)
+from .main_window import MainWindow, run_app
+from .web_ui.web_channel_backend import WebChannelBackend
 
 __all__ = [
-    # 组件
-    'MessageBubble',
-    'CodeMessageBubble',
-    'ImageMessageBubble',
-    'MessageType',
-    'ContextPanel',
-    'SmartCodeEditor',
-    'SmartInputField',
-    
-    # 面板
-    'ChatWindow',
-    'IDEWindow',
-    'PreviewPanel',
-    
-    # 服务
-    'ThemeSystem',
-    'get_theme_system',
-    'ThemeColors',
-    'FontConfig',
-    'I18nService',
-    'get_i18n_service',
+    'MainWindow',
+    'run_app',
+    'WebChannelBackend',
 ]

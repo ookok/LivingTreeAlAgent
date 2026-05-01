@@ -156,6 +156,154 @@ from .vector_store import (
     switch_to_qdrant
 )
 
+# Doc-V* 文档理解模块（2026-04-30 新增）
+from .evidence_memory import (
+    EvidenceMemory,
+    Evidence,
+    EvidenceType,
+    EvidenceStatus,
+    get_evidence_memory
+)
+from .document_navigator import (
+    DocumentNavigator,
+    NavigationMode,
+    NavigationState,
+    PageInfo,
+    NavigationAction,
+    NavigationResult,
+    get_document_navigator
+)
+from .visual_document_parser import (
+    VisualDocumentParser,
+    DocumentElement,
+    DocumentElementType,
+    PageLayout,
+    DocumentInfo,
+    ReadingDirection,
+    get_visual_document_parser
+)
+
+# Doc-V* 与 LLM Wiki 深度集成（2026-04-30 新增）
+from .docv_llm_wiki_integration import (
+    DocVLLMWikiIntegration,
+    DocVWikiResult,
+    get_docv_llm_wiki_integration,
+    process_document_with_docv,
+    query_with_docv_context
+)
+
+# 智能模块调度器（2026-04-30 新增）- 自动化、自适应模块调用
+from .smart_module_scheduler import (
+    SmartModuleScheduler,
+    ModuleType,
+    TaskType,
+    TaskContext,
+    ExecutionResult,
+    get_smart_scheduler,
+    analyze_document,
+    answer_question,
+    retrieve_knowledge
+)
+
+# DeepSeek 深度集成（2026-04-30 新增）- 自动化模型选择与调用
+from .deepseek_integration import (
+    DeepSeekIntegration,
+    DeepSeekModel,
+    ModelCapability,
+    get_deepseek_integration,
+    deepseek_smart_call,
+    deepseek_execute_tool
+)
+
+# RAGFlow 与 Doc-V* 融合（2026-04-30 新增）- 增强文档理解
+from .ragflow_docv_fusion import (
+    RAGFlowDocVFusion,
+    FusionMode,
+    RetrievalLevel,
+    FusionResult,
+    get_ragflow_docv_fusion,
+    fusion_process_document
+)
+
+# Anda 代理网络（2026-04-30 新增）- 可组合代理网络设计
+from .anda_agent_network import (
+    AndaAgentNetwork,
+    AgentRole,
+    AgentStatus,
+    TaskRequest,
+    get_anda_agent_network,
+    create_and_dispatch_task
+)
+
+# Solana 区块链集成（2026-04-30 新增）- 去中心化应用支持
+from .solana_integration import (
+    SolanaIntegration,
+    NetworkType,
+    TransactionStatus,
+    WalletInfo,
+    TransactionInfo,
+    get_solana_integration,
+    solana_transfer,
+    solana_call_contract
+)
+
+# ESFT 微调技术（2026-04-30 新增）- 专家领域模型微调
+from .esft_finetuning import (
+    ESFTFineTuning,
+    FineTuneMode,
+    ExpertiseDomain,
+    FineTuneConfig,
+    FineTuneProgress,
+    FineTuneResult,
+    get_esft_finetuning,
+    esft_train_expert_model
+)
+
+# 智能向量存储（2026-04-30 新增）- 混合模式，自动降级，免配置
+from .smart_vector_store import (
+    SmartVectorStore,
+    VectorStoreBackend,
+    BackendLevel,
+    SearchResult,
+    BackendInfo,
+    HydraCoreBackend,
+    FAISSBackend,
+    ChromaBackend,
+    MemoryBackend,
+    get_smart_vector_store
+)
+
+# 核心引擎模块（2026-04-30 重构新增）
+from .engine import (
+    FusionRAGEngine,
+    RAGResult,
+    IngestResult,
+    get_fusion_rag_engine
+)
+from .ingestor import (
+    MultiModalIngestor,
+    IngestDocument,
+    get_multi_modal_ingestor
+)
+from .knowledge_graph import (
+    DynamicKnowledgeGraph,
+    KGEntity,
+    KGRelation,
+    get_dynamic_knowledge_graph
+)
+from .query_engine import (
+    QueryEngine,
+    QueryResult,
+    SearchHit,
+    get_query_engine
+)
+from .reasoning import (
+    ReasoningEngine,
+    ReasoningStep,
+    ReasoningResult,
+    get_reasoning_engine
+)
+
 
 __all__ = [
     # 基础缓存层
@@ -240,6 +388,90 @@ __all__ = [
     "QdrantVectorStore",
     "VectorStoreManager",
     "PerformanceMonitor",
+    
+    # Doc-V* 文档理解模块
+    "EvidenceMemory",
+    "Evidence",
+    "EvidenceType",
+    "EvidenceStatus",
+    "DocumentNavigator",
+    "NavigationMode",
+    "NavigationState",
+    "PageInfo",
+    "NavigationAction",
+    "NavigationResult",
+    "VisualDocumentParser",
+    "DocumentElement",
+    "DocumentElementType",
+    "PageLayout",
+    "DocumentInfo",
+    "ReadingDirection",
+    
+    # Doc-V* 与 LLM Wiki 深度集成
+    "DocVLLMWikiIntegration",
+    "DocVWikiResult",
+    
+    # 智能模块调度器
+    "SmartModuleScheduler",
+    "ModuleType",
+    "TaskType",
+    "TaskContext",
+    "ExecutionResult",
+    
+    # DeepSeek 深度集成
+    "DeepSeekIntegration",
+    "DeepSeekModel",
+    "ModelCapability",
+    
+    # RAGFlow 与 Doc-V* 融合
+    "RAGFlowDocVFusion",
+    "FusionMode",
+    "RetrievalLevel",
+    "FusionResult",
+    
+    # Anda 代理网络
+    "AndaAgentNetwork",
+    "AgentRole",
+    "AgentStatus",
+    "TaskRequest",
+    
+    # Solana 区块链集成
+    "SolanaIntegration",
+    "NetworkType",
+    "TransactionStatus",
+    "WalletInfo",
+    "TransactionInfo",
+    
+    # ESFT 微调技术
+    "ESFTFineTuning",
+    "FineTuneMode",
+    "ExpertiseDomain",
+    "FineTuneConfig",
+    "FineTuneProgress",
+    "FineTuneResult",
+    
+    # 智能向量存储
+    "SmartVectorStore",
+    "VectorStoreBackend",
+    "BackendLevel",
+    "SearchResult",
+    "BackendInfo",
+    "HydraCoreBackend",
+    "FAISSBackend",
+    "ChromaBackend",
+    "MemoryBackend",
+    
+    # 核心引擎模块（重构新增）
+    "FusionRAGEngine",
+    "RAGResult",
+    "IngestResult",
+    "MultiModalIngestor",
+    "IngestDocument",
+    "DynamicKnowledgeGraph",
+    "KGEntity",
+    "KGRelation",
+    "QueryEngine",
+    "ReasoningEngine",
 
     # 工具函数
     "get_l4_executor",
@@ -259,12 +491,43 @@ __all__ = [
     "get_chroma",
     "get_vector_store",
     "switch_to_chroma",
-    "switch_to_qdrant"
+    "switch_to_qdrant",
+    "get_evidence_memory",
+    "get_document_navigator",
+    "get_visual_document_parser",
+    "get_docv_llm_wiki_integration",
+    "process_document_with_docv",
+    "query_with_docv_context",
+    "get_smart_scheduler",
+    "analyze_document",
+    "answer_question",
+    "retrieve_knowledge",
+    "get_deepseek_integration",
+    "deepseek_smart_call",
+    "deepseek_execute_tool",
+    "get_ragflow_docv_fusion",
+    "fusion_process_document",
+    "get_anda_agent_network",
+    "create_and_dispatch_task",
+    "get_solana_integration",
+    "solana_transfer",
+    "solana_call_contract",
+    "get_esft_finetuning",
+    "esft_train_expert_model",
+    "get_smart_vector_store",
+    "get_fusionrag",
+    "create_fusion_rag",
+    "FusionRAG",
+    "get_fusion_rag_engine",
+    "get_multi_modal_ingestor",
+    "get_dynamic_knowledge_graph",
+    "get_query_engine",
+    "get_reasoning_engine",
 ]
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __author__ = "LivingTree AI Team"
-__description__ = "Multi-Source Fusion Intelligence Acceleration System with Industry Governance"
+__description__ = "Multi-Source Fusion Intelligence Acceleration System with Industry Governance and Smart Vector Storage"
 
 
 class FusionRAG:
@@ -276,13 +539,21 @@ class FusionRAG:
     行业知识治理闭环：
     1. 输入控制 → IndustryGovernance (数据准入、术语归一化)
     2. 检索对齐 → KnowledgeTierManager + IndustryFilter (分层检索、行业过滤)
-    3. 输出验证 → RelevanceScorer + TripleChainEngine (多维度打分、三重链验证)
-    4. 持续进化 → FeedbackLearner + IndustryDialectDict (负反馈学习、方言扩展)
+    3. 向量检索 → SmartVectorStore (混合模式、自动降级、免配置)
+    4. 输出验证 → RelevanceScorer + TripleChainEngine (多维度打分、三重链验证)
+    5. 持续进化 → FeedbackLearner + IndustryDialectDict (负反馈学习、方言扩展)
     
     三重链统一机制：
     - 思维链：显式推理步骤
     - 因果链：步骤间逻辑关系
     - 证据链：可追溯的来源支持
+    
+    智能向量存储架构：
+    - L0: HydraCore V1.5 (超大数据集 > 100万条)
+    - L1: FAISS (中等数据集 > 10万条)
+    - L2: Chroma (中小型数据集 > 1万条)
+    - L3: Memory (测试/小数据)
+    - 自动检测、自动升级、优雅降级
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -303,12 +574,18 @@ class FusionRAG:
         # 初始化三重链引擎
         self.triple_chain_engine = create_triple_chain_engine()
         
+        # 初始化智能向量存储（核心集成）
+        self.vector_store = get_smart_vector_store()
+        
         # 配置
         self.config = config or {}
         self.target_industry = self.config.get("target_industry", "通用")
         self.min_relevance_threshold = self.config.get("min_relevance_threshold", 0.6)
         
+        # 获取当前向量存储后端信息
+        vs_info = self.vector_store.get_backend_info()
         print(f"[FusionRAG] 初始化完成，目标行业: {self.target_industry}")
+        print(f"[FusionRAG] 向量存储后端: {vs_info.name} (级别: {vs_info.level.name})")
     
     def normalize_query(self, query: str) -> str:
         """
@@ -511,6 +788,162 @@ class FusionRAG:
             if suggestions:
                 print(f"[FusionRAG] 建议添加方言条目: {suggestions}")
     
+    # ==================== 智能向量存储集成方法 ====================
+    
+    async def add_documents_to_vector_store(self, documents: List[Dict[str, Any]]):
+        """
+        批量添加文档到向量存储
+        
+        Args:
+            documents: 文档列表，每个文档包含 id, content, metadata
+        """
+        if not documents:
+            return
+            
+        embeddings = []
+        ids = []
+        metadatas = []
+        
+        for doc in documents:
+            # 生成嵌入（简化版，实际应调用嵌入模型）
+            embedding = self._generate_embedding(doc.get("content", ""))
+            embeddings.append(embedding)
+            ids.append(doc["id"])
+            metadatas.append({
+                "content": doc.get("content", ""),
+                "title": doc.get("title", ""),
+                "source_type": doc.get("source_type", "unknown"),
+                "industry": self.target_industry,
+                **(doc.get("metadata", {}))
+            })
+        
+        await self.vector_store.add(embeddings, ids, metadatas)
+        print(f"[FusionRAG] 已添加 {len(documents)} 个文档到向量存储")
+        
+    async def search_vector_store(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        使用智能向量存储进行检索
+        
+        Args:
+            query: 用户查询
+            top_k: 返回数量
+            
+        Returns:
+            检索结果列表
+        """
+        # 生成查询嵌入
+        query_embedding = self._generate_embedding(query)
+        
+        # 使用向量存储检索
+        results = await self.vector_store.search(query_embedding, top_k)
+        
+        # 转换为统一格式
+        return [{
+            "id": r.id,
+            "content": r.content,
+            "score": r.score,
+            "metadata": r.metadata,
+            "source_type": r.metadata.get("source_type", "vector_store"),
+            "tier": "vector"
+        } for r in results]
+        
+    async def hybrid_search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        混合检索：结合传统检索和向量检索
+        
+        Args:
+            query: 用户查询
+            top_k: 返回数量
+            
+        Returns:
+            融合后的检索结果
+        """
+        # 1. 传统检索
+        traditional_results = self.search(query, top_k)
+        
+        # 2. 向量检索
+        vector_results = await self.search_vector_store(query, top_k)
+        
+        # 3. 融合结果（去重 + 重新排序）
+        merged = {}
+        
+        # 添加传统检索结果
+        for item in traditional_results:
+            merged[item["id"]] = {**item, "source": "traditional", "combined_score": item["score"] * 0.7}
+        
+        # 添加向量检索结果（权重稍低）
+        for item in vector_results:
+            if item["id"] in merged:
+                # 融合分数
+                merged[item["id"]]["combined_score"] += item["score"] * 0.3
+                merged[item["id"]]["source"] = "hybrid"
+            else:
+                merged[item["id"]] = {**item, "source": "vector", "combined_score": item["score"] * 0.3}
+        
+        # 按融合分数排序
+        final_results = sorted(merged.values(), key=lambda x: x["combined_score"], reverse=True)
+        
+        return final_results[:top_k]
+        
+    def _generate_embedding(self, text: str) -> List[float]:
+        """
+        生成文本嵌入（简化版）
+        
+        Args:
+            text: 输入文本
+            
+        Returns:
+            嵌入向量
+        """
+        # 实际应调用嵌入模型，这里使用简化实现
+        # 生成 768 维向量（常用嵌入维度）
+        import hashlib
+        
+        # 使用哈希生成固定长度的向量
+        hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
+        embedding = []
+        
+        for i in range(768):
+            embedding.append((hash_val >> (i * 8)) % 256 / 255.0)
+            
+        return embedding
+        
+    def get_vector_store_info(self) -> Dict[str, Any]:
+        """
+        获取向量存储信息
+        
+        Returns:
+            向量存储信息字典
+        """
+        info = self.vector_store.get_backend_info()
+        backends = self.vector_store.list_backends()
+        
+        return {
+            "current_backend": {
+                "name": info.name,
+                "level": info.level.name,
+                "available": info.available,
+                "data_size": info.data_size,
+                "avg_latency": info.avg_latency,
+                "success_rate": info.success_rate
+            },
+            "all_backends": [{
+                "name": b.name,
+                "level": b.level.name,
+                "available": b.available,
+                "data_size": b.data_size
+            } for b in backends]
+        }
+        
+    async def clear_vector_store(self):
+        """清空向量存储"""
+        await self.vector_store.clear()
+        print("[FusionRAG] 向量存储已清空")
+        
+    async def get_vector_store_count(self) -> int:
+        """获取向量存储中的文档数量"""
+        return await self.vector_store.count()
+    
     def pin_document(self, doc_id: str, title: str, scenarios: List[str], priority: int = 3):
         """
         钉选文档（专家知识注入）
@@ -544,7 +977,8 @@ class FusionRAG:
             "filter": self.filter.get_stats(),
             "scorer": self.scorer.get_stats(),
             "learner": self.learner.get_learning_insights(),
-            "dialect": self.dialect.get_stats()
+            "dialect": self.dialect.get_stats(),
+            "vector_store": self.get_vector_store_info()
         }
     
     def get_config(self) -> Dict[str, Any]:
@@ -559,6 +993,26 @@ class FusionRAG:
 def create_fusion_rag(config: Optional[Dict[str, Any]] = None) -> FusionRAG:
     """创建 FusionRAG 实例"""
     return FusionRAG(config)
+
+
+# FusionRAG 单例
+_fusionrag_instance = None
+
+
+def get_fusionrag(config: Optional[Dict[str, Any]] = None) -> FusionRAG:
+    """
+    获取 FusionRAG 实例（单例）
+    
+    Args:
+        config: 配置字典
+        
+    Returns:
+        FusionRAG 实例
+    """
+    global _fusionrag_instance
+    if _fusionrag_instance is None:
+        _fusionrag_instance = FusionRAG(config)
+    return _fusionrag_instance
 
 
 # 添加到导出列表

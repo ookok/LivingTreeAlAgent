@@ -61,7 +61,6 @@ from .smart_config_detector import SmartConfigDetector, get_config_detector
 from .circuit_breaker import LayeredCircuitBreaker, get_circuit_breaker, CircuitBreaker, BreakerState
 from .health_monitor import HealthMonitor, get_health_monitor, HealthResult, Alert
 from .graceful_degradation import GracefulDegradation, get_degradation_manager, DegradationLevel
-from .smart_cache_manager import SmartCacheManager, get_cache_manager, LRUCache, RedisCache
 from .priority_task_queue import PriorityTaskQueue, get_task_queue, TaskPriority
 from .distributed_tracer import DistributedTracer, get_tracer, Trace, Span
 from .smart_profiler import SmartProfiler, get_profiler, ProfileResult, OptimizationSuggestion
@@ -76,28 +75,40 @@ from .stability_init import (
     submit_task,
 )
 
-# 意图识别
-from .intent_recognition import (
-    MultiModalIntentFusion,
-    ContextualIntentTracker,
-    get_multi_modal_intent_fusion,
-    get_contextual_intent_tracker,
-    IntentType,
-    ModalityType,
+# 意图管理
+from .intent_management import (
+    # 统一意图定义中心
+    UnifiedIntentHub,
+    get_unified_intent_hub,
+    IntentDefinition,
+    IntentPriority,
+    
+    # 智能意图识别引擎
+    SmartIntentRecognizer,
+    get_smart_intent_recognizer,
     IntentResult,
-)
-
-# 语义分析
-from .semantic_analysis import (
-    MultiGranularitySemanticAnalyzer,
-    EmotionalSemanticAnalyzer,
-    DomainAdaptiveSemanticAnalyzer,
-    get_multi_granularity_semantic_analyzer,
-    get_emotional_semantic_analyzer,
-    get_domain_adaptive_semantic_analyzer,
+    IntentCandidate,
+    
+    # 深度语义感知系统
+    DeepSemanticAnalyzer,
+    get_deep_semantic_analyzer,
+    SemanticAnalysis,
+    SemanticRole,
     SentimentType,
     DomainType,
-    SemanticAnalysisResult,
+    ComplexityLevel,
+    
+    # 自适应模型推理框架
+    AdaptiveReasoningFramework,
+    get_adaptive_reasoning_framework,
+    ReasoningStrategyType,
+    TaskType,
+    ReasoningResult,
+    
+    # 智能缓存系统
+    IntelligentCacheSystem,
+    get_intelligent_cache_system,
+    CacheLayer,
 )
 
 # 模型路由
@@ -287,10 +298,6 @@ __all__ = [
     "GracefulDegradation",
     "get_degradation_manager",
     "DegradationLevel",
-    "SmartCacheManager",
-    "get_cache_manager",
-    "LRUCache",
-    "RedisCache",
     "PriorityTaskQueue",
     "get_task_queue",
     "TaskPriority",
@@ -313,25 +320,30 @@ __all__ = [
     "cached",
     "submit_task",
     
-    # 意图识别
-    "MultiModalIntentFusion",
-    "ContextualIntentTracker",
-    "get_multi_modal_intent_fusion",
-    "get_contextual_intent_tracker",
-    "IntentType",
-    "ModalityType",
+    # 意图管理
+    "UnifiedIntentHub",
+    "get_unified_intent_hub",
+    "IntentDefinition",
+    "IntentPriority",
+    "SmartIntentRecognizer",
+    "get_smart_intent_recognizer",
     "IntentResult",
-    
-    # 语义分析
-    "MultiGranularitySemanticAnalyzer",
-    "EmotionalSemanticAnalyzer",
-    "DomainAdaptiveSemanticAnalyzer",
-    "get_multi_granularity_semantic_analyzer",
-    "get_emotional_semantic_analyzer",
-    "get_domain_adaptive_semantic_analyzer",
+    "IntentCandidate",
+    "DeepSemanticAnalyzer",
+    "get_deep_semantic_analyzer",
+    "SemanticAnalysis",
+    "SemanticRole",
     "SentimentType",
     "DomainType",
-    "SemanticAnalysisResult",
+    "ComplexityLevel",
+    "AdaptiveReasoningFramework",
+    "get_adaptive_reasoning_framework",
+    "ReasoningStrategyType",
+    "TaskType",
+    "ReasoningResult",
+    "IntelligentCacheSystem",
+    "get_intelligent_cache_system",
+    "CacheLayer",
     
     # 模型路由
     "SmartModelSelector",

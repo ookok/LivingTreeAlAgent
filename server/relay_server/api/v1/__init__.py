@@ -6,6 +6,7 @@ from .payment import router as payment_router
 from .credit import router as credit_router
 from .notification import router as notification_router
 from .serial_admin import router as serial_admin_router
+from .chat import router as chat_router
 
 __all__ = [
     "auth_router",
@@ -15,4 +16,5 @@ __all__ = [
     "credit_router",
     "notification_router",
     "serial_admin_router",
+    "chat_router",
 ]

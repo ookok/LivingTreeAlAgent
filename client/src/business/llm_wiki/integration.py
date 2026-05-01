@@ -9,15 +9,17 @@ LLM Wiki 集成模块 - 将 Phase 1 解析器集成到现有 FusionRAG 系统
 4. 提供统一的搜索接口（复用 FusionRAG 四层架构）
 5. DeepKE-LLM 术语抽取器集成
 6. VimRAG 多模态记忆图引擎集成
+7. SmartVectorStore 智能向量存储集成
 
 功能对等 FusionRAG：
 - 行业治理、分层检索、行业过滤、相关性打分、负反馈学习
 - 方言词典、三重链验证、智能术语抽取
 - 多模态记忆图（VimRAG 扩展）
+- 智能向量存储（混合模式、自动降级、免配置）
 
 作者: LivingTreeAI Team
 日期: 2026-04-30
-版本: 2.1.0 (Phase 1 + FusionRAG + DeepKE-LLM + VimRAG)
+版本: 2.2.0 (Phase 1 + FusionRAG + DeepKE-LLM + VimRAG + SmartVectorStore)
 """
 
 import os
@@ -31,7 +33,7 @@ from loguru import logger
 from .models import DocumentChunk
 from .parsers import LLMDocumentParser, PaperParser, CodeExtractor
 
-# 尝试导入 FusionRAG 模块
+# 尝试导入 FusionRAG 模块（智能向量存储使用延迟导入避免循环依赖）
 try:
     from business.fusion_rag.knowledge_base import KnowledgeBaseLayer
     from business.fusion_rag.chunk_optimizer import ChunkOptimizer
@@ -49,6 +51,7 @@ class LLMWikiIntegration:
     
     将 Phase 1 文档解析器集成到 FusionRAG 系统。
     功能对等 FusionRAG：行业治理、分层检索、行业过滤、相关性打分、负反馈学习、方言词典、三重链验证
+    智能向量存储：混合模式、自动降级、免配置（HydraCore/FAISS/Chroma/Memory）
     """
     
     def __init__(self, knowledge_base=None, chunk_optimizer=None, fusion_engine=None, config=None):
@@ -64,6 +67,16 @@ class LLMWikiIntegration:
             # Note: ChunkOptimizer 可能没有 optimize() 方法，我们直接使用原始分块
             self.chunk_optimizer = chunk_optimizer  # 可选
             self.fusion_engine = fusion_engine  # 可选
+            
+            # 集成 SmartVectorStore 智能向量存储（混合模式、自动降级、免配置）- 延迟导入避免循环依赖
+            try:
+                from business.fusion_rag.smart_vector_store import get_smart_vector_store
+                self.vector_store = get_smart_vector_store()
+                vs_info = self.vector_store.get_backend_info()
+                logger.info(f"智能向量存储集成完成，当前后端: {vs_info.name}")
+            except Exception as e:
+                logger.warning(f"智能向量存储初始化失败: {e}")
+                self.vector_store = None
             
             # 集成 FusionRAG 行业治理模块
             try:
@@ -106,7 +119,7 @@ class LLMWikiIntegration:
                     logger.warning(f"VimRAG 记忆图引擎导入失败: {e}")
                     self.memory_graph_engine = None
                 
-                logger.info("FusionRAG 治理模块集成完成（含 DeepKE-LLM + VimRAG）")
+                logger.info("FusionRAG 治理模块集成完成（含 DeepKE-LLM + VimRAG + SmartVectorStore）")
             except ImportError as e:
                 logger.warning(f"FusionRAG 治理模块导入失败: {e}")
                 self.governance = None
@@ -122,6 +135,7 @@ class LLMWikiIntegration:
             self.knowledge_base = None
             self.chunk_optimizer = None
             self.fusion_engine = None
+            self.vector_store = None
             self.governance = None
             self.tier_manager = None
             self.filter = None
@@ -142,8 +156,14 @@ class LLMWikiIntegration:
         self.stats = {
             "indexed_documents": 0,
             "indexed_chunks": 0,
-            "failed_documents": 0
+            "failed_documents": 0,
+            "vector_store_backend": "unknown"
         }
+        
+        # 更新向量存储后端信息
+        if self.vector_store:
+            vs_info = self.vector_store.get_backend_info()
+            self.stats["vector_store_backend"] = vs_info.name
         
         logger.info("LLMWikiIntegration 初始化完成")
     
@@ -838,6 +858,143 @@ class LLMWikiIntegration:
             chunk_type = chunk.chunk_type
             type_counts[chunk_type] = type_counts.get(chunk_type, 0) + 1
         return type_counts
+    
+    async def add_documents_to_vector_store(self, documents: List[Dict[str, Any]]):
+        """
+        将文档添加到智能向量存储
+        
+        Args:
+            documents: 文档列表，每个文档包含 id, content, metadata
+        """
+        if not self.vector_store:
+            logger.warning("智能向量存储不可用")
+            return
+        
+        try:
+            embeddings = []
+            ids = []
+            metadatas = []
+            
+            for doc in documents:
+                doc_id = doc.get("id", str(hash(doc.get("content", ""))))
+                content = doc.get("content", "")
+                metadata = doc.get("metadata", {})
+                
+                # 生成嵌入向量（简化版）
+                embedding = self._generate_simple_embedding(content)
+                
+                embeddings.append(embedding)
+                ids.append(doc_id)
+                metadatas.append({"content": content, **metadata})
+            
+            await self.vector_store.add(embeddings, ids, metadatas)
+            logger.info(f"成功添加 {len(documents)} 个文档到智能向量存储")
+            
+        except Exception as e:
+            logger.error(f"添加到智能向量存储失败: {e}")
+    
+    async def search_vector_store(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        使用智能向量存储进行搜索
+        
+        Args:
+            query: 查询字符串
+            top_k: 返回结果数量
+            
+        Returns:
+            搜索结果列表
+        """
+        if not self.vector_store:
+            logger.warning("智能向量存储不可用")
+            return []
+        
+        try:
+            # 生成查询嵌入向量
+            query_embedding = self._generate_simple_embedding(query)
+            
+            # 搜索向量存储
+            results = await self.vector_store.search(query_embedding, top_k)
+            
+            # 格式化结果
+            formatted_results = []
+            for r in results:
+                formatted_results.append({
+                    "id": r.id,
+                    "content": r.content,
+                    "score": r.score,
+                    "metadata": r.metadata,
+                    "source_type": "smart_vector_store"
+                })
+            
+            return formatted_results
+            
+        except Exception as e:
+            logger.error(f"智能向量存储搜索失败: {e}")
+            return []
+    
+    def _generate_simple_embedding(self, text: str) -> List[float]:
+        """生成简化的文本嵌入 (用于向量存储)"""
+        import re
+        
+        text = text.lower()
+        words = re.findall(r'[\w]+', text)
+        vec = [0.0] * 384  # 使用 384 维
+        
+        for word in words:
+            word_hash = hash(word) % 384
+            vec[word_hash] += 1.0
+        
+        # L2 归一化
+        norm = sum(v * v for v in vec) ** 0.5
+        if norm > 0:
+            vec = [v / norm for v in vec]
+        
+        return vec
+    
+    def get_vector_store_info(self) -> Dict[str, Any]:
+        """获取智能向量存储信息"""
+        if not self.vector_store:
+            return {"available": False, "backend": "unknown"}
+        
+        try:
+            info = self.vector_store.get_backend_info()
+            backends = self.vector_store.list_backends()
+            
+            return {
+                "available": True,
+                "backend": info.name,
+                "level": info.level.name,
+                "data_size": info.data_size,
+                "avg_latency": info.avg_latency,
+                "success_rate": info.success_rate,
+                "available_backends": [b.name for b in backends if b.available]
+            }
+        except Exception as e:
+            logger.error(f"获取向量存储信息失败: {e}")
+            return {"available": False, "backend": "unknown", "error": str(e)}
+    
+    async def clear_vector_store(self):
+        """清空智能向量存储"""
+        if not self.vector_store:
+            logger.warning("智能向量存储不可用")
+            return
+        
+        try:
+            await self.vector_store.clear()
+            logger.info("智能向量存储已清空")
+        except Exception as e:
+            logger.error(f"清空智能向量存储失败: {e}")
+    
+    async def get_vector_store_count(self) -> int:
+        """获取智能向量存储中的文档数量"""
+        if not self.vector_store:
+            return 0
+        
+        try:
+            return await self.vector_store.count()
+        except Exception as e:
+            logger.error(f"获取向量存储计数失败: {e}")
+            return 0
 
 
 def create_llm_wiki_integration(knowledge_base=None, config=None) -> LLMWikiIntegration:

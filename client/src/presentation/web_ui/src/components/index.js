@@ -1,0 +1,11 @@
+export { default as Sidebar } from './Sidebar.vue';
+export { default as Dashboard } from './Dashboard.vue';
+export { default as Memory } from './Memory.vue';
+export { default as Learning } from './Learning.vue';
+export { default as Reasoning } from './Reasoning.vue';
+export { default as SelfAwareness } from './SelfAwareness.vue';
+export { default as MCP } from './MCP.vue';
+export { default as Observability } from './Observability.vue';
+export { default as DocumentProcessor } from './DocumentProcessor.vue';
+export { default as SkillPanel } from './SkillPanel.vue';
+export { default as AutomationPanel } from './AutomationPanel.vue';

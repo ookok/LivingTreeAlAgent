@@ -6,9 +6,21 @@
 - 支持20+种模型能力
 - 流式调用支持
 - 自动fallback机制
-- 响应缓存
+- 响应缓存（LRU + 语义缓存）
 - 负载均衡
 - 历史成功率追踪
+- 🆕 智能任务分类器（L0层轻量级评估）
+- 🆕 渐进式推理（自动升级降级）
+- 🆕 上下文感知路由（根据对话状态动态选择）
+- 🆕 资源感知调度（实时监控CPU/GPU/内存）
+- 🆕 推理缓存与复用（跨层共享）
+
+分层架构：
+L0: SmolLM2 (Fast Reverse Brain) - 快速路由/意图分类
+L1: Qwen2.5-1.5B (light weight) - 基础理解
+L2: Qwen3.5: 4b (standard) - 中级推理
+L3: Qwen3.5: 9b (Advanced) - 高级推理
+L4: DeepSeek (Expert) - 深度生成/思考模式
 """
 
 import asyncio
@@ -64,6 +76,50 @@ def _get_expert_thinking_controller():
     return _expert_thinking_controller
 
 
+# ============= 自适应路由组件 =============
+
+# 延迟导入自适应路由组件，避免循环导入
+_task_classifier = None
+_context_router = None
+_inference_cache = None
+
+def _get_task_classifier():
+    """获取智能任务分类器（延迟加载）"""
+    global _task_classifier
+    if _task_classifier is None:
+        try:
+            from business.smart_task_classifier import get_task_classifier
+            _task_classifier = get_task_classifier()
+        except ImportError as e:
+            logger.warning(f"智能任务分类器导入失败: {e}")
+            return None
+    return _task_classifier
+
+def _get_context_router():
+    """获取上下文感知路由器（延迟加载）"""
+    global _context_router
+    if _context_router is None:
+        try:
+            from business.context_aware_routing import ContextAwareRouting
+            _context_router = ContextAwareRouting(None)  # 稍后设置 router
+        except ImportError as e:
+            logger.warning(f"上下文感知路由器导入失败: {e}")
+            return None
+    return _context_router
+
+def _get_inference_cache():
+    """获取推理缓存（延迟加载）"""
+    global _inference_cache
+    if _inference_cache is None:
+        try:
+            from business.inference_cache import get_inference_cache
+            _inference_cache = get_inference_cache()
+        except ImportError as e:
+            logger.warning(f"推理缓存导入失败: {e}")
+            return None
+    return _inference_cache
+
+
 # ============= 能力定义 =============
 
 class ModelCapability(Enum):
@@ -112,8 +168,8 @@ class ModelBackend(Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
-    LOCAL_GGUF = "local_gguf"
     LTAI = "ltai"   # LTAI (LivingTreeAi) 本地细胞模型
+    HERDSMAN = "herdsman"  # FlowyAIPC 牧马人引擎
     CUSTOM = "custom"
     MOCK = "mock"  # 测试用
 
@@ -358,6 +414,19 @@ class GlobalModelRouter:
         
         # 设置默认分层路由
         self._setup_default_tier_routing()
+        
+        # ========== 自适应路由组件 ==========
+        self.task_classifier = _get_task_classifier()
+        self.context_router = _get_context_router()
+        if self.context_router:
+            self.context_router.model_router = self  # 设置反向引用
+        self.inference_cache = _get_inference_cache()
+        
+        # 自适应路由开关
+        self.auto_tier_selection_enabled = True
+        self.progressive_reasoning_enabled = True
+        
+        logger.info("✅ 自适应路由组件加载完成")
         
         # ========== 日志级别配置 ==========
         self._log_level: LogLevel = LogLevel.INFO
@@ -766,6 +835,49 @@ class GlobalModelRouter:
                 )
                 logger.info(f"[加载] LTAI {cell_name} @ {ckpt_path or '(checkpoint待训练)'}")
 
+            # ── 5. FlowyAIPC 牧马人引擎配置（推荐）────────────────────────────
+            herdsman_cfg = load_model_config("herdsman") or {}
+            if herdsman_cfg.get("enabled", False) or herdsman_cfg.get("base_url"):
+                base_url = herdsman_cfg.get("base_url", "http://localhost:8080/v1")
+                api_key = herdsman_cfg.get("api_key", "")
+                for key, mc in (herdsman_cfg.get("models") or {}).items():
+                    model_id = mc.get("model_id", f"herdsman_{key}")
+                    if model_id in self.models:
+                        continue
+                    caps = [
+                        getattr(ModelCapability, c.upper(), ModelCapability.CHAT)
+                        for c in mc.get("capabilities", [])
+                    ]
+                    if not caps:
+                        caps = [
+                            ModelCapability.CHAT,
+                            ModelCapability.CONTENT_GENERATION,
+                            ModelCapability.CODE_GENERATION,
+                            ModelCapability.REASONING,
+                            ModelCapability.SUMMARIZATION,
+                            ModelCapability.TRANSLATION,
+                        ]
+                    self.models[model_id] = ModelInfo(
+                        model_id=model_id,
+                        name=f"{mc.get('model_name', key)} (Herdsman)",
+                        backend=ModelBackend.HERDSMAN,
+                        capabilities=caps,
+                        max_tokens=mc.get("max_tokens", 8192),
+                        context_length=mc.get("context_length", 32768),
+                        quality_score=mc.get("quality_score", 0.85),
+                        speed_score=mc.get("speed_score", 0.9),
+                        cost_score=mc.get("cost_score", 1.0),  # 本地运行，免费
+                        privacy_score=1.0,  # 本地运行，隐私安全
+                        is_available=True,
+                        config={
+                            "model": mc.get("model_name", key),
+                            "base_url": base_url,
+                            "api_key": api_key,
+                            "timeout": mc.get("timeout", 60),
+                        },
+                    )
+                    logger.info(f"[加载] FlowyAIPC Herdsman {mc.get('model_name', key)} @ {base_url}")
+
         except Exception as e:
             logger.error(f"从加密配置加载模型失败: {e}")
 
@@ -967,6 +1079,193 @@ class GlobalModelRouter:
             candidates.sort(key=lambda m: self._combined_score(m, context_length, w), reverse=True)
 
         return candidates
+    
+    # ------------------------------------------------------------------ #
+    #  自适应路由方法  <<  智能任务分类 + 上下文感知 + 渐进式推理  >>
+    # ------------------------------------------------------------------ #
+    
+    def analyze_task(self, prompt: str, context_messages: Optional[List[Dict[str, object]]] = None) -> Dict[str, object]:
+        """
+        分析任务并建议最优层级
+        
+        Args:
+            prompt: 用户输入
+            context_messages: 对话历史消息
+            
+        Returns:
+            分析结果，包含建议的层级和置信度
+        """
+        result = {
+            "task_analysis": None,
+            "context_analysis": None,
+            "suggested_tier": "L2",
+            "confidence": 0.5,
+            "reasoning": []
+        }
+        
+        # 1. 任务分类分析
+        if self.task_classifier:
+            task_analysis = self.task_classifier.analyze(prompt)
+            result["task_analysis"] = {
+                "complexity": task_analysis.complexity.value,
+                "task_type": task_analysis.task_type.value,
+                "estimated_tokens": task_analysis.estimated_tokens,
+                "confidence": task_analysis.confidence,
+                "suggested_tier": task_analysis.suggested_tier,
+            }
+            result["reasoning"].append(f"任务复杂度: {task_analysis.complexity.value}")
+        
+        # 2. 上下文分析
+        if self.context_router and context_messages:
+            context_analysis = self.context_router.analyze_context(context_messages)
+            result["context_analysis"] = {
+                "total_tokens": context_analysis.total_tokens,
+                "message_count": context_analysis.message_count,
+                "conversation_state": context_analysis.conversation_state.value,
+                "suggested_tier": context_analysis.required_tier,
+                "confidence": context_analysis.confidence,
+            }
+            result["reasoning"].append(f"对话状态: {context_analysis.conversation_state.value}")
+        
+        # 3. 综合建议层级
+        tiers = []
+        if result["task_analysis"]:
+            tiers.append(result["task_analysis"]["suggested_tier"])
+        if result["context_analysis"]:
+            tiers.append(result["context_analysis"]["suggested_tier"])
+        
+        if tiers:
+            # 选择最高层级（更保守）
+            tier_nums = [int(t[1:]) for t in tiers]
+            max_tier_num = max(tier_nums)
+            result["suggested_tier"] = f"L{max_tier_num}"
+            
+            # 计算综合置信度
+            confidences = []
+            if result["task_analysis"]:
+                confidences.append(result["task_analysis"]["confidence"])
+            if result["context_analysis"]:
+                confidences.append(result["context_analysis"]["confidence"])
+            result["confidence"] = sum(confidences) / len(confidences)
+        
+        logger.info(f"自适应路由分析完成: {result['suggested_tier']} (置信度: {result['confidence']:.2f})")
+        return result
+    
+    def route_with_adaptive(self, prompt: str, 
+                           context_messages: Optional[List[Dict[str, object]]] = None,
+                           capability: ModelCapability = ModelCapability.CHAT) -> Optional[ModelInfo]:
+        """
+        使用自适应路由选择最佳模型
+        
+        Args:
+            prompt: 用户输入
+            context_messages: 对话历史消息
+            capability: 需要的能力
+            
+        Returns:
+            最佳模型，如果没有则返回 None
+        """
+        if not self.auto_tier_selection_enabled:
+            # 如果禁用自适应路由，使用默认路由
+            return self.route(capability)
+        
+        # 1. 分析任务和上下文
+        analysis = self.analyze_task(prompt, context_messages)
+        suggested_tier = analysis["suggested_tier"]
+        
+        # 2. 获取该层级的模型
+        model_info = self.get_tier_model(suggested_tier)
+        
+        if model_info:
+            logger.info(f"自适应路由: {prompt[:50]}... → {suggested_tier} → {model_info.name}")
+            return model_info
+        
+        # 如果该层级没有模型，使用默认路由
+        logger.warning(f"层级 {suggested_tier} 无可用模型，回退到默认路由")
+        return self.route(capability)
+    
+    async def call_with_adaptive(self, prompt: str,
+                                system_prompt: str = "",
+                                context_messages: Optional[List[Dict[str, object]]] = None,
+                                **kwargs) -> str:
+        """
+        使用自适应路由调用模型
+        
+        Args:
+            prompt: 用户输入
+            system_prompt: 系统提示
+            context_messages: 对话历史消息
+            
+        Returns:
+            模型响应
+        """
+        # 1. 检查缓存
+        if self.inference_cache:
+            cached_response = self.inference_cache.get(prompt, system_prompt)
+            if cached_response:
+                logger.debug("自适应路由命中缓存")
+                return cached_response
+        
+        # 2. 使用自适应路由选择模型
+        analysis = self.analyze_task(prompt, context_messages)
+        suggested_tier = analysis["suggested_tier"]
+        
+        # 3. 如果启用渐进式推理
+        if self.progressive_reasoning_enabled:
+            try:
+                from business.progressive_reasoning import ProgressiveReasoning
+                progressive = ProgressiveReasoning(self)
+                result = await progressive.run(
+                    prompt=prompt,
+                    start_tier=suggested_tier,
+                    system_prompt=system_prompt,
+                    **kwargs
+                )
+                
+                # 缓存结果
+                if self.inference_cache:
+                    self.inference_cache.set(
+                        prompt=prompt,
+                        response=result.final_response,
+                        system_prompt=system_prompt,
+                        tier=result.final_tier,
+                        task_type="chat"
+                    )
+                
+                return result.final_response
+            except ImportError as e:
+                logger.warning(f"渐进式推理不可用: {e}")
+        
+        # 4. 使用常规调用
+        model_info = self.get_tier_model(suggested_tier)
+        if model_info:
+            response = await self.call_model_async(
+                capability=ModelCapability.CHAT,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                model_id=model_info.model_id,
+                **kwargs
+            )
+            
+            # 缓存结果
+            if self.inference_cache:
+                self.inference_cache.set(
+                    prompt=prompt,
+                    response=response,
+                    system_prompt=system_prompt,
+                    tier=suggested_tier,
+                    task_type="chat"
+                )
+            
+            return response
+        
+        # 5. 回退到默认调用
+        return await self.call_model_async(
+            capability=ModelCapability.CHAT,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            **kwargs
+        )
 
     def explain_routing(self, capability: ModelCapability,
                         strategy: RoutingStrategy = RoutingStrategy.AUTO,
@@ -1256,6 +1555,10 @@ class GlobalModelRouter:
                 response = await self._call_ltai(model, prompt, system_prompt)
                 success = bool(response)
 
+            elif model.backend == ModelBackend.HERDSMAN:
+                response = await self._call_openai(model, prompt, system_prompt)
+                success = bool(response)
+
         except Exception as e:
             logger.error(f"模型调用异常: {e}")
             success = False
@@ -1337,6 +1640,10 @@ class GlobalModelRouter:
                         response = await handler(prompt, system_prompt)
                         success = bool(response)
                 
+                elif model.backend == ModelBackend.HERDSMAN:
+                    response = await self._call_openai(model, prompt, system_prompt)
+                    success = bool(response)
+                
                 if success:
                     logger.info(f"模型调用成功: {model.name}")
                     return response
@@ -1411,6 +1718,10 @@ class GlobalModelRouter:
                     if handler and callable(handler):
                         response = await handler(prompt, system_prompt)
                         success = bool(response)
+                
+                elif model.backend == ModelBackend.HERDSMAN:
+                    response = await self._call_openai(model, prompt, system_prompt)
+                    success = bool(response)
             
             except Exception as e:
                 logger.error(f"Race 调用异常 {model.name}: {e}")
@@ -1509,6 +1820,11 @@ class GlobalModelRouter:
 
             elif model.backend == ModelBackend.LTAI:
                 async for chunk in self._call_ltai_stream(model, prompt, system_prompt):
+                    yield chunk
+                success = True
+
+            elif model.backend == ModelBackend.HERDSMAN:
+                async for chunk in self._call_openai_stream(model, prompt, system_prompt):
                     yield chunk
                 success = True
 

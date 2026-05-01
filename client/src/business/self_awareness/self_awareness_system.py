@@ -2,6 +2,13 @@
 自我意识系统主控制器（性能优化版）
 实现零干扰的后台自动升级和修复
 
+核心能力：
+1. 自我监控 - 零干扰后台监控
+2. 自我诊断 - 自动检测问题
+3. 自我修复 - 自动修复部署
+4. 自我反思 - 元认知能力
+5. 自我进化 - 自主学习优化
+
 性能优化：
 1. 增量文件扫描（只扫描变化的目录）
 2. 文件哈希缓存
@@ -10,7 +17,7 @@
 5. 智能调度（避免频繁测试）
 """
 
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import os
@@ -20,6 +27,8 @@ import threading
 import queue
 import hashlib
 import json
+import re
+import fnmatch
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import functools
@@ -42,11 +51,11 @@ class SelfAwarenessSystem:
     自我意识系统主控制器（性能优化版）
     
     核心能力：
-    1. 零干扰后台监控 - 不阻塞主程序
-    2. 自动检测代码变化
-    3. 自动测试验证
-    4. 自动诊断问题
-    5. 自动修复部署
+    1. 自我监控 - 零干扰后台监控
+    2. 自我诊断 - 自动检测问题
+    3. 自我修复 - 自动修复部署
+    4. 自我反思 - 元认知能力
+    5. 自我进化 - 自主学习优化
     
     性能优化：
     1. 增量扫描 - 只扫描变化的目录
@@ -64,6 +73,14 @@ class SelfAwarenessSystem:
         self.state = SystemState.IDLE
         self.state_lock = threading.Lock()
         
+        # 系统状态变量
+        self._system_state = {
+            'health': 'good',
+            'cognitive_load': 0.5,
+            'learning_rate': 0.1,
+            'last_reflection': 0
+        }
+        
         # 核心组件
         self.mirror_launcher = None  # 延迟初始化
         self.component_scanner = None
@@ -73,6 +90,11 @@ class SelfAwarenessSystem:
         self.root_cause_tracer = None
         self.deployment_manager = None
         self.backup_manager = None
+        
+        # 自我意识组件
+        self.self_reflection = None
+        self.goal_manager = None
+        self.autonomy_controller = None
         
         # 延迟初始化标志
         self._components_initialized = False
@@ -97,6 +119,8 @@ class SelfAwarenessSystem:
         self.test_cooldown: float = 10  # 测试冷却时间（秒）
         self.pending_changes: List[Dict[str, Any]] = []
         self.change_batch_delay: float = 2  # 批量处理延迟（秒）
+        self.last_reflection_time: float = 0
+        self.reflection_interval: float = 3600  # 反思间隔（秒）
         
         # 缓存
         self._hash_cache: Dict[str, Tuple[float, str]] = {}  # {path: (mtime, hash)}
@@ -105,6 +129,7 @@ class SelfAwarenessSystem:
         self.on_state_change: Optional[Callable] = None
         self.on_problem_detected: Optional[Callable] = None
         self.on_fix_applied: Optional[Callable] = None
+        self.on_reflection: Optional[Callable] = None
         
     def _init_components(self):
         """延迟初始化组件（提高启动速度）"""
@@ -119,6 +144,9 @@ class SelfAwarenessSystem:
         from .root_cause_tracer import RootCauseTracer
         from .deployment_manager import DeploymentManager
         from .backup_manager import BackupManager
+        from .self_reflection import SelfReflection
+        from .goal_manager import GoalManager
+        from .autonomy_controller import AutonomyController
         
         self.mirror_launcher = MirrorLauncher(
             LaunchConfig(mirror_dir=os.path.join(self.project_root, '.mirrors'))
@@ -130,6 +158,11 @@ class SelfAwarenessSystem:
         self.root_cause_tracer = RootCauseTracer()
         self.deployment_manager = DeploymentManager(self.project_root)
         self.backup_manager = BackupManager(self.project_root)
+        
+        # 自我意识组件
+        self.self_reflection = SelfReflection()
+        self.goal_manager = GoalManager()
+        self.autonomy_controller = AutonomyController()
         
         self._components_initialized = True
         
@@ -213,12 +246,73 @@ class SelfAwarenessSystem:
                     else:
                         # 延迟到冷却后处理
                         self.change_queue.put(batch)
-                    
+                
+                # 定期自我反思
+                if (current_time - self.last_reflection_time) >= self.reflection_interval:
+                    self._perform_reflection()
+                    self.last_reflection_time = current_time
+                
+                # 更新认知负载
+                self._update_cognitive_load()
+                
                 # 等待下次检查
                 time.sleep(self.config['monitor_interval'])
                 
             except Exception as e:
                 self._log_error(f"监控循环错误: {e}")
+    
+    def _perform_reflection(self):
+        """执行自我反思"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        goals = self.goal_manager.get_active_goals()
+        reflection = self.self_reflection.reflect(self._system_state, goals)
+        
+        # 更新系统状态
+        self._system_state['last_reflection'] = time.time()
+        
+        # 应用改进建议
+        for suggestion in reflection.improvement_suggestions:
+            self._apply_improvement_suggestion(suggestion)
+        
+        # 发布反思完成事件
+        self._publish_reflection_event(reflection)
+        
+        if self.on_reflection:
+            self.on_reflection(reflection)
+        
+        self._log_info(f"自我反思完成，建议数: {len(reflection.improvement_suggestions)}")
+    
+    def _publish_reflection_event(self, reflection):
+        """发布反思事件"""
+        try:
+            from client.src.business.integration_layer import EventType, publish
+            
+            event_data = {
+                'suggestions': reflection.improvement_suggestions,
+                'state_check': reflection.state_check,
+                'goal_assessment': reflection.goal_assessment
+            }
+            
+            publish(EventType.REFLECTION_COMPLETED, 'self_awareness', event_data)
+        except ImportError:
+            pass
+    
+    def _apply_improvement_suggestion(self, suggestion: str):
+        """应用改进建议"""
+        if "降低并发任务数量" in suggestion:
+            # 可以在这里实现实际的优化逻辑
+            self._log_info(f"应用改进: {suggestion}")
+    
+    def _update_cognitive_load(self):
+        """更新认知负载"""
+        pending_count = len(self.pending_changes)
+        fix_count = len(self.fix_history)
+        
+        # 简单的认知负载计算
+        load = min(1.0, 0.3 + pending_count * 0.1 + fix_count * 0.05)
+        self._system_state['cognitive_load'] = load
                 
     def _scan_all_files_incremental(self):
         """增量扫描所有文件（只扫描新增/修改的文件）"""
@@ -568,7 +662,7 @@ class SelfAwarenessSystem:
     def get_status(self) -> Dict[str, Any]:
         """获取系统状态"""
         with self.state_lock:
-            return {
+            status = {
                 'state': self.state.value,
                 'monitoring': self.monitor_thread is not None 
                            and self.monitor_thread.is_alive(),
@@ -577,4 +671,82 @@ class SelfAwarenessSystem:
                 'last_fix': self.fix_history[-1] if self.fix_history else None,
                 'pending_changes': len(self.pending_changes),
                 'cache_size': len(self._hash_cache),
+                
+                # 自我意识状态
+                'system_state': self._system_state,
+                'autonomy': self._get_autonomy_status(),
+                'goals': self._get_goal_status(),
             }
+            return status
+    
+    def _get_autonomy_status(self) -> Dict:
+        """获取自主控制状态"""
+        if not self._components_initialized:
+            return {'level': 3}
+        
+        return self.autonomy_controller.get_status()
+    
+    def _get_goal_status(self) -> Dict:
+        """获取目标状态"""
+        if not self._components_initialized:
+            return {'count': 0}
+        
+        return self.goal_manager.get_stats()
+    
+    def set_goal(self, description: str, priority: float = 0.5) -> str:
+        """设置目标"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        return self.goal_manager.set_goal(description, priority)
+    
+    def update_goal_progress(self, goal_id: str, progress: float):
+        """更新目标进度"""
+        if self._components_initialized:
+            self.goal_manager.update_goal_progress(goal_id, progress)
+    
+    def set_autonomy_level(self, level: int):
+        """设置自主级别"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        from .autonomy_controller import AutonomyLevel
+        
+        level_enum = AutonomyLevel(level)
+        self.autonomy_controller.set_autonomy_level(level_enum)
+    
+    def reflect(self) -> Dict:
+        """执行自我反思"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        goals = self.goal_manager.get_active_goals()
+        reflection = self.self_reflection.reflect(self._system_state, goals)
+        
+        return {
+            'state_check': reflection.state_check,
+            'goal_assessment': reflection.goal_assessment,
+            'improvement_suggestions': reflection.improvement_suggestions
+        }
+    
+    def get_reflection_history(self, limit: int = 10) -> List[Dict]:
+        """获取反思历史"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        history = self.self_reflection.get_reflection_history(limit)
+        return [
+            {
+                'timestamp': h.timestamp,
+                'suggestions': h.improvement_suggestions,
+                'goals_assessed': len(h.goal_assessment)
+            }
+            for h in history
+        ]
+    
+    def get_all_goals(self) -> List[Dict]:
+        """获取所有目标"""
+        if not self._components_initialized:
+            self._init_components()
+        
+        return self.goal_manager.get_all_goals()

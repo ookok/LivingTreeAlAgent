@@ -1,148 +1,142 @@
 """
-本地模型 Agent 适配器
+远程模型 Agent 适配器
 
-支持本地部署的开源模型：
-- Qwen2.5-7B/14B/72B
-- DeepSeek-V3-7B/33B
-- Llama 3
-- Mistral
+支持通过远程 URL 调用模型，兼容 OpenAI 格式：
+- FlowyAIPC Herdsman 引擎 (推荐)
+- 其他 OpenAI 兼容 API
+
+注意：本模块已不再支持本地模型下载和加载（GGUF 格式），
+所有模型调用均通过远程 URL 进行。
 """
 
 import asyncio
+import aiohttp
+import json
 from typing import List, Optional, Any, AsyncIterator
 from . import BaseAgentAdapter, AgentConfig, AgentResponse
 
 
-class LocalModelAdapter(BaseAgentAdapter):
-    """本地模型适配器"""
+class RemoteModelAdapter(BaseAgentAdapter):
+    """远程模型适配器（兼容 OpenAI 格式）"""
     
     def __init__(self, config: AgentConfig):
         super().__init__(config)
-        self._model = None
-        self._tokenizer = None
-    
-    def _load_model(self):
-        """懒加载模型"""
-        if not self._model:
-            try:
-                from transformers import AutoTokenizer, AutoModelForCausalLM
-                import torch
-                
-                model_name = self.config.model_name
-                if not model_name:
-                    model_name = "Qwen/Qwen2.5-7B-Instruct"
-                
-                self._tokenizer = AutoTokenizer.from_pretrained(model_name)
-                
-                # 根据显存大小选择量化方式
-                self._model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
-                    device_map="auto",
-                    torch_dtype=torch.bfloat16,
-                    load_in_4bit=True if self.config.max_tokens < 8192 else False,
-                    trust_remote_code=True
-                )
-                
-                print(f"[LocalModelAdapter] 模型加载完成: {model_name}")
-            except ImportError:
-                raise ImportError("请安装 transformers 和 accelerate 包")
-        return self._model, self._tokenizer
-    
-    def generate(self, prompt: str, **kwargs) -> AgentResponse:
-        """同步生成响应"""
-        model, tokenizer = self._load_model()
-        
-        messages = [{"role": "user", "content": prompt}]
-        text = tokenizer.apply_chat_template(messages, tokenize=False)
-        
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
-        
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            do_sample=True,
-            **kwargs
-        )
-        
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # 提取响应内容（去掉 prompt 部分）
-        if text in response:
-            content = response[len(text):].strip()
-        else:
-            content = response.strip()
-        
-        return AgentResponse(
-            content=content,
-            confidence=0.95,
-            finish_reason="completed"
-        )
+        self._base_url = config.base_url or "http://localhost:8080/v1"
+        self._api_key = config.api_key or ""
+        self._model_name = config.model_name or "default"
+        self._timeout = config.timeout or 60
     
     async def async_generate(self, prompt: str, **kwargs) -> AgentResponse:
         """异步生成响应"""
-        # 本地模型同步执行，包装为异步
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.generate, prompt, kwargs)
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        
+        payload = {
+            "model": self._model_name,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": kwargs.get("max_tokens", self.config.max_tokens or 4096),
+            "temperature": kwargs.get("temperature", self.config.temperature or 0.7),
+            "stream": False,
+        }
+        
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout)) as session:
+                async with session.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=payload
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        return AgentResponse(
+                            content=content,
+                            confidence=0.95,
+                            finish_reason="completed"
+                        )
+                    else:
+                        error_text = await resp.text()
+                        return AgentResponse(
+                            content=f"API调用失败: {resp.status}\n{error_text}",
+                            confidence=0.0,
+                            finish_reason="error"
+                        )
+        except Exception as e:
+            return AgentResponse(
+                content=f"连接失败: {str(e)}",
+                confidence=0.0,
+                finish_reason="error"
+            )
     
-    def stream_generate(self, prompt: str, **kwargs) -> AsyncIterator[str]:
+    def generate(self, prompt: str, **kwargs) -> AgentResponse:
+        """同步生成响应"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self.async_generate(prompt, **kwargs))
+    
+    async def stream_generate(self, prompt: str, **kwargs) -> AsyncIterator[str]:
         """流式生成响应"""
-        model, tokenizer = self._load_model()
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         
-        messages = [{"role": "user", "content": prompt}]
-        text = tokenizer.apply_chat_template(messages, tokenize=False)
+        payload = {
+            "model": self._model_name,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": kwargs.get("max_tokens", self.config.max_tokens or 4096),
+            "temperature": kwargs.get("temperature", self.config.temperature or 0.7),
+            "stream": True,
+        }
         
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
-        
-        from transformers import TextStreamer
-        
-        streamer = TextStreamer(tokenizer, skip_prompt=True)
-        
-        model.generate(
-            **inputs,
-            max_new_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            do_sample=True,
-            streamer=streamer,
-            **kwargs
-        )
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout)) as session:
+                async with session.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=payload
+                ) as resp:
+                    if resp.status == 200:
+                        async for line in resp.content:
+                            if line:
+                                try:
+                                    data = line.decode("utf-8").strip()
+                                    if data.startswith("data: "):
+                                        data = data[6:]
+                                    if data == "[DONE]":
+                                        break
+                                    if data:
+                                        json_data = json.loads(data)
+                                        content = json_data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                        if content:
+                                            yield content
+                                except json.JSONDecodeError:
+                                    continue
+                    else:
+                        error_text = await resp.text()
+                        yield f"API调用失败: {resp.status}\n{error_text}"
+        except Exception as e:
+            yield f"连接失败: {str(e)}"
     
     def get_supported_models(self) -> List[str]:
-        """获取支持的模型列表
-        
-        动态从 ModelManager 获取可用模型，避免硬编码
-        """
-        try:
-            from business.model_manager import ModelManager
-            from business.config import AppConfig, get_config
-            
-            config = get_config()
-            manager = ModelManager(config)
-            models = manager.get_available_models()
-            
-            model_names = []
-            for model in models:
-                if model.backend is not None:
-                    model_names.append(model.name)
-            
-            if model_names:
-                return model_names
-            
-        except Exception as e:
-            print(f"[LocalModelAdapter] 获取模型列表失败，使用默认列表: {e}")
-        
+        """获取支持的模型列表"""
         return [
-            "Qwen/Qwen2.5-7B-Instruct",
-            "Qwen/Qwen2.5-14B-Instruct",
-            "Qwen/Qwen2.5-72B-Instruct",
-            "deepseek-ai/DeepSeek-V3",
-            "deepseek-ai/DeepSeek-R1",
-            "meta-llama/Meta-Llama-3-8B-Instruct",
-            "mistralai/Mistral-7B-Instruct-v0.3"
+            "FlowyAIPC Herdsman",
+            "OpenAI Compatible API",
+            "Custom Remote Model",
         ]
 
 
 # 注册适配器
 from . import register_agent_adapter
-register_agent_adapter("local", LocalModelAdapter)
-register_agent_adapter("local_model", LocalModelAdapter)
+register_agent_adapter("remote", RemoteModelAdapter)
+register_agent_adapter("remote_url", RemoteModelAdapter)
+register_agent_adapter("openai_compatible", RemoteModelAdapter)

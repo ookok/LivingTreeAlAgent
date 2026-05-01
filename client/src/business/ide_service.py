@@ -31,6 +31,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from loguru import logger
 
 
 # ── 数据结构 ─────────────────────────────────────────────────────────────
@@ -922,6 +923,162 @@ main();
         }
 
 
+# ── IntelligentIDEService ──────────────────────────────────────────
+
+class IntelligentIDEService(IDEService):
+    """
+    智能IDE服务（增强版本）
+    
+    继承自 IDEService，增加额外的智能功能：
+    - 代码补全建议
+    - 符号导航支持
+    - 项目结构分析
+    - Serena 集成支持
+    """
+    
+    def __init__(self, config: Optional[Dict] = None):
+        """初始化智能IDE服务"""
+        super().__init__(config)
+        
+        # Serena 适配器（如果可用）
+        self._serena_adapter = None
+        self._serena_enabled = False
+        
+        # 项目信息
+        self._project_path = ""
+        self._file_symbols = {}
+        
+        # 初始化 Serena（如果可用）
+        self._init_serena()
+    
+    def _init_serena(self):
+        """初始化 Serena 适配器"""
+        try:
+            from business.self_evolution.serena_adapter import SerenaAdapter
+            self._serena_adapter = SerenaAdapter()
+            self._serena_enabled = True
+            logger.info("Serena 适配器初始化成功")
+        except Exception:
+            # Serena 不可用，使用本地 fallback
+            self._serena_enabled = False
+            logger.info("Serena 不可用，使用本地 fallback")
+    
+    def get_file_symbols(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        获取文件符号信息
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            符号列表
+        """
+        if not os.path.exists(file_path):
+            return []
+        
+        # 如果 Serena 可用，使用 Serena 获取符号
+        if self._serena_enabled and self._serena_adapter:
+            try:
+                return self._serena_adapter.get_symbols(file_path)
+            except Exception:
+                pass
+        
+        # 本地 fallback：使用 AST 分析
+        return self._get_symbols_from_ast(file_path)
+    
+    def _get_symbols_from_ast(self, file_path: str) -> List[Dict[str, Any]]:
+        """从 AST 获取符号信息（fallback）"""
+        symbols = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                code = f.read()
+            
+            tree = ast.parse(code)
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    symbols.append({
+                        'name': node.name,
+                        'kind': 'function',
+                        'line_start': node.lineno,
+                        'line_end': node.end_lineno or node.lineno,
+                    })
+                elif isinstance(node, ast.ClassDef):
+                    symbols.append({
+                        'name': node.name,
+                        'kind': 'class',
+                        'line_start': node.lineno,
+                        'line_end': node.end_lineno or node.lineno,
+                    })
+                elif isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            symbols.append({
+                                'name': target.id,
+                                'kind': 'variable',
+                                'line_start': node.lineno,
+                                'line_end': node.end_lineno or node.lineno,
+                            })
+        
+        except Exception as e:
+            logger.error(f"AST 分析失败: {e}")
+        
+        return symbols
+    
+    def get_serena_status(self) -> str:
+        """获取 Serena 状态"""
+        if self._serena_enabled and self._serena_adapter:
+            return self._serena_adapter.get_status()
+        return 'fallback'
+    
+    def get_serena_diagnostics(self, file_path: str) -> List[Dict[str, Any]]:
+        """获取 Serena 诊断信息"""
+        if self._serena_enabled and self._serena_adapter:
+            try:
+                return self._serena_adapter.get_diagnostics(file_path)
+            except Exception:
+                pass
+        return []
+    
+    def set_project_path(self, path: str):
+        """设置项目路径"""
+        self._project_path = path
+    
+    def analyze_project_structure(self) -> Dict[str, Any]:
+        """分析项目结构"""
+        if not self._project_path or not os.path.isdir(self._project_path):
+            return {}
+        
+        result = {
+            'path': self._project_path,
+            'files': [],
+            'directories': [],
+            'stats': {},
+        }
+        
+        file_count = 0
+        dir_count = 0
+        py_files = 0
+        
+        for root, dirs, files in os.walk(self._project_path):
+            dir_count += len(dirs)
+            for file in files:
+                file_count += 1
+                if file.endswith('.py'):
+                    py_files += 1
+                result['files'].append(os.path.relpath(os.path.join(root, file), self._project_path))
+        
+        result['directories'] = [os.path.relpath(d, self._project_path) for d, _, _ in os.walk(self._project_path)]
+        result['stats'] = {
+            'total_files': file_count,
+            'total_dirs': dir_count,
+            'python_files': py_files,
+        }
+        
+        return result
+
+
 # ── 快捷函数 ─────────────────────────────────────────────────────────
 
 def get_ide_service(config: Optional[Dict] = None) -> IDEService:
@@ -929,6 +1086,13 @@ def get_ide_service(config: Optional[Dict] = None) -> IDEService:
     if not hasattr(get_ide_service, "_instance"):
         get_ide_service._instance = IDEService(config)
     return get_ide_service._instance
+
+
+def get_intelligent_ide_service(config: Optional[Dict] = None) -> IntelligentIDEService:
+    """获取智能 IDE 服务实例（单例模式）"""
+    if not hasattr(get_intelligent_ide_service, "_instance"):
+        get_intelligent_ide_service._instance = IntelligentIDEService(config)
+    return get_intelligent_ide_service._instance
 
 
 # ── 测试 ─────────────────────────────────────────────────────────────

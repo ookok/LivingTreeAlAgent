@@ -25,7 +25,7 @@ class StabilityManager:
         from .circuit_breaker import get_circuit_breaker
         from .health_monitor import get_health_monitor
         from .graceful_degradation import get_degradation_manager
-        from .smart_cache_manager import get_cache_manager
+        from .intent_management.intelligent_cache import get_intelligent_cache_system as get_cache_manager
         from .priority_task_queue import get_task_queue
         from .distributed_tracer import get_tracer
         from .smart_profiler import get_profiler

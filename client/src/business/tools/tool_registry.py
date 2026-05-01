@@ -9,10 +9,51 @@ ToolRegistry - 工具注册中心
 - 支持动态注册新工具
 """
 
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, Type, ClassVar
 from dataclasses import dataclass, field
 from loguru import logger
 import json
+
+
+class BaseTool:
+    """
+    工具基类
+    
+    所有自定义工具应继承此类。
+    """
+    
+    name: ClassVar[str] = "base_tool"
+    description: ClassVar[str] = "基础工具"
+    category: ClassVar[str] = "general"
+    
+    def __init__(self):
+        self.logger = logger.bind(component=f"Tool.{self.name}")
+    
+    async def execute(self, **kwargs) -> Any:
+        """
+        执行工具
+        
+        Args:
+            **kwargs: 工具参数
+            
+        Returns:
+            执行结果
+        """
+        raise NotImplementedError("子类必须实现 execute 方法")
+    
+    def get_schema(self) -> Dict[str, Any]:
+        """
+        获取工具的 JSON Schema 定义
+        
+        Returns:
+            JSON Schema 字典
+        """
+        return {
+            "name": self.name,
+            "description": self.description,
+            "category": self.category,
+            "parameters": {}
+        }
 
 
 @dataclass

@@ -1,110 +1,42 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Dependencies
+node_modules/
 *.pyc
-*.pyo
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-# Embedded libraries - external repos (sync via sync_opencode.py)
-libs/opencode-core/
-libs/oh-my-opencode-plugin/
-libs/serena-core/
-# libs/opencode_integration/ IS version controlled
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
+__pycache__/
 .pytest_cache/
-
-# Environments
+.venv/
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
-# IDE
-.idea/
+# Build outputs
+dist/
+build/
+*.exe
+*.dmg
+*.AppImage
+
+# Configuration
+*.env.local
+config/local_config.py
+config/secrets.json
+
+# Data
+*.db
+*.json
+sessions.json
+messages.json
+
+# Logs
+*.log
+logs/
+
+# Editor
 .vscode/
+.idea/
 *.swp
 *.swo
-*~
-.DS_Store
-
-# Project specific
-*.db
-*.sqlite
-*.sqlite3
-skills_cluster.db
-test_output.txt
-output/
-logs/
-*.log
-
-# Large model files
-*.gguf
-*.bin
-*.pt
-*.pth
-*.ckpt
-*.safetensors
-models/
 
 # OS
+.DS_Store
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
 
-# Confidential files
-*.key
-*.pem
-*.crt
-*.p12
-secrets/
-credentials/
-
-# Test data
-test_data/
-
-# open-mem: Auto-generated folder context files.
-# Uncomment to exclude from version control (recommended for large projects):
-# **/AGENTS.md
+# Electron
+electron/dist/

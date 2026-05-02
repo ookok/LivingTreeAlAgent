@@ -261,7 +261,7 @@ class HealthMonitor:
     def _publish_health_alert(self, metric: HealthMetric):
         """发布健康告警事件"""
         try:
-            from client.src.business.integration_layer import EventType, publish
+            from livingtree.core.integration.event_bus import EventType, publish
             
             event_data = {
                 'metric_name': metric.name,

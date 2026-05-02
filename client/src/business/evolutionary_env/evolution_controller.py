@@ -61,7 +61,7 @@ class EvolutionController:
     def _init_fusion_rag(self):
         """初始化 FusionRAG 集成"""
         try:
-            from client.src.business.fusion_rag import get_docv_llm_wiki_integration
+            from livingtree.core.fusion_rag import get_docv_llm_wiki_integration
             self.fusion_rag = get_docv_llm_wiki_integration()
             print("[进化控制器] FusionRAG 集成初始化成功")
         except ImportError as e:

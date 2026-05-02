@@ -1,49 +1,24 @@
 """
-深度集成层 - Deep Integration Layer
+深度集成层 - 向后兼容层
 
-功能：
-1. 系统间事件总线
-2. 跨系统调用机制
-3. 数据共享与同步
-4. 智能协调与决策
-5. 统一上下文管理
-
-核心能力：
-- 事件驱动架构
-- 跨系统数据流转
-- 智能决策协调
-- 上下文感知路由
+⚠️ 已迁移至 livingtree.core.integration
+本模块保留为兼容层，所有导入将自动重定向到新位置。
 """
 
-from .event_bus import EventBus, Event, EventType, subscribe, publish
-from .cross_system_caller import CrossSystemCaller, get_cross_system_caller
-from .context_manager import ContextManager, get_context_manager
-from .integration_coordinator import IntegrationCoordinator, get_integration_coordinator
-from .service_manager import UnifiedServiceManager, ServiceIntegration, ServiceStatus, ServiceInfo
+from livingtree.core.integration import (
+    EventBus, Event, EventType, get_event_bus, subscribe, publish,
+    CrossSystemCaller, get_cross_system_caller, cross_system_call,
+    ContextManager, SessionContext, get_context_manager,
+    IntegrationCoordinator, WorkflowInstance, WorkflowStep, WorkflowStatus,
+    get_integration_coordinator,
+    UnifiedServiceManager, ServiceIntegration, ServiceStatus, ServiceInfo,
+)
 
 __all__ = [
-    # 事件总线
-    'EventBus',
-    'Event',
-    'EventType',
-    'subscribe',
-    'publish',
-    
-    # 跨系统调用
-    'CrossSystemCaller',
-    'get_cross_system_caller',
-    
-    # 上下文管理
-    'ContextManager',
-    'get_context_manager',
-    
-    # 集成协调器
-    'IntegrationCoordinator',
+    'EventBus', 'Event', 'EventType', 'get_event_bus', 'subscribe', 'publish',
+    'CrossSystemCaller', 'get_cross_system_caller', 'cross_system_call',
+    'ContextManager', 'SessionContext', 'get_context_manager',
+    'IntegrationCoordinator', 'WorkflowInstance', 'WorkflowStep', 'WorkflowStatus',
     'get_integration_coordinator',
-    
-    # 服务管理
-    'UnifiedServiceManager',
-    'ServiceIntegration',
-    'ServiceStatus',
-    'ServiceInfo',
+    'UnifiedServiceManager', 'ServiceIntegration', 'ServiceStatus', 'ServiceInfo',
 ]

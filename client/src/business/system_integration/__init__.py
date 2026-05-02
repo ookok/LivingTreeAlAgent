@@ -1,28 +1,28 @@
 """
-系统集成模块 - System Integration
+系统集成模块 - 向后兼容层
 
-功能：
-1. 统一初始化所有子系统
-2. 协调各系统间通信
-3. 生命周期管理
-4. 全局状态管理
+⚠️ 已迁移至 livingtree.core.integration
+本模块保留为兼容层，所有导入将自动重定向到新位置。
 """
 
-from .system_manager import SystemManager, get_system_manager
+from livingtree.core.integration import (
+    SystemManager, SysState as SystemState, SubsystemInfo,
+    get_system_manager,
+)
 
 __all__ = [
     'SystemManager',
     'get_system_manager',
+    'SystemState',
+    'SubsystemInfo',
 ]
 
 
 def initialize_systems():
-    """初始化所有系统"""
     manager = get_system_manager()
     manager.initialize()
 
 
 def shutdown_systems():
-    """关闭所有系统"""
     manager = get_system_manager()
     manager.shutdown()

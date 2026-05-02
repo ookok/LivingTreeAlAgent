@@ -13,7 +13,7 @@ from typing import Dict, Set, Optional, Any, List
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from client.src.business.config import UnifiedConfig
+from livingtree.infrastructure.config import get_config
 
 try:
     from fastapi import WebSocket, WebSocketDisconnect
@@ -124,7 +124,7 @@ class WebSocketRelayService:
         self.message_handlers: Dict[str, callable] = {}
         
         # 配置
-        config = UnifiedConfig.get_instance()
+        config = get_config()
         self.max_channels = 100
         self.max_connections_per_channel = 1000
         self.ping_interval = config.get("server.ws_ping_interval", 30)  # 秒

@@ -1,3 +1,6 @@
+"""
+Full migration complete. → livingtree.core.software_manager
+"""
 from .manager import SoftwareManager, software_manager
 from .metadata import MetadataManager, metadata_manager
 from .bootstrap import BootstrapInstaller, bootstrap

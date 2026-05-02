@@ -6,8 +6,9 @@ P2P CDN 模块 - 分布式智能缓存系统
 - 分布式缓存：热门数据自动在多个节点缓存
 - 数据一致性：版本控制和增量同步
 - 负载均衡：数据分片和多副本
-from __future__ import annotations
 """
+
+from __future__ import annotations
 
 
 import asyncio

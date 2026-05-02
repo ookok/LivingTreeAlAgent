@@ -17,6 +17,8 @@ Usage:
     python main.py heal            # Start auto-heal monitoring
     python main.py config          # Run configuration wizard
     python main.py model <name>    # Ensure model is installed
+    python main.py livingtree      # Start with new livingtree/ core
+    python main.py test            # Run livingtree integration tests
 """
 
 import sys
@@ -368,9 +370,19 @@ def main():
         run_config()
     elif command == 'model':
         run_model()
+    elif command == 'livingtree':
+        safe_print("[livingtree] Starting with new livingtree core...")
+        from livingtree.main import main as lt_main
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        lt_main()
+    elif command == 'test':
+        safe_print("[livingtree] Running integration tests...")
+        from livingtree.main import main as lt_main
+        sys.argv = [sys.argv[0], 'test']
+        lt_main()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: client, relay, tracker, app, bootstrap, install, uninstall, status, sync-models, check, update, heal, config, model")
+        print("Available commands: client, relay, tracker, app, livingtree, bootstrap, install, uninstall, status, sync-models, check, update, heal, config, model, test")
         sys.exit(1)
 
 

@@ -112,7 +112,7 @@ class LearningRouter:
     def _publish_learning_event(self, task_id: str, task_name: str, status: str, data: Dict):
         """发布学习事件"""
         try:
-            from client.src.business.integration_layer import EventType, publish
+            from livingtree.core.integration.event_bus import EventType, publish
             
             event_type = EventType.LEARNING_COMPLETED if status == 'completed' else EventType.LEARNING_FAILED
             

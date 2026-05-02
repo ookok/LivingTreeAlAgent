@@ -1,0 +1,28 @@
+# LivingTree — DeepSeek API 配置
+# API Key 已加密存储
+
+deepseek:
+  base_url: "https://api.deepseek.com"
+  api_key: "GVpfdR3wJDcJNgHFu3qC8znqFb6wnAl8n5GS8MwI87A4YgAV/yjO53i7SiBvCGUUSslc5y9QISbTgc52UDyV"
+  default_model: "deepseek-chat"
+  thinking_model: "deepseek-reasoner"
+  temperature: 0.7
+  max_tokens: 8192
+  enable_thinking: true
+
+# LivingTree — 核心配置
+ollama:
+  base_url: "http://localhost:11434"
+  default_model: "qwen2.5:1.5b"
+  num_ctx: 8192
+  num_gpu: 0
+  keep_alive: "5m"
+
+agent:
+  max_iterations: 30
+  max_tokens: 8192
+  temperature: 0.7
+  stream_output: true
+
+observability:
+  log_level: "INFO"

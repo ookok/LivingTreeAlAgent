@@ -1,3 +1,9 @@
+"""
+Full migration complete. → livingtree.core.evolution_extra
+
+核心功能：经验系统、技能评估、策略引擎、进化日志、技能发现
+"""
+
 from typing import List, Optional, Dict, Any
 
 from .experience_system import (

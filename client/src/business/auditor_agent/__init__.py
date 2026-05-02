@@ -1,6 +1,8 @@
 """
 审计者Agent (Auditor Agent)
 
+Full migration complete. → livingtree.core.auditor
+
 核心功能：
 1. 红队验证 - 主动寻找生成内容的漏洞
 2. 一致性检查 - 验证报告与代码的数值一致性

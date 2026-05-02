@@ -440,7 +440,7 @@ class MainWindow(QMainWindow):
         """初始化系统"""
         self._status_bar.update_system_status(False)
         
-        from client.src.business.system_integration import get_system_manager
+        from livingtree.core.integration.system_manager import get_system_manager
         system_manager = get_system_manager()
         system_manager.initialize()
         

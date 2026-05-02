@@ -1,13 +1,7 @@
 """
-数字咨询工程师 - 主控制器
+Full migration complete. → livingtree.core.consulting_engineer
 
-整合所有模块，提供统一的咨询文档生成能力。
-
-核心功能：
-1. 解析环评/可研文档
-2. 生成配套Python代码
-3. 生成结构化报告
-4. 验证数据准确性
+核心功能：解析环评/可研文档、生成配套代码、生成结构化报告、验证数据准确性
 """
 from .consulting_engineer import ConsultingEngineer, ProjectContext, TaskResult
 

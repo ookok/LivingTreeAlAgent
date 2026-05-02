@@ -265,7 +265,7 @@ class BrainMemoryRouter:
     def _publish_memory_event(self, memory_id: str, content: str, memory_type: str, metadata: Dict):
         """发布记忆事件"""
         try:
-            from client.src.business.integration_layer import EventType, publish
+            from livingtree.core.integration.event_bus import EventType, publish
             
             event_data = {
                 'memory_id': memory_id,

@@ -9,7 +9,7 @@ description = "LivingTree AI Agent - 智能代理开发平台"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
-include = ["client*", "server*", "app*"]
+include = ["livingtree*", "client*", "server*", "app*"]
 
 [project.scripts]
-livingtree = "client.src.main:main"
+livingtree = "livingtree.main:main"

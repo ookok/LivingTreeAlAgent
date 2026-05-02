@@ -41,7 +41,7 @@ def run_test(name, fn):
 # ── 测试 1: ScoreTokenMapper ─────────────────────────────────
 
 def test_score_token_mapper():
-    from client.src.business.verifier_engine import ScoreTokenMapper
+    from livingtree.core.verifier_engine import ScoreTokenMapper
 
     # 字母模式
     print("  [1.1] 字母映射 A→1, T→20")
@@ -87,7 +87,7 @@ def test_score_token_mapper():
 # ── 测试 2: VerificationConfig + VerificationCriteria ────────
 
 def test_data_structures():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerificationConfig, VerificationCriteria,
         ScoringMode, SelectionStrategy,
     )
@@ -137,7 +137,7 @@ def test_data_structures():
 # ── 测试 3: VerificationResult ───────────────────────────────
 
 def test_verification_result():
-    from client.src.business.verifier_engine import VerificationResult, BatchVerificationResult
+    from livingtree.core.verifier_engine import VerificationResult, BatchVerificationResult
 
     print("  [3.1] VerificationResult 默认值")
     r = VerificationResult(candidate_id="test_1", content="test content")
@@ -159,7 +159,7 @@ def test_verification_result():
 # ── 测试 4: VerifierRegistry ─────────────────────────────────
 
 def test_verifier_registry():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerifierRegistry, VerificationCriteria, ScoringMode,
     )
 
@@ -199,7 +199,7 @@ def test_verifier_registry():
 # ── 测试 5: 预置评估标准 ─────────────────────────────────────
 
 def test_preset_criteria():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         get_universal_criteria,
         get_ei_agent_criteria,
         get_fusion_rag_criteria,
@@ -249,7 +249,7 @@ def test_preset_criteria():
 # ── 测试 6: auto_register_default_modules ────────────────────
 
 def test_auto_register():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerifierRegistry, auto_register_default_modules,
     )
 
@@ -280,7 +280,7 @@ def test_auto_register():
 # ── 测试 7: VerifierEngine 初始化 ─────────────────────────────
 
 def test_engine_init():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerifierEngine, VerificationConfig, get_verifier_engine,
     )
 
@@ -306,7 +306,7 @@ def test_engine_init():
 
     print("  [7.3] 全局单例")
     # 清除旧单例
-    import client.src.business.verifier_engine as ve_mod
+    import livingtree.core.verifier_engine as ve_mod
     ve_mod._engine_instance = None
     engine3 = get_verifier_engine()
     engine4 = get_verifier_engine()
@@ -317,7 +317,7 @@ def test_engine_init():
 # ── 测试 8: 验证 Prompt 构造 ─────────────────────────────────
 
 def test_prompt_construction():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerifierEngine, VerificationConfig, VerificationCriteria, ScoringMode,
     )
 
@@ -372,7 +372,7 @@ def test_prompt_construction():
 # ── 测试 9: 概率评分提取（mock） ──────────────────────────────
 
 def test_score_extraction():
-    from client.src.business.verifier_engine import VerifierEngine
+    from livingtree.core.verifier_engine import VerifierEngine
 
     engine = VerifierEngine()
 
@@ -430,7 +430,7 @@ def test_score_extraction():
 # ── 测试 10: 使用统计 ───────────────────────────────────────
 
 def test_usage_stats():
-    from client.src.business.verifier_engine import (
+    from livingtree.core.verifier_engine import (
         VerifierEngine, VerificationConfig, VerificationResult,
         VerificationCriteria, SelectionStrategy,
         BatchVerificationResult,
@@ -482,7 +482,7 @@ def test_usage_stats():
 # ── 测试 11: GlobalModelRouter 集成接口 ──────────────────────
 
 def test_router_integration():
-    from client.src.business.verifier_engine import get_verifier_engine, VerifierRegistry
+    from livingtree.core.verifier_engine import get_verifier_engine, VerifierRegistry
 
     print("  [11.1] VerifierEngine 可作为独立模块导入")
     engine = get_verifier_engine()
@@ -498,7 +498,7 @@ def test_router_integration():
     print("  [11.3] GlobalModelRouter 有 verify 参数")
     import inspect
     # 检查签名中是否包含 verify
-    from client.src.business.global_model_router import GlobalModelRouter, call_model_sync
+    from livingtree.core.model.router import GlobalModelRouter, call_model_sync
     sig = inspect.signature(GlobalModelRouter.call_model)
     params = list(sig.parameters.keys())
     assert "verify" in params, f"verify not in {params}"

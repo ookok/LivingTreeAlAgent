@@ -23,7 +23,9 @@ except ImportError:
     HAS_PSUTIL = False
 
 try:
-    from client.src.business.config_provider import get_ollama_url
+    from livingtree.infrastructure.config import config as lt_config
+    def get_ollama_url():
+        return lt_config.ollama.base_url
     HAS_OLLAMA = True
 except ImportError:
     HAS_OLLAMA = False

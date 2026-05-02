@@ -1,6 +1,8 @@
 """
 SICA (Self-Improving Coding Agent) 自我改进代码生成引擎
 
+Full migration complete. → livingtree.core.sica_engine
+
 核心功能：
 1. 代码生成与优化
 2. 单元测试自动生成

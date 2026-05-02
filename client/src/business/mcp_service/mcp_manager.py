@@ -231,7 +231,7 @@ class MCPManager:
     def _publish_mcp_event(self, event_type: str):
         """发布MCP事件"""
         try:
-            from client.src.business.integration_layer import EventType, publish
+            from livingtree.core.integration.event_bus import EventType, publish
             
             if event_type == 'connected':
                 publish(EventType.MCP_CONNECTED, 'mcp_service', {

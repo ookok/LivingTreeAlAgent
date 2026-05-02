@@ -39,9 +39,18 @@ from .realtime_dashboard import (
 
 from .entroly_optimizer import (
     EntralyOptimizer,
-    OptimizationConfig,
-    OptimizationResult,
+    OptimizationConfig as EntralyConfig,
+    OptimizationResult as EntralyResult,
     get_entroly_optimizer,
+)
+
+from .unified_optimizer import (
+    UnifiedOptimizer,
+    UnifiedConfig,
+    UnifiedOptimizationResult,
+    OptimizerType,
+    TaskType,
+    get_unified_optimizer,
 )
 
 __all__ = [
@@ -72,8 +81,16 @@ __all__ = [
     "get_dashboard",
 
     # Entraly
-    "EntrolyOptimizer",
-    "OptimizationConfig",
-    "OptimizationResult",
+    "EntralyOptimizer",
+    "EntralyConfig",
+    "EntralyResult",
     "get_entroly_optimizer",
+
+    # Unified
+    "UnifiedOptimizer",
+    "UnifiedConfig",
+    "UnifiedOptimizationResult",
+    "OptimizerType",
+    "TaskType",
+    "get_unified_optimizer",
 ]

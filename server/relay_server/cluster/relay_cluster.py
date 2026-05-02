@@ -54,7 +54,7 @@ from typing import Dict, List, Optional, Set, Any
 from collections import defaultdict
 import logging
 
-from client.src.business.config import UnifiedConfig
+from livingtree.infrastructure.config import get_config
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -180,7 +180,7 @@ class GossipState:
     @staticmethod
     def get_interval() -> float:
         try:
-            config = UnifiedConfig.get_instance()
+            config = get_config()
             return config.get("server.gossip_interval", 2.0)
         except Exception:
             return 2.0

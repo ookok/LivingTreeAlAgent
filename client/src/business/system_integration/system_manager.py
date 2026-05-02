@@ -81,7 +81,7 @@ class SystemManager:
         logger.info("初始化深度集成层...")
         
         try:
-            from client.src.business.integration_layer import (
+            from livingtree.core.integration import (
                 get_event_bus,
                 get_cross_system_caller,
                 get_context_manager,
@@ -102,7 +102,7 @@ class SystemManager:
     
     def _register_system_event_listeners(self):
         """注册系统事件监听器"""
-        from client.src.business.integration_layer import EventType
+        from livingtree.core.integration.event_bus import EventType
         
         # 监听子系统状态变化
         self._event_bus.subscribe(EventType.SUBSYSTEM_STATUS_CHANGED,
@@ -231,13 +231,13 @@ class SystemManager:
         import importlib
         
         module_paths = {
-            'brain_memory': 'client.src.business.brain_memory',
+            'brain_memory': 'livingtree.core.memory.brain_memory',
             'self_healing': 'client.src.business.self_healing',
-            'continual_learning': 'client.src.business.continual_learning',
-            'cognitive_reasoning': 'client.src.business.cognitive_reasoning',
+            'continual_learning': 'livingtree.core.continual_learning',
+            'cognitive_reasoning': 'livingtree.core.cognitive_reasoning',
             'self_awareness': 'client.src.business.self_awareness',
             'mcp_service': 'client.src.business.mcp_service',
-            'api_gateway': 'client.src.business.api_gateway'
+            'api_gateway': 'livingtree.adapters.api.gateway'
         }
         
         module_path = module_paths.get(name)
@@ -275,7 +275,7 @@ class SystemManager:
     def _register_to_api_gateway(self, name: str, instance: Any):
         """注册到API网关"""
         if self._api_gateway is None:
-            from client.src.business.api_gateway import get_api_gateway
+            from livingtree.adapters.api.gateway import get_api_gateway
             self._api_gateway = get_api_gateway()
         
         try:

@@ -287,7 +287,7 @@ class SelfAwarenessSystem:
     def _publish_reflection_event(self, reflection):
         """发布反思事件"""
         try:
-            from client.src.business.integration_layer import EventType, publish
+            from livingtree.core.integration.event_bus import EventType, publish
             
             event_data = {
                 'suggestions': reflection.improvement_suggestions,

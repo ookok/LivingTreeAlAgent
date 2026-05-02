@@ -1,6 +1,8 @@
 """
 智能短信网关 (Smart SMS Gateway)
 
+Full migration complete. → livingtree.core.sms_gateway
+
 核心功能：
 1. 统一入口：对外提供 send_sms() 接口
 2. 策略模式：封装阿里云、腾讯云短信服务

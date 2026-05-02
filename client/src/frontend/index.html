@@ -21,10 +21,75 @@
 <body>
   <div id="app"></div>
   
-  <!-- Qt WebChannel 支持 -->
   <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
   
-  <!-- Vue应用 -->
+  <script>
+  // LivingTree Frontend Bridge
+  // Bridges Vue frontend to livingtree backend API
+  // When running in PyQt6, uses QWebChannel. Otherwise uses HTTP API.
+  var LivingTreeBridge = {
+    baseURL: window.location.origin + '/api',
+    _channel: null,
+    _backend: null,
+
+    init: function() {
+      if (typeof QWebChannel !== 'undefined') {
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+          LivingTreeBridge._channel = channel;
+          LivingTreeBridge._backend = channel.objects.backend;
+        });
+      }
+    },
+
+    chat: async function(message, sessionId) {
+      // Try QWebChannel first
+      if (this._backend && this._backend.sendMessage) {
+        return this._backend.sendMessage(message, sessionId || '');
+      }
+      // Fallback to HTTP API
+      try {
+        var resp = await fetch(this.baseURL + '/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: message, session_id: sessionId || '' }),
+        });
+        return await resp.json();
+      } catch (e) {
+        return { type: 'error', error: e.message };
+      }
+    },
+
+    health: async function() {
+      try {
+        var resp = await fetch(this.baseURL + '/health');
+        return await resp.json();
+      } catch (e) {
+        return { status: 'error', error: e.message };
+      }
+    },
+
+    getTools: async function() {
+      try {
+        var resp = await fetch(this.baseURL + '/tools');
+        return await resp.json();
+      } catch (e) {
+        return { tools: [], error: e.message };
+      }
+    },
+
+    getSkills: async function() {
+      try {
+        var resp = await fetch(this.baseURL + '/skills');
+        return await resp.json();
+      } catch (e) {
+        return { skills: [], error: e.message };
+      }
+    }
+  };
+
+  LivingTreeBridge.init();
+  </script>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

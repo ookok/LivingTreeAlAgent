@@ -321,7 +321,7 @@ class EntralyOptimizer:
 
 
 # 全局实例
-_global_optimizer: Optional[EntrolyOptimizer] = None
+_global_optimizer: Optional[EntralyOptimizer] = None
 
 
 def get_entroly_optimizer(config: Optional[OptimizationConfig] = None) -> EntralyOptimizer:

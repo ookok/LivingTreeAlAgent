@@ -17,27 +17,27 @@ import asyncio
 from unittest.mock import Mock, patch
 
 # 导入测试模块
-from client.src.business.task_decomposer import (
+from livingtree.core.planning.task_decomposer import (
     TaskDecomposer,
     ProcessType,
     create_architecture_task,
     create_refactoring_task,
     create_task_split_task,
 )
-from client.src.business.agent_skills.task_decomposition_skills import (
+from livingtree.core.skills.task_decomposition_skills import (
     ArchitectureDesignerSkill,
     CodeRefactorerSkill,
     TaskSplitterProSkill,
     DecompositionSkillFactory,
     register_decomposition_skills,
 )
-from client.src.business.solo_plan_manager import (
+from livingtree.core.planning.solo_plan_manager import (
     SoloPlanManager,
     PlanMode,
     ExecutionPhase,
     create_solo_plan_manager,
 )
-from client.src.business.task_planning import (
+from livingtree.core.task_planning import (
     TaskPlanner,
     TaskTree,
     RiskLevel,
@@ -168,7 +168,7 @@ class TestDecompositionSkills:
     
     def test_skill_factory(self):
         """测试技能工厂"""
-        from client.src.business.agent_skills.task_decomposition_skills import (
+        from livingtree.core.skills.task_decomposition_skills import (
             DecompositionSkillType,
             get_architecture_designer,
             get_code_refactorer,
@@ -187,7 +187,7 @@ class TestDecompositionSkills:
     
     def test_register_decomposition_skills(self):
         """测试注册所有拆解技能"""
-        from client.src.business.agent_skills.skill_registry import SkillRegistry
+        from livingtree.core.skills.skill_registry import SkillRegistry
         
         registry = SkillRegistry()
         register_decomposition_skills(registry)
@@ -311,7 +311,7 @@ class TestTaskPlannerEnhancements:
         planner = TaskPlanner()
         
         # 创建简单任务树
-        from client.src.business.task_planning import Task, TaskType, TaskStatus
+        from livingtree.core.task_planning import Task, TaskType, TaskStatus
         
         root_task = Task(
             id="root",

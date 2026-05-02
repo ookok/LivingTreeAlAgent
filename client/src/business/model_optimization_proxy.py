@@ -279,10 +279,15 @@ class ModelOptimizationProxy:
     def _get_token_optimizer(self):
         if self._token_optimizer is None:
             try:
-                from business.token_optimizer import get_token_optimizer
-                self._token_optimizer = get_token_optimizer()
+                from business.optimization import get_unified_optimizer, TaskType
+                self._token_optimizer = get_unified_optimizer()
+                self._token_optimizer.start_session()
             except Exception as e:
-                logger.warning(f"[ModelOptimizationProxy] Token优化器加载失败: {e}")
+                try:
+                    from business.token_optimizer import get_token_optimizer
+                    self._token_optimizer = get_token_optimizer()
+                except Exception as fallback_e:
+                    logger.warning(f"[ModelOptimizationProxy] Token优化器加载失败: {fallback_e}")
         return self._token_optimizer
     
     def _get_prompt_cache(self):

@@ -1,183 +1,76 @@
-# Evolution Engine - 智能IDE自我进化系统
-
 """
-从"执行工具"进化为"设计伙伴"的关键跨越
-构建"感知-诊断-规划-执行"闭环自治系统
+Evolution Engine - 智能IDE自我进化系统 (向后兼容层)
+
+⚠️ 已迁移至 livingtree.core.evolution
+本模块保留为兼容层，所有导入将自动重定向到新位置。
 """
 
-from .evolution_engine import EvolutionEngine, create_evolution_engine
-
-# 传感器
-from .sensors.base import BaseSensor, SensorType, EvolutionSignal
-from .sensors.performance_sensor import PerformanceSensor
-from .sensors.architecture_smell_sensor import ArchitectureSmellSensor
-
-# 聚合器
-from .aggregator.signal_aggregator import SignalAggregator
-
-# 提案生成
-from .proposal.structured_proposal import (
+from livingtree.core.evolution.evolution_engine import EvolutionEngine, create_evolution_engine
+from livingtree.core.evolution.sensors.base import BaseSensor, SensorType, EvolutionSignal
+from livingtree.core.evolution.sensors.performance_sensor import PerformanceSensor
+from livingtree.core.evolution.sensors.architecture_smell_sensor import ArchitectureSmellSensor
+from livingtree.core.evolution.aggregator.signal_aggregator import SignalAggregator
+from livingtree.core.evolution.proposal.structured_proposal import (
     StructuredProposal, ProposalType, ProposalPriority,
-    ProposalStatus, RiskLevel, TriggerSignal, ProposalStep
+    ProposalStatus, RiskLevel, TriggerSignal, ProposalStep,
 )
-from .proposal.proposal_generator import ProposalGenerator
-
-# 安全围栏
-from .safety.safety_fence import SafetyFence, SafetyRule, SafetyCategory
-
-# Phase 3: 执行引擎
-from .executor.git_sandbox import GitSandbox, SandboxSnapshot
-from .executor.atomic_executor import AtomicExecutor, AtomicResult
-from .executor.rollback_manager import RollbackManager, RollbackPoint, RollbackType
-from .executor.step_executor import StepExecutor, StepExecutionResult, StepStatus
-
-# 探索性执行引擎（新增）
-from .exploratory_executor import (
-    ExploratoryExecutor,
-    CandidateSolution,
-    CandidateStatus,
-    ExplorationResult,
+from livingtree.core.evolution.proposal.proposal_generator import ProposalGenerator
+from livingtree.core.evolution.safety.safety_fence import SafetyFence, SafetyRule, SafetyCategory
+from livingtree.core.evolution.executor.git_sandbox import GitSandbox, SandboxSnapshot
+from livingtree.core.evolution.executor.atomic_executor import AtomicExecutor, AtomicResult
+from livingtree.core.evolution.executor.rollback_manager import RollbackManager, RollbackPoint, RollbackType
+from livingtree.core.evolution.executor.step_executor import StepExecutor, StepExecutionResult, StepStatus
+from livingtree.core.evolution.exploratory_executor import (
+    ExploratoryExecutor, CandidateSolution, CandidateStatus, ExplorationResult,
 )
-
-# Phase 4: 进化记忆
-from .memory.evolution_log import (
-    EvolutionLog, ScanRecord, ProposalRecord,
-    ExecutionRecord, DecisionRecord, get_evolution_log
+from livingtree.core.evolution.memory.evolution_log import (
+    EvolutionLog, ScanRecord, ProposalRecord, ExecutionRecord, DecisionRecord, get_evolution_log,
 )
-from .memory.learning_engine import (
-    LearningEngine, ProposalMetrics, SignalPattern,
-    LearningInsight, get_learning_engine
+from livingtree.core.evolution.memory.learning_engine import (
+    LearningEngine, ProposalMetrics, SignalPattern, LearningInsight, get_learning_engine,
 )
-from .memory.pattern_miner import (
+from livingtree.core.evolution.memory.pattern_miner import (
     PatternMiner, TemporalPattern, CoOccurrencePattern,
-    CausalPattern, AnomalyPattern, get_pattern_miner
+    CausalPattern, AnomalyPattern, get_pattern_miner,
 )
-from .memory.decision_tracker import (
+from livingtree.core.evolution.memory.decision_tracker import (
     DecisionTracker, DecisionType, DecisionOutcome,
-    DecisionContext, DecisionFactor, DecisionNode,
-    ExecutionChain, get_decision_tracker
+    DecisionContext, DecisionFactor, DecisionNode, ExecutionChain, get_decision_tracker,
 )
-
-# UI 集成
-from .ui_integration import (
-    init_evolution_engine,
-    init_evolution_dashboard,
-    connect_dashboard_to_engine,
-    get_evolution_engine,
-    create_evolution_snapshot,
-    quick_start,
+from livingtree.core.evolution.ui_integration import (
+    init_evolution_engine, init_evolution_dashboard,
+    connect_dashboard_to_engine, get_evolution_engine,
+    create_evolution_snapshot, quick_start,
 )
-
-# Phase 5: 量化评估
-from .evaluator import (
-    EvolutionEvaluator,
-    EvaluationMode,
-    CapabilityDimension,
-    CapabilityScore,
-    EvolutionMetrics,
-    BaseEvaluator,
-    EvaluationResult,
-    MetricScore,
-    MetricType,
-    DCLMEvaluator,
-    DCLMScore,
-    BPBEvaluator,
-    BPBScore,
-    BenchmarkEvaluator,
-    BenchmarkScore,
-    BenchmarkTask,
+from livingtree.core.evolution.evaluator.evolution_evaluator import (
+    EvolutionEvaluator, EvaluationMode, CapabilityDimension,
+    CapabilityScore, EvolutionMetrics,
+)
+from livingtree.core.evolution.evaluator.base_evaluator import (
+    BaseEvaluator, EvaluationResult, MetricScore,
 )
 
 __all__ = [
-    # 主控制器
-    'EvolutionEngine',
-    'create_evolution_engine',
-    
-    # 传感器
-    'BaseSensor',
-    'SensorType',
-    'EvolutionSignal',
-    'PerformanceSensor',
-    'ArchitectureSmellSensor',
-    
-    # 聚合器
+    'EvolutionEngine', 'create_evolution_engine',
+    'BaseSensor', 'SensorType', 'EvolutionSignal', 'PerformanceSensor', 'ArchitectureSmellSensor',
     'SignalAggregator',
-    
-    # 提案生成
-    'StructuredProposal',
-    'ProposalType',
-    'ProposalPriority',
-    'ProposalStatus',
-    'RiskLevel',
-    'TriggerSignal',
-    'ProposalStep',
-    'ProposalGenerator',
-    
-    # 安全围栏
-    'SafetyFence',
-    'SafetyRule',
-    'SafetyCategory',
-    
-    # Phase 3: 执行引擎
-    'GitSandbox',
-    'SandboxSnapshot',
-    'AtomicExecutor',
-    'AtomicResult',
-    'RollbackManager',
-    'RollbackPoint',
-    'RollbackType',
-    'StepExecutor',
-    'StepExecutionResult',
-    'StepStatus',
-    
-    # Phase 4: 进化记忆
-    'EvolutionLog',
-    'ScanRecord',
-    'ProposalRecord',
-    'ExecutionRecord',
-    'DecisionRecord',
-    'get_evolution_log',
-    'LearningEngine',
-    'ProposalMetrics',
-    'SignalPattern',
-    'LearningInsight',
-    'get_learning_engine',
-    'PatternMiner',
-    'TemporalPattern',
-    'CoOccurrencePattern',
-    'CausalPattern',
-    'AnomalyPattern',
-    'get_pattern_miner',
-    'DecisionTracker',
-    'DecisionType',
-    'DecisionOutcome',
-    'DecisionContext',
-    'DecisionFactor',
-    'DecisionNode',
-    'ExecutionChain',
-    'get_decision_tracker',
-    
-    # Phase 5: 量化评估
-    'EvolutionEvaluator',
-    'EvaluationMode',
-    'CapabilityDimension',
-    'CapabilityScore',
-    'EvolutionMetrics',
-    'BaseEvaluator',
-    'EvaluationResult',
-    'MetricScore',
-    'MetricType',
-    'DCLMEvaluator',
-    'DCLMScore',
-    'BPBEvaluator',
-    'BPBScore',
-    'BenchmarkEvaluator',
-    'BenchmarkScore',
-    'BenchmarkTask',
-
-    # 探索性执行引擎（新增）
-    'ExploratoryExecutor',
-    'CandidateSolution',
-    'CandidateStatus',
-    'ExplorationResult',
+    'StructuredProposal', 'ProposalType', 'ProposalPriority', 'ProposalStatus', 'RiskLevel',
+    'TriggerSignal', 'ProposalStep', 'ProposalGenerator',
+    'SafetyFence', 'SafetyRule', 'SafetyCategory',
+    'GitSandbox', 'SandboxSnapshot', 'AtomicExecutor', 'AtomicResult',
+    'RollbackManager', 'RollbackPoint', 'RollbackType',
+    'StepExecutor', 'StepExecutionResult', 'StepStatus',
+    'ExploratoryExecutor', 'CandidateSolution', 'CandidateStatus', 'ExplorationResult',
+    'EvolutionLog', 'ScanRecord', 'ProposalRecord', 'ExecutionRecord', 'DecisionRecord',
+    'get_evolution_log', 'LearningEngine', 'ProposalMetrics', 'SignalPattern',
+    'LearningInsight', 'get_learning_engine',
+    'PatternMiner', 'TemporalPattern', 'CoOccurrencePattern',
+    'CausalPattern', 'AnomalyPattern', 'get_pattern_miner',
+    'DecisionTracker', 'DecisionType', 'DecisionOutcome',
+    'DecisionContext', 'DecisionFactor', 'DecisionNode', 'ExecutionChain', 'get_decision_tracker',
+    'init_evolution_engine', 'init_evolution_dashboard',
+    'connect_dashboard_to_engine', 'get_evolution_engine',
+    'create_evolution_snapshot', 'quick_start',
+    'EvolutionEvaluator', 'EvaluationMode', 'CapabilityDimension',
+    'CapabilityScore', 'EvolutionMetrics', 'BaseEvaluator', 'EvaluationResult', 'MetricScore',
 ]

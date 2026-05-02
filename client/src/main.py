@@ -45,7 +45,7 @@ async def initialize_living_system():
     """初始化生命系统"""
     logger.info("🧬 初始化生命系统...")
     
-    from client.src.business.cell_framework.living_system import get_living_system
+    from livingtree.core.cells.living_system import get_living_system
     
     living_system = get_living_system()
     await living_system.initialize()

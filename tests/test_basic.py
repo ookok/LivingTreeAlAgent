@@ -16,19 +16,20 @@ class TestBasicImports:
     
     def test_config_import(self):
         """测试配置系统导入"""
-        from client.src.business.nanochat_config import config
+        from livingtree.infrastructure.config import config
         assert config is not None
         assert hasattr(config, 'ollama')
     
     def test_event_bus_import(self):
         """测试事件总线导入"""
-        from client.src.business.shared.event_bus import EventBus, get_event_bus
+        from livingtree.infrastructure.event_bus import EventBus, get_event_bus
         event_bus = get_event_bus()
         assert event_bus is not None
     
     def test_logger_import(self):
         """测试日志系统导入"""
-        from client.src.business.logger import logger
+        from livingtree.core.observability.logger import get_logger
+        logger = get_logger()
         assert logger is not None
     
     def test_config_wizard_import(self):

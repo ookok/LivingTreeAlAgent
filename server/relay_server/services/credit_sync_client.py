@@ -22,7 +22,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 import httpx
 
-from client.src.business.config import UnifiedConfig
+from livingtree.infrastructure.config import get_config
 
 
 # ============ 同步状态枚举 ============
@@ -113,7 +113,7 @@ class CreditSyncClient:
         self._sync_lock = asyncio.Lock()
 
         # 同步间隔（秒）- 从配置读取
-        config = UnifiedConfig.get_instance()
+        config = get_config()
         self.sync_interval = config.get("server.credit_sync_interval", 30)  # 30秒同步一次
         self.api_timeout = config.get("server.credit_api_timeout", 30.0)  # API 超时（秒）
 

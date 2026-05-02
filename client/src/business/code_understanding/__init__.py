@@ -10,6 +10,7 @@
 """
 
 from .code_parser import CodeParser, LanguageSupport
+from .tree_sitter_parser import TreeSitterParser, get_tree_sitter_parser
 from .code_analyzer import CodeAnalyzer
 from .pattern_recognizer import PatternRecognizer
 from .code_graph import CodeGraph
@@ -20,6 +21,8 @@ from ..git_nexus import GitNexus, GitAnalyzer
 __all__ = [
     "CodeParser",
     "LanguageSupport",
+    "TreeSitterParser",
+    "get_tree_sitter_parser",
     "CodeAnalyzer",
     "PatternRecognizer",
     "CodeGraph",

@@ -1,6 +1,8 @@
 """
 形式化验证引擎
 
+Full migration complete. → livingtree.core.formal_verification
+
 核心功能：
 1. 约束验证（A > B等逻辑）
 2. 数值范围验证

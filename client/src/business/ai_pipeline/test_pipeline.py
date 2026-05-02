@@ -8,7 +8,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from client.src.business.ai_pipeline import (
+from livingtree.core.ai_pipeline import (
     get_ai_workflow_engine,
     get_task_decomposition_engine,
     get_code_generation_unit,

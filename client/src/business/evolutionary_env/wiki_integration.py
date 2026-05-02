@@ -21,8 +21,8 @@ WIKI_AVAILABLE = False
 WIKI_CORE = None
 
 try:
-    from client.src.business.llm_wiki.wiki_core import WikiCore, WikiPage, get_wiki_core
-    from client.src.business.llm_wiki.integration import LLMWikiIntegration
+    from livingtree.core.llm_wiki.wiki_core import WikiCore, WikiPage, get_wiki_core
+    from livingtree.core.llm_wiki.integration import LLMWikiIntegration
     WIKI_AVAILABLE = True
     logger.info("LLM Wiki 模块导入成功")
 except ImportError as e:
@@ -300,7 +300,7 @@ class WikiIntegrationLayer:
             return
         
         try:
-            from client.src.business.fusion_rag import KnowledgeBaseLayer
+            from livingtree.core.fusion_rag import KnowledgeBaseLayer
             kb_layer = KnowledgeBaseLayer()
             
             for page in self.wiki_core.get_all_pages():

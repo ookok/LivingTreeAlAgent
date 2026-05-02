@@ -26,7 +26,7 @@ import pytest
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from client.src.business.provider.base import (
+from livingtree.core.provider.base import (
     DriverMode, DriverState,
     ChatMessage, ChatRequest, ChatResponse,
     CompletionRequest, CompletionResponse,
@@ -34,13 +34,13 @@ from client.src.business.provider.base import (
     StreamChunk, UsageInfo,
     HealthReport, ModelDriver,
 )
-from client.src.business.provider.gateway import ModelGateway, RouteStrategy
-from client.src.business.provider.fault_tolerance import (
+from livingtree.core.provider.gateway import ModelGateway, RouteStrategy
+from livingtree.core.provider.fault_tolerance import (
     FaultToleranceManager, DegradationStrategy,
     CircuitBreaker, CircuitState,
 )
-from client.src.business.provider.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
-from client.src.business.provider.config_manager import (
+from livingtree.core.provider.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
+from livingtree.core.provider.config_manager import (
     ProviderConfigManager, ProviderConfig,
     ModelSlotConfig, ABTestConfig,
 )
@@ -667,7 +667,7 @@ class TestHardLoadRegistry:
     """硬加载注册表测试"""
 
     def test_register_and_create(self):
-        from client.src.business.provider.hard_load.registry import (
+        from livingtree.core.provider.hard_load.registry import (
             register_hard_backend,
             get_hard_backend,
             list_backends,
@@ -714,7 +714,7 @@ class TestHardLoadRegistry:
         assert driver.name == "test-mock"
 
     def test_create_unknown_backend(self):        
-        from client.src.business.provider.hard_load.registry import create_hard_driver
+        from livingtree.core.provider.hard_load.registry import create_hard_driver
         with pytest.raises(ValueError, match="未知硬加载后端"):
             create_hard_driver("nonexistent_backend")
 

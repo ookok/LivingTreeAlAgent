@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 @pytest.mark.asyncio
 async def test_cell_types():
     """测试细胞类型"""
-    from client.src.business.cell_framework.cell import CellType, CellState
+    from livingtree.core.cells.cell import CellType, CellState
     
     # 检查细胞类型枚举
     assert len(list(CellType)) == 6
@@ -36,7 +36,7 @@ async def test_cell_types():
 @pytest.mark.asyncio
 async def test_reasoning_cell():
     """测试推理细胞"""
-    from client.src.business.cell_framework.reasoning_cell import ReasoningCell
+    from livingtree.core.cells.reasoning_cell import ReasoningCell
     
     cell = ReasoningCell(specialization='test')
     
@@ -62,8 +62,8 @@ async def test_reasoning_cell():
 @pytest.mark.asyncio
 async def test_memory_cell():
     """测试记忆细胞"""
-    from client.src.business.cell_framework.memory_cell import MemoryCell
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.memory_cell import MemoryCell
+    from livingtree.core.cells.cell import CellType
     
     cell = MemoryCell(specialization='test')
     
@@ -92,8 +92,8 @@ async def test_memory_cell():
 @pytest.mark.asyncio
 async def test_perception_cell():
     """测试感知细胞"""
-    from client.src.business.cell_framework.perception_cell import PerceptionCell
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.perception_cell import PerceptionCell
+    from livingtree.core.cells.cell import CellType
     
     cell = PerceptionCell(specialization='test')
     
@@ -115,8 +115,8 @@ async def test_perception_cell():
 @pytest.mark.asyncio
 async def test_action_cell():
     """测试行动细胞"""
-    from client.src.business.cell_framework.action_cell import ActionCell
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.action_cell import ActionCell
+    from livingtree.core.cells.cell import CellType
     
     cell = ActionCell(specialization='test')
     
@@ -129,8 +129,8 @@ async def test_action_cell():
 @pytest.mark.asyncio
 async def test_learning_cell():
     """测试学习细胞"""
-    from client.src.business.cell_framework.learning_cell import LearningCell
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.learning_cell import LearningCell
+    from livingtree.core.cells.cell import CellType
     
     cell = LearningCell(specialization='test')
     
@@ -143,8 +143,8 @@ async def test_learning_cell():
 @pytest.mark.asyncio
 async def test_prediction_cell():
     """测试预测细胞"""
-    from client.src.business.cell_framework.prediction_cell import PredictionCell
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.prediction_cell import PredictionCell
+    from livingtree.core.cells.cell import CellType
     
     cell = PredictionCell(specialization='test')
     
@@ -157,8 +157,8 @@ async def test_prediction_cell():
 @pytest.mark.asyncio
 async def test_cell_connections():
     """测试细胞连接"""
-    from client.src.business.cell_framework.reasoning_cell import ReasoningCell
-    from client.src.business.cell_framework.memory_cell import MemoryCell
+    from livingtree.core.cells.reasoning_cell import ReasoningCell
+    from livingtree.core.cells.memory_cell import MemoryCell
     
     cell1 = ReasoningCell()
     cell2 = MemoryCell()
@@ -181,7 +181,7 @@ async def test_cell_connections():
 @pytest.mark.asyncio
 async def test_life_engine():
     """测试生命引擎"""
-    from client.src.business.cell_framework.life_engine import LifeEngine
+    from livingtree.core.cells.life_engine import LifeEngine
     
     engine = LifeEngine()
     
@@ -203,7 +203,7 @@ async def test_life_engine():
 @pytest.mark.asyncio
 async def test_self_consciousness():
     """测试自我意识系统"""
-    from client.src.business.cell_framework.self_consciousness import SelfConsciousness
+    from livingtree.core.cells.self_consciousness import SelfConsciousness
     
     sc = SelfConsciousness()
     
@@ -222,7 +222,7 @@ async def test_self_consciousness():
 @pytest.mark.asyncio
 async def test_immune_system():
     """测试免疫系统"""
-    from client.src.business.cell_framework.immune_system import ImmuneSystem
+    from livingtree.core.cells.immune_system import ImmuneSystem
     
     immune = ImmuneSystem()
     
@@ -237,7 +237,7 @@ async def test_immune_system():
 @pytest.mark.asyncio
 async def test_metabolic_system():
     """测试代谢系统"""
-    from client.src.business.cell_framework.metabolic_system import MetabolicSystem
+    from livingtree.core.cells.metabolic_system import MetabolicSystem
     
     metabolic = MetabolicSystem()
     
@@ -252,7 +252,7 @@ async def test_metabolic_system():
 @pytest.mark.asyncio
 async def test_evolution_engine():
     """测试进化引擎"""
-    from client.src.business.cell_framework.autonomous_evolution import AutonomousEvolution
+    from livingtree.core.cells.autonomous_evolution import AutonomousEvolution
     
     evolution = AutonomousEvolution(evolution_interval=1.0)
     
@@ -268,7 +268,7 @@ async def test_evolution_engine():
 @pytest.mark.asyncio
 async def test_cell_assembler():
     """测试细胞装配器"""
-    from client.src.business.cell_framework.cell_assembler import CellAssembler
+    from livingtree.core.cells.cell_assembler import CellAssembler
     
     assembler = CellAssembler()
     await assembler.initialize_cells()
@@ -287,7 +287,7 @@ async def test_cell_assembler():
 @pytest.mark.asyncio
 async def test_living_system():
     """测试生命系统"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()
@@ -309,7 +309,7 @@ async def test_living_system():
 @pytest.mark.asyncio
 async def test_living_system_full():
     """测试生命系统完整功能"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()

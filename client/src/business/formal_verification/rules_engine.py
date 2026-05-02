@@ -15,8 +15,8 @@ class BusinessRule:
     """业务规则"""
     id: str
     name: str
-    description: Optional[str] = None
     condition: str  # Python表达式
+    description: Optional[str] = None
     actions: List[str] = field(default_factory=list)
     severity: str = "medium"  # high, medium, low
     enabled: bool = True

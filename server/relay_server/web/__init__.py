@@ -1,3 +1,0 @@
-"""
-Relay Server Web
-"""

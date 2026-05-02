@@ -37,7 +37,7 @@ class CrossSystemCaller:
     def _get_system_manager(self):
         """延迟获取系统管理器"""
         if self._system_manager is None:
-            from client.src.business.system_integration import get_system_manager
+            from livingtree.core.integration.system_manager import get_system_manager
             self._system_manager = get_system_manager()
         return self._system_manager
     

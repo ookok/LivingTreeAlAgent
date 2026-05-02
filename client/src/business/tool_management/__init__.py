@@ -1,3 +1,6 @@
+"""
+Full migration complete. → livingtree.core.tool_management
+"""
 from .manifest import ToolManifest, ToolStatus, ToolExecutionResult, InputSpec, OutputSpec
 from .registry import ToolRegistry, registry
 from .resolver import ToolResolver, resolver

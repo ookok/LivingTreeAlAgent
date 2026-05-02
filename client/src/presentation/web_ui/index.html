@@ -1,27 +1,130 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LivingTree AI Agent Platform</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-        #app {
-            width: 100%;
-            height: 100%;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LivingTree AI Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; display: flex; flex-direction: column; }
+    #header { background: #181825; padding: 12px 20px; border-bottom: 1px solid #313244; display: flex; align-items: center; gap: 10px; }
+    #header h1 { font-size: 18px; color: #cba6f7; }
+    #status { font-size: 12px; padding: 4px 10px; border-radius: 12px; background: #313244; }
+    #status.connected { background: #a6e3a1; color: #1e1e2e; }
+    #content { flex: 1; display: flex; overflow: hidden; }
+    #chat-area { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+    #messages { flex: 1; overflow-y: auto; padding: 10px; }
+    .msg { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; max-width: 80%; word-break: break-word; }
+    .msg.user { background: #313244; align-self: flex-end; margin-left: auto; }
+    .msg.agent { background: #45475a; align-self: flex-start; }
+    .msg .role { font-size: 11px; opacity: 0.7; margin-bottom: 4px; }
+    #input-area { display: flex; gap: 10px; padding: 16px 0; border-top: 1px solid #313244; }
+    #input-box { flex: 1; padding: 12px; border: 1px solid #45475a; border-radius: 8px; background: #313244; color: #cdd6f4; font-size: 14px; resize: none; }
+    #send-btn { padding: 12px 24px; background: #cba6f7; color: #1e1e2e; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    #send-btn:hover { background: #b4befe; }
+    #sidebar { width: 280px; background: #181825; border-left: 1px solid #313244; padding: 20px; overflow-y: auto; }
+    #sidebar h3 { color: #cba6f7; margin-bottom: 10px; font-size: 14px; }
+    #sidebar .stat { font-size: 13px; color: #a6adc8; margin-bottom: 6px; }
+    #sidebar .stat span { color: #cdd6f4; }
+  </style>
 </head>
 <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+  <div id="header">
+    <h1>LivingTree AI Agent</h1>
+    <div id="status">initializing...</div>
+  </div>
+  <div id="content">
+    <div id="chat-area">
+      <div id="messages"></div>
+      <div id="input-area">
+        <textarea id="input-box" rows="2" placeholder="输入消息..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <button id="send-btn" onclick="sendMessage()">发送</button>
+      </div>
+    </div>
+    <div id="sidebar">
+      <h3>系统状态</h3>
+      <div class="stat">引擎: <span id="s-engine">-</span></div>
+      <div class="stat">模型: <span id="s-model">-</span></div>
+      <div class="stat">工具: <span id="s-tools">-</span></div>
+      <div class="stat">技能: <span id="s-skills">-</span></div>
+      <h3 style="margin-top:20px;">最新追踪</h3>
+      <div class="stat">Trace: <span id="s-trace">-</span></div>
+      <div class="stat">评分: <span id="s-score">-</span></div>
+    </div>
+  </div>
+
+  <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script>
+  var backend = null;
+  var isConnected = false;
+
+  function initBridge() {
+    if (typeof QWebChannel !== 'undefined') {
+      new QWebChannel(qt.webChannelTransport, function(channel) {
+        backend = channel.objects.backend;
+        isConnected = true;
+        document.getElementById('status').textContent = 'connected';
+        document.getElementById('status').className = 'connected';
+        addMessage('agent', 'Connected to LivingTree AI Engine');
+        refreshHealth();
+      });
+    } else {
+      document.getElementById('status').textContent = 'no channel';
+      addMessage('agent', 'Running in browser mode (no QWebChannel). Use HTTP API at /api/chat');
+    }
+  }
+
+  function sendMessage() {
+    var input = document.getElementById('input-box');
+    var text = input.value.trim();
+    if (!text) return;
+    addMessage('user', text);
+    input.value = '';
+
+    if (backend && backend.sendMessage) {
+      backend.sendMessage(text, '', function(result) {
+        try { var data = JSON.parse(result); addMessage('agent', data.content);
+          document.getElementById('s-trace').textContent = data.trace_id || '-';
+        } catch(e) { addMessage('agent', result); }
+      });
+    } else {
+      // HTTP fallback
+      fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: text, session_id: ''})
+      }).then(r => r.json()).then(data => {
+        addMessage('agent', data.content);
+        document.getElementById('s-trace').textContent = data.trace_id || '-';
+      }).catch(e => addMessage('agent', 'Error: ' + e.message));
+    }
+  }
+
+  function addMessage(role, text) {
+    var div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.innerHTML = '<div class="role">' + (role === 'user' ? 'You' : 'LivingTree') + '</div>' + text.replace(/\n/g, '<br>');
+    document.getElementById('messages').appendChild(div);
+    document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  }
+
+  function refreshHealth() {
+    if (backend && backend.healthCheck) {
+      backend.healthCheck(function(result) {
+        try {
+          var data = JSON.parse(result);
+          document.getElementById('s-engine').textContent = data.engine ? 'active' : 'inactive';
+          document.getElementById('s-status').textContent = data.status || '-';
+        } catch(e) {}
+      });
+    }
+    fetch('/api/health').then(r => r.json()).then(data => {
+      document.getElementById('s-tools').textContent = data.tools_count || '-';
+      document.getElementById('s-skills').textContent = data.skills_count || '-';
+    }).catch(function(){});
+  }
+
+  initBridge();
+  </script>
 </body>
 </html>

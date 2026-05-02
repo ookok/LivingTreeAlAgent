@@ -1,101 +1,89 @@
 # CODEBUDDY.md This file provides guidance for WorkBuddy when working with code in this repository.
 
-> 2026-04-26 | Python 3.11+ | PyQt6 | ~3400 files
+> 2026-05-02 | Python 3.11+ | PyQt6 | ~3400 files
 
 ## OVERVIEW
 
-Desktop AI agent platform (Hermes) — PyQt6 GUI, clean 3-layer architecture. **Migration from legacy `core/` + `ui/` to `client/src/` is COMPLETE.**
+Desktop AI agent platform (LivingTree) — PyQt6 GUI, 3-layer clean architecture with new `livingtree/` core package.
 
-Core capabilities: multi-agent system, P2P storage, digital twins, credit economy, e-commerce, browser automation, virtual conference, AmphiLoop bidirectional scheduling, PRISM context optimization.
+Core capabilities: multi-agent system, P2P storage, digital twins, credit economy, e-commerce, browser automation, virtual conference, AmphiLoop bidirectional scheduling, PRISM context optimization, World Model prediction, Self-Evolution.
 
-## ARCHITECTURE (Big Picture)
+## ARCHITECTURE — New (livingtree/)
 
-### ✅ Migration Complete
+The project has been restructured into a clean `livingtree/` package — a **Digital Lifeform** with a TaskChain pipeline:
 
-The project has completed migration from legacy monolithic structure to clean 3-layer architecture:
+```
+Perceive → Cognize → Plan → Execute → Reflect → Evolve
+```
 
-- **`client/src/`**: Clean separation into `business/` (logic), `infrastructure/` (DB/config/network), `presentation/` (UI), and `shared/` (utilities). **This is where ALL code lives now.**
+### Key Packages
 
-### Key Architectural Patterns
+- **`livingtree/`**: The new core package. All new backend code goes here.
+  - `livingtree/core/` — Core engine (LifeEngine + cells)
+    - `model/` — Unified Model Router (3-tier: Local/Edge/Cloud)
+    - `intent/` — Intent Parser + multi-turn tracker
+    - `memory/` — Unified MemoryStore (VectorDB + GraphDB + Sessions)
+    - `planning/` — TaskPlanner + Decomposer(CoT) + Scheduler
+    - `skills/` — SkillMatcher + Loader + Repository
+    - `tools/` — ToolRegistry + Dispatcher + builtins
+    - `plugins/` — PluginManager + Sandbox
+    - `context/` — ContextAssembler + Compressor
+    - `evolution/` — EvolutionEngine (Reflect→Identify→Experiment→Validate→Adopt)
+    - `world_model/` — StatePredictor + OutcomeSimulator
+    - `observability/` — StructuredLogger + RequestTracer + MetricsCollector
+  - `livingtree/infrastructure/` — Config(LTAIConfig), EventBus, DB, WebSocket, Security
+  - `livingtree/adapters/` — MCP, API Gateway, Providers (Ollama/OpenAI)
+  - `livingtree/frontend_bridge/` — FrontendChannel + BridgeAPI (connect Vue frontend)
+  - `livingtree/server/` — Relay + Tracker (streamlined)
 
-- **`client/src/business/`**: All business logic modules (~340+ files, organized by domain)
-- **`client/src/presentation/`**: All UI components (panels/, components/, widgets/, dialogs/, modules/)
-- **No legacy code**: `core/` and `ui/` directories have been completely removed
-- **Import paths**: Use `from client.src.business.{domain}.{module}` or `from client.src.presentation.{subdir}.{module}`
+### Legacy Packages (to be phased out)
 
-### Module Categories (`client/src/business/` — ~340+ files)
-
-Key modules include: `amphiloop/` (scheduling), `optimization/` (PRISM), `enterprise/` (P2P storage & task scheduling), `digital_twin/` (digital avatars), `credit_economy/` (points system), `decommerce/` (e-commerce), `living_tree_ai/` (300 files — voice, browser, meeting), `fusion_rag/` (multi-source retrieval), `knowledge_graph/`, `plugin_framework/`, `hermes_agent/`, `p2p_*` (P2P networking), `personal_mode/`, `ecc_*` (agent instincts/skills), `evolving_community/`, `intelligent_hints/`, `office_automation/`
-
-### Module Categories (`client/src/presentation/` — ~200+ files)
-
-- `panels/`: All UI panels (102+ files migrated from `ui/`)
-- `components/`: Reusable UI components (cards, gauges, spinners, etc.)
-- `widgets/`: Custom widgets
-- `dialogs/`: Dialog windows
-- `modules/`: Sub-modules (a2ui, connector, forum, intelligence, etc.)
+- **`client/src/business/`**: Legacy business logic (~340+ files). Modules being migrated to `livingtree/core/`.
+- **`client/src/presentation/`**: PyQt6 UI components. Still active for desktop GUI.
+- **`client/src/frontend/`**: Vue 3 frontend (the preserved frontend). Connected via `livingtree/frontend_bridge/`.
 
 ### Server Layer
 
-- `server/relay_server/` — FastAPI relay (api/, cluster/, database/)
-- `server/tracker_server.py` — P2P node tracker
-
-### Other Key Areas
-
-- `app/` — Standalone enterprise application
-- `packages/` — Shared libraries (`living_tree_naming/`, `shared/`)
-- `mobile/` — PWA/mobile support (main.py, screens, adaptive_layout, pwa_integration)
-- `config/` — Configuration files
+- `server/relay_server/` — FastAPI relay (legacy, migrating to `livingtree/server/relay/`)
+- `server/tracker_server.py` — P2P node tracker (legacy, migrating to `livingtree/server/tracker/`)
 
 ## STRUCTURE
 
 ```
 root/
-├── client/src/              # ✅ ALL code lives here now
-│   ├── main.py              # PyQt6 entry → HomePage
-│   ├── business/            # Business logic (~340+ files)
-│   │   ├── amphiloop/
-│   │   ├── optimization/
-│   │   ├── enterprise/
-│   │   ├── digital_twin/
-│   │   ├── credit_economy/
-│   │   ├── decommerce/
-│   │   ├── living_tree_ai/
-│   │   ├── fusion_rag/
-│   │   ├── knowledge_graph/
-│   │   ├── plugin_framework/
-│   │   ├── hermes_agent/
-│   │   ├── p2p_*/
-│   │   ├── personal_mode/
-│   │   ├── ecc_*/
-│   │   ├── evolving_community/
-│   │   ├── intelligent_hints/
-│   │   ├── office_automation/
-│   │   ├── config.py           # UnifiedConfig compatibility layer
-│   │   ├── nanochat_config.py # NanochatConfig (dataclass-based)
-│   │   ├── optimal_config.py   # OptimalConfig
-│   │   └── ...                # ~300+ more modules
-│   ├── infrastructure/      # DB (v1-v14), config, network, model, storage
-│   ├── presentation/        # UI (~200+ files)
-│   │   ├── panels/          # All panels (102+ files)
-│   │   ├── components/      # Reusable components
-│   │   ├── widgets/        # Custom widgets
-│   │   ├── dialogs/        # Dialog windows
-│   │   ├── modules/        # Sub-modules (a2ui, connector, etc.)
-│   │   └── ...
-│   └── shared/              # Shared utilities
-├── server/                  # Server layer
-│   ├── relay_server/        # FastAPI relay (api/, cluster/, database/)
-│   └── tracker_server.py   # P2P tracker
-├── app/                     # Standalone enterprise app
-├── mobile/                  # PWA/mobile (7 files)
-├── packages/                # Shared libs (living_tree_naming/, shared/)
-├── config/                  # Config files
-├── main.py                  # CLI: client|relay|tracker|app|all
-├── run.bat                  # Windows quick start (default: client)
-├── pyproject.toml           # setuptools build, livingtree CLI
-├── pytest.ini               # markers: unit, integration, slow, ui
-└── tests/                   # Real tests (1 file: test_provider.py)
+├── livingtree/                    # ✅ NEW — All new backend code
+│   ├── core/
+│   │   ├── life_engine.py         # LifeEngine — central dispatcher
+│   │   ├── model/router.py        # UnifiedModelRouter
+│   │   ├── intent/parser.py       # IntentParser + IntentTracker
+│   │   ├── memory/store.py        # MemoryStore (VectorDB + GraphDB + Sessions)
+│   │   ├── planning/decomposer.py # TaskPlanner + CoT Decomposer
+│   │   ├── skills/matcher.py      # SkillMatcher + SkillLoader
+│   │   ├── tools/registry.py      # ToolRegistry + Dispatcher
+│   │   ├── plugins/manager.py     # PluginManager + Sandbox
+│   │   ├── context/assembler.py   # ContextAssembler + Compressor
+│   │   ├── evolution/reflection.py # EvolutionEngine
+│   │   ├── world_model/predictor.py # StatePredictor + Simulator
+│   │   └── observability/         # Logger + Tracer + Metrics
+│   ├── infrastructure/            # Config + EventBus + DB + WS + Security
+│   ├── adapters/                  # MCP + API Gateway + Providers
+│   ├── frontend_bridge/           # FrontendChannel + BridgeAPI
+│   └── server/                    # Relay + Tracker
+│
+├── client/src/                    # Legacy (being phased out)
+│   ├── main.py                    # PyQt6 entry
+│   ├── business/                  # Legacy business logic
+│   ├── frontend/                   # Vue 3 frontend (preserved)
+│   └── presentation/              # PyQt6 UI components
+│
+├── server/                        # Legacy server (migrating)
+│   └── relay_server/
+├── app/                           # Standalone enterprise app
+├── mobile/                        # PWA/mobile
+├── config/                        # YAML config files
+├── main.py                        # CLI entry: livingtree client|relay|...
+├── pyproject.toml                 # setuptools build
+└── tests/                         # Test files
 ```
 
 ## RUN COMMANDS
@@ -107,16 +95,24 @@ python main.py client           # desktop client (default)
 python main.py relay            # relay server
 python main.py tracker          # P2P tracker
 python main.py app              # enterprise app
-python main.py all              # relay + tracker + client
+
+# New livingtree entry points
 python -m livingtree client     # via CLI entry point
+python -m livingtree server     # relay + tracker
 ```
 
-### Install (editable, order matters)
+### Quick Test
+
+```powershell
+# Test the new livingtree core
+python -c "from livingtree.core.life_engine import LifeEngine; e = LifeEngine(); r = e.handle_request('hello'); print(r.text)"
+```
+
+### Install (editable)
 
 ```powershell
 pip install -e ./client
 pip install -e ./server/relay_server
-pip install -e ./app
 ```
 
 ### Test
@@ -124,112 +120,73 @@ pip install -e ./app
 ```powershell
 pytest                              # all tests
 pytest tests/test_provider.py       # single test file
-pytest -m unit                      # unit tests only
-pytest -m integration               # integration tests only
-pytest -m slow --timeout 120        # slow tests
-pytest -m ui                        # UI tests
 pytest -v                           # verbose output
-pytest --tb=short                   # short traceback (default)
-```
-
-### CLI
-
-```powershell
-# livingtree CLI (installed via pyproject.toml)
-livingtree --help
 ```
 
 ## CONVENTIONS
 
-- **All new code**: `client/src/business/` (logic) or `client/src/presentation/` (UI) — **NEVER** `core/` or `ui/`
-- **Import**: `from client.src.business.{domain}.{module}` (business logic) or `from client.src.presentation.{subdir}.{module}` (UI)
+- **New backend code**: `livingtree/core/` (logic), `livingtree/infrastructure/` (config/db), `livingtree/adapters/` (external)
+- **Import (new)**: `from livingtree.core.model.router import UnifiedModelRouter`
+- **Import (new)**: `from livingtree.infrastructure.config import get_config`
+- **Import (new)**: `from livingtree.core.observability.logger import get_logger`
+- **Import (legacy)**: `from client.src.business.{module}` (for code not yet migrated)
 - **Windows**: Use `;` not `&&` for command chaining
-- **No lint/typecheck/formatter**: Manual quality control only
-- **Database migrations**: `client/src/infrastructure/database/` (v1-v14)
-- **Config**: `client/src/business/config.py` (UnifiedConfig compatibility layer) or `client/src/business/nanochat_config.py` (NanochatConfig)
-- **Tests**: `tests/` directory (only 1 real test file — root `test_*.py` files are stale)
+- **Config**: `livingtree/infrastructure/config.py` — LTAIConfig (dataclass-based, unifies NanochatConfig + OptimalConfig + UnifiedConfig)
+- **Tests**: `tests/` directory
 
 ## QUICK LOOKUP
 
-| Task                     | Go here                                 |
-| ------------------------ | ---------------------------------------- |
-| New business logic       | `client/src/business/`                   |
-| New UI panel            | `client/src/presentation/panels/`        |
-| UI components           | `client/src/presentation/components/`     |
-| UI widgets             | `client/src/presentation/widgets/`       |
-| DB migrations          | `client/src/infrastructure/database/`    |
-| Config                | `client/src/business/config.py`          |
-| Server API            | `server/relay_server/`                   |
-| Mobile/PWA            | `mobile/`                                |
-| P2P networking        | `client/src/business/p2p_*`             |
-| Agent framework        | `client/src/business/hermes_agent/`       |
-| Skill system           | `client/src/business/hermes_agent/`       |
-| Knowledge graph        | `client/src/business/knowledge_graph/`    |
+| Task                     | Go here                                     |
+| ------------------------ | -------------------------------------------- |
+| New business logic       | `livingtree/core/`                           |
+| Config                  | `livingtree/infrastructure/config.py`        |
+| Event bus               | `livingtree/infrastructure/event_bus.py`     |
+| Model routing           | `livingtree/core/model/router.py`            |
+| Intent parsing          | `livingtree/core/intent/parser.py`           |
+| Memory storage          | `livingtree/core/memory/store.py`            |
+| Task planning           | `livingtree/core/planning/decomposer.py`     |
+| Skill matching          | `livingtree/core/skills/matcher.py`          |
+| Tool registry           | `livingtree/core/tools/registry.py`          |
+| Plugin management       | `livingtree/core/plugins/manager.py`         |
+| Context assembly        | `livingtree/core/context/assembler.py`       |
+| Self-evolution          | `livingtree/core/evolution/reflection.py`    |
+| World model             | `livingtree/core/world_model/predictor.py`   |
+| Observability           | `livingtree/core/observability/`             |
+| MCP protocol            | `livingtree/adapters/mcp/manager.py`         |
+| API gateway             | `livingtree/adapters/api/gateway.py`         |
+| Model providers         | `livingtree/adapters/providers/ollama.py`    |
+| Frontend bridge         | `livingtree/frontend_bridge/channel.py`      |
+| Database                | `livingtree/infrastructure/database.py`      |
+| WebSocket               | `livingtree/infrastructure/websocket.py`     |
+| Security                | `livingtree/infrastructure/security.py`      |
+| Central dispatcher      | `livingtree/core/life_engine.py`             |
+| Vue frontend            | `client/src/frontend/`                       |
+| PyQt6 UI                | `client/src/presentation/`                   |
+| Server API              | `server/relay_server/`                       |
 
 ## ANTI-PATTERNS
 
-- ❌ Don't write to `core/` or `ui/` — **these directories have been deleted**
-- ❌ Don't use `from core.xxx` or `from ui.xxx` imports — **use `from client.src.business.xxx` or `from client.src.presentation.xxx`**
-- ❌ Don't open huge `__init__.py` (99k+ lines) — read sub-files instead
-- ❌ Root `test_*.py` (~80 stale files) — real tests in `tests/` (1 file)
-- ❌ Install in wrong order: client → relay_server → app
+- ❌ Don't write new backend code to `client/src/business/` — **use `livingtree/core/`**
+- ❌ Don't use `from client.src.business.global_model_router` — **use `from livingtree.core.model.router import get_model_router`**
+- ❌ Don't create duplicate config systems — **use `livingtree/infrastructure/config.py` (LTAIConfig)**
+- ❌ Don't open huge `__init__.py` files
 - ❌ No CI/CD — no `&&` on Windows, use PowerShell `;`
-- ❌ Don't assume legacy modules are dead — they've been migrated to `client/src/business/`
 
 ## CONFIGURATION SYSTEM
 
-### NanochatConfig (New, Preferred)
+### LTAIConfig (New, Unified)
 
 ```python
-# Preferred: Direct attribute access
-from client.src.business.nanochat_config import config
+from livingtree.infrastructure.config import config, get_config
 
-url = config.ollama.url
+# Dataclass-style access
+url = config.ollama.base_url
 timeout = config.timeouts.default
 max_retries = config.retries.default
+
+# Compute optimal params for task complexity
+optimal = config.compute_optimal(depth=5)
+
+# Reload from YAML
+config = get_config(reload=True)
 ```
-
-### UnifiedConfig (Legacy Compatibility Layer)
-
-```python
-# Still works, but deprecated
-from client.src.business.config import UnifiedConfig
-
-config = UnifiedConfig.get_instance()
-url = config.get("endpoints.ollama.url")
-```
-
-**Migration**: New code should use `NanochatConfig` (dataclass-based, type-safe, 10x faster).
-
-## EXTERNAL INTEGRATION OPPORTUNITIES
-
-### caveman — Token Compression Plugin
-
-**Project**: https://github.com/JuliusBrussee/caveman ⭐48,311
-**Purpose**: Reduce LLM output tokens by ~75% while preserving technical accuracy.
-**Match Score**: 3/5 — medium compatibility; high complementarity for token cost optimization.
-
-**Integration Suggestions**:
-
-1. **GlobalModelRouter layer**: Integrate caveman's token compression into `client/src/business/global_model_router.py` to reduce LLM response size before processing.
-2. **Python adapter**: Wrap caveman's CLI (`npx skills add JuliusBrussee/caveman`) as a Python subprocess adapter in `client/src/business/self_evolution/` or a new `client/src/business/token_optimization/` module.
-3. **Target modules**: Enable output compression in LLM-heavy modules — `fusion_rag/`, `hermes_agent/`, `rys_engine/`, `verifier_engine/`.
-4. **Modes**: Expose caveman's four compression levels (Lite / Full / Ultra / 文言文) as a config option in `NanochatConfig`.
-
-**Integration Caveats**:
-- caveman is a CLI tool; a Python adapter (subprocess) is needed to call it from LivingTreeAlAgent.
-- Output compression should be optional / per-module to avoid losing nuance in tasks requiring detailed output.
-
----
-
-### Agent Reach — Multi-Platform Search
-
-**Project**: https://github.com/Panniantong/Agent-Reach ⭐18,153
-**Purpose**: Unified CLI to read & search 14 platforms (Twitter, Reddit, YouTube, GitHub, Bilibili, etc.) with zero API fees.
-**Match Score**: 4/5 — high complementarity; search capability can be integrated into `fusion_rag/`.
-
-**Integration Suggestions**:
-
-1. **fusion_rag module**: Add Agent Reach as a new search source in `client/src/business/fusion_rag/`.
-2. **CLI adapter**: Develop a Python wrapper in `client/src/business/tools/agent_reach_tool.py` following the existing `BaseTool` pattern.
-3. **MCP ToolAdapter**: Alternatively, integrate via `client/src/business/tools/mcp_tool_adapter.py` using Agent Reach's CLI as an MCP-compatible tool.

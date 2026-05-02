@@ -1,2 +1,2 @@
 [console_scripts]
-livingtree = client.src.main:main
+livingtree = livingtree.main:main

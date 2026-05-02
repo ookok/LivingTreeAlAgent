@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 @pytest.mark.asyncio
 async def test_living_system_initialization():
     """测试生命系统初始化"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()
@@ -46,7 +46,7 @@ async def test_living_system_initialization():
 @pytest.mark.asyncio
 async def test_living_system_start_stop():
     """测试生命系统启动和停止"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()
@@ -69,7 +69,7 @@ async def test_living_system_start_stop():
 @pytest.mark.asyncio
 async def test_living_system_set_goal():
     """测试设置目标"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()
@@ -93,7 +93,7 @@ async def test_living_system_set_goal():
 @pytest.mark.asyncio
 async def test_living_system_execute_task():
     """测试执行任务"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()
@@ -116,7 +116,7 @@ async def test_living_system_execute_task():
 @pytest.mark.asyncio
 async def test_cell_assembler():
     """测试细胞装配器"""
-    from client.src.business.cell_framework.cell_assembler import CellAssembler
+    from livingtree.core.cells.cell_assembler import CellAssembler
     
     assembler = CellAssembler()
     await assembler.initialize_cells()
@@ -125,7 +125,7 @@ async def test_cell_assembler():
     assert len(assembler.get_all_cells()) >= 5
     
     # 检查各类型细胞
-    from client.src.business.cell_framework.cell import CellType
+    from livingtree.core.cells.cell import CellType
     assert len(assembler.get_cells_by_type(CellType.PERCEPTION)) >= 1
     assert len(assembler.get_cells_by_type(CellType.REASONING)) >= 1
     assert len(assembler.get_cells_by_type(CellType.MEMORY)) >= 1
@@ -147,7 +147,7 @@ async def test_cell_assembler():
 @pytest.mark.asyncio
 async def test_life_engine():
     """测试生命引擎"""
-    from client.src.business.cell_framework.life_engine import LifeEngine
+    from livingtree.core.cells.life_engine import LifeEngine
     
     engine = LifeEngine()
     
@@ -174,7 +174,7 @@ async def test_life_engine():
 @pytest.mark.asyncio
 async def test_self_consciousness():
     """测试自我意识系统"""
-    from client.src.business.cell_framework.self_consciousness import SelfConsciousness
+    from livingtree.core.cells.self_consciousness import SelfConsciousness
     
     sc = SelfConsciousness()
     
@@ -203,7 +203,7 @@ async def test_self_consciousness():
 @pytest.mark.asyncio
 async def test_immune_system():
     """测试免疫系统"""
-    from client.src.business.cell_framework.immune_system import ImmuneSystem
+    from livingtree.core.cells.immune_system import ImmuneSystem
     
     immune = ImmuneSystem()
     
@@ -231,7 +231,7 @@ async def test_immune_system():
 @pytest.mark.asyncio
 async def test_metabolic_system():
     """测试代谢系统"""
-    from client.src.business.cell_framework.metabolic_system import MetabolicSystem
+    from livingtree.core.cells.metabolic_system import MetabolicSystem
     
     metabolic = MetabolicSystem()
     
@@ -258,7 +258,7 @@ async def test_metabolic_system():
 @pytest.mark.asyncio
 async def test_evolution_engine():
     """测试进化引擎"""
-    from client.src.business.cell_framework.autonomous_evolution import AutonomousEvolution
+    from livingtree.core.cells.autonomous_evolution import AutonomousEvolution
     
     evolution = AutonomousEvolution(evolution_interval=1.0)
     
@@ -281,7 +281,7 @@ async def test_evolution_engine():
 @pytest.mark.asyncio
 async def test_cell_signaling():
     """测试细胞信号传递"""
-    from client.src.business.cell_framework.cell_assembler import CellAssembler
+    from livingtree.core.cells.cell_assembler import CellAssembler
     
     assembler = CellAssembler()
     
@@ -308,7 +308,7 @@ async def test_cell_signaling():
 @pytest.mark.asyncio
 async def test_full_integration():
     """测试完整集成"""
-    from client.src.business.cell_framework.living_system import LivingSystem
+    from livingtree.core.cells.living_system import LivingSystem
     
     system = LivingSystem()
     await system.initialize()

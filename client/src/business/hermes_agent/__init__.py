@@ -464,6 +464,15 @@ from business.hermes_agent.intent_recognizer import Intent, IntentRecognizer
 from business.hermes_agent.intent_clarifier import AdaptiveClarifier, ClarificationResult, ClarificationStrategy
 from business.hermes_agent.progressive_ui_renderer import ProgressiveUIRenderer, UIRenderState, RenderPriority
 
+# 咨询意图常量
+CONSULTING_INTENTS = {
+    "eia_report": "环境影响评价报告生成",
+    "feasibility_study": "可行性研究报告生成",
+    "financial_analysis": "财务分析报告生成",
+    "code_generation": "Python代码生成",
+    "document_generation": "文档生成",
+}
+
 # ==================== 自适应学习循环 ====================
 # 从架构指南 Phase C 新增 (2026-04-28)
 
@@ -482,6 +491,58 @@ from business.hermes_agent.multi_agent_orchestrator import (
     Agent,
     SubTask,
     AgentRole,
+)
+
+# ==================== 进化系统集成 ====================
+# 从架构指南 Phase D 新增 (2026-05-02)
+
+from business.hermes_agent.evolution_integration import (
+    EvolutionIntegration,
+    get_evolution_integration,
+    record_task,
+    record_user_feedback,
+    recommend_tools,
+)
+
+# 自我驱动系统
+from business.self_driving import SelfDrivingSystem, SystemState, get_self_driving_system
+from business.curiosity_engine import CuriosityEngine, get_curiosity_engine
+from business.auditor_agent import AuditorAgent, get_auditor_agent
+from business.analogy_transfer import AnalogyTransferEngine, get_analogy_engine
+from business.self_identity import SelfIdentity, get_self_identity
+from business.tool_discovery import ToolDiscoveryEngine, get_tool_discovery_engine
+
+# ==================== 数字咨询工程师 ====================
+# 从架构指南 Phase E 新增 (2026-05-02)
+
+from business.aria import (
+    ARIAController,
+    GenerationTask,
+    GenerationStatus,
+    MarkdownDSLParser,
+    WordRenderer,
+    get_aria_controller,
+    StyleLearner,
+    StyleDefinition,
+    TableStyleDefinition,
+)
+from business.map_agent import (
+    MapAgentController,
+    MapInteractionMode,
+    PerceptionTool,
+    GeometryTool,
+    OverlayAnalysisTool,
+    MobilityTool,
+    ExportTool,
+    get_map_agent_controller,
+)
+from business.consulting_engineer import (
+    ConsultingEngineer,
+    ProjectContext,
+    TaskResult,
+    get_consulting_engineer,
+    create_eia_project,
+    create_feasibility_project,
 )
 
 
@@ -503,6 +564,7 @@ __all__ = [
     "ProgressiveUIRenderer",
     "UIRenderState",
     "RenderPriority",
+    "CONSULTING_INTENTS",
     # 新增导出 (Phase C)
     "AdaptiveLearningLoop",
     "LearningSample",
@@ -512,4 +574,54 @@ __all__ = [
     "Agent",
     "SubTask",
     "AgentRole",
+    # 新增导出 (Phase D - 进化系统)
+    "EvolutionIntegration",
+    "get_evolution_integration",
+    "record_task",
+    "record_user_feedback",
+    "recommend_tools",
+    # 新增导出 (Phase E - 数字咨询工程师)
+    "ConsultingEngineer",
+    "ProjectContext",
+    "TaskResult",
+    "get_consulting_engineer",
+    "create_eia_project",
+    "create_feasibility_project",
+    # 新增导出 (Phase F - 自我驱动系统)
+    "SelfDrivingSystem",
+    "SystemState",
+    "get_self_driving_system",
+    "CuriosityEngine",
+    "get_curiosity_engine",
+    "AuditorAgent",
+    "get_auditor_agent",
+    "AnalogyTransferEngine",
+    "get_analogy_engine",
+    "SelfIdentity",
+    "get_self_identity",
+    "ToolDiscoveryEngine",
+    "get_tool_discovery_engine",
+    # 新增导出 (Phase G - A.R.I.A系统)
+    "ARIAController",
+    "GenerationTask",
+    "GenerationStatus",
+    "MarkdownDSLParser",
+    "WordRenderer",
+    "get_aria_controller",
+    "StyleLearner",
+    "StyleDefinition",
+    "TableStyleDefinition",
+    # 新增导出 (Phase H - Map Agent系统)
+    "MapAgentController",
+    "MapInteractionMode",
+    "PerceptionTool",
+    "GeometryTool",
+    "OverlayAnalysisTool",
+    "MobilityTool",
+    "ExportTool",
+    "get_map_agent_controller",
+    "MAP_CONFIG",
+    "update_config",
+    "validate_config",
+    "print_config_summary",
 ]

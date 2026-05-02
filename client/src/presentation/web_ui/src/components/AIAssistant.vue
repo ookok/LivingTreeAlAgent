@@ -225,8 +225,41 @@ const skills = ref([
   { id: 'code', name: '代码生成', icon: '💻' },
   { id: 'analyze', name: '数据分析', icon: '📊' },
   { id: 'summarize', name: '总结', icon: '📝' },
-  { id: 'translate', name: '翻译', icon: '🌐' }
+  { id: 'translate', name: '翻译', icon: '🌐' },
+  { id: 'eia', name: '环评报告', icon: '📄' },
+  { id: 'feasibility', name: '可研报告', icon: '📊' }
 ]);
+
+// 咨询意图关键词
+const consultingKeywords = {
+  eia_report: ['环评', '环境影响', '排放', '污染物', '环境评价', 'EIA'],
+  feasibility_study: ['可研', '可行性', 'NPV', 'IRR', '财务分析', '投资估算'],
+  financial_analysis: ['财务', '分析', '净现值', '敏感性分析', '蒙特卡洛'],
+  code_generation: ['写代码', '生成代码', 'python', '脚本', '编程', '计算'],
+  document_generation: ['报告', '文档', '撰写', '编写', '生成']
+};
+
+// 检测咨询意图
+const detectConsultingIntent = (query) => {
+  for (const [intent, keywords] of Object.entries(consultingKeywords)) {
+    if (keywords.some(kw => query.includes(kw))) {
+      return intent;
+    }
+  }
+  return null;
+};
+
+// 获取意图描述
+const getIntentDescription = (intent) => {
+  const descriptions = {
+    eia_report: '环境影响评价报告生成',
+    feasibility_study: '可行性研究报告生成',
+    financial_analysis: '财务分析报告生成',
+    code_generation: 'Python代码生成',
+    document_generation: '文档生成'
+  };
+  return descriptions[intent] || '咨询服务';
+};
 
 const templates = ref([
   { id: 'paper', name: '论文研读', icon: '📚', desc: '研读在线论文，产出论文综述' },
@@ -274,21 +307,259 @@ const sendMessage = async () => {
   
   isLoading.value = true;
   
-  await simulateThinking();
+  // 检测咨询意图
+  const consultingIntent = detectConsultingIntent(userMessage.content);
   
-  const aiResponse = generateResponse(userMessage.content);
-  messages.value.push(aiResponse);
+  if (consultingIntent) {
+    // 自动触发咨询工程师
+    await handleConsultingRequest(consultingIntent, userMessage.content);
+  } else {
+    await simulateThinking();
+    const aiResponse = generateResponse(userMessage.content);
+    messages.value.push(aiResponse);
+    
+    if (aiResponse.code) {
+      emit('codeGenerated', aiResponse.code);
+    }
+  }
+  
   isLoading.value = false;
   scrollToBottom();
   
-  if (aiResponse.code) {
-    emit('codeGenerated', aiResponse.code);
-  }
-  
   emit('sendMessage', {
     userMessage: userMessage.content,
-    aiResponse: aiResponse.content
+    aiResponse: ''
   });
+};
+
+// 处理咨询请求
+const handleConsultingRequest = async (intent, query) => {
+  const intentDesc = getIntentDescription(intent);
+  
+  // 添加意图识别提示
+  const intentMessage = {
+    id: Date.now() + 1,
+    isUser: false,
+    content: `🎯 检测到咨询需求：${intentDesc}`,
+    timestamp: new Date().toLocaleTimeString(),
+    code: null,
+    thought: true,
+    codeChange: null,
+    toolCall: null,
+    executionResult: null,
+    preview: null
+  };
+  messages.value.push(intentMessage);
+  await scrollToBottom();
+  
+  // 模拟咨询工程师处理过程
+  const tasks = ['初始化项目...', '分析需求...', '生成代码...', '验证数据...', '生成报告...'];
+  for (const task of tasks) {
+    currentTask.value = task;
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  currentTask.value = '';
+  
+  // 根据意图生成模拟响应
+  const response = generateConsultingResponse(intent, query);
+  messages.value.push(response);
+};
+
+// 生成咨询响应
+const generateConsultingResponse = (intent, query) => {
+  const responses = {
+    eia_report: {
+      content: '已为您创建环评报告项目！',
+      code: `# 环评排放量计算工具
+import pandas as pd
+
+def calculate_emission(pollutant_data):
+    """
+    计算污染物排放量
+    
+    Args:
+        pollutant_data (dict): 污染物数据
+    Returns:
+        float: 排放量(t/a)
+    """
+    emission = pollutant_data['generation'] * (1 - pollutant_data['efficiency'] / 100)
+    return round(emission, 2)
+
+# 示例数据
+project_data = {
+    'project_name': '化工厂项目',
+    'pollutant': 'SO2',
+    'generation': 200.0,  # t/a
+    'efficiency': 95.0    # %
+}
+
+result = calculate_emission(project_data)
+print(f"排放量: {result} t/a")`,
+      codeLang: 'python',
+      codeChange: {
+        file: 'emission_calculator.py',
+        additions: 20,
+        deletions: 0
+      },
+      executionResult: {
+        success: true,
+        output: '排放量: 10.0 t/a'
+      },
+      preview: {
+        content: `<h3>环境影响评价报告</h3>
+<p><strong>项目名称：</strong>化工厂项目</p>
+<p><strong>评价等级：</strong>一级</p>
+<p><strong>评价范围：</strong>水环境、大气环境、声环境</p>
+<p><strong>主要污染物：</strong>SO2、NOx、粉尘</p>
+<p><strong>排放量计算：</strong>10.0 t/a（达标）</p>`
+      }
+    },
+    feasibility_study: {
+      content: '已为您完成可行性研究分析！',
+      code: `# 净现值(NPV)计算
+def calculate_npv(cash_flows, discount_rate):
+    """
+    计算净现值
+    
+    Args:
+        cash_flows (list): 现金流列表
+        discount_rate (float): 折现率(%)
+    Returns:
+        float: NPV值
+    """
+    npv = 0
+    for i, cf in enumerate(cash_flows):
+        npv += cf / (1 + discount_rate / 100) ** i
+    return round(npv, 2)
+
+# 示例计算
+cash_flows = [-1000, 200, 300, 400, 500, 600]  # 初始投资 + 年收益
+discount_rate = 10
+npv_result = calculate_npv(cash_flows, discount_rate)
+irr = 15.2  # 内部收益率(%)
+
+print(f"NPV: {npv_result} 万元")
+print(f"IRR: {irr}%")`,
+      codeLang: 'python',
+      codeChange: {
+        file: 'financial_analysis.py',
+        additions: 20,
+        deletions: 0
+      },
+      executionResult: {
+        success: true,
+        output: 'NPV: 407.89 万元\nIRR: 15.2%'
+      },
+      preview: {
+        content: `<h3>可行性研究报告</h3>
+<p><strong>项目名称：</strong>新建厂房项目</p>
+<p><strong>总投资额：</strong>1000万元</p>
+<p><strong>NPV：</strong>407.89万元（> 0，项目可行）</p>
+<p><strong>IRR：</strong>15.2%（> 基准收益率10%）</p>
+<p><strong>投资回收期：</strong>3.8年</p>`
+      }
+    },
+    financial_analysis: {
+      content: '已完成财务分析！',
+      code: `# 敏感性分析
+import numpy as np
+
+def sensitivity_analysis(base_value, variables, ranges):
+    """
+    敏感性分析
+    
+    Args:
+        base_value: 基准值
+        variables: 变量列表
+        ranges: 变化范围(%)
+    Returns:
+        dict: 敏感性结果
+    """
+    results = {}
+    for var, rng in zip(variables, ranges):
+        results[var] = {
+            'low': base_value * (1 - rng / 100),
+            'base': base_value,
+            'high': base_value * (1 + rng / 100)
+        }
+    return results
+
+# 示例分析
+npv_base = 407.89
+variables = ['收入', '成本', '折现率']
+ranges = [10, 10, 5]
+
+result = sensitivity_analysis(npv_base, variables, ranges)
+print("敏感性分析结果:", result)`,
+      codeLang: 'python',
+      executionResult: {
+        success: true,
+        output: '敏感性分析结果: {...}'
+      },
+      preview: {
+        content: `<h3>财务敏感性分析报告</h3>
+<p><strong>基准NPV：</strong>407.89万元</p>
+<p><strong>收入变化±10%：</strong>367.10 ~ 448.68万元</p>
+<p><strong>成本变化±10%：</strong>448.68 ~ 367.10万元</p>
+<p><strong>折现率变化±5%：</strong>428.28 ~ 386.50万元</p>`
+      }
+    },
+    code_generation: {
+      content: '已为您生成代码！',
+      code: `# 自动生成的Python代码
+def process_data(input_data):
+    """
+    数据处理函数
+    
+    Args:
+        input_data (dict): 输入数据
+    Returns:
+        dict: 处理结果
+    """
+    result = {}
+    # 数据处理逻辑
+    for key, value in input_data.items():
+        result[key] = value * 2
+    return result
+
+# 测试
+test_data = {'a': 1, 'b': 2, 'c': 3}
+print(process_data(test_data))`,
+      codeLang: 'python',
+      codeChange: {
+        file: 'generated_code.py',
+        additions: 15,
+        deletions: 0
+      },
+      executionResult: {
+        success: true,
+        output: "{'a': 2, 'b': 4, 'c': 6}"
+      }
+    },
+    document_generation: {
+      content: '已为您生成文档！',
+      preview: {
+        content: `<h3>项目报告</h3>
+<p>根据您的需求，已生成完整的项目报告，包含以下内容：</p>
+<ul>
+<li>项目概述</li>
+<li>需求分析</li>
+<li>技术方案</li>
+<li>实施计划</li>
+<li>风险评估</li>
+</ul>`
+      }
+    }
+  };
+  
+  const responseData = responses[intent] || responses.document_generation;
+  
+  return {
+    id: Date.now() + 2,
+    isUser: false,
+    timestamp: new Date().toLocaleTimeString(),
+    ...responseData
+  };
 };
 
 const simulateThinking = async () => {

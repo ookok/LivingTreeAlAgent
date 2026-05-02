@@ -208,6 +208,91 @@ class IndustryGovernanceConfig:
     default_region: str = "南京"
 
 
+@dataclass
+class CellConfig:
+    """细胞AI框架配置"""
+    
+    # 细胞框架启用
+    enabled: bool = True
+    
+    # 最大细胞数量
+    max_cells: int = 100
+    
+    # 默认能量水平
+    default_energy_level: float = 1.0
+    
+    # 能量消耗率
+    energy_consumption_rate: float = 0.01
+    
+    # 休眠阈值（秒）- 无活动多久后进入休眠
+    dormancy_threshold: int = 300  # 5分钟
+    
+    # 最大连接数
+    max_connections_per_cell: int = 20
+    
+    # Hebbian学习率
+    hebbian_learning_rate: float = 0.05
+    
+    # 连接衰减率
+    connection_decay_rate: float = 0.01
+    
+    # 最小连接强度
+    min_connection_weight: float = 0.05
+    
+    # 最大连接强度
+    max_connection_weight: float = 1.0
+    
+    # 细胞分裂配置
+    division_enabled: bool = True
+    min_success_rate_for_division: float = 0.8
+    min_processed_for_division: int = 10
+    
+    # 变异率配置
+    mutation_small_rate: float = 0.6
+    mutation_medium_rate: float = 0.3
+    mutation_large_rate: float = 0.08
+    mutation_radical_rate: float = 0.02
+    
+    # 自然选择配置
+    selection_pressure: float = 0.2  # 每代淘汰比例
+    min_energy_threshold: float = 0.1
+    max_age_for_reproduction: int = 1000
+    
+    # 涌现检测配置
+    pattern_detection_threshold: float = 0.7
+    
+    # 群体智能配置
+    pheromone_evaporation_rate: float = 0.01
+    discovery_rate: float = 0.1
+    
+    # 学习配置
+    learning_enabled: bool = True
+    learning_rate: float = 0.01
+    min_samples_for_learning: int = 10
+    
+    # EWC配置（持续学习）
+    ewc_enabled: bool = True
+    ewc_lambda: float = 0.1
+    
+    # 渐进网络配置
+    progressive_enabled: bool = True
+    
+    # 元学习配置
+    meta_learning_enabled: bool = True
+    meta_learning_rate: float = 0.001
+    
+    # 细胞类型配置
+    reasoning_cells_enabled: bool = True
+    memory_cells_enabled: bool = True
+    learning_cells_enabled: bool = True
+    perception_cells_enabled: bool = True
+    action_cells_enabled: bool = True
+    
+    # 日志配置
+    logging_enabled: bool = True
+    log_level: str = "INFO"
+
+
 # ── 主配置类 ───────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -299,6 +384,9 @@ class NanochatConfig:
     
     # 行业知识治理配置
     industry_governance: IndustryGovernanceConfig = field(default_factory=IndustryGovernanceConfig)
+    
+    # 细胞AI框架配置
+    cell: CellConfig = field(default_factory=CellConfig)
     
     # ── 常用快捷属性 ─────────────────────────────────────────────────────────
     
@@ -565,6 +653,6 @@ def set_unified_config(config: UnifiedConfig):
 __all__ = ['config', 'NanochatConfig', 'EndpointConfig', 'RetryConfig', 
            'TimeoutConfig', 'DelayConfig', 'AgentConfig', 'LLMConfig', 
            'ApiKeysConfig', 'PathsConfig', 'LimitsConfig', 'CognitiveConfig',
-           'IndustryGovernanceConfig',
+           'IndustryGovernanceConfig', 'CellConfig',
            # 兼容层（已废弃）
            'UnifiedConfig', 'get_unified_config', 'set_unified_config']

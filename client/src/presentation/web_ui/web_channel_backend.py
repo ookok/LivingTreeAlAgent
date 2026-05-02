@@ -5,13 +5,18 @@ QWebChannel后端 - Web Channel Backend
 1. 实现QWebChannel通信接口
 2. 提供前端调用的API
 3. 处理前端事件和回调
+4. A.R.I.A流式输出支持
 """
 
+import asyncio
 import json
+import threading
+import time
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from client.src.business.system_integration import get_system_manager
 from client.src.business.api_gateway import get_api_gateway
+from client.src.business.hermes_agent import get_self_driving_system
 
 
 class WebChannelBackend(QObject):
@@ -30,6 +35,14 @@ class WebChannelBackend(QObject):
     - executeReasoning: 执行推理
     - addMemory: 添加记忆
     - refreshMemory: 刷新记忆
+    
+    A.R.I.A相关方法：
+    - startARIAGeneration: 启动A.R.I.A文档生成
+    - pauseARIAGeneration: 暂停生成
+    - resumeARIAGeneration: 恢复生成
+    - stopARIAGeneration: 终止生成
+    - getARIAGenerationStatus: 获取生成状态
+    - downloadGeneratedDocument: 下载生成的文档
     """
     
     # 信号定义
@@ -42,10 +55,24 @@ class WebChannelBackend(QObject):
     onMCPStatus = pyqtSignal(str)
     onToolResult = pyqtSignal(str)
     
+    # A.R.I.A流式输出信号
+    onARIAGenerationStarted = pyqtSignal(str)
+    onARIAGenerationProgress = pyqtSignal(str)
+    onARIAGenerationChunk = pyqtSignal(str)
+    onARIAGenerationPaused = pyqtSignal()
+    onARIAGenerationResumed = pyqtSignal()
+    onARIAGenerationCompleted = pyqtSignal(str)
+    onARIAGenerationError = pyqtSignal(str)
+    
     def __init__(self):
         super().__init__()
         self.system_manager = get_system_manager()
         self.api_gateway = get_api_gateway()
+        self.aria_controller = None
+        self.generation_task = None
+        self.generation_paused = False
+        self.generation_stopped = False
+        self.current_document_path = None
     
     @pyqtSlot()
     def initialize(self):
@@ -223,3 +250,229 @@ class WebChannelBackend(QObject):
             }
             for item in history
         ]
+    
+    # ==================== A.R.I.A 流式输出方法 ====================
+    
+    @pyqtSlot(str, str)
+    def startARIAGeneration(self, task_type: str, parameters_json: str):
+        """
+        启动A.R.I.A文档生成
+        
+        Args:
+            task_type: 任务类型 (eia_report, feasibility_study, etc.)
+            parameters_json: 参数JSON
+        """
+        if self.generation_task and self.generation_task.is_alive():
+            self.onARIAGenerationError.emit('已有生成任务在运行中')
+            return
+        
+        try:
+            parameters = json.loads(parameters_json)
+        except json.JSONDecodeError:
+            self.onARIAGenerationError.emit('无效的JSON参数')
+            return
+        
+        self.generation_paused = False
+        self.generation_stopped = False
+        
+        # 发送启动信号
+        self.onARIAGenerationStarted.emit(json.dumps({
+            'task_type': task_type,
+            'parameters': parameters
+        }))
+        
+        # 在后台线程中执行生成
+        self.generation_task = threading.Thread(
+            target=self._run_aria_generation,
+            args=(task_type, parameters),
+            daemon=True
+        )
+        self.generation_task.start()
+    
+    def _run_aria_generation(self, task_type: str, parameters: dict):
+        """
+        执行A.R.I.A生成任务（在后台线程中运行）
+        """
+        try:
+            # 模拟流式生成过程
+            chunks = self._generate_document_chunks(task_type, parameters)
+            
+            for chunk in chunks:
+                # 检查是否停止
+                if self.generation_stopped:
+                    self.onARIAGenerationError.emit('生成已终止')
+                    return
+                
+                # 检查是否暂停
+                while self.generation_paused:
+                    time.sleep(0.1)
+                    if self.generation_stopped:
+                        self.onARIAGenerationError.emit('生成已终止')
+                        return
+                
+                # 发送数据块
+                self.onARIAGenerationChunk.emit(json.dumps(chunk))
+                time.sleep(0.1)  # 模拟打字机效果延迟
+            
+            # 生成完成
+            self.onARIAGenerationCompleted.emit(json.dumps({
+                'document_path': self.current_document_path,
+                'task_type': task_type
+            }))
+            
+        except Exception as e:
+            self.onARIAGenerationError.emit(str(e))
+    
+    def _generate_document_chunks(self, task_type: str, parameters: dict):
+        """
+        生成文档数据块（模拟）
+        
+        返回格式：
+        {
+            'type': 'thinking' | 'content' | 'code' | 'table',
+            'content': '...',
+            'metadata': {...}
+        }
+        """
+        project_name = parameters.get('project_name', '未知项目')
+        
+        # 思考阶段
+        yield {
+            'type': 'thinking',
+            'content': f'正在分析{task_type}任务需求...',
+            'metadata': {'phase': 'analysis'}
+        }
+        
+        yield {
+            'type': 'thinking',
+            'content': '查询相关规范和标准...',
+            'metadata': {'phase': 'research'}
+        }
+        
+        yield {
+            'type': 'thinking',
+            'content': '准备生成报告内容...',
+            'metadata': {'phase': 'generation'}
+        }
+        
+        # 内容阶段 - Markdown DSL格式
+        content_chunks = [
+            '<!-- STYLE: heading_1 -->\n',
+            f'一、建设项目基本情况\n\n',
+            '<!-- STYLE: normal_text -->\n',
+            f'项目名称：{project_name}\n\n',
+            f'项目性质：新建\n\n',
+            f'建设地点：{parameters.get("location", "待定")}\n\n',
+            '<!-- STYLE: heading_2 -->\n',
+            '1.1 项目概况\n\n',
+            '<!-- STYLE: normal_text -->\n',
+            '本项目位于上述建设地点，总投资约',
+            f'{parameters.get("investment", "1000")}万元。',
+            '\n\n项目主要建设内容包括：\n',
+            '- 主体工程\n',
+            '- 辅助工程\n',
+            '- 环保工程\n',
+            '\n',
+            '<!-- STYLE: heading_2 -->\n',
+            '1.2 编制依据\n\n',
+            '<!-- STYLE: normal_text -->\n',
+            '1. 《中华人民共和国环境保护法》\n',
+            '2. 《中华人民共和国环境影响评价法》\n',
+            '3. 相关行业标准和规范\n',
+        ]
+        
+        for chunk in content_chunks:
+            yield {
+                'type': 'content',
+                'content': chunk,
+                'metadata': {'phase': 'content'}
+            }
+        
+        # 代码阶段
+        yield {
+            'type': 'code',
+            'content': '''```python
+# 排放量计算
+def calculate_emission(project_data):
+    return project_data['generation'] * (1 - project_data['efficiency'] / 100)
+
+result = calculate_emission({
+    'generation': 200,
+    'efficiency': 95
+})
+print(f"排放量: {result} t/a")
+```''',
+            'metadata': {'phase': 'code', 'language': 'python'}
+        }
+        
+        # 表格阶段
+        yield {
+            'type': 'table',
+            'content': '''<!-- STYLE: env_table -->
+| 污染物 | 产生量(t/a) | 处理效率(%) | 排放量(t/a) |
+|--------|------------|------------|------------|
+| SO2 | 200 | 95 | 10 |
+| NOx | 150 | 90 | 15 |
+| 粉尘 | 100 | 99 | 1 |''',
+            'metadata': {'phase': 'table'}
+        }
+        
+        # 完成思考
+        yield {
+            'type': 'thinking',
+            'content': '报告生成完成，正在验证格式...',
+            'metadata': {'phase': 'validation'}
+        }
+        
+        # 设置文档路径
+        self.current_document_path = f'/output/{project_name}_report.docx'
+    
+    @pyqtSlot()
+    def pauseARIAGeneration(self):
+        """暂停生成"""
+        self.generation_paused = True
+        self.onARIAGenerationPaused.emit()
+    
+    @pyqtSlot()
+    def resumeARIAGeneration(self):
+        """恢复生成"""
+        self.generation_paused = False
+        self.onARIAGenerationResumed.emit()
+    
+    @pyqtSlot()
+    def stopARIAGeneration(self):
+        """终止生成"""
+        self.generation_stopped = True
+        self.generation_paused = False
+    
+    @pyqtSlot(result=str)
+    def getARIAGenerationStatus(self):
+        """获取生成状态"""
+        status = 'idle'
+        if self.generation_task and self.generation_task.is_alive():
+            if self.generation_paused:
+                status = 'paused'
+            else:
+                status = 'running'
+        elif self.generation_stopped:
+            status = 'stopped'
+        
+        return json.dumps({
+            'status': status,
+            'document_path': self.current_document_path
+        })
+    
+    @pyqtSlot(result=str)
+    def downloadGeneratedDocument(self):
+        """下载生成的文档"""
+        if self.current_document_path:
+            return json.dumps({
+                'success': True,
+                'path': self.current_document_path,
+                'filename': self.current_document_path.split('/')[-1]
+            })
+        else:
+            return json.dumps({
+                'success': False,
+                'error': '没有已生成的文档'
+            })

@@ -73,11 +73,47 @@ class IntentRecognizer:
     ✅ 从交互中学习任务类型和必需字段
     """
 
+    # 预置的咨询相关意图模式（可从交互中扩展）
+    CONSULTING_INTENTS = {
+        "eia_report": {
+            "task_type": "eia_report",
+            "description": "环境影响评价报告生成",
+            "keywords": ["环评", "环境影响", "排放", "污染物", "环境评价", "EIA"],
+            "field_names": ["project_name", "location", "pollutant_type", "scale"],
+        },
+        "feasibility_study": {
+            "task_type": "feasibility_study",
+            "description": "可行性研究报告生成",
+            "keywords": ["可研", "可行性", "NPV", "IRR", "财务分析", "投资估算"],
+            "field_names": ["project_name", "investment", "discount_rate", "period"],
+        },
+        "financial_analysis": {
+            "task_type": "financial_analysis",
+            "description": "财务分析报告生成",
+            "keywords": ["财务", "分析", "净现值", "敏感性分析", "蒙特卡洛"],
+            "field_names": ["project_name", "cash_flow", "analysis_type"],
+        },
+        "code_generation": {
+            "task_type": "code_generation",
+            "description": "Python代码生成",
+            "keywords": ["写代码", "生成代码", "python", "脚本", "编程", "计算"],
+            "field_names": ["task_description", "requirements"],
+        },
+        "document_generation": {
+            "task_type": "document_generation",
+            "description": "文档生成",
+            "keywords": ["报告", "文档", "撰写", "编写", "生成"],
+            "field_names": ["document_type", "title", "content"],
+        },
+    }
+
     def __init__(self, storage_path: Optional[Path] = None):
         self.router = GlobalModelRouter()
         self.storage_path = storage_path or Path.home() / ".livingtree" / "intent_patterns.json"
         self.learned_patterns: Dict[str, Dict[str, Any]] = {}
         self._load_patterns()
+        # 合并预置模式到已学习模式
+        self._merge_consulting_intents()
 
     def _load_patterns(self):
         """加载已学习的意图模式"""
@@ -97,6 +133,21 @@ class IntentRecognizer:
                 json.dump(self.learned_patterns, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"❌ 保存意图模式失败: {e}")
+
+    def _merge_consulting_intents(self):
+        """合并预置的咨询意图模式到已学习模式"""
+        for key, pattern in self.CONSULTING_INTENTS.items():
+            if key not in self.learned_patterns:
+                self.learned_patterns[key] = pattern
+                logger.debug(f"📥 添加预置意图模式: {key}")
+
+    def is_consulting_intent(self, task_type: str) -> bool:
+        """判断是否为咨询类意图"""
+        return task_type in self.CONSULTING_INTENTS
+
+    def get_consulting_intent_info(self, task_type: str) -> Optional[Dict[str, Any]]:
+        """获取咨询意图的详细信息"""
+        return self.CONSULTING_INTENTS.get(task_type)
 
     async def recognize(self, user_input: str) -> Intent:
         """

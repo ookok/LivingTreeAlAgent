@@ -196,83 +196,88 @@ class LifeEngine:
         checkpoint = self.world.checkpoint
         completed = len(ctx.execution_results)
 
-        for idx, step in enumerate(ctx.plan):
-            if idx < completed:
-                continue
+        # Shared cache for cross-step data transfer
+        ctx.metadata.setdefault("shared_cache", {})
 
-            action = step.get("action", "unknown")
-            if not self.safety.check_action(action, step.get("description", "")):
-                ctx.execution_results.append({"step": step, "status": "denied"})
-                continue
+        # Use DAG executor for parallel execution
+        from ..execution.dag_executor import DAGExecutor, add_dependencies
+        plan_with_deps = add_dependencies(list(ctx.plan))
+        executor = DAGExecutor(max_parallel=5)
 
-            # ── Cost-aware model routing ──
-            # Auto-detect if deep reasoning is needed
-            needs_deep = step.get("needs_deep_reasoning", False) or any(
-                kw in action for kw in ["analyze", "predict", "assess", "evaluate", "review"]
-            )
+        async def execute_one(step: dict, ctx_lc: Any) -> dict:
             step_name = step.get("name", "unknown")
+            action = step.get("action", "unknown")
+
+            if not self.safety.check_action(action, step.get("description", "")):
+                return {"step": step, "status": "denied"}
+
+            # Cost-aware routing
+            needs_deep = step.get("needs_deep_reasoning", False) or any(
+                kw in action for kw in ["analyze", "predict", "assess", "evaluate", "review"])
             est_tokens = 3000 if needs_deep else 800
 
             if cost and needs_deep and not cost.can_use("deepseek/deepseek-v4-pro", est_tokens):
                 step["degraded_model"] = True
-                logger.info(f"[cost] Degraded '{step_name}' to flash")
 
-            # ── HITL approval gate ──
+            # HITL approval gate
             if step.get("needs_approval", False) and hitl:
-                ctx.metadata.setdefault("hitl_requests", 0)
-                ctx.metadata["hitl_requests"] += 1
                 question = step.get("approval_question", f"Approve: {step_name}?")
                 approved = await hitl.request_approval(step_name, question,
-                    context={"step": step, "session": ctx.session_id})
+                    context={"step": step, "session": ctx_lc.session_id})
                 if not approved:
-                    ctx.execution_results.append({"step": step, "status": "denied_by_human"})
-                    logger.info(f"[hitl] Step '{step_name}' denied by human")
+                    return {"step": step, "status": "denied_by_human"}
+
+            # ── Strategy retry ──
+            strategies = [
+                lambda: self._invoke(orchestrator.assign_task, task=step, agents=self._list_agents()),
+                lambda: self._retry_with_pro(step),
+                lambda: self._retry_with_kb(step, ctx_lc),
+            ]
+            result = None
+            last_error = ""
+            for strat in strategies:
+                try:
+                    result = await strat()
+                    if result and result.get("status") != "failed":
+                        break
+                except Exception as e:
+                    last_error = str(e)
                     continue
 
-            # ── Execute ──
-            if orchestrator:
-                result = await self._invoke(orchestrator.assign_task,
-                    task=step,
-                    agents=self._list_agents(),
-                )
-                if result:
-                    qc = self.world.quality_checker
-                    if qc and isinstance(result, dict) and result.get("result"):
-                        try:
-                            qr = await qc.check(str(result["result"]))
-                            ctx.quality_reports.append({
-                                "step": step_name, "passed": qr.passed,
-                                "score": qr.final_score, "issues": qr.total_issues,
-                            })
-                            if not qr.passed:
-                                result["status"] = "quality_failed"
-                        except Exception:
-                            pass
-                    ctx.execution_results.append(result)
+            if not result:
+                return {"step": step, "status": "failed", "error": last_error}
 
-            # ── Checkpoint after each step ──
-            if checkpoint:
+            # Quality check
+            qc = self.world.quality_checker
+            if qc and isinstance(result, dict) and result.get("result"):
                 try:
-                    from ..execution.checkpoint import CheckpointState
-                    cs = CheckpointState(
-                        session_id=ctx.session_id,
-                        task_goal=ctx.user_input or "",
-                        plan=ctx.plan,
-                        completed_steps=list(range(idx + 1)),
-                        current_step=idx + 1,
-                        execution_results=ctx.execution_results,
-                        reflections=ctx.reflections,
-                    )
-                    await checkpoint.save(ctx.session_id, cs)
-                except Exception as e:
-                    logger.debug(f"Checkpoint save: {e}")
+                    qr = await qc.check(str(result["result"]))
+                    ctx_lc.metadata.setdefault("quality_reports", []).append({
+                        "step": step_name, "passed": qr.passed, "score": qr.final_score,
+                    })
+                except Exception:
+                    pass
 
-            # ── Record token usage ──
-            if cost:
-                cost.record("deepseek/deepseek-v4-pro" if needs_deep else "deepseek/deepseek-v4-flash", est_tokens)
-                st = cost.status()
-                if not cost._degraded and st.usage_pct >= cost.degradation_threshold:
-                    cost.degrade()
+            # Share result to cache
+            ctx_lc.metadata["shared_cache"][step_name] = result
+            return result
+
+        results = await executor.execute(plan_with_deps, execute_one, ctx)
+        ctx.execution_results = results
+
+        # Checkpoint after all steps
+        if checkpoint and results:
+            try:
+                from ..execution.checkpoint import CheckpointState
+                cs = CheckpointState(
+                    session_id=ctx.session_id, task_goal=ctx.user_input or "",
+                    plan=ctx.plan, completed_steps=list(range(len(ctx.plan))),
+                    current_step=len(ctx.plan),
+                    execution_results=ctx.execution_results, reflections=ctx.reflections,
+                )
+                await checkpoint.save(ctx.session_id, cs)
+            except Exception:
+                pass
 
     # ── Stage 5: Reflect ──
 
@@ -380,7 +385,52 @@ class LifeEngine:
             elif hasattr(cap, 'description'):
                 cap.description = f"{cap.description} (evolved gen {self.genome.generation})"
 
-    async def _crossover_elites(self, ctx: LifeContext) -> None:
+    async def _retry_with_pro(self, step: dict) -> dict:
+        """Retry failed step using pro model for deeper reasoning."""
+        step["needs_deep_reasoning"] = True
+        step["_retry_strategy"] = "pro_model"
+        return await self._invoke(
+            self.world.orchestrator.assign_task,
+            task=step, agents=self._list_agents(),
+        )
+
+    async def _retry_with_kb(self, step: dict, ctx: LifeContext) -> dict:
+        """Retry failed step by first querying knowledge base for relevant info."""
+        kb = self.world.knowledge_base
+        if kb:
+            try:
+                query = step.get("name", step.get("description", ""))
+                results = kb.search(query, top_k=3)
+                if results:
+                    # Inject KB knowledge into the step context
+                    step["kb_context"] = [r.content[:500] for r in results]
+                    step["_retry_strategy"] = "kb_injection"
+                    return await self._invoke(
+                        self.world.orchestrator.assign_task,
+                        task=step, agents=self._list_agents(),
+                    )
+            except Exception:
+                pass
+        return {"step": step, "status": "failed", "error": "all retries exhausted"}
+
+    async def process_large_document(self, content: str, chunk_size: int = 8000) -> list[str]:
+        """Chunk large documents and summarize each chunk via LLM."""
+        chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+        if len(chunks) <= 1:
+            return chunks
+
+        logger.info(f"Processing large doc: {len(chunks)} chunks of {chunk_size} chars")
+        summaries = []
+        for i, chunk in enumerate(chunks[:10]):  # Max 10 chunks per pass
+            try:
+                summary = await self.consciousness.chain_of_thought(
+                    f"Summarize this section in 3-5 key points (section {i+1}/{len(chunks)}):\n\n{chunk[:5000]}",
+                    steps=2, max_tokens=1024,
+                )
+                summaries.append(summary)
+            except Exception:
+                summaries.append(chunk[:500])
+        return summaries
         """Create a new approach by synthesizing recent elite sessions."""
         if len(self.elite_registry) < 3:
             return

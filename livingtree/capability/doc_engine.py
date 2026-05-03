@@ -110,4 +110,43 @@ class DocEngine:
             f"---\n*由 LivingTree DocEngine 自动生成。*"
         )
 
+    async def generate_report_streaming(self, template_type: str, data: dict[str, Any],
+                                        requirements: dict[str, Any] | None = None):
+        """Incremental generation — yields each section as it's completed.
+
+        Usage:
+            async for update in engine.generate_report_streaming(...):
+                print(f"[{update['progress_pct']}%] {update['section']}")
+        """
+        reqs = requirements or {}
+        sections = await self._get_sections(template_type, data, reqs)
+        total = len(sections)
+        parts = []
+
+        for idx, sec in enumerate(sections, start=1):
+            content = await self._generate_section(sec, data, reqs)
+            parts.append(f"# {sec}\n\n{content}")
+            pct = int((idx / total) * 100)
+            yield {
+                "type": "section_complete",
+                "section": sec, "index": idx, "total": total,
+                "progress_pct": pct, "content": content,
+            }
+
+        document = "\n\n".join(parts)
+        yield {
+            "type": "report_complete",
+            "document": document,
+            "total_sections": total,
+            "template_type": template_type,
+        }
+
+    async def auto_format(self, text: str) -> str:
+        return text.strip()
+
+    async def export_to(self, text: str, fmt: str = "markdown") -> str:
+        path = self.output_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
 

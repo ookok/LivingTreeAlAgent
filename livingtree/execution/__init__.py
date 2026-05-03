@@ -11,6 +11,7 @@ from .quality_checker import MultiAgentQualityChecker, CheckResult, CheckStatus
 from .hitl import HumanInTheLoop, ApprovalRequest
 from .checkpoint import TaskCheckpoint, CheckpointState
 from .cost_aware import CostAware, BudgetStatus
+from .dag_executor import DAGExecutor, add_dependencies
 
 __all__ = [
     "TaskPlanner", "TaskSpec", "SubTask",
@@ -21,4 +22,5 @@ __all__ = [
     "HumanInTheLoop", "ApprovalRequest",
     "TaskCheckpoint", "CheckpointState",
     "CostAware", "BudgetStatus",
+    "DAGExecutor", "add_dependencies",
 ]

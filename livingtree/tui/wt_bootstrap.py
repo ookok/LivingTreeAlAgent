@@ -27,7 +27,10 @@ WT_EXE_NAME = "WindowsTerminal.exe"
 
 
 def _log(msg: str) -> None:
-    print(f"[WT] {msg}")
+    try:
+        print(f"[WT] {msg}", flush=True)
+    except (OSError, IOError):
+        pass
 
 
 def _is_x64() -> bool:
@@ -143,7 +146,11 @@ def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI 
         python, "-m", "livingtree", "tui", "--direct",
     ]
     _log(f"Launching: wt -d {ws}")
-    return subprocess.Popen(cmd, cwd=ws)
+    return subprocess.Popen(
+        cmd, cwd=ws,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
 
 
 def main() -> int:

@@ -17,6 +17,7 @@ build/
 *.env.local
 config/local_config.py
 config/secrets.json
+config/secrets.enc
 
 # Data
 *.db

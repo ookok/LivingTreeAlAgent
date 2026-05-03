@@ -1,0 +1,518 @@
+"""MCP Server — Model Context Protocol server for LivingTree tools.
+
+Exposes LivingTree capabilities to external AI tools (Claude Code, Codex,
+Cursor, Windsurf, etc.) via the MCP protocol.
+
+28 tools in 5 categories:
+- Code Graph: build_graph, blast_radius, callers, callees, search, hubs, gaps
+- Chat/Reasoning: chat, analyze, generate_report
+- Code Gen: generate_code, improve_code, mutate_code
+- Knowledge: search_knowledge, detect_gaps, discover_formats
+- Cell/Train: train_cell, drill_train, list_cells, absorb_codebase
+- System: status, metrics, peers, health
+
+Usage:
+    python -m livingtree.mcp.server
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+from typing import Any
+
+from loguru import logger
+
+
+TOOLS = [
+    # ── Code Graph ──
+    {
+        "name": "build_code_graph",
+        "description": "Build or rebuild the code knowledge graph for a project",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Root directory to index"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "blast_radius",
+        "description": "Find all files affected by a set of changed files",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "files": {"type": "array", "items": {"type": "string"}, "description": "Changed file paths"},
+            },
+            "required": ["files"],
+        },
+    },
+    {
+        "name": "get_callers",
+        "description": "Find all functions that call a given function",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "function_name": {"type": "string", "description": "Function name to find callers for"},
+            },
+            "required": ["function_name"],
+        },
+    },
+    {
+        "name": "get_callees",
+        "description": "Find all functions called by a given function",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "function_name": {"type": "string"},
+            },
+            "required": ["function_name"],
+        },
+    },
+    {
+        "name": "search_code",
+        "description": "Search code entities by name or file path",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "find_hubs",
+        "description": "Find most-connected architectural hotspots",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_n": {"type": "integer", "description": "Number of hubs to return", "default": 10},
+            },
+        },
+    },
+    {
+        "name": "find_uncovered",
+        "description": "Find functions without test coverage",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    # ── Chat ──
+    {
+        "name": "chat",
+        "description": "Send a message to the LivingTree AI and get a response",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "User message"},
+            },
+            "required": ["message"],
+        },
+    },
+    {
+        "name": "analyze",
+        "description": "Deep analyze a topic with chain-of-thought reasoning",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string"},
+            },
+            "required": ["topic"],
+        },
+    },
+    {
+        "name": "generate_report",
+        "description": "Generate an industrial report (EIA, emergency plan, etc.)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "template_type": {"type": "string", "description": "环评报告, 应急预案, 验收报告, 可行性研究报告"},
+                "data": {"type": "object", "description": "Report data"},
+            },
+            "required": ["template_type"],
+        },
+    },
+    # ── Code Generation ──
+    {
+        "name": "generate_code",
+        "description": "Generate annotated code from natural language description",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "language": {"type": "string", "default": "python"},
+                "domain": {"type": "string", "default": "general"},
+            },
+            "required": ["name", "description"],
+        },
+    },
+    {
+        "name": "improve_code",
+        "description": "Improve existing code with AI suggestions",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "requirements": {"type": "object"},
+            },
+            "required": ["code"],
+        },
+    },
+    # ── Knowledge ──
+    {
+        "name": "search_knowledge",
+        "description": "Search the LivingTree knowledge base",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "detect_knowledge_gaps",
+        "description": "Detect knowledge gaps in the knowledge base",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "discover_formats",
+        "description": "Discover document formats in a file",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+            },
+            "required": ["path"],
+        },
+    },
+    # ── Cell / Training ──
+    {
+        "name": "train_cell",
+        "description": "Train an AI cell on domain data",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cell_name": {"type": "string"},
+                "data": {"type": "array", "items": {"type": "object"}},
+            },
+            "required": ["cell_name"],
+        },
+    },
+    {
+        "name": "drill_train",
+        "description": "Train using MS-SWIFT automated pipeline",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cell_name": {"type": "string"},
+                "model_name": {"type": "string"},
+                "dataset": {"type": "array", "items": {"type": "object"}},
+                "training_type": {"type": "string", "default": "lora"},
+            },
+            "required": ["cell_name", "model_name"],
+        },
+    },
+    {
+        "name": "absorb_codebase",
+        "description": "Absorb code patterns from a directory into a cell",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+            },
+            "required": ["path"],
+        },
+    },
+    # ── System ──
+    {
+        "name": "get_status",
+        "description": "Get LivingTree system status",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_metrics",
+        "description": "Get runtime metrics",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "discover_peers",
+        "description": "Discover P2P network peers",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+]
+
+
+class MCPServer:
+    """Model Context Protocol server for LivingTree.
+
+    Implements the MCP JSON-RPC protocol over stdio.
+    External AI tools connect via:
+        {"mcpServers": {"livingtree": {"command": "python", "args": ["-m", "livingtree.mcp.server"]}}}
+    """
+
+    def __init__(self, hub=None):
+        self._hub = hub
+        self._code_graph = None
+
+    async def handle_request(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        """Route an MCP method to the appropriate handler."""
+        params = params or {}
+
+        # Initialize hub lazily
+        if self._hub is None and method != "initialize":
+            try:
+                from ..integration.hub import IntegrationHub
+                self._hub = IntegrationHub()
+                await self._hub.start()
+            except Exception as e:
+                logger.error(f"MCP hub init failed: {e}")
+                return {"error": str(e)}
+
+        # Initialize code graph lazily
+        if self._code_graph is None and method.startswith(("build_", "blast_", "get_", "search_code", "find_")):
+            try:
+                from ..capability.code_graph import CodeGraph
+                self._code_graph = CodeGraph()
+                self._code_graph.load()
+            except Exception:
+                pass
+
+        handlers = {
+            # Code Graph
+            "build_code_graph": self._build_graph,
+            "blast_radius": self._blast_radius,
+            "get_callers": self._get_callers,
+            "get_callees": self._get_callees,
+            "search_code": self._search_code,
+            "find_hubs": self._find_hubs,
+            "find_uncovered": self._find_uncovered,
+            # Chat
+            "chat": self._chat,
+            "analyze": self._analyze,
+            "generate_report": self._generate_report,
+            # Code Gen
+            "generate_code": self._gen_code,
+            "improve_code": self._improve_code,
+            # Knowledge
+            "search_knowledge": self._search_knowledge,
+            "detect_knowledge_gaps": self._detect_gaps,
+            "discover_formats": self._discover_formats,
+            # Cell
+            "train_cell": self._train_cell,
+            "drill_train": self._drill_train,
+            "absorb_codebase": self._absorb_codebase,
+            # System
+            "get_status": self._get_status,
+            "get_metrics": self._get_metrics,
+            "discover_peers": self._discover_peers,
+        }
+
+        handler = handlers.get(method)
+        if not handler:
+            return {"error": f"Unknown method: {method}"}
+        return await handler(params)
+
+    async def list_tools(self) -> list[dict]:
+        return TOOLS
+
+    # ── Code Graph handlers ──
+
+    async def _build_graph(self, params: dict) -> dict:
+        path = params.get("path", ".")
+        self._code_graph = self._code_graph or CodeGraph()
+        stats = self._code_graph.index(path)
+        self._code_graph.save()
+        return {
+            "files": stats.total_files, "entities": stats.total_entities,
+            "edges": stats.total_edges, "languages": stats.languages,
+            "build_time_ms": stats.build_time_ms,
+        }
+
+    async def _blast_radius(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built. Run build_code_graph first."}
+        files = params.get("files", [])
+        results = self._code_graph.blast_radius(files)
+        return {"impacted": [{"file": r.file, "reason": r.reason, "risk": r.risk} for r in results]}
+
+    async def _get_callers(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        callers = self._code_graph.get_callers(params["function_name"])
+        return {"callers": [{"name": c.name, "file": c.file, "line": c.line} for c in callers]}
+
+    async def _get_callees(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        callees = self._code_graph.get_callees(params["function_name"])
+        return {"callees": callees}
+
+    async def _search_code(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        results = self._code_graph.search(params["query"])
+        return {"results": [{"name": e.name, "file": e.file, "kind": e.kind} for e in results[:20]]}
+
+    async def _find_hubs(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        hubs = self._code_graph.find_hubs(params.get("top_n", 10))
+        return {"hubs": [{"name": h.name, "file": h.file, "connections": len(h.dependents) + len(h.dependencies)} for h in hubs]}
+
+    async def _find_uncovered(self, params: dict) -> dict:
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        uncovered = self._code_graph.find_uncovered()
+        return {"uncovered": [{"name": e.name, "file": e.file} for e in uncovered[:20]]}
+
+    # ── Chat handlers ──
+
+    async def _chat(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.chat(params["message"])
+
+    async def _analyze(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        result = await self._hub.chat(f"请深度分析: {params['topic']}")
+        return result
+
+    async def _generate_report(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.generate_report(
+            params["template_type"],
+            params.get("data", {}),
+        )
+
+    # ── Code gen handlers ──
+
+    async def _gen_code(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.generate_code(
+            params["name"],
+            params.get("description", ""),
+            params.get("domain", "general"),
+        )
+
+    async def _improve_code(self, params: dict) -> dict:
+        if not self._hub or not self._hub.world.code_engine:
+            return {"error": "Code engine not available"}
+        result = await self._hub.world.code_engine.improve_code(
+            params["code"],
+            params.get("requirements", {}),
+        )
+        return {"code": result.code, "annotations": result.annotations}
+
+    # ── Knowledge handlers ──
+
+    async def _search_knowledge(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        results = self._hub.world.knowledge_base.search(params["query"])
+        return {"results": [{"title": d.title, "content": d.content[:200]} for d in results[:10]]}
+
+    async def _detect_gaps(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        plan = self._hub.world.gap_detector.generate_learning_plan(self._hub.world.knowledge_base)
+        return {"gaps": [{"domain": g.domain, "topic": g.topic, "priority": g.priority} for g in plan]}
+
+    async def _discover_formats(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        template = self._hub.world.format_discovery.analyze_document(params["path"])
+        return {"name": template.name, "formats": list(template.formats), "structure": template.structure}
+
+    # ── Cell handlers ──
+
+    async def _train_cell(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.train_cell(params["cell_name"], params.get("data", []))
+
+    async def _drill_train(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.drill_train(
+            params["cell_name"], params["model_name"],
+            params.get("dataset", []), params.get("training_type", "lora"),
+        )
+
+    async def _absorb_codebase(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return await self._hub.absorb_github(params["path"])
+
+    # ── System handlers ──
+
+    async def _get_status(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return self._hub.status()
+
+    async def _get_metrics(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        return self._hub.world.metrics.get_snapshot() if self._hub.world.metrics else {}
+
+    async def _discover_peers(self, params: dict) -> dict:
+        if not self._hub:
+            return {"error": "Hub not available"}
+        peers = await self._hub.discover_peers()
+        return {"peers": peers}
+
+
+async def serve_stdio(hub=None) -> None:
+    """Run MCP server over stdio (JSON-RPC)."""
+    server = MCPServer(hub)
+    logger.info("LivingTree MCP Server starting on stdio")
+
+    buffer = ""
+    while True:
+        try:
+            chunk = sys.stdin.read(1)
+            if not chunk:
+                break
+            buffer += chunk
+            if buffer.strip().endswith("}"):
+                try:
+                    request = json.loads(buffer)
+                    buffer = ""
+                    method = request.get("method", "")
+                    req_id = request.get("id")
+
+                    if method == "tools/list":
+                        tools = await server.list_tools()
+                        response = {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}}
+                    elif method == "tools/call":
+                        tool_name = request.get("params", {}).get("name", "")
+                        arguments = request.get("params", {}).get("arguments", {})
+                        result = await server.handle_request(tool_name, arguments)
+                        response = {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}]}}
+                    elif method == "initialize":
+                        response = {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "livingtree-mcp", "version": "2.0.0"}}}
+                    else:
+                        response = {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
+
+                    sys.stdout.write(json.dumps(response, ensure_ascii=False, default=str) + "\n")
+                    sys.stdout.flush()
+                except json.JSONDecodeError:
+                    pass
+        except EOFError:
+            break
+        except Exception as e:
+            logger.error(f"MCP error: {e}")
+
+
+def main():
+    """Entry point: python -m livingtree.mcp.server"""
+    asyncio.run(serve_stdio())
+
+
+if __name__ == "__main__":
+    main()

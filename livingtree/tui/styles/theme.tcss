@@ -1,0 +1,260 @@
+/* LivingTree TUI — Dark Theme (default) */
+
+Screen {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+/* ── Header ── */
+#header {
+    dock: top;
+    height: 3;
+    background: #161b22;
+    border-bottom: solid $primary;
+    padding: 0 1;
+}
+
+#header-title {
+    color: $text-success;
+    text-style: bold;
+    width: 30;
+}
+
+#header-workspace {
+    color: $text-muted;
+    width: 1fr;
+}
+
+#header-status {
+    color: $text-success;
+    width: 20;
+    content-align: right middle;
+}
+
+/* ── Tab Bar ── */
+#tab-bar {
+    dock: top;
+    height: 1;
+    background: #21262d;
+}
+
+Tab {
+    padding: 0 2;
+    background: #21262d;
+    color: #8b949e;
+}
+
+Tab.-active {
+    background: #0d1117;
+    color: $text-success;
+    border-bottom: solid $primary;
+}
+
+/* ── Footer / Status Bar ── */
+#footer {
+    dock: bottom;
+    height: 1;
+    background: #161b22;
+    border-top: solid #30363d;
+    padding: 0 1;
+}
+
+#footer-keys {
+    width: 1fr;
+    color: $text-muted;
+}
+
+#footer-status {
+    width: 30;
+    color: $text-success;
+}
+
+/* ── Chat Screen ── */
+#chat-history {
+    background: #0d1117;
+    border: none;
+    overflow-y: scroll;
+}
+
+.chat-message-user {
+    color: $text-success;
+    margin: 1 2 0 2;
+}
+
+.chat-message-ai {
+    color: #c9d1d9;
+    margin: 1 2 0 2;
+    background: #161b22;
+    padding: 0 1;
+}
+
+.chat-message-system {
+    color: $text-muted;
+    margin: 0 2;
+    text-style: italic;
+}
+
+.chat-thinking {
+    color: #58a6ff;
+    margin: 0 2;
+    text-style: italic;
+}
+
+#chat-input-container {
+    dock: bottom;
+    height: auto;
+    min-height: 3;
+    max-height: 10;
+    background: #161b22;
+    border-top: solid #30363d;
+    padding: 0 1;
+}
+
+#chat-input {
+    border: none;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 3;
+}
+
+/* ── Code Screen ── */
+#code-editor {
+    background: #0d1117;
+    border: solid #30363d;
+    color: #c9d1d9;
+}
+
+#code-output {
+    height: 10;
+    background: #161b22;
+    border-top: solid #30363d;
+    color: #8b949e;
+    overflow-y: scroll;
+}
+
+/* ── Docs Screen ── */
+#file-tree {
+    width: 30;
+    background: #161b22;
+    border-right: solid #30363d;
+    overflow-y: scroll;
+}
+
+.file-tree-item {
+    padding: 0 1;
+}
+
+.file-tree-item:hover {
+    background: #21262d;
+}
+
+.file-tree-item.folder {
+    color: #58a6ff;
+    text-style: bold;
+}
+
+.file-tree-item.file {
+    color: #c9d1d9;
+}
+
+#doc-preview {
+    background: #0d1117;
+    border: none;
+    overflow-y: scroll;
+}
+
+/* ── Map Screen ── */
+#map-view {
+    background: #0d1117;
+    border: solid #30363d;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#map-search {
+    dock: top;
+    height: 3;
+    background: #161b22;
+    padding: 0 1;
+}
+
+/* ── Settings Screen ── */
+#settings-form {
+    padding: 1 2;
+    overflow-y: scroll;
+}
+
+#settings-form Label {
+    color: $text-success;
+    margin: 1 0 0 0;
+}
+
+#settings-form Input {
+    margin: 0 0 1 0;
+    background: #161b22;
+    border: solid #30363d;
+}
+
+/* ── Common ── */
+Button {
+    background: #21262d;
+    color: #c9d1d9;
+    border: solid #30363d;
+}
+
+Button:hover {
+    background: #30363d;
+    border: solid $primary;
+}
+
+Button.primary {
+    background: $primary;
+    color: $primary-contrast;
+    border: none;
+}
+
+Input {
+    background: #0d1117;
+    color: #c9d1d9;
+    border: solid #30363d;
+}
+
+Input:focus {
+    border: solid $primary;
+}
+
+.help-panel {
+    background: #161b22;
+    border: solid $primary;
+    padding: 1 2;
+    width: 60;
+    height: auto;
+}
+
+/* ── Animated Loading ── */
+.spinner {
+    color: $primary;
+    text-style: bold;
+}
+
+/* ── Light Theme Overrides ── */
+.light Screen {
+    background: #ffffff;
+    color: #24292f;
+}
+
+.light #header { background: #f6f8fa; border-bottom: solid #0969da; }
+.light #footer { background: #f6f8fa; border-top: solid #d0d7de; }
+.light #tab-bar { background: #f6f8fa; }
+.light Tab { background: #f6f8fa; color: #57606a; }
+.light Tab.-active { background: #ffffff; color: #0969da; }
+.light #chat-input-container { background: #f6f8fa; border-top: solid #d0d7de; }
+.light #chat-input { background: #ffffff; }
+.light #code-editor { background: #ffffff; border: solid #d0d7de; }
+.light #code-output { background: #f6f8fa; border-top: solid #d0d7de; }
+.light #file-tree { background: #f6f8fa; border-right: solid #d0d7de; }
+.light .file-tree-item:hover { background: #d0d7de; }
+.light #settings-form Input { background: #ffffff; border: solid #d0d7de; }
+.light Button { background: #f6f8fa; color: #24292f; }
+.light .chat-message-ai { background: #f6f8fa; }
+.light .help-panel { background: #f6f8fa; border: solid #0969da; }

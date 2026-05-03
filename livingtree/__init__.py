@@ -1,187 +1,65 @@
-"""
-LivingTree — Digital Lifeform AI Agent Platform
-================================================
+"""LivingTree AI Agent — Digital Lifeform Platform v2.0.0
 
-Core package providing:
-- LifeEngine: Central dispatcher with TaskChain pipeline (Perceive→Cognize→Plan→Execute→Reflect→Evolve)
-- UnifiedModelRouter: 3-tier model routing (Local/Edge/Cloud)
-- MemoryStore: Unified memory with VectorDB + GraphDB + Sessions
-- EvolutionEngine: Self-evolution with reflection and pattern learning
-- Complete tool, skill, and plugin ecosystems
+A self-learning, self-evolving, self-healing digital life form for:
+- Autonomous chat and task execution
+- Industrial report generation (EIA, emergency plans, etc.)
+- AI cell training and knowledge distillation
+- P2P network discovery and collaboration
+- Multi-agent task orchestration
+- Self-evolution through code absorption and mutation
+
+Architecture:
+    DNA Layer    — LifeEngine (perceive→cognize→plan→execute→reflect→evolve)
+    Cell Layer   — Trainable AI cells (mitosis, phage, regeneration, distillation)
+    Knowledge    — VectorStore, KnowledgeGraph, FormatDiscovery, GapDetector
+    Capability   — SkillFactory, ToolMarket, CodeEngine, DocEngine
+    Network      — P2P nodes, discovery, NAT traversal, encrypted channels
+    Execution    — TaskPlanner, Orchestrator, SelfHealer
+    Integration  — Hub for DI wiring and lifecycle
+    API          — FastAPI server with REST + WebSocket
+    Config       — Unified LTAIConfig
+    Observability — Structured logging, tracing, metrics
+
+Quick Start:
+    python -m livingtree client      # Interactive CLI
+    python -m livingtree server      # FastAPI server at port 8100
+    python -m livingtree test        # Integration tests
+    python -m livingtree check       # Environment check
 """
 
 __version__ = "2.0.0"
+__author__ = "LivingTree Team"
 
-from livingtree.core import (
-    LifeEngine,
-    Cell,
-    PerceptionCell, MemoryCell, ReasoningCell,
-    LearningCell, ActionCell,
-    Intent, IntentType, Context,
-    TaskNode, TaskPlan, ModelBinding,
-    ExecutionResult, LearningRecord,
-    Stimulus, Response,
-    SessionManager, SessionInfo, MessageRecord,
-    ContextEntry, UnifiedContext,
-    get_session_manager,
-    DocumentChunk, PaperMetadata,
-    LLMDocumentParser, PaperParser, CodeExtractor,
-    FeedbackManager, FeedbackRecord, TripletScore,
-    KnowledgeGraphSelfEvolver, ShortcutEdge,
-    HybridRetriever, RetrievalResult,
-    ToolRegistry, ToolDispatcher, ToolDef, SCHEMA,
-    register_all_tools, register_all_builtin_tools,
-    MessageSyncService, MessageChannel, MessageStatus, SyncMessage, SendResult,
-    ChannelHandler, SMSHandler, WeComHandler, EmailHandler, LANHandler,
-    MessageQueue, get_message_sync_service,
-    AgentProtocol, AgentMessage, Conversation, MessageType, MessagePriority,
-    ProtocolRegistry, get_protocol_registry,
-    AgentCapabilities,
-    WorkflowStatus, NodeType, WorkflowNode, WorkflowContext, WorkflowResult,
-    BaseWorkflow, SequentialWorkflow, DecisionWorkflow, ParallelWorkflow,
-    WorkflowBuilder, WorkflowEngine, register_workflow, execute_workflow,
-    get_workflow_engine,
-    AutomationJob, WorkflowScheduler, AgentActionExecutor, AutoWorkflowGenerator,
-    get_workflow_scheduler, get_agent_executor,
-    EvolutionEngine, SelfLearningEngine, Reflector, Optimizer, Repairer,
-    AdaptiveCompressionStrategy, EvolutionController, PatternLibrary, SafetyGate,
-    ABTestEngine, InteractionSample, PerformanceMetric, KnowledgePattern,
-    EvolutionStrategy, EvoExecutionRecord,
-    ReflectionReport, ImprovementProposal, EvolutionStatus,
-    LearningType, MetricType,
-    ChainOfThoughtDistiller, ChainTemplate, ReasoningRecord, ReasoningStep,
-    ReasoningType,
-    MultiModelComparison, ComparisonMetric, ModelOutput, ComparisonResult,
-    AutoModelSelector, IntentClassifier, ComplexityEstimator, PerformanceTracker,
-    TaskType, TaskComplexity, ModelCapability, ModelRecommendation,
-    KnowledgeConsistencyVerifier, ConsistencyChecker, VotingDecider,
-    MultiModelInferrer, ConsensusLevel, VerificationStatus,
-    ModelResponse, ConsistencyResult, VerificationReport,
-    SkillInfo, SkillRepository, SkillMatcher, SkillDependencyGraph,
-    SkillUpdater, ContextQuery, SkillStatus,
-    SkillCategory, AgentType, OutputType, SkillEvolution,
-    SkillInput, SkillOutput, SkillManifest, SkillRegistry,
-    SkillMdLoader, SkillExecutor,
-    SlashCommand, SlashCommandRegistry,
-    ContextAwareLoader,
-    CronScheduler, CronParser, NaturalLanguageScheduler, CronScheduledTask,
-    AutoEvolutionSkill, PatternDetector, SkillSeedGenerator, SkillSeed,
-    EvolutionCandidate, InteractionPattern,
-    HonchoUserModeling, UserProfile, UserPreference, Dialect, CommunicationStyle,
-    DecompositionSkillType, BaseDecompositionSkill,
-    ArchitectureDesignerSkill, CodeRefactorerSkill, TaskSplitterProSkill,
-    DecompositionSkillFactory, get_architecture_designer,
-    get_code_refactorer, get_task_splitter, register_decomposition_skills,
-    AgentSkillsInitializer,
-    MemoryStore, IMemorySystem, MemoryQuery, MemoryItem, MemoryResult,
-    MemoryLevel, SimpleVectorDB, SimpleGraphDB, SessionStore,
-    RelevanceScorer, ImportanceScorer, QueryPlanner,
-    KnowledgeGraph, Entity, Relation, EntityType, RelationType,
-    get_knowledge_graph,
-    UnifiedModelRouter, UnifiedModelClient, ModelRegistry, ModelHealthChecker,
-    CircuitBreaker, LoadBalancer, ModelInfo, ComputeTier, TaskCategory,
-    RoutingStrategy, EndpointHealth, AIResponse, CostBudget, TierEndpoint,
-    get_model_router, get_model_client,
-    IntentParser, ParsedIntent, IntentTracker, IntentSimilarity,
-    DialogTurn, SentimentLabel, LanguageHint,
-    TaskPlanner, TaskDecomposer,
-    ExecutionPlanner, RetryManager, MilestoneTracker,
-    COT_TEMPLATES,
-    ContextAssembler, ContextCompressor, ContextPrioritizer,
-    PromptTemplateEngine, TokenCounter,
-    AssembledContext, ContextChunk, ContextPriority,
-    PluginManager, Plugin, PluginManifest, PluginStatus,
-    PluginSandbox, PluginDiscovery, DependencyResolver,
-    StatePredictor, OutcomeSimulator, BayesianUpdater,
-    ScenarioTree, ScenarioNode, CausalAnalyzer,
-    PredictedOutcome, ActualOutcome, WorldAction, WorldActionType, WorldState,
-    StructuredLogger, LogEntry, LogLevel, get_logger,
-    RequestTracer, TraceContext, Span, get_tracer,
-    MetricsCollector, HealthMonitor, ErrorLevel, ErrorRecord,
-    RecoveryAttempt, APICallMetrics, get_metrics,
-    AuditorAgent, AuditResult, AuditIssue,
-    AuditIssueType, IssueSeverity, get_auditor_agent,
-    BlacklistManager, BlacklistEntry,
-    FormalVerifier, Constraint, ConstraintType,
-    FVVerificationStatus, FVVerificationResult, FVVerificationReport,
-    RulesEngine, BusinessRule, RuleExecutionResult,
-    EIA_Rules, FinancialRules,
-    SmsGateway, get_sms_gateway, SmsChannel, ChannelStatus,
-    ChannelConfig, EmailConfig, SmsResult, GatewayStats,
-    setup_monthly_reset,
-    DocumentParser, DocumentParserFactory, UnstructuredDocumentParser,
-    parse_document,
-    DocumentType, SectionType,
-    ParsedDocument, DocumentSection, TableData, TableCell, EntityRelation,
-    DocumentGenerator, DocumentGenerationResult,
-    ReportSchema, ReportSection, ReportType, ContentType,
-    SchemaValidator, ReportTemplates,
-    MapGateway, get_map_gateway, MapProvider, ServiceType, CoordinateSystem,
-    ProviderConfig, CacheEntry,
-    MAP_CONFIG, get_api_key, get_secret_key, get_base_url, get_timeout,
-    is_debug_enabled, update_config, validate_config, print_config_summary,
-    MapAgentController, MapInteractionMode, get_map_agent_controller,
-    PerceptionTool, SpatialIdentity,
-    GeometryTool, GeometryOperation,
-    OverlayAnalysisTool, OverlayResult,
-    MobilityTool, RouteAnalysisResult,
-    ExportTool, ExportFormat,
-    SICACodeGenerator, CodeGenerationResult, TestResult,
-    SelfReflectionEngine, ReflectionResult,
-    SoftwareManager, MetadataManager, BootstrapInstaller,
-    SystemScanner, SoftwareManagerBridge, WebChannelSetup,
-    PackageManager, PackageInfo, InstallStatus,
-    EvolutionSystem, ExperienceSystem, Experience, SkillUsage, HumanFeedback,
-    ExtraSkillEvaluator, ExtraSkill, SkillMetric, SkillExample,
-    ExtraSkillCategory, ExtraSkillStatus,
-    ExtraPolicyEngine, ExtraPolicy, PolicyRule, PolicyInsight,
-    ExtraPolicyType, ExtraPolicyAction,
-    EvolutionLogger, EvolutionEvent, EvolutionPhase,
-    EvolutionEventType, EvolutionImpact,
-    ExtraSkillDiscoveryEngine, PatternMatch, DiscoveryResult,
-    ToolManifest, TmToolStatus, ToolExecutionResult,
-    InputSpec, OutputSpec, TmValidationResult,
-    DocumentSlot, SandboxConfig, ToolPackage,
-    ToolResolver, ToolSandbox, ToolValidator,
-    ToolSlotter, ToolDownloader, EnvironmentalToolRegistry,
-    ToolDiscoveryEngine, ToolInfo, ToolSearchResult, ToolSource,
-    ConsultingEngineer, ProjectContext, CEProjectType, CETaskType, CETaskResult,
-    get_consulting_engineer,
-    create_eia_project, create_feasibility_project,
-)
+from .dna import LifeEngine, Genome, Consciousness, DefaultConsciousness, LLMConsciousness, DualModelConsciousness, SafetyGuard
+from .cell import CellAI, CellRegistry, CellTrainer, Mitosis, Phage, Regen, Distillation
+from .knowledge import KnowledgeBase, VectorStore, KnowledgeGraph, FormatDiscovery, GapDetector
+from .capability import SkillFactory, ToolMarket, DocEngine, CodeEngine, MaterialCollector
+from .network import Node, Discovery, NATTraverser, Reputation
+from .execution import TaskPlanner, Orchestrator, SelfHealer
+from .integration import IntegrationHub, launch, LaunchMode
+from .config import LTAIConfig, get_config, reload_config
+from .observability import setup_observability, get_logger
+from .tui import LivingTreeTuiApp, ChatScreen, CodeScreen, DocsScreen, MapScreen, SettingsScreen
 
-from livingtree.infrastructure import (
-    LTAIConfig, get_config, config,
-    EventBus, Event, EventHook, EventPriority, EVENTS,
-    get_event_bus, subscribe, publish,
-    Database,
-    WebSocketManager, WSConnection,
-    hash_password, verify_password,
-    check_rate_limit, sanitize_input, generate_api_key,
-)
-
-from livingtree.adapters import (
-    MCPServerManager, MCPClient, MCPDatabase,
-    MCPServerInfo, MCPToolDef,
-    MCPProtocol, ServerStatus, ServerSource,
-    get_mcp_manager,
-    APIGateway,
-    ProviderBase, OllamaProvider, OpenAICompatibleProvider,
-    ProviderRegistry, ProviderType,
-    ChatCompletionRequest, ChatCompletionResponse,
-    DeepSeekProvider, create_deepseek_provider,
-    TransportType, ProviderCategory,
-    ModelConfig, ProviderConfig,
-    PROVIDER_CATALOG,
-    ProviderCatalogRegistry, get_provider_catalog,
-)
-
-from livingtree.frontend_bridge import (
-    FrontendChannel, BridgeAPI,
-    FrontendRequest, FrontendResponse,
-)
-
-from livingtree.server import (
-    start_relay, get_relay_app,
-    start_tracker, get_tracker,
-)
+__all__ = [
+    # Version
+    "__version__",
+    # DNA
+    "LifeEngine", "Genome", "Consciousness", "DefaultConsciousness", "LLMConsciousness", "DualModelConsciousness", "SafetyGuard",
+    # Cell
+    "CellAI", "CellRegistry", "CellTrainer", "Mitosis", "Phage", "Regen", "Distillation",
+    # Knowledge
+    "KnowledgeBase", "VectorStore", "KnowledgeGraph", "FormatDiscovery", "GapDetector",
+    # Capability
+    "SkillFactory", "ToolMarket", "DocEngine", "CodeEngine", "MaterialCollector",
+    # Network
+    "Node", "Discovery", "NATTraverser", "Reputation",
+    # Execution
+    "TaskPlanner", "Orchestrator", "SelfHealer",
+    # Integration
+    "IntegrationHub", "launch", "LaunchMode",
+    # Config
+    "LTAIConfig", "get_config", "reload_config",
+    "setup_observability", "get_logger",
+    "LivingTreeTuiApp", "ChatScreen", "CodeScreen", "DocsScreen", "MapScreen", "SettingsScreen",
+]

@@ -1,10 +1,4 @@
-"""
-LivingTree — Package Entry Point
-=================================
-
-Usage: python -m livingtree [command]
-"""
-
+"""Entry point for 'python -m livingtree'."""
 from livingtree.main import main
 
 if __name__ == "__main__":

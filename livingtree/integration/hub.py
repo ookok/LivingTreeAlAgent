@@ -107,10 +107,29 @@ class IntegrationHub:
         self.world.checkpoint = TaskCheckpoint(store_path="./data/checkpoints")
         self.world.cost_aware = CostAware(daily_budget_tokens=1_000_000)
 
-        # Register all tools into ToolMarket
-        from ..capability.tool_market import register_all_tools
+        # Register seed physics models into ToolMarket (all else discovered at runtime)
+        from ..capability.tool_market import register_seed_tools
         self.world.tool_market.set_world(self.world)
-        register_all_tools(self.world.tool_market)
+        register_seed_tools(self.world.tool_market)
+
+        # Wire LearningEngine
+        from ..knowledge.learning_engine import TemplateLearner, SkillDiscoverer, RoleGenerator
+        self.world.template_learner = TemplateLearner(
+            kb=self.world.knowledge_base,
+            distillation=self.world.distillation,
+            expert_config=self.world.expert_config,
+        )
+        self.world.skill_discoverer = SkillDiscoverer(
+            phage=self.world.phage,
+            skill_factory=self.world.skill_factory,
+            ast_parser=self.world.ast_parser,
+            kb=self.world.knowledge_base,
+        )
+        self.world.role_generator = RoleGenerator(
+            distillation=self.world.distillation,
+            expert_config=self.world.expert_config,
+            kb=self.world.knowledge_base,
+        )
 
         # ── Create engine (receives the world) ──
         self.engine = LifeEngine(self.world)
@@ -271,26 +290,13 @@ class IntegrationHub:
     # ── Internal ──
 
     def _register_agents(self) -> None:
-        agents = [
-            ("collector", ["collector"], ["web_scrape", "file_read", "api_fetch"]),
-            ("analyst", ["analyst"], ["analysis", "pattern_recognition"]),
-            ("researcher", ["researcher"], ["search", "knowledge_retrieval"]),
-            ("writer", ["writer"], ["document_generation", "formatting"]),
-            ("developer", ["developer"], ["code_generation", "debugging"]),
-            ("reviewer", ["reviewer"], ["code_review", "quality_check"]),
-            ("environmental", ["environmental"], ["eia", "risk_assessment", "emission"]),
-            ("safety", ["safety"], ["risk_identification", "emergency_planning"]),
-            ("economic", ["economic"], ["cost_estimation", "economic_analysis"]),
-            ("planner", ["planner"], ["task_planning", "resource_allocation"]),
-            ("market_cycle", ["market_structure"], ["trend_analysis", "cycle_detection"]),
-            ("tail_risk", ["risk"], ["tail_modeling", "fragility_detection"]),
-            ("liquidity", ["price_volume"], ["liquidity_analysis", "volume_structure"]),
-            ("volatility", ["volatility"], ["volatility_clustering", "asymmetry"]),
-            ("multi_scale", ["complexity"], ["fractal_analysis", "drawdown_geometry"]),
-            ("stability", ["stability"], ["regime_gating", "signal_stability"]),
-            ("fusion", ["fusion"], ["geometric_patterns", "multi_factor_fusion"]),
+        """Register minimal seed agents. Full roles generated dynamically from tasks."""
+        seeds = [
+            ("analyst", ["analyst"], ["analysis", "reasoning", "tool_use"]),
+            ("executor", ["executor"], ["execution", "code_gen", "tool_use"]),
+            ("collector", ["collector"], ["web_search", "file_read", "knowledge_query"]),
         ]
-        for name, roles, caps in agents:
+        for name, roles, caps in seeds:
             self.world.orchestrator.register_agent(AgentSpec(
                 name=name,
                 roles=[AgentRole(name=r, capabilities=caps) for r in roles],

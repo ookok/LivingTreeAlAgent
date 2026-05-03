@@ -8,21 +8,18 @@ This package exposes the lightweight knowledge layer components:
 - GapDetector: identify and plan learning gaps
 """
 
-from .knowledge_base import KnowledgeBase, Document  # type: ignore
-from .vector_store import VectorStore, EmbeddingBackend  # type: ignore
-from .knowledge_graph import KnowledgeGraph, Entity  # type: ignore
-from .format_discovery import FormatDiscovery, Template  # type: ignore
-from .gap_detector import GapDetector, Gap  # type: ignore
+from .knowledge_base import KnowledgeBase, Document
+from .vector_store import VectorStore, EmbeddingBackend
+from .knowledge_graph import KnowledgeGraph, Entity
+from .format_discovery import FormatDiscovery, Template
+from .gap_detector import GapDetector, Gap
+from .learning_engine import TemplateLearner, SkillDiscoverer, RoleGenerator
 
 __all__ = [
-    "KnowledgeBase",
-    "Document",
-    "VectorStore",
-    "EmbeddingBackend",
-    "KnowledgeGraph",
-    "Entity",
-    "FormatDiscovery",
-    "Template",
-    "GapDetector",
-    "Gap",
+    "KnowledgeBase", "Document",
+    "VectorStore", "EmbeddingBackend",
+    "KnowledgeGraph", "Entity",
+    "FormatDiscovery", "Template",
+    "GapDetector", "Gap",
+    "TemplateLearner", "SkillDiscoverer", "RoleGenerator",
 ]

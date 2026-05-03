@@ -71,6 +71,9 @@ class LivingWorld:
         self.hitl: Any = None
         self.checkpoint: Any = None
         self.cost_aware: Any = None
+        self.template_learner: Any = None
+        self.skill_discoverer: Any = None
+        self.role_generator: Any = None
 
     def wire(self, **kwargs) -> "LivingWorld":
         """Wire subsystems into the world. Called during Hub boot."""

@@ -249,29 +249,57 @@ def _list_cells(params: dict, world: Any = None) -> dict:
 # ── Map tools ──
 
 def _lookup_location(params: dict, world: Any = None) -> dict:
-    """Geocode lookup with known city coordinates."""
+    """Geocode lookup via Tianditu API + city cache fallback."""
     query = params.get("query", "").strip()
-    cities = {
-        "北京": (39.9042, 116.4074), "beijing": (39.9042, 116.4074),
-        "上海": (31.2304, 121.4737), "shanghai": (31.2304, 121.4737),
-        "广州": (23.1291, 113.2644), "guangzhou": (23.1291, 113.2644),
-        "深圳": (22.5431, 114.0579), "shenzhen": (22.5431, 114.0579),
-        "成都": (30.5728, 104.0668), "chengdu": (30.5728, 104.0668),
-        "杭州": (30.2741, 120.1551), "hangzhou": (30.2741, 120.1551),
-        "武汉": (30.5928, 114.3055), "wuhan": (30.5928, 114.3055),
-        "南京": (32.0603, 118.7969), "nanjing": (32.0603, 118.7969),
-        "重庆": (29.4316, 106.9123), "chongqing": (29.4316, 106.9123),
-        "西安": (34.3416, 108.9398), "xian": (34.3416, 108.9398),
-    }
-    match = cities.get(query.lower(), None)
+    # Fast city cache
+    cities = {"北京": (39.9042,116.4074),"上海":(31.2304,121.4737),"广州":(23.1291,113.2644),
+              "深圳":(22.5431,114.0579),"成都":(30.5728,104.0668),"杭州":(30.2741,120.1551),
+              "武汉":(30.5928,114.3055),"南京":(32.0603,118.7969),"重庆":(29.4316,106.9123),
+              "西安":(34.3416,108.9398)}
+    match = cities.get(query, None) or cities.get(query.lower(), None)
+    try:
+        from .tianditu import geocode
+        result = geocode(query)
+        if result.get("found"):
+            lon, lat = float(result["lon"]), float(result["lat"])
+            return {"query": query, "lat": lat, "lon": lon, "found": True,
+                    "name": result.get("name",""), "admin": result.get("admin",""),
+                    "map_url": f"https://map.tianditu.gov.cn/#/?lat={lat}&lng={lon}&zoom=14",
+                    "source": "tianditu"}
+    except Exception:
+        pass
     if match:
-        return {"query": query, "lat": match[0], "lon": match[1], "found": True}
-    return {"query": query, "found": False, "hint": "Known: 北京/上海/广州/深圳/成都/杭州/武汉/南京/重庆/西安"}
+        return {"query": query, "lat": match[0], "lon": match[1], "found": True,
+                "map_url": f"https://map.tianditu.gov.cn/#/?lat={match[0]}&lng={match[1]}&zoom=14",
+                "source": "cache"}
+    return {"query": query, "found": False, "hint": "Try: 北京市朝阳区 or coordinates"}
 
 def _geocode_reverse(params: dict, world: Any = None) -> dict:
     lat, lon = params.get("lat", 0), params.get("lon", 0)
-    return {"lat": lat, "lon": lon, "location": f"({lat:.4f}, {lon:.4f})",
-            "map_url": f"https://www.tianditu.gov.cn/?lat={lat}&lng={lon}"}
+    try:
+        from .tianditu import reverse_geocode
+        result = reverse_geocode(lat, lon)
+        if result.get("found"):
+            return {"lat": lat, "lon": lon, "found": True,
+                    "address": result.get("address",""), "province": result.get("province",""),
+                    "city": result.get("city",""), "source": "tianditu"}
+    except Exception:
+        pass
+    return {"lat": lat, "lon": lon, "found": False,
+            "map_url": f"https://map.tianditu.gov.cn/#/?lat={lat}&lng={lon}&zoom=14"}
+
+def _static_map(params: dict, world: Any = None) -> dict:
+    """Generate terminal map display via Tianditu tiles."""
+    lat, lon = params.get("lat", 39.9042), params.get("lon", 116.4074)
+    zoom = params.get("zoom", 12)
+    layer = params.get("layer", "vec")
+    try:
+        from .tianditu import static_map
+        text = static_map(lon, lat, zoom, layer)
+        return {"lat": lat, "lon": lon, "zoom": zoom, "layer": layer,
+                "map_text": text, "map_url": f"https://map.tianditu.gov.cn/#/?lat={lat}&lng={lon}&zoom={zoom}"}
+    except Exception as e:
+        return {"error": str(e), "map_url": f"https://map.tianditu.gov.cn/#/?lat={lat}&lng={lon}&zoom={zoom}"}
 
 # ── Email tools ──
 
@@ -505,9 +533,13 @@ ALL_TOOLS = [
     # Map / GIS tools
     ("lookup_location", "Lookup city coordinates (lat/lon)", "map",
      {"properties": {"query": {"type": "string"}}, "required": ["query"]}, _lookup_location),
-    ("geocode_reverse", "Reverse geocode: lat/lon to map URL", "map",
-     {"properties": {"lat": {"type": "number"}, "lon": {"type": "number"}},
-      "required": ["lat", "lon"]}, _geocode_reverse),
+     ("geocode_reverse", "Reverse geocode: lat/lon to address via Tianditu", "map",
+      {"properties": {"lat": {"type": "number"}, "lon": {"type": "number"}},
+       "required": ["lat", "lon"]}, _geocode_reverse),
+    ("static_map", "Generate terminal map display from Tianditu tiles", "map",
+     {"properties": {"lat": {"type": "number", "default": 39.9042},
+      "lon": {"type": "number", "default": 116.4074},
+      "zoom": {"type": "integer", "default": 12}, "layer": {"type": "string", "default": "vec"}}}, _static_map),
 
     # Email tools
     ("send_email", "Queue an email for dispatch", "email",

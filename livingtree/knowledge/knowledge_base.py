@@ -97,20 +97,17 @@ class SQLiteBackend(StorageBackend):
     def connect(self) -> None:
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # WAL mode for concurrent reads + faster writes
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA cache_size=-8000")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS documents (
-                id TEXT PRIMARY KEY,
-                title TEXT,
-                content TEXT,
-                domain TEXT,
-                metadata TEXT,
-                valid_from TEXT,
-                valid_to TEXT,
-                created_at TEXT,
-                updated_at TEXT,
-                source TEXT DEFAULT 'manual',
-                author TEXT DEFAULT 'system',
-                revision INTEGER DEFAULT 1
+                id TEXT PRIMARY KEY, title TEXT, content TEXT, domain TEXT,
+                metadata TEXT, valid_from TEXT, valid_to TEXT,
+                created_at TEXT, updated_at TEXT, source TEXT DEFAULT 'manual',
+                author TEXT DEFAULT 'system', revision INTEGER DEFAULT 1
             )
         """)
         self._conn.commit()

@@ -81,18 +81,31 @@ class APIEmbeddingBackend(EmbeddingBackend):
 
 
 class VectorStore:
-    """Simple in-memory vector store with a pluggable embedding backend."""
+    """Simple in-memory vector store with embedding cache."""
 
-    def __init__(self, embedding_backend: Optional[EmbeddingBackend] = None, collection_name: str = "default") -> None:
+    def __init__(self, embedding_backend=None, collection_name: str = "default"):
         self.collection = collection_name
-        self.embedding_backend: EmbeddingBackend = embedding_backend or LocalEmbeddingBackend()
-        self._vectors: Dict[str, List[float]] = {}
-        logger.info("VectorStore initialized for collection '%s' with backend %s",
-                    self.collection, type(self.embedding_backend).__name__)
+        self.embedding_backend = embedding_backend or LocalEmbeddingBackend()
+        self._vectors: dict[str, list[float]] = {}
+        # Embedding cache to avoid re-computing
+        try:
+            from ..infrastructure.io_optimizer import _global_embed_cache
+            self._cache = _global_embed_cache
+        except Exception:
+            self._cache = None
+        logger.info(f"VectorStore init: {self.collection} / {type(self.embedding_backend).__name__}")
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
+        # Check cache first
+        if self._cache:
+            cached = self._cache.get(text)
+            if cached:
+                return cached
         vecs = self.embedding_backend.embed([text])
-        return vecs[0]
+        result = vecs[0]
+        if self._cache:
+            self._cache.set(text, result)
+        return result
 
     def add_vectors(self, items: List[Tuple[str, List[float]]]) -> None:
         for doc_id, vec in items:

@@ -129,6 +129,15 @@ $Shortcut.Save()
     except Exception as e:
         print(f"[LivingTree] Shortcut failed: {e}")
 
+    # 4. Register WT profile + global hotkey
+    try:
+        from .wt_setup import register_profile
+        register_profile(root)
+    except ImportError:
+        sys.path.insert(0, str(root / "scripts"))
+        from wt_setup import register_profile
+        register_profile(root)
+
 
 if __name__ == "__main__":
     install()

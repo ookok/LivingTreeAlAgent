@@ -106,8 +106,74 @@ def _dispersion_coeff(params: dict, world: Any = None) -> dict:
     g=c.get(s,c["D"]); return {"sy":round(g[0]*x**g[1],2),"sz":round(g[2]*x**g[3],2),"standard":"GB/T3840-1991"}
 
 
+def _generate_diagram(params: dict, world: Any = None) -> dict:
+    """Generate ASCII flowchart/diagram from natural language via LLM."""
+    description = params.get("description", "")
+    if not description:
+        return {"error": "description required"}
+    if not world or not world.consciousness:
+        return {"diagram": _basic_diagram(description), "source": "template"}
+
+    try:
+        import asyncio, json, aiohttp
+        loop = asyncio.get_event_loop()
+        async def _gen():
+            if hasattr(world, 'config'):
+                api_key = world.config.model.deepseek_api_key
+                base_url = world.config.model.deepseek_base_url
+                model = world.config.model.flash_model
+                headers = {"Content-Type":"application/json","Authorization":f"Bearer {api_key}"}
+                payload = {
+                    "model": model,
+                    "messages": [{"role":"system","content":(
+                        "Generate a text diagram using ASCII box-drawing characters.\n"
+                        "Use ┌─┐│└─┘├┤┬┴┼ for boxes and → for arrows.\n"
+                        "Output ONLY the diagram, no explanations.\n"
+                        "Types: flowchart, sequence, architecture, tree, table."
+                    )},{"role":"user","content": f"Generate a diagram for: {description}"}],
+                    "temperature":0.3,"max_tokens":2048,
+                }
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{base_url}/v1/chat/completions",
+                        headers=headers,json=payload,timeout=aiohttp.ClientTimeout(total=60),
+                    ) as resp:
+                        data = await resp.json()
+                        return data["choices"][0]["message"]["content"]
+            return _basic_diagram(description)
+        diagram = loop.run_until_complete(_gen())
+        return {"diagram": diagram, "source": "llm", "type": _detect_diagram_type(description)}
+    except Exception as e:
+        return {"diagram": _basic_diagram(description), "source": "template", "error": str(e)}
+
+
+def _detect_diagram_type(desc: str) -> str:
+    kw = desc.lower()
+    if any(w in kw for w in ["时序","sequence","uml"]): return "sequence"
+    if any(w in kw for w in ["架构","architecture","系统"]): return "architecture"
+    if any(w in kw for w in ["树","tree","层级","组织"]): return "tree"
+    if any(w in kw for w in ["表","table","数据"]): return "table"
+    return "flowchart"
+
+
+def _basic_diagram(desc: str) -> str:
+    return (
+        f"┌─────────────────────┐\n"
+        f"│     {desc[:30]:<30s}   │\n"
+        f"└──────────┬──────────┘\n"
+        f"           │\n"
+        f"           ▼\n"
+        f"┌─────────────────────┐\n"
+        f"│   Process / Analyze  │\n"
+        f"└──────────┬──────────┘\n"
+        f"           │\n"
+        f"           ▼\n"
+        f"┌─────────────────────┐\n"
+        f"│      Output / Result │\n"
+        f"└─────────────────────┘\n"
+    )
+
+
 def register_seed_tools(market: ToolMarket) -> int:
-    """Register only fundamental physical models as seed tools."""
     seeds = [
         ("gaussian_plume", "Gaussian plume dispersion model", "model",
          {"properties": {"Q":{"type":"number"},"u":{"type":"number"},"x":{"type":"number"}},
@@ -117,6 +183,9 @@ def register_seed_tools(market: ToolMarket) -> int:
           "required": ["Lw","r"]}, _noise_attenuation),
         ("dispersion_coeff", "Pasquill-Gifford stability coefficients", "model",
          {"properties": {"x":{"type":"number"}}, "required": ["x"]}, _dispersion_coeff),
+        ("generate_diagram", "Generate ASCII diagram from natural language (flowchart/sequence/architecture/tree/table)", "diagram",
+         {"properties": {"description": {"type": "string", "description": "Natural language description of the diagram"}},
+          "required": ["description"]}, _generate_diagram),
     ]
     for name, desc, cat, schema, handler in seeds:
         market.register(name, desc, cat, schema, handler)

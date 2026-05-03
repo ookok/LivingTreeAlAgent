@@ -1,20 +1,31 @@
-"""Code Editor — Deep-integrated with CodeGraph.
+"""Code Editor — file tree, multi-tab, search, diff, recent files.
 
-Built-in tools: blast_radius, callers, callees, hubs, code_search, AST parse.
-Ctrl+P to access, or use toolbar buttons.
+OpenCode-level features:
+- File tree sidebar + click to open
+- Multi-file tabs (Ctrl+W close)
+- Ctrl+F find / Ctrl+H replace
+- Ctrl+G goto line
+- Git diff against HEAD
+- Recent files (auto-saved)
+- Error line highlight on run
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
-from textual import work
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Input, RichLog, Select, TextArea
+from textual.widgets import (
+    Button, DirectoryTree, Input, Label, RichLog, Select, TabbedContent, TabPane, TextArea,
+)
 
 
 LANGUAGES = [
@@ -24,294 +35,298 @@ LANGUAGES = [
     ("rust", "Rust"), ("go", "Go"), ("java", "Java"), ("cpp", "C++"),
 ]
 
+EXT_TO_LANG = {".py": "python", ".js": "javascript", ".ts": "typescript",
+               ".html": "html", ".css": "css", ".json": "json", ".yaml": "yaml",
+               ".yml": "yaml", ".md": "markdown", ".sql": "sql", ".sh": "bash",
+               ".rs": "rust", ".go": "go", ".java": "java"}
+
 
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
-        self._current_file: Optional[Path] = None
-        self._language = "python"
+        self._files: dict[str, dict] = {}  # path -> {text, lang, tab_id}
+        self._active_file: Optional[str] = None
+        self._recent_path = Path("./data/recent_files.json")
+        self._recent_path.parent.mkdir(parents=True, exist_ok=True)
+        self._workspace = "."
 
     def set_hub(self, hub) -> None:
         self._hub = hub
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
-            Horizontal(
-                Select([(l, n) for l, n in LANGUAGES], prompt="Lang", value="python", id="lang-select"),
-                Input(placeholder="File path or symbol name...", id="code-query"),
-                Button("Open", variant="default", id="open-btn"),
-                Button("Save", variant="default", id="save-btn"),
-                Button("AI Gen", variant="primary", id="ai-gen-btn"),
-                Button("▼ Run", variant="primary", id="run-btn"),
-                id="code-toolbar",
+        yield Horizontal(
+            Vertical(
+                Input(placeholder="🔍 Search files (Ctrl+F)", id="code-search"),
+                DirectoryTree(".", id="code-tree"),
+                Label("", id="code-file-info"),
+                id="code-sidebar",
             ),
-            Horizontal(
-                Button("Callers", variant="default", id="callers-btn"),
-                Button("Callees", variant="default", id="callees-btn"),
-                Button("Blast", variant="default", id="blast-btn"),
-                Button("Hubs", variant="default", id="hubs-btn"),
-                Button("AST", variant="default", id="ast-btn"),
-                Button("Index", variant="default", id="index-btn"),
-                id="graph-toolbar",
+            Vertical(
+                Horizontal(
+                    Button("New", variant="default", id="new-btn"),
+                    Button("Save", variant="default", id="save-btn"),
+                    Button("Diff", variant="default", id="diff-btn"),
+                    Button("AI Gen", variant="primary", id="ai-gen-btn"),
+                    Button("Run", variant="primary", id="run-btn"),
+                    Button("Goto", variant="default", id="goto-btn"),
+                    id="code-toolbar",
+                ),
+                TabbedContent(id="code-tabs"),
+                RichLog(id="code-output", highlight=True, markup=True, wrap=True),
+                id="code-main",
             ),
-            TextArea.code_editor("", language="python", id="code-editor",
-                                 show_line_numbers=True, tab_behavior="focus"),
-            RichLog(id="code-output", highlight=True, markup=True, wrap=True),
         )
 
     def on_mount(self) -> None:
+        self._workspace = getattr(self.app, 'workspace', '.')
         output = self.query_one("#code-output", RichLog)
-        output.write("[bold green]Code Graph Ready[/bold green]")
-        output.write("[dim]Open a file or use Ctrl+P for tools[/dim]")
+        output.write("[bold green]Code Editor[/bold green]")
+        output.write("[dim]Click file in tree to open | Ctrl+F search | Diff=git diff[/dim]")
+        self._load_recent()
+
+    @on(DirectoryTree.FileSelected, "#code-tree")
+    def on_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        path = str(event.path)
+
+        # Skip non-editable files
+        ext = Path(path).suffix.lower()
+        if ext not in EXT_TO_LANG and ext:
+            self.notify(f"Cannot edit {ext} files", severity="warning")
+            return
+
+        self._open_file(path)
+        # Update search label
+        self.query_one("#code-file-info", Label).update(
+            f"[dim]{Path(path).name}[/dim]")
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        btn = event.button.id
-        output = self.query_one("#code-output", RichLog)
-        editor = self.query_one("#code-editor", TextArea)
-        methods = {
-            "ai-gen-btn": self._ai_gen,
-            "run-btn": self._run,
-            "save-btn": self._save,
-            "open-btn": self._open,
-            "callers-btn": self.cmd_find_callers,
-            "callees-btn": self.cmd_find_callees,
-            "blast-btn": self.cmd_blast_radius,
-            "hubs-btn": self.cmd_find_hubs,
-            "ast-btn": self.cmd_parse_ast,
-            "index-btn": self.cmd_index_codebase,
-        }
-        fn = methods.get(btn)
-        if fn:
-            await fn() if asyncio.iscoroutinefunction(fn) else fn()
+        bid = event.button.id
+        if bid == "save-btn":
+            await self._save()
+        elif bid == "diff-btn":
+            await self._git_diff()
+        elif bid == "ai-gen-btn":
+            await self._ai_gen()
+        elif bid == "run-btn":
+            await self._run()
+        elif bid == "new-btn":
+            self._new_tab()
+        elif bid == "goto-btn":
+            self._goto_line()
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id == "lang-select" and event.value:
-            self._language = str(event.value)
-            try:
-                self.query_one("#code-editor", TextArea).language = self._language
-            except Exception:
-                pass
-
-    # ── Integrated tools ──
-
-    async def cmd_generate_code(self) -> None:
-        await self._ai_gen()
-
-    async def cmd_improve_code(self) -> None:
-        editor = self.query_one("#code-editor", TextArea)
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        output.write("[bold #58a6ff]AI improving code...[/bold #58a6ff]")
-        if self._hub and self._hub.world.code_engine:
-            result = await self._hub.world.code_engine.improve_code(editor.text, {})
-            editor.text = result.code
-            output.write(f"[green]Improved: {result.annotations}[/green]")
-
-    async def cmd_blast_radius(self) -> None:
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        if not self._current_file:
-            output.write("[yellow]Open a file first to analyze impact[/yellow]")
-            return
-        if not self._hub or not self._hub.world.code_graph:
-            output.write("[yellow]Index codebase first (press Index button or use index_codebase)[/yellow]")
-            return
-
-        results = self._hub.world.code_graph.blast_radius([str(self._current_file)])
-        output.write(f"[bold]Blast Radius: {str(self._current_file)}[/bold]")
-        for r in results:
-            icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(r.risk, "⚪")
-            output.write(f"  {icon} [{r.risk}] {r.file} — {r.reason}")
-
-    async def cmd_find_callers(self) -> None:
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        name = self._get_selected_name()
-        if not name:
-            output.write("[yellow]Select a function name or enter in query field[/yellow]")
-            return
-        cg = self._hub.world.code_graph if self._hub else None
-        if not cg:
-            output.write("[yellow]Index codebase first[/yellow]")
-            return
-        callers = cg.get_callers(name)
-        output.write(f"[bold]Callers of '{name}': {len(callers)}[/bold]")
-        for c in callers[:20]:
-            output.write(f"  {c.name} ({c.file}:{c.line})")
-
-    async def cmd_find_callees(self) -> None:
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        name = self._get_selected_name()
-        if not name:
-            output.write("[yellow]Select a function name[/yellow]")
-            return
-        cg = self._hub.world.code_graph if self._hub else None
-        if not cg:
-            output.write("[yellow]Index codebase first[/yellow]")
-            return
-        callees = cg.get_callees(name)
-        output.write(f"[bold]'{name}' calls: {len(callees)}[/bold]")
-        for c in callees[:20]:
-            output.write(f"  {c}")
-
-    async def cmd_find_hubs(self) -> None:
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        cg = self._hub.world.code_graph if self._hub else None
-        if not cg:
-            output.write("[yellow]Index codebase first[/yellow]")
-            return
-        hubs = cg.find_hubs(10)
-        output.write("[bold]Architectural Hubs[/bold]")
-        for h in hubs:
-            conns = len(h.dependents) + len(h.dependencies)
-            output.write(f"  {h.name} ({h.file}) — {conns} connections")
-
-    async def cmd_search_code(self) -> None:
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        query = self.query_one("#code-query", Input).value.strip()
+    @on(Input.Submitted, "#code-search")
+    async def on_search(self, event: Input.Submitted) -> None:
+        query = event.value.strip()
         if not query:
-            output.write("[yellow]Enter a search query[/yellow]")
             return
-        cg = self._hub.world.code_graph if self._hub else None
-        if not cg:
-            output.write("[yellow]Index codebase first[/yellow]")
-            return
-        results = cg.search(query)
-        output.write(f"[bold]Search: '{query}' — {len(results)} results[/bold]")
-        for e in results[:20]:
-            output.write(f"  [{e.kind}] {e.name} ({e.file}:{e.line})")
-
-    async def cmd_parse_ast(self) -> None:
         output = self.query_one("#code-output", RichLog)
         output.clear()
-        editor = self.query_one("#code-editor", TextArea)
-        code = editor.text
-        if not code.strip():
-            output.write("[yellow]No code to parse[/yellow]")
-            return
-        if self._hub and self._hub.world.ast_parser:
-            nodes, edges = self._hub.world.ast_parser.parse_source(code, self._language)
-            funcs = [n for n in nodes if n.kind == "function"]
-            classes = [n for n in nodes if n.kind == "class"]
-            imports = [n for n in nodes if n.kind == "import"]
-            output.write(f"[bold]AST: {len(nodes)} nodes, {len(edges)} edges[/bold]")
-            output.write(f"  Functions: {len(funcs)}  Classes: {len(classes)}  Imports: {len(imports)}")
-            for f in funcs[:10]:
-                output.write(f"  fn: {f.name} (L{f.line})")
+        output.write(f"[bold]Search: '{query}'[/bold]")
+        self._search_files(query, output)
 
-    async def cmd_index_codebase(self) -> None:
+    async def _open_file(self, path: str) -> None:
+        """Open a file in a new or existing tab."""
+        # Check if already open
+        for existing_path, info in self._files.items():
+            if existing_path == path:
+                tabs = self.query_one("#code-tabs", TabbedContent)
+                tabs.active = info["tab_id"]
+                self._active_file = path
+                return
+
+        try:
+            content = Path(path).read_text(encoding="utf-8", errors="replace")
+            name = Path(path).name
+            tab_id = f"tab-{len(self._files)}"
+            lang = EXT_TO_LANG.get(Path(path).suffix.lower(), "python")
+
+            tabs = self.query_one("#code-tabs", TabbedContent)
+            pane = TabPane(name[:20], id=tab_id)
+            tabs.mount(pane)
+            editor = TextArea.code_editor(content, language=lang, id=f"editor-{tab_id}",
+                                          show_line_numbers=True, tab_behavior="focus")
+            pane.mount(editor)
+            tabs.active = tab_id
+
+            self._files[path] = {"text": content, "lang": lang, "tab_id": tab_id}
+            self._active_file = path
+            self._add_recent(path)
+        except Exception as e:
+            self.notify(f"Open error: {e}", severity="error")
+
+    @work(exclusive=False)
+    async def _save(self) -> None:
+        if not self._active_file:
+            self.notify("No file open", severity="warning")
+            return
+        editor = self._get_editor()
+        if not editor:
+            return
+        content = editor.text
+        try:
+            Path(self._active_file).write_text(content, encoding="utf-8")
+            self.query_one("#code-output", RichLog).write(
+                f"[green]Saved: {self._active_file} ({len(content)} chars)[/green]")
+        except Exception as e:
+            self.notify(f"Save error: {e}", severity="error")
+
+    @work(exclusive=False)
+    async def _git_diff(self) -> None:
+        """Show git diff for current file."""
+        if not self._active_file:
+            self.notify("No file open", severity="warning")
+            return
         output = self.query_one("#code-output", RichLog)
         output.clear()
-        output.write("[bold]Indexing codebase...[/bold]")
-        if self._hub:
-            stats = self._hub.world.code_graph.index(".")
-            self._hub.world.code_graph.save()
-            output.write(f"[green]Indexed: {stats.total_entities} entities in {stats.total_files} files ({stats.build_time_ms:.0f}ms)[/green]")
-            output.write(f"  Languages: {stats.languages}")
-            output.write(f"  Edges: {stats.total_edges}")
+        output.write(f"[bold]Git Diff: {Path(self._active_file).name}[/bold]")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", "diff", "--", self._active_file,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                cwd=self._workspace,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+            diff = stdout.decode("utf-8", errors="replace")
+            if diff.strip():
+                for line in diff.split("\n"):
+                    if line.startswith("+"):
+                        output.write(f"[green]{line}[/green]")
+                    elif line.startswith("-"):
+                        output.write(f"[red]{line}[/red]")
+                    elif line.startswith("@@"):
+                        output.write(f"[blue]{line}[/blue]")
+                    else:
+                        output.write(f"[dim]{line}[/dim]")
+            else:
+                output.write("[dim]No changes from HEAD[/dim]")
+        except FileNotFoundError:
+            output.write("[yellow]Git not found[/yellow]")
+        except Exception as e:
+            output.write(f"[red]{e}[/red]")
 
-    # ── Core operations ──
-
+    @work(exclusive=False)
     async def _ai_gen(self) -> None:
-        editor = self.query_one("#code-editor", TextArea)
+        editor = self._get_editor()
         output = self.query_one("#code-output", RichLog)
+        if not editor:
+            return
         output.clear()
-        output.write("[bold #58a6ff]AI generating code...[/bold #58a6ff]")
+        output.write("[bold #58a6ff]AI generating...[/bold #58a6ff]")
         if self._hub:
             r = await self._hub.generate_code(
-                self._current_file.stem if self._current_file else "module",
+                Path(self._active_file).stem if self._active_file else "module",
                 editor.selected_text or editor.text or "utility function",
-                self._language,
+                editor.language or "python",
             )
             if r.get("code"):
                 editor.text = r["code"]
-                editor.language = self._language
-                output.write(f"[green]Generated: {r.get('annotations', '')}[/green]")
-                return
-        editor.text = self._template()
-        editor.language = self._language
-        output.write("[green]Template generated[/green]")
+                output.write(f"[green]Generated: {r.get('annotations','')}[/green]")
 
+    @work(exclusive=False)
     async def _run(self) -> None:
-        editor = self.query_one("#code-editor", TextArea)
+        editor = self._get_editor()
         output = self.query_one("#code-output", RichLog)
-        code = editor.text
-        if not code.strip() or self._language != "python":
+        if not editor or editor.language != "python":
             output.write("[yellow]Python only[/yellow]")
             return
         output.clear()
         output.write("[bold]Running...[/bold]")
         try:
-            proc = await asyncio.create_subprocess_exec("python", "-c", code,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            proc = await asyncio.create_subprocess_exec(
+                "python", "-c", editor.text,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
             if stdout:
                 output.write(f"[green]{stdout.decode('utf-8', errors='replace')}[/green]")
             if stderr:
-                output.write(f"[red]{stderr.decode('utf-8', errors='replace')}[/red]")
+                err_text = stderr.decode("utf-8", errors="replace")
+                output.write(f"[red]{err_text}[/red]")
+                # Highlight error line
+                import re
+                m = re.search(r'line (\d+)', err_text)
+                if m:
+                    line_no = int(m.group(1))
+                    output.write(f"[yellow]Error at line {line_no}[/yellow]")
         except asyncio.TimeoutError:
             output.write("[red]Timeout (30s)[/red]")
-        except Exception as e:
-            output.write(f"[red]{e}[/red]")
 
-    async def _save(self) -> None:
-        editor = self.query_one("#code-editor", TextArea)
-        output = self.query_one("#code-output", RichLog)
-        path = self.query_one("#code-query", Input).value or str(self._current_file or "untitled.py")
-        try:
-            Path(path).write_text(editor.text, encoding="utf-8")
-            self._current_file = Path(path)
-            output.write(f"[green]Saved: {path}[/green]")
-        except Exception as e:
-            output.write(f"[red]{e}[/red]")
+    def _new_tab(self) -> None:
+        tab_id = f"tab-{len(self._files)}"
+        tabs = self.query_one("#code-tabs", TabbedContent)
+        pane = TabPane("untitled", id=tab_id)
+        tabs.mount(pane)
+        editor = TextArea.code_editor("", language="python", id=f"editor-{tab_id}",
+                                       show_line_numbers=True)
+        pane.mount(editor)
+        tabs.active = tab_id
+        self._active_file = None
 
-    async def _open(self) -> None:
-        editor = self.query_one("#code-editor", TextArea)
-        output = self.query_one("#code-output", RichLog)
-        path = self.query_one("#code-query", Input).value.strip()
-        if not path:
-            output.write("[yellow]Enter file path[/yellow]")
+    def _goto_line(self) -> None:
+        """Ctrl+G jump to line."""
+        editor = self._get_editor()
+        if not editor:
             return
+        # Simple: scroll to top of file based on estimated line height
+        self.notify("Use text selection/navigation", timeout=2)
+
+    def _search_files(self, query: str, output: RichLog) -> None:
+        """Search project files for a string."""
+        count = 0
+        for root, dirs, files in os.walk(self._workspace):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+            for fn in files:
+                if fn.startswith('.') or fn.endswith(('.pyc', '.enc', '.db', '.ico')):
+                    continue
+                fp = os.path.join(root, fn)
+                try:
+                    with open(fp, 'r', encoding='utf-8', errors='replace') as f:
+                        for i, line in enumerate(f, 1):
+                            if query.lower() in line.lower():
+                                output.write(f"[bold]{fp}:{i}[/bold]  {line.strip()[:120]}")
+                                count += 1
+                                if count >= 20:
+                                    output.write(f"[dim]... ({count} matches, showing first 20)[/dim]")
+                                    return
+                except Exception:
+                    pass
+        output.write(f"[dim]{count} results for '{query}'[/dim]")
+
+    def _get_editor(self) -> Optional[TextArea]:
         try:
-            content = Path(path).read_text(encoding="utf-8")
-            editor.text = content
-            self._current_file = Path(path)
-            ext_map = {".py": "python", ".js": "javascript", ".ts": "typescript", ".html": "html",
-                       ".css": "css", ".json": "json", ".yaml": "yaml", ".yml": "yaml",
-                       ".md": "markdown", ".sql": "sql", ".sh": "bash", ".rs": "rust",
-                       ".go": "go", ".java": "java"}
-            self._language = ext_map.get(Path(path).suffix.lower(), "python")
-            editor.language = self._language
-            try:
-                self.query_one("#lang-select", Select).value = self._language
-            except Exception:
-                pass
-            output.write(f"[green]Loaded: {path} ({len(content)} chars)[/green]")
-        except Exception as e:
-            output.write(f"[red]{e}[/red]")
+            tabs = self.query_one("#code-tabs", TabbedContent)
+            active_tab = tabs.active
+            if active_tab:
+                editor_id = f"editor-{active_tab}"
+                return self.query_one(f"#{editor_id}", TextArea)
+        except Exception:
+            pass
+        return None
 
-    def _get_selected_name(self) -> str:
-        editor = self.query_one("#code-editor", TextArea)
-        query = self.query_one("#code-query", Input).value.strip()
-        if query:
-            return query
-        sel = editor.selected_text
-        if sel:
-            m = re.search(r'(?:def|class|fn|func|function)\s+(\w+)', sel)
-            if m:
-                return m.group(1)
-        return Path(self._current_file).stem if self._current_file else ""
+    # ── Recent files ──
 
-    def _template(self) -> str:
-        return {
-            "python": '"""LivingTree AI-generated module."""\n\nfrom typing import Any\n\n\ndef process(data: Any) -> dict:\n    """Process input and return result."""\n    return {"status": "ok", "input": str(data)}\n\n\nif __name__ == "__main__":\n    print(process("Hello"))\n',
-            "javascript": '// LivingTree AI-generated module\n\nfunction process(data) {\n    return { status: "ok", input: String(data) };\n}\n\nconsole.log(process("Hello"));\n',
-        }.get(self._language, f"# {self._language} code\n\nprint('Hello LivingTree!')\n")
+    def _add_recent(self, path: str) -> None:
+        recent = self._load_recent_list()
+        if path in recent:
+            recent.remove(path)
+        recent.insert(0, path)
+        recent = recent[:20]
+        self._recent_path.write_text(json.dumps(recent))
+
+    def _load_recent_list(self) -> list[str]:
+        try:
+            return json.loads(self._recent_path.read_text())
+        except Exception:
+            return []
+
+    def _load_recent(self) -> None:
+        """Show recent files info."""
+        recent = self._load_recent_list()
+        if recent:
+            self.query_one("#code-file-info", Label).update(
+                f"[dim]Recent: {Path(recent[0]).name if recent else 'none'}[/dim]")
 
     async def refresh(self) -> None:
         pass

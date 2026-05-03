@@ -112,29 +112,52 @@ StageIndicator {
 }
 
 /* Code */
+/* Code editor sidebar + main */
+#code-sidebar {
+    width: 28;
+    background: $panel;
+    border-right: solid $panel-darken-1;
+    padding: 0 1;
+}
+
+#code-main {
+    width: 1fr;
+}
+
+#code-tree {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#code-search {
+    margin: 1 0;
+}
+
+#code-search:focus {
+    border: solid $primary;
+}
+
+#code-file-info {
+    color: $text-muted;
+    height: 1;
+    margin: 0;
+}
+
 #code-toolbar {
     height: 2;
     background: $panel;
     padding: 0 1;
 }
 
-#graph-toolbar {
-    height: 2;
-    background: $panel-darken-1;
-    padding: 0 1;
-}
-
-#code-editor {
+#code-tabs {
     height: 1fr;
-    border: solid $panel-darken-1;
-    scrollbar-size: 1 1;
 }
 
 #code-output {
     height: 12;
     background: $panel;
     border-top: solid $primary;
-    scrollbar-size: 1 1;
+    overflow-y: auto;
 }
 
 /* Docs */

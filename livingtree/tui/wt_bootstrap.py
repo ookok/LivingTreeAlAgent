@@ -137,7 +137,14 @@ def download_wt(target_dir: str = ".wt") -> Optional[Path]:
 
 def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI Agent") -> subprocess.Popen:
     ws = workspace or str(Path.cwd())
-    python = sys.executable
+    # Inside Windows Terminal we need python.exe (not pythonw)
+    python_exe = Path(sys.executable)
+    if python_exe.name == "pythonw.exe":
+        python = str(python_exe.parent / "python.exe")
+        if not Path(python).exists():
+            python = sys.executable
+    else:
+        python = sys.executable
 
     cmd = [
         str(wt_path),
@@ -149,7 +156,6 @@ def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI 
     return subprocess.Popen(
         cmd, cwd=ws,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )
 
 

@@ -20,24 +20,29 @@ def generate_icon() -> Path:
 
     icon_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 32x32 RGBA pixels: green tree icon
-    # Simple bitmap: green "L" shape on dark background
+    # 32x32 RGBA: green tree with layered canopy on dark bg
     width, height = 32, 32
     pixels = bytearray()
 
     for y in range(height):
         for x in range(width):
-            # Tree shape: centered trunk + canopy
-            cx, cy = 16, 20  # center
-            dx, dy = abs(x - cx), abs(y - cy)
-            in_trunk = dx <= 2 and y >= 12 and y <= 30
-            in_canopy = (y < 18 and dx <= 10 and dy <= 10 and not (dx <= 2 and y < 12))
-            if in_canopy:
-                pixels.extend([0, 180, 60, 255])  # green
-            elif in_trunk:
-                pixels.extend([80, 50, 20, 255])   # brown
+            cx = 16
+            # Trunk: center 5px wide, bottom half
+            trunk = abs(x - cx) <= 2 and y >= 16 and y <= 29
+            # Layered canopy: three tiers getting wider
+            t1 = y >= 4 and y <= 9 and abs(x - cx) <= 6 - (y - 4) * 0.5
+            t2 = y >= 8 and y <= 14 and abs(x - cx) <= 9 - (y - 8) * 0.7
+            t3 = y >= 11 and y <= 18 and abs(x - cx) <= 12 - (y - 11) * 0.8
+            canopy = t1 or t2 or t3
+            # Ground roots
+            root = trunk and y >= 27 and abs(x - cx) <= 4
+            if canopy:
+                shade = max(0, 220 - y * 4)
+                pixels.extend([0, shade, 30, 255])
+            elif trunk or root:
+                pixels.extend([90, 45, 15, 255])
             else:
-                pixels.extend([13, 17, 23, 0])     # transparent
+                pixels.extend([13, 17, 23, 0])
 
     # BMP data
     bmp_size = 40 + len(pixels)

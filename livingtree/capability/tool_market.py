@@ -246,6 +246,200 @@ def _list_cells(params: dict, world: Any = None) -> dict:
     cells = world.cell_registry.discover()
     return {"cells": [{"name": getattr(c, "name", str(c)[:30])} for c in cells]}
 
+# ── Map tools ──
+
+def _lookup_location(params: dict, world: Any = None) -> dict:
+    """Geocode lookup with known city coordinates."""
+    query = params.get("query", "").strip()
+    cities = {
+        "北京": (39.9042, 116.4074), "beijing": (39.9042, 116.4074),
+        "上海": (31.2304, 121.4737), "shanghai": (31.2304, 121.4737),
+        "广州": (23.1291, 113.2644), "guangzhou": (23.1291, 113.2644),
+        "深圳": (22.5431, 114.0579), "shenzhen": (22.5431, 114.0579),
+        "成都": (30.5728, 104.0668), "chengdu": (30.5728, 104.0668),
+        "杭州": (30.2741, 120.1551), "hangzhou": (30.2741, 120.1551),
+        "武汉": (30.5928, 114.3055), "wuhan": (30.5928, 114.3055),
+        "南京": (32.0603, 118.7969), "nanjing": (32.0603, 118.7969),
+        "重庆": (29.4316, 106.9123), "chongqing": (29.4316, 106.9123),
+        "西安": (34.3416, 108.9398), "xian": (34.3416, 108.9398),
+    }
+    match = cities.get(query.lower(), None)
+    if match:
+        return {"query": query, "lat": match[0], "lon": match[1], "found": True}
+    return {"query": query, "found": False, "hint": "Known: 北京/上海/广州/深圳/成都/杭州/武汉/南京/重庆/西安"}
+
+def _geocode_reverse(params: dict, world: Any = None) -> dict:
+    lat, lon = params.get("lat", 0), params.get("lon", 0)
+    return {"lat": lat, "lon": lon, "location": f"({lat:.4f}, {lon:.4f})",
+            "map_url": f"https://www.tianditu.gov.cn/?lat={lat}&lng={lon}"}
+
+# ── Email tools ──
+
+def _send_email(params: dict, world: Any = None) -> dict:
+    """Send email via 163.com SMTP with credentials from encrypted vault."""
+    subject = params.get("subject", "")
+    body = params.get("body", "")
+    to = params.get("to", "")
+    if not to or not subject:
+        return {"status": "error", "error": "to and subject required"}
+
+    # Load SMTP credentials from encrypted vault
+    try:
+        from ..config.secrets import get_secret_vault
+        vault = get_secret_vault()
+        smtp_host = vault.get("smtp_host", "smtp.163.com")
+        smtp_port = int(vault.get("smtp_port", "465"))
+        smtp_user = vault.get("smtp_user", "")
+        smtp_pass = vault.get("smtp_pass", "")
+    except Exception:
+        smtp_host = "smtp.163.com"
+        smtp_port = 465
+        smtp_user = "livingtreeai@163.com"
+        smtp_pass = ""
+
+    if not smtp_user or not smtp_pass:
+        return {"status": "error", "error": "SMTP credentials not configured"}
+
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    msg = MIMEMultipart()
+    msg["From"] = smtp_user
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    try:
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15)
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, [to], msg.as_string())
+        server.quit()
+        return {"status": "sent", "to": to, "subject": subject,
+                "from": smtp_user, "host": smtp_host}
+    except smtplib.SMTPAuthenticationError:
+        return {"status": "error", "error": "SMTP auth failed. Check credentials."}
+    except smtplib.SMTPException as e:
+        return {"status": "error", "error": f"SMTP error: {e}"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# ── Expert training tools ──
+
+def _distill_knowledge(params: dict, world: Any = None) -> dict:
+    if not world or not world.distillation:
+        return {"error": "Distillation not available"}
+    import asyncio
+    loop = asyncio.get_event_loop()
+    prompts = params.get("prompts", [params.get("prompt", "Explain AI agents")])
+    if isinstance(prompts, str):
+        prompts = [prompts]
+    result = loop.run_until_complete(
+        world.distillation.distill_knowledge(None, prompts, world.expert_config))
+    return {"expert": world.expert_config.model if world.expert_config else "default",
+            "prompts": len(prompts), "outputs": result.prompts_processed, "quality": result.quality_score}
+
+def _curriculum_learning(params: dict, world: Any = None) -> dict:
+    if not world or not world.distillation:
+        return {"error": "Distillation not available"}
+    import asyncio
+    loop = asyncio.get_event_loop()
+    topics = params.get("topics", [params.get("topic", "AI basics")])
+    if isinstance(topics, str):
+        topics = [topics]
+    levels = params.get("levels", [1, 2, 3])
+    from ..cell.cell_ai import CellAI
+    cell = CellAI(name=f"curriculum_{topics[0][:10]}")
+    result = loop.run_until_complete(
+        world.distillation.curriculum_learning(cell, topics, levels, world.expert_config))
+    if world.cell_registry:
+        world.cell_registry.register(cell)
+    return {"topics": len(topics), "levels": levels, "cell": cell.name, **result}
+
+# ── Skill tools ──
+
+def _list_skills(params: dict, world: Any = None) -> dict:
+    if not world or not world.skill_factory:
+        return {"error": "SkillFactory not available"}
+    skills = world.skill_factory.discover_skills()
+    return {"skills": skills, "count": len(skills)}
+
+def _create_skill(params: dict, world: Any = None) -> dict:
+    if not world or not world.skill_factory:
+        return {"error": "SkillFactory not available"}
+    skill = world.skill_factory.create_skill(
+        name=params["name"], description=params.get("description", ""),
+        code=params.get("code", "def execute(data): return {'status': 'ok'}"),
+        category=params.get("category", "general"))
+    return {"name": params["name"], "created": True, "skills_total": len(world.skill_factory.discover_skills())}
+
+# ── Calculation model handlers ──
+
+import math
+
+def _gaussian_plume(params: dict, world: Any = None) -> dict:
+    """Gaussian plume dispersion model: C = Q/(2π·σy·σz·u) · exp(-y²/2σy²) · [exp(-(z-He)²/2σz²) + exp(-(z+He)²/2σz²)]"""
+    Q, u, x = params["Q"], params["u"], params["x"]
+    y = params.get("y", 0)
+    z = params.get("z", 0)
+    stability = params.get("stability", "D")
+    He = params.get("He", 0)
+
+    # GB/T3840-1991 dispersion coefficients
+    coef = {"A": (0.527, 0.865, 0.28, 0.90), "B": (0.371, 0.866, 0.23, 0.85),
+            "C": (0.209, 0.897, 0.22, 0.80), "D": (0.128, 0.905, 0.20, 0.76),
+            "E": (0.098, 0.902, 0.15, 0.73), "F": (0.065, 0.902, 0.12, 0.67)}
+    g = coef.get(stability, coef["D"])
+    sy = g[0] * x ** g[1]
+    sz = g[2] * x ** g[3]
+
+    if sy <= 0 or sz <= 0 or u <= 0:
+        return {"error": "Invalid parameters"}
+
+    C = Q / (2 * math.pi * sy * sz * u) * math.exp(-y**2 / (2 * sy**2))
+    C *= (math.exp(-(z - He)**2 / (2 * sz**2)) + math.exp(-(z + He)**2 / (2 * sz**2)))
+
+    return {"model": "gaussian_plume", "C_mgm3": round(C * 1000, 6), "C_gm3": round(C, 8),
+            "Q_gs": Q, "u_ms": u, "x_m": x, "y_m": y, "z_m": z,
+            "stability": stability, "sy_m": round(sy, 2), "sz_m": round(sz, 2)}
+
+def _noise_attenuation(params: dict, world: Any = None) -> dict:
+    """Point source noise attenuation per GB12348-2008."""
+    Lw, r = params["Lw"], params["r"]
+    ground_type = params.get("ground_type", "hard")
+    Agr = 5 * (1 - math.exp(-r / 50)) if ground_type == "soft" else 0
+    Lp = Lw - 20 * math.log10(max(r, 0.1)) - 11 - Agr
+    return {"model": "noise_attenuation", "Lw_dB": Lw, "r_m": r,
+            "Lp_dB": round(Lp, 2), "Agr_dB": round(Agr, 2), "ground": ground_type,
+            "standard": "GB12348-2008"}
+
+def _water_dilution(params: dict, world: Any = None) -> dict:
+    """Complete mixing dilution model for rivers."""
+    C0, Q0, Qe = params["C0"], params["Q0"], params["Qe"]
+    if Q0 + Qe <= 0:
+        return {"error": "Q0+Qe must be > 0"}
+    C = C0 * Q0 / (Q0 + Qe)
+    alpha = Qe / (Q0 + Qe) if (Q0 + Qe) > 0 else 0
+    return {"model": "water_dilution", "C_mgL": round(C, 4),
+            "C0_mgL": C0, "Q0_m3s": Q0, "Qe_m3s": Qe,
+            "dilution_factor": round(alpha, 4), "method": "完全混合模型"}
+
+def _dispersion_coeff(params: dict, world: Any = None) -> dict:
+    """Dispersion coefficients per Pasquill-Gifford (GB/T3840-1991)."""
+    x = params["x"]
+    stability = params.get("stability", "D")
+    coef = {"A": (0.527, 0.865, 0.28, 0.90), "B": (0.371, 0.866, 0.23, 0.85),
+            "C": (0.209, 0.897, 0.22, 0.80), "D": (0.128, 0.905, 0.20, 0.76),
+            "E": (0.098, 0.902, 0.15, 0.73), "F": (0.065, 0.902, 0.12, 0.67)}
+    g = coef.get(stability, coef["D"])
+    sy = g[0] * x ** g[1]
+    sz = g[2] * x ** g[3]
+    return {"model": "dispersion_coeff", "x_m": x, "stability": stability,
+            "sy_m": round(sy, 2), "sz_m": round(sz, 2),
+            "standard": "GB/T3840-1991 Pasquill-Gifford",
+            "all_classes": {k: {"sy": round(v[0]*x**v[1], 2), "sz": round(v[2]*x**v[3], 2)}
+                            for k, v in coef.items()}}
+
 
 # ── Tool definitions ──
 
@@ -307,6 +501,57 @@ ALL_TOOLS = [
     # System tools
     ("get_status", "Get system status summary", "system", {"properties": {}}, _get_status),
     ("list_cells", "List all registered AI cells", "system", {"properties": {}}, _list_cells),
+
+    # Map / GIS tools
+    ("lookup_location", "Lookup city coordinates (lat/lon)", "map",
+     {"properties": {"query": {"type": "string"}}, "required": ["query"]}, _lookup_location),
+    ("geocode_reverse", "Reverse geocode: lat/lon to map URL", "map",
+     {"properties": {"lat": {"type": "number"}, "lon": {"type": "number"}},
+      "required": ["lat", "lon"]}, _geocode_reverse),
+
+    # Email tools
+    ("send_email", "Queue an email for dispatch", "email",
+     {"properties": {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+      "required": ["to", "subject", "body"]}, _send_email),
+
+    # Expert training tools
+    ("distill_knowledge", "Distill knowledge from expert LLM into cell", "training",
+     {"properties": {"prompts": {"type": "array", "items": {"type": "string"}},
+      "prompt": {"type": "string"}}}, _distill_knowledge),
+    ("curriculum_learning", "Curriculum learning: progressive topic difficulty", "training",
+     {"properties": {"topics": {"type": "array", "items": {"type": "string"}},
+      "levels": {"type": "array", "items": {"type": "integer"}}}}, _curriculum_learning),
+
+    # Skill tools
+    ("list_skills", "List all registered skills", "skill",
+     {"properties": {}}, _list_skills),
+    ("create_skill", "Create a new agent skill", "skill",
+     {"properties": {"name": {"type": "string"}, "description": {"type": "string"},
+      "code": {"type": "string"}, "category": {"type": "string"}},
+      "required": ["name"]}, _create_skill),
+
+    # ── Calculation models ──
+    ("gaussian_plume", "Gaussian plume dispersion C=Q/(2πσyσz·u)·exp(-y²/2σy²)·exp(-z²/2σz²)", "model",
+     {"properties": {"Q": {"type": "number", "description": "源强 (g/s)"},
+      "u": {"type": "number", "description": "风速 (m/s)"},
+      "x": {"type": "number", "description": "下风向距离 (m)"},
+      "y": {"type": "number", "default": 0}, "z": {"type": "number", "default": 0},
+      "stability": {"type": "string", "default": "D"}},
+      "required": ["Q", "u", "x"]}, _gaussian_plume),
+    ("noise_attenuation", "点声源几何衰减+地面吸收 Lp=Lw-20log(r)-11-Agr", "model",
+     {"properties": {"Lw": {"type": "number", "description": "声功率级 (dB)"},
+      "r": {"type": "number", "description": "距离 (m)"},
+      "ground_type": {"type": "string", "default": "hard"}},
+      "required": ["Lw", "r"]}, _noise_attenuation),
+    ("water_dilution", "河流完全混合稀释模型 C=C0·Q0/(Q0+Qe)", "model",
+     {"properties": {"C0": {"type": "number", "description": "污染物浓度 (mg/L)"},
+      "Q0": {"type": "number", "description": "河水流量 (m³/s)"},
+      "Qe": {"type": "number", "description": "废水流量 (m³/s)"}},
+      "required": ["C0", "Q0", "Qe"]}, _water_dilution),
+    ("dispersion_coeff", "大气扩散参数 σy,σz 按GB/T3840-1991 Pasquill稳定度A-F", "model",
+     {"properties": {"x": {"type": "number", "description": "下风向距离 (m)"},
+      "stability": {"type": "string", "default": "D"}},
+      "required": ["x"]}, _dispersion_coeff),
 ]
 
 

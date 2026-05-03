@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.request import urlopen, Request
 
-EXPECTED_VERSION = "1.24.10921.0"
+EXPECTED_VERSION = "1.25.1171.0"
 WT_EXE_NAME = "WindowsTerminal.exe"
 
 

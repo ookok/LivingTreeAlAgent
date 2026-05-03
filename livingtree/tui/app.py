@@ -28,6 +28,7 @@ from .screens.code import CodeScreen
 from .screens.docs import KnowledgeScreen
 from .screens.tools import ToolsScreen
 from .screens.settings import SettingsScreen
+from .screens.extensions import ExtensionsScreen
 from .widgets.header import TuiHeader
 from .widgets.footer_bar import StatusBar
 
@@ -70,6 +71,8 @@ class LivingTreeTuiApp(App):
                 yield ToolsScreen(id="tools-screen")
             with TabPane(" Settings ", id="settings"):
                 yield SettingsScreen(id="settings-screen")
+            with TabPane(" 🔌 Ext ", id="extensions"):
+                yield ExtensionsScreen(id="extensions-screen")
         yield Footer()
 
     async def on_mount(self) -> None:

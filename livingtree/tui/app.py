@@ -1,11 +1,4 @@
-"""LivingTree TUI — Textual-powered AI Development Platform.
-
-Uses Textual 8.x features: CommandPalette, DataTable, TabbedContent,
-Footer with key bindings, async workers, dynamic layout.
-
-Usage:
-    python -m livingtree tui --direct
-"""
+"""LivingTree TUI — Chinese, 5 tabs, unified status, WT GPU accel."""
 
 from __future__ import annotations
 
@@ -14,11 +7,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
-from textual.widgets import Footer, TabbedContent, TabPane
+from textual.widgets import TabbedContent, TabPane
 
 from ..integration.hub import IntegrationHub
 from ..observability import setup_observability
@@ -28,31 +19,32 @@ from .screens.code import CodeScreen
 from .screens.docs import KnowledgeScreen
 from .screens.tools import ToolsScreen
 from .screens.settings import SettingsScreen
-from .screens.extensions import ExtensionsScreen
 from .widgets.header import TuiHeader
 from .widgets.footer_bar import StatusBar
 
 
 class LivingTreeTuiApp(App):
-    TITLE = "🌳 LivingTree AI Agent"
-    SUB_TITLE = "Digital Lifeform v2.0 — www.livingtree-ai.com"
+    TITLE = "🌳 LivingTree"
+    SUB_TITLE = "数字生命体 v2.0"
 
     CSS_PATH = "styles/theme.tcss"
 
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", show=True),
-        Binding("ctrl+1", "focus_tab('chat')", "Chat", show=True),
-        Binding("ctrl+2", "focus_tab('code')", "Code", show=True),
-        Binding("ctrl+3", "focus_tab('docs')", "Docs", show=True),
-        Binding("ctrl+4", "focus_tab('settings')", "Settings", show=True),
-        Binding("ctrl+d", "toggle_dark", "Theme", show=True),
-        Binding("f1", "show_help", "Help", show=False),
-        Binding("f5", "refresh", "Refresh", show=False),
+        Binding("ctrl+q", "quit", "退出", show=True),
+        Binding("ctrl+1", "focus_tab('chat')", "对话", show=True),
+        Binding("ctrl+2", "focus_tab('code')", "代码", show=True),
+        Binding("ctrl+3", "focus_tab('docs')", "知识库", show=True),
+        Binding("ctrl+4", "focus_tab('tools')", "工具箱", show=True),
+        Binding("ctrl+5", "focus_tab('settings')", "配置", show=True),
+        Binding("ctrl+d", "toggle_dark", "主题", show=True),
+        Binding("ctrl+p", "command_palette", "命令", show=False),
+        Binding("f1", "show_help", "帮助", show=False),
+        Binding("f5", "refresh", "刷新", show=False),
     ]
 
     ENABLE_COMMAND_PALETTE = True
 
-    def __init__(self, workspace: str = "", hub: Optional[IntegrationHub] = None):
+    def __init__(self, workspace: str = "", hub=None):
         super().__init__()
         self.workspace = Path(workspace) if workspace else Path.cwd()
         self._hub = hub
@@ -61,37 +53,44 @@ class LivingTreeTuiApp(App):
     def compose(self) -> ComposeResult:
         yield TuiHeader()
         with TabbedContent(initial="chat"):
-            with TabPane(" Chat ", id="chat"):
+            with TabPane(" 💬 对话 ", id="chat"):
                 yield ChatScreen(id="chat-screen")
-            with TabPane(" Code ", id="code"):
+            with TabPane(" 📝 代码 ", id="code"):
                 yield CodeScreen(id="code-screen")
-            with TabPane(" 知识库 ", id="docs"):
+            with TabPane(" 📚 知识库 ", id="docs"):
                 yield KnowledgeScreen(id="docs-screen")
-            with TabPane(" 🔧 Tools ", id="tools"):
+            with TabPane(" 🔧 工具箱 ", id="tools"):
                 yield ToolsScreen(id="tools-screen")
-            with TabPane(" Settings ", id="settings"):
+            with TabPane(" ⚙ 配置 ", id="settings"):
                 yield SettingsScreen(id="settings-screen")
-            with TabPane(" 🔌 Ext ", id="extensions"):
-                yield ExtensionsScreen(id="extensions-screen")
-        yield Footer()
+        yield StatusBar()
 
     async def on_mount(self) -> None:
-        self.sub_title = f"v2.0 — {self.workspace.name}"
+        self.sub_title = f"数字生命体 v2.0 · {self.workspace.name}"
         if self._hub is None:
             try:
                 self._hub = IntegrationHub()
                 await self._hub.start()
             except Exception as e:
-                self.notify(f"Backend: {e}", severity="warning", timeout=3)
+                self.notify(f"后端: {e}", severity="warning", timeout=3)
 
-        for sid in ["chat", "code", "docs", "settings"]:
+        for sid in ["chat", "code", "docs", "tools", "settings"]:
             try:
                 screen = self.query_one(f"#{sid}-screen")
                 screen.set_hub(self._hub)
             except Exception:
                 pass
 
-        self.notify("Ready — Ctrl+1-4 tabs, Ctrl+P commands", timeout=2)
+        self._update_status()
+        self.set_interval(5, self._update_status)
+        self.notify("就绪 · ^P 命令 · ^1-5 切换标签", timeout=2)
+
+    def _update_status(self) -> None:
+        try:
+            bar = self.query_one(StatusBar)
+            bar.update_system_status(self._hub)
+        except Exception:
+            pass
 
     async def on_unmount(self) -> None:
         if self._hub:
@@ -111,7 +110,7 @@ class LivingTreeTuiApp(App):
 
     def action_refresh(self) -> None:
         tabs = self.query_one(TabbedContent)
-        for sid in ["chat", "code", "docs", "settings"]:
+        for sid in ["chat", "code", "docs", "tools", "settings"]:
             try:
                 screen = self.query_one(f"#{sid}-screen")
                 if hasattr(screen, "refresh"):
@@ -119,40 +118,11 @@ class LivingTreeTuiApp(App):
             except Exception:
                 pass
 
-    def get_system_commands(self, _):
-        """Provide commands to Textual's built-in CommandPalette."""
-        from textual.command import Provider, Hit, Hits
-        from ..integration.hub import IntegrationHub
-
-        class LivingTreeCommands(Provider):
-            async def search(self, query: str) -> Hits:
-                matcher = self.matcher(query)
-                commands = [
-                    ("Generate Code", "AI generates code from description", "gen_code"),
-                    ("Blast Radius", "Analyze change impact of current file", "blast"),
-                    ("Find Callers", "Who calls the selected function", "callers"),
-                    ("Find Callees", "What the selected function calls", "callees"),
-                    ("Search Code", "Search code entities by name", "search_code"),
-                    ("Index Codebase", "Build the code knowledge graph", "index"),
-                    ("Search Knowledge", "Search the knowledge base", "kb_search"),
-                    ("Detect Knowledge Gaps", "Find missing knowledge areas", "gaps"),
-                    ("System Status", "Show engine and cell status", "status"),
-                    ("Cost Status", "Show budget and pricing", "cost"),
-                    ("Audit Chain", "Verify Merkle audit integrity", "audit"),
-                    ("Health Check", "Run all health checks", "health"),
-                    ("Generate Report", "Generate industrial report", "report"),
-                    ("List Cells", "List registered AI cells", "cells"),
-                ]
-                for name, desc, cmd in commands:
-                    if matcher.match(name) or matcher.match(desc):
-                        yield Hit(name, desc, f"livingtree:{cmd}")
-        yield LivingTreeCommands
-
     @property
-    def hub(self) -> Optional[IntegrationHub]:
+    def hub(self):
         return self._hub
 
 
-def run_tui(workspace: str = "", hub: Optional[IntegrationHub] = None) -> None:
+def run_tui(workspace: str = "", hub=None) -> None:
     app = LivingTreeTuiApp(workspace=workspace, hub=hub)
     app.run()

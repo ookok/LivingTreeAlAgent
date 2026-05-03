@@ -1,22 +1,15 @@
-"""Settings — Configuration + Cell training hub.
-
-Integrated commands: train_cell, drill_train, absorb_codebase.
-"""
+"""Settings — unified config: API, Genome, Training, Skills, MCP."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, ScrollableContainer
 from textual.screen import Screen
 from textual.widgets import (
-    Button, Input, Label, RichLog, Select, Static, Switch,
+    Button, Input, Label, RichLog, Select, Switch, TabbedContent, TabPane,
 )
-
-
-TRAINING_TYPES = [("lora", "LoRA"), ("full", "Full"), ("distill", "Distill"), ("grpo", "GRPO")]
 
 
 class SettingsScreen(Screen):
@@ -28,186 +21,143 @@ class SettingsScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
-        yield ScrollableContainer(
-            Static("[bold]Configuration[/bold]", id="settings-title"),
+        yield TabbedContent(
+            TabPane("🔑 API", self._api_pane()),
+            TabPane("🧬 基因组", self._genome_pane()),
+            TabPane("🤖 训练", self._train_pane()),
+            TabPane("🧩 技能", self._skill_pane()),
+            TabPane("🔌 MCP", self._mcp_pane()),
+            id="settings-tabs",
+        )
 
-            Label("API Key"),
-            Input(placeholder="sk-... (encrypted)", password=True, id="settings-api-key"),
-            Label("Flash Model"),
-            Input(placeholder="provider/flash-model", id="settings-flash"),
-            Label("Pro Model"),
-            Input(placeholder="provider/pro-model", id="settings-pro"),
-            Label("Pro Thinking"),
-            Switch(value=True, id="settings-thinking"),
-            Label("Workspace"),
-            Input(placeholder=str(Path.cwd()), id="settings-workspace"),
-            Label(""),
-            Horizontal(
-                Button("Save", variant="primary", id="save-btn"),
-                Button("Reload", variant="default", id="reload-btn"),
-                id="config-buttons",
-            ),
+    def _api_pane(self) -> ScrollableContainer:
+        return ScrollableContainer(
+            Label("API 密钥"), Input(placeholder="sk-... (加密)", password=True, id="api-key"),
+            Label("快速模型"), Input(placeholder="provider/flash-model", id="flash-model"),
+            Label("深度模型"), Input(placeholder="provider/pro-model", id="pro-model"),
+            Label("深度思考"), Switch(value=True, id="thinking-switch"),
+            Label(""), Button("💾 保存", variant="primary", id="save-api-btn"),
+            RichLog(id="api-log", highlight=True, markup=True),
+            id="settings-api",
+        )
 
-            Static("[bold]Genome Gene Expression[/bold]", id="genome-title"),
-            Label("DNA Engine (环境/安全)"),
-            Switch(value=True, id="gene-dna"),
-            Label("Knowledge Layer (知识库)"),
-            Switch(value=True, id="gene-knowledge"),
-            Label("Capability Layer (技能/工具)"),
-            Switch(value=True, id="gene-capability"),
-            Label("Network Layer (P2P网络)"),
-            Switch(value=True, id="gene-network"),
-            Label("Cell Layer (细胞AI训练)"),
-            Switch(value=True, id="gene-cell"),
-            Label("Self Evolution (自主进化)"),
-            Switch(value=False, id="gene-evolution"),
-            Label("Code Absorption (代码吞噬)"),
-            Switch(value=False, id="gene-phage"),
-            Label(""),
-            Horizontal(
-                Button("Apply Genes", variant="primary", id="apply-genes-btn"),
-                id="genome-buttons",
-            ),
+    def _genome_pane(self) -> ScrollableContainer:
+        genes = ["DNA引擎(环境/安全)","知识层","能力层(技能/工具)","网络层(P2P)","细胞层(AI训练)","自主进化","代码吞噬"]
+        ids = ["gene-dna","gene-knowledge","gene-capability","gene-network","gene-cell","gene-evolution","gene-phage"]
+        children = []
+        for g, i in zip(genes, ids):
+            children.extend([Label(g), Switch(value=True, id=i)])
+        children.extend([Label(""), Button("🧬 应用基因", variant="primary", id="apply-genes-btn")])
+        children.append(RichLog(id="genome-log", highlight=True, markup=True))
+        return ScrollableContainer(*children, id="settings-genome")
 
-            Static("[bold]Cell Training[/bold]", id="train-title"),
-            Label("Cell Name"),
-            Input(placeholder="my_expert_cell", id="cell-name"),
-            Label("Model (ModelScope ID)"),
-            Input(placeholder="Qwen/Qwen3.5-4B", id="cell-model"),
-            Label("Training Type"),
-            Select(TRAINING_TYPES, prompt="Type", value="lora", id="train-type"),
-            Label("Codebase Path"),
-            Input(placeholder="./path/to/repo", id="codebase-path"),
-            Label(""),
-            Horizontal(
-                Button("Train Cell", variant="primary", id="train-btn"),
-                Button("Drill Train", variant="primary", id="drill-btn"),
-                Button("Absorb Code", variant="primary", id="absorb-btn"),
-                Button("List Cells", variant="default", id="list-cells-btn"),
-                id="train-buttons",
+    def _train_pane(self) -> ScrollableContainer:
+        return ScrollableContainer(
+            Label("细胞名称"), Input(placeholder="my_cell", id="cell-name"),
+            Label("模型ID"), Input(placeholder="Qwen/Qwen3.5-4B", id="cell-model"),
+            Label("训练类型"), Select([("lora","LoRA"),("full","全参"),("distill","蒸馏"),("grpo","GRPO")], value="lora", id="train-type"),
+            Label(""), Horizontal(
+                Button("🚀 训练", variant="primary", id="train-btn"),
+                Button("🧪 Drill", variant="primary", id="drill-btn"),
+                Button("📋 列表", variant="default", id="list-cells-btn"),
             ),
-            RichLog(id="settings-log", highlight=True, markup=True),
-            id="settings-form",
+            RichLog(id="train-log", highlight=True, markup=True),
+            id="settings-train",
+        )
+
+    def _skill_pane(self) -> ScrollableContainer:
+        return ScrollableContainer(
+            Label("技能管理 — data/skills/*.md (SKILL.md 格式)"), Label(""),
+            Button("📂 打开技能目录", variant="default", id="open-skills-btn"),
+            Button("🔄 刷新技能列表", variant="default", id="refresh-skills-btn"),
+            RichLog(id="skills-log", highlight=True, markup=True),
+            id="settings-skills",
+        )
+
+    def _mcp_pane(self) -> ScrollableContainer:
+        return ScrollableContainer(
+            Label("MCP 服务器配置 — data/mcp_servers.json"), Label(""),
+            Button("📂 打开MCP配置", variant="default", id="open-mcp-btn"),
+            Button("🔄 刷新MCP列表", variant="default", id="refresh-mcp-btn"),
+            RichLog(id="mcp-log", highlight=True, markup=True),
+            id="settings-mcp",
         )
 
     def on_mount(self) -> None:
         self._load()
-        log = self.query_one("#settings-log", RichLog)
-        log.write("[green]Settings loaded[/green]")
 
     def _load(self) -> None:
-        if not self._hub or not hasattr(self._hub, 'config'):
+        if not self._hub:
             return
         c = self._hub.config
         try:
-            self.query_one("#settings-flash", Input).value = c.model.flash_model
-            self.query_one("#settings-pro", Input).value = c.model.pro_model
-            self.query_one("#settings-thinking", Switch).value = c.model.pro_thinking_enabled
-            # Load genome
-            genes = self._hub.world.genome.expressed_genes
-            self.query_one("#gene-dna", Switch).value = genes.dna_engine
-            self.query_one("#gene-knowledge", Switch).value = genes.knowledge_layer
-            self.query_one("#gene-capability", Switch).value = genes.capability_layer
-            self.query_one("#gene-network", Switch).value = genes.network_layer
-            self.query_one("#gene-cell", Switch).value = genes.cell_layer
-            self.query_one("#gene-evolution", Switch).value = genes.self_evolution
-            self.query_one("#gene-phage", Switch).value = genes.code_absorption
+            self.query_one("#flash-model", Input).value = c.model.flash_model
+            self.query_one("#pro-model", Input).value = c.model.pro_model
+            self.query_one("#thinking-switch", Switch).value = c.model.pro_thinking_enabled
         except Exception:
             pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        log = self.query_one("#settings-log", RichLog)
-        btn = event.button.id
+        bid = event.button.id
+        log_map = {"api-log": "#api-log", "genome-log": "#genome-log",
+                   "train-log": "#train-log", "skills-log": "#skills-log", "mcp-log": "#mcp-log"}
+        log = None
+        for key, wid in log_map.items():
+            try:
+                log = self.query_one(wid, RichLog)
+                break
+            except Exception:
+                pass
 
-        if btn == "save-btn":
-            key = self.query_one("#settings-api-key", Input).value
-            if key and self._hub:
+        if bid == "save-api-btn":
+            key = self.query_one("#api-key", Input).value
+            if key:
                 from ...config.secrets import get_secret_vault
                 get_secret_vault().set("deepseek_api_key", key)
-                log.write("[green]Key encrypted & saved[/green]")
-            log.write("[green]Saved[/green]")
+            log.write("[green]已保存[/green]") if log else None
 
-        elif btn == "reload-btn":
-            self._load()
-            log.write("[green]Reloaded[/green]")
+        elif bid == "apply-genes-btn":
+            genes = self._hub.world.genome.expressed_genes
+            for sw_id, attr in [("gene-dna","dna_engine"),("gene-knowledge","knowledge_layer"),
+                ("gene-capability","capability_layer"),("gene-network","network_layer"),
+                ("gene-cell","cell_layer"),("gene-evolution","self_evolution"),
+                ("gene-phage","code_absorption")]:
+                try:
+                    setattr(genes, attr, self.query_one(f"#{sw_id}", Switch).value)
+                except Exception:
+                    pass
+            self._hub.world.genome.add_mutation("基因表达已切换", source="ui")
+            log.write(f"[green]基因组已应用 (第{self._hub.world.genome.generation}代)[/green]") if log else None
 
-        elif btn == "train-btn":
-            self.cmd_train_cell()
-        elif btn == "drill-btn":
-            self.cmd_drill_train()
-        elif btn == "absorb-btn":
-            self.cmd_absorb_codebase()
-        elif btn == "list-cells-btn":
-            if self._hub:
-                cells = self._hub.world.cell_registry.discover()
-                log.write(f"[bold]Cells: {len(cells)}[/bold]")
-                for c in cells:
-                    name = getattr(c, 'name', str(c)[:30])
-                    log.write(f"  {name}")
+        elif bid == "train-btn":
+            name = self.query_one("#cell-name", Input).value.strip()
+            if name and self._hub:
+                from ...cell.cell_ai import CellAI
+                cell = CellAI(name=name)
+                self._hub.world.cell_registry.register(cell)
+            log.write(f"[green]细胞 '{name}' 已注册[/green]") if log else None
 
-        elif btn == "apply-genes-btn":
-            self._apply_genes()
+        elif bid == "drill-btn":
+            log.write("[yellow]MS-SWIFT 需要安装 ms-swift[/yellow]") if log else None
 
-    # ── Tool commands ──
+        elif bid == "list-cells-btn":
+            cells = self._hub.world.cell_registry.discover()
+            for c in cells[:20]:
+                log.write(f"  {getattr(c,'name',str(c)[:30])}") if log else None
 
-    async def cmd_train_cell(self) -> None:
-        log = self.query_one("#settings-log", RichLog)
-        name = self.query_one("#cell-name", Input).value.strip()
-        if not name:
-            log.write("[yellow]Enter cell name[/yellow]")
-            return
-        if self._hub:
-            from ...cell.cell_ai import CellAI
-            cell = CellAI(name=name)
-            self._hub.world.cell_registry.register(cell)
-            log.write(f"[green]Cell '{name}' registered[/green]")
+        elif bid in ("open-skills-btn", "refresh-skills-btn"):
+            import os
+            os.startfile("data/skills") if os.path.exists("data/skills") else None
+            log.write("[green]技能目录: data/skills/[/green]") if log else None
 
-    async def cmd_drill_train(self) -> None:
-        log = self.query_one("#settings-log", RichLog)
-        name = self.query_one("#cell-name", Input).value.strip()
-        model = self.query_one("#cell-model", Input).value.strip()
-        ttype = str(self.query_one("#train-type", Select).value or "lora")
-        if not name or not model:
-            log.write("[yellow]Enter cell name and model[/yellow]")
-            return
-        if self._hub:
-            r = await self._hub.drill_train(name, model, [], ttype)
-            log.write(f"[green]Drill: {'OK' if r.get('success') else 'FAIL'} loss={r.get('loss', 'N/A')}[/green]")
-
-    async def cmd_absorb_codebase(self) -> None:
-        log = self.query_one("#settings-log", RichLog)
-        path = self.query_one("#codebase-path", Input).value.strip()
-        if not path:
-            log.write("[yellow]Enter codebase path[/yellow]")
-            return
-        if self._hub:
-            r = await self._hub.absorb_github(path)
-            log.write(f"[green]Absorbed: {r.get('functions_found', 0)} functions[/green]")
-
-    def _apply_genes(self) -> None:
-        """Apply genome gene expression changes from switches."""
-        log = self.query_one("#settings-log", RichLog)
-        if not self._hub:
-            return
-        genes = self._hub.world.genome.expressed_genes
-        genes.dna_engine = self._get_switch("gene-dna")
-        genes.knowledge_layer = self._get_switch("gene-knowledge")
-        genes.capability_layer = self._get_switch("gene-capability")
-        genes.network_layer = self._get_switch("gene-network")
-        genes.cell_layer = self._get_switch("gene-cell")
-        genes.self_evolution = self._get_switch("gene-evolution")
-        genes.code_absorption = self._get_switch("gene-phage")
-        self._hub.world.genome.add_mutation(
-            f"Gene expression toggled: dna={genes.dna_engine} kb={genes.knowledge_layer}",
-            source="ui_settings",
-        )
-        log.write(f"[green]Genes applied (gen {self._hub.world.genome.generation})[/green]")
-
-    def _get_switch(self, switch_id: str) -> bool:
-        try:
-            return self.query_one(f"#{switch_id}", Switch).value
-        except Exception:
-            return True
+        elif bid in ("open-mcp-btn", "refresh-mcp-btn"):
+            import json
+            try:
+                config = json.loads(Path("data/mcp_servers.json").read_text())
+                servers = list(config.get("mcpServers", {}).keys())
+                log.write(f"[green]MCP 服务器 ({len(servers)}): {', '.join(servers[:10])}[/green]") if log else None
+            except Exception:
+                log.write("[yellow]MCP 配置不存在[/yellow]") if log else None
 
     async def refresh(self) -> None:
         self._load()

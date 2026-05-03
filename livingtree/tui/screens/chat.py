@@ -35,11 +35,9 @@ class ChatScreen(Screen):
         self._hub = None
         self._messages: list[dict] = []
         self._api_key = ""
-        self._base_url = "https://api.deepseek.com"
-        self._flash = "deepseek/deepseek-v4-flash"
-        self._pro = "deepseek/deepseek-v4-pro"
-        self._sending = False
-        self._total_tokens = 0
+        self._base_url = ""
+        self._flash = ""
+        self._pro = ""
 
     def set_hub(self, hub) -> None:
         self._hub = hub
@@ -159,7 +157,7 @@ class ChatScreen(Screen):
         await asyncio.sleep(0.05)
         tp.update_step(1, "done", "retrieved")
 
-        tp.update_step(2, "running", f"{'deepseek-v4-pro' if auto_pro else 'deepseek-v4-flash'}")
+        tp.update_step(2, "running", f"{'pro' if auto_pro else 'flash'} model")
         display.text += "*AI thinking...* "
         try:
             resp = await self._stream(text, pro=auto_pro)

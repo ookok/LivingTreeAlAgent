@@ -31,12 +31,12 @@ class SettingsScreen(Screen):
         yield ScrollableContainer(
             Static("[bold]Configuration[/bold]", id="settings-title"),
 
-            Label("DeepSeek API Key"),
+            Label("API Key"),
             Input(placeholder="sk-... (encrypted)", password=True, id="settings-api-key"),
             Label("Flash Model"),
-            Input(placeholder="deepseek-v4-flash", id="settings-flash"),
+            Input(placeholder="provider/flash-model", id="settings-flash"),
             Label("Pro Model"),
-            Input(placeholder="deepseek-v4-pro", id="settings-pro"),
+            Input(placeholder="provider/pro-model", id="settings-pro"),
             Label("Pro Thinking"),
             Switch(value=True, id="settings-thinking"),
             Label("Workspace"),

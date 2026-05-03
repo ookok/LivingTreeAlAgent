@@ -270,11 +270,14 @@ class KnowledgeScreen(Screen):
             qa_out.write("[yellow]API key not configured[/yellow]")
             return
 
+        model = self._hub.config.model.flash_model
+        base_url = self._hub.config.model.deepseek_base_url
+
         try:
             import aiohttp
             headers = {"Content-Type":"application/json","Authorization":f"Bearer {api_key}"}
             payload = {
-                "model": "deepseek-v4-flash",
+                "model": model,
                 "messages": [
                     {"role":"system","content":f"Answer the question based on the document context. Be concise and accurate.\n\nDocument ({doc_name}):\n{context}"},
                     {"role":"user","content": q},
@@ -283,7 +286,7 @@ class KnowledgeScreen(Screen):
             }
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self._hub.config.model.deepseek_base_url}/v1/chat/completions",
+                    f"{base_url}/v1/chat/completions",
                     headers=headers, json=payload,
                     timeout=aiohttp.ClientTimeout(total=60),
                 ) as resp:

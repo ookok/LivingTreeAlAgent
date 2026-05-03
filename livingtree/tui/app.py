@@ -77,18 +77,18 @@ class LivingTreeTuiApp(App):
             self._boot_label = "初始化..."
             self._update_status()
             self._hub_task = asyncio.create_task(self._boot_hub())
-            self.set_interval(0.25, self._update_boot_progress)
+            self._boot_timer = self.set_interval(0.25, self._update_boot_progress)
         else:
             self._wire_screens()
             self._update_status()
-            self.set_interval(5, self._update_status)
+            self._status_timer = self.set_interval(5, self._update_status)
             self.notify("就绪 · ^P 命令 · ^1-5 切换标签", timeout=2)
 
     def _update_boot_progress(self) -> None:
         if not self._hub_task or self._hub_task.done():
+            self._boot_timer.stop()
             return
         elapsed = time.time() - self._boot_time
-        # Sigmoid-like curve: starts fast, slows asymptotically toward 99.9%
         self._boot_pct = 99.9 * elapsed / (elapsed + 8.0)
         self._update_status()
 
@@ -125,7 +125,12 @@ class LivingTreeTuiApp(App):
 
         self._wire_screens()
         self._update_status()
-        self.set_interval(5, self._update_status)
+        self._status_timer = self.set_interval(5, self._update_status)
+        # Ensure chat tab is active
+        try:
+            self.query_one(TabbedContent).active = "chat"
+        except Exception:
+            pass
         self.notify("就绪 · ^P 命令 · ^1-5 切换标签", timeout=2)
 
     def _wire_screens(self) -> None:

@@ -91,7 +91,6 @@ class ChatScreen(Screen):
         d.write("[bold]快捷键[/bold]")
         d.write("  Ctrl+1~5 切换标签 | Ctrl+P 命令面板 | Ctrl+D 主题 | Ctrl+Q 退出")
         d.write("")
-        self.query_one("#chat-input", Input).focus()
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:

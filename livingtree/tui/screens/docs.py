@@ -273,25 +273,23 @@ class KnowledgeScreen(Screen):
         model = self._hub.config.model.flash_model
         base_url = self._hub.config.model.deepseek_base_url
 
+        import aiohttp
+        session = self._hub._session if self._hub else aiohttp.ClientSession()
         try:
-            import aiohttp
             headers = {"Content-Type":"application/json","Authorization":f"Bearer {api_key}"}
             payload = {
                 "model": model,
-                "messages": [
-                    {"role":"system","content":f"Answer the question based on the document context. Be concise and accurate.\n\nDocument ({doc_name}):\n{context}"},
-                    {"role":"user","content": q},
-                ],
+                "messages": [{"role":"system","content":f"Answer the question based on the document context. Be concise and accurate.\n\nDocument ({doc_name}):\n{context}"},
+                             {"role":"user","content": q}],
                 "temperature": 0.3, "max_tokens": 1024,
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{base_url}/v1/chat/completions",
-                    headers=headers, json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60),
-                ) as resp:
-                    data = await resp.json()
-                    answer = data["choices"][0]["message"]["content"]
+            async with session.post(
+                f"{base_url}/v1/chat/completions",
+                headers=headers, json=payload,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as resp:
+                data = await resp.json()
+                answer = data["choices"][0]["message"]["content"]
             qa_out.write(f"\n[bold #58a6ff]🤖 AI:[/bold #58a6ff] {answer}\n")
             self.query_one("#kb-qa-input", Input).clear()
         except Exception as e:

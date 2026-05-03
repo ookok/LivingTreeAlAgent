@@ -117,16 +117,27 @@ class CodeGraph:
         lang_counts: dict[str, int] = {}
         total_entities = 0
 
+        # Concurrent parsing with ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        parse_tasks: list[tuple[str, str]] = []
         for filepath in files:
             if filepath.name.startswith(".") or "__pycache__" in str(filepath):
                 continue
             sut = str(filepath)
             if self._is_changed(sut):
-                nodes, edges = self._parser.parse_file(sut)
-                self._update_file(sut, nodes, edges)
-                ext = filepath.suffix
-                lang_counts[ext] = lang_counts.get(ext, 0) + 1
-                total_entities += len(nodes)
+                parse_tasks.append((sut, filepath.suffix))
+
+        with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:
+            futures = {pool.submit(self._parser.parse_file, t[0]): t for t in parse_tasks}
+            for future in as_completed(futures):
+                sut, ext = futures[future]
+                try:
+                    nodes, edges = future.result()
+                    self._update_file(sut, nodes, edges)
+                    lang_counts[ext] = lang_counts.get(ext, 0) + 1
+                    total_entities += len(nodes)
+                except Exception:
+                    pass
 
         total_edges = sum(len(e.dependents) for e in self._entities.values())
         elapsed = (time.time() - t0) * 1000

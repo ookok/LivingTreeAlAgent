@@ -10,6 +10,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Optional
 
+import aiohttp
 from loguru import logger
 
 from ..config import LTAIConfig, get_config
@@ -38,6 +39,7 @@ class IntegrationHub:
     def __init__(self, config: Optional[LTAIConfig] = None):
         self.config = config or get_config()
         self.obs = setup_observability(self.config)
+        self._session = aiohttp.ClientSession()  # shared session
 
         # ── Build the world ──
         self.world = LivingWorld(
@@ -163,6 +165,7 @@ class IntegrationHub:
         await self.daemon.stop()
         await self.world.self_healer.stop()
         await self.world.node.shutdown()
+        await self._session.close()
         self._started = False
         logger.info("🌳 LivingTree offline")
 

@@ -111,24 +111,33 @@ class VectorStore:
         for doc_id, vec in items:
             self._vectors[doc_id] = vec
 
-    def search_similar(self, query_vec: List[float], top_k: int = 5) -> List[str]:
+    def search_similar(self, query_vec: list[float], top_k: int = 5) -> list[str]:
         if not self._vectors:
             return []
-        # Cosine similarity
-        def _cos(a: List[float], b: List[float]) -> float:
+        try:
+            import numpy as np
+            ids = list(self._vectors.keys())
+            matrix = np.array([self._vectors[k] for k in ids])
+            query = np.array(query_vec)
+            # Batch cosine: dot / (norm_a * norm_b)
+            dots = np.dot(matrix, query)
+            norms_a = np.linalg.norm(matrix, axis=1)
+            norm_b = np.linalg.norm(query) or 1.0
+            scores = dots / (norms_a * norm_b + 1e-10)
+            top_indices = np.argsort(scores)[-top_k:][::-1]
+            return [ids[i] for i in top_indices if scores[i] > 0]
+        except ImportError:
+            pass
+        # Pure Python fallback
+        def _cos(a, b):
             import math
-            if len(a) != len(b) or len(a) == 0:
-                return 0.0
             dot = sum(x * y for x, y in zip(a, b))
             na = math.sqrt(sum(x * x for x in a)) or 1.0
             nb = math.sqrt(sum(x * x for x in b)) or 1.0
             return dot / (na * nb)
-
-        scores: List[Tuple[str, float]] = []
-        for doc_id, vec in self._vectors.items():
-            scores.append((doc_id, _cos(query_vec, vec)))
+        scores = [(k, _cos(v, query_vec)) for k, v in self._vectors.items()]
         scores.sort(key=lambda x: x[1], reverse=True)
-        return [doc_id for doc_id, _ in scores[:top_k]]
+        return [k for k, _ in scores[:top_k]]
 
     def delete_vector(self, doc_id: str) -> None:
         self._vectors.pop(doc_id, None)

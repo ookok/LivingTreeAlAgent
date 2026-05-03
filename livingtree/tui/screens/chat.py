@@ -214,9 +214,9 @@ class ChatScreen(Screen):
         }
 
         collected = []
+        session = self._hub._session if self._hub else aiohttp.ClientSession()
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
+            async with session.post(
                     f"{self._base_url}/v1/chat/completions",
                     headers=headers, json=payload,
                     timeout=aiohttp.ClientTimeout(total=180),

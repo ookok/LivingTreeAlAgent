@@ -307,7 +307,7 @@ StageIndicator {
 }
 
 #footer-status {
-    width: 42;
+    width: 48;
     color: $success;
     content-align: right middle;
 }

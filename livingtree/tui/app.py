@@ -94,6 +94,8 @@ class LivingTreeTuiApp(App):
 
         self._boot_label = "加载模块..."
         self._boot_pct = 10
+        self._update_status()
+        await asyncio.sleep(0.1)
 
         def _import_hub():
             from ..integration.hub import IntegrationHub
@@ -101,15 +103,23 @@ class LivingTreeTuiApp(App):
 
         self._boot_label = "导入引擎..."
         self._boot_pct = 25
+        self._update_status()
         HubClass = await loop.run_in_executor(None, _import_hub)
 
         self._boot_label = "构建世界..."
         self._boot_pct = 55
+        self._update_status()
         self._hub = HubClass()
 
         self._boot_label = "启动服务..."
         self._boot_pct = 80
+        self._update_status()
         await self._hub.start()
+
+        self._boot_label = "完成"
+        self._boot_pct = 100
+        self._update_status()
+        await asyncio.sleep(0.3)
 
         self._boot_label = ""
         self._boot_pct = 100

@@ -20,10 +20,10 @@ class StatusBar(Horizontal):
     def show_booting(self, label: str, pct: int, elapsed: float) -> None:
         self._boot_idx = (self._boot_idx + 1) % len(SPINNER)
         icon = SPINNER[self._boot_idx]
-        bar_w = 18
+        bar_w = 10
         filled = int(bar_w * pct / 100)
         bar = f"{'█' * filled}{'░' * (bar_w - filled)}"
-        text = f"{icon} {label} {pct}% [{bar}] {elapsed:.0f}s"
+        text = f"{icon} {label} [{bar}] {pct}% {elapsed:.0f}s"
         try:
             self.query_one("#footer-status", Label).update(text)
         except Exception:

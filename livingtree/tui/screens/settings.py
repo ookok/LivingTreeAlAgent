@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, ScrollableContainer
@@ -21,14 +22,17 @@ class SettingsScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
-        yield TabbedContent(
-            TabPane("🔑 API", self._api_pane()),
-            TabPane("🧬 基因组", self._genome_pane()),
-            TabPane("🤖 训练", self._train_pane()),
-            TabPane("🧩 技能", self._skill_pane()),
-            TabPane("🔌 MCP", self._mcp_pane()),
-            id="settings-tabs",
-        )
+        with TabbedContent(id="settings-tabs"):
+            with TabPane("🔑 API"):
+                yield self._api_pane()
+            with TabPane("🧬 基因组"):
+                yield self._genome_pane()
+            with TabPane("🤖 训练"):
+                yield self._train_pane()
+            with TabPane("🧩 技能"):
+                yield self._skill_pane()
+            with TabPane("🔌 MCP"):
+                yield self._mcp_pane()
 
     def _api_pane(self) -> ScrollableContainer:
         return ScrollableContainer(
@@ -55,7 +59,7 @@ class SettingsScreen(Screen):
         return ScrollableContainer(
             Label("细胞名称"), Input(placeholder="my_cell", id="cell-name"),
             Label("模型ID"), Input(placeholder="Qwen/Qwen3.5-4B", id="cell-model"),
-            Label("训练类型"), Select([("lora","LoRA"),("full","全参"),("distill","蒸馏"),("grpo","GRPO")], value="lora", id="train-type"),
+            Label("训练类型"), Select([("LoRA","lora"),("全参","full"),("蒸馏","distill"),("GRPO","grpo")], value="lora", id="train-type"),
             Label(""), Horizontal(
                 Button("🚀 训练", variant="primary", id="train-btn"),
                 Button("🧪 Drill", variant="primary", id="drill-btn"),
@@ -97,17 +101,23 @@ class SettingsScreen(Screen):
         except Exception:
             pass
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        log_map = {"api-log": "#api-log", "genome-log": "#genome-log",
-                   "train-log": "#train-log", "skills-log": "#skills-log", "mcp-log": "#mcp-log"}
-        log = None
-        for key, wid in log_map.items():
+    def _get_log(self, bid: str) -> Optional[RichLog]:
+        log_map = {"save-api-btn": "#api-log", "apply-genes-btn": "#genome-log",
+                   "train-btn": "#train-log", "drill-btn": "#train-log",
+                   "list-cells-btn": "#train-log",
+                   "open-skills-btn": "#skills-log", "refresh-skills-btn": "#skills-log",
+                   "open-mcp-btn": "#mcp-log", "refresh-mcp-btn": "#mcp-log"}
+        wid = log_map.get(bid)
+        if wid:
             try:
-                log = self.query_one(wid, RichLog)
-                break
+                return self.query_one(wid, RichLog)
             except Exception:
                 pass
+        return None
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        bid = event.button.id
+        log = self._get_log(bid)
 
         if bid == "save-api-btn":
             key = self.query_one("#api-key", Input).value
@@ -159,5 +169,5 @@ class SettingsScreen(Screen):
             except Exception:
                 log.write("[yellow]MCP 配置不存在[/yellow]") if log else None
 
-    async def refresh(self) -> None:
+    async def refresh(self, **kwargs) -> None:
         self._load()

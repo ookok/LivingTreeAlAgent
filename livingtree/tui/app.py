@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
+from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import TabbedContent, TabPane
 
-from ..integration.hub import IntegrationHub
 from ..observability import setup_observability
 
 from .screens.chat import ChatScreen
@@ -49,6 +50,10 @@ class LivingTreeTuiApp(App):
         self.workspace = Path(workspace) if workspace else Path.cwd()
         self._hub = hub
         self._dark = True
+        self._hub_task: Optional[asyncio.Task] = None
+        self._boot_time = 0.0
+        self._boot_pct = 0
+        self._boot_label = ""
 
     def compose(self) -> ComposeResult:
         yield TuiHeader()
@@ -67,37 +72,81 @@ class LivingTreeTuiApp(App):
 
     async def on_mount(self) -> None:
         self.sub_title = f"数字生命体 v2.0 · {self.workspace.name}"
+
         if self._hub is None:
-            try:
-                self._hub = IntegrationHub()
-                await self._hub.start()
-            except Exception as e:
-                self.notify(f"后端: {e}", severity="warning", timeout=3)
+            self._boot_time = time.time()
+            self._boot_label = "连接后端..."
+            self._update_status()
+            self._hub_task = asyncio.create_task(self._boot_hub())
+            self.set_interval(0.3, self._update_boot_progress)
+        else:
+            self._wire_screens()
+            self._update_status()
+            self.set_interval(5, self._update_status)
+            self.notify("就绪 · ^P 命令 · ^1-5 切换标签", timeout=2)
 
-        for sid in ["chat", "code", "docs", "tools", "settings"]:
-            try:
-                screen = self.query_one(f"#{sid}-screen")
-                screen.set_hub(self._hub)
-            except Exception:
-                pass
+    def _update_boot_progress(self) -> None:
+        if not self._hub_task or self._hub_task.done():
+            return
+        self._update_status()
 
+    async def _boot_hub(self) -> None:
+        loop = asyncio.get_event_loop()
+
+        self._boot_label = "加载模块..."
+        self._boot_pct = 10
+
+        def _import_hub():
+            from ..integration.hub import IntegrationHub
+            return IntegrationHub
+
+        self._boot_label = "导入引擎..."
+        self._boot_pct = 25
+        HubClass = await loop.run_in_executor(None, _import_hub)
+
+        self._boot_label = "构建世界..."
+        self._boot_pct = 55
+        self._hub = HubClass()
+
+        self._boot_label = "启动服务..."
+        self._boot_pct = 80
+        await self._hub.start()
+
+        self._boot_label = ""
+        self._boot_pct = 100
+
+        self._wire_screens()
         self._update_status()
         self.set_interval(5, self._update_status)
         self.notify("就绪 · ^P 命令 · ^1-5 切换标签", timeout=2)
 
+    def _wire_screens(self) -> None:
+        for sid in ["chat", "code", "docs", "tools", "settings"]:
+            try:
+                screen = self.query_one(f"#{sid}-screen")
+                screen.set_hub(self._hub)
+            except Exception as e:
+                logger.warning(f"Failed to wire screen '{sid}': {e}")
+
     def _update_status(self) -> None:
         try:
             bar = self.query_one(StatusBar)
-            bar.update_system_status(self._hub)
-        except Exception:
-            pass
+            if self._boot_label:
+                elapsed = time.time() - self._boot_time
+                bar.show_booting(self._boot_label, self._boot_pct, elapsed)
+            else:
+                bar.update_system_status(self._hub)
+        except Exception as e:
+            logger.debug(f"Status update failed: {e}")
 
     async def on_unmount(self) -> None:
+        if self._hub_task:
+            self._hub_task.cancel()
         if self._hub:
             try:
                 await self._hub.shutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Hub shutdown error: {e}")
 
     def action_toggle_dark(self) -> None:
         self.dark = not self.dark
@@ -105,8 +154,9 @@ class LivingTreeTuiApp(App):
     def action_focus_tab(self, tab_id: str) -> None:
         try:
             self.query_one(TabbedContent).active = tab_id
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to switch to tab '{tab_id}': {e}")
+            self.notify(f"无法切换到标签 '{tab_id}'", severity="error", timeout=2)
 
     def action_refresh(self) -> None:
         tabs = self.query_one(TabbedContent)

@@ -81,8 +81,18 @@ class CodeScreen(Screen):
     def on_mount(self) -> None:
         self._workspace = getattr(self.app, 'workspace', '.')
         output = self.query_one("#code-output", RichLog)
-        output.write("[bold green]Code Editor[/bold green]")
-        output.write("[dim]Click file in tree to open | Ctrl+F search | Diff=git diff[/dim]")
+        output.write("[bold green]📝 Code Editor[/bold green]")
+        output.write("")
+        output.write("[bold]功能速览[/bold]")
+        output.write("  • 左侧文件树 → 点击打开文件")
+        output.write("  • 支持多标签页编辑")
+        output.write("  • [bold]Diff[/bold] → Git 对比 HEAD")
+        output.write("  • [bold]AI Gen[/bold] → AI 代码生成")
+        output.write("  • [bold]Run[/bold] → Python 一键运行")
+        output.write("")
+        output.write("[bold]快捷键[/bold]")
+        output.write("  Ctrl+F 搜索  |  Ctrl+H 替换  |  Ctrl+G 跳行")
+        output.write("")
         self._load_recent()
 
     @on(DirectoryTree.FileSelected, "#code-tree")
@@ -328,5 +338,5 @@ class CodeScreen(Screen):
             self.query_one("#code-file-info", Label).update(
                 f"[dim]Recent: {Path(recent[0]).name if recent else 'none'}[/dim]")
 
-    async def refresh(self) -> None:
+    async def refresh(self, **kwargs) -> None:
         pass

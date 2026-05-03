@@ -16,9 +16,9 @@ import aiohttp
 from datetime import datetime
 from textual import work, on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Label, TextArea
+from textual.widgets import Button, Input, Label, RichLog
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -55,17 +55,14 @@ class ChatScreen(Screen):
                 id="sidebar",
             ),
             Vertical(
-                ScrollableContainer(
-                    TextArea("", id="chat-display", read_only=True),
-                    id="chat-scroll",
-                ),
+                RichLog(id="chat-display", highlight=True, markup=True, wrap=True),
                 Container(
                     Horizontal(
-                        TextArea("", id="chat-input"),
-                        Button("▸ Send", variant="primary", id="send-btn"),
+                        Input(placeholder="输入消息，Enter 发送...", id="chat-input"),
+                        Button("Send", variant="primary", id="send-btn"),
                     ),
                     Horizontal(
-                        Label("[dim]Enter=Send  Shift+Enter=NL  Ctrl+V=粘贴图片  /命令[/dim]", id="chat-hints"),
+                        Label("[dim]Enter=Send | Shift+Enter=换行 | /命令 | Ctrl+P=面板[/dim]", id="chat-hints"),
                         Button("File", variant="default", id="file-btn"),
                         Button("Clear", variant="default", id="clear-btn"),
                         Button("Status", variant="default", id="status-btn"),
@@ -77,13 +74,22 @@ class ChatScreen(Screen):
         )
 
     def on_mount(self) -> None:
-        d = self.query_one("#chat-display", TextArea)
-        d.text = (
-            "# LivingTree AI Chat\n\n"
-            "> 支持 Markdown 渲染 | 多模态输入 | 任务树实时状态\n\n"
-            "**命令:** `/code` `/report` `/analyze` `/search` `/file`\n\n"
-            "---\n"
-        )
+        d = self.query_one("#chat-display", RichLog)
+        d.write("[bold green]# 🌳 LivingTree AI Chat[/bold green]")
+        d.write("")
+        d.write("欢迎使用数字生命体 v2.0 智能对话系统")
+        d.write("")
+        d.write("[bold]快速上手[/bold]")
+        d.write("  • 输入问题并按 [bold]Enter[/bold] 发送")
+        d.write("  • [bold]/file 路径[/bold]  预览文件内容")
+        d.write("  • [bold]/code 描述[/bold]  生成代码")
+        d.write("  • [bold]/report 主题[/bold]  生成报告")
+        d.write("  • [bold]/search 关键词[/bold]  搜索知识库")
+        d.write("")
+        d.write("[bold]快捷键[/bold]")
+        d.write("  Ctrl+1~5 切换标签 | Ctrl+P 命令面板 | Ctrl+D 主题 | Ctrl+Q 退出")
+        d.write("")
+        self.query_one("#chat-input", Input).focus()
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -97,22 +103,22 @@ class ChatScreen(Screen):
         elif bid == "status-btn":
             await self._show_status()
 
-    @on(TextArea.Changed, "#chat-input")
-    def on_input_changed(self, event: TextArea.Changed) -> None:
-        """Detect pasted images (Ctrl+V with image data)."""
-        pass  # TextArea handles clipboard natively
+    @on(Input.Submitted, "#chat-input")
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.value.strip():
+            await self._send()
 
     def _pick_file(self) -> None:
         def on_file(path: str):
-            editor = self.query_one("#chat-input", TextArea)
-            current = editor.text
+            inp = self.query_one("#chat-input", Input)
+            current = inp.value
             p = Path(path)
             size_kb = p.stat().st_size // 1024
             if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
-                editor.text = f"{current}\n[image: {p.name} ({size_kb}KB)]\n".strip()
+                inp.value = f"{current}\n[image: {p.name} ({size_kb}KB)]\n".strip()
                 self.notify(f"图片已添加: {p.name}", timeout=2)
             else:
-                editor.text = f"{current}\n[file: {p.name} ({size_kb}KB)]\n".strip()
+                inp.value = f"{current}\n[file: {p.name} ({size_kb}KB)]\n".strip()
                 self.notify(f"文件已添加: {p.name}", timeout=2)
 
         self.app.push_screen(FilePicker(".", callback=on_file, title="选择文件"))
@@ -120,13 +126,13 @@ class ChatScreen(Screen):
     async def _send(self) -> None:
         if self._sending:
             return
-        editor = self.query_one("#chat-input", TextArea)
-        text = editor.text.strip()
+        inp = self.query_one("#chat-input", Input)
+        text = inp.value.strip()
         if not text:
             return
-        editor.clear()
+        inp.value = ""
         self._sending = True
-        display = self.query_one("#chat-display", TextArea)
+        display = self.query_one("#chat-display", RichLog)
         tp = self.query_one(TaskProgressPanel)
         tp.reset()
 
@@ -135,10 +141,9 @@ class ChatScreen(Screen):
             self._sending = False
             return
 
-        display.text += f"\n### You\n{text}\n\n"
+        display.write(f"\n[bold green]You:[/bold green] {text}")
         self._messages.append({"role": "user", "content": text})
 
-        # Load plan steps into progress panel
         auto_pro = len(text) > 200 or any(kw in text for kw in [
             "分析", "推理", "预测", "评估", "优化", "报告", "方案", "风险"])
         steps = [
@@ -158,20 +163,14 @@ class ChatScreen(Screen):
         tp.update_step(1, "done", "retrieved")
 
         tp.update_step(2, "running", f"{'pro' if auto_pro else 'flash'} model")
-        display.text += "*AI thinking...* "
+        display.write("[italic dim]AI thinking...[/italic dim]")
         try:
             resp = await self._stream(text, pro=auto_pro)
-            lines = display.text.split("\n")
-            for i in range(len(lines) - 1, -1, -1):
-                if "*AI thinking...*" in lines[i]:
-                    lines[i] = ""
-                    break
-            display.text = "\n".join(lines)
-            display.text += f"### AI\n{resp}\n\n---\n"
+            display.write(f"\n[bold #58a6ff]AI:[/bold #58a6ff]\n{resp}\n[dim]---[/dim]")
             self._messages.append({"role": "assistant", "content": resp})
             tp.update_step(2, "done", f"{len(resp)} chars")
         except Exception as e:
-            display.text += f"\n**❌ Error:** {e}\n"
+            display.write(f"\n[bold red]Error:[/bold red] {e}")
             tp.update_step(2, "failed", str(e)[:40])
 
         tp.update_step(3, "running", "formatting...")
@@ -184,7 +183,7 @@ class ChatScreen(Screen):
 
     async def _stream(self, text: str, pro: bool = False) -> str:
         if not self._api_key:
-            return f"*API key未配置*\n\n> {text[:100]}"
+            return f"[yellow]API key未配置[/yellow]\n\n> {text[:100]}"
 
         model = self._pro if pro else self._flash
         headers = {
@@ -223,9 +222,9 @@ class ChatScreen(Screen):
                 ) as resp:
                     if resp.status != 200:
                         err = await resp.text()
-                        return f"API Error {resp.status}: {err[:200]}"
+                        return f"[red]API Error {resp.status}[/red]: {err[:200]}"
                     buf = b""
-                    display = self.query_one("#chat-display", TextArea)
+                    display = self.query_one("#chat-display", RichLog)
                     async for chunk in resp.content.iter_any():
                         buf += chunk
                         while b"\n" in buf:
@@ -242,19 +241,18 @@ class ChatScreen(Screen):
                                 token = delta.get("content", "")
                                 if token:
                                     collected.append(token)
-                                    # Live update display every few tokens
                                     if len(collected) % 5 == 0:
-                                        display.text += "".join(collected[-5:])
+                                        display.write("".join(collected[-5:]))
                             except Exception:
                                 continue
         except Exception as e:
-            return f"**Error:** {e}"
+            return f"[red]Error:[/red] {e}"
 
         result = "".join(collected)
         self._total_tokens += len(result)
-        return result if result else "*(无响应)*"
+        return result if result else "[dim](无响应)[/dim]"
 
-    async def _handle_command(self, text: str, display: TextArea) -> None:
+    async def _handle_command(self, text: str, display: RichLog) -> None:
         parts = text.split(maxsplit=1)
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -265,31 +263,31 @@ class ChatScreen(Screen):
                 ext = p.suffix.lower()
                 size = p.stat().st_size
                 if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
-                    display.text += f"### 图片预览: {p.name}\n> {size//1024}KB\n\n"
+                    display.write(f"[bold]图片预览:[/bold] {p.name} ({size//1024}KB)")
                 else:
                     try:
                         content = p.read_text(encoding="utf-8", errors="replace")
                         lang = {".py":"python",".js":"javascript",".ts":"typescript",
                                 ".json":"json",".yaml":"yaml",".md":"markdown"}.get(ext,"")
-                        display.text += f"### {p.name}\n```{lang}\n{content[:2000]}\n```\n\n"
+                        display.write(f"[bold]{p.name}[/bold]\n```{lang}\n{content[:2000]}\n```")
                     except Exception:
-                        display.text += f"### {p.name}\n> 二进制文件 {size//1024}KB\n\n"
+                        display.write(f"[bold]{p.name}[/bold] 二进制文件 {size//1024}KB")
 
         elif cmd == "/code" and arg and self._hub:
             r = await self._hub.generate_code("module", arg, "python")
-            display.text += f"### 生成代码\n```python\n{r.get('code','')[:1500]}\n```\n\n"
+            display.write(f"[bold]生成代码[/bold]\n```python\n{r.get('code','')[:1500]}\n```")
 
         elif cmd == "/report" and arg and self._hub:
             r = await self._hub.generate_report(arg, {"title": arg})
             doc = r.get("document", "")
-            display.text += f"### 报告: {arg}\n\n{doc[:800]}{'...' if len(doc)>800 else ''}\n\n---\n"
+            trunc = f"{'...' if len(doc)>800 else ''}"
+            display.write(f"[bold]报告: {arg}[/bold]\n{doc[:800]}{trunc}\n[dim]---[/dim]")
 
         elif cmd == "/analyze" and arg and self._hub:
             r = await self._hub.chat(f"深度分析: {arg}")
-            display.text += f"### 分析结果\n{r.get('intent','')[:500]}\n\n"
+            display.write(f"[bold]分析结果[/bold]\n{r.get('intent','')[:500]}")
 
         elif cmd == "/search" and arg and self._hub:
-            # Support time-based search: /search 2023 环评标准
             from datetime import datetime
             parts = arg.split(maxsplit=1)
             as_of = None
@@ -306,42 +304,43 @@ class ChatScreen(Screen):
 
             results = self._hub.world.knowledge_base.search(query, top_k=10, as_of=as_of)
             time_label = f" (as of {as_of.date()})" if as_of else " (当前)"
-            display.text += f"### 知识搜索: `{query}`{time_label}\n"
+            display.write(f"[bold]知识搜索:[/bold] `{query}`{time_label}")
             if results:
-                display.text += (
-                    "| 标题 | 领域 | 有效期 |\n"
-                    "|------|------|--------|\n"
-                )
                 for d in results[:10]:
-                    vf = d.valid_from.strftime("%Y-%m") if d.valid_from else "—"
+                    vf = d.valid_from.strftime("%Y-%m") if d.valid_from else "-"
                     vt = d.valid_to.strftime("%Y-%m") if d.valid_to else "至今"
-                    display.text += f"| {d.title} | {d.domain or '-'} | {vf}~{vt} |\n"
+                    display.write(f"  • {d.title} [{d.domain or '-'}] {vf}~{vt}")
             else:
-                display.text += "> 无结果\n"
-            display.text += "\n"
+                display.write("[dim]  无结果[/dim]")
 
         else:
-            display.text += f"> 未知命令: `{cmd}` | 可用: `/code /report /analyze /search /file`\n"
+            display.write(f"[dim]未知命令: `{cmd}` | 可用: /code /report /analyze /search /file[/dim]")
 
     async def _show_status(self) -> None:
         if not self._hub:
             self.notify("后端未连接", severity="warning")
             return
         s = self._hub.status()
-        display = self.query_one("#chat-display", TextArea)
-        display.text += (
-            f"### 系统状态\n"
-            f"| 指标 | 值 |\n|------|----|\n"
-            f"| 世代 | {s.get('engine',{}).get('generation','?')} |\n"
-            f"| 细胞 | {s.get('cells',0)} |\n"
-            f"| 节点 | {s.get('network',{}).get('status','?')} |\n"
-            f"| 审计 | {s.get('audit',{}).get('total',0)} entries |\n"
-            f"| 预算 | {s.get('budget',{}).get('used',0)} tokens |\n\n---\n"
-        )
+        display = self.query_one("#chat-display", RichLog)
+        display.write("[bold]系统状态[/bold]")
+        display.write(f"  世代: {s.get('engine',{}).get('generation','?')}")
+        display.write(f"  细胞: {s.get('cells',0)}")
+        display.write(f"  节点: {s.get('network',{}).get('status','?')}")
+        display.write(f"  审计: {s.get('audit',{}).get('total',0)} entries")
+        display.write(f"  预算: {s.get('budget',{}).get('used',0)} tokens")
+        display.write("[dim]---[/dim]")
 
     def _clear(self) -> None:
-        d = self.query_one("#chat-display", TextArea)
-        d.text = "# LivingTree AI Chat\n\n> 支持 Markdown | 多模态 | 任务树\n\n---\n"
+        d = self.query_one("#chat-display", RichLog)
+        d.clear()
+        d.write("[bold green]# 🌳 LivingTree AI Chat[/bold green]")
+        d.write("")
+        d.write("[bold]快速上手[/bold]")
+        d.write("  • 输入问题并按 [bold]Enter[/bold] 发送")
+        d.write("  • [bold]/file 路径[/bold]  预览文件")
+        d.write("  • [bold]/code 描述[/bold]  生成代码")
+        d.write("  • [bold]/search 关键词[/bold]  搜索知识库")
+        d.write("")
         self._messages.clear()
         self._total_tokens = 0
-        self.query_one(TaskTreePanel).reset()
+        self.query_one(TaskProgressPanel).reset()

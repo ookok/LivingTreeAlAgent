@@ -29,37 +29,57 @@ class ToolsScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
-        yield TabbedContent(
-            TabPane("📄 PDF/Doc", id="pdf-tab"),
-            TabPane("🌐 翻译", id="translate-tab"),
-            TabPane("📊 流程图", id="flowchart-tab"),
-            TabPane("🗺️ 地图", id="map-tab"),
-            id="tools-tabs",
-        )
+        with TabbedContent(id="tools-tabs"):
+            with TabPane("📄 PDF/Doc", id="pdf-tab"):
+                yield Vertical(
+                    Horizontal(
+                        Input(placeholder="PDF or document path...", id="pdf-path"),
+                        Button("📖 Extract", variant="primary", id="pdf-extract-btn"),
+                        Button("📝 Summarize", variant="default", id="pdf-summarize-btn"),
+                        id="pdf-toolbar",
+                    ),
+                    TextArea("", id="pdf-content", read_only=True),
+                    RichLog(id="pdf-output", highlight=True, markup=True, wrap=True),
+                )
+            with TabPane("🌐 翻译", id="translate-tab"):
+                yield Vertical(
+                    Horizontal(
+                        Select([("中→英","zh→en"),("英→中","en→zh"),("中→日","zh→ja"),
+                                ("日→中","ja→zh"),("自动检测","auto")], value="zh→en", id="translate-lang"),
+                        Button("🌐 Translate", variant="primary", id="translate-btn"),
+                        id="translate-toolbar",
+                    ),
+                    TextArea("", id="translate-input"),
+                    Label("[dim]Translation output:[/dim]", id="translate-label"),
+                    TextArea("", id="translate-output", read_only=True),
+                )
+            with TabPane("📊 流程图", id="flowchart-tab"):
+                yield Vertical(
+                    Input(placeholder="Describe the diagram... e.g. 用户登录流程", id="flowchart-desc"),
+                    Button("📊 Generate", variant="primary", id="flowchart-gen-btn"),
+                    TextArea("", id="flowchart-output", read_only=True),
+                )
+            with TabPane("🗺️ 地图", id="map-tab"):
+                yield Vertical(
+                    Horizontal(
+                        Input(placeholder="🔍 Location (city, address, coordinates)...", id="map-query"),
+                        Button("🗺️ Search", variant="primary", id="map-search-btn"),
+                        Select([("矢量","vec"),("卫星","img"),("地形","ter"),("标注","cva")],
+                               value="vec", id="map-layer"),
+                        Button("Beijing", variant="default", id="map-bj"),
+                        Button("Shanghai", variant="default", id="map-sh"),
+                        id="map-toolbar",
+                    ),
+                    RichLog(id="map-display", highlight=True, markup=True, wrap=True),
+                    id="map-container",
+                )
 
     def on_mount(self) -> None:
-        self._setup_pdf_tab()
-        self._setup_translate_tab()
-        self._setup_flowchart_tab()
-        self._setup_map_tab()
-
-    # ── PDF/Doc tab ──
-
-    def _setup_pdf_tab(self) -> None:
-        tab = self.query_one("#pdf-tab", TabPane)
-        tab.mount(Vertical(
-            Horizontal(
-                Input(placeholder="PDF or document path...", id="pdf-path"),
-                Button("📖 Extract", variant="primary", id="pdf-extract-btn"),
-                Button("📝 Summarize", variant="default", id="pdf-summarize-btn"),
-                id="pdf-toolbar",
-            ),
-            TextArea("", id="pdf-content", read_only=True),
-            RichLog(id="pdf-output", highlight=True, markup=True, wrap=True),
-        ))
         output = self.query_one("#pdf-output", RichLog)
         output.write("[bold]📄 Document Processor[/bold]")
         output.write("[dim]Extract text from PDF/DOCX, then summarize with AI.[/dim]")
+
+    # ── PDF/Doc tab ──
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -170,20 +190,6 @@ class ToolsScreen(Screen):
 
     # ── Translate tab ──
 
-    def _setup_translate_tab(self) -> None:
-        tab = self.query_one("#translate-tab", TabPane)
-        tab.mount(Vertical(
-            Horizontal(
-                Select([("zh→en","中→英"),("en→zh","英→中"),("zh→ja","中→日"),
-                        ("ja→zh","日→中"),("auto","自动检测")], value="zh→en", id="translate-lang"),
-                Button("🌐 Translate", variant="primary", id="translate-btn"),
-                id="translate-toolbar",
-            ),
-            TextArea("", id="translate-input"),
-            Label("[dim]Translation output:[/dim]", id="translate-label"),
-            TextArea("", id="translate-output", read_only=True),
-        ))
-
     @work(exclusive=False)
     async def _translate(self) -> None:
         inp = self.query_one("#translate-input", TextArea)
@@ -227,14 +233,6 @@ class ToolsScreen(Screen):
 
     # ── Flowchart tab ──
 
-    def _setup_flowchart_tab(self) -> None:
-        tab = self.query_one("#flowchart-tab", TabPane)
-        tab.mount(Vertical(
-            Input(placeholder="Describe the diagram... e.g. 用户登录流程", id="flowchart-desc"),
-            Button("📊 Generate", variant="primary", id="flowchart-gen-btn"),
-            TextArea("", id="flowchart-output", read_only=True),
-        ))
-
     @work(exclusive=False)
     async def _gen_flowchart(self) -> None:
         desc = self.query_one("#flowchart-desc", Input).value.strip()
@@ -274,22 +272,6 @@ class ToolsScreen(Screen):
             out.text = f"Error: {e}"
 
     # ── Map tab ──
-
-    def _setup_map_tab(self) -> None:
-        tab = self.query_one("#map-tab", TabPane)
-        tab.mount(Vertical(
-            Horizontal(
-                Input(placeholder="🔍 Location (city, address, coordinates)...", id="map-query"),
-                Button("🗺️ Search", variant="primary", id="map-search-btn"),
-                Select([("vec","矢量"),("img","卫星"),("ter","地形"),("cva","标注")],
-                       value="vec", id="map-layer"),
-                Button("Beijing", variant="default", id="map-bj"),
-                Button("Shanghai", variant="default", id="map-sh"),
-                id="map-toolbar",
-            ),
-            RichLog(id="map-display", highlight=True, markup=True, wrap=True),
-            id="map-container",
-        ))
 
     @work(exclusive=False)
     async def _map_search(self) -> None:
@@ -352,5 +334,5 @@ class ToolsScreen(Screen):
         except Exception as e:
             display.write(f"[red]Error: {e}[/red]")
 
-    async def refresh(self) -> None:
+    async def refresh(self, **kwargs) -> None:
         pass

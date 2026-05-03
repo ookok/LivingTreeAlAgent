@@ -16,7 +16,7 @@ Screen {
 }
 
 #header-title {
-    width: 30;
+    width: 24;
     text-style: bold;
     color: $success;
 }
@@ -24,12 +24,7 @@ Screen {
 #header-workspace {
     width: 1fr;
     color: $text-muted;
-}
-
-#header-status {
-    width: 20;
     content-align: right middle;
-    color: $success;
 }
 
 TabbedContent {
@@ -38,10 +33,7 @@ TabbedContent {
 
 TabPane {
     padding: 0;
-}
-
-Tab {
-    padding: 0 2;
+    background: $surface;
 }
 
 /* Chat layout: sidebar + main */
@@ -77,14 +69,11 @@ StageIndicator {
 }
 
 /* Chat */
-#chat-scroll {
-    height: 1fr;
-    border: none;
-}
-
 #chat-display {
     height: 1fr;
     border: none;
+    overflow-y: scroll;
+    scrollbar-size: 1 1;
 }
 
 #chat-input-container {
@@ -160,17 +149,108 @@ StageIndicator {
     overflow-y: auto;
 }
 
-/* Docs */
-#file-tree {
-    width: 32;
+/* Docs — Knowledge Base */
+#kb-sidebar {
+    width: 30;
     background: $panel;
     border-right: solid $panel-darken-1;
+    padding: 0 1;
+}
+
+#kb-main {
+    width: 1fr;
+}
+
+#kb-tree {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#kb-preview {
+    height: 1fr;
+    border: none;
     scrollbar-size: 1 1;
 }
 
-#doc-preview {
+#kb-qa-output {
     height: 1fr;
     border: none;
+    scrollbar-size: 1 1;
+}
+
+#kb-search {
+    margin: 1 0;
+}
+
+#kb-search:focus {
+    border: solid $primary;
+}
+
+/* Tools */
+#tools-tabs {
+    height: 1fr;
+}
+
+#tools-tabs > TabPane {
+    padding: 1 1;
+}
+
+#pdf-path {
+    margin: 0 1 0 0;
+}
+
+#pdf-content {
+    height: 1fr;
+    border: none;
+    margin: 1 0 0 0;
+}
+
+#pdf-output {
+    height: 12;
+    background: $panel;
+    border: none;
+    margin: 1 0 0 0;
+}
+
+#translate-input {
+    height: 1fr;
+    border: none;
+    margin: 1 0;
+}
+
+#translate-output {
+    height: 1fr;
+    border: solid $panel-darken-1;
+    margin: 0 0 1 0;
+}
+
+#flowchart-desc {
+    margin: 0 0 1 0;
+}
+
+#flowchart-output {
+    height: 1fr;
+    border: none;
+}
+
+#map-display {
+    height: 1fr;
+    border: none;
+    margin: 1 0 0 0;
+}
+
+/* Settings */
+#settings-tabs {
+    height: 1fr;
+}
+
+#settings-tabs > TabPane {
+    padding: 1 2;
+}
+
+#settings-form {
+    padding: 1 3;
+    overflow-y: scroll;
     scrollbar-size: 1 1;
 }
 
@@ -200,6 +280,7 @@ StageIndicator {
     height: 1;
     background: $panel;
     border-top: solid $panel-darken-1;
+    border-bottom: none;
     padding: 0 1;
 }
 
@@ -208,14 +289,8 @@ StageIndicator {
     color: $text-muted;
 }
 
-#footer-contact {
-    width: 40;
-    color: $primary;
-    content-align: center middle;
-}
-
 #footer-status {
-    width: 20;
+    width: 42;
     color: $success;
     content-align: right middle;
 }
@@ -280,16 +355,82 @@ LoadingIndicator {
     height: 1;
 }
 
+LoadingSplash {
+    width: 100%;
+    height: 100%;
+    background: $surface;
+    align: center middle;
+}
+
+#splash-box {
+    width: 48;
+    height: 16;
+    border: thick $primary;
+    background: $panel;
+    padding: 2 3;
+    align: center middle;
+}
+
+#splash-logo {
+    width: 100%;
+    content-align: center middle;
+    text-style: bold;
+    color: $success;
+    height: 3;
+}
+
+#splash-title {
+    width: 100%;
+    content-align: center middle;
+    text-style: bold;
+    color: $text;
+}
+
+#splash-subtitle {
+    width: 100%;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#splash-status {
+    width: 100%;
+    content-align: center middle;
+    color: $primary;
+    margin: 1 0 0 0;
+}
+
+#splash-detail {
+    width: 100%;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#splash-timer {
+    width: 100%;
+    content-align: center middle;
+    color: $text-muted;
+    margin: 1 0 0 0;
+}
+
+/* Inline loading bar — shown while backend boots */
+LoadingBar {
+    dock: bottom;
+    height: 1;
+    background: $primary 15%;
+    color: $primary;
+    text-style: bold;
+}
+
 /* Misc */
 .chat-message-user {
     color: $success;
     text-style: bold;
-    padding: 1 2 0;
+    padding: 1 2 0 0;
 }
 
 .chat-message-ai {
     color: $text;
-    padding: 0 2 0;
+    padding: 0 2 0 0;
     background: $panel;
 }
 

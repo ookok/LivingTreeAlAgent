@@ -68,6 +68,9 @@ class LivingWorld:
         self.tracer: Any = None
         self.code_graph: Any = None
         self.ast_parser: Any = None
+        self.hitl: Any = None
+        self.checkpoint: Any = None
+        self.cost_aware: Any = None
 
     def wire(self, **kwargs) -> "LivingWorld":
         """Wire subsystems into the world. Called during Hub boot."""

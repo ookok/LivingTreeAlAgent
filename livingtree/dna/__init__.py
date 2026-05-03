@@ -4,16 +4,18 @@ Exports: LifeEngine, Consciousness, Genome, SafetyGuard, SandboxedExecutor
 """
 from .life_engine import LifeEngine
 from .consciousness import Consciousness, DefaultConsciousness
-from .llm_consciousness import LLMConsciousness
 from .dual_consciousness import DualModelConsciousness
 from .living_world import LivingWorld
 from .genome import Genome
-from .safety import SafetyGuard, SandboxedExecutor, ActionPolicy, AuditTrail, KillSwitch
+from .safety import (
+    SafetyGuard, SandboxedExecutor, ActionPolicy,
+    MerkleAuditChain, MerkleEntry, PathGuard, SSRFGuard, PromptInjectionScanner, KillSwitch,
+)
 
 __all__ = [
     "LifeEngine",
-    "Consciousness", "DefaultConsciousness", "LLMConsciousness", "DualModelConsciousness",
-    "LivingWorld",
-    "Genome",
-    "SafetyGuard", "SandboxedExecutor", "ActionPolicy", "AuditTrail", "KillSwitch",
+    "Consciousness", "DefaultConsciousness", "DualModelConsciousness",
+    "LivingWorld", "Genome",
+    "SafetyGuard", "SandboxedExecutor", "ActionPolicy",
+    "MerkleAuditChain", "MerkleEntry", "PathGuard", "SSRFGuard", "PromptInjectionScanner", "KillSwitch",
 ]

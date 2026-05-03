@@ -1,3 +1,0 @@
-# -*- coding: utf-8 -*-
-"""向后兼容shim - 已迁移至 livingtree.core.doc_lifecycle"""
-from livingtree.core.doc_lifecycle import *

@@ -240,10 +240,10 @@ for k, v in _imports.items(): globals()[k] = v
 
 # ── 微内核 ────────────────────────────────────────────────
 
-_imports = _safe_import("business.microkernel.kernel",
+_imports = _safe_import("livingtree.core.microkernel.kernel",
     ["Microkernel", "get_kernel", "init_kernel", "shutdown_kernel"])
 for k, v in _imports.items(): globals()[k] = v
 
-_imports = _safe_import("business.microkernel.lifecycle",
+_imports = _safe_import("livingtree.core.microkernel.lifecycle",
     ["LifecycleManager", "LifecycleState", "LifecycleEvent"])
 for k, v in _imports.items(): globals()[k] = v

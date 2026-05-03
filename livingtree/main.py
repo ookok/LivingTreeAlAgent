@@ -27,27 +27,38 @@ def main():
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
+    if command in ("tui", "terminal", "textual"):
+        workspace = args[0] if args else os.getcwd()
+        if "--direct" in args:
+            from .tui.app import run_tui
+            run_tui(workspace=workspace)
+        else:
+            import subprocess
+            bootstrapper = os.path.join(os.path.dirname(__file__), "tui", "wt_bootstrap.py")
+            subprocess.Popen([sys.executable, bootstrapper, workspace], cwd=project_root)
+        return
+
+    if command in ("--version", "-v", "version"):
+        from . import __version__
+        print(f"LivingTree AI Agent v{__version__}")
+        return
+
+    if command in ("--help", "-h", "help"):
+        _print_usage()
+        return
+
     from .integration.launcher import launch, LaunchMode
 
     if command in ("client", "cli"):
         launch(LaunchMode.CLIENT)
     elif command in ("server", "api"):
         launch(LaunchMode.SERVER)
-    elif command in ("tui", "terminal", "textual"):
-        from .tui.app import run_tui
-        workspace = args[0] if args else os.getcwd()
-        run_tui(workspace=workspace)
     elif command == "test":
         launch(LaunchMode.TEST)
     elif command in ("check", "env"):
         launch(LaunchMode.CHECK)
     elif command in ("quick", "q"):
         launch(LaunchMode.QUICK)
-    elif command in ("--version", "-v", "version"):
-        from . import __version__
-        print(f"LivingTree AI Agent v{__version__}")
-    elif command in ("--help", "-h", "help"):
-        _print_usage()
     else:
         print(f"Unknown command: {command}")
         _print_usage()

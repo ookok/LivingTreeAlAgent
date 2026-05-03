@@ -224,12 +224,63 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.get("/api/drill/queue")
     async def drill_queue(request: Request) -> list[dict[str, Any]]:
-        """Get pending training queue."""
-        hub = request.app.state.hub
-        if not hub:
-            raise HTTPException(status_code=503, detail="Hub not initialized")
         jobs = hub.drill.get_queue() if hub.drill else []
         return [{"model_name": j.model_name, "training_type": j.training_type} for j in jobs]
+
+    @app.get("/api/hitl/pending")
+    async def hitl_pending(request: Request) -> list[dict[str, Any]]:
+        """List pending HITL approval requests."""
+        hub = request.app.state.hub
+        if not hub or not hub.world.hitl:
+            return []
+        return [{"id": r.id, "task": r.task_name, "question": r.question,
+                 "status": r.status, "created": r.created} for r in hub.world.hitl.get_pending()]
+
+    @app.post("/api/hitl/approve")
+    async def hitl_approve(request: Request) -> dict[str, Any]:
+        """Approve a HITL request."""
+        hub = request.app.state.hub
+        body = await request.json()
+        req_id = body.get("id", "")
+        if hub and hub.world.hitl:
+            ok = hub.world.hitl.approve(req_id, body.get("response", ""))
+            return {"approved": ok}
+        return {"approved": False, "error": "HITL not available"}
+
+    @app.post("/api/hitl/deny")
+    async def hitl_deny(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        body = await request.json()
+        if hub and hub.world.hitl:
+            ok = hub.world.hitl.deny(body.get("id", ""), body.get("reason", ""))
+            return {"denied": ok}
+        return {"denied": False}
+
+    @app.get("/api/cost/status")
+    async def cost_status(request: Request) -> dict[str, Any]:
+        """Get cost/budget status."""
+        hub = request.app.state.hub
+        if not hub or not hub.world.cost_aware:
+            return {"error": "CostAware not available"}
+        st = hub.world.cost_aware.status()
+        return {"daily_limit": st.daily_limit, "used": st.used_today,
+                "remaining": st.remaining, "usage_pct": st.usage_pct,
+                "cost_yuan": round(st.cost_yuan, 4), "degraded": st.degraded}
+
+    @app.get("/api/checkpoint/sessions")
+    async def checkpoint_sessions(request: Request) -> list[str]:
+        hub = request.app.state.hub
+        if not hub or not hub.world.checkpoint:
+            return []
+        return await hub.world.checkpoint.list_sessions()
+
+    @app.delete("/api/checkpoint/{session_id}")
+    async def checkpoint_delete(session_id: str, request: Request) -> dict:
+        hub = request.app.state.hub
+        if hub and hub.world.checkpoint:
+            await hub.world.checkpoint.delete(session_id)
+            return {"deleted": True}
+        return {"deleted": False}
 
     @app.get("/api/cells")
     async def list_cells(request: Request) -> list[dict[str, Any]]:

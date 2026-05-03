@@ -6,13 +6,19 @@ Exports: TaskPlanner, Orchestrator, SelfHealer, ThinkingEvolution, MultiAgentQua
 from .task_planner import TaskPlanner, TaskSpec, SubTask
 from .orchestrator import Orchestrator, AgentSpec, AgentRole
 from .self_healer import SelfHealer, HealthCheck, RecoveryAction
-from .thinking_evolution import ThinkingEvolution, EvolutionCandidate, ElitePool, EvolutionResult
-from .quality_checker import MultiAgentQualityChecker, CheckResult, CheckStatus, QualityReport
+from .thinking_evolution import ThinkingEvolution, EvolutionCandidate, ElitePool
+from .quality_checker import MultiAgentQualityChecker, CheckResult, CheckStatus
+from .hitl import HumanInTheLoop, ApprovalRequest
+from .checkpoint import TaskCheckpoint, CheckpointState
+from .cost_aware import CostAware, BudgetStatus
 
 __all__ = [
     "TaskPlanner", "TaskSpec", "SubTask",
     "Orchestrator", "AgentSpec", "AgentRole",
     "SelfHealer", "HealthCheck", "RecoveryAction",
-    "ThinkingEvolution", "EvolutionCandidate", "ElitePool", "EvolutionResult",
-    "MultiAgentQualityChecker", "CheckResult", "CheckStatus", "QualityReport",
+    "ThinkingEvolution", "EvolutionCandidate", "ElitePool",
+    "MultiAgentQualityChecker", "CheckResult", "CheckStatus",
+    "HumanInTheLoop", "ApprovalRequest",
+    "TaskCheckpoint", "CheckpointState",
+    "CostAware", "BudgetStatus",
 ]

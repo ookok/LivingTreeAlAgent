@@ -1,16 +1,13 @@
-"""Status Bar widget — keyboard hints, progress, metrics."""
+"""Status Bar — keyboard hints, progress, system info, contact."""
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Label, Static
-
-from datetime import datetime
+from textual.widgets import Label
 
 
 class StatusBar(Horizontal):
-    """Bottom status bar with key hints and status info."""
-
     def compose(self) -> ComposeResult:
-        yield Label("^Q Quit  ^T Tab  ^D Theme  F1 Help  ^P Cmd", id="footer-keys")
+        yield Label("^Q Quit  ^1-4 Tabs  ^P Cmd  ^D Theme", id="footer-keys")
+        yield Label("www.livingtree-ai.com  |  livingtreeai@163.com", id="footer-contact")
         yield Label("Ready", id="footer-status")
 
     def set_status(self, text: str) -> None:
@@ -18,7 +15,3 @@ class StatusBar(Horizontal):
             self.query_one("#footer-status", Label).update(text)
         except Exception:
             pass
-
-    def update_time(self) -> None:
-        now = datetime.now().strftime("%H:%M:%S")
-        self.set_status(now)

@@ -118,6 +118,10 @@ class MultiAgentQualityChecker:
         tl_result = self._check_temporal_leakage(current)
         results.append(tl_result)
 
+        # Stage 7: Prompt Injection Scan
+        pi_result = self._check_prompt_injection(current)
+        results.append(pi_result)
+
         # Aggregate
         total_issues = sum(len(r.issues) for r in results)
         scores = [r.score for r in results if r.score > 0]
@@ -308,3 +312,16 @@ class MultiAgentQualityChecker:
             CheckStatus.FAIL if issues else CheckStatus.PASS)
         score = max(0.0, 1.0 - len(issues) * 0.35)
         return CheckResult("TemporalLeakage", status, issues, [], score=score)
+
+    @staticmethod
+    def _check_prompt_injection(content: str) -> CheckResult:
+        """Detect prompt injection and social engineering patterns."""
+        from ...dna.safety import PromptInjectionScanner
+        result = PromptInjectionScanner.scan(content)
+        if result["safe"]:
+            return CheckResult("PromptInjection", CheckStatus.PASS, [], [], score=1.0)
+
+        issues = [f"{f['type']}: {f['matches'][:2]}" for f in result["findings"]]
+        status = CheckStatus.REJECTED if any(f["severity"] == "high" for f in result["findings"]) else CheckStatus.FAIL
+        score = max(0.0, 1.0 - result["count"] * 0.3)
+        return CheckResult("PromptInjection", status, issues, [], score=score)

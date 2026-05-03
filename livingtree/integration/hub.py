@@ -7,6 +7,7 @@ the unified API surface. No scattered DI — everything through the world.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
@@ -22,6 +23,7 @@ from ..capability import CodeGraph, ASTParser
 from ..network import Node, Discovery, NATTraverser, Reputation, EncryptedChannel
 from ..execution import TaskPlanner, Orchestrator, SelfHealer, AgentSpec, AgentRole
 from ..execution import ThinkingEvolution, MultiAgentQualityChecker
+from ..execution import HumanInTheLoop, TaskCheckpoint, CostAware
 
 
 class IntegrationHub:
@@ -46,43 +48,36 @@ class IntegrationHub:
                 base_url=self.config.model.deepseek_base_url,
                 thinking_enabled=self.config.model.pro_thinking_enabled,
             ),
-            safety=SafetyGuard(),
+            safety=SafetyGuard(workspace=str(Path.cwd())),
         )
 
-        # ── Wire every subsystem into the world ──
+        # Wire sandbox audit reference
+        self.world.safety.sandbox.audit = self.world.safety.audit
+
+        # Wire all subsystems
         self.world.wire(
             cell_registry=CellRegistry(),
             cell_trainer=CellTrainer(config=TrainingConfig(
-                lora_r=self.config.cell.lora_r,
-                lora_alpha=self.config.cell.lora_alpha,
-                lora_dropout=self.config.cell.lora_dropout,
-                learning_rate=self.config.cell.learning_rate,
+                lora_r=self.config.cell.lora_r, lora_alpha=self.config.cell.lora_alpha,
+                lora_dropout=self.config.cell.lora_dropout, learning_rate=self.config.cell.learning_rate,
             )),
             distillation=Distillation(),
             expert_config=ExpertConfig(
-                name=self.config.model.pro_model,
-                api_endpoint=f"{self.config.model.deepseek_base_url}/v1/chat/completions",
+                model=self.config.model.pro_model,
                 api_key=self.config.model.deepseek_api_key,
             ),
-            mitosis=Mitosis(),
-            phage=Phage(),
-            regen=Regen(),
+            mitosis=Mitosis(), phage=Phage(), regen=Regen(),
             drill=SwiftDrillTrainer(modelscope_token=self.config.model.deepseek_api_key),
-            knowledge_base=KnowledgeBase(),
-            vector_store=VectorStore(),
-            knowledge_graph=KnowledgeGraph(),
-            format_discovery=FormatDiscovery(),
+            knowledge_base=KnowledgeBase(), vector_store=VectorStore(),
+            knowledge_graph=KnowledgeGraph(), format_discovery=FormatDiscovery(),
             gap_detector=GapDetector(),
-            skill_factory=SkillFactory(),
-            tool_market=ToolMarket(),
-            doc_engine=DocEngine(),
-            code_engine=CodeEngine(consciousness=self.world.consciousness),
+            skill_factory=SkillFactory(), tool_market=ToolMarket(),
+            doc_engine=DocEngine(), code_engine=CodeEngine(consciousness=self.world.consciousness),
             material_collector=MaterialCollector(),
             node=Node(name=self.config.network.node_name, capabilities=[
                 "chat", "code", "documents", "analysis", "eia", "emergency",
             ]),
-            discovery=Discovery(),
-            nat_traverser=NATTraverser(),
+            discovery=Discovery(), nat_traverser=NATTraverser(),
             reputation=Reputation(decay_interval=self.config.network.reputation_decay),
             encrypted_channel=EncryptedChannel(
                 node_id="", shared_secret=self.config.network.shared_secret,
@@ -93,14 +88,10 @@ class IntegrationHub:
                 max_parallel=self.config.execution.max_parallel_tasks,
             ),
             self_healer=SelfHealer(check_interval=self.config.execution.heal_check_interval),
-            quality_checker=MultiAgentQualityChecker(
-                consciousness=self.world.consciousness,
-            ),
-            metrics=self.obs.metrics,
-            tracer=self.obs.tracer,
+            quality_checker=MultiAgentQualityChecker(consciousness=self.world.consciousness),
+            metrics=self.obs.metrics, tracer=self.obs.tracer,
         )
 
-        # Fix encrypted channel node ID
         if self.world.node:
             self.world.encrypted_channel.node_id = self.world.node.info.id
 
@@ -108,9 +99,21 @@ class IntegrationHub:
         self.world.code_graph = CodeGraph()
         self.world.ast_parser = ASTParser()
 
+        # Wire genome into knowledge base for policy control
+        self.world.knowledge_base.genome = self.world.genome
+
+        # Wire HITL + Checkpoint + CostAware
+        self.world.hitl = HumanInTheLoop(default_timeout=300.0)
+        self.world.checkpoint = TaskCheckpoint(store_path="./data/checkpoints")
+        self.world.cost_aware = CostAware(daily_budget_tokens=1_000_000)
+
+        # Register all tools into ToolMarket
+        from ..capability.tool_market import register_all_tools
+        self.world.tool_market.set_world(self.world)
+        register_all_tools(self.world.tool_market)
+
         # ── Create engine (receives the world) ──
         self.engine = LifeEngine(self.world)
-        self._started = False
 
     async def start(self) -> None:
         if self._started:
@@ -255,7 +258,15 @@ class IntegrationHub:
             "network": self.world.node.get_status(),
             "orchestrator": self.world.orchestrator.get_status(),
             "healer": self.world.self_healer.get_status(),
+            "audit": self.world.safety.summary(),
         }
+
+    def audit_summary(self) -> dict:
+        return self.world.safety.summary()
+
+    def verify_audit_chain(self) -> dict:
+        valid, idx = self.world.safety.verify_audit()
+        return {"valid": valid, "first_broken_index": idx, "total_entries": len(self.world.safety.audit.entries)}
 
     # ── Internal ──
 

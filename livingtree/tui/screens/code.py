@@ -1,10 +1,7 @@
-"""Code Editor Screen — AI-assisted coding with syntax highlight.
+"""Code Editor — Deep-integrated with CodeGraph.
 
-Features:
-- Syntax-highlighted code editor (multi-language)
-- AI code generation/completion via DeepSeek
-- Run/preview output panel
-- File save/load
+Built-in tools: blast_radius, callers, callees, hubs, code_search, AST parse.
+Ctrl+P to access, or use toolbar buttons.
 """
 
 from __future__ import annotations
@@ -15,34 +12,20 @@ from typing import Optional
 
 from textual import work
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import (
-    Button, Input, Label, RichLog, Select, Static, TextArea,
-)
+from textual.widgets import Button, Input, RichLog, Select, TextArea
 
 
 LANGUAGES = [
-    ("python", "Python"),
-    ("javascript", "JavaScript"),
-    ("typescript", "TypeScript"),
-    ("html", "HTML"),
-    ("css", "CSS"),
-    ("json", "JSON"),
-    ("yaml", "YAML"),
-    ("markdown", "Markdown"),
-    ("sql", "SQL"),
-    ("bash", "Bash"),
-    ("rust", "Rust"),
-    ("go", "Go"),
-    ("java", "Java"),
-    ("cpp", "C++"),
+    ("python", "Python"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
+    ("html", "HTML"), ("css", "CSS"), ("json", "JSON"), ("yaml", "YAML"),
+    ("markdown", "Markdown"), ("sql", "SQL"), ("bash", "Bash"),
+    ("rust", "Rust"), ("go", "Go"), ("java", "Java"), ("cpp", "C++"),
 ]
 
 
 class CodeScreen(Screen):
-    """AI-assisted code editor with syntax highlighting."""
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
@@ -55,164 +38,242 @@ class CodeScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Vertical(
             Horizontal(
-                Select(
-                    [(lang, name) for lang, name in LANGUAGES],
-                    prompt="Language",
-                    value="python",
-                    id="lang-select",
-                ),
-                Input(placeholder="File path...", id="file-path"),
+                Select([(l, n) for l, n in LANGUAGES], prompt="Lang", value="python", id="lang-select"),
+                Input(placeholder="File path or symbol name...", id="code-query"),
                 Button("Open", variant="default", id="open-btn"),
                 Button("Save", variant="default", id="save-btn"),
                 Button("AI Gen", variant="primary", id="ai-gen-btn"),
-                Button("Run", variant="primary", id="run-btn"),
+                Button("▼ Run", variant="primary", id="run-btn"),
                 id="code-toolbar",
             ),
-            TextArea.code_editor(
-                "",
-                language="python",
-                id="code-editor",
-                show_line_numbers=True,
-                tab_behavior="focus",
+            Horizontal(
+                Button("Callers", variant="default", id="callers-btn"),
+                Button("Callees", variant="default", id="callees-btn"),
+                Button("Blast", variant="default", id="blast-btn"),
+                Button("Hubs", variant="default", id="hubs-btn"),
+                Button("AST", variant="default", id="ast-btn"),
+                Button("Index", variant="default", id="index-btn"),
+                id="graph-toolbar",
             ),
+            TextArea.code_editor("", language="python", id="code-editor",
+                                 show_line_numbers=True, tab_behavior="focus"),
             RichLog(id="code-output", highlight=True, markup=True, wrap=True),
         )
 
     def on_mount(self) -> None:
         output = self.query_one("#code-output", RichLog)
-        output.write("[bold]Code Output[/bold]")
-        output.write("[dim]Ready — press 'AI Gen' for AI code generation[/dim]")
+        output.write("[bold green]Code Graph Ready[/bold green]")
+        output.write("[dim]Open a file or use Ctrl+P for tools[/dim]")
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        btn_id = event.button.id
-        editor = self.query_one("#code-editor", TextArea)
+        btn = event.button.id
         output = self.query_one("#code-output", RichLog)
-
-        if btn_id == "ai-gen-btn":
-            await self._ai_generate_code(editor, output)
-        elif btn_id == "run-btn":
-            await self._run_code(editor, output)
-        elif btn_id == "save-btn":
-            await self._save_file(editor, output)
-        elif btn_id == "open-btn":
-            await self._open_file(editor, output)
+        editor = self.query_one("#code-editor", TextArea)
+        methods = {
+            "ai-gen-btn": self._ai_gen,
+            "run-btn": self._run,
+            "save-btn": self._save,
+            "open-btn": self._open,
+            "callers-btn": self.cmd_find_callers,
+            "callees-btn": self.cmd_find_callees,
+            "blast-btn": self.cmd_blast_radius,
+            "hubs-btn": self.cmd_find_hubs,
+            "ast-btn": self.cmd_parse_ast,
+            "index-btn": self.cmd_index_codebase,
+        }
+        fn = methods.get(btn)
+        if fn:
+            await fn() if asyncio.iscoroutinefunction(fn) else fn()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "lang-select" and event.value:
-            lang = str(event.value)
-            self._language = lang
+            self._language = str(event.value)
             try:
-                editor = self.query_one("#code-editor", TextArea)
-                editor.language = lang
+                self.query_one("#code-editor", TextArea).language = self._language
             except Exception:
                 pass
 
-    async def _ai_generate_code(self, editor: TextArea, output: RichLog) -> None:
-        """Generate code using DeepSeek API."""
-        selection = editor.selected_text or editor.text
-        if not selection or selection == editor.text:
-            prompt = "Generate a Python utility function that demonstrates best practices"
-        else:
-            prompt = f"Write code that implements the following: {selection}"
+    # ── Integrated tools ──
 
+    async def cmd_generate_code(self) -> None:
+        await self._ai_gen()
+
+    async def cmd_improve_code(self) -> None:
+        editor = self.query_one("#code-editor", TextArea)
+        output = self.query_one("#code-output", RichLog)
         output.clear()
-        output.write("[bold #58a6ff]AI generating code...[/bold #58a6ff]")
+        output.write("[bold #58a6ff]AI improving code...[/bold #58a6ff]")
+        if self._hub and self._hub.world.code_engine:
+            result = await self._hub.world.code_engine.improve_code(editor.text, {})
+            editor.text = result.code
+            output.write(f"[green]Improved: {result.annotations}[/green]")
 
-        if self._hub and hasattr(self._hub, 'config'):
-            api_key = self._hub.config.model.deepseek_api_key
-            base_url = self._hub.config.model.deepseek_base_url
+    async def cmd_blast_radius(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        if not self._current_file:
+            output.write("[yellow]Open a file first to analyze impact[/yellow]")
+            return
+        if not self._hub or not self._hub.world.code_graph:
+            output.write("[yellow]Index codebase first (press Index button or use index_codebase)[/yellow]")
+            return
 
-            if api_key:
-                try:
-                    import aiohttp, json
-                    headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {api_key}",
-                    }
-                    payload = {
-                        "model": "deepseek-v4-flash",
-                        "messages": [
-                            {"role": "system", "content": f"You are a code generation assistant. Generate {self._language} code only. No explanations unless asked."},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "temperature": 0.2,
-                        "max_tokens": 4096,
-                    }
-                    async with aiohttp.ClientSession() as session:
-                        async with session.post(
-                            f"{base_url}/v1/chat/completions",
-                            headers=headers,
-                            json=payload,
-                            timeout=aiohttp.ClientTimeout(total=60),
-                        ) as resp:
-                            data = await resp.json()
-                            code = data["choices"][0]["message"]["content"]
+        results = self._hub.world.code_graph.blast_radius([str(self._current_file)])
+        output.write(f"[bold]Blast Radius: {str(self._current_file)}[/bold]")
+        for r in results:
+            icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(r.risk, "⚪")
+            output.write(f"  {icon} [{r.risk}] {r.file} — {r.reason}")
 
-                    code = code.strip()
-                    if code.startswith("```"):
-                        lines = code.split("\n")
-                        code = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+    async def cmd_find_callers(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        name = self._get_selected_name()
+        if not name:
+            output.write("[yellow]Select a function name or enter in query field[/yellow]")
+            return
+        cg = self._hub.world.code_graph if self._hub else None
+        if not cg:
+            output.write("[yellow]Index codebase first[/yellow]")
+            return
+        callers = cg.get_callers(name)
+        output.write(f"[bold]Callers of '{name}': {len(callers)}[/bold]")
+        for c in callers[:20]:
+            output.write(f"  {c.name} ({c.file}:{c.line})")
 
-                    editor.text = code
-                    editor.language = self._language
-                    output.write("[bold green]Code generated![/bold green]")
-                    return
-                except Exception as e:
-                    output.write(f"[bold red]API Error:[/bold red] {e}")
-                    return
+    async def cmd_find_callees(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        name = self._get_selected_name()
+        if not name:
+            output.write("[yellow]Select a function name[/yellow]")
+            return
+        cg = self._hub.world.code_graph if self._hub else None
+        if not cg:
+            output.write("[yellow]Index codebase first[/yellow]")
+            return
+        callees = cg.get_callees(name)
+        output.write(f"[bold]'{name}' calls: {len(callees)}[/bold]")
+        for c in callees[:20]:
+            output.write(f"  {c}")
 
-        # Fallback template
-        template_code = self._get_template_code()
-        editor.text = template_code
-        editor.language = self._language
-        output.write("[bold green]Template code generated (no API key configured)[/bold green]")
+    async def cmd_find_hubs(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        cg = self._hub.world.code_graph if self._hub else None
+        if not cg:
+            output.write("[yellow]Index codebase first[/yellow]")
+            return
+        hubs = cg.find_hubs(10)
+        output.write("[bold]Architectural Hubs[/bold]")
+        for h in hubs:
+            conns = len(h.dependents) + len(h.dependencies)
+            output.write(f"  {h.name} ({h.file}) — {conns} connections")
 
-    async def _run_code(self, editor: TextArea, output: RichLog) -> None:
-        """Run the current code (Python only for safety)."""
+    async def cmd_search_code(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        query = self.query_one("#code-query", Input).value.strip()
+        if not query:
+            output.write("[yellow]Enter a search query[/yellow]")
+            return
+        cg = self._hub.world.code_graph if self._hub else None
+        if not cg:
+            output.write("[yellow]Index codebase first[/yellow]")
+            return
+        results = cg.search(query)
+        output.write(f"[bold]Search: '{query}' — {len(results)} results[/bold]")
+        for e in results[:20]:
+            output.write(f"  [{e.kind}] {e.name} ({e.file}:{e.line})")
+
+    async def cmd_parse_ast(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        editor = self.query_one("#code-editor", TextArea)
         code = editor.text
         if not code.strip():
-            output.write("[bold yellow]No code to run[/bold yellow]")
+            output.write("[yellow]No code to parse[/yellow]")
             return
+        if self._hub and self._hub.world.ast_parser:
+            nodes, edges = self._hub.world.ast_parser.parse_source(code, self._language)
+            funcs = [n for n in nodes if n.kind == "function"]
+            classes = [n for n in nodes if n.kind == "class"]
+            imports = [n for n in nodes if n.kind == "import"]
+            output.write(f"[bold]AST: {len(nodes)} nodes, {len(edges)} edges[/bold]")
+            output.write(f"  Functions: {len(funcs)}  Classes: {len(classes)}  Imports: {len(imports)}")
+            for f in funcs[:10]:
+                output.write(f"  fn: {f.name} (L{f.line})")
 
-        if self._language != "python":
-            output.write("[bold yellow]Running only supported for Python. Switch language.[/bold yellow]")
+    async def cmd_index_codebase(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        output.write("[bold]Indexing codebase...[/bold]")
+        if self._hub:
+            stats = self._hub.world.code_graph.index(".")
+            self._hub.world.code_graph.save()
+            output.write(f"[green]Indexed: {stats.total_entities} entities in {stats.total_files} files ({stats.build_time_ms:.0f}ms)[/green]")
+            output.write(f"  Languages: {stats.languages}")
+            output.write(f"  Edges: {stats.total_edges}")
+
+    # ── Core operations ──
+
+    async def _ai_gen(self) -> None:
+        editor = self.query_one("#code-editor", TextArea)
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        output.write("[bold #58a6ff]AI generating code...[/bold #58a6ff]")
+        if self._hub:
+            r = await self._hub.generate_code(
+                self._current_file.stem if self._current_file else "module",
+                editor.selected_text or editor.text or "utility function",
+                self._language,
+            )
+            if r.get("code"):
+                editor.text = r["code"]
+                editor.language = self._language
+                output.write(f"[green]Generated: {r.get('annotations', '')}[/green]")
+                return
+        editor.text = self._template()
+        editor.language = self._language
+        output.write("[green]Template generated[/green]")
+
+    async def _run(self) -> None:
+        editor = self.query_one("#code-editor", TextArea)
+        output = self.query_one("#code-output", RichLog)
+        code = editor.text
+        if not code.strip() or self._language != "python":
+            output.write("[yellow]Python only[/yellow]")
             return
-
         output.clear()
         output.write("[bold]Running...[/bold]")
-
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "python", "-c", code,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            proc = await asyncio.create_subprocess_exec("python", "-c", code,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-
             if stdout:
                 output.write(f"[green]{stdout.decode('utf-8', errors='replace')}[/green]")
             if stderr:
                 output.write(f"[red]{stderr.decode('utf-8', errors='replace')}[/red]")
-            output.write(f"[dim]Exit code: {proc.returncode}[/dim]")
         except asyncio.TimeoutError:
-            output.write("[bold red]Execution timed out (30s)[/bold red]")
+            output.write("[red]Timeout (30s)[/red]")
         except Exception as e:
-            output.write(f"[bold red]Error:[/bold red] {e}")
+            output.write(f"[red]{e}[/red]")
 
-    async def _save_file(self, editor: TextArea, output: RichLog) -> None:
-        path_input = self.query_one("#file-path", Input)
-        path = path_input.value or str(self._current_file or "untitled.py")
+    async def _save(self) -> None:
+        editor = self.query_one("#code-editor", TextArea)
+        output = self.query_one("#code-output", RichLog)
+        path = self.query_one("#code-query", Input).value or str(self._current_file or "untitled.py")
         try:
             Path(path).write_text(editor.text, encoding="utf-8")
             self._current_file = Path(path)
             output.write(f"[green]Saved: {path}[/green]")
         except Exception as e:
-            output.write(f"[red]Save error: {e}[/red]")
+            output.write(f"[red]{e}[/red]")
 
-    async def _open_file(self, editor: TextArea, output: RichLog) -> None:
-        path_input = self.query_one("#file-path", Input)
-        path = path_input.value
+    async def _open(self) -> None:
+        editor = self.query_one("#code-editor", TextArea)
+        output = self.query_one("#code-output", RichLog)
+        path = self.query_one("#code-query", Input).value.strip()
         if not path:
             output.write("[yellow]Enter file path[/yellow]")
             return
@@ -220,31 +281,37 @@ class CodeScreen(Screen):
             content = Path(path).read_text(encoding="utf-8")
             editor.text = content
             self._current_file = Path(path)
-            # Auto-detect language
-            ext = Path(path).suffix.lower()
-            ext_map = {".py": "python", ".js": "javascript", ".ts": "typescript",
-                       ".html": "html", ".css": "css", ".json": "json",
-                       ".yaml": "yaml", ".yml": "yaml", ".md": "markdown",
-                       ".sql": "sql", ".sh": "bash", ".rs": "rust", ".go": "go", ".java": "java"}
-            lang = ext_map.get(ext, "python")
-            editor.language = lang
-            self._language = lang
+            ext_map = {".py": "python", ".js": "javascript", ".ts": "typescript", ".html": "html",
+                       ".css": "css", ".json": "json", ".yaml": "yaml", ".yml": "yaml",
+                       ".md": "markdown", ".sql": "sql", ".sh": "bash", ".rs": "rust",
+                       ".go": "go", ".java": "java"}
+            self._language = ext_map.get(Path(path).suffix.lower(), "python")
+            editor.language = self._language
             try:
-                self.query_one("#lang-select", Select).value = lang
+                self.query_one("#lang-select", Select).value = self._language
             except Exception:
                 pass
             output.write(f"[green]Loaded: {path} ({len(content)} chars)[/green]")
         except Exception as e:
-            output.write(f"[red]Open error: {e}[/red]")
+            output.write(f"[red]{e}[/red]")
 
-    def _get_template_code(self) -> str:
-        """Get a template code snippet based on language."""
-        templates = {
-            "python": '"""LivingTree AI-generated module."""\n\nfrom typing import Any, Optional\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass Config:\n    name: str = "default"\n    version: str = "1.0"\n\n\ndef process(data: Any) -> dict[str, Any]:\n    """Process input data and return results."""\n    result = {"status": "ok", "input": str(data)}\n    return result\n\n\nif __name__ == "__main__":\n    print(process("Hello LivingTree!"))\n',
-            "javascript": '// LivingTree AI-generated module\n\n/**\n * Process input data\n */\nfunction process(data) {\n    return { status: "ok", input: String(data) };\n}\n\n// Example\nconsole.log(process("Hello LivingTree!"));\n',
-            "rust": '// LivingTree AI-generated module\n\nfn process(data: &str) -> String {\n    format!("Processed: {}", data)\n}\n\nfn main() {\n    println!("{}", process("Hello LivingTree!"));\n}\n',
-        }
-        return templates.get(self._language, f"# {self._language} code\n# Generated by LivingTree AI\n\nprint('Hello LivingTree!')\n")
+    def _get_selected_name(self) -> str:
+        editor = self.query_one("#code-editor", TextArea)
+        query = self.query_one("#code-query", Input).value.strip()
+        if query:
+            return query
+        sel = editor.selected_text
+        if sel:
+            m = re.search(r'(?:def|class|fn|func|function)\s+(\w+)', sel)
+            if m:
+                return m.group(1)
+        return Path(self._current_file).stem if self._current_file else ""
+
+    def _template(self) -> str:
+        return {
+            "python": '"""LivingTree AI-generated module."""\n\nfrom typing import Any\n\n\ndef process(data: Any) -> dict:\n    """Process input and return result."""\n    return {"status": "ok", "input": str(data)}\n\n\nif __name__ == "__main__":\n    print(process("Hello"))\n',
+            "javascript": '// LivingTree AI-generated module\n\nfunction process(data) {\n    return { status: "ok", input: String(data) };\n}\n\nconsole.log(process("Hello"));\n',
+        }.get(self._language, f"# {self._language} code\n\nprint('Hello LivingTree!')\n")
 
     async def refresh(self) -> None:
         pass

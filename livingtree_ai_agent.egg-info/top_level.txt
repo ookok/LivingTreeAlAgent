@@ -1,4 +1,0 @@
-app
-client
-livingtree
-server

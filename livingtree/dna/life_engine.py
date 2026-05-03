@@ -88,6 +88,12 @@ class LifeEngine:
     # ── Stage 1: Perceive ──
 
     async def _perceive(self, ctx: LifeContext) -> None:
+        # Scan for prompt injection before processing
+        scan = self.safety.scan_prompt(ctx.user_input)
+        if not scan.get("safe", True):
+            ctx.metadata["prompt_injection"] = scan
+            logger.warning(f"[perceive] Prompt injection detected: {scan['count']} patterns")
+
         thoughts = []
         async for token in self.consciousness.stream_of_thought(ctx.user_input):
             thoughts.append(token)
@@ -113,19 +119,57 @@ class LifeEngine:
 
         kb = self.world.knowledge_base
         if kb:
+            # Context budget: cap knowledge injection by query complexity
+            budget = self._context_budget(ctx.user_input)
             try:
-                results = kb.search(ctx.user_input)
+                results = kb.search(ctx.user_input, top_k=budget)
                 if results:
                     ctx.retrieved_knowledge.extend(results)
+                    ctx.metadata["knowledge_budget"] = budget
+                    ctx.metadata["knowledge_count"] = len(results)
             except Exception as e:
                 logger.debug(f"Knowledge search: {e}")
 
         questions = await self.consciousness.self_questioning(ctx.user_input)
         ctx.metadata["self_questions"] = questions
 
+    @staticmethod
+    def _context_budget(user_input: str) -> int:
+        """Compute how much knowledge to inject based on query complexity.
+
+        Simple queries get minimal context (save tokens).
+        Complex queries get more knowledge (better accuracy).
+        """
+        length = len(user_input)
+        complex_keywords = ["分析", "评估", "预测", "比较", "报告", "方案", "风险",
+                            "analyze", "evaluate", "predict", "compare", "report"]
+        complexity_score = min(1.0, length / 500) + sum(
+            0.3 for kw in complex_keywords if kw.lower() in user_input.lower()
+        )
+        if complexity_score <= 0.3:
+            return 2
+        if complexity_score <= 0.7:
+            return 5
+        if complexity_score <= 1.2:
+            return 10
+        return 15
+
     # ── Stage 3: Plan ──
 
     async def _plan(self, ctx: LifeContext) -> None:
+        # Check for existing checkpoint to resume from
+        checkpoint = self.world.checkpoint
+        if checkpoint:
+            state, remaining = await checkpoint.resume(ctx.session_id)
+            if state and remaining:
+                ctx.plan = remaining
+                ctx.execution_results = state.execution_results
+                ctx.reflections = state.reflections
+                ctx.metadata["resumed_from_checkpoint"] = True
+                ctx.metadata["completed_before_resume"] = len(state.completed_steps)
+                logger.info(f"[plan] Resumed from checkpoint: {state.completed_steps} steps done, {len(remaining)} remaining")
+                return
+
         hypotheses = await self.consciousness.hypothesis_generation(
             f"Given intent: {ctx.intent}, what are possible approaches?"
         )
@@ -147,38 +191,88 @@ class LifeEngine:
     async def _execute(self, ctx: LifeContext) -> None:
         logger.debug(f"[execute] {len(ctx.plan)} steps")
         orchestrator = self.world.orchestrator
+        hitl = self.world.hitl
+        cost = self.world.cost_aware
+        checkpoint = self.world.checkpoint
+        completed = len(ctx.execution_results)
 
-        for step in ctx.plan:
+        for idx, step in enumerate(ctx.plan):
+            if idx < completed:
+                continue
+
             action = step.get("action", "unknown")
             if not self.safety.check_action(action, step.get("description", "")):
                 ctx.execution_results.append({"step": step, "status": "denied"})
                 continue
 
+            # ── Cost-aware model routing ──
+            # Auto-detect if deep reasoning is needed
+            needs_deep = step.get("needs_deep_reasoning", False) or any(
+                kw in action for kw in ["analyze", "predict", "assess", "evaluate", "review"]
+            )
+            step_name = step.get("name", "unknown")
+            est_tokens = 3000 if needs_deep else 800
+
+            if cost and needs_deep and not cost.can_use("deepseek/deepseek-v4-pro", est_tokens):
+                step["degraded_model"] = True
+                logger.info(f"[cost] Degraded '{step_name}' to flash")
+
+            # ── HITL approval gate ──
+            if step.get("needs_approval", False) and hitl:
+                ctx.metadata.setdefault("hitl_requests", 0)
+                ctx.metadata["hitl_requests"] += 1
+                question = step.get("approval_question", f"Approve: {step_name}?")
+                approved = await hitl.request_approval(step_name, question,
+                    context={"step": step, "session": ctx.session_id})
+                if not approved:
+                    ctx.execution_results.append({"step": step, "status": "denied_by_human"})
+                    logger.info(f"[hitl] Step '{step_name}' denied by human")
+                    continue
+
+            # ── Execute ──
             if orchestrator:
                 result = await self._invoke(orchestrator.assign_task,
                     task=step,
                     agents=self._list_agents(),
                 )
                 if result:
-                    # Integrated quality check on every output
                     qc = self.world.quality_checker
                     if qc and isinstance(result, dict) and result.get("result"):
                         try:
-                            content = str(result["result"])
-                            qr = await qc.check(content)
+                            qr = await qc.check(str(result["result"]))
                             ctx.quality_reports.append({
-                                "step": step.get("name", "unknown"),
-                                "passed": qr.passed,
-                                "score": qr.final_score,
-                                "issues": qr.total_issues,
+                                "step": step_name, "passed": qr.passed,
+                                "score": qr.final_score, "issues": qr.total_issues,
                             })
                             if not qr.passed:
                                 result["status"] = "quality_failed"
                         except Exception:
                             pass
                     ctx.execution_results.append(result)
-            else:
-                ctx.execution_results.append({"step": step, "status": "pending"})
+
+            # ── Checkpoint after each step ──
+            if checkpoint:
+                try:
+                    from ..execution.checkpoint import CheckpointState
+                    cs = CheckpointState(
+                        session_id=ctx.session_id,
+                        task_goal=ctx.user_input or "",
+                        plan=ctx.plan,
+                        completed_steps=list(range(idx + 1)),
+                        current_step=idx + 1,
+                        execution_results=ctx.execution_results,
+                        reflections=ctx.reflections,
+                    )
+                    await checkpoint.save(ctx.session_id, cs)
+                except Exception as e:
+                    logger.debug(f"Checkpoint save: {e}")
+
+            # ── Record token usage ──
+            if cost:
+                cost.record("deepseek/deepseek-v4-pro" if needs_deep else "deepseek/deepseek-v4-flash", est_tokens)
+                st = cost.status()
+                if not cost._degraded and st.usage_pct >= cost.degradation_threshold:
+                    cost.degrade()
 
     # ── Stage 5: Reflect ──
 
@@ -257,6 +351,15 @@ class LifeEngine:
                 await self.world.self_healer.run_all_checks()
             except Exception as e:
                 logger.debug(f"Heal check: {e}")
+
+        # Cleanup checkpoint on success, keep on failure for resume
+        cp = self.world.checkpoint
+        if cp:
+            if ok:
+                await cp.delete(ctx.session_id)
+            cost = self.world.cost_aware
+            if cost and cost._degraded:
+                cost.restore()
 
     # ── Embedded thinking evolution ──
 

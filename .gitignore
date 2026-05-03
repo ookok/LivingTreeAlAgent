@@ -19,6 +19,9 @@ config/local_config.py
 config/secrets.json
 config/secrets.enc
 
+# Windows Terminal unpacked build
+.wt/
+
 # Data
 *.db
 *.json

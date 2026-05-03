@@ -24,38 +24,30 @@ from pydantic import BaseModel, Field
 
 
 class ModelConfig(BaseModel):
-    """LLM model configuration — DeepSeek dual-model + Ollama fallback.
+    """LLM model configuration — litellm provider/model format.
 
-    deepseek-v4-flash: Fast model for intent recognition, semantic understanding, self-questioning
-    deepseek-v4-pro:  Deep reasoning with thinking mode (chain-of-thought, hypothesis generation)
-
-    API keys are stored encrypted in config/secrets.enc (via SecretVault).
+    Format: "provider/model" e.g. "deepseek/deepseek-v4-pro"
+    Supports 100+ providers through litellm.
     """
 
-    # ── DeepSeek cloud models (primary) ──
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_api_key: str = ""
 
-    # Fast model: intent parsing, semantic understanding, quick tasks
-    flash_model: str = "deepseek-v4-flash"
+    flash_model: str = "deepseek/deepseek-v4-flash"
     flash_temperature: float = 0.3
     flash_max_tokens: int = 4096
 
-    # Pro model: deep reasoning, chain-of-thought, hypothesis, thinking mode
-    pro_model: str = "deepseek-v4-pro"
+    pro_model: str = "deepseek/deepseek-v4-pro"
     pro_temperature: float = 0.7
     pro_max_tokens: int = 8192
     pro_thinking_enabled: bool = True
 
-    # ── Ollama local model (fallback) ──
     ollama_base_url: str = "http://localhost:11434"
-    default_local_model: str = "qwen3:latest"
+    fallback_model: str = "ollama/qwen3:latest"
 
-    # ── General ──
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
-    context_window: int = 32768
     embedding_model: str = "all-MiniLM-L6-v2"
 
 
@@ -238,11 +230,9 @@ class LTAIConfig(BaseModel):
         data = {}
         env_map: dict[str, tuple[str, type]] = {
             "LT_DEEPSEEK_API_KEY": ("model.deepseek_api_key", str),
-            "LT_DEEPSEEK_BASE_URL": ("model.deepseek_base_url", str),
             "LT_FLASH_MODEL": ("model.flash_model", str),
             "LT_PRO_MODEL": ("model.pro_model", str),
-            "LT_PRO_THINKING": ("model.pro_thinking_enabled", lambda v: v.lower() == "true"),
-            "LT_OLLAMA_BASE_URL": ("model.ollama_base_url", str),
+            "LT_FALLBACK_MODEL": ("model.fallback_model", str),
             "LT_NODE_NAME": ("network.node_name", str),
             "LT_LAN_PORT": ("network.lan_port", int),
             "LT_SHARED_SECRET": ("network.shared_secret", str),

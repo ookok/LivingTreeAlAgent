@@ -170,6 +170,44 @@ class LifeEngine:
                 logger.info(f"[plan] Resumed from checkpoint: {state.completed_steps} steps done, {len(remaining)} remaining")
                 return
 
+        # ── Clarification: detect missing info before planning ──
+        from ..execution.clarifier import Clarifier
+        clarifier = Clarifier(
+            consciousness=self.consciousness,
+            kb=self.world.knowledge_base,
+            distillation=self.world.distillation,
+            expert_config=self.world.expert_config,
+        )
+        clarifications = await clarifier.analyze(ctx.user_input)
+        ctx.metadata.setdefault("clarifications", [])
+        ctx.metadata.setdefault("clarified_answers", {})
+
+        hitl = self.world.hitl
+        for cq in clarifications[:3]:  # Max 3 questions per session
+            if hitl:
+                formatted = cq.format_for_display()
+                approved = await hitl.request_approval(
+                    task_name="clarification",
+                    question=formatted,
+                    context={"choices": cq.options, "mode": cq.mode},
+                    timeout=120.0,
+                )
+                if approved:
+                    cq.answer = "confirmed"
+                    clarifier.record(cq)
+                    ctx.metadata["clarified_answers"][cq.id] = cq.answer
+                    ctx.metadata["clarifications"].append({
+                        "question": cq.question, "answer": cq.answer, "mode": cq.mode,
+                    })
+            else:
+                # No HITL: auto-fill first option if available
+                if cq.options:
+                    cq.answer = cq.options[0]
+                else:
+                    cq.answer = "generic"
+                clarifier.record(cq)
+                ctx.metadata["clarified_answers"][cq.id] = cq.answer
+
         hypotheses = await self.consciousness.hypothesis_generation(
             f"Given intent: {ctx.intent}, what are possible approaches?"
         )

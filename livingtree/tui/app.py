@@ -87,13 +87,9 @@ class LivingTreeTuiApp(App):
     def _update_boot_progress(self) -> None:
         if not self._hub_task or self._hub_task.done():
             return
-        # Auto-advance: fast early, slow near end — never stalls
-        if self._boot_pct < 50:
-            self._boot_pct += 2
-        elif self._boot_pct < 80:
-            self._boot_pct += 1
-        elif self._boot_pct < 95:
-            self._boot_pct += 0.3
+        elapsed = time.time() - self._boot_time
+        # Sigmoid-like curve: starts fast, slows asymptotically toward 99.9%
+        self._boot_pct = 99.9 * elapsed / (elapsed + 8.0)
         self._update_status()
 
     async def _boot_hub(self) -> None:

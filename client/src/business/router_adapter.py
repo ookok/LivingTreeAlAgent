@@ -58,7 +58,7 @@ class GlobalModelRouter:
     
     def __init__(self):
         # 延迟导入，避免循环依赖
-        from business.enhanced_model_router import get_enhanced_model_router
+        from livingtree.core.model.enhanced_router import get_enhanced_model_router
         
         self._enhanced_router = get_enhanced_model_router()
         logger.info("✅ GlobalModelRouter 适配器已初始化（内部使用 EnhancedModelRouter）")

@@ -116,7 +116,7 @@ class PipelineOrchestrator:
     
     def __init__(self):
         # 延迟导入避免循环依赖
-        from business.enhanced_model_router import get_enhanced_model_router
+        from livingtree.core.model.enhanced_router import get_enhanced_model_router
         
         self._model_router = get_enhanced_model_router()
         self._thinking_enabled = True

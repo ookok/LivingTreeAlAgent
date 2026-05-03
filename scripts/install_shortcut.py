@@ -85,34 +85,50 @@ def generate_icon() -> Path:
     return icon_path
 
 
-def create_shortcut():
+def install():
+    """Full install: icon + shortcut + pre-download WT."""
     root = Path(__file__).parent.parent
+
+    # 1. Generate icon
+    icon_path = generate_icon()
+    print(f"[LivingTree] Icon: {icon_path}")
+
+    # 2. Pre-download WT (so first launch is instant)
+    wt_path = root / ".wt" / "WindowsTerminal.exe"
+    if not wt_path.exists():
+        print("[LivingTree] Pre-downloading Windows Terminal...")
+        # Import our bootstrapper's download
+        bootstrapper = root / "livingtree" / "tui" / "wt_bootstrap.py"
+        result = subprocess.run(
+            [sys.executable, str(bootstrapper), "--download"],
+            capture_output=True, text=True, timeout=300, cwd=str(root),
+        )
+        print(result.stdout.strip())
+    else:
+        print(f"[LivingTree] WT already installed: {wt_path}")
+
+    # 3. Create desktop shortcut
     desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
     shortcut_path = desktop / "LivingTree AI Agent.lnk"
     python = sys.executable
-    bootstrapper = root / "livingtree" / "tui" / "wt_bootstrap.py"
-    icon_path = generate_icon()
+    bs = root / "livingtree" / "tui" / "wt_bootstrap.py"
 
-    ps_script = f"""
+    ps = f"""
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
 $Shortcut.TargetPath = "{python}"
-$Shortcut.Arguments = '"{bootstrapper}"'
+$Shortcut.Arguments = '"{bs}"'
 $Shortcut.WorkingDirectory = "{root}"
 $Shortcut.IconLocation = "{icon_path}"
 $Shortcut.Description = "LivingTree AI Agent — Digital Lifeform Platform"
 $Shortcut.Save()
 """
-
     try:
-        subprocess.run(["powershell", "-Command", ps_script],
-                       capture_output=True, timeout=10)
+        subprocess.run(["powershell", "-Command", ps], capture_output=True, timeout=10)
         print(f"[LivingTree] Desktop shortcut created: {shortcut_path}")
-        print(f"[LivingTree] Icon: {icon_path}")
     except Exception as e:
         print(f"[LivingTree] Shortcut failed: {e}")
-        print(f"  python {python} {bootstrapper}")
 
 
 if __name__ == "__main__":
-    create_shortcut()
+    install()

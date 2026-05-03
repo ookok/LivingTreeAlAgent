@@ -110,16 +110,23 @@ def install():
     # 3. Create desktop shortcut
     desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
     shortcut_path = desktop / "LivingTree AI Agent.lnk"
-    python = sys.executable
+
+    # Use pythonw.exe to avoid console window
+    python_exe = Path(sys.executable)
+    pythonw = python_exe.parent / (python_exe.name.replace("python.exe", "pythonw.exe"))
+    if not pythonw.exists():
+        pythonw = python_exe  # fallback to python.exe if pythonw not found
+
     bs = root / "livingtree" / "tui" / "wt_bootstrap.py"
 
     ps = f"""
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
-$Shortcut.TargetPath = "{python}"
+$Shortcut.TargetPath = "{pythonw}"
 $Shortcut.Arguments = '"{bs}"'
 $Shortcut.WorkingDirectory = "{root}"
 $Shortcut.IconLocation = "{icon_path}"
+$Shortcut.WindowStyle = 7
 $Shortcut.Description = "LivingTree AI Agent — Digital Lifeform Platform"
 $Shortcut.Save()
 """

@@ -1,4 +1,4 @@
-# LivingTree AI Agent
+# 🌳 LivingTree AI Agent
 
 > 🌳 数字生命体 — AI驱动的自我进化智能代理平台 | v2.0.0
 

@@ -32,7 +32,7 @@ from .widgets.footer_bar import StatusBar
 
 
 class LivingTreeTuiApp(App):
-    TITLE = "LivingTree AI Agent"
+    TITLE = "🌳 LivingTree AI Agent"
     SUB_TITLE = "Digital Lifeform v2.0 — www.livingtree-ai.com"
 
     CSS_PATH = "styles/theme.tcss"

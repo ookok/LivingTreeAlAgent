@@ -132,7 +132,7 @@ def download_wt(target_dir: str = ".wt") -> Optional[Path]:
         return None
 
 
-def launch(wt_path: Path, workspace: str = "", title: str = "LivingTree AI Agent") -> subprocess.Popen:
+def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI Agent") -> subprocess.Popen:
     ws = workspace or str(Path.cwd())
     python = sys.executable
 

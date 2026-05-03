@@ -8,7 +8,7 @@ class TuiHeader(Horizontal):
     """Application header bar with title, workspace, and status."""
 
     def compose(self) -> ComposeResult:
-        yield Label("LivingTree AI Agent", id="header-title")
+        yield Label("🌳 LivingTree", id="header-title")
         yield Label("", id="header-workspace")
         yield Label("ONLINE", id="header-status")
 

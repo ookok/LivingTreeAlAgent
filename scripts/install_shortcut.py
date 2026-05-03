@@ -20,29 +20,47 @@ def generate_icon() -> Path:
 
     icon_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 32x32 RGBA: green tree with layered canopy on dark bg
+    # 32x32 RGBA: 🌳 tree icon — rounded canopy + trunk on green
     width, height = 32, 32
     pixels = bytearray()
-
+    # Draw a proper tree with rounded canopy on grass
     for y in range(height):
         for x in range(width):
             cx = 16
-            # Trunk: center 5px wide, bottom half
-            trunk = abs(x - cx) <= 2 and y >= 16 and y <= 29
-            # Layered canopy: three tiers getting wider
-            t1 = y >= 4 and y <= 9 and abs(x - cx) <= 6 - (y - 4) * 0.5
-            t2 = y >= 8 and y <= 14 and abs(x - cx) <= 9 - (y - 8) * 0.7
-            t3 = y >= 11 and y <= 18 and abs(x - cx) <= 12 - (y - 11) * 0.8
-            canopy = t1 or t2 or t3
-            # Ground roots
-            root = trunk and y >= 27 and abs(x - cx) <= 4
-            if canopy:
-                shade = max(0, 220 - y * 4)
-                pixels.extend([0, shade, 30, 255])
-            elif trunk or root:
-                pixels.extend([90, 45, 15, 255])
+            dx = abs(x - cx)
+            dy_up = max(0, 16 - y)  # distance from canopy top
+
+            # Gradient sky background
+            if y < 5 and dx > 10:
+                r, g, b, a = 135, 206, 235, 255  # sky blue top
+            elif y < 15 and dx > 10:
+                r, g, b, a = 176, 224, 230, 255  # lighter sky
             else:
-                pixels.extend([13, 17, 23, 0])
+                r, g, b, a = 240, 255, 255, 255   # white bg
+
+            # Trunk: 4px wide, bottom portion
+            trunk = y >= 16 and y <= 27 and dx <= 3 and dx >= 0
+            # Canopy: 3 layered ellipses
+            top_canopy = y >= 3 and y <= 9 and dx <= 7 - (y - 3) * 0.3
+            mid_canopy = y >= 6 and y <= 13 and dx <= 10 - (y - 6) * 0.4
+            bot_canopy = y >= 9 and y <= 17 and dx <= 13 - (y - 9) * 0.5
+
+            canopy = top_canopy or mid_canopy or bot_canopy
+
+            # Draw canopy — gradient green
+            if canopy:
+                shade = 100 + (y - 3) * 8  # darker at bottom
+                r, g, b, a = 34, min(200, shade), 34, 255
+            # Draw trunk — brown
+            elif trunk:
+                r, g, b, a = 101, 67, 33, 255
+            # Ground line
+            elif y >= 28 and dx <= 14:
+                r, g, b, a = 34, 139, 34, 255
+            elif y >= 29 and dx <= 16:
+                r, g, b, a = 50, 180, 50, 255
+
+            pixels.extend([r, g, b, a])
 
     # BMP data
     bmp_size = 40 + len(pixels)

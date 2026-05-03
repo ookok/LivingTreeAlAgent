@@ -49,7 +49,6 @@ class LivingTreeTuiApp(App):
         super().__init__()
         self.workspace = Path(workspace) if workspace else Path.cwd()
         self._hub = hub
-        self._dark = True
         self._hub_task: Optional[asyncio.Task] = None
         self._boot_time = 0.0
         self._boot_pct = 0
@@ -149,7 +148,7 @@ class LivingTreeTuiApp(App):
                 logger.warning(f"Hub shutdown error: {e}")
 
     def action_toggle_dark(self) -> None:
-        self.dark = not self.dark
+        self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
 
     def action_focus_tab(self, tab_id: str) -> None:
         try:

@@ -15,16 +15,6 @@ from loguru import logger
 
 from ..config import LTAIConfig, get_config
 from ..observability import setup_observability
-from ..dna import LifeEngine, LivingWorld, DualModelConsciousness, SafetyGuard
-from ..cell import CellRegistry, CellTrainer, TrainingConfig, Distillation, ExpertConfig
-from ..cell import Mitosis, Phage, Regen, CellAI, SwiftDrillTrainer
-from ..knowledge import KnowledgeBase, VectorStore, KnowledgeGraph, FormatDiscovery, GapDetector
-from ..capability import SkillFactory, ToolMarket, DocEngine, CodeEngine, MaterialCollector
-from ..capability import CodeGraph, ASTParser
-from ..network import Node, Discovery, NATTraverser, Reputation, EncryptedChannel
-from ..execution import TaskPlanner, Orchestrator, SelfHealer, AgentSpec, AgentRole
-from ..execution import ThinkingEvolution, MultiAgentQualityChecker
-from ..execution import HumanInTheLoop, TaskCheckpoint, CostAware
 
 
 class IntegrationHub:
@@ -37,6 +27,18 @@ class IntegrationHub:
     """
 
     def __init__(self, config: Optional[LTAIConfig] = None):
+        # Lazy imports — only load heavy subsystems on construction
+        from ..dna import LifeEngine, LivingWorld, DualModelConsciousness, SafetyGuard
+        from ..cell import CellRegistry, CellTrainer, TrainingConfig, Distillation, ExpertConfig
+        from ..cell import Mitosis, Phage, Regen, SwiftDrillTrainer
+        from ..knowledge import KnowledgeBase, VectorStore, KnowledgeGraph, FormatDiscovery, GapDetector
+        from ..capability import SkillFactory, ToolMarket, DocEngine, CodeEngine, MaterialCollector
+        from ..capability import CodeGraph, ASTParser
+        from ..network import Node, Discovery, NATTraverser, Reputation, EncryptedChannel
+        from ..execution import TaskPlanner, Orchestrator, SelfHealer
+        from ..execution import MultiAgentQualityChecker
+        from ..execution import HumanInTheLoop, TaskCheckpoint, CostAware
+
         self.config = config or get_config()
         self.obs = setup_observability(self.config)
         self._session = aiohttp.ClientSession()  # shared session
@@ -202,6 +204,7 @@ class IntegrationHub:
         return {**result, "path": str(path), "formatted": doc}
 
     async def train_cell(self, name: str, data: list[dict], epochs: int = 3) -> dict:
+        from ..cell import CellAI
         cell = CellAI(name=name, model_name=self.config.cell.default_base_model)
         result = cell.train(data, epochs=epochs)
         self.world.cell_registry.register(cell)
@@ -210,6 +213,7 @@ class IntegrationHub:
     async def drill_train(self, cell_name: str, model: str, dataset: list[dict],
                           training_type: str = "lora", teacher: str = "",
                           reward: str = "") -> dict:
+        from ..cell import CellAI
         cell = CellAI(name=cell_name, model_name=model)
         self.world.cell_registry.register(cell)
 
@@ -242,6 +246,7 @@ class IntegrationHub:
         return await self.world.drill.download_model(model_id)
 
     async def distill_knowledge(self, prompts: list[str]) -> list[str]:
+        from ..cell import CellAI
         cell = CellAI(name="distill")
         results = await self.world.distillation.distill_knowledge(
             cell, prompts, self.world.expert_config,
@@ -250,6 +255,7 @@ class IntegrationHub:
         return results
 
     async def absorb_github(self, url: str) -> dict:
+        from ..cell import CellAI
         cell = CellAI(name=f"phage_{url.split('/')[-1][:20]}")
         return await self.world.phage.absorb_codebase(cell, url)
 
@@ -306,6 +312,7 @@ class IntegrationHub:
 
     def _register_agents(self) -> None:
         """Register minimal seed agents. Full roles generated dynamically from tasks."""
+        from ..execution import AgentSpec, AgentRole
         seeds = [
             ("analyst", ["analyst"], ["analysis", "reasoning", "tool_use"]),
             ("executor", ["executor"], ["execution", "code_gen", "tool_use"]),

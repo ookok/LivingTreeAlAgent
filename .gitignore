@@ -19,8 +19,7 @@ config/local_config.py
 config/secrets.json
 config/secrets.enc
 
-# Windows Terminal unpacked build
-.wt/
+# Windows Terminal unpacked build (pre-bundled for offline use)
 
 # Data
 *.db

@@ -36,6 +36,24 @@ TabPane {
     background: $surface;
 }
 
+Tabs > .tab {
+    padding: 0 2;
+    color: $text-muted;
+    background: transparent;
+    border: none;
+}
+
+Tabs > .tab.--active {
+    color: $text;
+    text-style: bold;
+    background: $primary;
+    border-bottom: tall $primary-darken-1;
+}
+
+Tabs > .tab:hover {
+    background: $primary 20%;
+}
+
 /* Chat layout: sidebar + main */
 #sidebar {
     width: 26;
@@ -278,9 +296,8 @@ StageIndicator {
 #footer {
     dock: bottom;
     height: 1;
-    background: $panel;
-    border-top: solid $panel-darken-1;
-    border-bottom: none;
+    background: $surface;
+    border-top: solid $primary;
     padding: 0 1;
 }
 

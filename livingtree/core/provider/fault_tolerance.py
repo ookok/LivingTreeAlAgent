@@ -1,1 +1,1 @@
-from client.src.business.provider.fault_tolerance import *
+from livingtree.adapters.providers.fault_tolerance import *

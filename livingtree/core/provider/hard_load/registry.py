@@ -1,1 +1,1 @@
-from client.src.business.provider.hard_load.registry import *
+from livingtree.adapters.providers.hard_load.registry import *

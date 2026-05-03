@@ -1,1 +1,1 @@
-from client.src.business.provider.base import *
+from livingtree.adapters.providers.base import *

@@ -1,17 +1,11 @@
 """
 Provider - 模型驱动层
-桥接层: 委托到 client.src.business.provider
-TODO: 逐步迁移到 livingtree/core/provider/
+已迁移到 livingtree.adapters.providers
 """
-import sys, os
-_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-_biz = os.path.join(_root, 'client', 'src')
-if _biz not in sys.path:
-    sys.path.insert(0, _biz)
 
-from client.src.business.provider import *
+from livingtree.adapters.providers import *
 
-from client.src.business.provider.base import (
+from livingtree.adapters.providers.base import (
     DriverMode, DriverState,
     ChatMessage, ChatRequest, ChatResponse,
     CompletionRequest, CompletionResponse,
@@ -19,13 +13,13 @@ from client.src.business.provider.base import (
     StreamChunk, UsageInfo,
     HealthReport, ModelDriver,
 )
-from client.src.business.provider.gateway import ModelGateway, RouteStrategy
-from client.src.business.provider.fault_tolerance import (
+from livingtree.adapters.providers.gateway import ModelGateway, RouteStrategy
+from livingtree.adapters.providers.fault_tolerance import (
     FaultToleranceManager, DegradationStrategy,
     CircuitBreaker, CircuitState,
 )
-from client.src.business.provider.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
-from client.src.business.provider.config_manager import (
+from livingtree.adapters.providers.monitor import ResourceMonitor, ResourceSnapshot, AppMetrics
+from livingtree.adapters.providers.config_manager import (
     ProviderConfigManager, ProviderConfig,
     ModelSlotConfig, ABTestConfig,
 )

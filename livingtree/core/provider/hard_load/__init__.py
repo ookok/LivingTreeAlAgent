@@ -1,1 +1,1 @@
-from client.src.business.provider.hard_load import *
+from livingtree.adapters.providers.hard_load import *

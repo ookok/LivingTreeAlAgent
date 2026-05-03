@@ -26,6 +26,7 @@ from ..observability import setup_observability
 from .screens.chat import ChatScreen
 from .screens.code import CodeScreen
 from .screens.docs import KnowledgeScreen
+from .screens.tools import ToolsScreen
 from .screens.settings import SettingsScreen
 from .widgets.header import TuiHeader
 from .widgets.footer_bar import StatusBar
@@ -65,6 +66,8 @@ class LivingTreeTuiApp(App):
                 yield CodeScreen(id="code-screen")
             with TabPane(" 知识库 ", id="docs"):
                 yield KnowledgeScreen(id="docs-screen")
+            with TabPane(" 🔧 Tools ", id="tools"):
+                yield ToolsScreen(id="tools-screen")
             with TabPane(" Settings ", id="settings"):
                 yield SettingsScreen(id="settings-screen")
         yield Footer()

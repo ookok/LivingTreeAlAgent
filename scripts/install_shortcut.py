@@ -111,11 +111,23 @@ def install():
     desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
     shortcut_path = desktop / "LivingTree AI Agent.lnk"
 
-    # Use pythonw.exe to avoid console window
-    python_exe = Path(sys.executable)
-    pythonw = python_exe.parent / (python_exe.name.replace("python.exe", "pythonw.exe"))
-    if not pythonw.exists():
-        pythonw = python_exe  # fallback to python.exe if pythonw not found
+    # Find pythonw.exe — try base Python first (venv may not have it)
+    pythonw = ""
+    import sysconfig
+    base = Path(sysconfig.get_config_var("BINDIR") or sysconfig.get_config_var("prefix"))
+    candidates = [
+        base / "pythonw.exe",                                    # base Python
+        Path(sys.executable).parent / "pythonw.exe",              # venv Scripts
+        Path(sys.base_exec_prefix) / "pythonw.exe",               # sys base
+        Path(sys._base_executable).parent / "pythonw.exe" if hasattr(sys, "_base_executable") else None,
+    ]
+    for c in candidates:
+        if c and c.exists():
+            pythonw = str(c)
+            break
+    if not pythonw:
+        print("[LivingTree] WARNING: pythonw.exe not found — shortcut will show console")
+        pythonw = sys.executable
 
     bs = root / "livingtree" / "tui" / "wt_bootstrap.py"
 

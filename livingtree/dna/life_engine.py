@@ -361,6 +361,10 @@ class LifeEngine:
             if cost and cost._degraded:
                 cost.restore()
 
+        # Precipitation: distill successful session insight into KnowledgeBase
+        if ok and ctx.intent and self.world.knowledge_base and self.world.distillation:
+            await self._precipitate_knowledge(ctx)
+
     # ── Embedded thinking evolution ──
 
     def _mutate_capabilities(self, cell: Any, fitness: float) -> None:
@@ -387,6 +391,32 @@ class LifeEngine:
         )
         ctx.reflections.append(synthesis)
         logger.debug(f"[evolve] Crossover: {synthesis[:100]}")
+
+    async def _precipitate_knowledge(self, ctx: LifeContext) -> None:
+        """Distill successful session insight into KnowledgeBase for future recall."""
+        try:
+            prompt = (
+                f"The following task was successfully completed. Extract the key insight (1-2 sentences) "
+                f"that would help a future agent handle similar tasks better.\n\n"
+                f"Task: {ctx.user_input}\nResult: {ctx.plan[-1] if ctx.plan else 'completed'}\n"
+                f"Reflection: {ctx.reflections[-1] if ctx.reflections else 'ok'}"
+            )
+            insight = await self.world.distillation.query_expert(
+                prompt, self.world.expert_config,
+            )
+            if insight and len(insight) > 20:
+                from ..knowledge.knowledge_base import Document
+                doc = Document(
+                    title=f"insight:{ctx.session_id}",
+                    content=insight,
+                    domain="general",
+                    source="precipitation",
+                    metadata={"session": ctx.session_id, "success_rate": ctx.metadata.get("success_rate", 0)},
+                )
+                self.world.knowledge_base.add_knowledge(doc)
+                logger.debug(f"[evolve] Knowledge precipitated: {insight[:80]}...")
+        except Exception:
+            pass
 
     # ── Helpers ──
 

@@ -134,11 +134,15 @@ class IntegrationHub:
         # ── Create engine (receives the world) ──
         self.engine = LifeEngine(self.world)
 
+        # ── Boot LifeDaemon for autonomous self-driven cycles ──
+        from ..dna.life_daemon import LifeDaemon
+        self.daemon = LifeDaemon(self.world, interval_minutes=30.0)
+        self._started = False
+
     async def start(self) -> None:
         if self._started:
             return
-
-        logger.info(f"LivingTree v{self.config.version} booting")
+        logger.info(f"🌳 LivingTree v{self.config.version} booting")
         logger.info(f"  Flash: {self.config.model.flash_model} | Pro: {self.config.model.pro_model}")
         logger.info(f"  Node: {self.world.node.info.name} ({self.world.node.info.id[:12]})")
 
@@ -149,16 +153,18 @@ class IntegrationHub:
         self._register_agents()
 
         self._started = True
-        logger.info("LivingTree online")
+        await self.daemon.start()
+        logger.info("🌳 LivingTree online — autonomous cycles active")
 
     async def shutdown(self) -> None:
         if not self._started:
             return
         logger.info("Shutting down...")
+        await self.daemon.stop()
         await self.world.self_healer.stop()
         await self.world.node.shutdown()
         self._started = False
-        logger.info("LivingTree offline")
+        logger.info("🌳 LivingTree offline")
 
     # ── Core API ──
 

@@ -27,7 +27,7 @@ Screen {
     content-align: right middle;
 }
 
-TabbedContent {
+Screen > TabbedContent {
     height: 1fr;
 }
 

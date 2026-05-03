@@ -80,6 +80,7 @@ class CodeScreen(Screen):
 
     def on_mount(self) -> None:
         self._workspace = getattr(self.app, 'workspace', '.')
+        self._workspace = str(self._workspace) if not isinstance(self._workspace, str) else self._workspace
         output = self.query_one("#code-output", RichLog)
         output.write("[bold green]📝 Code Editor[/bold green]")
         output.write("")

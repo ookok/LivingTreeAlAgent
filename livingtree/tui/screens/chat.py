@@ -38,6 +38,8 @@ class ChatScreen(Screen):
         self._base_url = ""
         self._flash = ""
         self._pro = ""
+        self._sending = False
+        self._total_tokens = 0
 
     def set_hub(self, hub) -> None:
         self._hub = hub

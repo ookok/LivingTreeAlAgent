@@ -19,7 +19,6 @@ from textual.screen import Screen
 from textual.widgets import (
     Button, DirectoryTree, Input, Label, RichLog, TabbedContent, TabPane, TextArea, Tree,
 )
-from textual.widgets._tree import TreeNode
 from rich.syntax import Syntax
 from rich.table import Table
 
@@ -29,7 +28,7 @@ EXT_TO_LANG = {".py":"python",".js":"javascript",".ts":"typescript",".json":"jso
                ".rs":"rust",".go":"go"}
 
 
-def _build_tree(root_node: TreeNode, path: Path, depth: int = 0) -> None:
+def _build_tree(root_node, path: Path, depth: int = 0) -> None:
     if depth >= 4:
         return
     try:
@@ -53,56 +52,43 @@ class KnowledgeScreen(Screen):
     def set_hub(self, hub) -> None: self._hub = hub
 
     def compose(self) -> ComposeResult:
-        yield Horizontal(
-            Vertical(
-                Input(placeholder="🔍 Search knowledge...", id="kb-search"),
-                Tree("📁 Workspace", id="kb-tree"),
-                Horizontal(
-                    Button("🔍 Search", variant="primary", id="kb-search-btn"),
-                    Button("📥 Import", variant="default", id="kb-import-btn"),
-                    Button("📊 Stats", variant="default", id="kb-stats-btn"),
-                    Button("🔄 Refresh", variant="default", id="kb-refresh-btn"),
-                ),
-                id="kb-sidebar",
-            ),
-            Vertical(
-                TabbedContent(
-                    TabPane("📄 Preview", id="preview-tab"),
-                    TabPane("💬 AI Q&A", id="qa-tab"),
-                    TabPane("🕸 Graph", id="graph-tab"),
-                    id="kb-tabs",
-                ),
-                id="kb-main",
-            ),
-        )
+        with Horizontal():
+            with Vertical(id="kb-sidebar"):
+                yield Input(placeholder="🔍 Search knowledge...", id="kb-search")
+                yield Tree("📁 Workspace", id="kb-tree")
+                with Horizontal():
+                    yield Button("🔍 Search", variant="primary", id="kb-search-btn")
+                    yield Button("📥 Import", variant="default", id="kb-import-btn")
+                    yield Button("📊 Stats", variant="default", id="kb-stats-btn")
+                    yield Button("🔄 Refresh", variant="default", id="kb-refresh-btn")
+            with Vertical(id="kb-main"):
+                with TabbedContent(id="kb-tabs"):
+                    with TabPane("📄 Preview", id="preview-tab"):
+                        yield RichLog(id="kb-preview", highlight=True, markup=True, wrap=True)
+                    with TabPane("💬 AI Q&A", id="qa-tab"):
+                        yield Vertical(
+                            RichLog(id="kb-qa-output", highlight=True, markup=True, wrap=True),
+                            Horizontal(
+                                Input(placeholder="Ask about the current document...", id="kb-qa-input"),
+                                Button("Ask AI", variant="primary", id="kb-ask-btn"),
+                                id="kb-qa-row",
+                            ),
+                        )
+                    with TabPane("🕸 Graph", id="graph-tab"):
+                        yield RichLog(id="kb-graph", highlight=True, markup=True, wrap=True)
 
     def on_mount(self) -> None:
-        self._workspace = getattr(self.app, 'workspace', '.')
+        ws = getattr(self.app, 'workspace', '.')
+        self._workspace = Path(ws) if not isinstance(ws, Path) else ws
         self._populate_tree()
-        # Set up Preview tab
-        preview_tab = self.query_one("#preview-tab", TabPane)
-        preview_tab.mount(RichLog(id="kb-preview", highlight=True, markup=True, wrap=True))
         preview = self.query_one("#kb-preview", RichLog)
         preview.write("[bold green]📚 Knowledge Base[/bold green]")
         preview.write("[dim]Click file → preview | Q&A tab → ask about docs | Graph → entity map[/dim]")
 
-        # Set up Q&A tab
-        qa_tab = self.query_one("#qa-tab", TabPane)
-        qa_tab.mount(Vertical(
-            RichLog(id="kb-qa-output", highlight=True, markup=True, wrap=True),
-            Horizontal(
-                Input(placeholder="Ask about the current document...", id="kb-qa-input"),
-                Button("Ask AI", variant="primary", id="kb-ask-btn"),
-                id="kb-qa-row",
-            ),
-        ))
         qa_out = self.query_one("#kb-qa-output", RichLog)
         qa_out.write("[bold]💬 AI Document Q&A[/bold]")
         qa_out.write("[dim]Select a document, then ask questions about its content.[/dim]")
 
-        # Set up Graph tab
-        graph_tab = self.query_one("#graph-tab", TabPane)
-        graph_tab.mount(RichLog(id="kb-graph", highlight=True, markup=True, wrap=True))
         graph = self.query_one("#kb-graph", RichLog)
         graph.write("[bold]🕸 Knowledge Graph[/bold]")
         graph.write("[dim]Entity relationships extracted from your documents.[/dim]")
@@ -304,5 +290,5 @@ class KnowledgeScreen(Screen):
             size /= 1024
         return f"{size:.1f} TB"
 
-    async def refresh(self) -> None:
+    async def refresh(self, **kwargs) -> None:
         self._populate_tree()

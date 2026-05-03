@@ -255,9 +255,24 @@ class KnowledgeBase:
         from .vector_store import VectorStore
         self.vector_store: VectorStore = vector_store or VectorStore()
         self.genome = genome
+        self.dedup_enabled = True
         logger.info(f"KB: {type(self.storage).__name__} + {type(self.vector_store).__name__}")
 
-    def add_knowledge(self, doc: Document) -> str:
+    def add_knowledge(self, doc: Document, skip_dedup: bool = False) -> str:
+        """Add knowledge with dedup check."""
+        # Dedup check
+        if self.dedup_enabled and not skip_dedup and len(doc.content) > 50:
+            try:
+                from .dedup import DedupEngine
+                engine = DedupEngine(vector_store=self.vector_store, kb=self)
+                result = engine.check(doc.content, content_id=doc.id,
+                                      check_exact=True, check_near=True, check_semantic=False)
+                if result["is_duplicate"]:
+                    logger.info(f"Dedup: blocked '{doc.title}' — {result['suggestion']}")
+                    return result.get("duplicate_of", doc.id)
+            except Exception:
+                pass
+
         doc_id = self.storage.add_document(doc)
         try:
             vec = self.vector_store.embed(doc.content)

@@ -24,7 +24,6 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 
 from ..widgets.file_picker import FilePicker
-from ..widgets.task_tree import TaskTreePanel
 from ..widgets.task_progress import TaskProgressPanel
 
 

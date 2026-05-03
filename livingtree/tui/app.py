@@ -101,20 +101,20 @@ class LivingTreeTuiApp(App):
     async def _boot_hub(self) -> None:
         loop = asyncio.get_event_loop()
 
-        self._set_phase("加载模块...", 10)
+        self._set_phase("加载模块...", 5)
         await asyncio.sleep(0.2)
 
         def _import_hub():
             from ..integration.hub import IntegrationHub
             return IntegrationHub
 
-        self._set_phase("导入引擎...", 50)
+        self._set_phase("导入引擎...", 85)
         HubClass = await loop.run_in_executor(None, _import_hub)
 
-        self._set_phase("构建世界...", 70)
+        self._set_phase("构建世界...", 92)
         self._hub = HubClass()
 
-        self._set_phase("启动服务...", 95)
+        self._set_phase("启动服务...", 98)
         await self._hub.start()
 
         self._boot_pct = 100

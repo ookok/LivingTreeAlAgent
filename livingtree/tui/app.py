@@ -52,7 +52,6 @@ class LivingTreeTuiApp(App):
         self._hub_task: Optional[asyncio.Task] = None
         self._boot_time = 0.0
         self._boot_pct = 0
-        self._boot_target = 0
         self._boot_label = ""
 
     def compose(self) -> ComposeResult:
@@ -76,10 +75,9 @@ class LivingTreeTuiApp(App):
         if self._hub is None:
             self._boot_time = time.time()
             self._boot_label = "初始化..."
-            self._boot_target = 5
             self._update_status()
             self._hub_task = asyncio.create_task(self._boot_hub())
-            self.set_interval(0.3, self._update_boot_progress)
+            self.set_interval(0.25, self._update_boot_progress)
         else:
             self._wire_screens()
             self._update_status()
@@ -89,39 +87,42 @@ class LivingTreeTuiApp(App):
     def _update_boot_progress(self) -> None:
         if not self._hub_task or self._hub_task.done():
             return
-        if self._boot_pct < self._boot_target:
-            self._boot_pct = min(self._boot_pct + 1, self._boot_target)
-        self._update_status()
-
-    def _set_phase(self, label: str, target: int) -> None:
-        self._boot_label = label
-        self._boot_target = target
+        # Auto-advance: fast early, slow near end — never stalls
+        if self._boot_pct < 50:
+            self._boot_pct += 2
+        elif self._boot_pct < 80:
+            self._boot_pct += 1
+        elif self._boot_pct < 95:
+            self._boot_pct += 0.3
         self._update_status()
 
     async def _boot_hub(self) -> None:
         loop = asyncio.get_event_loop()
 
-        self._set_phase("加载模块...", 5)
-        await asyncio.sleep(0.2)
+        self._boot_label = "加载模块..."
+        self._update_status()
+        await asyncio.sleep(0.1)
 
         def _import_hub():
             from ..integration.hub import IntegrationHub
             return IntegrationHub
 
-        self._set_phase("导入引擎...", 85)
+        self._boot_label = "导入引擎..."
+        self._update_status()
         HubClass = await loop.run_in_executor(None, _import_hub)
 
-        self._set_phase("构建世界...", 92)
+        self._boot_label = "构建世界..."
+        self._update_status()
         self._hub = HubClass()
 
-        self._set_phase("启动服务...", 98)
+        self._boot_label = "启动服务..."
+        self._update_status()
         await self._hub.start()
 
-        self._boot_pct = 100
         self._boot_label = "完成"
-        self._boot_target = 100
+        self._boot_pct = 100
         self._update_status()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.4)
 
         self._boot_label = ""
         self._boot_pct = 100

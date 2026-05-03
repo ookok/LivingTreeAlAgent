@@ -16,3 +16,11 @@ from .router import (
     get_model_router,
     get_model_client,
 )
+
+from .enhanced_router import (  # noqa: E402
+    EnhancedModelRouter,
+    EnhancedResponse,
+    ModelCapability,
+    get_enhanced_model_router,
+    call_model,
+)

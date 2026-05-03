@@ -17,10 +17,13 @@
 from .models import (
     TierLevel,
     QueryType,
+    APIStatus,
     APIConfig,
     APIHealth,
     SearchResult,
     FusionResult,
+    QueryContext,
+    RateLimiter,
 )
 from .tier1_engines import (
     BaiduEngine,
@@ -54,11 +57,14 @@ from .tiered_adapter import TieredSearchAdapter, get_tiered_adapter, tiered_sear
 __all__ = [
     # 模型
     "TierLevel",
-    "QueryType", 
+    "QueryType",
+    "APIStatus",
     "APIConfig",
     "APIHealth",
     "SearchResult",
     "FusionResult",
+    "QueryContext",
+    "RateLimiter",
     
     # 引擎
     "BaiduEngine",

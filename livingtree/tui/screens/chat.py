@@ -25,6 +25,7 @@ from rich.syntax import Syntax
 
 from ..widgets.file_picker import FilePicker
 from ..widgets.task_tree import TaskTreePanel
+from ..widgets.task_progress import TaskProgressPanel
 
 
 class ChatScreen(Screen):
@@ -53,8 +54,7 @@ class ChatScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Horizontal(
             Vertical(
-                TaskTreePanel(id="task-tree"),
-                Label("[dim]Ctrl+P commands[/dim]", id="task-hint"),
+                TaskProgressPanel(id="task-progress"),
                 id="sidebar",
             ),
             Vertical(
@@ -130,42 +130,40 @@ class ChatScreen(Screen):
         editor.clear()
         self._sending = True
         display = self.query_one("#chat-display", TextArea)
-        tree = self.query_one(TaskTreePanel)
-        tree.reset()
+        tp = self.query_one(TaskProgressPanel)
+        tp.reset()
 
         if text.startswith("/"):
             await self._handle_command(text, display)
             self._sending = False
             return
 
-        # User message
         display.text += f"\n### You\n{text}\n\n"
         self._messages.append({"role": "user", "content": text})
 
-        # Animate pipeline
-        tree.update_stage("perceive", "running", "analyzing input...")
-        await asyncio.sleep(0.1)
-        tree.update_stage("perceive", "done", f"{len(text)} chars")
-
-        tree.update_stage("cognize", "running", "understanding intent...")
-        await asyncio.sleep(0.1)
-
-        # Auto-route: pro for complex queries
+        # Load plan steps into progress panel
         auto_pro = len(text) > 200 or any(kw in text for kw in [
-            "分析", "推理", "预测", "评估", "优化", "报告", "方案", "风险",
-            "analyze", "reason", "predict", "evaluate", "report",
-        ])
+            "分析", "推理", "预测", "评估", "优化", "报告", "方案", "风险"])
+        steps = [
+            {"name": "理解意图", "depends_on": []},
+            {"name": "检索知识", "depends_on": []},
+            {"name": f"{'深度' if auto_pro else '快速'}推理", "depends_on": [0, 1]},
+            {"name": "生成回复", "depends_on": [2]},
+        ]
+        tp.load_plan(steps)
+        tp.update_step(0, "running", "analyzing...")
 
-        tree.update_stage("cognize", "done", f"{'deep' if auto_pro else 'quick'} reasoning")
-        tree.update_stage("plan", "running", "decomposing task...")
         await asyncio.sleep(0.05)
-        tree.update_stage("plan", "done", "1 step plan")
+        tp.update_step(0, "done", f"{len(text)} chars")
 
-        tree.update_stage("execute", "running", "AI generating...")
+        tp.update_step(1, "running", "searching KB...")
+        await asyncio.sleep(0.05)
+        tp.update_step(1, "done", "retrieved")
+
+        tp.update_step(2, "running", f"{'deepseek-v4-pro' if auto_pro else 'deepseek-v4-flash'}")
         display.text += "*AI thinking...* "
         try:
             resp = await self._stream(text, pro=auto_pro)
-            # Replace the "thinking..." placeholder
             lines = display.text.split("\n")
             for i in range(len(lines) - 1, -1, -1):
                 if "*AI thinking...*" in lines[i]:
@@ -174,25 +172,17 @@ class ChatScreen(Screen):
             display.text = "\n".join(lines)
             display.text += f"### AI\n{resp}\n\n---\n"
             self._messages.append({"role": "assistant", "content": resp})
-            tree.update_stage("execute", "done", f"response {len(resp)} chars")
+            tp.update_step(2, "done", f"{len(resp)} chars")
         except Exception as e:
             display.text += f"\n**❌ Error:** {e}\n"
-            tree.update_stage("execute", "failed", str(e)[:60])
+            tp.update_step(2, "failed", str(e)[:40])
 
-        tree.update_stage("reflect", "running", "evaluating...")
-        await asyncio.sleep(0.05)
-        tree.update_stage("reflect", "done", "ok")
-        tree.update_stage("evolve", "done", "cycle complete")
-        tree.set_cost(self._total_tokens, self._total_tokens / 1_000_000 * 4.5)
+        tp.update_step(3, "running", "formatting...")
+        await asyncio.sleep(0.02)
+        tp.update_step(3, "done", "complete")
+        tp.mark_all_done()
 
-        # Update budget and checkpoint from hub
-        if self._hub and self._hub.world.cost_aware:
-            st = self._hub.world.cost_aware.status()
-            tree.set_budget(st.used_today, st.daily_limit, st.degraded)
-        if self._hub and self._hub.world.checkpoint:
-            sessions = await self._hub.world.checkpoint.list_sessions()
-            tree.set_checkpoint(str(len(sessions)), len(sessions))
-
+        self._total_tokens += len(resp) if 'resp' in dir() else 0
         self._sending = False
 
     async def _stream(self, text: str, pro: bool = False) -> str:

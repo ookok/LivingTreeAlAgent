@@ -158,6 +158,12 @@ class IntegrationHub:
         await self.daemon.start()
         logger.info("🌳 LivingTree online — autonomous cycles active")
 
+        # Print startup narrative
+        story = self.daemon._advanced.full_narrative()
+        for line in story.split("\n"):
+            if line.strip():
+                logger.info(line)
+
     async def shutdown(self) -> None:
         if not self._started:
             return

@@ -40,9 +40,15 @@ class LifeDaemon:
         self._task: Optional[asyncio.Task] = None
         self._cycle_count = 0
         self._learned_domains: set[str] = set()
-        self._knowledge_threshold = 10  # docs before triggering mitosis
+        self._knowledge_threshold = 10
         self._state_path = Path("./data/life_state")
         self._state_path.mkdir(parents=True, exist_ok=True)
+
+        # Advanced capabilities
+        from .advanced import AdvancedCapabilities
+        self._advanced = AdvancedCapabilities(world)
+        self.narrator = self._advanced.narrator
+        self.twin = self._advanced.twin
 
     # ── Lifecycle ──
 
@@ -103,7 +109,11 @@ class LifeDaemon:
         # 4. Train: trigger mitosis if threshold reached
         await self._maybe_train()
 
-        # 5. Persist genome
+        # 5. Dream + Arena + Self-Phage (advanced capabilities)
+        if self._advanced:
+            await self._advanced.run_all()
+
+        # 6. Persist genome
         self._save_genome()
 
     # ── Step 1: Self-check ──

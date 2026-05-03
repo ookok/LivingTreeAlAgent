@@ -88,6 +88,13 @@ class LifeEngine:
     # ── Stage 1: Perceive ──
 
     async def _perceive(self, ctx: LifeContext) -> None:
+        # Digital twin: observe user behavior
+        twin = getattr(getattr(self.world, 'daemon', None), 'twin', None)
+        if twin:
+            twin.observe(ctx.user_input, auto_pro_triggered=(
+                len(ctx.user_input) > 200 or any(kw in ctx.user_input for kw in
+                ["分析","推理","预测","评估","优化","报告","方案","风险"])))
+
         # Scan for prompt injection before processing
         scan = self.safety.scan_prompt(ctx.user_input)
         if not scan.get("safe", True):

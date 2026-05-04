@@ -192,6 +192,12 @@ class ChatView(ScrollView):
             self._dirty = True
             self.refresh()
 
+    def update_last_content(self, content: str) -> None:
+        if self._messages:
+            self._messages[-1].content = content
+            self._dirty = True
+            self.refresh()
+
     def clear(self) -> None:
         self._messages.clear()
         self._lines.clear()

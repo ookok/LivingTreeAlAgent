@@ -474,7 +474,7 @@ class ChatScreen(Screen):
 
     # ── Stash (Ctrl+S) ──
     def action_stash_draft(self) -> None:
-        inp = self.query_one("#chat-input", RichLog)
+        inp = self.query_one("#chat-input", TextArea)
         text = inp.text.strip()
         if not text:
             self.notify("Nothing to stash", timeout=2)
@@ -538,7 +538,7 @@ class ChatScreen(Screen):
 
     def action_copy_selection(self) -> None:
         try:
-            ta = self.query_one("#chat-input", RichLog)
+            ta = self.query_one("#chat-input", TextArea)
             sel = ta.selected_text
             if sel:
                 clipboard_handler.write_clipboard_text(sel)
@@ -558,7 +558,7 @@ class ChatScreen(Screen):
         label = f"[image: {path.name} ({size_kb}KB)]" if path.suffix.lower() in (
             ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"
         ) else f"[file: {path.name} ({size_kb}KB)]"
-        inp = self.query_one("#chat-input", RichLog)
+        inp = self.query_one("#chat-input", TextArea)
         inp.text = f"{inp.text}\n{label}".strip()
         self.notify(f"Selected: {path.name}", timeout=2)
 
@@ -579,7 +579,7 @@ class ChatScreen(Screen):
         text = await voice_handler.speech_to_text("zh-CN")
         self._voice_active = False
         if text:
-            inp = self.query_one("#chat-input", RichLog)
+            inp = self.query_one("#chat-input", TextArea)
             inp.value = f"{inp.value} {text}".strip()
             self.notify(f"Recognized: {text[:30]}...", timeout=3)
         else:
@@ -678,7 +678,7 @@ class ChatScreen(Screen):
     # ── Send ──
     async def _send(self) -> None:
         if self._sending:
-            inp = self.query_one("#chat-input", RichLog)
+            inp = self.query_one("#chat-input", TextArea)
             text = inp.text.strip()
             if text:
                 self._pending_queue.append(text)
@@ -687,7 +687,7 @@ class ChatScreen(Screen):
                 self.notify("Queued (busy)", timeout=1)
             return
 
-        inp = self.query_one("#chat-input", RichLog)
+        inp = self.query_one("#chat-input", TextArea)
         text = inp.text.strip()
         if not text:
             return
@@ -796,7 +796,7 @@ class ChatScreen(Screen):
         if self._sending or not self._pending_queue:
             return
         text = self._pending_queue.pop(0)
-        inp = self.query_one("#chat-input", RichLog)
+        inp = self.query_one("#chat-input", TextArea)
         inp.text = text
         self._update_pending_preview()
         await self._send()
@@ -1058,7 +1058,7 @@ class ChatScreen(Screen):
             elif arg == "pop":
                 draft = self._stash.pop()
                 if draft:
-                    inp = self.query_one("#chat-input", RichLog)
+                    inp = self.query_one("#chat-input", TextArea)
                     inp.text = draft.text
                     self.notify(f"Draft restored ({len(draft.text)} chars)", timeout=2)
                 else:
@@ -1130,7 +1130,7 @@ class ChatScreen(Screen):
             if self._messages and self._messages[-1]["role"] == "user":
                 last = self._messages.pop()
                 self._retry_count += 1
-                inp = self.query_one("#chat-input", RichLog)
+                inp = self.query_one("#chat-input", TextArea)
                 inp.text = last["content"]
                 self._display_write(f"[dim]Retrying last message (attempt {self._retry_count})[/dim]")
                 await asyncio.sleep(0.1)

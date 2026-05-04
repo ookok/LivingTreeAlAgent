@@ -65,6 +65,7 @@ class ChatScreen(Screen):
     BINDINGS = [
         ("escape", "app.pop_screen", "返回"),
         ("ctrl+c", "copy_selection", "复制"),
+        ("ctrl+shift+c", "copy_transcript", "全复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
         ("ctrl+s", "stash_draft", "暂存草稿"),
         ("ctrl+r", "history_search", "搜索历史"),
@@ -555,6 +556,9 @@ class ChatScreen(Screen):
         except Exception:
             pass
         self._copy_last_response()
+
+    def action_copy_transcript(self) -> None:
+        self._copy_full_transcript()
 
     # ── File/Folder pickers ──
     async def _pick_file_native(self) -> None:

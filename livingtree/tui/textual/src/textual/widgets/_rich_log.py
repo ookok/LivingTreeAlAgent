@@ -55,6 +55,12 @@ class RichLog(ScrollView, can_focus=True):
         &:focus {
             background-tint: $foreground 5%;
         }
+        &.-read-only {
+            border: solid $primary;
+            &:focus {
+                border: solid $accent;
+            }
+        }
     }
     """
 

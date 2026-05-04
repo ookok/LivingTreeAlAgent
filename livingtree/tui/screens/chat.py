@@ -332,7 +332,6 @@ class ChatScreen(Screen):
         except Exception:
             pass
 
-        d = self.query_one("#chat-display", MessageList)
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model

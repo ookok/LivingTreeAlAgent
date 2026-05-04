@@ -275,7 +275,7 @@ class ChatScreen(Screen):
         yield AttachmentBar(id="attachment-bar")
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-            Label("[dim]Ctrl+Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
+            Label("[dim]Ctrl+Enter send[/dim]", id="chat-hints"),
             id="chat-input-container",
         )
 

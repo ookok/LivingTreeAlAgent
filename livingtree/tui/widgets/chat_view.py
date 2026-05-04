@@ -119,6 +119,11 @@ class ChatMessage:
                     return Text.from_markup(self.content)
                 except Exception:
                     pass
+            elif fmt == "markdown":
+                try:
+                    return Markdown(self.content)
+                except Exception:
+                    pass
             try:
                 return ReprHighlighter()(self.content)
             except Exception:

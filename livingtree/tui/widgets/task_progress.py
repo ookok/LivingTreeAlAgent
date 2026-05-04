@@ -124,19 +124,17 @@ class TaskProgressPanel(Container):
         self._spinner_task = asyncio.create_task(spin())
 
     def load_plan(self, plan: list[dict]) -> None:
-        """Load a task plan and create rows."""
-        self._plan = plan
-        self._start_time = time.time()
+        import time as _time
+        uid = str(int(_time.time() * 1000))[-6:]
         container = self.query_one("#tp-tasks", Vertical)
 
-        # Remove old rows
         for child in list(container.children):
             child.remove()
         self._rows.clear()
 
         for i, step in enumerate(plan):
             name = step.get("name", step.get("description", f"Step {i+1}"))[:40]
-            row = SubTaskRow(i, name, id=f"tp-row-{i}")
+            row = SubTaskRow(i, name, id=f"tp-row-{uid}-{i}")
             self._rows[i] = row
             container.mount(row)
 

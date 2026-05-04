@@ -49,11 +49,26 @@ class ChatMessage:
         text = self._format()
         if not text:
             return []
-        console = Console(file=StringIO(), force_terminal=False, width=width, color_system="truecolor")
-        with console.capture() as capture:
-            console.print(text)
-        lines = capture.get().split("\n")
-        return [Strip(line) for line in lines]
+        from rich.console import Console as RichConsole
+        console = RichConsole(
+            file=StringIO(), force_terminal=False,
+            width=max(width, 20), color_system="truecolor"
+        )
+        strips = []
+        try:
+            render_iter = console.render(text)
+            for line_output in render_iter:
+                segments = console.render(line_output)
+                for segment in segments:
+                    seg_text = segment.text
+                    seg_style = segment.style or Style()
+                    strips.append(Strip([(seg_text, seg_style)]))
+        except Exception:
+            fallback = str(text).split("\n")
+            for line in fallback:
+                if line:
+                    strips.append(Strip([(line, Style())]))
+        return strips
 
     def _format(self) -> RenderableType:
         if self.collapsed:

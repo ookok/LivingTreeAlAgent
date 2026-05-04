@@ -124,7 +124,7 @@ class ChatScreen(Screen):
                 yield TaskListPanel(id="task-list")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True, max_lines=1000)
+                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000)
                 yield Horizontal(
                     Label("", id="llm-status"),
                     Label("", id="pulse-status"),

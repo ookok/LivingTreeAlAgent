@@ -308,7 +308,6 @@ class ChatScreen(Screen):
             id="chat-input-container",
         )
         yield AttachmentBar(id="attachment-bar")
-        yield StatusBar()
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

@@ -774,8 +774,11 @@ class ChatScreen(Screen):
             self._history = self._history[-500:]
 
         display = self.query_one("#chat-display", ChatView)
-        tp = self.query_one(TaskProgressPanel)
-        tp.reset()
+        try:
+            tp = self.query_one(TaskProgressPanel)
+            tp.reset()
+        except Exception:
+            tp = TaskProgressPanel()
 
         if text.startswith("/"):
             await self._handle_command(text, display)
@@ -815,7 +818,10 @@ class ChatScreen(Screen):
             {"name": "Generate response", "depends_on": [2]},
         ]
         tp.load_plan(steps)
-        tl = self.query_one(TaskListPanel)
+        try:
+            tl = self.query_one(TaskListPanel)
+        except Exception:
+            tl = TaskListPanel()
         tl.load_tasks(steps)
         tp.update_step(0, "running", "analyzing...")
         tl.update_task(0, "running", "analyzing...")
@@ -1533,5 +1539,7 @@ class ChatScreen(Screen):
         self._pending_queue.clear()
         self._update_pending_preview()
         self._update_topbar()
-        self.query_one(TaskListPanel).reset()
-        self.query_one(TaskProgressPanel).reset()
+        try: self.query_one(TaskListPanel).reset()
+        except: pass
+        try: self.query_one(TaskProgressPanel).reset()
+        except: pass

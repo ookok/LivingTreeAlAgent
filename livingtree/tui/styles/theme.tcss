@@ -44,9 +44,10 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 
 #sidebar { width: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; }
 #main-area { width: 3fr; height: 1fr; }
+#chat-body { height: 1fr; }
 #chat-display {
     height: 1fr; border: solid #30363d; overflow-y: scroll;
-    scrollbar-size: 1 1; padding: 0 2; background: #0d1117;
+    scrollbar-size: 1 1; padding: 0 2; background: #0d1117; margin-bottom: 0;
 }
 #chat-display:focus { border: solid #58a6ff; }
 

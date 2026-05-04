@@ -265,7 +265,7 @@ class ChatScreen(Screen):
             Label("", id="chat-cache-label"),
             id="chat-topbar",
         )
-        with Horizontal():
+        with Horizontal(id="chat-body"):
             with Vertical(id="sidebar"):
                 yield TaskProgressPanel(id="task-progress")
                 yield TaskListPanel(id="task-list")

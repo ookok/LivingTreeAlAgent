@@ -38,6 +38,7 @@ from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
 from ..widgets.chat_view import ChatView
+from ..widgets.chat_enhance import EmotionMirror, AutoSectioner, GhostSuggestions
 from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
@@ -104,6 +105,9 @@ class ChatScreen(Screen):
         self._lsp = None
         self._mcp_health = 0
         self._cancel_flag = False
+        self._emotion = EmotionMirror()
+        self._sectioner = AutoSectioner()
+        self._ghost = None  # initialized when hub is ready
         self._blocks: list[dict] = []  # {role, content, collapsed, summary}
 
     def _fold_block(self, block_idx: int) -> None:
@@ -333,6 +337,9 @@ class ChatScreen(Screen):
             try:
                 cv = self.query_one("#chat-display", ChatView)
                 cv._consciousness = self._hub.world.consciousness
+                self._ghost = GhostSuggestions(
+                    getattr(self._hub.world, 'anticipatory', None)
+                )
             except Exception:
                 pass
 
@@ -430,7 +437,6 @@ class ChatScreen(Screen):
 
         if text.startswith("#"):
             hint.update("[dim]This will be saved to memory.md (no turn fired)[/dim]")
-
         elif text.startswith("/") and " " not in text:
             matches = [c for c in _COMMANDS if c.startswith(text)]
             if len(matches) == 1:
@@ -439,6 +445,9 @@ class ChatScreen(Screen):
                 hint.update(f"[dim]{' | '.join(matches[:5])}[/dim]")
             else:
                 hint.update("")
+        elif self._ghost:
+            ghost = self._ghost.suggest(text)
+            hint.update(ghost if ghost else "")
         else:
             hint.update("")
 
@@ -759,6 +768,9 @@ class ChatScreen(Screen):
             self._display_write(f"\n[dim]Memory context loaded ({self._memory.count_entries()} entries)[/dim]")
 
         self._display_write(f"\n[bold green]You:[/bold green] {text}")
+        mood = self._emotion.detect(text)
+        self._mood_text = self._emotion.get_indicator()
+        self._display_write(self._mood_text)
         try:
             self.query_one("#chat-display", ChatView).user_message(text)
         except Exception:

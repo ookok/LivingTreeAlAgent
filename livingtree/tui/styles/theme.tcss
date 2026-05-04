@@ -54,11 +54,11 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #autocomplete-hint { height: 1; color: #484f58; padding: 0 2; }
 
 #chat-input-container {
-    dock: bottom; height: auto; min-height: 6; max-height: 14;
+    dock: bottom; height: auto; min-height: 10; max-height: 18;
     background: #161b22; border-top: solid #30363d; padding: 1 1;
 }
 #chat-input {
-    width: 1fr; height: 4; border: solid #30363d;
+    width: 1fr; height: 8; border: solid #30363d;
     background: #0d1117; color: #c9d1d9; padding: 0 1; margin: 0 1 0 0;
 }
 #chat-input:focus { border: solid #58a6ff; }

@@ -547,7 +547,7 @@ class ChatScreen(Screen):
         if self._reasoning_effort != "off":
             lines.append(f"[dim]Reasoning effort: {self._reasoning_effort}[/dim]")
         lines.append(resp)
-        lines.append("[dim]---[/dim]")
+        lines.append(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
         for line in lines:
             display.write(line)
 

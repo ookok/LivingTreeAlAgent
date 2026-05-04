@@ -62,12 +62,12 @@ class ChatMessage:
                 for segment in segments:
                     seg_text = segment.text
                     seg_style = segment.style or Style()
-                    strips.append(Strip([(seg_text, seg_style)]))
+                    strips.append(Strip([(seg_text, seg_style, False)]))
         except Exception:
             fallback = str(text).split("\n")
             for line in fallback:
                 if line:
-                    strips.append(Strip([(line, Style())]))
+                    strips.append(Strip([(line, Style(), False)]))
         return strips
 
     def _format(self) -> RenderableType:

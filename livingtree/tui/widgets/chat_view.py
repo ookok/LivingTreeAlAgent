@@ -80,7 +80,12 @@ class ChatMessage:
             return Text(f"💭 {len(self.content)} chars (click to expand)", style=STYLES["thinking"])
 
         if self.role == "user":
-            return Text(f"You: {self.content}", style=STYLES["user"])
+            return Panel(
+                Text(self.content, style=Style(color="#c9d1d9")),
+                border_style="#3fb950",
+                title="You",
+                title_align="left",
+            )
         elif self.role == "thinking":
             return Text(f"💭 Thinking:\n{self.content[-500:]}", style=STYLES["thinking"])
         elif self.role == "tool":
@@ -129,11 +134,11 @@ class ChatMessage:
 
         from rich.table import Table as RichTable
         if len(parts) == 1:
-            return parts[0]
+            return Panel(parts[0], border_style="#58a6ff", title="AI", title_align="left")
         table = RichTable.grid()
         for p in parts:
             table.add_row(p)
-        return table
+        return Panel(table, border_style="#58a6ff", title="AI", title_align="left")
 
 
 class ChatView(ScrollView):

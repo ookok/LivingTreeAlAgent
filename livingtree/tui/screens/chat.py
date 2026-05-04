@@ -301,6 +301,27 @@ class ChatScreen(Screen):
         except ImportError:
             pass
 
+        # Hook TextArea paste to detect file paths from drag-drop
+        try:
+            ta = self.query_one("#chat-input", TextArea)
+            original_paste = ta._on_paste
+            def _hooked_paste(event):
+                text = getattr(event, 'text', '') or ''
+                stripped = text.strip().strip('"').strip("'")
+                p = Path(stripped)
+                if p.exists() and p.is_file():
+                    try:
+                        bar = self.query_one("#attachment-bar", AttachmentBar)
+                        bar.add(p)
+                        self.notify(f"Attached: {p.name}", timeout=2)
+                        return
+                    except Exception:
+                        pass
+                original_paste(event)
+            ta._on_paste = _hooked_paste
+        except Exception:
+            pass
+
         d = self.query_one("#chat-display", RichLog)
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         if self._hub and hasattr(self._hub, 'config'):

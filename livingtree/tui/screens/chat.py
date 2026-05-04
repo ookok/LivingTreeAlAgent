@@ -72,6 +72,7 @@ class ChatScreen(Screen):
         ("end", "scroll_to_bottom", "到底部"),
         ("ctrl+f", "fold_all", "折叠AI"),
         ("f2", "open_recent_file", "打开文件"),
+        ("ctrl+g", "toggle_select_mode", "选择模式"),
     ]
 
     def __init__(self, **kwargs):
@@ -82,6 +83,7 @@ class ChatScreen(Screen):
         self._base_url = ""
         self._flash = ""
         self._pro = ""
+        self._select_mode = False
         self._sending = False
         self._total_tokens = 0
         self._attached_files: list[Path] = []
@@ -453,6 +455,46 @@ class ChatScreen(Screen):
     @work(exclusive=False)
     async def action_send_from_binding(self) -> None:
         await self._send()
+
+    def action_toggle_select_mode(self) -> None:
+        self._select_mode = not self._select_mode
+        try:
+            rl = self.query_one("#chat-display", RichLog)
+            if self._select_mode:
+                rl.display = False
+                # Show selectable transcript
+                self._show_select_overlay()
+                self.notify("Select mode ON — drag to select, Ctrl+G to exit", timeout=5)
+            else:
+                rl.display = True
+                self._hide_select_overlay()
+                self.notify("View mode", timeout=2)
+        except Exception:
+            pass
+
+    def _show_select_overlay(self) -> None:
+        try:
+            ta = self.query_one("#select-overlay", TextArea)
+        except Exception:
+            try:
+                self.query_one("#main-area").mount(
+                    TextArea("", id="select-overlay", read_only=True, show_line_numbers=False),
+                    before=0
+                )
+            except Exception:
+                return
+            ta = self.query_one("#select-overlay", TextArea)
+        text = "\n\n".join(
+            f"{'You' if m['role']=='user' else 'AI'}: {m['content']}"
+            for m in self._messages
+        )
+        ta.load_text(text)
+
+    def _hide_select_overlay(self) -> None:
+        try:
+            self.query_one("#select-overlay", TextArea).remove()
+        except Exception:
+            pass
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "enter":

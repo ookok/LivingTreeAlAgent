@@ -887,6 +887,8 @@ class ChatScreen(Screen):
                         return f"[red]API Error {resp.status}[/red]: {err_text[:200]}"
 
                     buf = b""
+                    collected_text = ""
+                    last_flush = time.monotonic()
                     display = self.query_one("#chat-display", RichLog)
                     async for chunk in resp.content.iter_any():
                         buf += chunk
@@ -901,27 +903,19 @@ class ChatScreen(Screen):
                             try:
                                 data = json.loads(d)
                                 delta = data.get("choices", [{}])[0].get("delta", {})
-
-                                reasoning = delta.get("reasoning_content", "")
-                                if reasoning and self._reasoning_effort != "off":
-                                    self._display_write(f"[dim italic]Think: {reasoning[:100]}...[/dim italic]")
-
                                 token = delta.get("content", "")
                                 if token:
                                     collected.append(token)
-                                    if len(collected) % 4 == 0:
-                                        self._display_write("".join(collected[-4:]))
-
-                                usage = data.get("usage", {})
-                                if usage and self._cache_tracker:
-                                    self._cache_tracker.record_turn(
-                                        prompt_tokens=usage.get("prompt_tokens", 0),
-                                        completion_tokens=usage.get("completion_tokens", 0),
-                                        cached_tokens=usage.get("prompt_cache_hit_tokens", 0)
-                                        + usage.get("prompt_cache_miss_tokens", 0),
-                                    )
+                                    collected_text += token
+                                    now = time.monotonic()
+                                    if now - last_flush > 0.05 and collected_text:
+                                        display.write(collected_text, scroll_end=True)
+                                        collected_text = ""
+                                        last_flush = now
                             except Exception:
                                 continue
+                    if collected_text:
+                        display.write(collected_text, scroll_end=True)
         except asyncio.TimeoutError:
             return "[red]Request timed out (180s)[/red]"
         except aiohttp.ClientConnectionError:

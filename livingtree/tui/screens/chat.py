@@ -915,6 +915,8 @@ class ChatScreen(Screen):
                     last_flush = time.monotonic()
                     display = self.query_one("#chat-display", RichLog)
                     think_panel = self.query_one("#cache-stats", Static)
+                    ml = self.query_one("#chat-display", MessageList)
+                    # Progressive markdown rendering during stream
                     async for chunk in resp.content.iter_any():
                         if self._cancel_flag:
                             display.write("\n[#d29922]-- Cancelled --[/#d29922]")
@@ -943,26 +945,42 @@ class ChatScreen(Screen):
                                     collected.append(token)
                                     collected_text += token
                                     now = time.monotonic()
-                                    if now - last_flush > 0.05 and collected_text:
-                                        display.write(collected_text, scroll_end=True)
-                                        collected_text = ""
-                                        last_flush = now
+                                    # Progressive markdown: re-render when paragraph completes
+                                    has_para_break = collected_text.endswith("\n\n") or collected_text.endswith("\n\n")
+                                    if (now - last_flush > 0.3 or has_para_break) and collected_text:
+                                        try:
+                                            from rich.markdown import Markdown as RichMarkdown
+                                            from rich.console import Console
+                                            from io import StringIO
+                                            buf_io = StringIO()
+                                            Console(file=buf_io, force_terminal=False, width=80).print(RichMarkdown(collected_text))
+                                            display.clear()
+                                            display.write(buf_io.getvalue(), scroll_end=True)
+                                            collected_text = ""
+                                            last_flush = now
+                                        except Exception:
+                                            display.write(collected_text, scroll_end=True)
+                                            collected_text = ""
+                                            last_flush = now
                             except Exception:
                                 continue
                     if collected_text:
                         display.write(collected_text, scroll_end=True)
-                    if thinking_text:
-                        think_panel.update(f"[#d2a8ff]💭 Thought for {len(thinking_text)} chars[/#d2a8ff]")
-                        display.write(f"\n[#d2a8ff]💭 {thinking_text[:500]}[/#d2a8ff]\n", scroll_end=True)
-                    # Render completed response as markdown
+                    # Final markdown render
                     result = "".join(collected)
                     if result:
                         try:
-                            display.clear()
                             from rich.markdown import Markdown as RichMarkdown
-                            display.write(RichMarkdown(result))
+                            from rich.console import Console
+                            from io import StringIO
+                            buf_io = StringIO()
+                            Console(file=buf_io, force_terminal=False, width=80).print(RichMarkdown(result))
+                            display.clear()
+                            display.write(buf_io.getvalue(), scroll_end=True)
                         except Exception:
                             pass
+                    if thinking_text:
+                        think_panel.update(f"[#d2a8ff]💭 Thought for {len(thinking_text)} chars[/#d2a8ff]")
         except asyncio.TimeoutError:
             return "[red]Request timed out (180s)[/red]"
         except aiohttp.ClientConnectionError:

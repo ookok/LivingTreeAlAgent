@@ -165,7 +165,7 @@ class IntegrationHub:
         self.world.cache_optimizer = self.cache_optimizer
 
         from ..execution.side_git import SideGit
-        self.side_git = SideGit(workspace=str(Path.cwd()))
+        self.side_git = SideGit(workspace_path=str(Path.cwd()))
         self.world.side_git = self.side_git
 
         from ..execution.session_manager import SessionManager

@@ -68,8 +68,9 @@ class ChatMessage:
             for rich_segments in render_iter:
                 segs = []
                 for s in rich_segments:
-                    segs.append(Segment(s.text, s.style or Style()))
-                strips.append(Strip(segs))
+                    style = s.style if s.style else Style()
+                    segs.append(Segment(s.text, style))
+                strips.append(Strip(segs) if segs else Strip.blank(max(width, 1)))
         except Exception:
             for line in str(text).split("\n"):
                 strips.append(Strip([Segment(line, Style())]))

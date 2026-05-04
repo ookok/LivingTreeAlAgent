@@ -37,7 +37,7 @@ from rich.syntax import Syntax
 from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
-from ..widgets.footer_bar import StatusBar
+from ..widgets.message_list import MessageList, ThinkingBlock
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler
@@ -209,12 +209,23 @@ class ChatScreen(Screen):
 
     def _display_write(self, text: str = "") -> None:
         try:
-            d = self.query_one("#chat-display", RichLog)
-            d.write(text)
+            ml = self.query_one("#chat-display", MessageList)
+            ml.add_message(text)
         except Exception:
             pass
 
-    def _render_response(self, display: RichLog, resp: str) -> None:
+    def _render_response(self, display, resp: str) -> None:
+        try:
+            ml = self.query_one("#chat-display", MessageList)
+            from rich.markdown import Markdown as RichMarkdown
+            from rich.console import Console
+            from io import StringIO
+            buf = StringIO()
+            Console(file=buf, force_terminal=False, width=80).print(RichMarkdown(resp))
+            ml.add_message(buf.getvalue(), "assistant")
+        except Exception:
+            ml = self.query_one("#chat-display", MessageList)
+            ml.add_message(resp, "assistant")
         from rich.markdown import Markdown as RichMarkdown
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
         if self._reasoning_effort != "off":
@@ -274,7 +285,7 @@ class ChatScreen(Screen):
                 yield TaskListPanel(id="task-list")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
+                yield MessageList(id="chat-display")
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
             Label("[dim]Ctrl+Enter send[/dim]", id="chat-hints"),
@@ -341,7 +352,7 @@ class ChatScreen(Screen):
 
     def _display_clear(self) -> None:
         try:
-            self.query_one("#chat-display", RichLog).clear()
+            self.query_one("#chat-display", MessageList).clear_all()
         except Exception:
             pass
 

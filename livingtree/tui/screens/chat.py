@@ -166,23 +166,20 @@ class ChatScreen(Screen):
         ext = p.suffix.lower()
         self._display_write(f"\n[#58a6ff]Opening: {p.name}[/#58a6ff]\n")
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
-            import subprocess, sys
-            if sys.platform == "win32":
-                subprocess.Popen(["start", "", str(p)], shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(p)])
-            else:
-                subprocess.Popen(["xdg-open", str(p)])
-            self._display_write(f"[dim]Image opened externally: {p.name}[/dim]\n")
+            self._display_write("")
+            try:
+                from rich.text import Text
+                from rich.panel import Panel
+                img_text = Text(f"  🖼 {p.name} ({self._fmt_size(p)})")
+                img_text.stylize("bold #58a6ff")
+                self._display_write(Panel(img_text, border_style="#58a6ff", title="Image"))
+            except Exception:
+                pass
         elif ext in (".mp3", ".wav", ".mp4", ".avi", ".mov"):
             import subprocess, sys
             if sys.platform == "win32":
                 subprocess.Popen(["start", "", str(p)], shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(p)])
-            else:
-                subprocess.Popen(["xdg-open", str(p)])
-            self._display_write(f"[dim]Media opened externally: {p.name}[/dim]\n")
+            self._display_write(f"[#d2a8ff]🎵 Playing: {p.name}[/#d2a8ff]\n")
         else:
             try:
                 content = p.read_text(encoding="utf-8", errors="replace")
@@ -198,6 +195,16 @@ class ChatScreen(Screen):
                 self._attached_files.append(p)
             except Exception:
                 self._display_write(f"[dim]Cannot preview: {p.name}[/dim]\n")
+
+    @staticmethod
+    def _fmt_size(path: Path) -> str:
+        try:
+            s = path.stat().st_size
+            if s < 1024: return f"{s}B"
+            if s < 1024*1024: return f"{s//1024}KB"
+            return f"{s//1024//1024}MB"
+        except Exception:
+            return "?"
 
     def _display_write(self, text: str = "") -> None:
         try:

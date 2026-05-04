@@ -37,6 +37,7 @@ from rich.syntax import Syntax
 from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
+from ..widgets.message_list import MessageList, ThinkingBlock
 from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
@@ -286,7 +287,7 @@ class ChatScreen(Screen):
                 yield TaskListPanel(id="task-list")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000)
+                yield MessageList(id="chat-display")
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
             Label("[dim]Ctrl+Enter send[/dim]", id="chat-hints"),

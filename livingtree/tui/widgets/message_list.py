@@ -181,10 +181,8 @@ class MessageList(Vertical):
             pass
         self._widgets.append(widget)
         self._sessions[self._session_idx].append(widget)
-        try:
-            self.mount(widget)
-        except Exception:
-            pass
+        if self.app is not None:
+            self.app._register(self, widget)
         self._auto_collapse()
         return widget
 

@@ -64,6 +64,7 @@ class ChatScreen(Screen):
         ("escape", "app.pop_screen", "返回"),
         ("ctrl+c", "copy_selection", "复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
+        ("enter", "send_from_binding", "发送"),
         ("ctrl+s", "stash_draft", "暂存草稿"),
         ("ctrl+r", "history_search", "搜索历史"),
         ("shift+tab", "cycle_effort", "推理深度"),
@@ -254,6 +255,10 @@ class ChatScreen(Screen):
             self.action_cycle_effort()
 
     # ── Reasoning effort ──
+    @work(exclusive=False)
+    async def action_send_from_binding(self) -> None:
+        await self._send()
+
     def action_cycle_effort(self) -> None:
         self._effort_idx = (self._effort_idx + 1) % len(REASONING_EFFORTS)
         self._reasoning_effort = REASONING_EFFORTS[self._effort_idx]

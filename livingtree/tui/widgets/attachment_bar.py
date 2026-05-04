@@ -66,7 +66,7 @@ class AttachmentBar(Horizontal):
             name = f.name[:25] + ("..." if len(f.name) > 25 else "")
             label = f"{icon} {name} {size_str}"
             self.mount(Static(label, id=f"att-label-{uid}-{i}"))
-            btn = Button("[#f85149]✕[/#f85149]", id=f"att-rm-{i}")
+            btn = Button("[#f85149]✕[/#f85149]", id=f"att-rm-{uid}-{i}")
             btn.can_focus = False
             self.mount(btn)
 

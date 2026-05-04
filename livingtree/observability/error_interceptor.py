@@ -239,7 +239,7 @@ class ErrorInterceptor:
         severity: str = "error",
     ) -> CapturedError:
         self._counter += 1
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now().isoformat()
 
         error = CapturedError(
             id=self._counter,

@@ -23,9 +23,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 
-EXT_TO_LANG = {".py":"python",".js":"javascript",".ts":"typescript",".json":"json",
-               ".yaml":"yaml",".html":"html",".css":"css",".sql":"sql",".sh":"bash",
-               ".rs":"rust",".go":"go"}
+from ...config.system_config import EXT_TO_LANG
 
 
 def _build_tree(root_node, path: Path, depth: int = 0) -> None:

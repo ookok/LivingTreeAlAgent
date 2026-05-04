@@ -31,10 +31,10 @@ class TinyClassifier:
     """
 
     FEATURE_KEYWORDS = [
-        "analyze", "分析", "code", "代码", "生成", "report", "报告", "环评",
-        "search", "搜索", "knowledge", "知识", "train", "训练", "translate", "翻译",
-        "summarize", "总结", "refactor", "重构", "fix", "修复", "debug",
-        "emergency", "应急", "eia", "diff", "review",
+        "analyze", "分析", "code", "代码", "生成", "report", "报告",
+        "search", "搜索", "knowledge", "知识", "train", "训练",
+        "translate", "翻译", "summarize", "总结", "refactor", "重构",
+        "fix", "修复", "debug", "emergency", "应急", "eia",
     ]
 
     def __init__(self):

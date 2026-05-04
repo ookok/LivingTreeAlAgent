@@ -42,34 +42,14 @@ from ..widgets import sound_effects
 from ..widgets.composer_stash import ComposerStash
 from ..widgets.user_memory import UserMemory
 
-_COMMANDS = {
-    "/file": "预览文件内容 — /file 路径",
-    "/code": "AI 生成代码 — /code 描述",
-    "/report": "AI 生成报告 — /report 主题",
-    "/search": "搜索知识库 — /search 关键词",
-    "/analyze": "深度分析 — /analyze 问题",
-    "/translate": "翻译 — /translate 文本",
-    "/summary": "总结对话 — /summary",
-    "/clear": "清空聊天 — /clear",
-    "/help": "显示命令帮助 — /help",
-    "/stash": "暂存草稿 — /stash | /stash list|pop|clear",
-    "/effort": "推理深度 — /effort off|high|max",
-    "/memory": "用户记忆 — /memory | /memory show|clear|path",
-    "/diff": "渲染差异 — /diff <old> <new>",
-    "/share": "导出对话 — /share",
-    "/init": "生成 AGENTS.md — /init",
-    "/retry": "重试最后一条 — /retry",
-    "/status": "系统状态 — /status",
-    "/extract": "实体提取 — /extract <class1,class2> <text>",
-    "/lx": "LangExtract提取 — /lx <classes> <text>",
-    "/pipeline": "自动管道 — /pipeline <自然语言描述任务>",
-    "/pipe": "同上（别名）",
-    "/parse": "解析文档 — /parse <PDF路径>",
-    "/fetch": "抓取网页 — /fetch <URL>",
-    "/errors": "系统错误 — /errors | /errors clear",
-}
+from ...config.system_config import (
+    SLASH_COMMANDS as _COMMANDS,
+    REASONING_EFFORTS,
+    PIPELINE_INTENT_TRIGGERS,
+    PRO_REASONING_INTENT_TRIGGERS,
+)
 
-REASONING_EFFORTS = ["off", "high", "max"]
+REASONING_EFFORTS = REASONING_EFFORTS
 TOOL_OUTPUT_DIR = ".livingtree/tool_outputs"
 MAX_INLINE_OUTPUT = 32 * 1024
 
@@ -463,8 +443,7 @@ class ChatScreen(Screen):
         display.write(f"\n[bold green]You:[/bold green] {text}")
         self._messages.append({"role": "user", "content": text})
 
-        auto_pro = len(text) > 200 or any(kw in text for kw in [
-            "分析", "推理", "预测", "评估", "优化", "报告", "方案", "风险"])
+        auto_pro = len(text) > 200 or any(kw in text for kw in PRO_REASONING_INTENT_TRIGGERS)
 
         if self._reasoning_effort == "off":
             auto_pro = False

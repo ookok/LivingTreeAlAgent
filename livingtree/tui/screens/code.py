@@ -11,17 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, DirectoryTree, Input, Label, RichLog, Static, TabbedContent, TabPane, TextArea
 
-LANGUAGES = [
-    ("python", "Python"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
-    ("html", "HTML"), ("css", "CSS"), ("json", "JSON"), ("yaml", "YAML"),
-    ("markdown", "Markdown"), ("sql", "SQL"), ("bash", "Bash"),
-    ("rust", "Rust"), ("go", "Go"), ("java", "Java"), ("cpp", "C++"),
-]
-
-EXT_TO_LANG = {".py": "python", ".js": "javascript", ".ts": "typescript",
-               ".html": "html", ".css": "css", ".json": "json", ".yaml": "yaml",
-               ".yml": "yaml", ".md": "markdown", ".sql": "sql", ".sh": "bash",
-               ".rs": "rust", ".go": "go", ".java": "java"}
+from ...config.system_config import EXT_TO_LANG, LANG_DISPLAY_NAMES as LANGUAGES
 
 
 class CodeScreen(Screen):

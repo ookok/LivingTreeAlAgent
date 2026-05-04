@@ -272,17 +272,6 @@ class ChatScreen(Screen):
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
-        yield Horizontal(
-            Button("File", id="file-btn"),
-            Label("", id="llm-status"),
-            Label("", id="pulse-status"),
-            Label("", id="error-status"),
-            Label("[dim]Enter send  Ctrl+X copy  End→bottom[/dim]", id="action-hints"),
-            Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
-            Button("Copy", id="copy-btn"),
-            Button("Clear", id="clear-btn"),
-            id="action-bar",
-        )
         yield AttachmentBar(id="attachment-bar")
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
@@ -381,30 +370,21 @@ class ChatScreen(Screen):
 
     def _update_status_bar(self) -> None:
         try:
-            provider = "deepseek"
+            bar = self.app.query_one(StatusBar)
             if self._hub and hasattr(self._hub.world, 'consciousness'):
                 status = self._hub.world.consciousness.get_election_status()
-                provider = status.get("elected", "deepseek")
+                elected = status.get("elected", "deepseek")
                 count = len(status.get("providers", []))
-                self.query_one("#llm-status", Label).update(f"[#58a6ff]LLM: {provider}[/#58a6ff] ({count})")
-        except Exception: pass
-
+                bar.update_llm_info(elected, count)
+        except Exception:
+            pass
         try:
             bio = getattr(self._hub.world, 'biorhythm', None) if self._hub else None
             if bio:
-                snap = bio._get_snapshot()
-                icons = {"active": "[#3fb950]● active[/#3fb950]", "reflecting": "[#d29922]◉ reflect[/#d29922]", "resting": "[#8b949e]○ rest[/#8b949e]", "dreaming": "[#d2a8ff]◎ dream[/#d2a8ff]"}
-                self.query_one("#pulse-status", Label).update(icons.get(snap["state"], ""))
-        except Exception: pass
-
-        try:
-            from ...observability.error_interceptor import get_interceptor
-            ei = get_interceptor()
-            if ei:
-                s = ei.get_stats()
-                if s["total_errors"] > 0:
-                    self.query_one("#error-status", Label).update(f"[#f85149]!{s['total_errors']} err[/#f85149]")
-        except Exception: pass
+                bar = self.app.query_one(StatusBar)
+                bar.update_pulse(bio._get_snapshot())
+        except Exception:
+            pass
 
     @work(exclusive=False)
     async def _switch_llm(self) -> None:
@@ -446,15 +426,7 @@ class ChatScreen(Screen):
     # ── Buttons ──
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        if bid == "clear-btn":
-            self._clear()
-        elif bid == "switch-llm-btn":
-            await self._switch_llm()
-        elif bid == "file-btn":
-            await self._pick_file_native()
-        elif bid == "copy-btn":
-            self.action_copy_block()
+        pass  # buttons removed, actions via footer + keyboard
 
     # ── Reasoning effort ──
     @work(exclusive=False)

@@ -13,10 +13,10 @@ class StatusBar(Horizontal):
     _done_steps: set[int] = set()
 
     def compose(self) -> ComposeResult:
-        yield Label("^Q quit  Tab switch  Enter enter  ^D theme", id="footer-keys")
-        yield Label("", id="mcp-chip")
+        yield Label("^Q quit  Enter send  ^C copy  Shift+Tab effort  ^D theme", id="footer-keys")
+        yield Label("", id="footer-llm")
+        yield Label("", id="footer-pulse")
         yield Label("", id="error-chip")
-        yield Label("", id="pulse-chip")
         yield Label("", id="footer-status")
 
     def set_boot_steps(self, steps: list[str]) -> None:
@@ -84,16 +84,21 @@ class StatusBar(Horizontal):
         except Exception:
             pass
 
+    def update_llm_info(self, elected: str, count: int = 0) -> None:
+        try:
+            c = self.query_one("#footer-llm", Label)
+            c.update(f"[#58a6ff]{elected}[/#58a6ff]" + (f" ({count})" if count else ""))
+        except Exception:
+            pass
+
     def update_pulse(self, snapshot: dict) -> None:
         try:
-            chip = self.query_one("#pulse-chip", Label)
-            hr = snapshot.get("heart_rate", 60)
+            c = self.query_one("#footer-pulse", Label)
             state = snapshot.get("state", "active")
             icons = {"active": "[#3fb950]●[/#3fb950]", "reflecting": "[#d29922]◉[/#d29922]",
-                     "resting": "[#8b949e]○[/#8b949e]", "dreaming": "[#d2a8ff]◎[/#d2a8ff]",
-                     "consolidating": "[#58a6ff]◉[/#58a6ff]", "waking": "[#fea62b]◐[/#fea62b]"}
+                     "resting": "[#8b949e]○[/#8b949e]", "dreaming": "[#d2a8ff]◎[/#d2a8ff]"}
             icon = icons.get(state, "●")
-            chip.update(f"{icon} {state}")
+            c.update(f"{icon} {state}")
         except Exception:
             pass
 

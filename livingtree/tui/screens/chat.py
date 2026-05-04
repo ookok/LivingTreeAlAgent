@@ -35,6 +35,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 
 from ..widgets.task_progress import TaskProgressPanel
+from ..widgets.task_list import TaskListPanel
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler
@@ -120,6 +121,7 @@ class ChatScreen(Screen):
         with Horizontal():
             with Vertical(id="sidebar"):
                 yield TaskProgressPanel(id="task-progress")
+                yield TaskListPanel(id="task-list")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True, max_lines=1000)
@@ -545,15 +547,22 @@ class ChatScreen(Screen):
             {"name": "Generate response", "depends_on": [2]},
         ]
         tp.load_plan(steps)
+        tl = self.query_one(TaskListPanel)
+        tl.load_tasks(steps)
         tp.update_step(0, "running", "analyzing...")
+        tl.update_task(0, "running", "analyzing...")
         await asyncio.sleep(0.02)
         tp.update_step(0, "done", f"{len(text)} chars")
+        tl.update_task(0, "done")
 
         tp.update_step(1, "running", "searching KB...")
+        tl.update_task(1, "running", "KB")
         await asyncio.sleep(0.02)
         tp.update_step(1, "done", "retrieved")
+        tl.update_task(1, "done")
 
         tp.update_step(2, "running", f"{'pro' if auto_pro else 'flash'} model (effort={self._reasoning_effort})")
+        tl.update_task(2, "running", f"{'pro' if auto_pro else 'flash'}")
         self._think_idx = 0
         self._think_timer = self.set_interval(0.8, self._animate_thinking)
         try:
@@ -569,9 +578,12 @@ class ChatScreen(Screen):
                 self._think_timer.stop()
 
         tp.update_step(3, "running", "formatting...")
+        tl.update_task(3, "running", "formatting")
         await asyncio.sleep(0.02)
         tp.update_step(3, "done", "complete")
+        tl.update_task(3, "done")
         tp.mark_all_done()
+        tl.mark_all_done()
 
         self._update_topbar()
         self._sending = False
@@ -1236,4 +1248,5 @@ class ChatScreen(Screen):
         self._pending_queue.clear()
         self._update_pending_preview()
         self._update_topbar()
+        self.query_one(TaskListPanel).reset()
         self.query_one(TaskProgressPanel).reset()

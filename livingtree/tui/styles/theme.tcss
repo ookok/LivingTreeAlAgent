@@ -52,9 +52,14 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-display:focus { border: solid #58a6ff; }
 
 #chat-input-container {
-    dock: bottom; height: auto; min-height: 7; max-height: 14;
+    dock: bottom; height: auto; min-height: 9; max-height: 14;
     background: #161b22; border-top: solid #30363d; padding: 1 1;
 }
+#chat-input {
+    width: 1fr; height: 10; border: solid #30363d;
+    background: #0d1117; color: #c9d1d9; padding: 0 1;
+}
+#chat-input:focus { border: solid #58a6ff; }
 #attachment-bar {
     dock: bottom; min-height: 0; max-height: 3;
 }

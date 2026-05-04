@@ -13,7 +13,7 @@ class StatusBar(Horizontal):
     _done_steps: set[int] = set()
 
     def compose(self) -> ComposeResult:
-        yield Label("^Q quit  Enter send  ^C copy  Shift+Tab effort  ^D theme", id="footer-keys")
+        yield Label("^Q quit  Ctrl+Enter send  ^C copy  Shift+Tab effort  ^D theme", id="footer-keys")
         yield Label("", id="footer-llm")
         yield Label("", id="footer-pulse")
         yield Label("", id="error-chip")

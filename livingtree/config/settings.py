@@ -55,6 +55,16 @@ class ModelConfig(BaseModel):
     longcat_chat_temperature: float = 0.5
     longcat_chat_max_tokens: int = 4096
 
+    xiaomi_base_url: str = "https://api.xiaomimimo.com/v1"
+    xiaomi_api_key: str = ""
+    xiaomi_flash_model: str = "mimo-v2-flash"
+    xiaomi_pro_model: str = "mimo-v2.5"
+
+    aliyun_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    aliyun_api_key: str = ""
+    aliyun_flash_model: str = "qwen-turbo"
+    aliyun_pro_model: str = "qwen-max"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -298,6 +308,14 @@ def _load_config() -> LTAIConfig:
         if longcat_key:
             config.model.longcat_api_key = longcat_key
             logger.info("Loaded longcat_api_key from encrypted vault")
+        xiaomi_key = vault.get("xiaomi_api_key", "")
+        if xiaomi_key:
+            config.model.xiaomi_api_key = xiaomi_key
+            logger.info("Loaded xiaomi_api_key from encrypted vault")
+        aliyun_key = vault.get("aliyun_api_key", "")
+        if aliyun_key:
+            config.model.aliyun_api_key = aliyun_key
+            logger.info("Loaded aliyun_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

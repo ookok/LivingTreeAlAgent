@@ -6,6 +6,14 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+
+# ── Install error interceptor FIRST, before any imports ──
+try:
+    from ..observability.error_interceptor import install as _install_interceptor
+    _install_interceptor()
+except Exception:
+    pass
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
@@ -190,6 +198,16 @@ class LivingTreeTuiApp(App):
     def hub(self):
         return self._hub
 
+    def _handle_exception(self, error: Exception) -> None:
+        try:
+            from ..observability.error_interceptor import get_interceptor
+            ei = get_interceptor()
+            if ei:
+                ei.capture(error, context="textual_app_handler")
+        except Exception:
+            pass
+        super()._handle_exception(error)
+
     async def _auto_start_opencode_serve(self) -> None:
         try:
             from .widgets.opencode_launcher import OpenCodeLauncher
@@ -204,6 +222,17 @@ class LivingTreeTuiApp(App):
 
 
 def run_tui(workspace: str = "", hub=None) -> None:
-    app = LivingTreeTuiApp(workspace=workspace, hub=hub)
-    app.run()
+    try:
+        app = LivingTreeTuiApp(workspace=workspace, hub=hub)
+        app.run()
+    except Exception as e:
+        logger.exception(f"TUI crashed: {e}")
+        try:
+            from ..observability.error_interceptor import get_interceptor
+            ei = get_interceptor()
+            if ei:
+                ei.capture(e, context="run_tui_fatal")
+        except Exception:
+            pass
+        raise
 

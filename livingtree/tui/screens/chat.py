@@ -327,6 +327,14 @@ class ChatScreen(Screen):
         except Exception:
             pass
 
+        # Wire AI consciousness to ChatView
+        if self._hub and hasattr(self._hub.world, 'consciousness'):
+            try:
+                cv = self.query_one("#chat-display", ChatView)
+                cv._consciousness = self._hub.world.consciousness
+            except Exception:
+                pass
+
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model

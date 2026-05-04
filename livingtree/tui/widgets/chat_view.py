@@ -137,12 +137,42 @@ class ChatView(ScrollView):
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, consciousness=None, **kwargs):
         super().__init__(**kwargs)
         self._messages: list[ChatMessage] = []
         self._lines: list[Strip] = []
         self._dirty = True
         self.can_focus = False
+        self._consciousness = consciousness
+
+    # ── Public API ──
+
+    def add_message(self, role: str, content: str = "") -> ChatMessage:
+        if role == "assistant" and self._consciousness:
+            role = self._classify_format(content[:500])
+        msg = ChatMessage(role, content)
+        self._messages.append(msg)
+        self._dirty = True
+        self.refresh()
+        return msg
+
+    def _classify_format(self, text: str) -> str:
+        try:
+            import asyncio
+            result = asyncio.run(
+                self._consciousness.chain_of_thought(
+                    f"Classify this content format with ONE word (markdown/code/thinking/tool_output/error/plain):\n{text[:300]}",
+                    steps=1, max_tokens=10, temperature=0.1
+                )
+            )
+            for label in ["markdown", "code", "thinking", "tool_output", "error"]:
+                if label in result.lower():
+                    return "assistant" if label == "markdown" else label
+        except Exception:
+            pass
+        if "```" in text:
+            return "assistant"
+        return "assistant"
 
     # ── Public API ──
 

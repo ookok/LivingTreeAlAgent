@@ -125,7 +125,10 @@ class RichLog(ScrollView, can_focus=True):
         self.auto_scroll = auto_scroll
         """Automatically scroll to the end on write."""
         self.read_only = read_only
-        """When True, mouse events pass through for terminal-level text selection."""
+        """When True: border displayed, mouse events allow terminal text selection."""
+        if read_only:
+            self.border_title = "Chat Output"
+            self.styles.border = ("solid", "#58a6ff")
         self.highlighter: Highlighter = ReprHighlighter()
         """Rich Highlighter used to highlight content when highlight is True"""
 
@@ -139,6 +142,10 @@ class RichLog(ScrollView, can_focus=True):
     def notify_style_update(self) -> None:
         super().notify_style_update()
         self._line_cache.clear()
+
+    def focus_on_click(self) -> bool:
+        """When read_only, allow terminal-native text selection by not capturing clicks."""
+        return not self.read_only
 
     def on_resize(self, event: Resize) -> None:
         if event.size.width and not self._size_known:

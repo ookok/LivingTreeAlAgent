@@ -125,27 +125,27 @@ class ChatScreen(Screen):
                 RichLog(id="chat-display", highlight=True, markup=True, wrap=True),
                 Static("", id="pending-preview"),
                 Static("", id="autocomplete-hint"),
-                Horizontal(
-                    Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
-                    Button("File", id="file-btn"),
-                    Button("Folder", id="folder-btn"),
-                    Button("Voice", id="voice-btn"),
-                    Button("Save", id="save-btn"),
-                    Button("Copy", id="copy-btn"),
-                    Button("Clear", id="clear-btn"),
-                    Label("[dim]Ctrl+S stash  Alt+R history  Ctrl+C copy[/dim]", id="action-hints"),
-                    id="action-bar",
-                ),
-                Container(
-                    Horizontal(
-                        TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-                        Button("Send", variant="primary", id="send-btn"),
-                    ),
-                    Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
-                    id="chat-input-container",
-                ),
                 id="main-area",
             ),
+        )
+        yield Horizontal(
+            Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
+            Button("File", id="file-btn"),
+            Button("Folder", id="folder-btn"),
+            Button("Voice", id="voice-btn"),
+            Button("Save", id="save-btn"),
+            Button("Copy", id="copy-btn"),
+            Button("Clear", id="clear-btn"),
+            Label("[dim]Ctrl+S stash  Alt+R history  Ctrl+C copy[/dim]", id="action-hints"),
+            id="action-bar",
+        )
+        yield Container(
+            Horizontal(
+                TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
+                Button("Send", variant="primary", id="send-btn"),
+            ),
+            Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
+            id="chat-input-container",
         )
 
     def on_mount(self) -> None:

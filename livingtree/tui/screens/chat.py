@@ -894,41 +894,61 @@ class ChatScreen(Screen):
 
         elif cmd == "/search" and arg:
             query = arg
-            time_label = ""
+            display.write(f"[bold #58a6ff]Multi-Search:[/bold #58a6ff] `{query}`")
 
-            # First try Spark web search
+            # 1. Spark OneSearch (联网)
             ss = getattr(self._hub.world, 'spark_search', None) if self._hub else None
+            web_results = None
             if ss:
                 web_results = await ss.query(query, limit=5)
-                if web_results:
-                    display.write(ss.format_results(web_results))
-                    display.write("[dim]---[/dim]")
-                    return
 
+            # 2. Local KnowledgeBase (本地)
+            kb_results = None
             if self._hub:
-                from datetime import datetime as dt
-                parts = arg.split(maxsplit=1)
-                as_of = None
                 try:
-                    candidate = dt.fromisoformat(parts[0]) if len(parts[0]) == 10 else None
-                    if candidate and len(parts) > 1:
-                        as_of = candidate
-                        query = parts[1]
-                        time_label = f" (as of {as_of.date()})"
-                except (ValueError, IndexError):
+                    kb_results = self._hub.world.knowledge_base.search(query, top_k=10)
+                except Exception:
                     pass
 
-                results = self._hub.world.knowledge_base.search(query, top_k=10, as_of=as_of)
-                display.write(f"[bold]KB Search:[/bold] `{query}`{time_label}")
-                if results:
-                    for d in results[:10]:
-                        vf = d.valid_from.strftime("%Y-%m") if d.valid_from else "-"
-                        vt = d.valid_to.strftime("%Y-%m") if d.valid_to else "now"
-                        display.write(f"  {d.title} [{d.domain or '-'}] {vf}~{vt}")
-                else:
-                    display.write("[dim]  No local results[/dim]")
-            else:
-                display.write("[dim]Search not available[/dim]")
+            # 3. MaterialCollector (web 聚合)
+            mc_results = None
+            if self._hub and self._hub.world.material_collector:
+                try:
+                    mc_results = await self._hub.world.material_collector.collect_from_web(query)
+                except Exception:
+                    pass
+
+            has_any = False
+
+            if web_results:
+                has_any = True
+                display.write(f"\n[#fea62b]Web (Spark):[/#fea62b] {len(web_results)} results")
+                for r in web_results[:5]:
+                    display.write(f"  [bold]{r.title[:80]}[/bold]")
+                    display.write(f"  [dim]{r.url}[/dim]")
+                    if r.summary:
+                        display.write(f"  {r.summary[:120]}")
+
+            if kb_results:
+                has_any = True
+                display.write(f"\n[#58a6ff]KnowledgeBase:[/#58a6ff] {len(kb_results)} results")
+                for d in kb_results[:5]:
+                    display.write(f"  {d.title} [{d.domain or '-'}]")
+
+            if mc_results:
+                has_any = True
+                display.write(f"\n[#3fb950]Web (Collector):[/#3fb950] {len(mc_results)} results")
+                for m in mc_results[:5]:
+                    title = m.get('title', m.get('source', '?'))
+                    snippet = str(m.get('content', m.get('snippet', '')))[:100]
+                    display.write(f"  [bold]{title[:60]}[/bold]")
+                    if snippet:
+                        display.write(f"  {snippet}")
+
+            if not has_any:
+                display.write("[dim]  No results from any source[/dim]")
+
+            display.write("[dim]---[/dim]")
 
         elif cmd in ("/extract", "/lx") and arg:
             parts = arg.split(maxsplit=1)

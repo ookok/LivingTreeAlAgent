@@ -105,4 +105,5 @@ SLASH_COMMANDS: dict[str, str] = {
     "/parse": "解析文档 — /parse <PDF路径>",
     "/fetch": "抓取网页 — /fetch <URL>",
     "/errors": "系统错误 — /errors | /errors clear",
+    "/narrative": "生命叙事 — 系统讲自己的故事",
 }

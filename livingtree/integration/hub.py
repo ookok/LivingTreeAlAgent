@@ -242,6 +242,28 @@ class IntegrationHub:
         self.world.web_reach = WebReach(consciousness=self.world.consciousness)
         logger.debug("WebReach initialized")
 
+        # ── Digital Life Form subsystems ──
+        from ..dna.biorhythm import Biorhythm
+        self.world.biorhythm = Biorhythm(world=self.world)
+        logger.debug("Biorhythm initialized")
+        
+        from ..dna.adaptive_ui import AdaptiveUI
+        self.world.adaptive_ui = AdaptiveUI(world=self.world)
+        logger.debug("AdaptiveUI initialized")
+        
+        from ..dna.anticipatory import Anticipatory
+        self.world.anticipatory = Anticipatory()
+        logger.debug("Anticipatory initialized")
+        
+        from ..dna.self_narrative import SelfNarrative
+        self.world.self_narrative = SelfNarrative(world=self.world)
+        self.world.self_narrative.birth()
+        logger.debug("SelfNarrative initialized")
+        
+        from ..network.collective import CollectiveConsciousness
+        self.world.collective = CollectiveConsciousness(world=self.world)
+        logger.debug("CollectiveConsciousness initialized")
+
         # Auto-discover vault-based providers
         try:
             from ..config.secrets import get_secret_vault
@@ -331,6 +353,10 @@ class IntegrationHub:
 
         self._started = True
         self._phase = 1
+        
+        if self.world.biorhythm:
+            await self.world.biorhythm.start()
+        
         await self.daemon.start()
         logger.info("🌳 LivingTree online — autonomous cycles active")
 
@@ -669,3 +695,4 @@ class IntegrationHub:
                 return False, {"error": str(e)}
         for name, fn in [("kb", _check_kb), ("cells", _check_cells), ("network", _check_network)]:
             self.world.self_healer.register_check(name, fn)
+

@@ -1079,6 +1079,14 @@ class ChatScreen(Screen):
             except ImportError:
                 display.write("[#d29922]WebReach not available (install bs4+lxml+readability-lxml)[/#d29922]")
 
+        elif cmd == "/narrative":
+            narr = getattr(self._hub.world, 'self_narrative', None) if self._hub else None
+            if narr:
+                display.write(narr.narrate())
+                display.write(f"[dim]Stats: {narr.stats()}[/dim]")
+            else:
+                display.write("[dim]Self-narrative not available[/dim]")
+
         elif cmd == "/errors":
             try:
                 from ...observability.error_interceptor import get_interceptor

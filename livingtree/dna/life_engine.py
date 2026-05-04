@@ -162,6 +162,24 @@ class LifeEngine:
                     logger.debug(f"MemoryPipeline: {e}")
 
             logger.info(f"Cycle {ctx.session_id} complete")
+
+            # ── Digital Life Form: pulse, learn, narrate, share ──
+            bio = getattr(self.world, 'biorhythm', None)
+            if bio: bio.pulse()
+            
+            anti = getattr(self.world, 'anticipatory', None)
+            if anti and ctx.user_input:
+                anti.learn(ctx.user_input, ctx.intent or "chat", ctx.metadata.get("success_rate", 0) >= 0.5)
+            
+            narr = getattr(self.world, 'self_narrative', None)
+            if narr:
+                narr.conversation(ctx.session_id, ctx.intent or "chat", ctx.metadata.get("success_rate", 0) >= 0.5)
+                if ctx.metadata.get("success_rate", 0) >= 0.7:
+                    narr.learned(ctx.intent[:60] if ctx.intent else "knowledge")
+            
+            coll = getattr(self.world, 'collective', None)
+            if coll: await coll.share_with_peers()
+            
             return ctx
         except Exception as e:
             logger.error(f"Cycle {ctx.session_id} failed: {e}")

@@ -159,6 +159,21 @@ class LivingTreeTuiApp(App):
         try:
             bar = self.query_one(StatusBar)
             bar.update_system_status(self._hub)
+            if self._hub and self._hub._started:
+                bar.update_mcp_health(healthy=0, total=0)
+
+            bio = getattr(self._hub.world, 'biorhythm', None) if self._hub else None
+            if bio:
+                bar.update_pulse(bio._get_snapshot())
+
+            try:
+                from ..observability.error_interceptor import get_interceptor
+                interceptor = get_interceptor()
+                if interceptor:
+                    stats = interceptor.get_stats()
+                    bar.update_error_count(stats["total_errors"], stats["recent_60s"])
+            except Exception:
+                pass
         except Exception:
             pass
 

@@ -16,6 +16,7 @@ class StatusBar(Horizontal):
         yield Label("^Q quit  Tab switch  Enter enter  ^D theme", id="footer-keys")
         yield Label("", id="mcp-chip")
         yield Label("", id="error-chip")
+        yield Label("", id="pulse-chip")
         yield Label("", id="footer-status")
 
     def set_boot_steps(self, steps: list[str]) -> None:
@@ -80,6 +81,19 @@ class StatusBar(Horizontal):
             else:
                 color = "red" if recent_60s > 0 else "yellow"
                 chip.update(f"[{color}]! {count} errors[/{color}]")
+        except Exception:
+            pass
+
+    def update_pulse(self, snapshot: dict) -> None:
+        try:
+            chip = self.query_one("#pulse-chip", Label)
+            hr = snapshot.get("heart_rate", 60)
+            state = snapshot.get("state", "active")
+            icons = {"active": "[#3fb950]●[/#3fb950]", "reflecting": "[#d29922]◉[/#d29922]",
+                     "resting": "[#8b949e]○[/#8b949e]", "dreaming": "[#d2a8ff]◎[/#d2a8ff]",
+                     "consolidating": "[#58a6ff]◉[/#58a6ff]", "waking": "[#fea62b]◐[/#fea62b]"}
+            icon = icons.get(state, "●")
+            chip.update(f"{icon} {state}")
         except Exception:
             pass
 

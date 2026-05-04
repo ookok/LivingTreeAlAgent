@@ -575,10 +575,13 @@ class ChatScreen(Screen):
         }
 
         if self._reasoning_effort != "off":
-            payload["reasoning_effort"] = self._reasoning_effort
+            try:
+                payload["reasoning_effort"] = self._reasoning_effort
+            except Exception:
+                pass
 
         collected = []
-        session = self._hub._session if self._hub else aiohttp.ClientSession()
+        session = self._hub._lazy_session() if self._hub else aiohttp.ClientSession()
         t0 = time.monotonic()
         try:
             async with session.post(

@@ -131,6 +131,8 @@ class DualModelConsciousness(Consciousness):
             self._free_models.append("longcat")
         if zhipu_api_key:
             self._free_models.append("zhipu")
+        if spark_api_key:
+            self._free_models.append("spark")
         if xiaomi_api_key:
             self._paid_models.append("xiaomi")
         if aliyun_api_key:

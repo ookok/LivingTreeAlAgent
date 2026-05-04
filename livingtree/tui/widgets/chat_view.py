@@ -53,7 +53,7 @@ class ChatMessage:
     def render_lines(self, width: int) -> list[Strip]:
         text = self._format()
         if not text:
-            return []
+            return [Strip.blank(max(width, 1))]
         from rich.console import Console as RichConsole
         console = RichConsole(
             file=StringIO(), force_terminal=False,
@@ -61,16 +61,16 @@ class ChatMessage:
         )
         strips = []
         try:
-            render_iter = console.render(text)
-            for line_output in render_iter:
-                segments = console.render(line_output)
-                for segment in segments:
-                    seg_text = segment.text
-                    seg_style = segment.style or Style()
-                    strips.append(Strip([Segment(seg_text, seg_style)]))
+            with console.capture() as capture:
+                console.print(text)
+            result = capture.get()
+            for line in result.split("\n"):
+                if line:
+                    strips.append(Strip([Segment(line, Style())]))
+                else:
+                    strips.append(Strip.blank(max(width, 1)))
         except Exception:
-            fallback = str(text).split("\n")
-            for line in fallback:
+            for line in str(text).split("\n"):
                 if line:
                     strips.append(Strip([Segment(line, Style())]))
         return strips

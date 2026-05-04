@@ -127,6 +127,7 @@ class RichLog(ScrollView, can_focus=True):
         self.read_only = read_only
         """When True: border displayed, mouse events allow terminal text selection."""
         if read_only:
+            self.can_focus = False
             self.border_title = "Chat Output"
             self.styles.border = ("solid", "#58a6ff")
         self.highlighter: Highlighter = ReprHighlighter()

@@ -372,17 +372,25 @@ class ChatScreen(Screen):
         try:
             bar = self.app.query_one(StatusBar)
             if self._hub and hasattr(self._hub.world, 'consciousness'):
-                status = self._hub.world.consciousness.get_election_status()
-                elected = status.get("elected", "deepseek")
-                count = len(status.get("providers", []))
+                try:
+                    status = self._hub.world.consciousness.get_election_status()
+                    elected = status.get("elected", "connecting...")
+                    count = len(status.get("providers", []))
+                except Exception:
+                    elected = "connecting..."
+                    count = 0
                 bar.update_llm_info(elected, count)
+            else:
+                bar.update_llm_info("connecting...")
         except Exception:
             pass
         try:
+            bar = self.app.query_one(StatusBar)
             bio = getattr(self._hub.world, 'biorhythm', None) if self._hub else None
             if bio:
-                bar = self.app.query_one(StatusBar)
                 bar.update_pulse(bio._get_snapshot())
+            else:
+                bar.update_pulse({"state": "waking"})
         except Exception:
             pass
 

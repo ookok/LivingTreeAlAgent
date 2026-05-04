@@ -210,22 +210,20 @@ class ChatScreen(Screen):
     def _display_write(self, text: str = "") -> None:
         try:
             d = self.query_one("#chat-display", RichLog)
-            from rich.markdown import Markdown as RichMarkdown
-            d.write(RichMarkdown(text or ""))
+            d.write(text)
         except Exception:
-            try:
-                d.write(text or "")
-            except Exception:
-                pass
+            pass
 
     def _render_response(self, display: RichLog, resp: str) -> None:
+        from rich.markdown import Markdown as RichMarkdown
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
         if self._reasoning_effort != "off":
             lines.append(f"[dim]Reasoning effort: {self._reasoning_effort}[/dim]")
-        lines.append(resp)
-        lines.append(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
-        for line in lines:
-            self._display_write(line)
+        try:
+            display.write(RichMarkdown(resp))
+        except Exception:
+            display.write(resp)
+        display.write(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
 
     @work(exclusive=False)
     async def action_fold_all(self) -> None:

@@ -38,6 +38,7 @@ from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
 from ..widgets.message_list import MessageList, ThinkingBlock
+from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler

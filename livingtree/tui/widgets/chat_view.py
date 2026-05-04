@@ -104,7 +104,13 @@ class ChatMessage:
         elif self.role == "assistant":
             return self._render_assistant()
         else:
-            # All unrecognized content: try Markdown first, then highlighted text
+            # Rich markup (e.g. [#58a6ff]text[/#58a6ff]) → use from_markup
+            if self.content.strip().startswith("[") and "[/" in self.content:
+                try:
+                    return Text.from_markup(self.content)
+                except Exception:
+                    pass
+            # Standard markdown → use Markdown renderer
             try:
                 return Markdown(self.content)
             except Exception:

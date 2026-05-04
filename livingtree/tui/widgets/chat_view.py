@@ -272,13 +272,16 @@ class ChatView(ScrollView):
         spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
         for i, msg in enumerate(self._messages):
-            lines = msg.render_lines(width)
+            lines = msg.render_lines(width - 10)
+            ts = f"[dim][{msg.timestamp}][/dim]"
             for j, line in enumerate(lines):
-                if j == 0 and self._streaming and i == len(self._messages) - 1 and msg.role in ("assistant",):
-                    prefix = f"[#d2a8ff]⠋[/#d2a8ff] "
-                    strips.append(Strip([Segment(prefix, Style())]) + line)
+                if j == 0:
+                    prefix = ts + " "
                 else:
-                    strips.append(line)
+                    prefix = " " * 9
+                if self._streaming and i == len(self._messages) - 1 and msg.role in ("assistant",):
+                    prefix += "[#d2a8ff]⠋[/#d2a8ff] "
+                strips.append(Strip([Segment(prefix, Style())]) + line)
 
         if self._status_text:
             strips.append(Strip.blank(width))

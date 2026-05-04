@@ -28,8 +28,14 @@ def main():
         sys.path.insert(0, project_root)
 
     if command in ("tui", "terminal", "textual"):
-        workspace = args[0] if args else os.getcwd()
+        workspace_args = [a for a in args if not a.startswith("-")]
+        workspace = workspace_args[0] if workspace_args else os.getcwd()
         if "--direct" in args:
+            # Use local textual source (same as debug_tui.py)
+            _local_textual = os.path.join(project_root, "livingtree", "tui", "textual", "src")
+            if os.path.isdir(_local_textual):
+                sys.path.insert(0, _local_textual)
+            os.chdir(project_root)
             from .tui.app import run_tui
             run_tui(workspace=workspace)
         else:

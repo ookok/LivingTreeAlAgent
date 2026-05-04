@@ -153,9 +153,12 @@ def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI 
         python, "-m", "livingtree", "tui", "--direct",
     ]
     _log(f"Launching: wt -d {ws}")
+    log_dir = os.path.join(ws, "data", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = open(os.path.join(log_dir, "wt_error.log"), "a")
     return subprocess.Popen(
         cmd, cwd=ws,
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=log_file,
     )
 
 

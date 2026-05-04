@@ -34,12 +34,18 @@ class LocalEmbeddingBackend(EmbeddingBackend):
 
     def __init__(self) -> None:
         self._model = None
+        self._model_loaded = False
+
+    def _ensure_model(self) -> None:
+        if self._model_loaded:
+            return
+        self._model_loaded = True
         if _HAS_SENTENCE_TRANSFORMERS:
             try:
                 self._model = SentenceTransformer(
-                    "all-MiniLM-L6-v2"  # small and fast
-                )  # type: ignore
-            except Exception as e:  # pragma: no cover
+                    "all-MiniLM-L6-v2"
+                )
+            except Exception as e:
                 logger.warning("Local embedding model load failed: %s", e)
                 self._model = None
 
@@ -60,6 +66,7 @@ class LocalEmbeddingBackend(EmbeddingBackend):
         return vecs
 
     def embed(self, texts: List[str]) -> List[List[float]]:
+        self._ensure_model()
         if self._model is not None:
             embeddings = self._model.encode(texts)  # type: ignore
             return embeddings.tolist()

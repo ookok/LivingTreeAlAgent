@@ -17,7 +17,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import (
-    Button, DirectoryTree, Input, Label, RichLog, TabbedContent, TabPane, TextArea, Tree,
+    Button, DirectoryTree, Input, Label, RichLog, Static, TabbedContent, TabPane, TextArea, Tree,
 )
 from rich.syntax import Syntax
 from rich.table import Table
@@ -43,6 +43,8 @@ def _build_tree(root_node, path: Path, depth: int = 0) -> None:
 
 
 class KnowledgeScreen(Screen):
+    BINDINGS = [("escape", "app.pop_screen", "返回")]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
@@ -52,6 +54,7 @@ class KnowledgeScreen(Screen):
     def set_hub(self, hub) -> None: self._hub = hub
 
     def compose(self) -> ComposeResult:
+        yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
         with Horizontal():
             with Vertical(id="kb-sidebar"):
                 yield Input(placeholder="🔍 Search knowledge...", id="kb-search")
@@ -78,6 +81,9 @@ class KnowledgeScreen(Screen):
                         yield RichLog(id="kb-graph", highlight=True, markup=True, wrap=True)
 
     def on_mount(self) -> None:
+        hub = getattr(self.app, '_hub', None)
+        if hub and hasattr(self, 'set_hub'):
+            self.set_hub(hub)
         ws = getattr(self.app, 'workspace', '.')
         self._workspace = Path(ws) if not isinstance(ws, Path) else ws
         self._populate_tree()

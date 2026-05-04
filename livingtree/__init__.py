@@ -11,41 +11,91 @@ Uses litellm with local DeepSeek pricing (no remote fetch).
 """
 
 import os
+
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 __version__ = "2.0.0"
 __author__ = "LivingTree Team"
 
-from .dna import LifeEngine, Genome, Consciousness, DefaultConsciousness, DualModelConsciousness, SafetyGuard
-from .cell import CellAI, CellRegistry, CellTrainer, Mitosis, Phage, Regen, Distillation
-from .knowledge import KnowledgeBase, VectorStore, KnowledgeGraph, FormatDiscovery, GapDetector
-from .capability import SkillFactory, ToolMarket, DocEngine, CodeEngine, MaterialCollector
-from .network import Node, Discovery, NATTraverser, Reputation
-from .execution import TaskPlanner, Orchestrator, SelfHealer
-from .integration import IntegrationHub, launch, LaunchMode
+# Lightweight imports — always available immediately
 from .config import LTAIConfig, get_config, reload_config
 from .observability import setup_observability, get_logger
-from .tui import LivingTreeTuiApp, ChatScreen, CodeScreen, DocsScreen, SettingsScreen
 
 __all__ = [
-    # Version
     "__version__",
-    # DNA
-    "LifeEngine", "Genome", "Consciousness", "DefaultConsciousness", "DualModelConsciousness", "SafetyGuard",
-    # Cell
-    "CellAI", "CellRegistry", "CellTrainer", "Mitosis", "Phage", "Regen", "Distillation",
-    # Knowledge
-    "KnowledgeBase", "VectorStore", "KnowledgeGraph", "FormatDiscovery", "GapDetector",
-    # Capability
+    "LifeEngine", "Genome", "Consciousness", "DefaultConsciousness",
+    "DualModelConsciousness", "SafetyGuard",
+    "CellAI", "CellRegistry", "CellTrainer", "Mitosis", "Phage", "Regen",
+    "Distillation", "SwiftDrillTrainer",
+    "KnowledgeBase", "VectorStore", "KnowledgeGraph", "FormatDiscovery",
+    "GapDetector",
     "SkillFactory", "ToolMarket", "DocEngine", "CodeEngine", "MaterialCollector",
-    # Network
     "Node", "Discovery", "NATTraverser", "Reputation",
-    # Execution
     "TaskPlanner", "Orchestrator", "SelfHealer",
-    # Integration
     "IntegrationHub", "launch", "LaunchMode",
-    # Config
     "LTAIConfig", "get_config", "reload_config",
     "setup_observability", "get_logger",
-    "LivingTreeTuiApp", "ChatScreen", "CodeScreen", "DocsScreen", "SettingsScreen",
+    "LivingTreeTuiApp", "ChatScreen", "CodeScreen", "KnowledgeScreen",
+    "SettingsScreen",
 ]
+
+# Lazy imports map — modules only loaded on first access
+_LAZY = {
+    # DNA
+    "LifeEngine": ".dna",
+    "Genome": ".dna",
+    "Consciousness": ".dna",
+    "DefaultConsciousness": ".dna",
+    "DualModelConsciousness": ".dna",
+    "SafetyGuard": ".dna",
+    # Cell
+    "CellAI": ".cell",
+    "CellRegistry": ".cell",
+    "CellTrainer": ".cell",
+    "Mitosis": ".cell",
+    "Phage": ".cell",
+    "Regen": ".cell",
+    "Distillation": ".cell",
+    "SwiftDrillTrainer": ".cell",
+    # Knowledge
+    "KnowledgeBase": ".knowledge",
+    "VectorStore": ".knowledge",
+    "KnowledgeGraph": ".knowledge",
+    "FormatDiscovery": ".knowledge",
+    "GapDetector": ".knowledge",
+    # Capability
+    "SkillFactory": ".capability",
+    "ToolMarket": ".capability",
+    "DocEngine": ".capability",
+    "CodeEngine": ".capability",
+    "MaterialCollector": ".capability",
+    # Network
+    "Node": ".network",
+    "Discovery": ".network",
+    "NATTraverser": ".network",
+    "Reputation": ".network",
+    # Execution
+    "TaskPlanner": ".execution",
+    "Orchestrator": ".execution",
+    "SelfHealer": ".execution",
+    # Integration
+    "IntegrationHub": ".integration",
+    "launch": ".integration",
+    "LaunchMode": ".integration",
+    # TUI
+    "LivingTreeTuiApp": ".tui",
+    "ChatScreen": ".tui",
+    "CodeScreen": ".tui",
+    "KnowledgeScreen": ".tui",
+    "SettingsScreen": ".tui",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY:
+        import importlib
+        mod = importlib.import_module(_LAZY[name], __package__)
+        attr = getattr(mod, name)
+        globals()[name] = attr
+        return attr
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

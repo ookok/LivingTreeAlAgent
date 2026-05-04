@@ -24,7 +24,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import (
-    Button, DirectoryTree, Input, Label, RichLog, Select, TabbedContent, TabPane, TextArea,
+    Button, DirectoryTree, Input, Label, RichLog, Select, Static, TabbedContent, TabPane, TextArea,
 )
 
 
@@ -42,6 +42,8 @@ EXT_TO_LANG = {".py": "python", ".js": "javascript", ".ts": "typescript",
 
 
 class CodeScreen(Screen):
+    BINDINGS = [("escape", "app.pop_screen", "返回")]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
@@ -55,6 +57,7 @@ class CodeScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
+        yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
         yield Horizontal(
             Vertical(
                 Input(placeholder="🔍 Search files (Ctrl+F)", id="code-search"),
@@ -79,6 +82,9 @@ class CodeScreen(Screen):
         )
 
     def on_mount(self) -> None:
+        hub = getattr(self.app, '_hub', None)
+        if hub and hasattr(self, 'set_hub'):
+            self.set_hub(hub)
         self._workspace = getattr(self.app, 'workspace', '.')
         self._workspace = str(self._workspace) if not isinstance(self._workspace, str) else self._workspace
         output = self.query_one("#code-output", RichLog)

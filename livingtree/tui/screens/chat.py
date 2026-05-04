@@ -2,33 +2,56 @@
 
 LLM returns markdown format for beautiful rendering.
 Task tree shows the LifeEngine pipeline in real-time.
-Multi-modal: text, file upload, image paste all in one input.
+Multi-modal: text, file upload, image paste, autocomplete.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from pathlib import Path
 from typing import Optional
 
 import aiohttp
 from datetime import datetime
-from textual import work, on
+from textual import work, on, events
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Input, Label, RichLog
+from textual.widgets import Button, Label, RichLog, Static, TextArea
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
 
-from ..widgets.file_picker import FilePicker
 from ..widgets.task_progress import TaskProgressPanel
+from ..widgets import native_dialogs
+from ..widgets import clipboard_handler
+from ..widgets import voice_handler
+from ..widgets import sound_effects
+
+# /commands with descriptions
+_COMMANDS = {
+    "/file": "预览文件内容 — /file 路径",
+    "/code": "AI 生成代码 — /code 描述",
+    "/report": "AI 生成报告 — /report 主题",
+    "/search": "搜索知识库 — /search 关键词",
+    "/analyze": "深度分析 — /analyze 问题",
+    "/translate": "翻译 — /translate 文本",
+    "/summary": "总结对话 — /summary",
+    "/clear": "清空聊天 — /clear",
+    "/help": "显示命令帮助 — /help",
+}
 
 
 class ChatScreen(Screen):
     """Streaming chat with markdown, task tree, and multi-modal input."""
+
+    BINDINGS = [
+        ("escape", "app.pop_screen", "返回"),
+        ("ctrl+c", "copy_selection", "复制"),
+        ("ctrl+enter", "send_from_binding", "发送"),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -40,17 +63,23 @@ class ChatScreen(Screen):
         self._pro = ""
         self._sending = False
         self._total_tokens = 0
+        self._attached_files: list[Path] = []
+        self._voice_active = False
 
     def set_hub(self, hub) -> None:
         self._hub = hub
         if hub and hasattr(hub, "config"):
             c = hub.config
-            self._api_key = c.model.deepseek_api_key
-            self._base_url = c.model.deepseek_base_url
-            self._flash = c.model.flash_model
-            self._pro = c.model.pro_model
+            self._api_key = c.model.deepseek_api_key or ""
+            self._base_url = c.model.deepseek_base_url or ""
+            self._flash = c.model.flash_model or ""
+            self._pro = c.model.pro_model or ""
+            logger.info(f"ChatScreen set_hub: api_key={'***' if self._api_key else 'EMPTY'}")
+        else:
+            logger.warning("ChatScreen set_hub: hub has no config")
 
     def compose(self) -> ComposeResult:
+        yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
         yield Horizontal(
             Vertical(
                 TaskProgressPanel(id="task-progress"),
@@ -58,16 +87,20 @@ class ChatScreen(Screen):
             ),
             Vertical(
                 RichLog(id="chat-display", highlight=True, markup=True, wrap=True),
+                Static("", id="autocomplete-hint"),
                 Container(
                     Horizontal(
-                        Input(placeholder="输入消息，Enter 发送...", id="chat-input"),
-                        Button("Send", variant="primary", id="send-btn"),
+                        TextArea("", id="chat-input", language=None, show_line_numbers=False),
+                        Button("发送", variant="primary", id="send-btn"),
                     ),
                     Horizontal(
-                        Label("[dim]Enter=Send | Shift+Enter=换行 | /命令 | Ctrl+P=面板[/dim]", id="chat-hints"),
-                        Button("File", variant="default", id="file-btn"),
+                        Label("[dim]Enter=发送 | Shift+Enter=换行 | /命令 | Ctrl+C=复制[/dim]", id="chat-hints"),
+                        Button("📎 文件", variant="default", id="file-btn"),
+                        Button("📁 目录", variant="default", id="folder-btn"),
+                        Button("🎤 语音", variant="default", id="voice-btn"),
+                        Button("💾 保存", variant="default", id="save-btn"),
+                        Button("📋 复制", variant="default", id="copy-btn"),
                         Button("Clear", variant="default", id="clear-btn"),
-                        Button("Status", variant="default", id="status-btn"),
                     ),
                     id="chat-input-container",
                 ),
@@ -76,21 +109,46 @@ class ChatScreen(Screen):
         )
 
     def on_mount(self) -> None:
+        hub = getattr(self.app, '_hub', None)
+        if hub and hasattr(self, 'set_hub'):
+            self.set_hub(hub)
         d = self.query_one("#chat-display", RichLog)
         d.write("[bold green]# 🌳 LivingTree AI Chat[/bold green]")
         d.write("")
+        if not getattr(self.app, '_hub_ready', False):
+            d.write("[yellow]⏳ 引擎正在后台初始化，对话功能暂不可用[/yellow]")
+            d.write("[dim]你可以先浏览其他页面，初始化完成后自动启用[/dim]")
+            d.write("")
         d.write("欢迎使用数字生命体 v2.0 智能对话系统")
         d.write("")
         d.write("[bold]快速上手[/bold]")
         d.write("  • 输入问题并按 [bold]Enter[/bold] 发送")
-        d.write("  • [bold]/file 路径[/bold]  预览文件内容")
-        d.write("  • [bold]/code 描述[/bold]  生成代码")
-        d.write("  • [bold]/report 主题[/bold]  生成报告")
-        d.write("  • [bold]/search 关键词[/bold]  搜索知识库")
+        d.write("  • [bold]/ 命令自动补全[/bold] — /file /code /report 等")
+        d.write("  • [bold]📎 选择文件[/bold] — 上传文件参与对话")
+        d.write("  • [bold]🎤 语音输入[/bold] — 说话转文字")
+        d.write("  • [bold]💾 保存对话[/bold] — 导出聊天记录")
+        d.write("  • [bold]Ctrl+V[/bold] — 粘贴图片/文件到输入框")
         d.write("")
         d.write("[bold]快捷键[/bold]")
-        d.write("  Ctrl+1~5 切换标签 | Ctrl+P 命令面板 | Ctrl+D 主题 | Ctrl+Q 退出")
+        d.write("  Tab切换 | Ctrl+P 命令面板 | Ctrl+D 主题 | Ctrl+Q 退出")
         d.write("")
+
+    # ── Autocomplete ──
+    def on_input_changed(self, event: TextArea.Changed) -> None:
+        if event.text_area.id != "chat-input":
+            return
+        text = event.text_area.text
+        hint = self.query_one("#autocomplete-hint", Static)
+        if text.startswith("/") and " " not in text:
+            matches = [c for c in _COMMANDS if c.startswith(text)]
+            if len(matches) == 1:
+                hint.update(f"[dim]{_COMMANDS[matches[0]]}[/dim]")
+            elif matches:
+                hint.update(f"[dim]{' | '.join(matches[:4])}[/dim]")
+            else:
+                hint.update("")
+        else:
+            hint.update("")
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -100,38 +158,134 @@ class ChatScreen(Screen):
         elif bid == "clear-btn":
             self._clear()
         elif bid == "file-btn":
-            self._pick_file()
-        elif bid == "status-btn":
-            await self._show_status()
+            await self._pick_file_native()
+        elif bid == "folder-btn":
+            await self._pick_folder_native()
+        elif bid == "voice-btn":
+            await self._voice_input()
+        elif bid == "copy-btn":
+            self._copy_last_response()
 
-    @on(Input.Submitted, "#chat-input")
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.value.strip():
-            await self._send()
+    def _copy_last_response(self) -> None:
+        """Copy the last AI response to clipboard."""
+        for msg in reversed(self._messages):
+            if msg["role"] == "assistant":
+                clipboard_handler.write_clipboard_text(msg["content"])
+                self.notify("已复制最新回复", timeout=2)
+                return
+        self.notify("暂无回复可复制", severity="warning", timeout=2)
 
-    def _pick_file(self) -> None:
-        def on_file(path: str):
-            inp = self.query_one("#chat-input", Input)
-            current = inp.value
-            p = Path(path)
-            size_kb = p.stat().st_size // 1024
-            if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
-                inp.value = f"{current}\n[image: {p.name} ({size_kb}KB)]\n".strip()
-                self.notify(f"图片已添加: {p.name}", timeout=2)
-            else:
-                inp.value = f"{current}\n[file: {p.name} ({size_kb}KB)]\n".strip()
-                self.notify(f"文件已添加: {p.name}", timeout=2)
+    def action_copy_selection(self) -> None:
+        """Ctrl+C — copy selected text or last response."""
+        try:
+            ta = self.query_one("#chat-input", TextArea)
+            sel = ta.selected_text
+            if sel:
+                clipboard_handler.write_clipboard_text(sel)
+                self.notify("已复制选中文本", timeout=2)
+                return
+        except Exception:
+            pass
+        self._copy_last_response()
 
-        self.app.push_screen(FilePicker(".", callback=on_file, title="选择文件"))
+    async def _pick_file_native(self) -> None:
+        path = await native_dialogs.open_file_dialog(title="选择文件")
+        if not path:
+            return
+        self._attached_files.append(path)
+        size_kb = path.stat().st_size // 1024 if path.exists() else 0
+        label = f"[image: {path.name} ({size_kb}KB)]" if path.suffix.lower() in (
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"
+        ) else f"[file: {path.name} ({size_kb}KB)]"
+        inp = self.query_one("#chat-input", TextArea)
+        inp.text = f"{inp.text}\n{label}".strip()
+        self.notify(f"已选择: {path.name}", timeout=2)
+
+    async def _pick_folder_native(self) -> None:
+        path = await native_dialogs.open_folder_dialog(title="选择文件夹")
+        if not path:
+            return
+        display = self.query_one("#chat-display", RichLog)
+        display.write(f"[bold]📁 工作目录切换为:[/bold] {path}")
+        self.notify(f"目录: {path}", timeout=3)
+
+    # ── Voice input ──
+    async def _voice_input(self) -> None:
+        if self._voice_active:
+            return
+        self._voice_active = True
+        self.notify("🎤 正在聆听... (10秒)", timeout=3)
+        text = await voice_handler.speech_to_text("zh-CN")
+        self._voice_active = False
+        if text:
+            inp = self.query_one("#chat-input", TextArea)
+            inp.value = f"{inp.value} {text}".strip()
+            self.notify(f"识别: {text[:30]}...", timeout=3)
+        else:
+            self.notify("未检测到语音", severity="warning", timeout=2)
+
+    # ── Save chat ──
+    async def _save_chat(self) -> None:
+        path = await native_dialogs.save_file_dialog(
+            title="保存聊天记录",
+            filetypes=[("Markdown", "*.md"), ("Text", "*.txt")],
+            defaultextension=".md",
+        )
+        if not path:
+            return
+        lines = []
+        for msg in self._messages:
+            role = "You" if msg["role"] == "user" else "AI"
+            lines.append(f"## {role}\n\n{msg['content']}\n")
+        path.write_text("\n".join(lines), encoding="utf-8")
+        self.notify(f"已保存: {path.name}", timeout=3)
+
+    # ── Paste handler ──
+    def _on_paste(self, event: events.Paste) -> None:
+        """Handle Ctrl+V paste — detect images from clipboard."""
+        if not event.text or len(event.text) < 10:
+            # Could be a binary paste — check clipboard for images
+            if clipboard_handler.clipboard_has_image():
+                img = clipboard_handler.get_clipboard_image()
+                if img:
+                    inp = self.query_one("#chat-input", TextArea)
+                    inp.value = f"{inp.value}\n[image: {img.name} ({len(img.data)//1024}KB)]".strip()
+                    self.notify(f"图片已粘贴: {img.name}", timeout=2)
+                    event.stop()
+                    return
+            # Check for files
+            files = clipboard_handler.get_clipboard_files()
+            if files:
+                for f in files:
+                    inp = self.query_one("#chat-input", TextArea)
+                    inp.value = f"{inp.value}\n[file: {f.name}]".strip()
+                self.notify(f"已粘贴 {len(files)} 个文件", timeout=2)
+                event.stop()
+                return
+
+    def _animate_thinking(self) -> None:
+        """Animate waiting indicator while AI is thinking."""
+        try:
+            sp = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            d = self.query_one("#chat-display", RichLog)
+            d.write(f"  [bold #fea62b]{sp[self._think_idx % len(sp)]}[/bold #fea62b] [italic dim]AI 正在生成回复...[/italic dim]")
+            self._think_idx += 1
+        except Exception:
+            pass
 
     async def _send(self) -> None:
         if self._sending:
             return
-        inp = self.query_one("#chat-input", Input)
-        text = inp.value.strip()
+        inp = self.query_one("#chat-input", TextArea)
+        text = inp.text.strip()
         if not text:
             return
-        inp.value = ""
+        if not self._hub:
+            display = self.query_one("#chat-display", RichLog)
+            display.write("\n[yellow]⏳ 引擎尚未就绪，请稍后再试[/yellow]")
+            self._sending = False
+            return
+        inp.text = ""
         self._sending = True
         display = self.query_one("#chat-display", RichLog)
         tp = self.query_one(TaskProgressPanel)
@@ -164,7 +318,8 @@ class ChatScreen(Screen):
         tp.update_step(1, "done", "retrieved")
 
         tp.update_step(2, "running", f"{'pro' if auto_pro else 'flash'} model")
-        display.write("[italic dim]AI thinking...[/italic dim]")
+        self._think_idx = 0
+        self._think_timer = self.set_interval(0.8, self._animate_thinking)
         try:
             resp = await self._stream(text, pro=auto_pro)
             display.write(f"\n[bold #58a6ff]AI:[/bold #58a6ff]\n{resp}\n[dim]---[/dim]")
@@ -173,6 +328,8 @@ class ChatScreen(Screen):
         except Exception as e:
             display.write(f"\n[bold red]Error:[/bold red] {e}")
             tp.update_step(2, "failed", str(e)[:40])
+        finally:
+            self._think_timer.stop()
 
         tp.update_step(3, "running", "formatting...")
         await asyncio.sleep(0.02)

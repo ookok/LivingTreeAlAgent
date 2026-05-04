@@ -8,12 +8,17 @@ from typing import Optional
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, ScrollableContainer
 from textual.screen import Screen
+from textual.containers import Horizontal, Vertical, ScrollableContainer
 from textual.widgets import (
-    Button, Input, Label, RichLog, Select, Switch, TabbedContent, TabPane,
+    Button, Input, Label, RichLog, Select, Static, Switch,
 )
+
+_SEP = Label("")
 
 
 class SettingsScreen(Screen):
+    BINDINGS = [("escape", "app.pop_screen", "返回")]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
@@ -22,17 +27,22 @@ class SettingsScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
-        with TabbedContent(id="settings-tabs"):
-            with TabPane("🔑 API"):
-                yield self._api_pane()
-            with TabPane("🧬 基因组"):
-                yield self._genome_pane()
-            with TabPane("🤖 训练"):
-                yield self._train_pane()
-            with TabPane("🧩 技能"):
-                yield self._skill_pane()
-            with TabPane("🔌 MCP"):
-                yield self._mcp_pane()
+        yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
+        with ScrollableContainer(id="settings-form"):
+            yield Label("[bold #fea62b]🔑 API 密钥[/bold #fea62b]")
+            yield self._api_pane()
+            yield _SEP
+            yield Label("[bold #fea62b]🧬 基因组[/bold #fea62b]")
+            yield self._genome_pane()
+            yield _SEP
+            yield Label("[bold #fea62b]🤖 训练[/bold #fea62b]")
+            yield self._train_pane()
+            yield _SEP
+            yield Label("[bold #fea62b]🧩 技能[/bold #fea62b]")
+            yield self._skill_pane()
+            yield _SEP
+            yield Label("[bold #fea62b]🔌 MCP[/bold #fea62b]")
+            yield self._mcp_pane()
 
     def _api_pane(self) -> ScrollableContainer:
         return ScrollableContainer(

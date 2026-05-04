@@ -15,11 +15,13 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import (
-    Button, Input, Label, RichLog, Select, TabbedContent, TabPane, TextArea,
+    Button, Input, Label, RichLog, Select, Static, TabbedContent, TabPane, TextArea,
 )
 
 
 class ToolsScreen(Screen):
+    BINDINGS = [("escape", "app.pop_screen", "返回")]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
@@ -29,6 +31,7 @@ class ToolsScreen(Screen):
         self._hub = hub
 
     def compose(self) -> ComposeResult:
+        yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
         with TabbedContent(id="tools-tabs"):
             with TabPane("📄 PDF/Doc", id="pdf-tab"):
                 yield Vertical(
@@ -75,6 +78,9 @@ class ToolsScreen(Screen):
                 )
 
     def on_mount(self) -> None:
+        hub = getattr(self.app, '_hub', None)
+        if hub and hasattr(self, 'set_hub'):
+            self.set_hub(hub)
         output = self.query_one("#pdf-output", RichLog)
         output.write("[bold]📄 Document Processor[/bold]")
         output.write("[dim]Extract text from PDF/DOCX, then summarize with AI.[/dim]")

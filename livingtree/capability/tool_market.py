@@ -166,3 +166,31 @@ def _basic_diagram(desc: str) -> str:
     )
 
 
+def _detect_diagram_type(desc: str) -> str:
+    d = desc.lower()
+    for kw, tp in [("流程", "flowchart"), ("架构", "architecture"), ("时序", "sequence"),
+                   ("树", "tree"), ("表", "table"), ("组件", "component")]:
+        if kw in d:
+            return tp
+    return "flowchart"
+
+
+def register_seed_tools(market: ToolMarket) -> None:
+    """Register fundamental physical models (not learned — laws of nature)."""
+    market.register("gaussian_plume", "Gaussian plume dispersion model (EIA)",
+                    category="physics", handler=_gaussian_plume,
+                    input_schema={"Q": "number", "u": "number", "x": "number",
+                                  "y": "number", "z": "number", "stability": "string",
+                                  "He": "number"})
+    market.register("noise_attenuation", "Noise attenuation distance model",
+                    category="physics", handler=_noise_attenuation,
+                    input_schema={"Lw": "number", "r": "number", "ground_type": "string"})
+    market.register("dispersion_coeff",
+                    "Pasquill-Gifford dispersion coefficients (GB/T3840-1991)",
+                    category="physics", handler=_dispersion_coeff,
+                    input_schema={"x": "number", "stability": "string"})
+    market.register("generate_diagram", "Generate ASCII diagram from description",
+                    category="visualization", handler=_generate_diagram,
+                    input_schema={"description": "string"})
+
+

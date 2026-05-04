@@ -44,7 +44,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-effort-label { width: auto; color: #d2a8ff; padding: 0 1; }
 #chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
 
-#sidebar { width: 30; height: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; dock: left; }
+#sidebar { width: 30; height: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; }
 #main-area { width: 1fr; height: 1fr; }
 #chat-body { height: 1fr; }
 #chat-display {

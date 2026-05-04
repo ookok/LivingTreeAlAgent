@@ -211,23 +211,17 @@ class ChatScreen(Screen):
 
     def _display_write(self, text: str = "") -> None:
         try:
-            ml = self.query_one("#chat-display", ChatView)
-            ml.add_message(text)
+            cv = self.query_one("#chat-display", ChatView)
+            cv.write(text)
         except Exception:
             pass
 
     def _render_response(self, display, resp: str) -> None:
         try:
-            ml = self.query_one("#chat-display", ChatView)
-            from rich.markdown import Markdown as RichMarkdown
-            from rich.console import Console
-            from io import StringIO
-            buf = StringIO()
-            Console(file=buf, force_terminal=False, width=80).print(RichMarkdown(resp))
-            ml.add_message(buf.getvalue(), "assistant")
+            cv = self.query_one("#chat-display", ChatView)
+            cv.assistant_message(resp)
         except Exception:
-            ml = self.query_one("#chat-display", ChatView)
-            ml.add_message(resp, "assistant")
+            pass
         from rich.markdown import Markdown as RichMarkdown
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
         if self._reasoning_effort != "off":
@@ -756,6 +750,10 @@ class ChatScreen(Screen):
             self._display_write(f"\n[dim]Memory context loaded ({self._memory.count_entries()} entries)[/dim]")
 
         self._display_write(f"\n[bold green]You:[/bold green] {text}")
+        try:
+            self.query_one("#chat-display", ChatView).user_message(text)
+        except Exception:
+            pass
         self._messages.append({"role": "user", "content": text})
         summary = self._make_summary(text)
         self._blocks.append({"role": "user", "content": text, "collapsed": False, "summary": summary})
@@ -832,15 +830,6 @@ class ChatScreen(Screen):
         inp.text = text
         self._update_pending_preview()
         await self._send()
-
-    def _render_response(self, display: RichLog, resp: str) -> None:
-        lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
-        if self._reasoning_effort != "off":
-            lines.append(f"[dim]Reasoning effort: {self._reasoning_effort}[/dim]")
-        lines.append(resp)
-        lines.append(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
-        for line in lines:
-            self._display_write(line)
 
     def _update_cache_stats(self) -> None:
         self._update_topbar()

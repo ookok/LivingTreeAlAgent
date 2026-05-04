@@ -19,11 +19,12 @@ Screen { background: #0a0c10; color: #c9d1d9; layers: base overlay; }
 .card-row { height: auto; align-horizontal: center; padding: 1 4; }
 
 /* ═══ Status bar ═══ */
-StatusBar { dock: bottom; height: 1; background: #161b22; border-top: solid #30363d; padding: 0 2; }
+StatusBar { dock: bottom; height: 1; min-height: 1; background: #161b22; border-top: solid #30363d; padding: 0 2; }
 #footer-keys { width: 2fr; color: #484f58; }
-#mcp-chip { width: auto; color: #58a6ff; content-align: center middle; padding: 0 1; }
-#error-chip { width: auto; content-align: center middle; padding: 0 1; }
-#footer-status { width: 1fr; color: #58a6ff; content-align: right middle; }
+#footer-llm { width: auto; color: #58a6ff; padding: 0 1; }
+#footer-pulse { width: auto; padding: 0 1; }
+#error-chip { width: auto; }
+#footer-status { width: auto; color: #58a6ff; }
 
 /* ═══ Back link ═══ */
 #back-link { dock: top; height: 1; color: #58a6ff; padding: 0 2; background: #161b22; border-bottom: solid #30363d; }

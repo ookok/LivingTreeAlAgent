@@ -64,7 +64,6 @@ class ChatScreen(Screen):
     """Streaming chat with full toolkit."""
 
     BINDINGS = [
-        ("escape", "handle_escape", "返回/取消"),
         ("ctrl+c", "copy_selection", "复制"),
         ("ctrl+shift+c", "copy_transcript", "全复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
@@ -260,7 +259,7 @@ class ChatScreen(Screen):
             self._pro = c.model.pro_model or ""
 
     def compose(self) -> ComposeResult:
-        yield Static("[dim]esc back[/dim]", id="back-link")
+        yield Static("[#58a6ff]← Back[/#58a6ff] [dim](click to return)[/dim]", id="back-link")
         yield Horizontal(
             Label("", id="chat-model-label"),
             Label("", id="chat-effort-label"),

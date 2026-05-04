@@ -123,17 +123,13 @@ class ChatScreen(Screen):
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True, max_lines=1000)
-                yield Static("", id="pending-preview")
-                yield Static("", id="autocomplete-hint")
                 yield Horizontal(
-                    Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
-                    Button("File", id="file-btn"),
-                    Button("Folder", id="folder-btn"),
-                    Button("Voice", id="voice-btn"),
-                    Button("Save", id="save-btn"),
-                    Button("Copy", id="copy-btn"),
+                    Label("", id="llm-status"),
+                    Label("", id="pulse-status"),
+                    Label("", id="error-status"),
+                    Label("[dim]Enter send  Ctrl+S stash  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
+                    Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
                     Button("Clear", id="clear-btn"),
-                    Label("[dim]Ctrl+S stash  Alt+R history  Ctrl+C copy[/dim]", id="action-hints"),
                     id="action-bar",
                 )
                 yield Container(
@@ -189,27 +185,65 @@ class ChatScreen(Screen):
     def _update_topbar(self) -> None:
         try:
             self.query_one("#chat-model-label", Label).update("[bold #58a6ff]DeepSeek V4 Pro[/bold #58a6ff]")
-        except Exception:
-            pass
+        except Exception: pass
         try:
             self.query_one("#chat-effort-label", Label).update(f"[#d2a8ff]{self._reasoning_effort.upper()}[/#d2a8ff]")
-        except Exception:
-            pass
+        except Exception: pass
         try:
             self.query_one("#chat-tokens-label", Label).update(f"[#8b949e]{self._total_tokens // 1000}K[/#8b949e]")
-        except Exception:
-            pass
+        except Exception: pass
         try:
             cost = self._total_tokens * 0.00000014
             self.query_one("#chat-cost-label", Label).update(f"[#3fb950]¥{cost:.4f}[/#3fb950]" if cost > 0 else "[#8b949e]¥0[/#8b949e]")
-        except Exception:
-            pass
+        except Exception: pass
         try:
             if self._cache_tracker:
                 snap = self._cache_tracker.snapshot()
                 self.query_one("#chat-cache-label", Label).update(f"[#484f58]cache {snap['cache_hit_pct']:.0f}%[/#484f58]")
-        except Exception:
-            pass
+        except Exception: pass
+
+        self._update_status_bar()
+
+    def _update_status_bar(self) -> None:
+        try:
+            provider = "deepseek"
+            if self._hub and hasattr(self._hub.world, 'consciousness'):
+                status = self._hub.world.consciousness.get_election_status()
+                provider = status.get("elected", "deepseek")
+                count = len(status.get("providers", []))
+                self.query_one("#llm-status", Label).update(f"[#58a6ff]LLM: {provider}[/#58a6ff] ({count})")
+        except Exception: pass
+
+        try:
+            bio = getattr(self._hub.world, 'biorhythm', None) if self._hub else None
+            if bio:
+                snap = bio._get_snapshot()
+                icons = {"active": "[#3fb950]● active[/#3fb950]", "reflecting": "[#d29922]◉ reflect[/#d29922]", "resting": "[#8b949e]○ rest[/#8b949e]", "dreaming": "[#d2a8ff]◎ dream[/#d2a8ff]"}
+                self.query_one("#pulse-status", Label).update(icons.get(snap["state"], ""))
+        except Exception: pass
+
+        try:
+            from ...observability.error_interceptor import get_interceptor
+            ei = get_interceptor()
+            if ei:
+                s = ei.get_stats()
+                if s["total_errors"] > 0:
+                    self.query_one("#error-status", Label).update(f"[#f85149]!{s['total_errors']} err[/#f85149]")
+        except Exception: pass
+
+    @work(exclusive=False)
+    async def _switch_llm(self) -> None:
+        if not self._hub:
+            self.notify("Backend not ready", severity="warning", timeout=2)
+            return
+        c = self._hub.world.consciousness
+        self._display_write("[#58a6ff]Re-electing LLM provider...[/#58a6ff]\n")
+        elected = await c._elect()
+        status = c.get_election_status()
+        providers = ", ".join(status.get("providers", []))
+        self._display_write(f"[#3fb950]Elected: {elected}[/#3fb950] | Pool: [{providers}]\n")
+        self._update_status_bar()
+        self.notify(f"Switched to {elected}", timeout=3)
 
     # ── Autocomplete ──
     def on_input_changed(self, event: TextArea.Changed) -> None:
@@ -240,18 +274,8 @@ class ChatScreen(Screen):
         bid = event.button.id
         if bid == "clear-btn":
             self._clear()
-        elif bid == "file-btn":
-            await self._pick_file_native()
-        elif bid == "folder-btn":
-            await self._pick_folder_native()
-        elif bid == "voice-btn":
-            await self._voice_input()
-        elif bid == "copy-btn":
-            self._copy_last_response()
-        elif bid == "save-btn":
-            await self._save_chat()
-        elif bid == "effort-btn":
-            self.action_cycle_effort()
+        elif bid == "switch-llm-btn":
+            await self._switch_llm()
 
     # ── Reasoning effort ──
     @work(exclusive=False)

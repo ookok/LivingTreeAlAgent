@@ -210,9 +210,13 @@ class ChatScreen(Screen):
     def _display_write(self, text: str = "") -> None:
         try:
             d = self.query_one("#chat-display", RichLog)
-            d.write(text)
+            from rich.markdown import Markdown as RichMarkdown
+            d.write(RichMarkdown(text or ""))
         except Exception:
-            pass
+            try:
+                d.write(text or "")
+            except Exception:
+                pass
 
     def _render_response(self, display: RichLog, resp: str) -> None:
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
@@ -339,12 +343,6 @@ class ChatScreen(Screen):
     def _display_clear(self) -> None:
         try:
             self.query_one("#chat-display", RichLog).clear()
-        except Exception:
-            pass
-    def _display_write(self, text: str = "") -> None:
-        try:
-            d = self.query_one("#chat-display", RichLog)
-            d.write(text)
         except Exception:
             pass
 

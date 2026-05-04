@@ -204,12 +204,6 @@ class ChatScreen(Screen):
         except Exception:
             pass
 
-    # ── Enter to send ──
-    @on(TextArea.Submitted, "#chat-input")
-    async def _on_chat_submit(self, event: TextArea.Submitted) -> None:
-        event.stop()
-        await self._send()
-
     # ── Autocomplete ──
     def on_input_changed(self, event: TextArea.Changed) -> None:
         if event.text_area.id != "chat-input":

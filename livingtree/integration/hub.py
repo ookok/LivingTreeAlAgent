@@ -242,6 +242,27 @@ class IntegrationHub:
         self.world.web_reach = WebReach(consciousness=self.world.consciousness)
         logger.debug("WebReach initialized")
 
+        # Auto-discover vault-based providers
+        try:
+            from ..config.secrets import get_secret_vault
+            from ..treellm.providers import OpenAILikeProvider
+            vault = get_secret_vault()
+            vault_providers = [
+                ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
+            ]
+            for name, key_name, url_name, model_name, default_model in vault_providers:
+                key = vault.get(key_name, "")
+                if key:
+                    base_url = vault.get(url_name, "")
+                    model = vault.get(model_name, "") or default_model
+                    self.world.consciousness._llm.add_provider(OpenAILikeProvider(
+                        name=name, base_url=base_url, api_key=key, default_model=model,
+                    ))
+                    self.world.consciousness._paid_models.append(name)
+                    logger.info(f"Vault provider: {name} ({model})")
+        except Exception as e:
+            logger.debug(f"Vault providers: {e}")
+
         from ..dna.conversation_dna import ConversationDNA
         self.world.conversation_dna = ConversationDNA(world=self.world)
         logger.debug("ConversationDNA initialized")

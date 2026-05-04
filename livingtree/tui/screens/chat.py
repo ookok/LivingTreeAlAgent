@@ -44,10 +44,13 @@ from ..widgets.user_memory import UserMemory
 
 from ...config.system_config import (
     SLASH_COMMANDS as _COMMANDS,
+    _HIDDEN_COMMANDS,
     REASONING_EFFORTS,
     PIPELINE_INTENT_TRIGGERS,
     PRO_REASONING_INTENT_TRIGGERS,
 )
+
+_ALL_COMMANDS = {**_COMMANDS, **_HIDDEN_COMMANDS}
 
 REASONING_EFFORTS = REASONING_EFFORTS
 TOOL_OUTPUT_DIR = ".livingtree/tool_outputs"
@@ -1108,6 +1111,7 @@ class ChatScreen(Screen):
             display.write("[bold]Commands[/bold]")
             for cname, desc in sorted(_COMMANDS.items()):
                 display.write(f"  [bold]{cname}[/bold] — {desc}")
+            display.write(f"\n[dim]+ {len(_HIDDEN_COMMANDS)} hidden commands available[/dim]")
 
         else:
             display.write(f"[dim]Unknown: `{cmd}` | /help for commands[/dim]")

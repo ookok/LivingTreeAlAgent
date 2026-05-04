@@ -29,7 +29,7 @@ from textual import work, on, events
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Label, MessageList, Static, TextArea
+from textual.widgets import Button, Label, Static, TextArea
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax

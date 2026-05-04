@@ -13,7 +13,8 @@ from __future__ import annotations
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
-from textual.segment import Segment
+from rich.segment import Segment
+from rich.style import Style
 
 from rich.markdown import Markdown
 from rich.console import Console, RenderableType

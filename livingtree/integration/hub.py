@@ -94,6 +94,9 @@ class IntegrationHub:
                 dmxapi_api_key=self.config.model.dmxapi_api_key,
                 dmxapi_base_url=self.config.model.dmxapi_base_url,
                 dmxapi_default_model=self.config.model.dmxapi_default_model,
+                spark_api_key=self.config.model.spark_api_key,
+                spark_base_url=self.config.model.spark_base_url,
+                spark_default_model=self.config.model.spark_default_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )

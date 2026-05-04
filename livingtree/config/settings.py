@@ -74,6 +74,10 @@ class ModelConfig(BaseModel):
     dmxapi_api_key: str = ""
     dmxapi_default_model: str = "gpt-5-mini"
 
+    spark_base_url: str = "https://maas-api.cn-huabei-1.xf-yun.com/v2"
+    spark_api_key: str = ""
+    spark_default_model: str = "xdeepseekv3"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -333,6 +337,10 @@ def _load_config() -> LTAIConfig:
         if dmxapi_key:
             config.model.dmxapi_api_key = dmxapi_key
             logger.info("Loaded dmxapi_api_key from encrypted vault")
+        spark_key = vault.get("spark_api_key", "")
+        if spark_key:
+            config.model.spark_api_key = spark_key
+            logger.info("Loaded spark_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

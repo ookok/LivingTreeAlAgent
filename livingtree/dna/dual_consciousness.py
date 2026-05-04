@@ -55,6 +55,9 @@ class DualModelConsciousness(Consciousness):
         dmxapi_api_key: str = "",
         dmxapi_base_url: str = "",
         dmxapi_default_model: str = "gpt-5-mini",
+        spark_api_key: str = "",
+        spark_base_url: str = "",
+        spark_default_model: str = "xdeepseekv3",
     ):
         self.flash_model = flash_model
         self.pro_model = pro_model
@@ -112,6 +115,14 @@ class DualModelConsciousness(Consciousness):
                 api_key=dmxapi_api_key,
                 default_model=dmxapi_default_model,
             ))
+        if spark_api_key:
+            from ..treellm.providers import OpenAILikeProvider
+            self._llm.add_provider(OpenAILikeProvider(
+                name="spark",
+                base_url=spark_base_url or "https://maas-api.cn-huabei-1.xf-yun.com/v2",
+                api_key=spark_api_key,
+                default_model=spark_default_model,
+            ))
 
         # ── Election order: free models first ──
         self._free_models = []
@@ -126,6 +137,8 @@ class DualModelConsciousness(Consciousness):
             self._paid_models.append("aliyun")
         if dmxapi_api_key:
             self._paid_models.append("dmxapi")
+        if spark_api_key:
+            self._paid_models.append("spark")
         if api_key:
             self._paid_models.append("deepseek")
 

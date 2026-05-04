@@ -95,7 +95,6 @@ class ChatScreen(Screen):
         self._think_idx = 0
         self._lsp = None
         self._mcp_health = 0
-        self._display_lines: list[str] = []
 
     def set_hub(self, hub) -> None:
         self._hub = hub
@@ -121,7 +120,7 @@ class ChatScreen(Screen):
                 yield TaskProgressPanel(id="task-progress")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield TextArea("", id="chat-display", read_only=True, show_line_numbers=False, language=None)
+                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True)
                 yield Static("", id="pending-preview")
                 yield Static("", id="autocomplete-hint")
                 yield Horizontal(
@@ -158,31 +157,33 @@ class ChatScreen(Screen):
             pass
 
         d = self.query_one("#chat-display", TextArea)
-        self._write("[#58a6ff]# LivingTree[/#58a6ff]")
+        self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model
             if lc.longcat_api_key:
-                self._write(f"  [#8b949e]LongCat {lc.longcat_models}[/#8b949e]")
+                self._display_write(f"  [#8b949e]LongCat {lc.longcat_models}[/#8b949e]")
         if not getattr(self.app, '_hub_ready', False):
-            self._write("  [#d29922]initializing...[/#d29922]")
-        self._write("")
-        self._write("[bold]Quick Start[/bold]")
-        self._write("  Type a message and press [bold]Enter[/bold]")
-        self._write("  [bold]Ctrl+S[/bold] stash draft | [bold]Alt+R[/bold] search history")
-        self._write("  [bold]Shift+Tab[/bold] cycle effort | [bold]Ctrl+C[/bold] copy")
-        self._write("  [bold]/search[/bold] multi-source | [bold]/pipeline[/bold] auto-gen")
-        self._write("  [bold]/file[/bold] preview | [bold]/fetch[/bold] web scrape")
-        self._write("  [bold]/help[/bold] all commands")
-        self._write("")
+            self._display_write("  [#d29922]initializing...[/#d29922]")
+        self._display_write("")
+        self._display_write("[bold]Quick Start[/bold]")
+        self._display_write("  Type a message and press [bold]Enter[/bold]")
+        self._display_write("  [bold]Ctrl+S[/bold] stash draft | [bold]Alt+R[/bold] search history")
+        self._display_write("  [bold]Shift+Tab[/bold] cycle effort | [bold]Ctrl+C[/bold] copy")
+        self._display_write("  [bold]/search[/bold] multi-source | [bold]/pipeline[/bold] auto-gen")
+        self._display_write("  [bold]/file[/bold] preview | [bold]/fetch[/bold] web scrape")
+        self._display_write("  [bold]/help[/bold] all commands")
+        self._display_write("")
 
 
-    def _write(self, text: str = ""):
-        if text:
-            self._display_lines.append(text)
+    def _display_clear(self) -> None:
         try:
-            ta = self.query_one("#chat-display", TextArea)
-            ta.load_text(chr(10).join(self._display_lines[-500:]))
-            ta.scroll_end(animate=False)
+            self.query_one("#chat-display", RichLog).clear()
+        except Exception:
+            pass
+    def _display_write(self, text: str = "") -> None:
+        try:
+            d = self.query_one("#chat-display", RichLog)
+            d.write(text)
         except Exception:
             pass
 
@@ -291,12 +292,12 @@ class ChatScreen(Screen):
         if self._history_visible:
             return
 
-        self._write("\n[bold #58a6ff]History (type to filter, Enter=restore, Esc=dismiss)[/bold #58a6ff]")
+        self._display_write("\n[bold #58a6ff]History (type to filter, Enter=restore, Esc=dismiss)[/bold #58a6ff]")
         recent = self._history[-20:]
         for i, entry in enumerate(reversed(recent)):
             preview = entry[:100] + ("..." if len(entry) > 100 else "")
-            self._write(f"  [dim]{i+1}.[/dim] {preview}")
-        self._write("[dim]---[/dim]")
+            self._display_write(f"  [dim]{i+1}.[/dim] {preview}")
+        self._display_write("[dim]---[/dim]")
         self._history_visible = False
 
     # ── Pending input preview ──
@@ -366,7 +367,7 @@ class ChatScreen(Screen):
         if not path:
             return
         display = self.query_one("#chat-display", TextArea)
-        self._write(f"[bold]Working dir:[/bold] {path}")
+        self._display_write(f"[bold]Working dir:[/bold] {path}")
         self.notify(f"Folder: {path}", timeout=3)
 
     # ── Voice ──
@@ -449,7 +450,7 @@ class ChatScreen(Screen):
             idx = self._think_idx % len(sp)
             self._think_idx += 1
             d = self.query_one("#chat-display", TextArea)
-            self._write(f"  [bold #fea62b]{sp[idx]}[/bold #fea62b] [italic dim]AI thinking...[/italic dim]")
+            self._display_write(f"  [bold #fea62b]{sp[idx]}[/bold #fea62b] [italic dim]AI thinking...[/italic dim]")
         except Exception:
             pass
 
@@ -478,7 +479,7 @@ class ChatScreen(Screen):
 
         if not self._hub:
             display = self.query_one("#chat-display", TextArea)
-            self._write("\n[yellow]Engine not ready yet[/yellow]")
+            self._display_write("\n[yellow]Engine not ready yet[/yellow]")
             return
 
         inp.text = ""
@@ -499,9 +500,9 @@ class ChatScreen(Screen):
 
         memory_ctx = self._memory.get_context_block()
         if memory_ctx:
-            self._write(f"\n[dim]Memory context loaded ({self._memory.count_entries()} entries)[/dim]")
+            self._display_write(f"\n[dim]Memory context loaded ({self._memory.count_entries()} entries)[/dim]")
 
-        self._write(f"\n[bold green]You:[/bold green] {text}")
+        self._display_write(f"\n[bold green]You:[/bold green] {text}")
         self._messages.append({"role": "user", "content": text})
 
         auto_pro = len(text) > 200 or any(kw in text for kw in PRO_REASONING_INTENT_TRIGGERS)
@@ -533,7 +534,7 @@ class ChatScreen(Screen):
             self._messages.append({"role": "assistant", "content": resp})
             tp.update_step(2, "done", f"{len(resp)} chars")
         except Exception as e:
-            self._write(f"\n[bold red]Error:[/bold red] {e}")
+            self._display_write(f"\n[bold red]Error:[/bold red] {e}")
             tp.update_step(2, "failed", str(e)[:40])
         finally:
             if self._think_timer:
@@ -568,7 +569,7 @@ class ChatScreen(Screen):
         lines.append(resp)
         lines.append(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
         for line in lines:
-            self._write(line)
+            self._display_write(line)
 
     def _update_cache_stats(self) -> None:
         self._update_topbar()
@@ -656,13 +657,13 @@ class ChatScreen(Screen):
 
                                 reasoning = delta.get("reasoning_content", "")
                                 if reasoning and self._reasoning_effort != "off":
-                                    self._write(f"[dim italic]Think: {reasoning[:100]}...[/dim italic]")
+                                    self._display_write(f"[dim italic]Think: {reasoning[:100]}...[/dim italic]")
 
                                 token = delta.get("content", "")
                                 if token:
                                     collected.append(token)
                                     if len(collected) % 4 == 0:
-                                        self._write("".join(collected[-4:]))
+                                        self._display_write("".join(collected[-4:]))
 
                                 usage = data.get("usage", {})
                                 if usage and self._cache_tracker:
@@ -809,12 +810,12 @@ class ChatScreen(Screen):
         if cmd == "/stash":
             if arg == "list":
                 drafts = self._stash.list()
-                self._write("[bold]Stashed Drafts[/bold]")
+                self._display_write("[bold]Stashed Drafts[/bold]")
                 if drafts:
                     for d in drafts:
-                        self._write(f"  {d['index']}. {d['preview']} [dim]({d['timestamp'][:16]})[/dim]")
+                        self._display_write(f"  {d['index']}. {d['preview']} [dim]({d['timestamp'][:16]})[/dim]")
                 else:
-                    self._write("  [dim]No stashed drafts[/dim]")
+                    self._display_write("  [dim]No stashed drafts[/dim]")
             elif arg == "pop":
                 draft = self._stash.pop()
                 if draft:
@@ -822,12 +823,12 @@ class ChatScreen(Screen):
                     inp.text = draft.text
                     self.notify(f"Draft restored ({len(draft.text)} chars)", timeout=2)
                 else:
-                    self._write("[dim]No drafts to restore[/dim]")
+                    self._display_write("[dim]No drafts to restore[/dim]")
             elif arg == "clear":
                 count = self._stash.clear()
-                self._write(f"[dim]Cleared {count} drafts[/dim]")
+                self._display_write(f"[dim]Cleared {count} drafts[/dim]")
             else:
-                self._write(f"[dim]/stash list|pop|clear (Ctrl+S to stash current)[/dim]")
+                self._display_write(f"[dim]/stash list|pop|clear (Ctrl+S to stash current)[/dim]")
 
         elif cmd == "/effort":
             efforts = ["off", "high", "max"]
@@ -840,51 +841,51 @@ class ChatScreen(Screen):
                     btn.label = f"Effort:{arg.upper()}"
                 except Exception:
                     pass
-                self._write(f"[dim]Reasoning effort: {arg.upper()}[/dim]")
+                self._display_write(f"[dim]Reasoning effort: {arg.upper()}[/dim]")
             else:
-                self._write(f"[dim]Current: [bold]{self._reasoning_effort.upper()}[/bold] | /effort off|high|max[/dim]")
+                self._display_write(f"[dim]Current: [bold]{self._reasoning_effort.upper()}[/bold] | /effort off|high|max[/dim]")
 
         elif cmd == "/memory":
             if arg == "show":
                 content = self._memory.read()
-                self._write(f"[bold]User Memory[/bold]\n{content}" if content else "[dim]No memory entries[/dim]")
+                self._display_write(f"[bold]User Memory[/bold]\n{content}" if content else "[dim]No memory entries[/dim]")
             elif arg == "clear":
                 self._memory.clear()
-                self._write("[dim]Memory cleared[/dim]")
+                self._display_write("[dim]Memory cleared[/dim]")
             elif arg == "path":
-                self._write(f"[dim]Memory file: {self._memory.show_path()}[/dim]")
+                self._display_write(f"[dim]Memory file: {self._memory.show_path()}[/dim]")
             else:
                 count = self._memory.count_entries()
-                self._write(f"[dim]User memory: {count} entries | /memory show|clear|path[/dim]")
+                self._display_write(f"[dim]User memory: {count} entries | /memory show|clear|path[/dim]")
 
         elif cmd == "/diff":
             if arg:
                 args = arg.split(maxsplit=1)
                 if len(args) == 2:
-                    self._write(self._render_diff(args[0], args[1]))
+                    self._display_write(self._render_diff(args[0], args[1]))
                 else:
-                    self._write("[dim]Usage: /diff <old_text> <new_text>[/dim]")
+                    self._display_write("[dim]Usage: /diff <old_text> <new_text>[/dim]")
             else:
-                self._write("[dim]Usage: /diff <old_text> <new_text>[/dim]")
+                self._display_write("[dim]Usage: /diff <old_text> <new_text>[/dim]")
 
         elif cmd == "/share":
             html = self._export_html()
             path = Path(".livingtree/shared_chat.html")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(html, encoding="utf-8")
-            self._write(f"[dim]Chat exported to {path}[/dim]")
+            self._display_write(f"[dim]Chat exported to {path}[/dim]")
             self.notify(f"Exported to {path}", timeout=3)
 
         elif cmd == "/init":
             agents_md = self._generate_agents_md()
             path = Path("AGENTS.md")
             if path.exists():
-                self._write("[yellow]AGENTS.md already exists. Showing diff:[/yellow]")
+                self._display_write("[yellow]AGENTS.md already exists. Showing diff:[/yellow]")
                 existing = path.read_text(encoding="utf-8")
-                self._write(self._render_diff(existing, agents_md))
+                self._display_write(self._render_diff(existing, agents_md))
             else:
                 path.write_text(agents_md, encoding="utf-8")
-                self._write(f"[dim]Created AGENTS.md ({len(agents_md)} chars)[/dim]")
+                self._display_write(f"[dim]Created AGENTS.md ({len(agents_md)} chars)[/dim]")
 
         elif cmd == "/retry":
             if self._messages and self._messages[-1]["role"] == "user":
@@ -892,11 +893,11 @@ class ChatScreen(Screen):
                 self._retry_count += 1
                 inp = self.query_one("#chat-input", TextArea)
                 inp.text = last["content"]
-                self._write(f"[dim]Retrying last message (attempt {self._retry_count})[/dim]")
+                self._display_write(f"[dim]Retrying last message (attempt {self._retry_count})[/dim]")
                 await asyncio.sleep(0.1)
                 await self._send()
             else:
-                self._write("[dim]No message to retry[/dim]")
+                self._display_write("[dim]No message to retry[/dim]")
 
         elif cmd == "/status":
             await self._show_status()
@@ -907,43 +908,43 @@ class ChatScreen(Screen):
                 ext = p.suffix.lower()
                 size = p.stat().st_size
                 if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
-                    self._write(f"[bold]Image:[/bold] {p.name} ({size//1024}KB)")
+                    self._display_write(f"[bold]Image:[/bold] {p.name} ({size//1024}KB)")
                 else:
                     try:
                         content = p.read_text(encoding="utf-8", errors="replace")
                         lang = {".py":"python",".js":"javascript",".ts":"typescript",
                                 ".json":"json",".yaml":"yaml",".md":"markdown",".css":"css",
                                 ".html":"html",".rs":"rust",".go":"go"}.get(ext,"")
-                        self._write(f"[bold]{p.name}[/bold]\n```{lang}\n{content[:2000]}\n```")
+                        self._display_write(f"[bold]{p.name}[/bold]\n```{lang}\n{content[:2000]}\n```")
 
                         if self._lsp and ext in (".py", ".rs", ".go", ".ts", ".js", ".c", ".cpp"):
                             try:
                                 result = await self._lsp.check_file(p)
-                                self._write(self._lsp.format_diagnostics_summary(result))
+                                self._display_write(self._lsp.format_diagnostics_summary(result))
                             except Exception:
                                 pass
                     except Exception:
-                        self._write(f"[bold]{p.name}[/bold] Binary ({size//1024}KB)")
+                        self._display_write(f"[bold]{p.name}[/bold] Binary ({size//1024}KB)")
             else:
-                self._write(f"[red]File not found: {arg}[/red]")
+                self._display_write(f"[red]File not found: {arg}[/red]")
 
         elif cmd == "/code" and arg and self._hub:
             r = await self._hub.generate_code("module", arg, "python")
-            self._write(f"[bold]Generated Code[/bold]\n```python\n{r.get('code','')[:1500]}\n```")
+            self._display_write(f"[bold]Generated Code[/bold]\n```python\n{r.get('code','')[:1500]}\n```")
 
         elif cmd == "/report" and arg and self._hub:
             r = await self._hub.generate_report(arg, {"title": arg})
             doc = r.get("document", "")
             trunc = "..." if len(doc) > 800 else ""
-            self._write(f"[bold]Report: {arg}[/bold]\n{doc[:800]}{trunc}\n[dim]---[/dim]")
+            self._display_write(f"[bold]Report: {arg}[/bold]\n{doc[:800]}{trunc}\n[dim]---[/dim]")
 
         elif cmd == "/analyze" and arg and self._hub:
             r = await self._hub.chat(f"Depth analysis: {arg}")
-            self._write(f"[bold]Analysis[/bold]\n{r.get('intent','')[:500]}")
+            self._display_write(f"[bold]Analysis[/bold]\n{r.get('intent','')[:500]}")
 
         elif cmd == "/search" and arg:
             query = arg
-            self._write(f"[bold #58a6ff]Multi-Search:[/bold #58a6ff] `{query}`")
+            self._display_write(f"[bold #58a6ff]Multi-Search:[/bold #58a6ff] `{query}`")
 
             # 1. Spark OneSearch (联网)
             ss = getattr(self._hub.world, 'spark_search', None) if self._hub else None
@@ -971,43 +972,43 @@ class ChatScreen(Screen):
 
             if web_results:
                 has_any = True
-                self._write(f"\n[#fea62b]Web (Spark):[/#fea62b] {len(web_results)} results")
+                self._display_write(f"\n[#fea62b]Web (Spark):[/#fea62b] {len(web_results)} results")
                 for r in web_results[:5]:
-                    self._write(f"  [bold]{r.title[:80]}[/bold]")
-                    self._write(f"  [dim]{r.url}[/dim]")
+                    self._display_write(f"  [bold]{r.title[:80]}[/bold]")
+                    self._display_write(f"  [dim]{r.url}[/dim]")
                     if r.summary:
-                        self._write(f"  {r.summary[:120]}")
+                        self._display_write(f"  {r.summary[:120]}")
 
             if kb_results:
                 has_any = True
-                self._write(f"\n[#58a6ff]KnowledgeBase:[/#58a6ff] {len(kb_results)} results")
+                self._display_write(f"\n[#58a6ff]KnowledgeBase:[/#58a6ff] {len(kb_results)} results")
                 for d in kb_results[:5]:
-                    self._write(f"  {d.title} [{d.domain or '-'}]")
+                    self._display_write(f"  {d.title} [{d.domain or '-'}]")
 
             if mc_results:
                 has_any = True
-                self._write(f"\n[#3fb950]Web (Collector):[/#3fb950] {len(mc_results)} results")
+                self._display_write(f"\n[#3fb950]Web (Collector):[/#3fb950] {len(mc_results)} results")
                 for m in mc_results[:5]:
                     title = m.get('title', m.get('source', '?'))
                     snippet = str(m.get('content', m.get('snippet', '')))[:100]
-                    self._write(f"  [bold]{title[:60]}[/bold]")
+                    self._display_write(f"  [bold]{title[:60]}[/bold]")
                     if snippet:
-                        self._write(f"  {snippet}")
+                        self._display_write(f"  {snippet}")
 
             if not has_any:
-                self._write("[dim]  No results from any source[/dim]")
+                self._display_write("[dim]  No results from any source[/dim]")
 
-            self._write("[dim]---[/dim]")
+            self._display_write("[dim]---[/dim]")
 
         elif cmd in ("/extract", "/lx") and arg:
             parts = arg.split(maxsplit=1)
             if len(parts) < 2:
-                self._write("[dim]Usage: /extract class1,class2,... <text to extract from>[/dim]")
+                self._display_write("[dim]Usage: /extract class1,class2,... <text to extract from>[/dim]")
                 return
             classes = [c.strip() for c in parts[0].split(",") if c.strip()]
             text = parts[1].strip()
             if not classes or not text:
-                self._write("[dim]Usage: /extract class1,class2,... <text>[/dim]")
+                self._display_write("[dim]Usage: /extract class1,class2,... <text>[/dim]")
                 return
 
             engine = None
@@ -1023,30 +1024,30 @@ class ChatScreen(Screen):
                         model=self._flash,
                     )
                 except ImportError:
-                    self._write("[yellow]LangExtract engine not available[/yellow]")
+                    self._display_write("[yellow]LangExtract engine not available[/yellow]")
                     return
 
-            self._write(f"[bold]Extracting: {', '.join(classes)}[/bold]")
-            self._write(f"[dim]Source: {text[:100]}...[/dim]")
+            self._display_write(f"[bold]Extracting: {', '.join(classes)}[/bold]")
+            self._display_write(f"[dim]Source: {text[:100]}...[/dim]")
 
             try:
                 results = engine.extract(text=text, classes=classes)
                 if results:
-                    self._write(f"[dim]{len(results)} extractions:[/dim]")
+                    self._display_write(f"[dim]{len(results)} extractions:[/dim]")
                     for r in results[:30]:
-                        self._write(r.format_display())
+                        self._display_write(r.format_display())
                     if len(results) > 30:
-                        self._write(f"  [dim]... and {len(results)-30} more[/dim]")
+                        self._display_write(f"  [dim]... and {len(results)-30} more[/dim]")
 
                     html = engine.visualize_to_html(results, text, "Extraction Results")
                     viz_path = Path(".livingtree/extraction_viz.html")
                     viz_path.parent.mkdir(parents=True, exist_ok=True)
                     viz_path.write_text(html, encoding="utf-8")
-                    self._write(f"[dim]Visualization saved to {viz_path}[/dim]")
+                    self._display_write(f"[dim]Visualization saved to {viz_path}[/dim]")
                 else:
-                    self._write("[dim]No extractions found[/dim]")
+                    self._display_write("[dim]No extractions found[/dim]")
             except Exception as e:
-                self._write(f"[red]Extraction error: {e}[/red]")
+                self._display_write(f"[red]Extraction error: {e}[/red]")
 
         elif cmd in ("/pipeline", "/pipe") and arg:
             engine = None
@@ -1060,41 +1061,41 @@ class ChatScreen(Screen):
                         consciousness=getattr(self._hub.world, 'consciousness', None) if self._hub else None,
                     )
                 except ImportError:
-                    self._write("[yellow]Pipeline engine not available[/yellow]")
+                    self._display_write("[yellow]Pipeline engine not available[/yellow]")
                     return
 
-            self._write(f"[#d2a8ff]Generating pipeline for:[/#d2a8ff] {arg[:100]}")
+            self._display_write(f"[#d2a8ff]Generating pipeline for:[/#d2a8ff] {arg[:100]}")
             result = await engine.run_nl(arg)
 
             cfg = result.get("generated_pipeline", {})
             steps = cfg.get("steps", [])
-            self._write(f"[#58a6ff]Pipeline: {cfg.get('name', '?')}[/#58a6ff]")
-            self._write(f"[dim]{cfg.get('description', '')}[/dim]")
+            self._display_write(f"[#58a6ff]Pipeline: {cfg.get('name', '?')}[/#58a6ff]")
+            self._display_write(f"[dim]{cfg.get('description', '')}[/dim]")
             for i, s in enumerate(steps):
                 op = s.get("op", "?")
                 extra = s.get("prompt", "") or str(s.get("params", ""))
-                self._write(f"  {i+1}. [#d2a8ff]{op}[/#d2a8ff] {extra[:80]}")
+                self._display_write(f"  {i+1}. [#d2a8ff]{op}[/#d2a8ff] {extra[:80]}")
 
-            self._write(f"[dim]{result.get('steps_executed', 0)} steps, {result.get('output_count', 0)} results[/dim]")
+            self._display_write(f"[dim]{result.get('steps_executed', 0)} steps, {result.get('output_count', 0)} results[/dim]")
 
             results = result.get("results", [])
             if results:
-                self._write(f"[bold]Results:[/bold]")
+                self._display_write(f"[bold]Results:[/bold]")
                 for r in results[:15]:
                     text = str(r.get("text", ""))[:120]
                     cls = r.get("class", "")
                     label = f"[{cls}] " if cls else ""
-                    self._write(f"  {label}{text}")
+                    self._display_write(f"  {label}{text}")
 
                 if len(results) > 15:
-                    self._write(f"  [dim]... and {len(results) - 15} more[/dim]")
+                    self._display_write(f"  [dim]... and {len(results) - 15} more[/dim]")
 
-            self._write("[dim]---[/dim]")
+            self._display_write("[dim]---[/dim]")
 
         elif cmd == "/parse" and arg:
             p = Path(arg)
             if not p.exists():
-                self._write(f"[#f85149]File not found: {arg}[/#f85149]")
+                self._display_write(f"[#f85149]File not found: {arg}[/#f85149]")
                 return
 
             parser = None
@@ -1106,55 +1107,55 @@ class ChatScreen(Screen):
                     from ...capability.multimodal_parser import MultimodalParser
                     parser = MultimodalParser(api_key=self._api_key, base_url=self._base_url)
                 except ImportError:
-                    self._write("[#d29922]Multimodal parser not available[/#d29922]")
+                    self._display_write("[#d29922]Multimodal parser not available[/#d29922]")
                     return
 
-            self._write(f"[#58a6ff]Parsing: {p.name}[/#58a6ff]")
+            self._display_write(f"[#58a6ff]Parsing: {p.name}[/#58a6ff]")
             doc = await parser.parse_with_descriptions(p)
-            self._write(f"[dim]{doc.summary_text()}[/dim]")
+            self._display_write(f"[dim]{doc.summary_text()}[/dim]")
 
             if doc.text:
                 preview = doc.text[:2000]
-                self._write(f"\n[bold]Content Preview:[/bold]\n{preview}")
+                self._display_write(f"\n[bold]Content Preview:[/bold]\n{preview}")
                 if len(doc.text) > 2000:
-                    self._write(f"\n[dim]... ({len(doc.text)} total chars)[/dim]")
+                    self._display_write(f"\n[dim]... ({len(doc.text)} total chars)[/dim]")
 
             if doc.tables:
-                self._write(f"\n[bold]Tables ({len(doc.tables)}):[/bold]")
+                self._display_write(f"\n[bold]Tables ({len(doc.tables)}):[/bold]")
                 for t in doc.tables[:5]:
-                    self._write(t.to_markdown())
+                    self._display_write(t.to_markdown())
 
             if doc.images:
-                self._write(f"\n[bold]Images:[/bold] {len(doc.images)}")
+                self._display_write(f"\n[bold]Images:[/bold] {len(doc.images)}")
                 for i in doc.images[:5]:
                     if i.description:
-                        self._write(f"  [#d2a8ff]Image {i.index+1}[/#d2a8ff] (p{i.page}): {i.description[:100]}")
+                        self._display_write(f"  [#d2a8ff]Image {i.index+1}[/#d2a8ff] (p{i.page}): {i.description[:100]}")
 
             self._messages.append({"role": "system", "content": doc.text[:4000]})
-            self._write("[dim]Document content added to context[/dim]")
-            self._write("[dim]---[/dim]")
+            self._display_write("[dim]Document content added to context[/dim]")
+            self._display_write("[dim]---[/dim]")
 
         elif cmd == "/fetch" and arg:
             try:
                 from ...capability.web_reach import WebReach
                 reach = WebReach()
-                self._write(f"[#58a6ff]Fetching: {arg[:80]}[/#58a6ff]")
+                self._display_write(f"[#58a6ff]Fetching: {arg[:80]}[/#58a6ff]")
                 page = await reach.fetch(arg)
-                self._write(page.format_display())
+                self._display_write(page.format_display())
                 if page.text:
                     self._messages.append({"role": "system", "content": page.text[:4000]})
-                    self._write("[dim]Page content added to context[/dim]")
-                self._write("[dim]---[/dim]")
+                    self._display_write("[dim]Page content added to context[/dim]")
+                self._display_write("[dim]---[/dim]")
             except ImportError:
-                self._write("[#d29922]WebReach not available (install bs4+lxml+readability-lxml)[/#d29922]")
+                self._display_write("[#d29922]WebReach not available (install bs4+lxml+readability-lxml)[/#d29922]")
 
         elif cmd == "/narrative":
             narr = getattr(self._hub.world, 'self_narrative', None) if self._hub else None
             if narr:
-                self._write(narr.narrate())
-                self._write(f"[dim]Stats: {narr.stats()}[/dim]")
+                self._display_write(narr.narrate())
+                self._display_write(f"[dim]Stats: {narr.stats()}[/dim]")
             else:
-                self._write("[dim]Self-narrative not available[/dim]")
+                self._display_write("[dim]Self-narrative not available[/dim]")
 
         elif cmd == "/errors":
             try:
@@ -1163,24 +1164,24 @@ class ChatScreen(Screen):
                 if interceptor:
                     if arg == "clear":
                         count = interceptor.clear()
-                        self._write(f"[dim]Cleared {count} errors[/dim]")
+                        self._display_write(f"[dim]Cleared {count} errors[/dim]")
                     else:
-                        self._write(interceptor.format_for_tui())
+                        self._display_write(interceptor.format_for_tui())
                         stats = interceptor.get_stats()
-                        self._write(f"[dim]{stats['total_errors']} total, {stats['recent_60s']} in last 60s[/dim]")
+                        self._display_write(f"[dim]{stats['total_errors']} total, {stats['recent_60s']} in last 60s[/dim]")
                 else:
-                    self._write("[dim]Error interceptor not installed[/dim]")
+                    self._display_write("[dim]Error interceptor not installed[/dim]")
             except ImportError:
-                self._write("[dim]Error interceptor module not found[/dim]")
+                self._display_write("[dim]Error interceptor module not found[/dim]")
 
         elif cmd == "/help":
-            self._write("[bold]Commands[/bold]")
+            self._display_write("[bold]Commands[/bold]")
             for cname, desc in sorted(_COMMANDS.items()):
-                self._write(f"  [bold]{cname}[/bold] — {desc}")
-            self._write(f"\n[dim]+ {len(_HIDDEN_COMMANDS)} hidden commands available[/dim]")
+                self._display_write(f"  [bold]{cname}[/bold] — {desc}")
+            self._display_write(f"\n[dim]+ {len(_HIDDEN_COMMANDS)} hidden commands available[/dim]")
 
         else:
-            self._write(f"[dim]Unknown: `{cmd}` | /help for commands[/dim]")
+            self._display_write(f"[dim]Unknown: `{cmd}` | /help for commands[/dim]")
 
     async def _show_status(self) -> None:
         if not self._hub:
@@ -1188,20 +1189,20 @@ class ChatScreen(Screen):
             return
         s = self._hub.status()
         display = self.query_one("#chat-display", TextArea)
-        self._write("[bold]System Status[/bold]")
-        self._write(f"  Generation: {s.get('engine',{}).get('generation','?')}")
-        self._write(f"  Cells: {s.get('cells',0)}")
-        self._write(f"  Node: {s.get('network',{}).get('status','?')}")
-        self._write(f"  Audit: {s.get('audit',{}).get('total',0)} entries")
-        self._write(f"  Budget: {s.get('budget',{}).get('used',0)} tokens")
-        self._write(f"  Reasoning: {self._reasoning_effort.upper()}")
-        self._write(f"  Cache: {self._cache_tracker.snapshot() if self._cache_tracker else 'N/A'}")
-        self._write("[dim]---[/dim]")
+        self._display_write("[bold]System Status[/bold]")
+        self._display_write(f"  Generation: {s.get('engine',{}).get('generation','?')}")
+        self._display_write(f"  Cells: {s.get('cells',0)}")
+        self._display_write(f"  Node: {s.get('network',{}).get('status','?')}")
+        self._display_write(f"  Audit: {s.get('audit',{}).get('total',0)} entries")
+        self._display_write(f"  Budget: {s.get('budget',{}).get('used',0)} tokens")
+        self._display_write(f"  Reasoning: {self._reasoning_effort.upper()}")
+        self._display_write(f"  Cache: {self._cache_tracker.snapshot() if self._cache_tracker else 'N/A'}")
+        self._display_write("[dim]---[/dim]")
 
     def _clear(self) -> None:
         d = self.query_one("#chat-display", TextArea)
-        self._display_lines.clear(); self._write()
-        self._write("[#58a6ff]# LivingTree[/#58a6ff]")
+        self._display_lines.clear(); self._display_write()
+        self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         self._messages.clear()
         self._total_tokens = 0
         self._pending_queue.clear()

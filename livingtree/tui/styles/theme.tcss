@@ -43,7 +43,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
 
 #sidebar { width: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; }
-#main-area { width: 2fr; height: 1fr; }
+#main-area { width: 3fr; height: 1fr; }
 #chat-display {
     height: 1fr; border: none; overflow-y: scroll;
     scrollbar-size: 1 1; padding: 0 2; background: #0d1117;

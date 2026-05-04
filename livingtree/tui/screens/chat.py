@@ -840,7 +840,6 @@ class ChatScreen(Screen):
         self._think_timer = self.set_interval(0.8, self._animate_thinking)
         try:
             resp = await self._stream(text, pro=auto_pro)
-            self._render_response(display, resp)
             self._messages.append({"role": "assistant", "content": resp})
             summary = self._make_summary(resp)
             self._blocks.append({"role": "assistant", "content": resp, "collapsed": False, "summary": summary})

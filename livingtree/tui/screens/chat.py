@@ -272,12 +272,12 @@ class ChatScreen(Screen):
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
-        yield AttachmentBar(id="attachment-bar")
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
             Label("[dim]Ctrl+Enter send[/dim]", id="chat-hints"),
             id="chat-input-container",
         )
+        yield AttachmentBar(id="attachment-bar")
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

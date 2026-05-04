@@ -48,6 +48,10 @@ class DualModelConsciousness(Consciousness):
         aliyun_base_url: str = "",
         aliyun_flash_model: str = "qwen-turbo",
         aliyun_pro_model: str = "qwen-max",
+        zhipu_api_key: str = "",
+        zhipu_base_url: str = "",
+        zhipu_flash_model: str = "glm-4-flash",
+        zhipu_pro_model: str = "glm-4-plus",
     ):
         self.flash_model = flash_model
         self.pro_model = pro_model
@@ -89,6 +93,28 @@ class DualModelConsciousness(Consciousness):
                 api_key=aliyun_api_key,
                 default_model=aliyun_flash_model,
             ))
+        if zhipu_api_key:
+            from ..treellm.providers import OpenAILikeProvider
+            self._llm.add_provider(OpenAILikeProvider(
+                name="zhipu",
+                base_url=zhipu_base_url or "https://open.bigmodel.cn/api/paas/v4",
+                api_key=zhipu_api_key,
+                default_model=zhipu_flash_model,
+            ))
+
+        # ── Election order: free models first ──
+        self._free_models = []
+        self._paid_models = []
+        if longcat_api_key:
+            self._free_models.append("longcat")
+        if zhipu_api_key:
+            self._free_models.append("zhipu")
+        if xiaomi_api_key:
+            self._paid_models.append("xiaomi")
+        if aliyun_api_key:
+            self._paid_models.append("aliyun")
+        if api_key:
+            self._paid_models.append("deepseek")
 
         self._elected: str = ""
         self._elected_at: float = 0.0
@@ -105,7 +131,9 @@ class DualModelConsciousness(Consciousness):
             if self._elected and (now - self._elected_at) < self._recheck_interval:
                 return self._elected
 
-            candidates = list(self._llm.provider_names)
+            candidates = []
+            candidates.extend(self._free_models)
+            candidates.extend(self._paid_models)
 
             if not self._opencode_cache:
                 try:

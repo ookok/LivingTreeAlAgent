@@ -87,6 +87,10 @@ class IntegrationHub:
                 aliyun_base_url=self.config.model.aliyun_base_url,
                 aliyun_flash_model=self.config.model.aliyun_flash_model,
                 aliyun_pro_model=self.config.model.aliyun_pro_model,
+                zhipu_api_key=self.config.model.zhipu_api_key,
+                zhipu_base_url=self.config.model.zhipu_base_url,
+                zhipu_flash_model=self.config.model.zhipu_flash_model,
+                zhipu_pro_model=self.config.model.zhipu_pro_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )

@@ -65,6 +65,11 @@ class ModelConfig(BaseModel):
     aliyun_flash_model: str = "qwen-turbo"
     aliyun_pro_model: str = "qwen-max"
 
+    zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    zhipu_api_key: str = ""
+    zhipu_flash_model: str = "glm-4-flash"
+    zhipu_pro_model: str = "glm-4-plus"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -316,6 +321,10 @@ def _load_config() -> LTAIConfig:
         if aliyun_key:
             config.model.aliyun_api_key = aliyun_key
             logger.info("Loaded aliyun_api_key from encrypted vault")
+        zhipu_key = vault.get("zhipu_api_key", "")
+        if zhipu_key:
+            config.model.zhipu_api_key = zhipu_key
+            logger.info("Loaded zhipu_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

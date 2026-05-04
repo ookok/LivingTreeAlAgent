@@ -14,6 +14,8 @@ from .knowledge_graph import KnowledgeGraph, Entity
 from .format_discovery import FormatDiscovery, Template
 from .gap_detector import GapDetector, Gap
 from .learning_engine import TemplateLearner, SkillDiscoverer, RoleGenerator
+from .struct_mem import StructMemory, EventEntry, SynthesisBlock, MemoryBuffer
+from .provenance import ProvenanceTracker, ProvenanceEntry
 
 __all__ = [
     "KnowledgeBase", "Document",
@@ -22,4 +24,6 @@ __all__ = [
     "FormatDiscovery", "Template",
     "GapDetector", "Gap",
     "TemplateLearner", "SkillDiscoverer", "RoleGenerator",
+    "StructMemory", "EventEntry", "SynthesisBlock", "MemoryBuffer",
+    "ProvenanceTracker", "ProvenanceEntry",
 ]

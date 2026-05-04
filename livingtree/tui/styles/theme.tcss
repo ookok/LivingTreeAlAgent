@@ -1,90 +1,112 @@
-/* LivingTree TUI — polished theme */
+/* LivingTree TUI — deep dark terminal aesthetic */
 
-Screen { background: $surface; color: $text; layers: base overlay; }
+Screen { background: #0a0c10; color: #c9d1d9; layers: base overlay; }
 
 /* ═══ Title bar ═══ */
 #title-bar {
     dock: top; height: 1;
     content-align: center middle; text-style: bold;
-    color: $success; background: $panel;
-    border-bottom: thick $success;
+    color: #58a6ff; background: #161b22;
+    border-bottom: solid #30363d;
 }
 
 /* ═══ Search ═══ */
-#card-search {
-    dock: top; height: 1; margin: 0 4;
-    border: solid $primary; background: $surface; color: $text;
-}
-#card-search:focus { border: solid $accent; }
+#card-search { dock: top; height: 1; margin: 0 4; border: solid #30363d; background: #0d1117; color: #c9d1d9; }
+#card-search:focus { border: solid #58a6ff; }
 
 /* ═══ Card layout ═══ */
 #card-scroll { height: 1fr; overflow-y: auto; }
 .card-row { height: auto; align-horizontal: center; padding: 1 4; }
 
 /* ═══ Status bar ═══ */
-StatusBar { dock: bottom; height: 2; background: $panel; border-top: solid $primary; padding: 0 2; }
-#footer-keys { width: 1fr; color: $text-muted; }
-#footer-status { width: 1fr; color: $success; content-align: right middle; }
+StatusBar { dock: bottom; height: 1; background: #161b22; border-top: solid #30363d; padding: 0 2; }
+#footer-keys { width: 2fr; color: #484f58; }
+#mcp-chip { width: auto; color: #58a6ff; content-align: center middle; padding: 0 1; }
+#error-chip { width: auto; content-align: center middle; padding: 0 1; }
+#footer-status { width: 1fr; color: #58a6ff; content-align: right middle; }
 
 /* ═══ Back link ═══ */
-#back-link {
-    dock: top; height: 1;
-    color: $primary; padding: 0 2;
-    background: $panel; border-bottom: solid $panel-darken-1;
-}
-#back-link:hover { color: $accent; text-style: bold; }
+#back-link { dock: top; height: 1; color: #58a6ff; padding: 0 2; background: #161b22; border-bottom: solid #30363d; }
+#back-link:hover { color: #79c0ff; text-style: bold; }
 
 /* ═══ Module screens ═══ */
 ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: vertical; height: 1fr; }
 
-/* ═══ Chat ═══ */
-#sidebar { width: 26; background: $panel; border-right: solid $panel-darken-1; padding: 1; }
+/* ═══ Chat — deep dark terminal style ═══ */
+#chat-topbar {
+    dock: top; height: 1; background: #161b22; padding: 0 2;
+    border-bottom: solid #30363d;
+}
+#chat-model-label { width: auto; color: #58a6ff; text-style: bold; }
+#chat-tokens-label { width: auto; color: #8b949e; padding: 0 1; }
+#chat-cost-label { width: auto; color: #3fb950; }
+#chat-effort-label { width: auto; color: #d2a8ff; padding: 0 1; }
+#chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
+
 #main-area { width: 1fr; }
-#chat-display { height: 1fr; border: none; overflow-y: scroll; scrollbar-size: 1 1; padding: 0 1; }
+#chat-display {
+    height: 1fr; border: none; overflow-y: scroll;
+    scrollbar-size: 1 1; padding: 0 2;
+    background: #0d1117;
+}
+#chat-display:focus { border: none; }
+
+#pending-preview { height: auto; min-height: 0; max-height: 3; color: #484f58; padding: 0 2; border-top: solid #21262d; }
+#autocomplete-hint { height: 1; color: #484f58; padding: 0 2; }
 
 #chat-input-container {
-    dock: bottom; height: auto; min-height: 6; max-height: 14;
-    background: $panel; border-top: thick $primary; padding: 1 1;
+    dock: bottom; height: auto; min-height: 4; max-height: 10;
+    background: #161b22; border-top: solid #30363d; padding: 0 1;
 }
 #chat-input {
-    width: 1fr; height: 4; border: solid $panel-darken-1;
-    background: $surface; padding: 0 1; margin: 0 1 0 0;
+    width: 1fr; height: 3; border: none;
+    background: #0d1117; color: #c9d1d9; padding: 0 1;
 }
-#chat-input:focus { border: solid $accent; }
-#chat-hints { color: $text-muted; width: 1fr; margin: 0 0 0 1; }
-#autocomplete-hint { height: 1; color: $text-muted; padding: 0 2; }
+#chat-input:focus { border: none; background: #0d1117; }
+#chat-hints {
+    width: 1fr; color: #484f58; margin: 0; padding: 0 1;
+    height: 1; content-align: left middle;
+}
+
+/* ═══ Sender labels ═══ */
+#chat-display .user-label { color: #3fb950; text-style: bold; }
+#chat-display .ai-label { color: #58a6ff; text-style: bold; }
+#chat-display .think-label { color: #d2a8ff; }
+#chat-display .error-label { color: #f85149; text-style: bold; }
+#chat-display .warn-label { color: #d29922; }
 
 /* ═══ Code ═══ */
-#code-sidebar { width: 28; background: $panel; border-right: solid $panel-darken-1; padding: 1; }
+#code-sidebar { width: 28; background: #161b22; border-right: solid #30363d; padding: 1; }
 #code-main { width: 1fr; }
 #code-tree { height: 1fr; overflow-y: auto; }
-#code-search { height: 3; margin: 1 0; border: solid $primary; }
-#code-search:focus { border: solid $accent; }
-#code-file-info { color: $text-muted; height: 1; }
-#code-toolbar { height: 2; background: $panel; padding: 0 1; }
+#code-search { height: 3; margin: 1 0; border: solid #30363d; }
+#code-search:focus { border: solid #58a6ff; }
+#code-file-info { color: #8b949e; height: 1; }
+#code-toolbar { height: 2; background: #161b22; padding: 0 1; }
 #code-tabs { height: 1fr; }
-#code-output { height: 12; background: $panel; border-top: solid $primary; overflow-y: auto; }
+#code-output { height: 12; background: #161b22; border-top: solid #30363d; overflow-y: auto; }
 
 /* ═══ Help ═══ */
-#help-content { height: 1fr; padding: 2 4; background: $panel; border: thick $accent; overflow-y: auto; }
+#help-content { height: 1fr; padding: 2 4; background: #161b22; border: solid #30363d; overflow-y: auto; }
 #help-close { dock: bottom; margin: 1 0; }
 
 /* ═══ Widgets ═══ */
-Button { margin: 0 1 0 0; }
-Button.primary { border: solid $primary; }
-Input { height: 3; margin: 0 1 0 0; border: solid $panel-darken-1; background: $surface; }
-Input:focus { border: solid $accent; }
+Button { margin: 0 1 0 0; color: #c9d1d9; background: #21262d; border: solid #30363d; }
+Button:hover { background: #30363d; }
+Button.primary { border: solid #58a6ff; color: #58a6ff; }
+Input { height: 3; margin: 0 1 0 0; border: solid #30363d; background: #0d1117; color: #c9d1d9; }
+Input:focus { border: solid #58a6ff; }
 Select { margin: 0 1 0 0; }
-RichLog { border: none; padding: 0 1; }
+RichLog { border: none; padding: 0 1; background: #0d1117; }
 
 /* ═══ DataTable ═══ */
-DataTable { height: 1fr; scrollbar-size: 1 1; }
-DataTable > .datatable--header { text-style: bold; background: $panel-darken-1; }
-DataTable > .datatable--cursor { background: $primary 20%; }
+DataTable { height: 1fr; scrollbar-size: 1 1; background: #0d1117; }
+DataTable > .datatable--header { text-style: bold; background: #21262d; }
+DataTable > .datatable--cursor { background: #58a6ff 20%; }
 
 /* ═══ Palette ═══ */
-#palette-container { max-width: 52; max-height: 24; background: $panel; border: thick $primary; padding: 1; align: center middle; }
+#palette-container { max-width: 52; max-height: 24; background: #161b22; border: solid #30363d; padding: 1; align: center middle; }
 #palette-input { height: 3; margin: 1; }
-#palette-input:focus { border: solid $accent; }
-#palette-list { height: 16; margin: 1; background: $surface; overflow-y: scroll; }
-#palette-hint { color: $text-muted; text-style: italic; margin: 0 2; }
+#palette-input:focus { border: solid #58a6ff; }
+#palette-list { height: 16; margin: 1; background: #0d1117; overflow-y: scroll; }
+#palette-hint { color: #8b949e; text-style: italic; margin: 0 2; }

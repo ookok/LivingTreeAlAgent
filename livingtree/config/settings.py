@@ -45,6 +45,16 @@ class ModelConfig(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
     fallback_model: str = "ollama/qwen3:latest"
 
+    longcat_base_url: str = "https://api.longcat.chat/openai/v1"
+    longcat_api_key: str = ""
+    longcat_flash_model: str = "openai/LongCat-Flash-Lite"
+    longcat_flash_temperature: float = 0.3
+    longcat_flash_max_tokens: int = 4096
+    longcat_models: str = "openai/LongCat-Flash-Lite,openai/LongCat-Flash-Chat"
+    longcat_chat_model: str = "openai/LongCat-Flash-Chat"
+    longcat_chat_temperature: float = 0.5
+    longcat_chat_max_tokens: int = 4096
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -284,6 +294,10 @@ def _load_config() -> LTAIConfig:
         if api_key:
             config.model.deepseek_api_key = api_key
             logger.info("Loaded deepseek_api_key from encrypted vault")
+        longcat_key = vault.get("longcat_api_key", "")
+        if longcat_key:
+            config.model.longcat_api_key = longcat_key
+            logger.info("Loaded longcat_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

@@ -37,7 +37,12 @@ __all__ = [
     "setup_observability", "get_logger",
     "LivingTreeTuiApp", "ChatScreen", "CodeScreen", "KnowledgeScreen",
     "SettingsScreen",
+    "CacheOptimizer", "ToolCallRepair", "ThoughtHarvester",
+    "RLMRunner", "SideGit", "SubAgentRoles", "SessionManager",
+    "LSPManager", "SSEAgentServer", "SkillDiscoveryManager",
+    "StructMemory",
 ]
+
 
 # Lazy imports map — modules only loaded on first access
 _LAZY = {

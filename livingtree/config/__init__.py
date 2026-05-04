@@ -21,6 +21,8 @@ from .settings import (
     reload_config,
 )
 from .secrets import SecretVault, get_secret_vault
+from .config_security import sanitize_project_config, validate_project_config, is_safe_config_key
+from .config_editor import ConfigSchemaEditor, ConfigField
 
 __all__ = [
     "LTAIConfig",
@@ -38,4 +40,9 @@ __all__ = [
     "reload_config",
     "SecretVault",
     "get_secret_vault",
+    "sanitize_project_config",
+    "validate_project_config",
+    "is_safe_config_key",
+    "ConfigSchemaEditor",
+    "ConfigField",
 ]

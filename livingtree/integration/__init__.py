@@ -10,5 +10,11 @@ The IntegrationHub is the entry point that:
 
 from .hub import IntegrationHub
 from .launcher import launch, LaunchMode
+from .sse_server import SSEAgentServer, create_sse_server
+from .self_updater import check_update, download_update, install_update, run_update
 
-__all__ = ["IntegrationHub", "launch", "LaunchMode"]
+__all__ = [
+    "IntegrationHub", "launch", "LaunchMode",
+    "SSEAgentServer", "create_sse_server",
+    "check_update", "download_update", "install_update", "run_update",
+]

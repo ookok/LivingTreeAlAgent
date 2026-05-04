@@ -368,3 +368,77 @@ def setup_routes(app: FastAPI) -> None:
                 await websocket.send_json({"type": "error", "message": str(e)})
             except Exception:
                 pass
+
+    # ── OpenAI-compatible relay for external tools (opencode, Claude Code, etc.) ──
+
+    @app.post("/v1/chat/completions")
+    async def openai_chat_completions(request: Request):
+        """OpenAI-compatible endpoint. Routes through LivingTree's auto-election."""
+        hub = getattr(request.app.state, 'hub', None)
+        if not hub:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="Hub not initialized")
+
+        try:
+            body = await request.json()
+        except Exception:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        messages = body.get("messages", [])
+        if not messages:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="messages required")
+
+        last_msg = messages[-1].get("content", "") if messages else ""
+        stream = body.get("stream", False)
+
+        if stream:
+            from fastapi.responses import StreamingResponse
+            import json as _json
+
+            async def generate():
+                try:
+                    async for token in hub.world.consciousness.stream_of_thought(last_msg):
+                        chunk = _json.dumps({
+                            "choices": [{"delta": {"content": token}, "index": 0}],
+                            "object": "chat.completion.chunk",
+                        })
+                        yield f"data: {chunk}\n\n"
+                    yield "data: [DONE]\n\n"
+                except Exception as e:
+                    error_chunk = _json.dumps({"error": str(e)})
+                    yield f"data: {error_chunk}\n\n"
+
+            return StreamingResponse(generate(), media_type="text/event-stream")
+
+        result = await hub.chat(last_msg)
+        reply = str(result.get("intent", "") or result.get("reflections", [""])[0] or "")
+        return {
+            "id": f"livingtree-{result.get('session_id', '')}",
+            "object": "chat.completion",
+            "created": int(__import__('time').time()),
+            "model": "livingtree-dual",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": reply},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": len(last_msg),
+                "completion_tokens": len(reply),
+                "total_tokens": len(last_msg) + len(reply),
+            },
+        }
+
+    @app.get("/v1/models")
+    async def openai_list_models(request: Request):
+        return {
+            "object": "list",
+            "data": [
+                {"id": "livingtree-dual", "object": "model"},
+                {"id": "livingtree-flash", "object": "model"},
+                {"id": "longcat-flash-lite", "object": "model"},
+                {"id": "longcat-flash-chat", "object": "model"},
+            ],
+        }

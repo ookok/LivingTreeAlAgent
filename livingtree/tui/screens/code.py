@@ -1,21 +1,7 @@
-"""Code Editor — file tree, multi-tab, search, diff, recent files.
-
-OpenCode-level features:
-- File tree sidebar + click to open
-- Multi-file tabs (Ctrl+W close)
-- Ctrl+F find / Ctrl+H replace
-- Ctrl+G goto line
-- Git diff against HEAD
-- Recent files (auto-saved)
-- Error line highlight on run
-"""
-
+"""Code Editor — file tree, multi-tab, search, diff, opencode LSP, AI tools."""
 from __future__ import annotations
 
-import asyncio
-import json
-import os
-import subprocess
+import asyncio, json, os, shutil, subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -23,10 +9,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import (
-    Button, DirectoryTree, Input, Label, RichLog, Select, Static, TabbedContent, TabPane, TextArea,
-)
-
+from textual.widgets import Button, DirectoryTree, Input, Label, RichLog, Static, TabbedContent, TabPane, TextArea
 
 LANGUAGES = [
     ("python", "Python"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
@@ -47,11 +30,12 @@ class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hub = None
-        self._files: dict[str, dict] = {}  # path -> {text, lang, tab_id}
+        self._files: dict[str, dict] = {}
         self._active_file: Optional[str] = None
         self._recent_path = Path("./data/recent_files.json")
         self._recent_path.parent.mkdir(parents=True, exist_ok=True)
         self._workspace = "."
+        self._lsp_bridge = None
 
     def set_hub(self, hub) -> None:
         self._hub = hub
@@ -60,7 +44,7 @@ class CodeScreen(Screen):
         yield Static("[dim]← 返回首页 (Esc)[/dim]", id="back-link")
         yield Horizontal(
             Vertical(
-                Input(placeholder="🔍 Search files (Ctrl+F)", id="code-search"),
+                Input(placeholder="Search files (Ctrl+F)", id="code-search"),
                 DirectoryTree(".", id="code-tree"),
                 Label("", id="code-file-info"),
                 id="code-sidebar",
@@ -73,6 +57,8 @@ class CodeScreen(Screen):
                     Button("AI Gen", variant="primary", id="ai-gen-btn"),
                     Button("Run", variant="primary", id="run-btn"),
                     Button("Goto", variant="default", id="goto-btn"),
+                    Button("[#58a6ff]OpenCode[/#58a6ff]", variant="default", id="opencode-btn"),
+                    Button("[#3fb950]Serve[/#3fb950]", variant="default", id="opencode-serve-btn"),
                     id="code-toolbar",
                 ),
                 TabbedContent(id="code-tabs"),
@@ -87,35 +73,43 @@ class CodeScreen(Screen):
             self.set_hub(hub)
         self._workspace = getattr(self.app, 'workspace', '.')
         self._workspace = str(self._workspace) if not isinstance(self._workspace, str) else self._workspace
+
+        try:
+            from .widgets.opencode_lsp import OpenCodeLSPBridge
+            self._lsp_bridge = OpenCodeLSPBridge()
+        except Exception:
+            pass
+
         output = self.query_one("#code-output", RichLog)
-        output.write("[bold green]📝 Code Editor[/bold green]")
+        output.write("[#58a6ff]# Code Editor[/#58a6ff]")
         output.write("")
-        output.write("[bold]功能速览[/bold]")
-        output.write("  • 左侧文件树 → 点击打开文件")
-        output.write("  • 支持多标签页编辑")
-        output.write("  • [bold]Diff[/bold] → Git 对比 HEAD")
-        output.write("  • [bold]AI Gen[/bold] → AI 代码生成")
-        output.write("  • [bold]Run[/bold] → Python 一键运行")
+        output.write("[bold]Features[/bold]")
+        output.write("  File tree → click to open")
+        output.write("  Multi-tab editing")
+        output.write("  [bold]Diff[/bold] — Git vs HEAD")
+        output.write("  [bold]AI Gen[/bold] — Generate code")
+        output.write("  [bold]Run[/bold] — Python run")
+        output.write("  [bold #58a6ff]OpenCode[/bold #58a6ff] — AI dev env (TUI)")
+        output.write("  [bold #3fb950]Serve[/bold #3fb950] — Auto-start opencode API")
         output.write("")
-        output.write("[bold]快捷键[/bold]")
-        output.write("  Ctrl+F 搜索  |  Ctrl+H 替换  |  Ctrl+G 跳行")
+        if not shutil.which("opencode"):
+            output.write("[dim]First use: auto-downloads Node.js + opencode locally[/dim]")
+            output.write("")
+        output.write("[bold]Shortcuts[/bold]")
+        output.write("  Ctrl+F search  |  Ctrl+H replace  |  Ctrl+G goto")
         output.write("")
         self._load_recent()
 
     @on(DirectoryTree.FileSelected, "#code-tree")
     def on_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         path = str(event.path)
-
-        # Skip non-editable files
-        ext = Path(path).suffix.lower()
-        if ext not in EXT_TO_LANG and ext:
-            self.notify(f"Cannot edit {ext} files", severity="warning")
+        if Path(path).is_dir():
             return
-
+        ext = Path(path).suffix.lower()
+        if ext not in EXT_TO_LANG and ext not in (".txt", ".cfg", ".ini", ".toml", ".env", ".csv", ".xml"):
+            return
         self._open_file(path)
-        # Update search label
-        self.query_one("#code-file-info", Label).update(
-            f"[dim]{Path(path).name}[/dim]")
+        self._run_lsp_diagnostics(path)
 
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -132,197 +126,198 @@ class CodeScreen(Screen):
             self._new_tab()
         elif bid == "goto-btn":
             self._goto_line()
+        elif bid == "opencode-btn":
+            await self._launch_opencode(serve=False)
+        elif bid == "opencode-serve-btn":
+            await self._launch_opencode(serve=True)
+
+    async def _open_file(self, path: str) -> None:
+        if path in self._files:
+            self._activate_tab(path)
+            return
+        try:
+            content = Path(path).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return
+        ext = Path(path).suffix.lower()
+        lang = EXT_TO_LANG.get(ext, "")
+        tab_id = f"tab-{len(self._files)}"
+        self._files[path] = {"text": content, "lang": lang, "tab_id": tab_id}
+        tabs = self.query_one("#code-tabs", TabbedContent)
+        pane = TabPane(Path(path).name, id=tab_id)
+        pane.mount(TextArea(content, language=lang, id=f"editor-{tab_id}", show_line_numbers=True))
+        tabs.add_pane(pane)
+        tabs.active = tab_id
+        self._active_file = path
+        self._add_recent(path)
+        self.query_one("#code-file-info", Label).update(f"[dim]{path} ({len(content)} chars)[/dim]")
+
+    def _activate_tab(self, path: str) -> None:
+        if path in self._files:
+            self._active_file = path
+            self.query_one("#code-tabs", TabbedContent).active = self._files[path]["tab_id"]
+
+    @work(exclusive=False)
+    async def _save(self) -> None:
+        if not self._active_file:
+            return
+        tab_id = self._files[self._active_file]["tab_id"]
+        try:
+            editor = self.query_one(f"#editor-{tab_id}", TextArea)
+            content = editor.text
+            Path(self._active_file).write_text(content, encoding="utf-8")
+            self._files[self._active_file]["text"] = content
+            output = self.query_one("#code-output", RichLog)
+            output.write(f"[#3fb950]Saved: {self._active_file}[/#3fb950]")
+            self._run_lsp_diagnostics(self._active_file)
+        except Exception as e:
+            output = self.query_one("#code-output", RichLog)
+            output.write(f"[#f85149]Save failed: {e}[/#f85149]")
+
+    @work(exclusive=False)
+    async def _git_diff(self) -> None:
+        if not self._active_file:
+            return
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", "diff", "HEAD", "--", self._active_file,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            diff_text = stdout.decode(errors="replace")
+            if diff_text.strip():
+                output.write(f"[bold]Diff: {self._active_file}[/bold]")
+                output.write(diff_text[:2000])
+            else:
+                output.write("[dim]No changes from HEAD[/dim]")
+        except Exception as e:
+            output.write(f"[#f85149]Diff failed: {e}[/#f85149]")
+
+    @work(exclusive=False)
+    async def _ai_gen(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        if not self._hub:
+            output.write("[#d29922]Engine not ready[/#d29922]")
+            return
+        try:
+            result = await self._hub.generate_code("module", "utility function", "python")
+            code = result.get("code", "")
+            if code:
+                self._new_tab()
+                tab_id = self._files.get(list(self._files.keys())[-1], {}).get("tab_id", "")
+                if tab_id:
+                    editor = self.query_one(f"#editor-{tab_id}", TextArea)
+                    editor.text = code
+                output.write("[#3fb950]Code generated[/#3fb950]")
+            else:
+                output.write("[dim]No code generated[/dim]")
+        except Exception as e:
+            output.write(f"[#f85149]AI Gen failed: {e}[/#f85149]")
+
+    @work(exclusive=False)
+    async def _run(self) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        if not self._active_file:
+            return
+        path = self._active_file
+        if not path.endswith(".py"):
+            output.write("[dim]Only Python files can be run[/dim]")
+            return
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "python", path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            output.write(f"[bold]Run: {path}[/bold]")
+            if stdout:
+                output.write(stdout.decode(errors="replace")[:2000])
+            if stderr:
+                output.write(f"[#f85149]{stderr.decode(errors='replace')[:1000]}[/#f85149]")
+            if proc.returncode == 0:
+                output.write("[#3fb950]Exit: 0[/#3fb950]")
+            else:
+                output.write(f"[#f85149]Exit: {proc.returncode}[/#f85149]")
+        except Exception as e:
+            output.write(f"[#f85149]Run failed: {e}[/#f85149]")
+
+    def _new_tab(self) -> None:
+        tab_id = f"tab-{len(self._files)+1}"
+        tabs = self.query_one("#code-tabs", TabbedContent)
+        pane = TabPane("New", id=tab_id)
+        pane.mount(TextArea("", language="python", id=f"editor-{tab_id}", show_line_numbers=True))
+        tabs.add_pane(pane)
+        tabs.active = tab_id
+
+    def _goto_line(self) -> None:
+        if not self._active_file:
+            return
+        tab_id = self._files[self._active_file]["tab_id"]
+        try:
+            editor = self.query_one(f"#editor-{tab_id}", TextArea)
+            editor.focus()
+        except Exception:
+            pass
 
     @on(Input.Submitted, "#code-search")
-    async def on_search(self, event: Input.Submitted) -> None:
+    def on_search(self, event: Input.Submitted) -> None:
         query = event.value.strip()
         if not query:
             return
         output = self.query_one("#code-output", RichLog)
         output.clear()
-        output.write(f"[bold]Search: '{query}'[/bold]")
-        self._search_files(query, output)
-
-    async def _open_file(self, path: str) -> None:
-        """Open a file in a new or existing tab."""
-        # Check if already open
-        for existing_path, info in self._files.items():
-            if existing_path == path:
-                tabs = self.query_one("#code-tabs", TabbedContent)
-                tabs.active = info["tab_id"]
-                self._active_file = path
-                return
-
-        try:
-            content = Path(path).read_text(encoding="utf-8", errors="replace")
-            name = Path(path).name
-            tab_id = f"tab-{len(self._files)}"
-            lang = EXT_TO_LANG.get(Path(path).suffix.lower(), "python")
-
-            tabs = self.query_one("#code-tabs", TabbedContent)
-            pane = TabPane(name[:20], id=tab_id)
-            tabs.mount(pane)
-            editor = TextArea.code_editor(content, language=lang, id=f"editor-{tab_id}",
-                                          show_line_numbers=True, tab_behavior="focus")
-            pane.mount(editor)
-            tabs.active = tab_id
-
-            self._files[path] = {"text": content, "lang": lang, "tab_id": tab_id}
-            self._active_file = path
-            self._add_recent(path)
-        except Exception as e:
-            self.notify(f"Open error: {e}", severity="error")
-
-    @work(exclusive=False)
-    async def _save(self) -> None:
-        if not self._active_file:
-            self.notify("No file open", severity="warning")
-            return
-        editor = self._get_editor()
-        if not editor:
-            return
-        content = editor.text
-        try:
-            Path(self._active_file).write_text(content, encoding="utf-8")
-            self.query_one("#code-output", RichLog).write(
-                f"[green]Saved: {self._active_file} ({len(content)} chars)[/green]")
-        except Exception as e:
-            self.notify(f"Save error: {e}", severity="error")
-
-    @work(exclusive=False)
-    async def _git_diff(self) -> None:
-        """Show git diff for current file."""
-        if not self._active_file:
-            self.notify("No file open", severity="warning")
-            return
-        output = self.query_one("#code-output", RichLog)
-        output.clear()
-        output.write(f"[bold]Git Diff: {Path(self._active_file).name}[/bold]")
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "git", "diff", "--", self._active_file,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                cwd=self._workspace,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-            diff = stdout.decode("utf-8", errors="replace")
-            if diff.strip():
-                for line in diff.split("\n"):
-                    if line.startswith("+"):
-                        output.write(f"[green]{line}[/green]")
-                    elif line.startswith("-"):
-                        output.write(f"[red]{line}[/red]")
-                    elif line.startswith("@@"):
-                        output.write(f"[blue]{line}[/blue]")
-                    else:
-                        output.write(f"[dim]{line}[/dim]")
-            else:
-                output.write("[dim]No changes from HEAD[/dim]")
-        except FileNotFoundError:
-            output.write("[yellow]Git not found[/yellow]")
-        except Exception as e:
-            output.write(f"[red]{e}[/red]")
-
-    @work(exclusive=False)
-    async def _ai_gen(self) -> None:
-        editor = self._get_editor()
-        output = self.query_one("#code-output", RichLog)
-        if not editor:
-            return
-        output.clear()
-        output.write("[bold #58a6ff]AI generating...[/bold #58a6ff]")
-        if self._hub:
-            r = await self._hub.generate_code(
-                Path(self._active_file).stem if self._active_file else "module",
-                editor.selected_text or editor.text or "utility function",
-                editor.language or "python",
-            )
-            if r.get("code"):
-                editor.text = r["code"]
-                output.write(f"[green]Generated: {r.get('annotations','')}[/green]")
-
-    @work(exclusive=False)
-    async def _run(self) -> None:
-        editor = self._get_editor()
-        output = self.query_one("#code-output", RichLog)
-        if not editor or editor.language != "python":
-            output.write("[yellow]Python only[/yellow]")
-            return
-        output.clear()
-        output.write("[bold]Running...[/bold]")
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "python", "-c", editor.text,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-            if stdout:
-                output.write(f"[green]{stdout.decode('utf-8', errors='replace')}[/green]")
-            if stderr:
-                err_text = stderr.decode("utf-8", errors="replace")
-                output.write(f"[red]{err_text}[/red]")
-                # Highlight error line
-                import re
-                m = re.search(r'line (\d+)', err_text)
-                if m:
-                    line_no = int(m.group(1))
-                    output.write(f"[yellow]Error at line {line_no}[/yellow]")
-        except asyncio.TimeoutError:
-            output.write("[red]Timeout (30s)[/red]")
-
-    def _new_tab(self) -> None:
-        tab_id = f"tab-{len(self._files)}"
-        tabs = self.query_one("#code-tabs", TabbedContent)
-        pane = TabPane("untitled", id=tab_id)
-        tabs.mount(pane)
-        editor = TextArea.code_editor("", language="python", id=f"editor-{tab_id}",
-                                       show_line_numbers=True)
-        pane.mount(editor)
-        tabs.active = tab_id
-        self._active_file = None
-
-    def _goto_line(self) -> None:
-        """Ctrl+G jump to line."""
-        editor = self._get_editor()
-        if not editor:
-            return
-        # Simple: scroll to top of file based on estimated line height
-        self.notify("Use text selection/navigation", timeout=2)
-
-    def _search_files(self, query: str, output: RichLog) -> None:
-        """Search project files for a string."""
-        count = 0
-        for root, dirs, files in os.walk(self._workspace):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
-            for fn in files:
-                if fn.startswith('.') or fn.endswith(('.pyc', '.enc', '.db', '.ico')):
-                    continue
-                fp = os.path.join(root, fn)
+        output.write(f"[bold]Search: {query}[/bold]")
+        for root, dirs, files in os.walk("."):
+            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__", ".livingtree", "node_modules")]
+            for fname in files:
+                fpath = os.path.join(root, fname)
                 try:
-                    with open(fp, 'r', encoding='utf-8', errors='replace') as f:
-                        for i, line in enumerate(f, 1):
-                            if query.lower() in line.lower():
-                                output.write(f"[bold]{fp}:{i}[/bold]  {line.strip()[:120]}")
-                                count += 1
-                                if count >= 20:
-                                    output.write(f"[dim]... ({count} matches, showing first 20)[/dim]")
-                                    return
+                    content = Path(fpath).read_text(encoding="utf-8", errors="replace")
+                    if query.lower() in content.lower():
+                        output.write(f"  {fpath}")
                 except Exception:
                     pass
-        output.write(f"[dim]{count} results for '{query}'[/dim]")
 
-    def _get_editor(self) -> Optional[TextArea]:
+    @work(exclusive=False)
+    async def _launch_opencode(self, serve: bool = False) -> None:
+        from .widgets.opencode_launcher import OpenCodeLauncher
+        output = self.query_one("#code-output", RichLog)
+        output.clear()
+        mode_label = "OpenCode Serve" if serve else "OpenCode"
+        output.write(f"[#58a6ff]Starting {mode_label}...[/#58a6ff]")
+
+        def on_progress(msg):
+            output.write(f"  [#d29922]{msg}[/#d29922]")
+
+        launcher = OpenCodeLauncher(workspace=self._workspace, hub=self._hub)
+        if serve:
+            ok, msg = await launcher.auto_start_serve(on_progress=on_progress)
+        else:
+            ok, msg = await launcher.launch_tui(on_progress=on_progress)
+
+        if ok:
+            output.write(f"  [#3fb950]{msg}[/#3fb950]")
+            if serve:
+                output.write(f"[#3fb950]API: http://localhost:{launcher.SERVE_PORT}[/#3fb950]")
+                output.write("[#3fb950]LSP enabled via opencode[/#3fb950]")
+        else:
+            output.write(f"  [#f85149]Failed: {msg}[/#f85149]")
+
+    @work(exclusive=False)
+    async def _run_lsp_diagnostics(self, file_path: str) -> None:
+        if not self._lsp_bridge or not file_path:
+            return
+        output = self.query_one("#code-output", RichLog)
         try:
-            tabs = self.query_one("#code-tabs", TabbedContent)
-            active_tab = tabs.active
-            if active_tab:
-                editor_id = f"editor-{active_tab}"
-                return self.query_one(f"#{editor_id}", TextArea)
+            diag_text = await self._lsp_bridge.check_file_and_format(file_path)
+            if diag_text:
+                output.write(diag_text)
         except Exception:
             pass
-        return None
-
-    # ── Recent files ──
 
     def _add_recent(self, path: str) -> None:
         recent = self._load_recent_list()
@@ -339,11 +334,7 @@ class CodeScreen(Screen):
             return []
 
     def _load_recent(self) -> None:
-        """Show recent files info."""
         recent = self._load_recent_list()
         if recent:
-            self.query_one("#code-file-info", Label).update(
-                f"[dim]Recent: {Path(recent[0]).name if recent else 'none'}[/dim]")
-
-    async def refresh(self, **kwargs) -> None:
-        pass
+            name = Path(recent[0]).name if recent else "none"
+            self.query_one("#code-file-info", Label).update(f"[dim]Recent: {name}[/dim]")

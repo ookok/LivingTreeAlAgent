@@ -107,6 +107,7 @@ class LivingTreeTuiApp(App):
             self._update_status()
             self.pop_screen()
             self.notify("系统就绪 — 全部功能已启用", timeout=3)
+            await self._auto_start_opencode_serve()
 
         except Exception as e:
             logger.error(f"Boot failed: {e}")
@@ -174,7 +175,20 @@ class LivingTreeTuiApp(App):
     def hub(self):
         return self._hub
 
+    async def _auto_start_opencode_serve(self) -> None:
+        try:
+            from .widgets.opencode_launcher import OpenCodeLauncher
+            launcher = OpenCodeLauncher(workspace=str(self.workspace), hub=self._hub)
+            ok, msg = await launcher.auto_start_serve_if_needed()
+            if ok and "already" not in msg.lower():
+                logger.info(f"OpenCode serve auto-started: {msg}")
+            elif ok:
+                logger.debug(f"OpenCode serve: {msg}")
+        except Exception as e:
+            logger.debug(f"OpenCode serve auto-start skipped: {e}")
+
 
 def run_tui(workspace: str = "", hub=None) -> None:
     app = LivingTreeTuiApp(workspace=workspace, hub=hub)
     app.run()
+

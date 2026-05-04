@@ -74,6 +74,15 @@ class LivingWorld:
         self.template_learner: Any = None
         self.skill_discoverer: Any = None
         self.role_generator: Any = None
+        # New v2.1 subsystems
+        self.cache_optimizer: Any = None
+        self.side_git: Any = None
+        self.session_manager: Any = None
+        self.lsp_manager: Any = None
+        self.sub_agent_roles: Any = None
+        self.rlm_runner: Any = None
+        self.skill_discovery: Any = None
+        self.struct_memory: Any = None
 
     def wire(self, **kwargs) -> "LivingWorld":
         """Wire subsystems into the world. Called during Hub boot."""

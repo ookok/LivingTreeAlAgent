@@ -48,3 +48,8 @@ electron/dist/
 # Uncomment to exclude from version control (recommended for large projects):
 # **/AGENTS.md
 livingtree/tui/textual/
+
+# Local environment cache (large binaries)
+.livingtree/base/
+.livingtree/opencode/
+.livingtree/nodejs/

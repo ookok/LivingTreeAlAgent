@@ -70,6 +70,19 @@ class LifeEngine:
         self.is_running = True
         self.stages.clear()
 
+        if kwargs.get("memory_context"):
+            ctx.metadata["struct_mem_context"] = kwargs["memory_context"]
+
+        # Pre-turn side-git snapshot
+        turn_id = None
+        side_git = getattr(self.world, 'side_git', None)
+        if side_git:
+            try:
+                turn_id = await side_git.pre_turn()
+                ctx.metadata["side_git_turn"] = turn_id
+            except Exception as e:
+                logger.debug(f"SideGit pre_turn: {e}")
+
         try:
             await self._stage("perceive", self._perceive, ctx)
             await self._stage("cognize", self._cognize, ctx)
@@ -77,6 +90,77 @@ class LifeEngine:
             await self._stage("execute", self._execute, ctx)
             await self._stage("reflect", self._reflect, ctx)
             await self._stage("evolve", self._evolve, ctx)
+
+            # StructMem: auto-bind + consolidate after successful cycle
+            struct_mem = getattr(self.world, 'struct_memory', None)
+            if struct_mem and ctx.user_input:
+                try:
+                    msgs = [
+                        {"role": "user", "content": ctx.user_input},
+                        {"role": "assistant", "content": str(ctx.intent or "")},
+                    ]
+                    entries = await struct_mem.bind_events(ctx.session_id, msgs)
+                    if entries:
+                        ctx.metadata["struct_mem_bound"] = len(entries)
+                        await struct_mem.consolidate_if_needed()
+                except Exception as e:
+                    logger.debug(f"StructMem cycle hook: {e}")
+
+            # ConversationDNA: record successful sessions
+            dna = getattr(self.world, 'conversation_dna', None)
+            if dna and ctx.metadata.get("success_rate", 0) >= 0.7:
+                try:
+                    dna.record(
+                        session_id=ctx.session_id,
+                        intent=ctx.intent or ctx.user_input or "",
+                        plan=ctx.plan,
+                        success_rate=ctx.metadata["success_rate"],
+                        tokens_used=ctx.metadata.get("total_tokens", 0),
+                        pipeline_steps=ctx.metadata.get("pipeline_steps"),
+                        key_insights=ctx.reflections,
+                    )
+                except Exception as e:
+                    logger.debug(f"DNA record: {e}")
+
+            # SelfDiscovery: observe patterns, propose tools
+            sd = getattr(self.world, 'self_discovery', None)
+            if dna and sd:
+                try:
+                    genes = dna._genes
+                    if genes:
+                        await sd.observe(genes[-1])
+                        proposals = sd.get_new_proposals()
+                        for p in proposals:
+                            logger.info(f"SelfDiscovery proposes: {p.format_display()}")
+                            sd.mark_notified(p.name)
+                except Exception as e:
+                    logger.debug(f"SelfDiscovery: {e}")
+
+            # Provenance: link extracted entities to source
+            prov = getattr(self.world, 'provenance', None)
+            if prov and ctx.metadata.get("extracted_entities"):
+                try:
+                    for entity in ctx.metadata["extracted_entities"]:
+                        prov.record(
+                            fact_id=f"{ctx.session_id}:{entity.get('text','')[:40]}",
+                            source_document=entity.get("source", ctx.session_id),
+                            char_start=entity.get("char_start", -1),
+                            char_end=entity.get("char_end", -1),
+                            extraction_confidence=entity.get("confidence", 0.9),
+                        )
+                except Exception as e:
+                    logger.debug(f"Provenance: {e}")
+
+            # MemoryPipeline: suggest optimized pipelines for repeated tasks
+            mp = getattr(self.world, 'memory_pipeline', None)
+            if mp and ctx.intent:
+                try:
+                    suggestion = await mp.suggest(ctx.intent or ctx.user_input or "")
+                    if suggestion.get("found"):
+                        ctx.metadata["pipeline_suggestion"] = suggestion
+                except Exception as e:
+                    logger.debug(f"MemoryPipeline: {e}")
+
             logger.info(f"Cycle {ctx.session_id} complete")
             return ctx
         except Exception as e:
@@ -84,6 +168,14 @@ class LifeEngine:
             raise
         finally:
             self.is_running = False
+
+            if side_git and turn_id is not None:
+                try:
+                    changed = await side_git.post_turn(turn_id)
+                    if changed:
+                        ctx.metadata["side_git_changes"] = changed
+                except Exception as e:
+                    logger.debug(f"SideGit post_turn: {e}")
 
     # ── Stage 1: Perceive ──
 
@@ -104,9 +196,22 @@ class LifeEngine:
         thoughts = []
         async for token in self.consciousness.stream_of_thought(ctx.user_input):
             thoughts.append(token)
+        thought_text = "".join(thoughts)
+
+        # Thought harvesting — scavenge escaped tool calls from reasoning
+        try:
+            from .thought_harvest import ThoughtHarvester
+            harvester = ThoughtHarvester()
+            harvest = harvester.harvest(thought_text)
+            if harvest.found:
+                ctx.metadata["harvested_tool_calls"] = harvest.tool_calls
+                logger.debug(f"[perceive] Harvested {len(harvest.tool_calls)} tool calls from thinking")
+        except Exception:
+            pass
+
         ctx.collected_materials.append({
             "source": "consciousness",
-            "stream": "".join(thoughts),
+            "stream": thought_text,
         })
         mc = self.world.material_collector
         if mc:
@@ -119,9 +224,12 @@ class LifeEngine:
     # ── Stage 2: Cognize ──
 
     async def _cognize(self, ctx: LifeContext) -> None:
-        ctx.intent = await self.consciousness.chain_of_thought(
-            f"Analyze intent and required knowledge: {ctx.user_input}"
-        )
+        mem_context = ctx.metadata.get("struct_mem_context", "")
+        cog_prompt = f"Analyze intent and required knowledge: {ctx.user_input}"
+        if mem_context:
+            cog_prompt = f"{cog_prompt}\n\nRelevant memory context:\n{mem_context[:4000]}"
+
+        ctx.intent = await self.consciousness.chain_of_thought(cog_prompt)
         ctx.metadata["cognition"] = ctx.intent
 
         kb = self.world.knowledge_base

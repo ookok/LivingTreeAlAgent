@@ -46,9 +46,63 @@ class DocEngine:
         return tpl.sections if tpl else []
 
     async def generate_report(self, template_type: str, data: dict[str, Any],
-                              requirements: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Generate report using learned templates."""
+                               requirements: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Generate report using learned templates.
+
+        Auto-extracts structured entities from raw input text when
+        an ExtractionEngine is available in the world. Extracted entities
+        are added to data before template generation.
+        """
         reqs = requirements or {}
+
+        if "raw_text" in data and hasattr(self, '_extraction_engine'):
+            try:
+                engine = self._extraction_engine
+                classes = ["symptom", "finding", "medication", "entity", "metric"]
+                extractions = engine.extract(
+                    text=data["raw_text"],
+                    classes=classes,
+                    prompt_description=(
+                        f"Extract structured information for {template_type} report. "
+                        "Use exact text from source. Include entity, attribute, and value."
+                    ),
+                )
+                if extractions:
+                    data["extracted_entities"] = [
+                        {"class": e.extraction_class, "text": e.extraction_text,
+                         "position": f"{e.char_start}:{e.char_end}",
+                         "attributes": e.attributes}
+                        for e in extractions
+                    ]
+                    logger.debug(f"DocEngine auto-extracted {len(extractions)} entities")
+            except Exception as e:
+                logger.debug(f"DocEngine extraction: {e}")
+
+        if "raw_documents" in data and hasattr(self, '_pipeline_engine'):
+            try:
+                pipe_result = await self._pipeline_engine.run_nl(
+                    f"Process and structure for {template_type} report: extract key entities, deduplicate, and organize",
+                    documents=data["raw_documents"],
+                )
+                data["pipeline_results"] = pipe_result.get("results", [])
+                data["pipeline_stats"] = {
+                    "steps": pipe_result.get("steps_executed", 0),
+                    "outputs": pipe_result.get("output_count", 0),
+                }
+                logger.debug(f"DocEngine auto-pipelined {data['pipeline_stats']}")
+            except Exception as e:
+                logger.debug(f"DocEngine pipeline: {e}")
+
+        if "file_path" in data and hasattr(self, '_multimodal_parser'):
+            try:
+                parsed = await self._multimodal_parser.parse(data["file_path"])
+                data["parsed_document"] = parsed.to_dict()
+                data["parsed_text"] = parsed.text[:8000]
+                data["parsed_tables"] = [t.to_markdown() for t in parsed.tables[:5]]
+                data["parsed_images"] = [i.to_dict() for i in parsed.images[:10]]
+                logger.debug(f"DocEngine auto-parsed {parsed.summary_text()}")
+            except Exception as e:
+                logger.debug(f"DocEngine multimodal: {e}")
         sections = await self._get_sections(template_type, data, reqs)
         parts: list[str] = []
         progress: list[dict[str, Any]] = []

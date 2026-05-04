@@ -11,6 +11,10 @@ from .safety import (
     SafetyGuard, SandboxedExecutor, ActionPolicy,
     MerkleAuditChain, MerkleEntry, PathGuard, SSRFGuard, PromptInjectionScanner, KillSwitch,
 )
+from .cache_optimizer import CacheOptimizer, PrefixCacheTracker
+from .tool_repair import ToolCallRepair, repair_tool_call, normalize_command
+from .thought_harvest import ThoughtHarvester, HarvestResult, scavenge_thinking
+from .conversation_dna import ConversationDNA, SessionGene
 
 __all__ = [
     "LifeEngine",
@@ -18,4 +22,8 @@ __all__ = [
     "LivingWorld", "Genome",
     "SafetyGuard", "SandboxedExecutor", "ActionPolicy",
     "MerkleAuditChain", "MerkleEntry", "PathGuard", "SSRFGuard", "PromptInjectionScanner", "KillSwitch",
+    "CacheOptimizer", "PrefixCacheTracker",
+    "ToolCallRepair", "repair_tool_call", "normalize_command",
+    "ThoughtHarvester", "HarvestResult", "scavenge_thinking",
+    "ConversationDNA", "SessionGene",
 ]

@@ -13,7 +13,9 @@ class StatusBar(Horizontal):
     _done_steps: set[int] = set()
 
     def compose(self) -> ComposeResult:
-        yield Label("^Q 退出  Tab切换  Enter进入  ^D 主题", id="footer-keys")
+        yield Label("^Q quit  Tab switch  Enter enter  ^D theme", id="footer-keys")
+        yield Label("", id="mcp-chip")
+        yield Label("", id="error-chip")
         yield Label("", id="footer-status")
 
     def set_boot_steps(self, steps: list[str]) -> None:
@@ -58,6 +60,28 @@ class StatusBar(Horizontal):
 
     def show_booting(self, label: str, pct: float, elapsed: float) -> None:
         self._render_steps()
+
+    def update_mcp_health(self, healthy: int, total: int) -> None:
+        try:
+            chip = self.query_one("#mcp-chip", Label)
+            if total == 0:
+                chip.update("")
+            else:
+                color = "green" if healthy == total else ("yellow" if healthy > 0 else "red")
+                chip.update(f"MCP [{color}]{healthy}/{total}[/{color}]")
+        except Exception:
+            pass
+
+    def update_error_count(self, count: int, recent_60s: int = 0) -> None:
+        try:
+            chip = self.query_one("#error-chip", Label)
+            if count == 0:
+                chip.update("")
+            else:
+                color = "red" if recent_60s > 0 else "yellow"
+                chip.update(f"[{color}]! {count} errors[/{color}]")
+        except Exception:
+            pass
 
     def update_system_status(self, hub=None) -> None:
         try:

@@ -26,6 +26,17 @@ class IntegrationHub:
         self.engine = None
         self.daemon = None
 
+        # Auto-wired new modules (Phase 1 — instant constructors)
+        self.cache_optimizer = None
+        self.side_git = None
+        self.session_manager = None
+        self.lsp_manager = None
+        self.sub_agent_roles = None
+        self.rlm_runner = None
+        self.sse_server = None
+        self.struct_memory = None
+        self.extraction_engine = None
+
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
             self._session = aiohttp.ClientSession()
@@ -61,6 +72,13 @@ class IntegrationHub:
                 api_key=self.config.model.deepseek_api_key,
                 base_url=self.config.model.deepseek_base_url,
                 thinking_enabled=self.config.model.pro_thinking_enabled,
+                longcat_api_key=self.config.model.longcat_api_key,
+                longcat_base_url=self.config.model.longcat_base_url,
+                longcat_flash_model=self.config.model.longcat_flash_model,
+                longcat_flash_temperature=self.config.model.longcat_flash_temperature,
+                longcat_flash_max_tokens=self.config.model.longcat_flash_max_tokens,
+                longcat_models=self.config.model.longcat_models,
+                longcat_chat_model=self.config.model.longcat_chat_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )
@@ -120,6 +138,115 @@ class IntegrationHub:
 
         self.engine = LifeEngine(self.world)
 
+        # ── Auto-wire new modules ──
+        from ..dna.cache_optimizer import CacheOptimizer
+        self.cache_optimizer = CacheOptimizer(
+            max_tokens=1_000_000,
+            cache_budget=0.85,
+        )
+        self.world.cache_optimizer = self.cache_optimizer
+
+        from ..execution.side_git import SideGit
+        self.side_git = SideGit(workspace=str(Path.cwd()))
+        self.world.side_git = self.side_git
+
+        from ..execution.session_manager import SessionManager
+        self.session_manager = SessionManager()
+        self.world.session_manager = self.session_manager
+
+        from ..lsp import LSPManager
+        self.lsp_manager = LSPManager(opencode_bin=self.opencode_bin_path())
+        self.world.lsp_manager = self.lsp_manager
+
+        from ..execution.sub_agent_roles import SubAgentRoles
+        self.sub_agent_roles = SubAgentRoles(consciousness=self.world.consciousness)
+        self.world.sub_agent_roles = self.sub_agent_roles
+
+        from ..execution.rlm import RLMRunner
+        self.rlm_runner = RLMRunner(consciousness=self.world.consciousness, max_workers=16)
+        self.world.rlm_runner = self.rlm_runner
+
+        from ..dna.dual_consciousness import DualModelConsciousness
+        self.world.skill_discovery = None
+        try:
+            from ..capability.skill_discovery import SkillDiscoveryManager
+            self.world.skill_discovery = SkillDiscoveryManager()
+            self.world.skill_discovery.discover_all()
+        except Exception:
+            pass
+
+        from ..knowledge.struct_mem import StructMemory
+        self.struct_memory = StructMemory(world=self.world)
+        self.world.struct_memory = self.struct_memory
+        logger.debug("StructMemory initialized")
+
+        from ..capability.extraction_engine import ExtractionEngine
+        self.extraction_engine = ExtractionEngine(
+            api_key=self.config.model.deepseek_api_key,
+            base_url=self.config.model.deepseek_base_url,
+            model=self.config.model.flash_model,
+        )
+        self.world.extraction_engine = self.extraction_engine
+        logger.debug("ExtractionEngine (LangExtract) initialized")
+
+        if self.world.doc_engine:
+            self.world.doc_engine._extraction_engine = self.extraction_engine
+
+        from ..capability.pipeline_engine import PipelineEngine
+        self.world.pipeline_engine = PipelineEngine(
+            consciousness=self.world.consciousness,
+            extraction_engine=self.extraction_engine,
+        )
+        logger.debug("PipelineEngine initialized")
+
+        if self.world.doc_engine:
+            self.world.doc_engine._pipeline_engine = self.world.pipeline_engine
+
+        from ..capability.multimodal_parser import MultimodalParser
+        self.world.multimodal_parser = MultimodalParser(
+            api_key=self.config.model.deepseek_api_key,
+            base_url=self.config.model.deepseek_base_url,
+        )
+        if self.world.doc_engine:
+            self.world.doc_engine._multimodal_parser = self.world.multimodal_parser
+
+        from ..dna.conversation_dna import ConversationDNA
+        self.world.conversation_dna = ConversationDNA(world=self.world)
+        logger.debug("ConversationDNA initialized")
+
+        from ..capability.self_discovery import SelfDiscovery
+        self.world.self_discovery = SelfDiscovery()
+        logger.debug("SelfDiscovery initialized")
+
+        from ..knowledge.provenance import ProvenanceTracker
+        self.world.provenance = ProvenanceTracker()
+        logger.debug("ProvenanceTracker initialized")
+
+        from ..capability.memory_pipeline import MemoryPipeline
+        self.world.memory_pipeline = MemoryPipeline(
+            struct_memory=self.struct_memory,
+            conversation_dna=self.world.conversation_dna,
+        )
+        logger.debug("MemoryPipeline initialized")
+
+        from ..network.offline_mode import DualMode
+        self.world.dual_mode = DualMode(
+            node=self.world.node,
+            knowledge_base=self.world.knowledge_base,
+            struct_memory=self.struct_memory,
+        )
+        logger.debug("DualMode initialized")
+
+        from ..integration.opencode_bridge import OpenCodeBridge
+        self.world.opencode_bridge = OpenCodeBridge()
+        providers = self.world.opencode_bridge.discover_for_election()
+        if providers:
+            logger.info(f"OpenCode bridge: {len(providers)} providers available")
+            self.world.opencode_providers = providers
+        else:
+            self.world.opencode_providers = []
+            logger.debug("OpenCode bridge: no external providers found")
+
         from ..dna.life_daemon import LifeDaemon
         self.daemon = LifeDaemon(self.world, interval_minutes=30.0)
 
@@ -133,6 +260,21 @@ class IntegrationHub:
         await self.world.node.register()
         asyncio.create_task(self.world.node.heartbeat(self.config.network.heartbeat_interval))
         self._register_agents()
+
+        if self.lsp_manager:
+            try:
+                await self.lsp_manager.start()
+                logger.debug("LSP Manager started")
+            except Exception as e:
+                logger.debug(f"LSP start skipped: {e}")
+
+        if self.world.dual_mode:
+            try:
+                await self.world.dual_mode.start_monitoring()
+                status = await self.world.dual_mode.check()
+                logger.info(f"DualMode: {'online' if status['online'] else 'offline'} (provider={status['provider']})")
+            except Exception as e:
+                logger.debug(f"DualMode start: {e}")
 
         self._started = True
         self._phase = 1
@@ -160,13 +302,62 @@ class IntegrationHub:
         if not self._started:
             await self.start()
         self.world.metrics.life_cycles.inc()
-        ctx = await self.engine.run(message, **kwargs)
+
+        pipe_keywords = ["提取", "汇总", "去重", "排序", "过滤", "筛选", "合并",
+                         "extract", "summarize", "dedup", "sort", "filter", "merge",
+                         "pipeline", "管道", "处理这些文档", "分析这些文件"]
+        if self.world.pipeline_engine and any(kw in message.lower() for kw in pipe_keywords):
+            try:
+                pipe_result = await self.world.pipeline_engine.run_nl(message)
+                return {
+                    "mode": "pipeline",
+                    "pipeline": pipe_result.get("generated_pipeline", {}),
+                    "results": pipe_result.get("results", [])[:20],
+                    "stats": {
+                        "steps": pipe_result.get("steps_executed", 0),
+                        "outputs": pipe_result.get("output_count", 0),
+                    },
+                }
+            except Exception as e:
+                logger.debug(f"Pipeline auto-dispatch: {e}")
+
+        mem_context = ""
+        if self.struct_memory:
+            try:
+                entries, synthesis = await self.struct_memory.retrieve_for_query(message)
+                mem_context = self.struct_memory.get_context_block(message, entries, synthesis)
+            except Exception:
+                pass
+
+        ctx = await self.engine.run(message, memory_context=mem_context, **kwargs)
+
+        if self.session_manager:
+            try:
+                from ..execution.session_manager import SessionState
+                state = SessionState(
+                    session_id=ctx.session_id,
+                    workspace=str(Path.cwd()),
+                    messages=[{"role": "user", "content": message},
+                              {"role": "assistant", "content": str(ctx.metadata.get("cognition", ""))}],
+                    total_tokens=ctx.metadata.get("total_tokens", 0),
+                    reasoning_effort=getattr(self, '_effort', "max"),
+                )
+                await self.session_manager.save(state)
+            except Exception:
+                pass
+
+        cache_stats = {}
+        if self.cache_optimizer:
+            cache_stats = self.cache_optimizer.stats()
+
         return {
             "session_id": ctx.session_id, "intent": ctx.intent,
             "plan": ctx.plan, "execution_results": ctx.execution_results,
             "reflections": ctx.reflections, "quality": ctx.quality_reports,
             "generation": self.world.genome.generation,
             "success_rate": ctx.metadata.get("success_rate", 0),
+            "cache_stats": cache_stats,
+            "side_git_turn": ctx.metadata.get("side_git_turn"),
         }
 
     async def generate_report(self, template: str, data: dict, requirements: dict | None = None) -> dict:
@@ -256,7 +447,20 @@ class IntegrationHub:
     def status(self) -> dict:
         if not self._started:
             return {"version": self.config.version, "online": False, "phase": "starting"}
-        return {"version": self.config.version, "online": True, "engine": self.engine.status(), "cells": len(self.world.cell_registry.discover()), "network": self.world.node.get_status(), "orchestrator": self.world.orchestrator.get_status(), "healer": self.world.self_healer.get_status(), "audit": self.world.safety.summary()}
+        cache_stats = self.cache_optimizer.stats() if self.cache_optimizer else {}
+        sessions = self.session_manager.list_sessions.__wrapped__ if hasattr(self.session_manager, 'list_sessions') else []
+        return {
+            "version": self.config.version, "online": True,
+            "engine": self.engine.status(),
+            "cells": len(self.world.cell_registry.discover()),
+            "network": self.world.node.get_status(),
+            "orchestrator": self.world.orchestrator.get_status(),
+            "healer": self.world.self_healer.get_status(),
+            "audit": self.world.safety.summary(),
+            "cache": cache_stats,
+            "sub_agents": self.sub_agent_roles.get_status() if self.sub_agent_roles else {},
+            "struct_memory": self.struct_memory.get_stats() if self.struct_memory else {},
+        }
 
     def audit_summary(self) -> dict:
         return self.world.safety.summary()
@@ -264,6 +468,122 @@ class IntegrationHub:
     def verify_audit_chain(self) -> dict:
         valid, idx = self.world.safety.verify_audit()
         return {"valid": valid, "first_broken_index": idx, "total_entries": len(self.world.safety.audit.entries)}
+
+    def opencode_bin_path(self) -> str:
+        from pathlib import Path
+        base = Path(".livingtree") / "base" / "opencode"
+        exe = base / ("opencode.exe" if __import__('sys').platform == "win32" else "opencode")
+        if exe.exists():
+            return str(exe)
+        import shutil
+        return shutil.which("opencode") or "opencode"
+
+    async def restore_turn(self, turn_id: int) -> dict:
+        if self.side_git:
+            ok = await self.side_git.restore(turn_id)
+            return {"restored": ok, "turn_id": turn_id}
+        return {"restored": False, "error": "SideGit not available"}
+
+    async def revert_turn(self, turn_id: int) -> dict:
+        return await self.restore_turn(turn_id)
+
+    async def list_side_git_turns(self) -> list[dict]:
+        if self.side_git:
+            return await self.side_git.list_turns()
+        return []
+
+    async def list_sessions(self) -> list[dict]:
+        if self.session_manager:
+            return await self.session_manager.list_sessions()
+        return []
+
+    async def resume_session(self, session_id: str) -> dict | None:
+        if self.session_manager:
+            state = await self.session_manager.load(session_id)
+            return state.model_dump() if state else None
+        return None
+
+    def get_cache_stats(self) -> dict:
+        if self.cache_optimizer:
+            return self.cache_optimizer.stats()
+        return {}
+
+    async def run_rlm_fanout(self, prompt: str, n_workers: int = 4) -> dict:
+        if self.rlm_runner:
+            result = await self.rlm_runner.fan_out(prompt, n_workers)
+            return {
+                "summary": result.summary(),
+                "worker_count": result.worker_count,
+                "success_count": result.success_count,
+                "total_tokens": result.total_tokens,
+                "results": [{"task_id": r.task_id, "content": r.content[:200], "success": r.success} for r in result.results],
+            }
+        return {"error": "RLM not available"}
+
+    async def run_implement_verify(self, spec: str) -> dict:
+        if self.sub_agent_roles:
+            task = await self.sub_agent_roles.run_implement_verify(spec)
+            return {
+                "task_id": task.id,
+                "status": task.status,
+                "approved": task.approved,
+                "iterations": task.iterations,
+                "output": task.final_output[:500] if task.final_output else "",
+                "verifier_feedback": task.verifier_feedback[:200] if task.verifier_feedback else "",
+            }
+        return {"error": "SubAgentRoles not available"}
+
+    async def lsp_check_file(self, file_path: str) -> dict:
+        if self.lsp_manager:
+            result = await self.lsp_manager.check_file(file_path)
+            return {
+                "file": file_path,
+                "errors": result.errors,
+                "warnings": result.warnings,
+                "diagnostics": [{"line": d.line, "severity": d.severity, "message": d.message} for d in result.diagnostics[:15]],
+            }
+        return {"error": "LSP not available"}
+
+    async def generate_agents_md(self) -> dict:
+        ws = Path.cwd()
+        data = {
+            "workspace": str(ws),
+            "project_type": "general",
+        }
+        if (ws / "pyproject.toml").exists():
+            data["project_type"] = "python"
+        elif (ws / "package.json").exists():
+            data["project_type"] = "nodejs"
+        elif (ws / "Cargo.toml").exists():
+            data["project_type"] = "rust"
+
+        agents_path = ws / "AGENTS.md"
+        if agents_path.exists():
+            data["exists"] = True
+            data["existing_content"] = agents_path.read_text(encoding="utf-8")[:500]
+        return data
+
+    async def retrieve_from_memory(self, query: str, top_k: int = 60) -> dict:
+        if self.struct_memory:
+            entries, synthesis = await self.struct_memory.retrieve_for_query(query, top_k=top_k)
+            context = self.struct_memory.get_context_block(query, entries, synthesis)
+            return {
+                "entries_count": len(entries),
+                "synthesis_count": len(synthesis),
+                "context_block": context[:5000],
+                "stats": self.struct_memory.get_stats(),
+            }
+        return {"error": "StructMemory not available"}
+
+    async def consolidate_memory(self) -> dict:
+        if self.struct_memory:
+            blocks = await self.struct_memory.consolidate_if_needed()
+            return {
+                "consolidated": len(blocks),
+                "new_synthesis": [{"id": b.id, "content": b.content[:200]} for b in blocks],
+                "stats": self.struct_memory.get_stats(),
+            }
+        return {"error": "StructMemory not available"}
 
     def _register_agents(self) -> None:
         from ..execution import AgentSpec, AgentRole

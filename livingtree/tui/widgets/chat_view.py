@@ -21,6 +21,7 @@ from rich.console import Console, RenderableType
 from rich.text import Text
 from rich.style import Style
 from rich.panel import Panel
+from rich.table import Table as RichTable
 from io import StringIO
 
 
@@ -32,6 +33,7 @@ STYLES = {
     "tool": Style(color="#fea62b"),
     "error": Style(color="#f85149", bold=True),
     "system": Style(color="#8b949e"),
+    "clarification": Style(color="#fea62b", bold=True),
 }
 
 
@@ -82,6 +84,12 @@ class ChatMessage:
             return Text(f"💭 Thinking:\n{self.content[-500:]}", style=STYLES["thinking"])
         elif self.role == "tool":
             return Text(f"🔧 {self.content}", style=STYLES["tool"])
+        elif self.role == "clarification":
+            return Panel(
+                Text(f"❓ {self.content}", style=STYLES["clarification"]),
+                border_style="orange1",
+                title="Needs Clarification",
+            )
         elif self.role == "error":
             return Text(f"✗ {self.content}", style=STYLES["error"])
         elif self.role == "assistant":
@@ -157,21 +165,25 @@ class ChatView(ScrollView):
         return msg
 
     def _classify_format(self, text: str) -> str:
+        # Quick pattern detection (no LLM needed for obvious cases)
+        lower = text.lower()
+        if any(kw in lower for kw in ["哪个", "which one", "clarify", "澄清", "you mean", "你是说", 
+                                        "请确认", "confirm", "还是", "or would you"]):
+            if "?" in text or "？" in text:
+                return "clarification"
         try:
             import asyncio
             result = asyncio.run(
                 self._consciousness.chain_of_thought(
-                    f"Classify this content format with ONE word (markdown/code/thinking/tool_output/error/plain):\n{text[:300]}",
+                    f"Classify with ONE word (markdown/code/thinking/clarification/tool/error/plain):\n{text[:300]}",
                     steps=1, max_tokens=10, temperature=0.1
                 )
             )
-            for label in ["markdown", "code", "thinking", "tool_output", "error"]:
+            for label in ["clarification", "markdown", "code", "thinking", "tool", "error"]:
                 if label in result.lower():
                     return "assistant" if label == "markdown" else label
         except Exception:
             pass
-        if "```" in text:
-            return "assistant"
         return "assistant"
 
     # ── Public API ──

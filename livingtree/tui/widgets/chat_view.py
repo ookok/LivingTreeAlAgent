@@ -104,11 +104,14 @@ class ChatMessage:
         elif self.role == "assistant":
             return self._render_assistant()
         else:
+            # All unrecognized content: try Markdown first, then highlighted text
             try:
-                highlighted = ReprHighlighter()(self.content)
-                return highlighted
+                return Markdown(self.content)
             except Exception:
-                return Text.from_markup(self.content)
+                try:
+                    return ReprHighlighter()(self.content)
+                except Exception:
+                    return Text(self.content, style=Style(color="#c9d1d9"))
 
     def _render_assistant(self) -> RenderableType:
         try:

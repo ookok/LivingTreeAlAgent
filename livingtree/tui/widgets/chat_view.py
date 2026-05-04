@@ -101,8 +101,17 @@ class ChatMessage:
             return Text(f"✗ {self.content}", style=STYLES["error"])
         elif self.role == "assistant":
             return self._render_assistant()
+        elif self.role == "system":
+            if self.content.strip().startswith("[") and "[/" in self.content:
+                try:
+                    return Text.from_markup(self.content)
+                except Exception:
+                    pass
+            try:
+                return ReprHighlighter()(self.content)
+            except Exception:
+                return Text(self.content, style=Style(color="#c9d1d9"))
         else:
-            # Rich markup (e.g. [#58a6ff]text[/#58a6ff]) → use from_markup
             if self.content.strip().startswith("[") and "[/" in self.content:
                 try:
                     return Text.from_markup(self.content)

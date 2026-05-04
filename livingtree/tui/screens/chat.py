@@ -67,6 +67,7 @@ class ChatScreen(Screen):
         ("ctrl+c", "copy_selection", "复制"),
         ("ctrl+shift+c", "copy_transcript", "全复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
+        ("ctrl+n", "new_session", "新会话"),
         ("ctrl+s", "stash_draft", "暂存草稿"),
         ("ctrl+r", "history_search", "搜索历史"),
         ("shift+tab", "cycle_effort", "推理深度"),

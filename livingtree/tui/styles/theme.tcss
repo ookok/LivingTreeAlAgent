@@ -43,7 +43,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
 
 #sidebar { width: 26; background: #161b22; border-right: solid #30363d; padding: 1; }
-#main-area { width: 1fr; }
+#main-area { width: 1fr; height: 1fr; }
 #chat-display {
     height: 1fr; border: none; overflow-y: scroll;
     scrollbar-size: 1 1; padding: 0 2; background: #0d1117;
@@ -54,11 +54,11 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #autocomplete-hint { height: 1; color: #484f58; padding: 0 2; }
 
 #chat-input-container {
-    dock: bottom; height: auto; min-height: 10; max-height: 18;
+    dock: bottom; height: auto; min-height: 12; max-height: 20;
     background: #161b22; border-top: solid #30363d; padding: 1 1;
 }
 #chat-input {
-    width: 1fr; height: 8; border: solid #30363d;
+    width: 1fr; height: 10; border: solid #30363d;
     background: #0d1117; color: #c9d1d9; padding: 0 1; margin: 0 1 0 0;
 }
 #chat-input:focus { border: solid #58a6ff; }

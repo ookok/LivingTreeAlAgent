@@ -203,7 +203,6 @@ class ChatScreen(Screen):
                 snap = self._cache_tracker.snapshot()
                 self.query_one("#chat-cache-label", Label).update(f"[#484f58]cache {snap['cache_hit_pct']:.0f}%[/#484f58]")
         except Exception: pass
-
         self._update_status_bar()
 
     def _update_status_bar(self) -> None:

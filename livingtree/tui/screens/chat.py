@@ -72,6 +72,7 @@ class ChatScreen(Screen):
         ("enter", "send_from_binding", "发送"),
         ("end", "scroll_to_bottom", "到底部"),
         ("ctrl+f", "fold_all", "折叠AI"),
+        ("f2", "open_recent_file", "打开文件"),
     ]
 
     def __init__(self, **kwargs):
@@ -111,6 +112,92 @@ class ChatScreen(Screen):
         first = lines[0].strip() if lines else text[:max_len]
         first = first.replace("#", "").replace("*", "").strip()
         return first[:max_len] + ("..." if len(first) > max_len else "")
+
+    def _detect_files(self, text: str) -> list[str]:
+        import re
+        patterns = [
+            r'(?:created|modified|saved|wrote|生成|创建|保存)\s+[`\"]?([\w./\\-]+\.\w{1,5})[`\"]?',
+            r'(?:file|文件)[:\s]+[`\"]?([\w./\\-]+\.\w{1,5})[`\"]?',
+        ]
+        files = []
+        for p in patterns:
+            for m in re.finditer(p, text, re.IGNORECASE):
+                f = m.group(1)
+                if f not in files:
+                    files.append(f)
+        return files[-5:] if files else []
+
+    def _format_files_for_display(self, text: str, files: list[str]) -> str:
+        if not files:
+            return text
+        icons = {
+            ".png": "🖼", ".jpg": "🖼", ".jpeg": "🖼", ".gif": "🖼",
+            ".mp3": "🎵", ".wav": "🎵", ".mp4": "🎬",
+            ".doc": "📘", ".docx": "📘", ".pdf": "📕", ".xlsx": "📊",
+            ".py": "🐍", ".js": "🟨", ".html": "🌐",
+        }
+        file_line = "[#3fb950]Files:[/#3fb950]\n"
+        for f in files[:8]:
+            ext = Path(f).suffix.lower()
+            icon = icons.get(ext, "📄")
+            name = Path(f).name
+            file_line += f"  {icon} [#58a6ff]{name}[/#58a6ff] [dim](F2 to open)[/dim]\n"
+        return text + "\n" + file_line
+
+    @work(exclusive=False)
+    async def action_open_recent_file(self) -> None:
+        """F2: Open the most recently mentioned file."""
+        files = []
+        for msg in self._messages:
+            files.extend(self._detect_files(str(msg.get("content", ""))))
+        if not files:
+            self.notify("No files detected in conversation", timeout=2)
+            return
+        f = files[-1]
+        await self._open_file(f)
+
+    async def _open_file(self, path: str) -> None:
+        p = Path(path)
+        if not p.exists():
+            p = Path(self._workspace) / path if hasattr(self, '_workspace') else Path(path)
+        if not p.exists():
+            self.notify(f"File not found: {path}", severity="warning", timeout=3)
+            return
+        ext = p.suffix.lower()
+        self._display_write(f"\n[#58a6ff]Opening: {p.name}[/#58a6ff]\n")
+        if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
+            import subprocess, sys
+            if sys.platform == "win32":
+                subprocess.Popen(["start", "", str(p)], shell=True)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(p)])
+            else:
+                subprocess.Popen(["xdg-open", str(p)])
+            self._display_write(f"[dim]Image opened externally: {p.name}[/dim]\n")
+        elif ext in (".mp3", ".wav", ".mp4", ".avi", ".mov"):
+            import subprocess, sys
+            if sys.platform == "win32":
+                subprocess.Popen(["start", "", str(p)], shell=True)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(p)])
+            else:
+                subprocess.Popen(["xdg-open", str(p)])
+            self._display_write(f"[dim]Media opened externally: {p.name}[/dim]\n")
+        else:
+            try:
+                content = p.read_text(encoding="utf-8", errors="replace")
+                lang = {".py":"python",".js":"javascript",".ts":"typescript",
+                        ".json":"json",".yaml":"yaml",".yml":"yaml",".md":"markdown",
+                        ".html":"html",".css":"css",".sql":"sql",".sh":"bash",
+                        ".rs":"rust",".go":"go",".java":"java",".cpp":"cpp",".c":"c",
+                        ".toml":"toml",".ini":"ini",".cfg":"ini",".xml":"xml"}.get(ext, "")
+                preview = content[:1500]
+                self._display_write(f"```{lang}\n{preview}\n```\n")
+                if len(content) > 1500:
+                    self._display_write(f"[dim]... {len(content)} total chars[/dim]\n")
+                self._attached_files.append(p)
+            except Exception:
+                self._display_write(f"[dim]Cannot preview: {p.name}[/dim]\n")
 
     def _display_write(self, text: str = "") -> None:
         try:

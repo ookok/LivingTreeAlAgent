@@ -238,6 +238,10 @@ class IntegrationHub:
         self.world.spark_search = SparkSearch(api_password=search_key)
         logger.debug("Spark Search initialized")
 
+        from ..capability.web_reach import WebReach
+        self.world.web_reach = WebReach(consciousness=self.world.consciousness)
+        logger.debug("WebReach initialized")
+
         from ..dna.conversation_dna import ConversationDNA
         self.world.conversation_dna = ConversationDNA(world=self.world)
         logger.debug("ConversationDNA initialized")

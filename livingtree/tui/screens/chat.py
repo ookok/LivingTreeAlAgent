@@ -65,6 +65,7 @@ _COMMANDS = {
     "/pipeline": "自动管道 — /pipeline <自然语言描述任务>",
     "/pipe": "同上（别名）",
     "/parse": "解析文档 — /parse <PDF路径>",
+    "/fetch": "抓取网页 — /fetch <URL>",
     "/errors": "系统错误 — /errors | /errors clear",
 }
 
@@ -1084,6 +1085,20 @@ class ChatScreen(Screen):
             self._messages.append({"role": "system", "content": doc.text[:4000]})
             display.write("[dim]Document content added to context[/dim]")
             display.write("[dim]---[/dim]")
+
+        elif cmd == "/fetch" and arg:
+            try:
+                from ...capability.web_reach import WebReach
+                reach = WebReach()
+                display.write(f"[#58a6ff]Fetching: {arg[:80]}[/#58a6ff]")
+                page = await reach.fetch(arg)
+                display.write(page.format_display())
+                if page.text:
+                    self._messages.append({"role": "system", "content": page.text[:4000]})
+                    display.write("[dim]Page content added to context[/dim]")
+                display.write("[dim]---[/dim]")
+            except ImportError:
+                display.write("[#d29922]WebReach not available (install bs4+lxml+readability-lxml)[/#d29922]")
 
         elif cmd == "/errors":
             try:

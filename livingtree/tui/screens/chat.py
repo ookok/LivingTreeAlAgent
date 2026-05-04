@@ -37,6 +37,7 @@ from rich.syntax import Syntax
 from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
+from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler
@@ -281,6 +282,7 @@ class ChatScreen(Screen):
             id="chat-input-container",
         )
         yield AttachmentBar(id="attachment-bar")
+        yield StatusBar()
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

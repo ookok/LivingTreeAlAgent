@@ -79,6 +79,8 @@ class ChatMessage:
     def _classify_content(self, text: str) -> str:
         if re.search(r'\[/?[#\w]+\]|\[/\w+\]', text):
             return "markup"
+        if re.search(r'\*\*.*\*\*|`[^`]+`|^#{1,4}\s|^\s*[-*+]\s', text, re.MULTILINE):
+            return "markdown"
         return "plain"
 
     def _has_markup(self, text: str) -> bool:
@@ -270,18 +272,13 @@ class ChatView(ScrollView):
         spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
         for i, msg in enumerate(self._messages):
-            lines = msg.render_lines(width - 8)
-            ts = msg.timestamp or ""
+            lines = msg.render_lines(width)
             for j, line in enumerate(lines):
-                if j == 0:
-                    prefix = f"[dim]{ts}[/dim] "
+                if j == 0 and self._streaming and i == len(self._messages) - 1 and msg.role in ("assistant",):
+                    prefix = f"[#d2a8ff]⠋[/#d2a8ff] "
+                    strips.append(Strip([Segment(prefix, Style())]) + line)
                 else:
-                    prefix = "     "
-                if self._streaming and i == len(self._messages) - 1 and msg.role in ("assistant",):
-                    prefix += f"[#d2a8ff]{spinner[self._spinner_idx % 10]}[/#d2a8ff] "
-                else:
-                    prefix += "  "
-                strips.append(Strip([Segment(prefix, Style())]) + line)
+                    strips.append(line)
 
         if self._status_text:
             strips.append(Strip.blank(width))

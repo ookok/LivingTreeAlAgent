@@ -52,17 +52,12 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-display:focus { border: solid #58a6ff; }
 
 #chat-input-container {
-    height: auto; min-height: 7; max-height: 14;
+    dock: bottom; height: auto; min-height: 7; max-height: 14;
     background: #161b22; border-top: solid #30363d; padding: 1 1;
 }
-#chat-input {
-    width: 1fr; height: 5; border: solid #30363d;
-    background: #0d1117; color: #c9d1d9; padding: 0 1;
+#attachment-bar {
+    dock: bottom; min-height: 0; max-height: 3;
 }
-#chat-input:focus { border: solid #58a6ff; }
-#chat-hints { width: 1fr; color: #484f58; margin: 0; padding: 0 1; height: 1; content-align: left middle; }
-#action-bar { height: 1; background: #161b22; border-top: solid #21262d; padding: 0 1; align-horizontal: left; }
-#attachment-bar { min-height: 0; }
 #effort-btn { margin: 0 1 0 0; border: solid #d2a8ff; color: #d2a8ff; }
 #chat-display .user-label { color: #3fb950; text-style: bold; }
 #chat-display .ai-label { color: #58a6ff; text-style: bold; }

@@ -271,22 +271,22 @@ class ChatScreen(Screen):
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
-            yield Horizontal(
-                Button("File", id="file-btn"),
-                Label("", id="llm-status"),
-                Label("", id="pulse-status"),
-                Label("", id="error-status"),
-                Label("[dim]Enter send  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
-                Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
-                Button("Clear", id="clear-btn"),
-                id="action-bar",
-            )
-            yield AttachmentBar(id="attachment-bar")
-            yield Container(
-                TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-                Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
-                id="chat-input-container",
-            )
+        yield Horizontal(
+            Button("File", id="file-btn"),
+            Label("", id="llm-status"),
+            Label("", id="pulse-status"),
+            Label("", id="error-status"),
+            Label("[dim]Enter send  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
+            Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
+            Button("Clear", id="clear-btn"),
+            id="action-bar",
+        )
+        yield AttachmentBar(id="attachment-bar")
+        yield Container(
+            TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
+            Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
+            id="chat-input-container",
+        )
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)
@@ -434,20 +434,16 @@ class ChatScreen(Screen):
         await self._send()
 
     def on_key(self, event: events.Key) -> None:
-        if event.key == "enter" and event.is_synthesized:
-            return
         if event.key == "enter":
             try:
                 ta = self.query_one("#chat-input", TextArea)
                 if ta.has_focus:
-                    event.stop()
                     event.prevent_default()
-                    self._call_later(self._send_from_input)
+                    event.stop()
+                    import asyncio
+                    asyncio.create_task(self._send())
             except Exception:
                 pass
-
-    async def _send_from_input(self) -> None:
-        await self._send()
 
     def action_scroll_to_bottom(self) -> None:
         try:

@@ -72,12 +72,15 @@ class AttachmentBar(Horizontal):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = str(event.button.id)
-        if bid.startswith("att-rm-"):
+        if "att-rm" in bid:
             try:
-                idx = int(bid.split("-")[-1])
-                self.remove(idx)
-                if self._on_remove:
-                    self._on_remove(idx)
+                parts = bid.split("-")
+                idx = int(parts[-1])
+                if 0 <= idx < len(self._files):
+                    self._files.pop(idx)
+                    self._render()
+                    if self._on_remove:
+                        self._on_remove(idx)
             except (ValueError, IndexError):
                 pass
 

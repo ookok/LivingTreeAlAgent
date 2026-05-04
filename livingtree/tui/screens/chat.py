@@ -314,7 +314,19 @@ class ChatScreen(Screen):
                 clipboard_handler.write_clipboard_text(msg["content"])
                 self.notify("Copied last response", timeout=2)
                 return
-        self.notify("No response to copy", severity="warning", timeout=2)
+        self.notify("Nothing to copy", severity="warning", timeout=2)
+
+    def _copy_full_transcript(self) -> None:
+        lines = []
+        for msg in self._messages:
+            role = "You" if msg["role"] == "user" else "AI"
+            lines.append(f"{role}: {msg['content']}")
+        text = "\n\n".join(lines)
+        if text:
+            clipboard_handler.write_clipboard_text(text)
+            self.notify(f"Copied full transcript ({len(self._messages)} msgs)", timeout=2)
+        else:
+            self.notify("Nothing to copy", severity="warning", timeout=2)
 
     def action_copy_selection(self) -> None:
         try:

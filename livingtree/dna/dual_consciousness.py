@@ -411,16 +411,16 @@ class DualModelConsciousness(Consciousness):
     # ── Fallbacks ──
 
     async def _heuristic_stream(self, prompt: str) -> AsyncIterator[str]:
-        for thought in ["[感知]", "[认知]", "[规划]", "[准备]"]:
-            await asyncio.sleep(0.02)
-            yield thought + " "
+        import asyncio
+        yield "[All providers offline — check network / API keys / opencode serve]\n"
+        await asyncio.sleep(0.02)
+        yield f"Query: {prompt[:100]}"
 
     def _heuristic_cot(self, q: str, steps: int) -> str:
-        return "\n".join([f"Step {i+1}: 分析{q[:30]}维度{i+1}" for i in range(steps)] +
-                         [f"结论: 经{steps}步推理"])
+        return f"[Offline] All LLM providers unavailable. Query: {q[:200]}. Steps: {steps}."
 
     def _heuristic_hypotheses(self, p: str, n: int) -> list[str]:
-        return [f"假设{i+1}: 处理 {p[:30]}" for i in range(n)]
+        return [f"[Offline] Cannot generate hypotheses for: {p[:80]}"]
 
     def _heuristic_questions(self, c: str) -> list[str]:
-        return [f"关于'{c[:40]}'需要哪些关键领域知识?", "有哪些边界条件尚未明确?", "当前的推理前提假设是否成立?"]
+        return ["[Offline] Are API keys valid?", "[Offline] Is opencode serve running?", "[Offline] Check network connectivity"]

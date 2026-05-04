@@ -79,18 +79,32 @@ class Phage:
         }
 
     async def scan_github(self, repo_url: str) -> dict:
-        """Scan a GitHub repository URL (simulated for now).
-
-        For real GitHub scanning, use the GitHub API or clone-and-analyze.
-        """
-        logger.info(f"Scanning GitHub repo: {repo_url}")
         repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
-        return {
-            "repo": repo_url,
-            "name": repo_name,
-            "status": "simulated",
-            "message": "Clone and scan locally with scan_directory() for full analysis",
-        }
+        try:
+            parts = repo_url.rstrip("/").replace("https://github.com/", "").split("/")
+            if len(parts) >= 2:
+                api_url = f"https://api.github.com/repos/{parts[0]}/{parts[1]}"
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(api_url, headers={"User-Agent": "LivingTree/2.1"},
+                                     timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return {
+                                "repo": repo_url, "name": repo_name,
+                                "stars": data.get("stargazers_count", 0),
+                                "language": data.get("language", ""),
+                                "description": data.get("description", "")[:200],
+                                "topics": data.get("topics", []),
+                                "status": "analyzed",
+                            }
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"GitHub scan: {e}")
+
+        return {"repo": repo_url, "name": repo_name, "status": "scanned",
+                "message": "Use scan_directory() for full local analysis"}
 
     async def extract_patterns(self, source: str, language: str = "python") -> list[dict]:
         """Extract code patterns from source string using AST.

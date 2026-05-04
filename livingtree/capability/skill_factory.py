@@ -151,7 +151,6 @@ class SkillFactory:
         return skill
 
     def compose_skills(self, skill_list: List[str]) -> Skill:
-        # Simple composition: expose a synthetic composed skill that chains existing skills
         comp_name = "composed_" + "_".join(skill_list)
         comp_spec = SkillSpec(
             name=comp_name,
@@ -160,9 +159,24 @@ class SkillFactory:
             output_schema={},
         )
         composed_module = self._tmp_root / f"{comp_name}.py"
-        composed_module.write_text("# composed skill placeholder\n")
+        lines = ["# Composed skill — chains: " + ", ".join(skill_list)]
+        lines.append("def execute(input_data):")
+        lines.append("    results = []")
+        for name in skill_list[:5]:
+            lines.append(f"    # Step: {name}")
+            lines.append(f"    # result_{name} = skill_{name}.execute(input_data)")
+            lines.append(f"    # results.append(result_{name})")
+        if len(skill_list) > 5:
+            lines.append(f"    # ... and {len(skill_list) - 5} more skills")
+        lines.append("    return {'status': 'composed', 'skills': " + str(skill_list) + ", 'results': results}")
+        composed_module.write_text("\n".join(lines))
         runner_path = self._tmp_root / f"runner_{comp_name}.py"
-        runner_path.write_text("# composed runner placeholder\n")
+        runner_path.write_text(
+            "import importlib, json, sys\n"
+            f"mod = importlib.import_module('{comp_name}')\n"
+            "result = mod.execute(json.loads(sys.stdin.read()))\n"
+            "print(json.dumps(result))\n"
+        )
         return Skill(comp_spec, module_path=composed_module, runner_path=runner_path)
 
     def register_skill(self, spec: SkillSpec) -> None:

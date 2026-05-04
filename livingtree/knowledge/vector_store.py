@@ -50,19 +50,21 @@ class LocalEmbeddingBackend(EmbeddingBackend):
                 self._model = None
 
     def _fallback_embed(self, texts: List[str]) -> List[List[float]]:
-        # Deterministic, lightweight embedding using a tiny PRNG derived from content
-        vecs: List[List[float]] = []
+        import hashlib
+        vecs = []
         for t in texts:
-            import struct
-            h = hashlib.sha256(t.encode("utf-8")).digest()
-            seed = int.from_bytes(h[:4], "little", signed=False)
-            a = seed if seed != 0 else 1
-            rng = a
-            out: List[float] = []
-            for _ in range(128):
-                rng = (1103515245 * rng + 12345) & 0x7fffffff
-                out.append((rng % 1000) / 1000.0)
-            vecs.append(out)
+            low = t.lower()
+            vec = [0.0] * 128
+            for i, ch in enumerate(low):
+                if ch.isalpha():
+                    idx = ord(ch) % 128
+                    vec[idx] += 1.0 / max(len(low), 1)
+            ngram = low + " " + low
+            for i in range(len(ngram) - 2):
+                h = ord(ngram[i]) * 256 + ord(ngram[i + 1])
+                vec[h % 128] += 0.5 / max(len(ngram), 1)
+            total = sum(abs(v) for v in vec) or 1.0
+            vecs.append([v / total for v in vec])
         return vecs
 
     def embed(self, texts: List[str]) -> List[List[float]]:

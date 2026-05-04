@@ -83,8 +83,22 @@ class KnowledgeGraph:
 
     # Neo4j-style adapters (stubs for demo)
     def to_neo4j(self, path: str) -> None:
-        logger = __import__('loguru').logger  # lazy import to avoid hard dep
-        logger.info("Exporting to Neo4j is not implemented in this lightweight backend. Path: %s", path)
+        self.export_to_sqlite(path.replace(".neo4j", ".db").replace(".cypher", ".db"))
+
+    def export_to_sqlite(self, path: str) -> None:
+        import sqlite3, json
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE IF NOT EXISTS entities (id TEXT PRIMARY KEY, label TEXT, kind TEXT, properties TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS edges (source TEXT, target TEXT, relation TEXT, weight REAL)")
+        for eid, ent in self.nodes_index.items():
+            conn.execute("INSERT OR REPLACE INTO entities VALUES (?,?,?,?)",
+                         (eid, ent.label or "", getattr(ent, 'kind', ''), json.dumps(getattr(ent, 'properties', {}), ensure_ascii=False)))
+        for eid, ent in self.nodes_index.items():
+            for rel_ent_id in getattr(ent, 'related', []):
+                conn.execute("INSERT INTO edges VALUES (?,?,?,?)", (eid, rel_ent_id, "related", 1.0))
+        conn.commit()
+        conn.close()
+        logger.info(f"KnowledgeGraph exported to SQLite: {path}")
 
 
 __all__ = ["KnowledgeGraph", "Entity"]

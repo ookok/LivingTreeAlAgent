@@ -13,6 +13,7 @@ from __future__ import annotations
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
+from textual.segment import Segment
 
 from rich.markdown import Markdown
 from rich.console import Console, RenderableType
@@ -62,12 +63,12 @@ class ChatMessage:
                 for segment in segments:
                     seg_text = segment.text
                     seg_style = segment.style or Style()
-                    strips.append(Strip([(seg_text, seg_style, False)]))
+                    strips.append(Strip([Segment(seg_text, seg_style)]))
         except Exception:
             fallback = str(text).split("\n")
             for line in fallback:
                 if line:
-                    strips.append(Strip([(line, Style(), False)]))
+                    strips.append(Strip([Segment(line, Style())]))
         return strips
 
     def _format(self) -> RenderableType:

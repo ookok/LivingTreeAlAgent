@@ -201,6 +201,13 @@ class ChatScreen(Screen):
         except Exception:
             pass
 
+    # ── Enter to send ──
+    @work(exclusive=False)
+    async def _on_text_area_submitted(self, event: TextArea.Submitted) -> None:
+        if event.text_area.id == "chat-input":
+            event.stop()
+            await self._send()
+
     # ── Autocomplete ──
     def on_input_changed(self, event: TextArea.Changed) -> None:
         if event.text_area.id != "chat-input":
@@ -250,6 +257,11 @@ class ChatScreen(Screen):
         self._effort_idx = (self._effort_idx + 1) % len(REASONING_EFFORTS)
         self._reasoning_effort = REASONING_EFFORTS[self._effort_idx]
         self._update_topbar()
+        try:
+            btn = self.query_one("#effort-btn", Button)
+            btn.label = f"Effort:{self._reasoning_effort.upper()}"
+        except Exception:
+            pass
         self.notify(f"Reasoning: {self._reasoning_effort.upper()}", timeout=2)
 
     # ── Stash (Ctrl+S) ──
@@ -802,8 +814,12 @@ class ChatScreen(Screen):
             if arg in efforts:
                 self._effort_idx = efforts.index(arg)
                 self._reasoning_effort = arg
-                btn = self.query_one("#effort-btn", Button)
-                btn.label = f"Effort:{arg.upper()}"
+                self._update_topbar()
+                try:
+                    btn = self.query_one("#effort-btn", Button)
+                    btn.label = f"Effort:{arg.upper()}"
+                except Exception:
+                    pass
                 display.write(f"[dim]Reasoning effort: {arg.upper()}[/dim]")
             else:
                 display.write(f"[dim]Current: [bold]{self._reasoning_effort.upper()}[/bold] | /effort off|high|max[/dim]")

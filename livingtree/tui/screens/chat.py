@@ -127,10 +127,11 @@ class ChatScreen(Screen):
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
             yield Horizontal(
+                Button("File", id="file-btn"),
                 Label("", id="llm-status"),
                 Label("", id="pulse-status"),
                 Label("", id="error-status"),
-                Label("[dim]Enter send  Ctrl+S stash  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
+                Label("[dim]Enter send  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
                 Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
                 Button("Clear", id="clear-btn"),
                 id="action-bar",
@@ -279,6 +280,8 @@ class ChatScreen(Screen):
             self._clear()
         elif bid == "switch-llm-btn":
             await self._switch_llm()
+        elif bid == "file-btn":
+            await self._pick_file_native()
 
     # ── Reasoning effort ──
     @work(exclusive=False)

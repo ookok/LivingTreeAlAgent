@@ -54,7 +54,9 @@ class AttachmentBar(Horizontal):
     def _render(self) -> None:
         self.remove_children()
         if not self._files:
+            self.styles.display = "none"
             return
+        self.styles.display = "block"
         for i, f in enumerate(self._files):
             ext = f.suffix.lower()
             icon = ICONS.get(ext, "📎")

@@ -50,6 +50,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
     scrollbar-size: 1 1; padding: 0 2; background: #0d1117; margin-bottom: 0;
 }
 #chat-display:focus { border: solid #58a6ff; }
+RichLog.-read-only { border: solid #58a6ff; }
 
 #pending-preview { height: auto; min-height: 0; max-height: 3; color: #484f58; padding: 0 2; border-top: solid #21262d; }
 #autocomplete-hint { height: 1; color: #484f58; padding: 0 2; }

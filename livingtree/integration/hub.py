@@ -326,13 +326,8 @@ class IntegrationHub:
 
         from ..integration.opencode_bridge import OpenCodeBridge
         self.world.opencode_bridge = OpenCodeBridge()
-        providers = self.world.opencode_bridge.discover_for_election()
-        if providers:
-            logger.info(f"OpenCode bridge: {len(providers)} providers available")
-            self.world.opencode_providers = providers
-        else:
-            self.world.opencode_providers = []
-            logger.debug("OpenCode bridge: no external providers found")
+        self.world.opencode_providers = []
+        logger.debug("OpenCode bridge initialized (lazy discovery on first election)")
 
         from ..dna.life_daemon import LifeDaemon
         self.daemon = LifeDaemon(self.world, interval_minutes=30.0)

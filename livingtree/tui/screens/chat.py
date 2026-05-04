@@ -72,8 +72,6 @@ class ChatScreen(Screen):
         ("end", "scroll_to_bottom", "到底部"),
         ("ctrl+f", "fold_all", "折叠AI"),
         ("f2", "open_recent_file", "打开文件"),
-        ("ctrl+g", "toggle_select_mode", "选择模式"),
-        ("ctrl+x", "copy_block", "复制对话块"),
     ]
 
     def __init__(self, **kwargs):
@@ -305,24 +303,27 @@ class ChatScreen(Screen):
         except ImportError:
             pass
 
-        # Hook TextArea paste to detect file paths from drag-drop
+        # Hook TextArea paste for drag-drop file paths
         try:
             ta = self.query_one("#chat-input", TextArea)
-            original_paste = ta._on_paste
-            def _hooked_paste(event):
-                text = getattr(event, 'text', '') or ''
-                stripped = text.strip().strip('"').strip("'")
-                p = Path(stripped)
-                if p.exists() and p.is_file():
-                    try:
-                        bar = self.query_one("#attachment-bar", AttachmentBar)
-                        bar.add(p)
-                        self.notify(f"Attached: {p.name}", timeout=2)
-                        return
-                    except Exception:
-                        pass
-                original_paste(event)
-            ta._on_paste = _hooked_paste
+            old_paste = ta._on_paste
+            async def _hooked_paste(self, event):
+                try:
+                    text = getattr(event, 'text', '') or ''
+                    if text:
+                        lines = [l.strip().strip('"').strip("'") for l in text.split("\n") if l.strip()]
+                        for line in lines:
+                            p = Path(line)
+                            if p.exists() and p.is_file():
+                                bar = self.query_one("#attachment-bar", AttachmentBar)
+                                bar.add(p)
+                        if any(Path(l.strip().strip('"').strip("'")).exists() for l in text.split("\n") if l.strip()):
+                            self.notify("File attached", timeout=2)
+                            return
+                except Exception:
+                    pass
+                return await old_paste(event)
+            ta._on_paste = _hooked_paste.__get__(ta, TextArea)
         except Exception:
             pass
 
@@ -468,59 +469,12 @@ class ChatScreen(Screen):
                 return
         self.notify("Nothing to copy", severity="warning", timeout=2)
 
-    def action_toggle_select_mode(self) -> None:
-        self._select_mode = not self._select_mode
-        try:
-            rl = self.query_one("#chat-display", RichLog)
-            if self._select_mode:
-                rl.display = False
-                # Show selectable transcript
-                self._show_select_overlay()
-                self.notify("Select mode ON — drag to select, Ctrl+G to exit", timeout=5)
-            else:
-                rl.display = True
-                self._hide_select_overlay()
-                self.notify("View mode", timeout=2)
-        except Exception:
-            pass
-
-    def _show_select_overlay(self) -> None:
-        try:
-            ta = self.query_one("#select-overlay", TextArea)
-        except Exception:
-            try:
-                self.query_one("#main-area").mount(
-                    TextArea("", id="select-overlay", read_only=True, show_line_numbers=False),
-                    before=0
-                )
-            except Exception:
-                return
-            ta = self.query_one("#select-overlay", TextArea)
-        text = "\n\n".join(
-            f"{'You' if m['role']=='user' else 'AI'}: {m['content']}"
-            for m in self._messages
-        )
-        ta.load_text(text)
-
-    def _hide_select_overlay(self) -> None:
-        try:
-            self.query_one("#select-overlay", TextArea).remove()
-        except Exception:
-            pass
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "enter":
-            try:
-                ta = self.query_one("#chat-input", TextArea)
-                if ta.has_focus:
-                    event.prevent_default()
-                    event.stop()
-                    import asyncio
-                    asyncio.create_task(self._send())
-            except Exception:
-                pass
-
     def action_scroll_to_bottom(self) -> None:
+        try:
+            d = self.query_one("#chat-display", RichLog)
+            d.scroll_end(animate=False)
+        except Exception:
+            pass
         try:
             d = self.query_one("#chat-display", RichLog)
             d.scroll_end(animate=False)

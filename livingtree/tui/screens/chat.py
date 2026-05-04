@@ -126,7 +126,7 @@ class ChatScreen(Screen):
                 Static("", id="autocomplete-hint"),
                 Container(
                     Horizontal(
-                        TextArea("", id="chat-input", language=None, show_line_numbers=False),
+                        TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
                         Button("Send", variant="primary", id="send-btn"),
                     ),
                     Horizontal(
@@ -202,11 +202,10 @@ class ChatScreen(Screen):
             pass
 
     # ── Enter to send ──
-    @work(exclusive=False)
-    async def _on_text_area_submitted(self, event: TextArea.Submitted) -> None:
-        if event.text_area.id == "chat-input":
-            event.stop()
-            await self._send()
+    @on(TextArea.Submitted, "#chat-input")
+    async def _on_chat_submit(self, event: TextArea.Submitted) -> None:
+        event.stop()
+        await self._send()
 
     # ── Autocomplete ──
     def on_input_changed(self, event: TextArea.Changed) -> None:

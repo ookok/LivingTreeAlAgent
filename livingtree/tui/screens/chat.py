@@ -585,21 +585,42 @@ class ChatScreen(Screen):
         if self._detect_paste_burst(event):
             return
 
+        # Check if pasted text is a file path (drag-drop from OS)
+        if event.text:
+            text = event.text.strip()
+            lines = [l.strip().strip('"').strip("'") for l in text.split("\n") if l.strip()]
+            found_files = []
+            for line in lines[:10]:
+                p = Path(line)
+                if p.exists() and p.is_file():
+                    found_files.append(p)
+                    try:
+                        bar = self.query_one("#attachment-bar", AttachmentBar)
+                        bar.add(p)
+                    except Exception:
+                        pass
+            if found_files:
+                self.notify(f"Attached {len(found_files)} file(s)", timeout=2)
+                event.stop()
+                return
+
         if not event.text or len(event.text) < 10:
             if clipboard_handler.clipboard_has_image():
                 img = clipboard_handler.get_clipboard_image()
                 if img:
-                    inp = self.query_one("#chat-input", RichLog)
-                    inp.value = f"{inp.value}\n[image: {img.name} ({len(img.data)//1024}KB)]".strip()
+                    self._display_write(f"\n[dim]Image pasted: {img.name} ({len(img.data)//1024}KB)[/dim]\n")
                     self.notify(f"Image pasted: {img.name}", timeout=2)
                     event.stop()
                     return
             files = clipboard_handler.get_clipboard_files()
             if files:
                 for f in files:
-                    inp = self.query_one("#chat-input", RichLog)
-                    inp.value = f"{inp.value}\n[file: {f.name}]".strip()
-                self.notify(f"Pasted {len(files)} files", timeout=2)
+                    try:
+                        bar = self.query_one("#attachment-bar", AttachmentBar)
+                        bar.add(Path(f))
+                    except Exception:
+                        pass
+                self.notify(f"Attached {len(files)} file(s)", timeout=2)
                 event.stop()
                 return
 

@@ -144,8 +144,19 @@ class RichLog(ScrollView, can_focus=True):
         self._line_cache.clear()
 
     def focus_on_click(self) -> bool:
-        """When read_only, allow terminal-native text selection by not capturing clicks."""
         return not self.read_only
+
+    def _on_mouse_down(self, event) -> None:
+        if self.read_only:
+            event.stop()
+        else:
+            super()._on_mouse_down(event)
+
+    def _on_click(self, event) -> None:
+        if self.read_only:
+            event.stop()
+        else:
+            super()._on_click(event)
 
     def on_resize(self, event: Resize) -> None:
         if event.size.width and not self._size_known:

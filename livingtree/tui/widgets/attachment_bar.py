@@ -57,13 +57,15 @@ class AttachmentBar(Horizontal):
             self.styles.display = "none"
             return
         self.styles.display = "block"
+        import time
+        uid = str(int(time.time() * 1000))[-6:]
         for i, f in enumerate(self._files):
             ext = f.suffix.lower()
             icon = ICONS.get(ext, "📎")
             size_str = self._format_size(f)
             name = f.name[:25] + ("..." if len(f.name) > 25 else "")
             label = f"{icon} {name} {size_str}"
-            self.mount(Static(label, id=f"att-label-{i}"))
+            self.mount(Static(label, id=f"att-label-{uid}-{i}"))
             btn = Button("[#f85149]✕[/#f85149]", id=f"att-rm-{i}")
             btn.can_focus = False
             self.mount(btn)

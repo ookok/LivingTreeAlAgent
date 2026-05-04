@@ -64,10 +64,12 @@ class ChatScreen(Screen):
         ("escape", "app.pop_screen", "返回"),
         ("ctrl+c", "copy_selection", "复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
-        ("enter", "send_from_binding", "发送"),
         ("ctrl+s", "stash_draft", "暂存草稿"),
         ("ctrl+r", "history_search", "搜索历史"),
         ("shift+tab", "cycle_effort", "推理深度"),
+        ("enter", "send_from_binding", "发送"),
+        ("end", "scroll_to_bottom", "到底部"),
+        ("ctrl+end", "scroll_to_bottom", "到底部"),
     ]
 
     def __init__(self, **kwargs):
@@ -120,7 +122,7 @@ class ChatScreen(Screen):
                 yield TaskProgressPanel(id="task-progress")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True)
+                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True, max_lines=1000)
                 yield Static("", id="pending-preview")
                 yield Static("", id="autocomplete-hint")
                 yield Horizontal(
@@ -255,6 +257,13 @@ class ChatScreen(Screen):
     @work(exclusive=False)
     async def action_send_from_binding(self) -> None:
         await self._send()
+
+    def action_scroll_to_bottom(self) -> None:
+        try:
+            d = self.query_one("#chat-display", RichLog)
+            d.scroll_end(animate=False)
+        except Exception:
+            pass
 
     def action_cycle_effort(self) -> None:
         self._effort_idx = (self._effort_idx + 1) % len(REASONING_EFFORTS)

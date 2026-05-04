@@ -216,6 +216,7 @@ class ChatView(ScrollView):
             self._messages.append(msg)
             self._dirty = True
             self.refresh()
+            self.scroll_end(animate=False)
 
     def update_last_content(self, content: str) -> None:
         if self._messages:

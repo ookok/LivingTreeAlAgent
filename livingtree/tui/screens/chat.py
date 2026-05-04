@@ -42,6 +42,20 @@ from ..widgets.chat_enhance import EmotionMirror, AutoSectioner, GhostSuggestion
 from ..widgets.agent_panel import AgentCapabilityPanel
 from ..widgets.task_panels import TaskPanelSystem
 from ..widgets.footer_bar import StatusBar
+
+# Dummy classes for removed widgets (backward compat)
+class TaskProgressPanel:
+    def load_plan(self, s): pass
+    def update_step(self, *a): pass
+    def mark_all_done(self): pass
+    def reset(self): pass
+    progress_pct = 0
+
+class TaskListPanel:
+    def load_tasks(self, s): pass
+    def update_task(self, *a): pass
+    def mark_all_done(self): pass
+    def reset(self): pass
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler

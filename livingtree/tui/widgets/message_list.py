@@ -113,3 +113,11 @@ class MessageList(Vertical, can_focus=False):
         while len(children) > self.MAX_MESSAGES:
             children[0].remove()
             children.pop(0)
+
+    # ── RichLog compatibility ──
+    def write(self, text: str, scroll_end: bool = False) -> None:
+        if text.strip():
+            self.add_message(text)
+
+    def clear(self) -> None:
+        self.clear_all()

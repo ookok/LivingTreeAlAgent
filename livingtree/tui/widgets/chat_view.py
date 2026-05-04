@@ -58,24 +58,21 @@ class ChatMessage:
         if not text:
             return [Strip.blank(max(width, 1))]
         from rich.console import Console as RichConsole
-        console = RichConsole(
-            file=StringIO(), force_terminal=False,
-            width=max(width, 20), color_system="truecolor"
-        )
         strips = []
         try:
-            with console.capture() as capture:
-                console.print(text)
-            result = capture.get()
-            for line in result.split("\n"):
-                if line:
-                    strips.append(Strip([Segment(line, Style())]))
-                else:
-                    strips.append(Strip.blank(max(width, 1)))
+            console = RichConsole(
+                file=StringIO(), force_terminal=False,
+                width=max(width, 20), color_system="truecolor"
+            )
+            render_iter = console.render_lines(text, pad=False)
+            for rich_segments in render_iter:
+                segs = []
+                for s in rich_segments:
+                    segs.append(Segment(s.text, s.style or Style()))
+                strips.append(Strip(segs))
         except Exception:
             for line in str(text).split("\n"):
-                if line:
-                    strips.append(Strip([Segment(line, Style())]))
+                strips.append(Strip([Segment(line, Style())]))
         return strips
 
     def _format(self) -> RenderableType:

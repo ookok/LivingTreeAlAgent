@@ -179,6 +179,11 @@ class LifeEngine:
             
             coll = getattr(self.world, 'collective', None)
             if coll: await coll.share_with_peers()
+
+            predictive = getattr(self.world, 'predictive', None)
+            if predictive:
+                predictive.record_change("life_engine", "cycle_complete", ctx.metadata.get("success_rate", 0) >= 0.5)
+                predictive._save()
             
             return ctx
         except Exception as e:

@@ -264,6 +264,18 @@ class IntegrationHub:
         self.world.collective = CollectiveConsciousness(world=self.world)
         logger.debug("CollectiveConsciousness initialized")
 
+        from ..dna.self_evolving import SelfEvolvingEngine
+        self.world.self_evolving = SelfEvolvingEngine(world=self.world)
+        logger.debug("SelfEvolvingEngine initialized")
+
+        from ..dna.multi_agent_debate import MultiAgentDebate
+        self.world.debate = MultiAgentDebate(consciousness=self.world.consciousness)
+        logger.debug("MultiAgentDebate initialized")
+
+        from ..dna.predictive_world import PredictiveWorldModel
+        self.world.predictive = PredictiveWorldModel(world=self.world)
+        logger.debug("PredictiveWorldModel initialized")
+
         # Auto-discover vault-based providers
         try:
             from ..config.secrets import get_secret_vault

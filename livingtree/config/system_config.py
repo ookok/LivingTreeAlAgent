@@ -110,4 +110,6 @@ _HIDDEN_COMMANDS = {
     "/extract":  "/extract class1,class2 text → 实体提取",
     "/errors":   "/errors → 查看错误日志",
     "/effort":   "/effort off|high|max → 推理深度",
+    "/predict":  "/predict file.py → 预测变更影响",
+    "/debate":   "/debate topic → 多智能体辩论",
 }

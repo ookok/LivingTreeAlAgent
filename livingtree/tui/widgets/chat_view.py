@@ -17,6 +17,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from rich.markdown import Markdown
+from rich.highlighter import ReprHighlighter
 from rich.console import Console, RenderableType
 from rich.text import Text
 from rich.style import Style
@@ -96,9 +97,10 @@ class ChatMessage:
             return self._render_assistant()
         else:
             try:
-                return Text.from_markup(self.content)
+                highlighted = ReprHighlighter()(self.content)
+                return highlighted
             except Exception:
-                return Text(self.content, style=STYLES["system"])
+                return Text.from_markup(self.content)
 
     def _render_assistant(self) -> RenderableType:
         text = self.content

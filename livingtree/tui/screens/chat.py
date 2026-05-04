@@ -461,6 +461,14 @@ class ChatScreen(Screen):
     async def action_send_from_binding(self) -> None:
         await self._send()
 
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            ta = self.query_one("#chat-input", TextArea)
+            if ta.has_focus:
+                event.stop()
+                event.prevent_default()
+                asyncio.create_task(self._send())
+
     def action_copy_block(self) -> None:
         for msg in reversed(self._messages):
             if msg["role"] == "assistant":

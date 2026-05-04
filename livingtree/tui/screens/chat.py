@@ -362,21 +362,17 @@ class ChatScreen(Screen):
             except Exception:
                 pass
 
-        self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
+        self._display_write("[#58a6ff]# LivingTree v2.1[/#58a6ff]  [dim]Digital Life Form[/dim]")
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model
             if lc.longcat_api_key:
-                self._display_write(f"  [#8b949e]LongCat {lc.longcat_models}[/#8b949e]")
+                self._display_write(f"  [#8b949e]LLM: {lc.longcat_models} | Free tier active[/#8b949e]")
         if not getattr(self.app, '_hub_ready', False):
-            self._display_write("  [#d29922]initializing...[/#d29922]")
+            self._display_write("  [#d29922]⏳ initializing...[/#d29922]")
         self._display_write("")
-        self._display_write("[bold]Quick Start[/bold]")
-        self._display_write("  Type a message and press [bold]Enter[/bold]")
-        self._display_write("  [bold]Ctrl+S[/bold] stash draft | [bold]Alt+R[/bold] search history")
-        self._display_write("  [bold]Shift+Tab[/bold] cycle effort | [bold]Ctrl+C[/bold] copy")
-        self._display_write("  [bold]/search[/bold] multi-source | [bold]/pipeline[/bold] auto-gen")
-        self._display_write("  [bold]/file[/bold] preview | [bold]/fetch[/bold] web scrape")
-        self._display_write("  [bold]/help[/bold] all commands")
+        self._display_write("[bold]Getting Started[/bold]")
+        self._display_write("  Type a message → [bold]Ctrl+Enter[/bold] to send")
+        self._display_write("  [bold]Ctrl+C[/bold] copy  [bold]Ctrl+N[/bold] new  [bold]Ctrl+F[/bold] fold")
         self._display_write("")
 
 

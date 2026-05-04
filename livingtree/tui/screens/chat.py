@@ -36,6 +36,7 @@ from rich.syntax import Syntax
 
 from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
+from ..widgets.attachment_bar import AttachmentBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
 from ..widgets import voice_handler
@@ -134,6 +135,7 @@ class ChatScreen(Screen):
                     Button("Clear", id="clear-btn"),
                     id="action-bar",
                 )
+                yield AttachmentBar(id="attachment-bar")
                 yield Container(
                     TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
                     Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),

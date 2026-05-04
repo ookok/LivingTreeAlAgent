@@ -103,6 +103,7 @@ class ChatScreen(Screen):
         self._think_idx = 0
         self._lsp = None
         self._mcp_health = 0
+        self._cancel_flag = False
         self._blocks: list[dict] = []  # {role, content, collapsed, summary}
 
     def _fold_block(self, block_idx: int) -> None:

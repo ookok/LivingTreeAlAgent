@@ -892,29 +892,43 @@ class ChatScreen(Screen):
             r = await self._hub.chat(f"Depth analysis: {arg}")
             display.write(f"[bold]Analysis[/bold]\n{r.get('intent','')[:500]}")
 
-        elif cmd == "/search" and arg and self._hub:
-            from datetime import datetime as dt
-            parts = arg.split(maxsplit=1)
-            as_of = None
+        elif cmd == "/search" and arg:
             query = arg
-            try:
-                candidate = dt.fromisoformat(parts[0]) if len(parts[0]) == 10 else None
-                if candidate and len(parts) > 1:
-                    as_of = candidate
-                    query = parts[1]
-            except (ValueError, IndexError):
-                pass
+            time_label = ""
 
-            results = self._hub.world.knowledge_base.search(query, top_k=10, as_of=as_of)
-            time_label = f" (as of {as_of.date()})" if as_of else ""
-            display.write(f"[bold]Search:[/bold] `{query}`{time_label}")
-            if results:
-                for d in results[:10]:
-                    vf = d.valid_from.strftime("%Y-%m") if d.valid_from else "-"
-                    vt = d.valid_to.strftime("%Y-%m") if d.valid_to else "now"
-                    display.write(f"  {d.title} [{d.domain or '-'}] {vf}~{vt}")
+            # First try Spark web search
+            ss = getattr(self._hub.world, 'spark_search', None) if self._hub else None
+            if ss:
+                web_results = await ss.query(query, limit=5)
+                if web_results:
+                    display.write(ss.format_results(web_results))
+                    display.write("[dim]---[/dim]")
+                    return
+
+            if self._hub:
+                from datetime import datetime as dt
+                parts = arg.split(maxsplit=1)
+                as_of = None
+                try:
+                    candidate = dt.fromisoformat(parts[0]) if len(parts[0]) == 10 else None
+                    if candidate and len(parts) > 1:
+                        as_of = candidate
+                        query = parts[1]
+                        time_label = f" (as of {as_of.date()})"
+                except (ValueError, IndexError):
+                    pass
+
+                results = self._hub.world.knowledge_base.search(query, top_k=10, as_of=as_of)
+                display.write(f"[bold]KB Search:[/bold] `{query}`{time_label}")
+                if results:
+                    for d in results[:10]:
+                        vf = d.valid_from.strftime("%Y-%m") if d.valid_from else "-"
+                        vt = d.valid_to.strftime("%Y-%m") if d.valid_to else "now"
+                        display.write(f"  {d.title} [{d.domain or '-'}] {vf}~{vt}")
+                else:
+                    display.write("[dim]  No local results[/dim]")
             else:
-                display.write("[dim]  No results[/dim]")
+                display.write("[dim]Search not available[/dim]")
 
         elif cmd in ("/extract", "/lx") and arg:
             parts = arg.split(maxsplit=1)

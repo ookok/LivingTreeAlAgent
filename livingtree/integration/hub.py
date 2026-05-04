@@ -228,6 +228,16 @@ class IntegrationHub:
         if self.world.doc_engine:
             self.world.doc_engine._multimodal_parser = self.world.multimodal_parser
 
+        from ..capability.spark_search import SparkSearch
+        search_key = ""
+        try:
+            from ..config.secrets import get_secret_vault
+            search_key = get_secret_vault().get("spark_search_key", "")
+        except Exception:
+            pass
+        self.world.spark_search = SparkSearch(api_password=search_key)
+        logger.debug("Spark Search initialized")
+
         from ..dna.conversation_dna import ConversationDNA
         self.world.conversation_dna = ConversationDNA(world=self.world)
         logger.debug("ConversationDNA initialized")

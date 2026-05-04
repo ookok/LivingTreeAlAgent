@@ -39,6 +39,8 @@ from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
 from ..widgets.chat_view import ChatView
 from ..widgets.chat_enhance import EmotionMirror, AutoSectioner, GhostSuggestions
+from ..widgets.agent_panel import AgentCapabilityPanel
+from ..widgets.task_panels import TaskPanelSystem
 from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
@@ -282,8 +284,7 @@ class ChatScreen(Screen):
         )
         with Horizontal(id="chat-body"):
             with Vertical(id="sidebar"):
-                yield TaskProgressPanel(id="task-progress")
-                yield TaskListPanel(id="task-list")
+                yield AgentCapabilityPanel(id="agent-panel")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield ChatView(id="chat-display")
@@ -340,6 +341,11 @@ class ChatScreen(Screen):
                 self._ghost = GhostSuggestions(
                     getattr(self._hub.world, 'anticipatory', None)
                 )
+                try:
+                    ap = self.query_one("#agent-panel", AgentCapabilityPanel)
+                    ap.update_from_hub(self._hub)
+                except Exception:
+                    pass
             except Exception:
                 pass
 

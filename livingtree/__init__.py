@@ -1,4 +1,4 @@
-"""LivingTree AI Agent — Digital Lifeform Platform v2.0.0
+"""LivingTree AI Agent — Digital Lifeform Platform v2.1.0
 
 A self-learning, self-evolving, self-healing digital life form for:
 - Autonomous chat and task execution
@@ -7,7 +7,7 @@ A self-learning, self-evolving, self-healing digital life form for:
 - P2P network discovery and collaboration
 - Multi-agent task orchestration
 
-Uses litellm with local DeepSeek pricing (no remote fetch).
+TreeLLM-powered multi-provider routing (DeepSeek, LongCat, Xiaomi, Aliyun, etc.)
 """
 
 import os

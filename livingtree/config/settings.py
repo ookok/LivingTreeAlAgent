@@ -24,11 +24,7 @@ from pydantic import BaseModel, Field
 
 
 class ModelConfig(BaseModel):
-    """LLM model configuration — litellm provider/model format.
-
-    Format: "provider/model" e.g. "deepseek/deepseek-v4-pro"
-    Supports 100+ providers through litellm.
-    """
+    """LLM model configuration — uses TreeLLM for multi-provider routing."""
 
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_api_key: str = ""

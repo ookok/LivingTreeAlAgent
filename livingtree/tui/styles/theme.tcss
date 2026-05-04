@@ -59,7 +59,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 }
 #chat-input {
     width: 1fr; height: 5; border: solid #30363d;
-    background: #0d1117; color: #c9d1d9; padding: 0 1; margin: 0 1 0 0;
+    background: #0d1117; color: #c9d1d9; padding: 0 1; margin: 0;
 }
 #chat-input:focus { border: solid #58a6ff; }
 #chat-hints { width: 1fr; color: #484f58; margin: 0; padding: 0 1; height: 1; content-align: left middle; }

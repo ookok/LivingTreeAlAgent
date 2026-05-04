@@ -135,10 +135,7 @@ class ChatScreen(Screen):
                     id="action-bar",
                 )
                 yield Container(
-                    Horizontal(
-                        TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-                        Button("Send", variant="primary", id="send-btn"),
-                    ),
+                    TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
                     Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
                     id="chat-input-container",
                 )
@@ -239,9 +236,7 @@ class ChatScreen(Screen):
     @work(exclusive=False)
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
-        if bid == "send-btn":
-            await self._send()
-        elif bid == "clear-btn":
+        if bid == "clear-btn":
             self._clear()
         elif bid == "file-btn":
             await self._pick_file_native()

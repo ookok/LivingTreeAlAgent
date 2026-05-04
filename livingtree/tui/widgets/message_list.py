@@ -154,31 +154,7 @@ class MessageList(Vertical):
     def error_block(self, msg: str) -> ErrorBlock:
         return self._add(ErrorBlock(msg))
 
-    # ── Session management ──
-
-    def new_session(self) -> None:
-        self._sessions.append([])
-        self._session_idx = len(self._sessions) - 1
-        self._refresh_display()
-
-    def prev_session(self) -> None:
-        if self._session_idx > 0:
-            self._session_idx -= 1
-            self._refresh_display()
-
-    def next_session(self) -> None:
-        if self._session_idx < len(self._sessions) - 1:
-            self._session_idx += 1
-            self._refresh_display()
-
-    @property
-    def session_count(self) -> int:
-        return len(self._sessions)
-
-    # ── Display ──
-
     def write(self, text: str, scroll_end: bool = False) -> None:
-        """RichLog compatibility."""
         if text.strip():
             self._add(Static(text))
 
@@ -189,36 +165,35 @@ class MessageList(Vertical):
         self._widgets.clear()
         self._sessions = [[]]
         self._session_idx = 0
-        self._refresh_display()
+        self.remove_children()
+        self.mount(Static("[dim]No messages yet[/dim]", id="msg-placeholder"))
+
+    def new_session(self) -> None:
+        self._sessions.append([])
+        self._session_idx = len(self._sessions) - 1
 
     # ── Internal ──
 
     def _add(self, widget: Static):
-        self._remove_placeholder()
-        self._widgets.append(widget)
-        self._sessions[self._session_idx].append(widget)
-        self.mount(widget)
-        self._auto_collapse()
-        return widget
-
-    def _remove_placeholder(self):
         try:
             self.query_one("#msg-placeholder", Static).remove()
         except Exception:
             pass
+        self._widgets.append(widget)
+        self._sessions[self._session_idx].append(widget)
+        try:
+            self.mount(widget)
+        except Exception:
+            pass
+        self._auto_collapse()
+        return widget
 
     def _auto_collapse(self) -> None:
         current = self._sessions[self._session_idx]
         ai_blocks = [w for w in current if isinstance(w, AIResponse)]
         if len(ai_blocks) > self.MAX_BLOCKS:
             for old in ai_blocks[:-self.MAX_BLOCKS]:
-                old.update(f"[dim]... older response ({len(old._text)} chars)[/dim]")
-
-    def _refresh_display(self) -> None:
-        self.remove_children()
-        self._widgets.clear()
-        for w in self._sessions[self._session_idx]:
-            self._widgets.append(w)
-            self.mount(w)
-        if not self._widgets:
-            self.mount(Static("[dim]No messages yet[/dim]", id="msg-placeholder"))
+                try:
+                    old.update(f"[dim]... older response ({len(getattr(old, '_text', ''))} chars)[/dim]")
+                except Exception:
+                    pass

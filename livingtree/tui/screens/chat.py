@@ -64,7 +64,7 @@ class ChatScreen(Screen):
     """Streaming chat with full toolkit."""
 
     BINDINGS = [
-        ("escape", "app.pop_screen", "返回"),
+        ("escape", "handle_escape", "返回/取消"),
         ("ctrl+c", "copy_selection", "复制"),
         ("ctrl+shift+c", "copy_transcript", "全复制"),
         ("ctrl+enter", "send_from_binding", "发送"),
@@ -455,6 +455,17 @@ class ChatScreen(Screen):
                 self.notify("Copied last AI response", timeout=2)
                 return
         self.notify("Nothing to copy", severity="warning", timeout=2)
+
+    def action_handle_escape(self) -> None:
+        if self._sending:
+            now = time.monotonic()
+            last = getattr(self, '_last_esc', 0)
+            if now - last < 0.6:
+                self._cancel_flag = True
+                self.notify("Cancelling...", timeout=2)
+            self._last_esc = now
+            return
+        self.app.pop_screen()
 
     def action_scroll_to_bottom(self) -> None:
         try:

@@ -86,7 +86,11 @@ class ChatMessage:
             return Text(f"✗ {self.content}", style=STYLES["error"])
         elif self.role == "assistant":
             return self._render_assistant()
-        return Text(f"{self.content}", style=STYLES.get(self.role, Style()))
+        else:
+            try:
+                return Text.from_markup(self.content)
+            except Exception:
+                return Text(self.content, style=STYLES["system"])
 
     def _render_assistant(self) -> RenderableType:
         text = self.content
@@ -159,9 +163,9 @@ class ChatView(ScrollView):
         return self.add_message("assistant", text)
 
     def write(self, text: str, scroll_end: bool = False) -> None:
-        """RichLog-compatible write."""
         if text.strip():
-            self._messages.append(ChatMessage("system", text))
+            msg = ChatMessage("system", text)
+            self._messages.append(msg)
             self._dirty = True
             self.refresh()
 

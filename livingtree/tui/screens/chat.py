@@ -900,9 +900,14 @@ class ChatScreen(Screen):
 
                     buf = b""
                     collected_text = ""
+                    thinking_text = ""
                     last_flush = time.monotonic()
                     display = self.query_one("#chat-display", RichLog)
+                    think_panel = self.query_one("#cache-stats", Static)
                     async for chunk in resp.content.iter_any():
+                        if self._cancel_flag:
+                            display.write("\n[#d29922]-- Cancelled --[/#d29922]")
+                            break
                         buf += chunk
                         while b"\n" in buf:
                             line, buf = buf.split(b"\n", 1)
@@ -915,6 +920,13 @@ class ChatScreen(Screen):
                             try:
                                 data = json.loads(d)
                                 delta = data.get("choices", [{}])[0].get("delta", {})
+                                reasoning = delta.get("reasoning_content", "")
+                                if reasoning:
+                                    thinking_text += reasoning
+                                    if len(thinking_text) < 200:
+                                        think_panel.update(f"[#d2a8ff]Thinking:[/#d2a8ff]\n{thinking_text}")
+                                    else:
+                                        think_panel.update(f"[#d2a8ff]Thinking:[/#d2a8ff]\n{thinking_text[-180:]}")
                                 token = delta.get("content", "")
                                 if token:
                                     collected.append(token)
@@ -928,6 +940,18 @@ class ChatScreen(Screen):
                                 continue
                     if collected_text:
                         display.write(collected_text, scroll_end=True)
+                    if thinking_text:
+                        think_panel.update(f"[#d2a8ff]💭 Thought for {len(thinking_text)} chars[/#d2a8ff]")
+                        display.write(f"\n[#d2a8ff]💭 {thinking_text[:500]}[/#d2a8ff]\n", scroll_end=True)
+                    # Render completed response as markdown
+                    result = "".join(collected)
+                    if result:
+                        try:
+                            display.clear()
+                            from rich.markdown import Markdown as RichMarkdown
+                            display.write(RichMarkdown(result))
+                        except Exception:
+                            pass
         except asyncio.TimeoutError:
             return "[red]Request timed out (180s)[/red]"
         except aiohttp.ClientConnectionError:

@@ -116,38 +116,33 @@ class ChatScreen(Screen):
             Label("", id="chat-cache-label"),
             id="chat-topbar",
         )
-        yield Horizontal(
-            Vertical(
-                TaskProgressPanel(id="task-progress"),
-                Static("", id="cache-stats"),
-                id="sidebar",
-            ),
-            Vertical(
-                TextArea("", id="chat-display", read_only=True, show_line_numbers=False, language=None),
-                Static("", id="pending-preview"),
-                Static("", id="autocomplete-hint"),
-                id="main-area",
-            ),
-        )
-        yield Horizontal(
-            Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
-            Button("File", id="file-btn"),
-            Button("Folder", id="folder-btn"),
-            Button("Voice", id="voice-btn"),
-            Button("Save", id="save-btn"),
-            Button("Copy", id="copy-btn"),
-            Button("Clear", id="clear-btn"),
-            Label("[dim]Ctrl+S stash  Alt+R history  Ctrl+C copy[/dim]", id="action-hints"),
-            id="action-bar",
-        )
-        yield Container(
-            Horizontal(
-                TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-                Button("Send", variant="primary", id="send-btn"),
-            ),
-            Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
-            id="chat-input-container",
-        )
+        with Horizontal():
+            with Vertical(id="sidebar"):
+                yield TaskProgressPanel(id="task-progress")
+                yield Static("", id="cache-stats")
+            with Vertical(id="main-area"):
+                yield TextArea("", id="chat-display", read_only=True, show_line_numbers=False, language=None)
+                yield Static("", id="pending-preview")
+                yield Static("", id="autocomplete-hint")
+                yield Horizontal(
+                    Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
+                    Button("File", id="file-btn"),
+                    Button("Folder", id="folder-btn"),
+                    Button("Voice", id="voice-btn"),
+                    Button("Save", id="save-btn"),
+                    Button("Copy", id="copy-btn"),
+                    Button("Clear", id="clear-btn"),
+                    Label("[dim]Ctrl+S stash  Alt+R history  Ctrl+C copy[/dim]", id="action-hints"),
+                    id="action-bar",
+                )
+                yield Container(
+                    Horizontal(
+                        TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
+                        Button("Send", variant="primary", id="send-btn"),
+                    ),
+                    Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
+                    id="chat-input-container",
+                )
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

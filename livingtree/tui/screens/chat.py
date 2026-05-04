@@ -120,7 +120,7 @@ class ChatScreen(Screen):
                 yield TaskProgressPanel(id="task-progress")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True)
+                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, read_only=True)
                 yield Static("", id="pending-preview")
                 yield Static("", id="autocomplete-hint")
                 yield Horizontal(

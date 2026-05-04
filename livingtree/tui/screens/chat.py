@@ -29,7 +29,7 @@ from textual import work, on, events
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Label, Static, TextArea
+from textual.widgets import Button, Label, RichLog, Static, TextArea
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -37,7 +37,6 @@ from rich.syntax import Syntax
 from ..widgets.task_progress import TaskProgressPanel
 from ..widgets.task_list import TaskListPanel
 from ..widgets.attachment_bar import AttachmentBar
-from ..widgets.message_list import MessageList, ThinkingBlock
 from ..widgets.footer_bar import StatusBar
 from ..widgets import native_dialogs
 from ..widgets import clipboard_handler
@@ -211,14 +210,14 @@ class ChatScreen(Screen):
 
     def _display_write(self, text: str = "") -> None:
         try:
-            ml = self.query_one("#chat-display", MessageList)
+            ml = self.query_one("#chat-display", RichLog)
             ml.add_message(text)
         except Exception:
             pass
 
     def _render_response(self, display, resp: str) -> None:
         try:
-            ml = self.query_one("#chat-display", MessageList)
+            ml = self.query_one("#chat-display", RichLog)
             from rich.markdown import Markdown as RichMarkdown
             from rich.console import Console
             from io import StringIO
@@ -226,7 +225,7 @@ class ChatScreen(Screen):
             Console(file=buf, force_terminal=False, width=80).print(RichMarkdown(resp))
             ml.add_message(buf.getvalue(), "assistant")
         except Exception:
-            ml = self.query_one("#chat-display", MessageList)
+            ml = self.query_one("#chat-display", RichLog)
             ml.add_message(resp, "assistant")
         from rich.markdown import Markdown as RichMarkdown
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
@@ -246,7 +245,7 @@ class ChatScreen(Screen):
 
     def _rerender_blocks(self) -> None:
         try:
-            d = self.query_one("#chat-display", MessageList)
+            d = self.query_one("#chat-display", RichLog)
             d.clear()
             for i, b in enumerate(self._blocks):
                 role = "You" if b["role"] == "user" else "AI"
@@ -287,7 +286,7 @@ class ChatScreen(Screen):
                 yield TaskListPanel(id="task-list")
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
-                yield MessageList(id="chat-display")
+                yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000)
         yield Container(
             TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
             Label("[dim]Ctrl+Enter send[/dim]", id="chat-hints"),
@@ -353,7 +352,7 @@ class ChatScreen(Screen):
 
     def _display_clear(self) -> None:
         try:
-            self.query_one("#chat-display", MessageList).clear_all()
+            self.query_one("#chat-display", RichLog).clear_all()
         except Exception:
             pass
 
@@ -480,12 +479,12 @@ class ChatScreen(Screen):
 
     def action_scroll_to_bottom(self) -> None:
         try:
-            d = self.query_one("#chat-display", MessageList)
+            d = self.query_one("#chat-display", RichLog)
             d.scroll_end(animate=False)
         except Exception:
             pass
         try:
-            d = self.query_one("#chat-display", MessageList)
+            d = self.query_one("#chat-display", RichLog)
             d.scroll_end(animate=False)
         except Exception:
             pass
@@ -517,7 +516,7 @@ class ChatScreen(Screen):
 
     # ── History search (Alt+R) ──
     def action_history_search(self) -> None:
-        display = self.query_one("#chat-display", MessageList)
+        display = self.query_one("#chat-display", RichLog)
         if self._history_visible:
             return
 
@@ -598,7 +597,7 @@ class ChatScreen(Screen):
         path = await native_dialogs.open_folder_dialog(title="Select folder")
         if not path:
             return
-        display = self.query_one("#chat-display", MessageList)
+        display = self.query_one("#chat-display", RichLog)
         self._display_write(f"[bold]Working dir:[/bold] {path}")
         self.notify(f"Folder: {path}", timeout=3)
 
@@ -702,7 +701,7 @@ class ChatScreen(Screen):
             sp = "\u280b\u2819\u2818\u280c\u2804\u2826\u2827\u2847\u2807"
             idx = self._think_idx % len(sp)
             self._think_idx += 1
-            d = self.query_one("#chat-display", MessageList)
+            d = self.query_one("#chat-display", RichLog)
             self._display_write(f"  [bold #fea62b]{sp[idx]}[/bold #fea62b] [italic dim]AI thinking...[/italic dim]")
         except Exception:
             pass
@@ -731,7 +730,7 @@ class ChatScreen(Screen):
             return
 
         if not self._hub:
-            display = self.query_one("#chat-display", MessageList)
+            display = self.query_one("#chat-display", RichLog)
             self._display_write("\n[yellow]Engine not ready yet[/yellow]")
             return
 
@@ -741,7 +740,7 @@ class ChatScreen(Screen):
         if len(self._history) > 500:
             self._history = self._history[-500:]
 
-        display = self.query_one("#chat-display", MessageList)
+        display = self.query_one("#chat-display", RichLog)
         tp = self.query_one(TaskProgressPanel)
         tp.reset()
 
@@ -833,7 +832,7 @@ class ChatScreen(Screen):
         self._update_pending_preview()
         await self._send()
 
-    def _render_response(self, display: MessageList, resp: str) -> None:
+    def _render_response(self, display: RichLog, resp: str) -> None:
         lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
         if self._reasoning_effort != "off":
             lines.append(f"[dim]Reasoning effort: {self._reasoning_effort}[/dim]")
@@ -914,9 +913,9 @@ class ChatScreen(Screen):
                     collected_text = ""
                     thinking_text = ""
                     last_flush = time.monotonic()
-                    display = self.query_one("#chat-display", MessageList)
+                    display = self.query_one("#chat-display", RichLog)
                     think_panel = self.query_one("#cache-stats", Static)
-                    ml = self.query_one("#chat-display", MessageList)
+                    ml = self.query_one("#chat-display", RichLog)
                     # Progressive markdown rendering during stream
                     async for chunk in resp.content.iter_any():
                         if self._cancel_flag:
@@ -1109,7 +1108,7 @@ class ChatScreen(Screen):
         return "\n".join(lines)
 
     # ── Commands ──
-    async def _handle_command(self, text: str, display: MessageList) -> None:
+    async def _handle_command(self, text: str, display: RichLog) -> None:
         parts = text.split(maxsplit=1)
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -1495,7 +1494,7 @@ class ChatScreen(Screen):
             self.notify("Backend not connected", severity="warning")
             return
         s = self._hub.status()
-        display = self.query_one("#chat-display", MessageList)
+        display = self.query_one("#chat-display", RichLog)
         self._display_write("[bold]System Status[/bold]")
         self._display_write(f"  Generation: {s.get('engine',{}).get('generation','?')}")
         self._display_write(f"  Cells: {s.get('cells',0)}")
@@ -1507,7 +1506,7 @@ class ChatScreen(Screen):
         self._display_write("[dim]---[/dim]")
 
     def _clear(self) -> None:
-        d = self.query_one("#chat-display", MessageList)
+        d = self.query_one("#chat-display", RichLog)
         self._display_lines.clear(); self._display_write()
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         self._messages.clear()

@@ -79,17 +79,46 @@ class ChatMessage:
             return Text(f"You: {self.content}", style=STYLES["user"])
         elif self.role == "thinking":
             return Text(f"💭 Thinking:\n{self.content[-500:]}", style=STYLES["thinking"])
-        elif self.role == "assistant":
-            try:
-                return Markdown(self.content)
-            except Exception:
-                return Text(self.content, style=Style())
         elif self.role == "tool":
             return Text(f"🔧 {self.content}", style=STYLES["tool"])
         elif self.role == "error":
             return Text(f"✗ {self.content}", style=STYLES["error"])
-        else:
-            return Text(self.content, style=Style())
+        elif self.role == "assistant":
+            return self._render_assistant()
+        return Text(f"{self.content}", style=STYLES.get(self.role, Style()))
+
+    def _render_assistant(self) -> RenderableType:
+        text = self.content
+        parts = []
+        # Split by code blocks
+        import re
+        segments = re.split(r'(```\w*\n.*?```)', text, flags=re.DOTALL)
+        for seg in segments:
+            seg = seg.strip()
+            if not seg:
+                continue
+            if seg.startswith("```") and seg.endswith("```"):
+                lines = seg.split("\n")
+                lang = lines[0][3:].strip()
+                code = "\n".join(lines[1:-1])
+                label = f"[bold #79c0ff]{lang or 'code'}:[/bold #79c0ff]\n" if lang else ""
+                parts.append(Text.assemble(
+                    (label, Style(color="#79c0ff", bold=True)),
+                    (code, Style(color="#c9d1d9")),
+                ))
+            else:
+                try:
+                    parts.append(Markdown(seg))
+                except Exception:
+                    parts.append(Text(seg, style=Style(color="#c9d1d9")))
+
+        from rich.table import Table as RichTable
+        if len(parts) == 1:
+            return parts[0]
+        table = RichTable.grid()
+        for p in parts:
+            table.add_row(p)
+        return table
 
 
 class ChatView(ScrollView):

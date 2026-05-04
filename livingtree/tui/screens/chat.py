@@ -71,7 +71,7 @@ class ChatScreen(Screen):
         ("shift+tab", "cycle_effort", "推理深度"),
         ("enter", "send_from_binding", "发送"),
         ("end", "scroll_to_bottom", "到底部"),
-        ("ctrl+end", "scroll_to_bottom", "到底部"),
+        ("ctrl+f", "fold_all", "折叠AI"),
     ]
 
     def __init__(self, **kwargs):
@@ -99,6 +99,58 @@ class ChatScreen(Screen):
         self._think_idx = 0
         self._lsp = None
         self._mcp_health = 0
+        self._blocks: list[dict] = []  # {role, content, collapsed, summary}
+
+    def _fold_block(self, block_idx: int) -> None:
+        if 0 <= block_idx < len(self._blocks):
+            self._blocks[block_idx]["collapsed"] = not self._blocks[block_idx]["collapsed"]
+            self._rerender_blocks()
+
+    def _make_summary(self, text: str, max_len: int = 60) -> str:
+        lines = text.strip().split("\n")
+        first = lines[0].strip() if lines else text[:max_len]
+        first = first.replace("#", "").replace("*", "").strip()
+        return first[:max_len] + ("..." if len(first) > max_len else "")
+
+    def _display_write(self, text: str = "") -> None:
+        try:
+            d = self.query_one("#chat-display", RichLog)
+            d.write(text)
+        except Exception:
+            pass
+
+    def _render_response(self, display: RichLog, resp: str) -> None:
+        lines = [f"\n[bold #58a6ff]AI:[/bold #58a6ff]"]
+        if self._reasoning_effort != "off":
+            lines.append(f"[dim]Reasoning effort: {self._reasoning_effort}[/dim]")
+        lines.append(resp)
+        lines.append(f"[dim]---  [italic]Ctrl+C to copy[/italic][/dim]")
+        for line in lines:
+            self._display_write(line)
+
+    @work(exclusive=False)
+    async def action_fold_all(self) -> None:
+        for b in self._blocks:
+            b["collapsed"] = True
+        self._rerender_blocks()
+
+    def _rerender_blocks(self) -> None:
+        try:
+            d = self.query_one("#chat-display", RichLog)
+            d.clear()
+            for i, b in enumerate(self._blocks):
+                role = "You" if b["role"] == "user" else "AI"
+                color = "#3fb950" if b["role"] == "user" else "#58a6ff"
+                if b.get("collapsed") and b["role"] == "assistant":
+                    summary = b.get("summary", b["content"][:60])
+                    d.write(f"\n[bold {color}]▶ {role}:[/bold {color}] [dim]{summary}[/dim]")
+                    d.write("[dim]  (click to expand)[/dim]")
+                else:
+                    d.write(f"\n[bold {color}]{role}:[/bold {color}]")
+                    d.write(b["content"])
+                d.write("[dim]---[/dim]")
+        except Exception:
+            pass
 
     def set_hub(self, hub) -> None:
         self._hub = hub
@@ -538,6 +590,12 @@ class ChatScreen(Screen):
 
         self._display_write(f"\n[bold green]You:[/bold green] {text}")
         self._messages.append({"role": "user", "content": text})
+        summary = self._make_summary(text)
+        self._blocks.append({"role": "user", "content": text, "collapsed": False, "summary": summary})
+
+        for i in range(max(0, len(self._blocks) - 6)):
+            if self._blocks[i]["role"] == "assistant":
+                self._blocks[i]["collapsed"] = True
 
         auto_pro = len(text) > 200 or any(kw in text for kw in PRO_REASONING_INTENT_TRIGGERS)
 
@@ -573,6 +631,8 @@ class ChatScreen(Screen):
             resp = await self._stream(text, pro=auto_pro)
             self._render_response(display, resp)
             self._messages.append({"role": "assistant", "content": resp})
+            summary = self._make_summary(resp)
+            self._blocks.append({"role": "assistant", "content": resp, "collapsed": False, "summary": summary})
             tp.update_step(2, "done", f"{len(resp)} chars")
         except Exception as e:
             self._display_write(f"\n[bold red]Error:[/bold red] {e}")

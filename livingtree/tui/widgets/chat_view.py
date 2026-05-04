@@ -76,6 +76,10 @@ class ChatMessage:
                 strips.append(Strip([Segment(line, Style())]))
         return strips
 
+    def _has_markup(self, text: str) -> bool:
+        import re
+        return bool(re.search(r'\[/?[#\w]+\]|\[/\w+\]', text))
+
     def _format(self) -> RenderableType:
         if self.collapsed:
             return Text(f"💭 {len(self.content)} chars (click to expand)", style=STYLES["thinking"])
@@ -103,26 +107,24 @@ class ChatMessage:
             return self._render_assistant()
         elif self.role == "system":
             try:
-                return Text.from_markup(self.content)
+                return ReprHighlighter()(self.content)
             except Exception:
-                try:
-                    return ReprHighlighter()(self.content)
-                except Exception:
-                    return Text(self.content, style=Style(color="#c9d1d9"))
+                if self._has_markup(self.content):
+                    try:
+                        return Text.from_markup(self.content)
+                    except Exception:
+                        pass
+                return Text(self.content, style=Style(color="#c9d1d9"))
         else:
-            if self.content.strip().startswith("[") and "[/" in self.content:
+            if self._has_markup(self.content):
                 try:
                     return Text.from_markup(self.content)
                 except Exception:
                     pass
-            # Standard markdown → use Markdown renderer
             try:
-                return Markdown(self.content)
+                return ReprHighlighter()(self.content) if self.content else Text("")
             except Exception:
-                try:
-                    return ReprHighlighter()(self.content)
-                except Exception:
-                    return Text(self.content, style=Style(color="#c9d1d9"))
+                return Text(self.content, style=Style(color="#c9d1d9"))
 
     def _render_assistant(self) -> RenderableType:
         try:

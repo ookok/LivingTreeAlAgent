@@ -153,7 +153,7 @@ class ChatScreen(Screen):
         except ImportError:
             pass
 
-        d = self.query_one("#chat-display", TextArea)
+        d = self.query_one("#chat-display", RichLog)
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model
@@ -303,7 +303,7 @@ class ChatScreen(Screen):
 
     # ── Stash (Ctrl+S) ──
     def action_stash_draft(self) -> None:
-        inp = self.query_one("#chat-input", TextArea)
+        inp = self.query_one("#chat-input", RichLog)
         text = inp.text.strip()
         if not text:
             self.notify("Nothing to stash", timeout=2)
@@ -317,7 +317,7 @@ class ChatScreen(Screen):
 
     # ── History search (Alt+R) ──
     def action_history_search(self) -> None:
-        display = self.query_one("#chat-display", TextArea)
+        display = self.query_one("#chat-display", RichLog)
         if self._history_visible:
             return
 
@@ -367,7 +367,7 @@ class ChatScreen(Screen):
 
     def action_copy_selection(self) -> None:
         try:
-            ta = self.query_one("#chat-input", TextArea)
+            ta = self.query_one("#chat-input", RichLog)
             sel = ta.selected_text
             if sel:
                 clipboard_handler.write_clipboard_text(sel)
@@ -387,7 +387,7 @@ class ChatScreen(Screen):
         label = f"[image: {path.name} ({size_kb}KB)]" if path.suffix.lower() in (
             ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"
         ) else f"[file: {path.name} ({size_kb}KB)]"
-        inp = self.query_one("#chat-input", TextArea)
+        inp = self.query_one("#chat-input", RichLog)
         inp.text = f"{inp.text}\n{label}".strip()
         self.notify(f"Selected: {path.name}", timeout=2)
 
@@ -395,7 +395,7 @@ class ChatScreen(Screen):
         path = await native_dialogs.open_folder_dialog(title="Select folder")
         if not path:
             return
-        display = self.query_one("#chat-display", TextArea)
+        display = self.query_one("#chat-display", RichLog)
         self._display_write(f"[bold]Working dir:[/bold] {path}")
         self.notify(f"Folder: {path}", timeout=3)
 
@@ -408,7 +408,7 @@ class ChatScreen(Screen):
         text = await voice_handler.speech_to_text("zh-CN")
         self._voice_active = False
         if text:
-            inp = self.query_one("#chat-input", TextArea)
+            inp = self.query_one("#chat-input", RichLog)
             inp.value = f"{inp.value} {text}".strip()
             self.notify(f"Recognized: {text[:30]}...", timeout=3)
         else:
@@ -438,7 +438,7 @@ class ChatScreen(Screen):
             if clipboard_handler.clipboard_has_image():
                 img = clipboard_handler.get_clipboard_image()
                 if img:
-                    inp = self.query_one("#chat-input", TextArea)
+                    inp = self.query_one("#chat-input", RichLog)
                     inp.value = f"{inp.value}\n[image: {img.name} ({len(img.data)//1024}KB)]".strip()
                     self.notify(f"Image pasted: {img.name}", timeout=2)
                     event.stop()
@@ -446,7 +446,7 @@ class ChatScreen(Screen):
             files = clipboard_handler.get_clipboard_files()
             if files:
                 for f in files:
-                    inp = self.query_one("#chat-input", TextArea)
+                    inp = self.query_one("#chat-input", RichLog)
                     inp.value = f"{inp.value}\n[file: {f.name}]".strip()
                 self.notify(f"Pasted {len(files)} files", timeout=2)
                 event.stop()
@@ -478,7 +478,7 @@ class ChatScreen(Screen):
             sp = "\u280b\u2819\u2818\u280c\u2804\u2826\u2827\u2847\u2807"
             idx = self._think_idx % len(sp)
             self._think_idx += 1
-            d = self.query_one("#chat-display", TextArea)
+            d = self.query_one("#chat-display", RichLog)
             self._display_write(f"  [bold #fea62b]{sp[idx]}[/bold #fea62b] [italic dim]AI thinking...[/italic dim]")
         except Exception:
             pass
@@ -486,7 +486,7 @@ class ChatScreen(Screen):
     # ── Send ──
     async def _send(self) -> None:
         if self._sending:
-            inp = self.query_one("#chat-input", TextArea)
+            inp = self.query_one("#chat-input", RichLog)
             text = inp.text.strip()
             if text:
                 self._pending_queue.append(text)
@@ -495,7 +495,7 @@ class ChatScreen(Screen):
                 self.notify("Queued (busy)", timeout=1)
             return
 
-        inp = self.query_one("#chat-input", TextArea)
+        inp = self.query_one("#chat-input", RichLog)
         text = inp.text.strip()
         if not text:
             return
@@ -507,7 +507,7 @@ class ChatScreen(Screen):
             return
 
         if not self._hub:
-            display = self.query_one("#chat-display", TextArea)
+            display = self.query_one("#chat-display", RichLog)
             self._display_write("\n[yellow]Engine not ready yet[/yellow]")
             return
 
@@ -517,7 +517,7 @@ class ChatScreen(Screen):
         if len(self._history) > 500:
             self._history = self._history[-500:]
 
-        display = self.query_one("#chat-display", TextArea)
+        display = self.query_one("#chat-display", RichLog)
         tp = self.query_one(TaskProgressPanel)
         tp.reset()
 
@@ -596,7 +596,7 @@ class ChatScreen(Screen):
         if self._sending or not self._pending_queue:
             return
         text = self._pending_queue.pop(0)
-        inp = self.query_one("#chat-input", TextArea)
+        inp = self.query_one("#chat-input", RichLog)
         inp.text = text
         self._update_pending_preview()
         await self._send()
@@ -679,7 +679,7 @@ class ChatScreen(Screen):
                         return f"[red]API Error {resp.status}[/red]: {err_text[:200]}"
 
                     buf = b""
-                    display = self.query_one("#chat-display", TextArea)
+                    display = self.query_one("#chat-display", RichLog)
                     async for chunk in resp.content.iter_any():
                         buf += chunk
                         while b"\n" in buf:
@@ -858,7 +858,7 @@ class ChatScreen(Screen):
             elif arg == "pop":
                 draft = self._stash.pop()
                 if draft:
-                    inp = self.query_one("#chat-input", TextArea)
+                    inp = self.query_one("#chat-input", RichLog)
                     inp.text = draft.text
                     self.notify(f"Draft restored ({len(draft.text)} chars)", timeout=2)
                 else:
@@ -930,7 +930,7 @@ class ChatScreen(Screen):
             if self._messages and self._messages[-1]["role"] == "user":
                 last = self._messages.pop()
                 self._retry_count += 1
-                inp = self.query_one("#chat-input", TextArea)
+                inp = self.query_one("#chat-input", RichLog)
                 inp.text = last["content"]
                 self._display_write(f"[dim]Retrying last message (attempt {self._retry_count})[/dim]")
                 await asyncio.sleep(0.1)
@@ -1227,7 +1227,7 @@ class ChatScreen(Screen):
             self.notify("Backend not connected", severity="warning")
             return
         s = self._hub.status()
-        display = self.query_one("#chat-display", TextArea)
+        display = self.query_one("#chat-display", RichLog)
         self._display_write("[bold]System Status[/bold]")
         self._display_write(f"  Generation: {s.get('engine',{}).get('generation','?')}")
         self._display_write(f"  Cells: {s.get('cells',0)}")
@@ -1239,7 +1239,7 @@ class ChatScreen(Screen):
         self._display_write("[dim]---[/dim]")
 
     def _clear(self) -> None:
-        d = self.query_one("#chat-display", TextArea)
+        d = self.query_one("#chat-display", RichLog)
         self._display_lines.clear(); self._display_write()
         self._display_write("[#58a6ff]# LivingTree[/#58a6ff]")
         self._messages.clear()

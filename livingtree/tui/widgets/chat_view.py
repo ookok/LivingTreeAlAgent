@@ -46,6 +46,9 @@ class ChatMessage:
         self.content = content
         self.collapsed = False
         self.rendered: list[str] = []
+        self.timestamp = None
+        from datetime import datetime
+        self.timestamp = datetime.now().strftime("%H:%M")
 
     def append(self, text: str) -> None:
         self.content += text
@@ -133,6 +136,19 @@ class ChatView(ScrollView):
         self._dirty = True
         self.can_focus = False
         self._consciousness = consciousness
+        self._streaming = False
+        self._spinner_idx = 0
+        self._status_text = ""
+
+    def set_streaming(self, active: bool) -> None:
+        self._streaming = active
+        self._dirty = True
+        self.refresh()
+
+    def set_status(self, text: str) -> None:
+        self._status_text = text
+        self._dirty = True
+        self.refresh()
 
     # ── Public API ──
 
@@ -228,8 +244,26 @@ class ChatView(ScrollView):
             return
         width = max(self.size.width, 40)
         strips = []
-        for msg in self._messages:
-            lines = msg.render_lines(width)
-            strips.extend(lines)
+        spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+        for i, msg in enumerate(self._messages):
+            lines = msg.render_lines(width - 8)
+            ts = msg.timestamp or ""
+            for j, line in enumerate(lines):
+                if j == 0:
+                    prefix = f"[dim]{ts}[/dim] "
+                else:
+                    prefix = "     "
+                if self._streaming and i == len(self._messages) - 1 and msg.role in ("assistant",):
+                    prefix += f"[#d2a8ff]{spinner[self._spinner_idx % 10]}[/#d2a8ff] "
+                else:
+                    prefix += "  "
+                strips.append(Strip([Segment(prefix, Style())]) + line)
+
+        if self._status_text:
+            strips.append(Strip.blank(width))
+            strips.append(Strip([Segment(self._status_text, Style(color="#484f58"))]))
+
         self._lines = strips
+        self._spinner_idx += 1
         self._dirty = False

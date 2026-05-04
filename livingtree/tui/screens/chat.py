@@ -915,7 +915,10 @@ class ChatScreen(Screen):
                     display = self.query_one("#chat-display", ChatView)
                     think_panel = self.query_one("#cache-stats", Static)
                     think_panel.update("[#d2a8ff]💭 Thinking...[/#d2a8ff]")
-                    # Sentence-based streaming
+                    # Create a single message that we update progressively
+                    display.assistant_message("")
+                    display.set_streaming(True)
+                    # Sentence-based progressive streaming
                     async for chunk in resp.content.iter_any():
                         if self._cancel_flag:
                             display.write("\n[#d29922]-- Cancelled --[/#d29922]")
@@ -942,27 +945,29 @@ class ChatScreen(Screen):
                                     collected.append(token)
                                     collected_text += token
                                     now = time.monotonic()
-                                    # Flush on sentence boundary or 500ms timeout
                                     ends_sentence = any(collected_text.rstrip().endswith(c) for c in ('.', '!', '?', '。', '！', '？', '\n', ':', '：'))
                                     if ends_sentence and collected_text.strip():
-                                        display.write(collected_text, scroll_end=True)
+                                        all_text = "".join(collected)
+                                        display.update_last_content(all_text)
                                         collected_text = ""
                                         last_flush = now
                                     elif now - last_flush > 0.5 and collected_text.strip():
-                                        display.write(collected_text, scroll_end=True)
+                                        all_text = "".join(collected)
+                                        display.update_last_content(all_text)
                                         collected_text = ""
                                         last_flush = now
                             except Exception:
                                 continue
                     if collected_text.strip():
-                        display.write(collected_text, scroll_end=True)
+                        all_text = "".join(collected)
+                        display.update_last_content(all_text)
                     if thinking_text:
                         think_panel.update(f"[#d2a8ff]💭 {len(thinking_text)} chars[/#d2a8ff]")
-                    # Final: replace streamed text with formatted markdown
+                    # Final update — ensure complete content is set
                     result = "".join(collected)
                     if result:
-                        display.clear()
-                        display.assistant_message(result)
+                        display.update_last_content(result)
+                        display.set_streaming(False)
         except asyncio.TimeoutError:
             return "[red]Request timed out (180s)[/red]"
         except aiohttp.ClientConnectionError:

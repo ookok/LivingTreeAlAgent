@@ -15,12 +15,12 @@ from textual.strip import Strip
 from textual.geometry import Size
 from rich.segment import Segment
 from rich.style import Style
+import re
 
 from rich.markdown import Markdown
 from rich.highlighter import ReprHighlighter
 from rich.console import Console, RenderableType
 from rich.text import Text
-from rich.style import Style
 from rich.panel import Panel
 from rich.table import Table as RichTable
 from io import StringIO
@@ -76,6 +76,11 @@ class ChatMessage:
                 strips.append(Strip([Segment(line, Style())]))
         return strips
 
+    def _classify_content(self, text: str) -> str:
+        if re.search(r'\[/?[#\w]+\]|\[/\w+\]', text):
+            return "markup"
+        return "plain"
+
     def _has_markup(self, text: str) -> bool:
         import re
         return bool(re.search(r'\[/?[#\w]+\]|\[/\w+\]', text))
@@ -106,14 +111,15 @@ class ChatMessage:
         elif self.role == "assistant":
             return self._render_assistant()
         elif self.role == "system":
+            fmt = self._classify_content(self.content)
+            if fmt == "markup":
+                try:
+                    return Text.from_markup(self.content)
+                except Exception:
+                    pass
             try:
                 return ReprHighlighter()(self.content)
             except Exception:
-                if self._has_markup(self.content):
-                    try:
-                        return Text.from_markup(self.content)
-                    except Exception:
-                        pass
                 return Text(self.content, style=Style(color="#c9d1d9"))
         else:
             if self._has_markup(self.content):

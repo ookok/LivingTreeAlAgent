@@ -73,6 +73,7 @@ class ChatScreen(Screen):
         ("ctrl+f", "fold_all", "折叠AI"),
         ("f2", "open_recent_file", "打开文件"),
         ("ctrl+g", "toggle_select_mode", "选择模式"),
+        ("ctrl+x", "copy_block", "复制对话块"),
     ]
 
     def __init__(self, **kwargs):
@@ -278,8 +279,9 @@ class ChatScreen(Screen):
             Label("", id="llm-status"),
             Label("", id="pulse-status"),
             Label("", id="error-status"),
-            Label("[dim]Enter send  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
+            Label("[dim]Enter send  Ctrl+X copy  End→bottom[/dim]", id="action-hints"),
             Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
+            Button("Copy", id="copy-btn"),
             Button("Clear", id="clear-btn"),
             id="action-bar",
         )
@@ -450,11 +452,21 @@ class ChatScreen(Screen):
             await self._switch_llm()
         elif bid == "file-btn":
             await self._pick_file_native()
+        elif bid == "copy-btn":
+            self.action_copy_block()
 
     # ── Reasoning effort ──
     @work(exclusive=False)
     async def action_send_from_binding(self) -> None:
         await self._send()
+
+    def action_copy_block(self) -> None:
+        for msg in reversed(self._messages):
+            if msg["role"] == "assistant":
+                clipboard_handler.write_clipboard_text(msg["content"])
+                self.notify("Copied last AI response", timeout=2)
+                return
+        self.notify("Nothing to copy", severity="warning", timeout=2)
 
     def action_toggle_select_mode(self) -> None:
         self._select_mode = not self._select_mode

@@ -80,12 +80,12 @@ class ChatMessage:
             return Text(f"💭 {len(self.content)} chars (click to expand)", style=STYLES["thinking"])
 
         if self.role == "user":
-            return Panel(
-                Text(self.content, style=Style(color="#c9d1d9")),
-                border_style="#3fb950",
-                title="You",
-                title_align="left",
-            )
+            try:
+                md = Markdown(self.content)
+                return Panel(md, border_style="#3fb950", title="You", title_align="left")
+            except Exception:
+                return Panel(Text(self.content, style=Style(color="#c9d1d9")),
+                           border_style="#3fb950", title="You", title_align="left")
         elif self.role == "thinking":
             return Text(f"💭 Thinking:\n{self.content[-500:]}", style=STYLES["thinking"])
         elif self.role == "tool":
@@ -108,37 +108,11 @@ class ChatMessage:
                 return Text.from_markup(self.content)
 
     def _render_assistant(self) -> RenderableType:
-        text = self.content
-        parts = []
-        # Split by code blocks
-        import re
-        segments = re.split(r'(```\w*\n.*?```)', text, flags=re.DOTALL)
-        for seg in segments:
-            seg = seg.strip()
-            if not seg:
-                continue
-            if seg.startswith("```") and seg.endswith("```"):
-                lines = seg.split("\n")
-                lang = lines[0][3:].strip()
-                code = "\n".join(lines[1:-1])
-                label = f"[bold #79c0ff]{lang or 'code'}:[/bold #79c0ff]\n" if lang else ""
-                parts.append(Text.assemble(
-                    (label, Style(color="#79c0ff", bold=True)),
-                    (code, Style(color="#c9d1d9")),
-                ))
-            else:
-                try:
-                    parts.append(Markdown(seg))
-                except Exception:
-                    parts.append(Text(seg, style=Style(color="#c9d1d9")))
-
-        from rich.table import Table as RichTable
-        if len(parts) == 1:
-            return Panel(parts[0], border_style="#58a6ff", title="AI", title_align="left")
-        table = RichTable.grid()
-        for p in parts:
-            table.add_row(p)
-        return Panel(table, border_style="#58a6ff", title="AI", title_align="left")
+        try:
+            md = Markdown(self.content)
+            return Panel(md, border_style="#58a6ff", title="AI", title_align="left")
+        except Exception:
+            return Panel(Text(self.content), border_style="#58a6ff", title="AI", title_align="left")
 
 
 class ChatView(ScrollView):

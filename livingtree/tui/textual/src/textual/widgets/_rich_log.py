@@ -71,6 +71,7 @@ class RichLog(ScrollView, can_focus=True):
     markup: var[bool] = var(False)
     auto_scroll: var[bool] = var(True)
     read_only: var[bool] = var(False)
+    read_only: var[bool] = var(False)
 
     def __init__(
         self,

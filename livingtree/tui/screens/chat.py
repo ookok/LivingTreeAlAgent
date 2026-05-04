@@ -561,6 +561,7 @@ class ChatScreen(Screen):
             return f"[yellow]API key not configured[/yellow]\n\n> {text[:100]}"
 
         model = self._pro if pro else self._flash
+        model = model.split("/")[-1] if "/" in model else model
         sys_content = (
             "You are a professional AI assistant. Reply in Markdown format.\n"
             "Rules:\n"

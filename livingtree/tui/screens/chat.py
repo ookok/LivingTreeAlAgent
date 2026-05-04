@@ -69,7 +69,6 @@ class ChatScreen(Screen):
         ("ctrl+s", "stash_draft", "暂存草稿"),
         ("ctrl+r", "history_search", "搜索历史"),
         ("shift+tab", "cycle_effort", "推理深度"),
-        ("enter", "send_from_binding", "发送"),
         ("end", "scroll_to_bottom", "到底部"),
         ("ctrl+f", "fold_all", "折叠AI"),
         ("f2", "open_recent_file", "打开文件"),
@@ -432,6 +431,22 @@ class ChatScreen(Screen):
     # ── Reasoning effort ──
     @work(exclusive=False)
     async def action_send_from_binding(self) -> None:
+        await self._send()
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "enter" and event.is_synthesized:
+            return
+        if event.key == "enter":
+            try:
+                ta = self.query_one("#chat-input", TextArea)
+                if ta.has_focus:
+                    event.stop()
+                    event.prevent_default()
+                    self._call_later(self._send_from_input)
+            except Exception:
+                pass
+
+    async def _send_from_input(self) -> None:
         await self._send()
 
     def action_scroll_to_bottom(self) -> None:

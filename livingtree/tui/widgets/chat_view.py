@@ -69,6 +69,8 @@ class ChatMessage:
                 segs = []
                 for s in rich_segments:
                     style = s.style if s.style else Style()
+                    if style.bgcolor is not None:
+                        style = Style(color=style.color, bold=style.bold, italic=style.italic, dim=style.dim)
                     segs.append(Segment(s.text, style))
                 strips.append(Strip(segs) if segs else Strip.blank(max(width, 1)))
         except Exception:
@@ -264,8 +266,9 @@ class ChatView(ScrollView):
     @property
     def virtual_size(self) -> Size:
         self._ensure_rendered()
-        width = max((len(l) for l in self._lines), default=1)
-        return Size(width, max(len(self._lines), 1))
+        w = max((l.cell_length for l in self._lines), default=self.size.width)
+        h = max(len(self._lines), self.size.height)
+        return Size(w, h)
 
     # ── Internal ──
 

@@ -63,6 +63,8 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 }
 #chat-input:focus { border: solid #58a6ff; }
 #chat-hints { width: 1fr; color: #484f58; margin: 0; padding: 0 1; height: 1; content-align: left middle; }
+#action-bar { height: 1; background: #161b22; border-top: solid #21262d; padding: 0 1; align-horizontal: left; }
+#action-hints { width: 1fr; color: #484f58; content-align: right middle; margin: 0 0 0 1; }
 #effort-btn { margin: 0 1 0 0; border: solid #d2a8ff; color: #d2a8ff; }
 #cache-stats { height: auto; max-height: 3; color: #484f58; padding: 0 1; }
 

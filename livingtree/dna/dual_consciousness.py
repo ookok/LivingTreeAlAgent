@@ -52,6 +52,9 @@ class DualModelConsciousness(Consciousness):
         zhipu_base_url: str = "",
         zhipu_flash_model: str = "glm-4-flash",
         zhipu_pro_model: str = "glm-4-plus",
+        dmxapi_api_key: str = "",
+        dmxapi_base_url: str = "",
+        dmxapi_default_model: str = "gpt-5-mini",
     ):
         self.flash_model = flash_model
         self.pro_model = pro_model
@@ -101,6 +104,14 @@ class DualModelConsciousness(Consciousness):
                 api_key=zhipu_api_key,
                 default_model=zhipu_flash_model,
             ))
+        if dmxapi_api_key:
+            from ..treellm.providers import OpenAILikeProvider
+            self._llm.add_provider(OpenAILikeProvider(
+                name="dmxapi",
+                base_url=dmxapi_base_url or "https://www.dmxapi.cn/v1",
+                api_key=dmxapi_api_key,
+                default_model=dmxapi_default_model,
+            ))
 
         # ── Election order: free models first ──
         self._free_models = []
@@ -113,6 +124,8 @@ class DualModelConsciousness(Consciousness):
             self._paid_models.append("xiaomi")
         if aliyun_api_key:
             self._paid_models.append("aliyun")
+        if dmxapi_api_key:
+            self._paid_models.append("dmxapi")
         if api_key:
             self._paid_models.append("deepseek")
 

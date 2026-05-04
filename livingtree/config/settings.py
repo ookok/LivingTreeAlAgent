@@ -70,6 +70,10 @@ class ModelConfig(BaseModel):
     zhipu_flash_model: str = "glm-4-flash"
     zhipu_pro_model: str = "glm-4-plus"
 
+    dmxapi_base_url: str = "https://www.dmxapi.cn/v1"
+    dmxapi_api_key: str = ""
+    dmxapi_default_model: str = "gpt-5-mini"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -325,6 +329,10 @@ def _load_config() -> LTAIConfig:
         if zhipu_key:
             config.model.zhipu_api_key = zhipu_key
             logger.info("Loaded zhipu_api_key from encrypted vault")
+        dmxapi_key = vault.get("dmxapi_api_key", "")
+        if dmxapi_key:
+            config.model.dmxapi_api_key = dmxapi_key
+            logger.info("Loaded dmxapi_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

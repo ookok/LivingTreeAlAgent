@@ -91,6 +91,9 @@ class IntegrationHub:
                 zhipu_base_url=self.config.model.zhipu_base_url,
                 zhipu_flash_model=self.config.model.zhipu_flash_model,
                 zhipu_pro_model=self.config.model.zhipu_pro_model,
+                dmxapi_api_key=self.config.model.dmxapi_api_key,
+                dmxapi_base_url=self.config.model.dmxapi_base_url,
+                dmxapi_default_model=self.config.model.dmxapi_default_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )

@@ -114,13 +114,35 @@ class ChatScreen(Screen):
             Label("", id="chat-cache-label"),
             id="chat-topbar",
         )
-        yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True)
-        yield Static("", id="pending-preview")
-        yield Static("", id="autocomplete-hint")
-        yield Container(
-            TextArea("", id="chat-input", language=None, show_line_numbers=False),
-            Label("[dim]enter send  shift+enter newline  ctrl+s stash  alt+r history  shift+tab effort  ctrl+c copy  esc back[/dim]", id="chat-hints"),
-            id="chat-input-container",
+        yield Horizontal(
+            Vertical(
+                TaskProgressPanel(id="task-progress"),
+                Static("", id="cache-stats"),
+                id="sidebar",
+            ),
+            Vertical(
+                RichLog(id="chat-display", highlight=True, markup=True, wrap=True),
+                Static("", id="pending-preview"),
+                Static("", id="autocomplete-hint"),
+                Container(
+                    Horizontal(
+                        TextArea("", id="chat-input", language=None, show_line_numbers=False),
+                        Button("Send", variant="primary", id="send-btn"),
+                    ),
+                    Horizontal(
+                        Label("[dim]Enter send | Ctrl+S stash | Alt+R history | Shift+Tab effort | Ctrl+C copy[/dim]", id="chat-hints"),
+                        Button("Effort:" + self._reasoning_effort.upper(), id="effort-btn"),
+                        Button("File", id="file-btn"),
+                        Button("Folder", id="folder-btn"),
+                        Button("Voice", id="voice-btn"),
+                        Button("Save", id="save-btn"),
+                        Button("Copy", id="copy-btn"),
+                        Button("Clear", id="clear-btn"),
+                    ),
+                    id="chat-input-container",
+                ),
+                id="main-area",
+            ),
         )
 
     def on_mount(self) -> None:
@@ -138,15 +160,20 @@ class ChatScreen(Screen):
 
         d = self.query_one("#chat-display", RichLog)
         d.write("[#58a6ff]# LivingTree[/#58a6ff]")
-
         if self._hub and hasattr(self._hub, 'config'):
             lc = self._hub.config.model
             if lc.longcat_api_key:
                 d.write(f"  [#8b949e]LongCat {lc.longcat_models}[/#8b949e]")
-
         if not getattr(self.app, '_hub_ready', False):
             d.write("  [#d29922]initializing...[/#d29922]")
-
+        d.write("")
+        d.write("[bold]Quick Start[/bold]")
+        d.write("  Type a message and press [bold]Enter[/bold]")
+        d.write("  [bold]Ctrl+S[/bold] stash draft | [bold]Alt+R[/bold] search history")
+        d.write("  [bold]Shift+Tab[/bold] cycle effort | [bold]Ctrl+C[/bold] copy")
+        d.write("  [bold]/search[/bold] multi-source | [bold]/pipeline[/bold] auto-gen")
+        d.write("  [bold]/file[/bold] preview | [bold]/fetch[/bold] web scrape")
+        d.write("  [bold]/help[/bold] all commands")
         d.write("")
 
     def _update_topbar(self) -> None:

@@ -34,8 +34,7 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 
 /* ═══ Chat — deep dark terminal style ═══ */
 #chat-topbar {
-    dock: top; height: 1; background: #161b22; padding: 0 2;
-    border-bottom: solid #30363d;
+    dock: top; height: 1; background: #161b22; padding: 0 2; border-bottom: solid #30363d;
 }
 #chat-model-label { width: auto; color: #58a6ff; text-style: bold; }
 #chat-tokens-label { width: auto; color: #8b949e; padding: 0 1; }
@@ -43,11 +42,11 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #chat-effort-label { width: auto; color: #d2a8ff; padding: 0 1; }
 #chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
 
+#sidebar { width: 26; background: #161b22; border-right: solid #30363d; padding: 1; }
 #main-area { width: 1fr; }
 #chat-display {
     height: 1fr; border: none; overflow-y: scroll;
-    scrollbar-size: 1 1; padding: 0 2;
-    background: #0d1117;
+    scrollbar-size: 1 1; padding: 0 2; background: #0d1117;
 }
 #chat-display:focus { border: none; }
 
@@ -55,18 +54,17 @@ ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: v
 #autocomplete-hint { height: 1; color: #484f58; padding: 0 2; }
 
 #chat-input-container {
-    dock: bottom; height: auto; min-height: 4; max-height: 10;
-    background: #161b22; border-top: solid #30363d; padding: 0 1;
+    dock: bottom; height: auto; min-height: 6; max-height: 14;
+    background: #161b22; border-top: solid #30363d; padding: 1 1;
 }
 #chat-input {
-    width: 1fr; height: 3; border: none;
-    background: #0d1117; color: #c9d1d9; padding: 0 1;
+    width: 1fr; height: 4; border: solid #30363d;
+    background: #0d1117; color: #c9d1d9; padding: 0 1; margin: 0 1 0 0;
 }
-#chat-input:focus { border: none; background: #0d1117; }
-#chat-hints {
-    width: 1fr; color: #484f58; margin: 0; padding: 0 1;
-    height: 1; content-align: left middle;
-}
+#chat-input:focus { border: solid #58a6ff; }
+#chat-hints { width: 1fr; color: #484f58; margin: 0; padding: 0 1; height: 1; content-align: left middle; }
+#effort-btn { margin: 0 1 0 0; border: solid #d2a8ff; color: #d2a8ff; }
+#cache-stats { height: auto; max-height: 3; color: #484f58; padding: 0 1; }
 
 /* ═══ Sender labels ═══ */
 #chat-display .user-label { color: #3fb950; text-style: bold; }

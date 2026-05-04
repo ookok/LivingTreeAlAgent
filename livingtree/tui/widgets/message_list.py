@@ -50,7 +50,7 @@ class ThinkingBlock(Static):
             self.update(f"[#d2a8ff]💭 Thinking:[/#d2a8ff]\n{self._thinking[-500:]}")
 
 
-class MessageList(Vertical, can_focus=False):
+class MessageList(Vertical):
     """Scrollable message list with dynamic widget management."""
 
     MAX_MESSAGES = 100

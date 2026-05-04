@@ -126,21 +126,21 @@ class ChatScreen(Screen):
                 yield Static("", id="cache-stats")
             with Vertical(id="main-area"):
                 yield RichLog(id="chat-display", highlight=True, markup=True, wrap=True, max_lines=1000, read_only=True)
-                yield Horizontal(
-                    Label("", id="llm-status"),
-                    Label("", id="pulse-status"),
-                    Label("", id="error-status"),
-                    Label("[dim]Enter send  Ctrl+S stash  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
-                    Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
-                    Button("Clear", id="clear-btn"),
-                    id="action-bar",
-                )
-                yield AttachmentBar(id="attachment-bar")
-                yield Container(
-                    TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
-                    Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
-                    id="chat-input-container",
-                )
+            yield Horizontal(
+                Label("", id="llm-status"),
+                Label("", id="pulse-status"),
+                Label("", id="error-status"),
+                Label("[dim]Enter send  Ctrl+S stash  Ctrl+C copy  End→bottom[/dim]", id="action-hints"),
+                Button("[#58a6ff]Switch LLM[/#58a6ff]", id="switch-llm-btn"),
+                Button("Clear", id="clear-btn"),
+                id="action-bar",
+            )
+            yield AttachmentBar(id="attachment-bar")
+            yield Container(
+                TextArea.code_editor("", id="chat-input", language=None, show_line_numbers=False),
+                Label("[dim]Enter send  Shift+Enter newline[/dim]", id="chat-hints"),
+                id="chat-input-container",
+            )
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

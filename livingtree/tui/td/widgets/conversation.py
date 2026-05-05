@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns", "lineage", "practice", "profile"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3433,6 +3433,96 @@ class Conversation(containers.Vertical):
             if not result.ips:
                 lines.append("  [red]解析失败[/red]")
             await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "lineage":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.data_lineage import get_data_lineage
+            dl = get_data_lineage()
+            parts = params.split() if params else []
+            node_id = parts[0] if parts else ""
+            if node_id:
+                ancestors = dl.trace_backward(node_id)
+                descendants = dl.trace_forward(node_id)
+                lines = [f"## 🔗 数据血缘: {node_id}", ""]
+                lines.append("### ↑ 上游 (来源)")
+                if ancestors:
+                    for n in ancestors[:10]:
+                        icon = {"user_provided": "👤", "computed": "🔢", "learned": "📚", "assumed": "⚠️"}.get(n.derivation, "•")
+                        lines.append(f"{icon} **{n.id}** = {n.value} {n.unit} [{n.derivation}]")
+                else:
+                    lines.append("  (无上游 — 根数据)")
+                lines.append("\n### ↓ 下游 (影响)")
+                if descendants:
+                    for n in descendants[:10]:
+                        lines.append(f"  → **{n.id}** = {n.value} {n.unit} [{n.derivation}]")
+                else:
+                    lines.append("  (无下游)")
+                await self.post(Note("\n".join(lines)))
+            else:
+                summary = dl.summary()
+                lines = [
+                    f"## 🔗 数据血缘",
+                    f"节点: {summary['total_nodes']} | "
+                    f"根节点: {summary['root_nodes']} | "
+                    f"用户提供: {summary['user_provided_pct']:.0f}%",
+                    f"高置信: {summary['by_confidence']['high']} | "
+                    f"中: {summary['by_confidence']['medium']} | "
+                    f"低: {summary['by_confidence']['low']}",
+                ]
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "practice":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.adaptive_practice import get_adaptive_practice
+            ap = get_adaptive_practice()
+            parts = params.split() if params else []
+            sub = parts[0].lower() if parts else "report"
+            if sub == "report" or sub == "weak":
+                report = ap.report()
+                lines = [f"## 🎯 自适应学习 — 最弱项 (需练习)", ""]
+                for w in report.get("weakest", []):
+                    trend_icon = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(w["trend"], "")
+                    lines.append(
+                        f"{trend_icon} **{w['template']}/{w['section']}** | "
+                        f"分数:{w['score']} | 修改率:{w['mod_rate']}%"
+                    )
+                if not report["weakest"]:
+                    lines.append("暂无足够数据 — 多生成几份报告后自动开始追踪")
+                lines.append(f"\n### 🏆 最强项")
+                for s in report.get("strongest", [])[:3]:
+                    lines.append(f"✅ **{s['template']}/{s['section']}** — {s['score']}")
+                await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /practice [report]"))
+            return True
+
+        elif command == "profile":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.progressive_trust import get_progressive_trust
+            pt = get_progressive_trust()
+            parts = params.split() if params else []
+            username = parts[0] if parts else ""
+            if username:
+                profile = pt.get_user_profile(username)
+                if not profile:
+                    await self.post(Note(f"[dim]用户 {username} 暂无数据[/dim]"))
+                else:
+                    lines = [
+                        f"## 👤 {username}",
+                        f"交互: {profile['interactions']}次 | 回话: {profile['sessions']}次",
+                        f"",
+                        f"### 专业领域",
+                    ]
+                    for domain, exp in profile.get("expertise", {}).items():
+                        icon = {"expert": "🟢", "proficient": "🟡", "learning": "🟠", "novice": "🔴"}.get(exp["level"], "")
+                        lines.append(f"{icon} **{domain}** — {exp['level']} (skill:{exp['skill']}, 修正率:{exp['correction_rate']}%)")
+                    if profile.get("auto_approval_domains"):
+                        lines.append(f"\n⏭ 自动通过: {', '.join(profile['auto_approval_domains'])}")
+                    await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /profile <用户名>"))
             return True
 
         return False

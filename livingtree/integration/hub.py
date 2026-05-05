@@ -506,6 +506,30 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"ProxyPool: {e}")
 
+        # ── DataLineage: document data tracing ──
+        try:
+            from ..capability.data_lineage import get_data_lineage
+            self.world.data_lineage = get_data_lineage()
+            logger.info("DataLineage initialized")
+        except Exception as e:
+            logger.debug(f"DataLineage: {e}")
+
+        # ── AdaptivePractice: idle self-study for weak areas ──
+        try:
+            from ..capability.adaptive_practice import get_adaptive_practice
+            self.world.adaptive_practice = get_adaptive_practice()
+            logger.info("AdaptivePractice initialized")
+        except Exception as e:
+            logger.debug(f"AdaptivePractice: {e}")
+
+        # ── ProgressiveTrust: per-user expertise model ──
+        try:
+            from ..capability.progressive_trust import get_progressive_trust
+            self.world.progressive_trust = get_progressive_trust()
+            logger.info("ProgressiveTrust initialized")
+        except Exception as e:
+            logger.debug(f"ProgressiveTrust: {e}")
+
         if self.lsp_manager:
             try:
                 await self.lsp_manager.start()

@@ -77,10 +77,20 @@ class IdleConsolidator:
         """One pass of consolidation."""
         # Gather raw material
         conversations = self._gather_conversations()
+
+        # ── Pre-warm KV cache for active providers ──
+        self._pre_warm_cache(hub)
+
+        # ── Adaptive practice: self-study weakest skill ──
+        try:
+            from .adaptive_practice import get_adaptive_practice
+            ap = get_adaptive_practice()
+            await ap.practice_weakest(hub)
+        except Exception:
+            pass
+
         if not conversations:
             return
-
-        llm = hub.world.consciousness._llm
 
         # ── Pre-warm KV cache for active providers ──
         self._pre_warm_cache(hub)

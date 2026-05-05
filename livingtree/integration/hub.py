@@ -559,6 +559,35 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"ErrorReplay: {e}")
 
+        if self.lsp_manager:
+            try:
+                await self.lsp_manager.start()
+                logger.debug("LSP Manager started")
+            except Exception as e:
+                logger.debug(f"LSP start skipped: {e}")
+
+        if self.world.dual_mode:
+            try:
+                await self.world.dual_mode.start_monitoring()
+                status = await self.world.dual_mode.check()
+                logger.info(f"DualMode: {'online' if status['online'] else 'offline'} (provider={status['provider']})")
+            except Exception as e:
+                logger.debug(f"DualMode start: {e}")
+
+        self._started = True
+        self._phase = 1
+        
+        if self.world.biorhythm:
+            await self.world.biorhythm.start()
+        
+        await self.daemon.start()
+        logger.info("🌳 LivingTree online — autonomous cycles active")
+
+        story = self.daemon._advanced.full_narrative()
+        for line in story.split("\n"):
+            if line.strip():
+                logger.info(line)
+
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""
         brain = getattr(self.world, 'network_brain', None)
@@ -600,35 +629,6 @@ class IntegrationHub:
                 logger.info(f"Observe request from {data.get('from_id','?')}")
         except Exception:
             pass
-
-        if self.lsp_manager:
-            try:
-                await self.lsp_manager.start()
-                logger.debug("LSP Manager started")
-            except Exception as e:
-                logger.debug(f"LSP start skipped: {e}")
-
-        if self.world.dual_mode:
-            try:
-                await self.world.dual_mode.start_monitoring()
-                status = await self.world.dual_mode.check()
-                logger.info(f"DualMode: {'online' if status['online'] else 'offline'} (provider={status['provider']})")
-            except Exception as e:
-                logger.debug(f"DualMode start: {e}")
-
-        self._started = True
-        self._phase = 1
-        
-        if self.world.biorhythm:
-            await self.world.biorhythm.start()
-        
-        await self.daemon.start()
-        logger.info("🌳 LivingTree online — autonomous cycles active")
-
-        story = self.daemon._advanced.full_narrative()
-        for line in story.split("\n"):
-            if line.strip():
-                logger.info(line)
 
     async def shutdown(self) -> None:
         if not self._started:

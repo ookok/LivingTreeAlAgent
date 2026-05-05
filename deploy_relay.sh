@@ -15,19 +15,31 @@ echo "║   Port: $PORT                              ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
-# Step 1: Check Python
-echo "[1/5] Checking Python..."
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python3 not found. Install Python 3.14+ first."
-    exit 1
+# Step 1: Check Python 3.14
+echo "[1/5] Checking Python 3.14..."
+PYTHON_CMD=""
+if command -v python3.14 &>/dev/null; then
+    PYTHON_CMD="python3.14"
+elif python3 -c "import sys; sys.exit(0 if sys.version_info>=(3,14) else 1)" 2>/dev/null; then
+    PYTHON_CMD="python3"
+else
+    echo "   Python 3.14 not found. Attempting install..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        curl -fsSL https://www.python.org/ftp/python/3.14.0/python-3.14.0-macos11.pkg -o /tmp/python314.pkg
+        sudo installer -pkg /tmp/python314.pkg -target /
+        PYTHON_CMD="python3.14"
+    else
+        sudo apt-get update -qq && sudo apt-get install -y -qq python3.14 python3.14-venv 2>/dev/null || true
+        PYTHON_CMD="python3.14"
+    fi
 fi
-python3 --version
+$PYTHON_CMD --version
 
 # Step 2: Create venv
 echo ""
 echo "[2/5] Setting up virtual environment..."
 if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+    $PYTHON_CMD -m venv .venv
     echo "venv created."
 else
     echo "venv already exists."

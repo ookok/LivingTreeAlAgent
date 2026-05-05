@@ -583,6 +583,9 @@ class IntegrationHub:
         await self.daemon.start()
         logger.info("🌳 LivingTree online — autonomous cycles active")
 
+        # ── Sync provider keys from relay (fallback to local if unavailable) ──
+        await self._sync_provider_keys_from_relay()
+
         story = self.daemon._advanced.full_narrative()
         for line in story.split("\n"):
             if line.strip():

@@ -118,6 +118,21 @@ def _save_user_keys():
         USER_KEYS_FILE.write_text(json.dumps(USER_KEYS))
     except Exception: pass
 
+def _load_config_cache():
+    """Load encrypted config and cache provider keys for client sync."""
+    global _config_cache
+    try:
+        from livingtree.config.secrets import get_secret_vault
+        vault = get_secret_vault()
+        # Cache only provider API keys, not SMTP/other secrets
+        for key in vault.keys():
+            if "api_key" in key or "base_url" in key or "default_model" in key:
+                _config_cache[key] = vault.get(key, "")
+    except Exception:
+        pass
+
+_config_cache: dict[str, str] = {}
+
 def _load_user_keys():
     global USER_KEYS
     try:
@@ -300,15 +315,16 @@ class P2PRelayServer:
     def __init__(self, port: int = 8888, host: str = "0.0.0.0"):
         self.port = port; self.host = host
         self._app = web.Application()
-        self._hub = None
         self._started_at = time.time()
         self._request_count = 0
         self._ws_clients: dict[str, web.WebSocketResponse] = {}
+        self._config_cache: dict[str, str] = {}  # cached secrets.enc keys
         _ensure_accounts()
         _ensure_api_keys()
         _load_relay_pool()
         _load_subscriptions()
         self._setup_routes()
+        _load_config_cache()
 
     def _setup_routes(self):
         app = self._app
@@ -330,6 +346,20 @@ class P2PRelayServer:
         app.router.add_post("/admin/password", self._admin_change_password)
         app.router.add_post("/admin/subscriptions/add", self._admin_add_subscription)
         app.router.add_get("/admin/subscriptions/remove", self._admin_remove_subscription)
+        # API (all require API key except /login and /health)
+        app.router.add_get("/health", self._health)
+        app.router.add_get("/config/providers", self._config_providers)
+        app.router.add_get("/status", self._handle_status)
+        app.router.add_post("/cost/report", self._cost_report)
+        # Web delegation
+        app.router.add_post("/web/fetch", self._web_fetch)
+        app.router.add_post("/web/search", self._web_search)
+        # P2P
+        app.router.add_post("/peers/register", self._peer_register)
+        app.router.add_get("/peers/discover", self._peer_discover)
+        app.router.add_post("/peers/sync", self._peer_sync)
+        app.router.add_get("/peers/best", self._peer_best_relay)
+        app.router.add_get("/ws/relay", self._ws_relay)
         # LLM Proxy (sub2api-style)
         app.router.add_post("/v1/chat/completions", self._llm_proxy)
         app.router.add_get("/v1/models", self._llm_proxy_models)
@@ -613,6 +643,17 @@ class P2PRelayServer:
         user = self._check_auth(request)
         if not user: return web.json_response({"error": "Unauthorized"}, status=401)
         return web.json_response({"peers": len(PEER_STORE), "requests": self._request_count, "user": user})
+
+    async def _config_providers(self, request: web.Request) -> web.Response:
+        """Return cached provider API keys to authorized clients."""
+        user = self._check_auth(request)
+        if not user: return web.json_response({"error": "Unauthorized"}, status=401)
+        # Filter: only return API keys, not SMTP passwords etc.
+        providers = {}
+        for k, v in _config_cache.items():
+            if "api_key" in k:
+                providers[k] = v[:12] + "***" if len(v) > 12 else v  # mask for safety
+        return web.json_response({"providers": providers, "count": len(providers)})
 
     async def _handle_chat(self, request: web.Request) -> web.Response:
         user = self._check_auth(request)
@@ -1140,48 +1181,36 @@ class P2PRelayServer:
 
     async def start(self):
         _load_user_keys()
-        logger.info(f"🚀 Relay Server: {RELAY_HOST}:{self.port}")
+        logger.info(f"🚀 Relay Gateway: {RELAY_HOST}:{self.port}")
         logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🔑 User keys: {len(USER_KEYS)}")
+        logger.info(f"📋 Config cached: {len(_config_cache)} keys")
         logger.info(f"🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
-
-        # ── Service Discovery: named URL + HTTPS + mDNS ──
-        try:
-            from livingtree.network.service_discovery import get_service_discovery
-            sd = get_service_discovery()
-            await sd.setup()
-            svc = await sd.register("relay", self.port, protocol="https")
-            logger.info(f"🌐 Named URL: {svc.url}")
-            if svc.lan_url:
-                logger.info(f"📱 LAN: {svc.lan_url}")
-        except Exception as e:
-            logger.debug(f"ServiceDiscovery: {e}")
 
         # Connectivity heartbeat
         asyncio.create_task(self._connectivity_check())
         # Relay pool auto-sync
         asyncio.create_task(self._sync_relay_pool())
 
-        from livingtree.integration.hub import IntegrationHub
-        self._hub = IntegrationHub(lazy=True)
-        await self._hub.start()
         self._started_at = time.time()
         runner = web.AppRunner(self._app)
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
 
-        # Initial connectivity check
+        global _external_ok
         try:
             _, writer = await asyncio.wait_for(asyncio.open_connection(GITHUB_CHECK, 443), timeout=5)
             writer.close(); await writer.wait_closed()
-            global _external_ok; _external_ok = True
+            _external_ok = True
         except Exception:
             pass
 
-        logger.info(f"✅ Ready | External: {'OK' if _external_ok else 'OFFLINE'}")
+        logger.info(f"✅ Ready — lightweight gateway | External: {'OK' if _external_ok else 'OFFLINE'}")
+        logger.info(f"   Login: POST /login → api_key")
+        logger.info(f"   Config: GET /config/providers → cached API keys")
+        logger.info(f"   Peers: POST /peers/register | GET /peers/discover")
 
     async def shutdown(self):
         for ws in self._ws_clients.values(): await ws.close()
-        if self._hub: await self._hub.shutdown()
 
 
 async def run_server(port: int = 8888, host: str = "0.0.0.0"):

@@ -53,6 +53,14 @@ RELAY_PORT = 8888
 RELAY_POOL: list[str] = []  # ["host:port", ...]
 RELAY_POOL_FILE = Path(".livingtree/relay_pool.json")
 
+# ═══ External network status ═══
+_external_ok: bool = False
+GITHUB_CHECK = "github.com"
+CHECK_INTERVAL = 30  # seconds
+
+# ═══ User API keys (one per user) ═══
+USER_KEYS: dict[str, str] = {}  # username → api_key
+
 # RMB per 1M tokens (approximate)
 RMB_PER_M_TOKENS = {
     "deepseek": 2.0, "siliconflow": 0.0, "mofang": 0.0,
@@ -77,6 +85,11 @@ def _ensure_accounts():
             "created": time.time(), "cost_rmb": 0.0, "token_in": 0, "token_out": 0,
             "last_login": 0, "is_admin": True,
         }
+    # Auto-generate API keys for users who don't have one
+    for name in ACCOUNT_STORE:
+        if name not in USER_KEYS:
+            USER_KEYS[name] = f"lt-{secrets.token_hex(24)}"
+    _save_user_keys()
 
 def _save_accounts():
     try:
@@ -88,6 +101,22 @@ def _save_accounts():
 
 def _hash_password(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
+
+USER_KEYS_FILE = Path(".livingtree/user_keys.json")
+
+def _save_user_keys():
+    try:
+        USER_KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        USER_KEYS_FILE.write_text(json.dumps(USER_KEYS))
+    except Exception: pass
+
+def _load_user_keys():
+    global USER_KEYS
+    try:
+        if USER_KEYS_FILE.exists():
+            USER_KEYS = json.loads(USER_KEYS_FILE.read_text())
+    except Exception:
+        pass
 
 
 def _load_relay_pool():
@@ -148,6 +177,7 @@ button.danger{background:#da3633}button.small{padding:3px 8px;font-size:12px}
   <div class="metric"><div class="val">PEERS</div><div class="lbl">在线节点</div></div>
   <div class="metric"><div class="val">ACCTS</div><div class="lbl">账户数</div></div>
   <div class="metric"><div class="val">¥COST</div><div class="lbl">累计费用</div></div>
+  <div class="metric"><div class="val">NET_STATUS</div><div class="lbl">外网</div></div>
 </div>
 <p><a href="/admin/logout" style="font-size:12px">退出登录</a></p>
 
@@ -166,7 +196,7 @@ PWD_MSG
   <input name="password" placeholder="密码" required>
   <button type="submit">+ 添加</button>
 </form>
-<table><tr><th>用户名</th><th>创建时间</th><th>Token输入</th><th>Token输出</th><th>累计费用(¥)</th><th>最后登录</th><th>操作</th></tr>
+<table><tr><th>用户名</th><th>创建时间</th><th>Token输入</th><th>Token输出</th><th>累计费用(¥)</th><th>最后登录</th><th>API Key</th><th>操作</th></tr>
 ACCOUNT_ROWS</table>
 
 <h2>💰 费用明细</h2>
@@ -198,12 +228,15 @@ function copyKey(k){navigator.clipboard.writeText(k).then(()=>{var e=event.targe
 </script>
 
 <h2>📡 API端点</h2>
-<div class="endpoint">POST /login — {"username":"","password":""} → {"token":"..."}</div>
-<div class="endpoint">POST /chat — Authorization: Bearer &lt;token&gt; {"message":"..."}</div>
+<div class="endpoint">POST /login — {"username":"","password":""} → {"token":"...","api_key":"lt-..."}</div>
+<div class="endpoint">POST /chat — Authorization: Bearer &lt;api_key&gt; {"message":"..."}</div>
+<div class="endpoint">POST /web/fetch — 中继帮节点抓取网页（需外网连通）</div>
+<div class="endpoint">POST /web/search — 中继帮节点搜索（需外网连通）</div>
 <div class="endpoint">POST /peers/register — P2P节点注册</div>
 <div class="endpoint">GET /peers/discover — P2P节点发现</div>
+<div class="endpoint">POST /peers/sync — 中继池同步</div>
 <div class="endpoint">WS /ws/relay — WebSocket消息中继</div>
-<div class="endpoint">POST /cost/report — 上报token消耗</div>
+<div class="endpoint">POST /cost/report — 上报token消耗（需api_key）</div>
 <div style="margin-top:15px">
 <a href="/admin/stats/reset?scope=costs"><button class="danger">🗑 清空费用统计</button></a>
 <a href="/admin/stats/reset?scope=peers"><button class="danger">🗑 清空节点列表</button></a>
@@ -258,14 +291,18 @@ class P2PRelayServer:
         app.router.add_post("/admin/keys/add", self._admin_add_key)
         app.router.add_get("/admin/keys/revoke", self._admin_revoke_key)
         app.router.add_post("/admin/password", self._admin_change_password)
-        # API
+        # API (all require API key except /login and /health)
         app.router.add_get("/health", self._health)
         app.router.add_post("/chat", self._handle_chat)
         app.router.add_get("/status", self._handle_status)
         app.router.add_post("/cost/report", self._cost_report)
+        # Web delegation (relay fetches for nodes)
+        app.router.add_post("/web/fetch", self._web_fetch)
+        app.router.add_post("/web/search", self._web_search)
         # P2P
         app.router.add_post("/peers/register", self._peer_register)
         app.router.add_get("/peers/discover", self._peer_discover)
+        app.router.add_post("/peers/sync", self._peer_sync)
         app.router.add_get("/ws/relay", self._ws_relay)
         # WeChat
         app.router.add_get("/wechat", self._wechat_verify)
@@ -277,12 +314,16 @@ class P2PRelayServer:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-            # Token format: username:session_token
+            # Check user-specific API keys first
+            for username, key in USER_KEYS.items():
+                if token == key:
+                    return username
+            # Legacy: session token
             for username, data in ACCOUNT_STORE.items():
                 expected = hashlib.sha256(f"{username}:{data.get('password_hash','')}".encode()).hexdigest()[:32]
                 if token == expected or token == data.get("session_token", ""):
                     return username
-            # Check API keys
+            # Global API keys (deprecated but kept for backward compat)
             if token in API_KEY_STORE:
                 return "api"
         return None
@@ -310,7 +351,17 @@ class P2PRelayServer:
             account["session_token"] = token
             account["last_login"] = time.time()
             _save_accounts()
-            return web.json_response({"token": token, "username": username, "node_id": f"lt-{username}"})
+            # Return user's API key (auto-generated if needed)
+            api_key = USER_KEYS.get(username, "")
+            if not api_key:
+                api_key = f"lt-{secrets.token_hex(24)}"
+                USER_KEYS[username] = api_key
+                _save_user_keys()
+            return web.json_response({
+                "token": token, "username": username,
+                "node_id": f"lt-{username}",
+                "api_key": api_key,
+            })
         except Exception as e:
             return web.json_response({"error": str(e)}, status=400)
 
@@ -323,14 +374,16 @@ class P2PRelayServer:
         if not self._check_admin(request):
             return web.Response(text=LOGIN_HTML.replace("ERR_MSG", ""), content_type="text/html")
 
-        # Account rows
+        # Account rows with API key
         account_rows = ""
         for name, a in ACCOUNT_STORE.items():
             created = time.strftime("%m-%d %H:%M", time.localtime(a.get("created", 0)))
             last = time.strftime("%m-%d %H:%M", time.localtime(a.get("last_login", 0))) if a.get("last_login") else "-"
+            ukey = USER_KEYS.get(name, "")
+            key_display = ukey[:12] + "..." + ukey[-8:] if ukey else "-"
             reset_link = f"/admin/accounts/reset?user={name}"
             del_link = f"/admin/accounts/delete?user={name}"
-            account_rows += f"<tr><td>{name}{' [管理员]' if a.get('is_admin') else ''}</td><td>{created}</td><td>{a.get('token_in',0):,}</td><td>{a.get('token_out',0):,}</td><td>¥{a.get('cost_rmb',0):.4f}</td><td>{last}</td><td><a href='{reset_link}'><button class='small'>改密</button></a> <a href='{del_link}' onclick='return confirm(\"删除{name}?\")'><button class='small danger'>删除</button></a></td></tr>"
+            account_rows += f"<tr><td>{name}{' [管理员]' if a.get('is_admin') else ''}</td><td>{created}</td><td>{a.get('token_in',0):,}</td><td>{a.get('token_out',0):,}</td><td>¥{a.get('cost_rmb',0):.4f}</td><td>{last}</td><td><code data-key='{ukey}' onclick='copyKey(this.dataset.key)' style='cursor:pointer;font-size:11px' title='点击复制API Key'>{key_display} 📋</code></td><td><a href='{reset_link}'><button class='small'>改密</button></a> <a href='{del_link}' onclick='return confirm(\"删除{name}?\")'><button class='small danger'>删除</button></a></td></tr>"
 
         # Cost rows (per-account per-provider)
         cost_rows = ""
@@ -380,6 +433,7 @@ class P2PRelayServer:
         html = html.replace("PEERS", str(len(PEER_STORE)))
         html = html.replace("ACCTS", str(len(ACCOUNT_STORE)))
         html = html.replace("¥COST", f"{total_cost:.2f}")
+        html = html.replace("NET_STATUS", "🟢OK" if _external_ok else "🔴断")
         html = html.replace("ACCOUNT_ROWS", account_rows or "<tr><td colspan=7>暂无账户</td></tr>")
         html = html.replace("COST_ROWS", cost_rows or "<tr><td colspan=6>暂无消费记录</td></tr>")
         html = html.replace("RELAY_ROWS", relay_rows or "<tr><td colspan=2>暂无其他中继服务器</td></tr>")
@@ -591,6 +645,125 @@ class P2PRelayServer:
             self._ws_clients.pop(client_id, None)
         return ws
 
+    # ═══ Web delegation (nodes delegate fetch/search to relay) ═══
+
+    async def _web_fetch(self, request: web.Request) -> web.Response:
+        user = self._check_auth(request)
+        if not user: return web.json_response({"error": "Unauthorized — need API key"}, status=401)
+        if not _external_ok: return web.json_response({"error": "Relay has no external network access"}, status=503)
+        try:
+            data = await request.json()
+            url = data.get("url", "")
+            if not url: return web.json_response({"error": "url required"}, status=400)
+            import urllib.request, re
+            req = urllib.request.Request(url, headers={"User-Agent": "LivingTreeRelay/2.1"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            # Strip to text
+            clean = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL|re.IGNORECASE)
+            clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL|re.IGNORECASE)
+            clean = re.sub(r'<[^>]+>', ' ', clean)
+            clean = re.sub(r'\s+', ' ', clean)
+            return web.json_response({"content": clean[:30000], "url": url})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _web_search(self, request: web.Request) -> web.Response:
+        user = self._check_auth(request)
+        if not user: return web.json_response({"error": "Unauthorized — need API key"}, status=401)
+        if not _external_ok: return web.json_response({"error": "Relay has no external network access"}, status=503)
+        try:
+            data = await request.json()
+            query = data.get("query", "")
+            if not query: return web.json_response({"error": "query required"}, status=400)
+            try:
+                from livingtree.search.spark_search import SparkSearch
+                results = SparkSearch().search(query, limit=data.get("limit", 5))
+                return web.json_response({"results": results, "query": query})
+            except Exception:
+                pass
+            # Fallback: DuckDuckGo HTML search
+            import urllib.request, urllib.parse, re
+            url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+            req = urllib.request.Request(url, headers={"User-Agent": "LivingTreeRelay/2.1"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            results = []
+            for m in re.finditer(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.DOTALL):
+                results.append({"url": m.group(1), "title": re.sub(r'<[^>]+>', '', m.group(2)).strip()})
+            return web.json_response({"results": results[:5], "query": query})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    # ═══ Relay pool sync ═══
+
+    async def _peer_sync(self, request: web.Request) -> web.Response:
+        """Relay servers push/pull their pool lists to each other."""
+        try:
+            data = await request.json()
+            remote_pool = data.get("pool", [])
+            remote_addr = data.get("address", "")
+            # Merge: add remote relays we don't know about
+            added = 0
+            for addr in remote_pool:
+                if addr and addr not in RELAY_POOL and addr != f"{RELAY_HOST}:{RELAY_PORT}":
+                    RELAY_POOL.append(addr)
+                    added += 1
+            if added:
+                _save_relay_pool()
+                logger.info(f"Sync: +{added} relays from {remote_addr}")
+            # Return our pool so they can sync too
+            return web.json_response({
+                "pool": [f"{RELAY_HOST}:{RELAY_PORT}"] + RELAY_POOL,
+                "added": added,
+                "external_ok": _external_ok,
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=400)
+
+    # ═══ Connectivity heartbeat ═══
+
+    async def _connectivity_check(self):
+        """Periodic GitHub connectivity check."""
+        global _external_ok
+        while True:
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(GITHUB_CHECK, 443),
+                    timeout=5,
+                )
+                writer.close()
+                await writer.wait_closed()
+                _external_ok = True
+            except Exception:
+                _external_ok = False
+            await asyncio.sleep(CHECK_INTERVAL)
+
+    async def _sync_relay_pool(self):
+        """Periodically push relay pool to other relays in the pool."""
+        await asyncio.sleep(10)  # initial delay
+        while True:
+            if _external_ok:
+                my_pool = [f"{RELAY_HOST}:{RELAY_PORT}"] + RELAY_POOL
+                for addr in RELAY_POOL[:]:
+                    try:
+                        host, port = addr.rsplit(":", 1)
+                        async with aiohttp.ClientSession() as s:
+                            async with s.post(
+                                f"http://{host}:{port}/peers/sync",
+                                json={"pool": my_pool, "address": f"{RELAY_HOST}:{RELAY_PORT}"},
+                                timeout=aiohttp.ClientTimeout(total=5),
+                            ) as resp:
+                                if resp.status == 200:
+                                    remote = await resp.json()
+                                    for ra in remote.get("pool", []):
+                                        if ra not in RELAY_POOL and ra != f"{RELAY_HOST}:{RELAY_PORT}":
+                                            RELAY_POOL.append(ra)
+                                            _save_relay_pool()
+                    except Exception:
+                        pass
+            await asyncio.sleep(60)
+
     # ═══ WeChat ═══
 
     async def _wechat_verify(self, request: web.Request) -> web.Response:
@@ -614,11 +787,15 @@ class P2PRelayServer:
     # ═══ Lifecycle ═══
 
     async def start(self):
+        _load_user_keys()
         logger.info(f"🚀 Relay Server: {RELAY_HOST}:{self.port}")
-        logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
+        logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🔑 User keys: {len(USER_KEYS)}")
+        logger.info(f"🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
 
-        # Auto-start opencode serve
-        # asyncio.create_task(self._auto_start_opencode())
+        # Connectivity heartbeat
+        asyncio.create_task(self._connectivity_check())
+        # Relay pool auto-sync
+        asyncio.create_task(self._sync_relay_pool())
 
         from livingtree.integration.hub import IntegrationHub
         self._hub = IntegrationHub(lazy=True)
@@ -627,7 +804,16 @@ class P2PRelayServer:
         runner = web.AppRunner(self._app)
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
-        logger.info(f"✅ Ready")
+
+        # Initial connectivity check
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(GITHUB_CHECK, 443), timeout=5)
+            writer.close(); await writer.wait_closed()
+            global _external_ok; _external_ok = True
+        except Exception:
+            pass
+
+        logger.info(f"✅ Ready | External: {'OK' if _external_ok else 'OFFLINE'}")
 
     async def shutdown(self):
         for ws in self._ws_clients.values(): await ws.close()

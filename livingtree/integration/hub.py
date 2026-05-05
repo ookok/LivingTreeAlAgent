@@ -497,6 +497,15 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"TrustScoring: {e}")
 
+        # ── ProxyPool: multi-source proxy fetcher ──
+        try:
+            from ..network.proxy_fetcher import get_proxy_pool
+            pool = get_proxy_pool()
+            asyncio.create_task(pool.start_background())
+            logger.info(f"ProxyPool started ({pool.stats()['total']} cached)")
+        except Exception as e:
+            logger.debug(f"ProxyPool: {e}")
+
         if self.lsp_manager:
             try:
                 await self.lsp_manager.start()

@@ -89,23 +89,11 @@ def _get_proxy() -> str | None:
 def _get_proxy_from_pool() -> str | None:
     """Attempt to get a working proxy from the proxy pool."""
     try:
-        from importlib.util import find_spec
-        if not find_spec("client"):
-            return None
-
-        import sys
-        project_root = Path(__file__).parent.parent.parent.parent
-        if str(project_root) not in sys.path:
-            sys.path.insert(0, str(project_root))
-
-        from client.src.business.base_proxy_manager import (
-            get_proxy_manager, ProxyStatus
-        )
-        manager = get_proxy_manager()
-        if manager and manager.get_pool_size() > 0:
-            proxy = manager.get_best_proxy()
-            if proxy and proxy.status == ProxyStatus.ACTIVE:
-                return proxy.url
+        from .proxy_fetcher import get_proxy_pool
+        pool = get_proxy_pool()
+        proxy = pool.get_best()
+        if proxy and proxy.failure_count < 5:
+            return proxy.url
     except Exception:
         pass
     return None

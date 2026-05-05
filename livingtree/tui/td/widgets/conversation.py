@@ -1373,6 +1373,7 @@ class Conversation(containers.Vertical):
             SlashCommand("/docs", "文档生成", "批量生成10份报告"),
             SlashCommand("/team", "协作 & 网络", "查看在线节点"),
             SlashCommand("/layout", "布局管理", "切换到环评布局"),
+            SlashCommand("/ak", "金融数据", "股票/期货/指数/汇率"),
             SlashCommand("/help", "帮助", "查看帮助"),
         ]
 
@@ -1912,7 +1913,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands (8 unified commands) ═══
-        if command in ("help", "ask", "do", "files", "learn", "check", "docs", "team", "layout"):
+        if command in ("help", "ask", "do", "files", "learn", "check", "docs", "team", "layout", "ak"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2109,6 +2110,8 @@ class Conversation(containers.Vertical):
             return await self._cmd_team(params, hub)
         elif command == "layout":
             return await self._cmd_layout(params, hub)
+        elif command == "ak":
+            return await self._cmd_ak(params, hub)
 
         return False
 
@@ -2650,4 +2653,130 @@ class Conversation(containers.Vertical):
             await self.post(Note(f"✅ 已应用" + (f" (修正{result.fix_attempts}次)" if result.fix_attempts else "")))
         else:
             await self.post(Note(f"[red]{', '.join(result.parse_errors) or '无法生成'}[/red]"))
+        return True
+
+    async def _cmd_ak(self, params: str, hub) -> bool:
+        from livingtree.tui.td.widgets.note import Note
+        pl = params.lower().strip() if params else ""
+
+        try:
+            import akshare as ak
+        except ImportError:
+            await self.post(Note(
+                "[red]akshare 未安装[/red]\n"
+                "[dim]pip install akshare[/dim]\n"
+                "[dim]安装后可使用: /ak stock 000001  |  /ak future 螺纹钢  |  /ak index[/dim]"
+            ))
+            return True
+
+        if not pl or pl == "help":
+            await self.post(Note(
+                "## 📈 Akshare 金融数据\n\n"
+                "/ak stock <代码>     — 个股行情 (如: /ak stock 000001)\n"
+                "/ak future <品种>    — 期货行情 (如: /ak future 螺纹钢)\n"
+                "/ak index           — 主要指数\n"
+                "/ak forex           — 外汇汇率\n"
+                "/ak news            — 财经新闻\n\n"
+                "[dim]akshare 1.18 — 数据源来自东方财富/新浪/同花顺[/dim]"
+            ))
+            return True
+
+        # ── 个股行情 ──
+        if pl.startswith("stock ") or pl.startswith("个股 ") or pl.startswith("股票 "):
+            code = pl.replace("stock ", "").replace("个股 ", "").replace("股票 ", "").strip()
+            if not code.replace(".", "").isdigit():
+                await self.post(Note("[dim]用法: /ak stock 000001[/dim]"))
+                return True
+            try:
+                df = ak.stock_zh_a_spot_em()
+                row = df[df["代码"] == code]
+                if row.empty:
+                    # Try with prefix
+                    for prefix in ["", "sh", "sz"]:
+                        try:
+                            df2 = ak.stock_zh_a_hist(symbol=code, period="daily", start_date="20260101", adjust="qfq")
+                            if not df2.empty:
+                                latest = df2.iloc[-1]
+                                lines = [f"## 📈 {code}", f"最新: ¥{latest['收盘']}", f"最高: ¥{latest['最高']}", f"最低: ¥{latest['最低']}", f"成交量: {latest['成交量']:,}"]
+                                await self.post(Note("\n".join(lines)))
+                                return True
+                        except Exception:
+                            pass
+                    await self.post(Note(f"[dim]未找到股票代码 {code}[/dim]"))
+                else:
+                    r = row.iloc[0]
+                    change = f"{'+' if r['涨跌幅'] >= 0 else ''}{r['涨跌幅']:.2f}%"
+                    lines = [
+                        f"## 📈 {r['名称']} ({r['代码']})",
+                        f"最新: ¥{r['最新价']}  {change}",
+                        f"今开: {r['今开']}  昨收: {r['昨收']}",
+                        f"最高: {r['最高']}  最低: {r['最低']}",
+                        f"成交量: {r['成交量']:,}  成交额: {r['成交额']:,}",
+                    ]
+                    await self.post(Note("\n".join(lines)))
+            except Exception as e:
+                await self.post(Note(f"[red]{e}[/red]"))
+            return True
+
+        # ── 期货行情 ──
+        if pl.startswith("future ") or pl.startswith("期货 "):
+            name = pl.replace("future ", "").replace("期货 ", "").strip()
+            try:
+                df = ak.futures_zh_spot_em()
+                if name:
+                    mask = df["名称"].str.contains(name, na=False)
+                    df = df[mask]
+                if df.empty:
+                    await self.post(Note(f"[dim]未找到期货品种: {name}[/dim]"))
+                else:
+                    lines = [f"## 📊 期货行情 ({len(df)}条)", ""]
+                    for _, r in df.head(10).iterrows():
+                        chg = f"{'+' if r['涨跌幅'] >= 0 else ''}{r['涨跌幅']:.2f}%"
+                        lines.append(f"**{r['名称']}** ¥{r['最新价']} {chg} | 成交量:{float(r['成交量']):.0f}")
+                    await self.post(Note("\n".join(lines)))
+            except Exception as e:
+                await self.post(Note(f"[red]{e}[/red]"))
+            return True
+
+        # ── 指数 ──
+        if pl in ("index", "指数", "大盘"):
+            try:
+                df = ak.stock_zh_index_spot_em()
+                lines = ["## 📊 主要指数", ""]
+                for _, r in df.head(10).iterrows():
+                    chg = f"{'+' if r['涨跌幅'] >= 0 else ''}{r['涨跌幅']:.2f}%"
+                    lines.append(f"**{r['名称']}** {r['最新价']:.0f} {chg}")
+                await self.post(Note("\n".join(lines)))
+            except Exception as e:
+                await self.post(Note(f"[red]{e}[/red]"))
+            return True
+
+        # ── 外汇 ──
+        if pl in ("forex", "外汇", "汇率"):
+            try:
+                df = ak.currency_boc_sina()
+                lines = ["## 💱 外汇汇率", ""]
+                for _, r in df.head(8).iterrows():
+                    lines.append(f"**{r['货币名称']}** {r['中行折算价']}")
+                await self.post(Note("\n".join(lines)))
+            except Exception as e:
+                await self.post(Note(f"[red]{e}[/red]"))
+            return True
+
+        # ── 新闻 ──
+        if pl in ("news", "新闻", "快讯"):
+            try:
+                df = ak.stock_info_global_em()
+                lines = ["## 📰 全球财经快讯", ""]
+                for _, r in df.head(10).iterrows():
+                    lines.append(f"- {str(r.get('content', r.iloc[0]))[:120]}")
+                await self.post(Note("\n".join(lines)))
+            except Exception as e:
+                await self.post(Note(f"[red]{e}[/red]"))
+            return True
+
+        await self.post(Note(
+            "## 📈 Akshare 金融数据\n\n"
+            "/ak stock <代码>  /ak future <品种>  /ak index  /ak forex  /ak news"
+        ))
         return True

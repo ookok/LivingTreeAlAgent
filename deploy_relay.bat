@@ -2,6 +2,11 @@
 setlocal enabledelayedexpansion
 title LivingTree Relay Server
 
+:: Fix DNS for cloud servers
+netsh interface ip set dns "Ethernet" static 223.5.5.5 >nul 2>&1
+netsh interface ip add dns "Ethernet" 114.114.114.114 index=2 >nul 2>&1
+ipconfig /flushdns >nul 2>&1
+
 set PORT=%1
 if "%PORT%"=="" set /p PORT="Port (8888): "
 if "%PORT%"=="" set PORT=8888

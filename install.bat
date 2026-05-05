@@ -1,7 +1,11 @@
 @echo off
-chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
 title LivingTree Installer
+
+:: Fix DNS for cloud servers
+netsh interface ip set dns "Ethernet" static 223.5.5.5 >nul 2>&1
+netsh interface ip add dns "Ethernet" 114.114.114.114 index=2 >nul 2>&1
+ipconfig /flushdns >nul 2>&1
 
 set PORT=8888
 set MODE=client

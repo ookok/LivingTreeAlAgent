@@ -228,7 +228,133 @@ class DocumentEditor:
         target = data
         for k in keys[:-1]:
             if k not in target:
-                return EditResult(path=path)
+        return EditResult(path=path)
+
+    # ═══ Semantic navigation: LLM finds exact code locations ═══
+
+    async def find_location(
+        self,
+        query: str,
+        project_root: str | Path = ".",
+        hub=None,
+    ) -> list[dict]:
+        """Semantic file navigation — LLM reads files and returns exact locations.
+
+        "find where authentication logic is" → [{file: "auth.py", line: 42, context: "..."}]
+        """
+        if not hub or not hub.world:
+            return []
+
+        root = Path(project_root)
+        # First, find candidate files via filesystem
+        candidates = []
+        for f in root.rglob("*.py"):
+            if f.stat().st_size < 100000 and ".venv" not in str(f) and "__pycache__" not in str(f):
+                candidates.append(f)
+            if len(candidates) > 30:
+                break
+
+        if not candidates:
+            return []
+
+        # Let LLM scan candidates and locate the relevant code
+        file_list = "\n".join(str(c.relative_to(root)) for c in candidates[:20])
+        llm = hub.world.consciousness._llm
+
+        try:
+            result = await llm.chat(
+                messages=[{"role": "user", "content": (
+                    f"Given these project files:\n{file_list}\n\n"
+                    f"Query: {query}\n\n"
+                    f"Which file(s) most likely contain the relevant code? "
+                    f"Output JSON array: [{{\"file\":\"path\",\"reason\":\"why\"}}]"
+                )}],
+                provider=getattr(llm, '_elected', ''),
+                temperature=0.1, max_tokens=300, timeout=15,
+            )
+            if not result or not result.text:
+                return []
+
+            import json as _json
+            m = re.search(r'\[[\s\S]*\]', result.text)
+            if not m:
+                return []
+            files = _json.loads(m.group())
+            locations = []
+            for item in files[:5]:
+                fpath = root / item["file"]
+                if fpath.exists():
+                    with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read(20000)
+                    # Find the specific line
+                    result2 = await llm.chat(
+                        messages=[{"role": "user", "content": (
+                            f"File: {item['file']}\nContent:\n```\n{content[:8000]}\n```\n\n"
+                            f"Query: {query}\n\n"
+                            f"Output JSON: {{\"line\": N, \"context\": \"the matching code\"}}"
+                            f"Where N is the 1-indexed line number of the most relevant code."
+                        )}],
+                        provider=getattr(llm, '_elected', ''),
+                        temperature=0.0, max_tokens=200, timeout=15,
+                    )
+                    if result2 and result2.text:
+                        m2 = re.search(r'\{[\s\S]*\}', result2.text)
+                        if m2:
+                            loc = _json.loads(m2.group())
+                            locations.append({
+                                "file": str(fpath),
+                                "line": loc.get("line", 0),
+                                "context": loc.get("context", "")[:200],
+                                "reason": item.get("reason", ""),
+                            })
+            return locations[:5]
+        except Exception:
+            return []
+
+    # ═══ Multi-file transactions ═══
+
+    async def transaction(
+        self,
+        edits: list[dict],  # [{path, pattern, replacement}, ...]
+        dry_run: bool = False,
+    ) -> dict:
+        """Edit multiple files atomically. Auto-rollback ALL if any fails.
+
+        Args:
+            edits: List of {path, pattern, replacement} dicts
+            dry_run: Preview only
+
+        Returns:
+            {success: bool, results: [EditResult], rollback: bool}
+        """
+        backups = {}
+        results = []
+        success = True
+
+        # Phase 1: Backup all files
+        for edit in edits:
+            path = Path(edit["path"])
+            if path.exists():
+                backups[str(path)] = path.read_bytes()
+
+        # Phase 2: Apply all edits
+        for edit in edits:
+            result = self.replace_pattern(
+                edit["path"], edit.get("pattern", ""),
+                edit.get("replacement", ""), dry_run=dry_run,
+            )
+            results.append(result)
+            if not dry_run and result.replacements == 0:
+                success = False
+                break
+
+        # Phase 3: Rollback on failure
+        if not success and not dry_run:
+            for path_str, backup in backups.items():
+                Path(path_str).write_bytes(backup)
+            return {"success": False, "results": results, "rollback": True}
+
+        return {"success": True, "results": results, "rollback": False}
             target = target[k]
 
         last_key = keys[-1]

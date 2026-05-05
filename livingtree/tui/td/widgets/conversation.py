@@ -1885,7 +1885,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2163,6 +2163,31 @@ class Conversation(containers.Vertical):
             node = get_p2p_node()
             result = await node.connect_to(params.strip())
                 await self.post(Note(result))
+            return True
+
+        elif command == "locate":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.document_editor import get_editor
+            if not params:
+                await self.post(Note("用法: /locate <代码描述>"))
+                await self.post(Note("示例: /locate 用户认证逻辑"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            editor = get_editor()
+            await self.post(Note(f"**🔎 定位:** {params}"))
+            locations = await editor.find_location(params, hub=hub)
+            if not locations:
+                await self.post(Note("[dim]未找到匹配位置[/dim]"))
+            else:
+                lines = [f"## 🔎 找到 {len(locations)} 处", ""]
+                for loc in locations:
+                    lines.append(f"- **{Path(loc['file']).name}**:{loc['line']}")
+                    lines.append(f"  [dim]{loc['file']}[/dim]")
+                    if loc.get('context'):
+                        lines.append(f"  `{loc['context'][:120]}`")
+                    if loc.get('reason'):
+                        lines.append(f"  {loc['reason']}")
+                await self.post(Note("\n".join(lines)))
             return True
 
         elif command == "find":

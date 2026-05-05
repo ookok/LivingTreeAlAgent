@@ -308,7 +308,7 @@ class LivingTreeTuiApp(ToadApp):
         from .td.screens.main import MainScreen
         from pathlib import Path
 
-        async def get_screen() -> MainScreen:
+        def get_screen() -> MainScreen:
             return MainScreen(
                 project_path=self.workspace,
                 agent=agent_data,
@@ -324,8 +324,8 @@ class LivingTreeTuiApp(ToadApp):
         self.update_show_sessions()
         self.session_update_signal.publish((details.mode_name, details))
 
-        async def make_screen():
-            screen = await get_screen()
+        def make_screen():
+            screen = get_screen()
             screen.id = details.mode_name
             if prompt:
                 screen._initial_prompt = prompt

@@ -21,14 +21,34 @@ if "%PYTHON_CMD%"=="" (
 )
 if "%PYTHON_CMD%"=="" (
     echo Python 3.14 not found. Trying to install...
-    if exist "%TEMP%\python314.exe" del "%TEMP%\python314.exe"
-    bitsadmin /transfer "Python314" /download /priority HIGH "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe"
-    if not exist "%TEMP%\python314.exe" (
-        bitsadmin /transfer "Python314" /download /priority HIGH "https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe"
+    
+    REM Find any Python to use for download
+    set DL_PYTHON=
+    for /f "tokens=*" %%i in ('where python 2^>nul') do set DL_PYTHON=%%i
+    if "!DL_PYTHON!"=="" (
+        for /f "tokens=*" %%i in ('where python3 2^>nul') do set DL_PYTHON=%%i
     )
-    if exist "%TEMP%\python314.exe" (
-        "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
-        del "%TEMP%\python314.exe"
+    if "!DL_PYTHON!"=="" (
+        for /f "tokens=*" %%i in ('where py 2^>nul') do set DL_PYTHON=%%i
+    )
+
+    REM Use any Python to download Python 3.14 installer
+    set DL_URL=https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe
+    set DL_FILE=%TEMP%\python314.exe
+
+    if not "!DL_PYTHON!"=="" (
+        echo Downloading with !DL_PYTHON!...
+        "!DL_PYTHON!" -c "import urllib.request; urllib.request.urlretrieve('%DL_URL%', r'%DL_FILE%')" 2>nul
+    )
+
+    if not exist "%DL_FILE%" (
+        echo Python download via urllib failed, trying certutil...
+        certutil -urlcache -split -f "%DL_URL%" "%DL_FILE%" >nul 2>&1
+    )
+
+    if exist "%DL_FILE%" (
+        "%DL_FILE%" /quiet InstallAllUsers=0 Include_test=0
+        del "%DL_FILE%"
     )
     if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
 )

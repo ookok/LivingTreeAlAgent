@@ -39,6 +39,36 @@ class ElectionBadge(Static):
 # ═══ System tool registry ═══
 
 SYSTEM_TOOLS: dict[str, dict] = {
+    # ── File operations ──
+    "file_read": {
+        "name": "读取文件",
+        "category": "file",
+        "description": "读取文件内容（支持超大文件流式读取）",
+        "params": {"path": "文件路径", "max_chars": "最大字符数(默认10000)"},
+        "icon": "📖",
+    },
+    "file_write": {
+        "name": "写入文件",
+        "category": "file",
+        "description": "写入/保存文件（自动选择目录: .py→src/ .docx→output/ .md→docs/）",
+        "params": {"filename": "文件名", "content": "文件内容"},
+        "icon": "💾",
+    },
+    "file_replace": {
+        "name": "替换文件内容",
+        "category": "file",
+        "description": "精准替换文件内容（正则/章节/行范围/JSON路径），原子写入",
+        "params": {"path": "文件路径", "mode": "pattern|section|lines|json", "target": "替换目标", "replacement": "新内容"},
+        "icon": "✏️",
+    },
+    "file_find": {
+        "name": "搜索文件",
+        "category": "file",
+        "description": "全域文件搜索（文件系统+代码+文档+历史+知识库 6路并行）",
+        "params": {"query": "搜索关键词"},
+        "icon": "🔍",
+    },
+
     # ── Physical models (EIA) ──
     "gaussian_plume": {
         "name": "高斯烟羽模型",

@@ -319,18 +319,20 @@ class LivingTreeTuiApp(ToadApp):
         await self.new_session_screen(get_screen, prompt=prompt)
 
     async def new_session_screen(self, get_screen, prompt=None):
-        """Create a new Toad managed session."""
-        details = self.session_tracker.create_session()
-        mode_name = details.mode_name
+        """Create a new session via Toad's SessionTracker."""
+        details = self.session_tracker.new_session()
+        self.update_show_sessions()
+        self.session_update_signal.publish((details.mode_name, details))
 
         async def make_screen():
             screen = await get_screen()
+            screen.id = details.mode_name
             if prompt:
                 screen._initial_prompt = prompt
             return screen
 
-        self.add_mode(mode_name, make_screen)
-        await self.switch_mode(mode_name)
+        self.add_mode(details.mode_name, make_screen)
+        await self.switch_mode(details.mode_name)
         return details
 
     # ── Required ToadApp overrides ──

@@ -7,6 +7,10 @@ Core functions:
   2. Admin panel: /admin → account CRUD, password reset, per-node cost dashboard
   3. P2P signaling: peer registration, discovery, WebSocket relay
   4. Token cost tracking: per-account, RMB-converted
+
+Deployment:
+  Standalone exe: python build_relay_exe.py → dist/relay_server.exe
+  Win2008: deploy_win2008.bat <target> → bundles exe + CRT DLLs
 """
 from __future__ import annotations
 
@@ -14,13 +18,25 @@ import asyncio
 import hashlib
 import json
 import os
+import platform
 import secrets
+import sys
 import time
 from pathlib import Path
 
 import aiohttp
 from aiohttp import web
 from loguru import logger
+
+# ═══ Win2008 compatibility: prefer SelectorEventLoop ═══
+_WIN_VER = getattr(sys, 'getwindowsversion', lambda: None)()
+if _WIN_VER and hasattr(_WIN_VER, 'major') and _WIN_VER.major < 10:
+    try:
+        loop = asyncio.SelectorEventLoop()
+        asyncio.set_event_loop(loop)
+        logger.info("Win2008: SelectorEventLoop set")
+    except Exception:
+        pass
 
 PROJECT_ROOT = Path(__file__).parent
 
@@ -591,4 +607,23 @@ if __name__ == "__main__":
     parser.add_argument("--port", "-p", type=int, default=8888)
     parser.add_argument("--host", "-H", default="0.0.0.0")
     args = parser.parse_args()
-    asyncio.run(run_server(args.port, args.host))
+
+    # ═══ Win2008 compatibility header ═══
+    print(f"Platform: {platform.system()} {platform.release()}")
+    print(f"Python: {sys.version}")
+    print(f"Event loop: {asyncio.get_event_loop().__class__.__name__}")
+    print(f"Listening: {args.host}:{args.port}")
+    print(f"Admin panel: http://www.mogoo.com.cn:{args.port}/admin" if args.port == 8888 else f"http://0.0.0.0:{args.port}/admin")
+    print()
+
+    try:
+        asyncio.run(run_server(args.port, args.host))
+    except KeyboardInterrupt:
+        print("\nServer stopped by user.")
+    except Exception as e:
+        print(f"\n[FATAL] {e}")
+        print("\nWindows Server 2008 troubleshooting:")
+        print("  1. Ensure VC++ 2015+ Redistributable is installed")
+        print("  2. Run install_crt.bat if provided with the deployment package")
+        print("  3. Check: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+        sys.exit(1)

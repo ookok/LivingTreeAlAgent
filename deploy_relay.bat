@@ -21,14 +21,12 @@ if "%PYTHON_CMD%"=="" (
 )
 if "%PYTHON_CMD%"=="" (
     echo Python 3.14 not found. Trying to install...
-    echo Step 1: downloading installer...
-    powershell -Command "Invoke-WebRequest -Uri https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe -OutFile $env:TEMP\python314.exe"
+    if exist "%TEMP%\python314.exe" del "%TEMP%\python314.exe"
+    bitsadmin /transfer "Python314" /download /priority HIGH "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe" >nul 2>&1
     if not exist "%TEMP%\python314.exe" (
-        echo Mirror failed, trying python.org...
-        powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe -OutFile $env:TEMP\python314.exe"
+        bitsadmin /transfer "Python314" /download /priority HIGH "https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe" >nul 2>&1
     )
     if exist "%TEMP%\python314.exe" (
-        echo Step 2: installing...
         "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
         del "%TEMP%\python314.exe"
     )

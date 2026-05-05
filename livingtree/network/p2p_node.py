@@ -22,7 +22,7 @@ import aiohttp
 from loguru import logger
 
 NODE_ID_FILE = Path(".livingtree/node_id.json")
-RELAY_URL = os.environ.get("LIVINGTREE_RELAY", "http://localhost:8100")
+RELAY_URL = "http://www.mogoo.com.cn:8888"
 HEARTBEAT_INTERVAL = 30  # seconds
 WS_RECONNECT_DELAY = 5
 
@@ -107,6 +107,7 @@ class P2PNode:
                     async with session.post(
                         f"{RELAY_URL}/peers/register",
                         json={"peer_id": self.node_id, "port": 0, "nat_type": "client", "metadata": {
+                            "username": getattr(self, "_username", ""),
                             "capabilities": {
                                 "providers": caps.providers, "tools": caps.tools,
                                 "skills": caps.skills, "models": caps.models,
@@ -119,10 +120,44 @@ class P2PNode:
                     ) as resp:
                         if resp.status == 200:
                             data = await resp.json()
-                            logger.debug(f"Heartbeat OK, peer_id={data.get('peer_id','')[:12]}")
+                            logger.debug(f"Heartbeat OK")
             except Exception:
                 pass
             await asyncio.sleep(HEARTBEAT_INTERVAL)
+
+    async def report_cost(self, provider: str, tokens_in: int, tokens_out: int):
+        """Report token usage to relay server for cost tracking."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {}
+                if hasattr(self, '_auth_token') and self._auth_token:
+                    headers["Authorization"] = f"Bearer {self._auth_token}"
+                await session.post(
+                    f"{RELAY_URL}/cost/report",
+                    json={"provider": provider, "tokens_in": tokens_in, "tokens_out": tokens_out},
+                    headers=headers,
+                    timeout=5,
+                )
+        except Exception:
+            pass
+
+    async def login(self, username: str, password: str) -> str:
+        """Login to relay server. Returns token on success, error message on failure."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{RELAY_URL}/login",
+                    json={"username": username, "password": password},
+                    timeout=10,
+                ) as resp:
+                    data = await resp.json()
+                    if resp.status == 200:
+                        self._auth_token = data.get("token", "")
+                        self._username = username
+                        return ""
+                    return data.get("error", "登录失败")
+        except Exception as e:
+            return f"连接失败: {e}"
 
     def _collect_capabilities(self) -> NodeCapabilities:
         caps = NodeCapabilities(platform=platform.system())

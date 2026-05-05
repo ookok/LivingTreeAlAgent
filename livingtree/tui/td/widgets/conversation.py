@@ -1885,7 +1885,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2188,6 +2188,21 @@ class Conversation(containers.Vertical):
                 lines.append("")
                 lines.append("使用 /connect <节点ID> 连接特定节点")
                 await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "login":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.network.p2p_node import get_p2p_node
+            parts = params.split() if params else []
+            if len(parts) < 2:
+                await self.post(Note("用法: /login <用户名> <密码>"))
+                return True
+            node = get_p2p_node()
+            result = await node.login(parts[0], parts[1])
+            if result:
+                await self.post(Note(f"[red]{result}[/red]"))
+            else:
+                await self.post(Note(f"[green]✓ 已登录为 {parts[0]}[/green]"))
             return True
 
         elif command == "mine":

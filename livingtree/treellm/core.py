@@ -243,9 +243,13 @@ class TreeLLM:
         # ── Cost tracking ──
         try:
             from ..capability.industrial_doc_engine import get_cost_dash
-            get_cost_dash().record(name, tokens, tokens)  # estimate input≈output for now
-        except Exception:
-            pass
+            get_cost_dash().record(name, tokens, tokens)
+        except Exception: pass
+        # ── P2P cost report to relay ──
+        try:
+            from ..network.p2p_node import get_p2p_node
+            get_p2p_node().report_cost(name, tokens, tokens)
+        except Exception: pass
 
     def _record_failure(self, name: str, error: str) -> None:
         s = self._stats.get(name)

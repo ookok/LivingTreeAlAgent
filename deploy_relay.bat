@@ -20,11 +20,16 @@ if "%PYTHON_CMD%"=="" (
     )
 )
 if "%PYTHON_CMD%"=="" (
-    echo Python 3.14 not found.
-    echo Downloading from mirror...
-    powershell -Command "(New-Object Net.WebClient).DownloadFile('https://mirrors.huaweicloud.com/python/3.14.0/python-3.14.0-amd64.exe','%TEMP%\python314.exe')"
+    echo Python 3.14 not found. Trying to install...
+    echo Step 1: downloading installer...
+    powershell -Command "Invoke-WebRequest -Uri https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe -OutFile $env:TEMP\python314.exe"
+    if not exist "%TEMP%\python314.exe" (
+        echo Mirror failed, trying python.org...
+        powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe -OutFile $env:TEMP\python314.exe"
+    )
     if exist "%TEMP%\python314.exe" (
-        start /wait "" "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
+        echo Step 2: installing...
+        "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
         del "%TEMP%\python314.exe"
     )
     if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe

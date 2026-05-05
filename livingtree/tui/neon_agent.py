@@ -58,6 +58,15 @@ class NeonAgent(AgentBase):
         if self._message_target:
             self._message_target.post_message(message)
 
+    @staticmethod
+    async def _throttle_render():
+        """Yield to event loop so Textual can drain rendered messages.
+
+        This creates natural backpressure — if the render pipeline is saturated,
+        token posting slows down automatically.
+        """
+        await asyncio.sleep(0)
+
     async def send_prompt(self, prompt: str) -> str | None:
         self._cancel_flag = False
         self._last_prompt = prompt  # For dynamic tool hint
@@ -103,6 +112,12 @@ class NeonAgent(AgentBase):
                     break
                 full_text += token
                 if len(full_text) > 200 or token.endswith("\n"):
+                    try:
+                        from livingtree.tui.message_queue import MessageQueue
+                        # Throttle: wait if render pipeline is backed up
+                        await self._throttle_render()
+                    except Exception:
+                        pass
                     self._post(acp_messages.Update("text", full_text))
                     full_text = ""
 

@@ -406,6 +406,10 @@ class Conversation(containers.Vertical):
 
         self._post_lock = asyncio.Lock()
 
+        # ── Prioritized message queue ──
+        from livingtree.tui.message_queue import MessageQueue
+        self._mq = MessageQueue()
+
     def update_title(self) -> None:
         """Update the screen title."""
 
@@ -656,8 +660,11 @@ class Conversation(containers.Vertical):
                 self.call_after_refresh(self.cursor.follow, cursor_block)
 
     async def post_agent_response(self, fragment: str = "") -> AgentResponse | None:
-        """Get or create an agent response widget."""
+        """Get or create an agent response widget (rate-limited via message queue)."""
         from livingtree.tui.td.widgets.agent_response import AgentResponse
+
+        # Backpressure: throttle if queue is full
+        await self._mq.throttle()
 
         async with self._post_lock:
             if self._agent_response is None:
@@ -670,6 +677,9 @@ class Conversation(containers.Vertical):
     async def post_agent_thought(self, thought_fragment: str) -> AgentThought | None:
         """Get or create an agent thought widget."""
         from livingtree.tui.td.widgets.agent_thought import AgentThought
+
+        # Backpressure
+        await self._mq.throttle()
 
         async with self._post_lock:
             if self._agent_thought is None:
@@ -849,11 +859,9 @@ class Conversation(containers.Vertical):
             self.call_later(self.agent_turn_over, stop_reason)
 
     async def agent_turn_over(self, stop_reason: str | None) -> None:
-        """Called when the agent's turn is over.
-
-        Args:
-            stop_reason: The stop reason returned from the Agent, or `None`.
-        """
+        """Called when the agent's turn is over."""
+        # ── Drain message queue: flush pending fragments ──
+        await self._mq.flush()
         self.turn = "client"
         if self._agent_thought is not None and self._agent_thought.loading:
             await self._agent_thought.remove()
@@ -1727,6 +1735,8 @@ class Conversation(containers.Vertical):
     async def action_cancel(self) -> None:
         if monotonic() - self._last_escape_time < 3:
             if (agent := self.agent) is not None:
+                # ── Flush message queue before cancelling ──
+                self._mq.flush()
                 if await agent.cancel():
                     self.flash("Turn cancelled", style="success")
                 else:

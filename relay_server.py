@@ -149,6 +149,16 @@ button.danger{background:#da3633}button.small{padding:3px 8px;font-size:12px}
   <div class="metric"><div class="val">ACCTS</div><div class="lbl">账户数</div></div>
   <div class="metric"><div class="val">¥COST</div><div class="lbl">累计费用</div></div>
 </div>
+<p><a href="/admin/logout" style="font-size:12px">退出登录</a></p>
+
+<h2>🔒 修改管理员密码</h2>
+PWD_MSG
+<form class="add-form" method="POST" action="/admin/password">
+  <input name="username" placeholder="管理员用户名" required>
+  <input name="old_password" type="password" placeholder="旧密码" required>
+  <input name="new_password" type="password" placeholder="新密码" required>
+  <button type="submit">修改</button>
+</form>
 
 <h2>👤 账户管理</h2>
 <form class="add-form" method="POST" action="/admin/accounts/add">
@@ -175,7 +185,17 @@ PEER_ROWS</table>
 <h2>🔑 API Keys</h2>
 <table><tr><th>名称</th><th>Key</th><th>创建</th><th>操作</th></tr>
 KEY_ROWS</table>
-<form method="POST" action="/admin/keys/add"><input name="name" placeholder="Key名称" required><button type="submit">+ 生成</button></form>
+<div class="row">
+<form method="POST" action="/admin/keys/add" style="flex:1" class="add-form">
+  <input name="name" placeholder="Key名称" required style="flex:1">
+  <button type="submit">+ 生成</button>
+</form>
+</div>
+<p style="font-size:11px;color:#8b949e">点击Key值自动复制到剪贴板</p>
+<script>
+window._copyKeys=PASS_TO_JS
+function copyKey(k){navigator.clipboard.writeText(k).then(()=>{var e=event.target;e.textContent='已复制!';setTimeout(()=>e.textContent=e.dataset.key,1500)}).catch(()=>prompt('复制:',k))}
+</script>
 
 <h2>📡 API端点</h2>
 <div class="endpoint">POST /login — {"username":"","password":""} → {"token":"..."}</div>
@@ -188,7 +208,6 @@ KEY_ROWS</table>
 <a href="/admin/stats/reset?scope=costs"><button class="danger">🗑 清空费用统计</button></a>
 <a href="/admin/stats/reset?scope=peers"><button class="danger">🗑 清空节点列表</button></a>
 <a href="/admin/stats/reset?scope=all"><button class="danger">🗑 清空全部统计</button></a>
-<a href="/admin/logout" style="margin-left:20px"><button>退出登录</button></a>
 </div>
 </body></html>"""
 
@@ -238,6 +257,7 @@ class P2PRelayServer:
         app.router.add_get("/admin/relays/remove", self._admin_remove_relay)
         app.router.add_post("/admin/keys/add", self._admin_add_key)
         app.router.add_get("/admin/keys/revoke", self._admin_revoke_key)
+        app.router.add_post("/admin/password", self._admin_change_password)
         # API
         app.router.add_get("/health", self._health)
         app.router.add_post("/chat", self._handle_chat)
@@ -344,12 +364,17 @@ class P2PRelayServer:
 
         # Key rows
         key_rows = ""
+        key_list = {}
         for key_val, info in API_KEY_STORE.items():
             display = key_val[:12] + "..." + key_val[-8:]
+            key_list[display] = key_val
             created = time.strftime("%m-%d", time.localtime(info.get("created", 0)))
-            key_rows += f"<tr><td>{info['name']}</td><td><code>{display}</code></td><td>{created}</td><td><a href='/admin/keys/revoke?key={display}'><button class='small danger'>吊销</button></a></td></tr>"
+            revoke_key = key_val[:12] + key_val[-8:]  # use partial for revoke link
+            key_rows += f"<tr><td>{info['name']}</td><td><code data-key='{key_val}' onclick='copyKey(this.dataset.key)' style='cursor:pointer' title='点击复制'>{display} 📋</code></td><td>{created}</td><td><a href='/admin/keys/revoke?key={display}'><button class='small danger'>吊销</button></a></td></tr>"
 
         html = ADMIN_HTML
+        html = html.replace("PWD_MSG", "")
+        html = html.replace("PASS_TO_JS", json.dumps(key_list))
         html = html.replace("UPTIME", f"{(time.time()-self._started_at):.0f}")
         html = html.replace("REQS", str(self._request_count))
         html = html.replace("PEERS", str(len(PEER_STORE)))
@@ -454,6 +479,32 @@ class P2PRelayServer:
             if partial in key_val or key_val[:12] in partial:
                 del API_KEY_STORE[key_val]; break
         raise web.HTTPFound("/admin")
+
+    async def _admin_change_password(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        data = await request.post()
+        username = data.get("username", "").strip()
+        old_pass = data.get("old_password", "")
+        new_pass = data.get("new_password", "")
+        account = ACCOUNT_STORE.get(username)
+        if not account or account["password_hash"] != _hash_password(old_pass):
+            return web.Response(text=ADMIN_HTML.replace("UPTIME", "err")
+                .replace("REQS", "").replace("PEERS", "").replace("ACCTS", "").replace("¥COST", "")
+                .replace("ACCOUNT_ROWS", "").replace("COST_ROWS", "").replace("RELAY_ROWS", "")
+                .replace("PEER_ROWS", "").replace("KEY_ROWS", "")
+                .replace("PWD_MSG", "<p style=color:#f85149>旧密码错误</p>"), content_type="text/html")
+        if len(new_pass) < 4:
+            return web.Response(text=ADMIN_HTML.replace("UPTIME", "err")
+                .replace("REQS", "").replace("PEERS", "").replace("ACCTS", "").replace("¥COST", "")
+                .replace("ACCOUNT_ROWS", "").replace("COST_ROWS", "").replace("RELAY_ROWS", "")
+                .replace("PEER_ROWS", "").replace("KEY_ROWS", "")
+                .replace("PWD_MSG", "<p style=color:#f85149>新密码至少4位</p>"), content_type="text/html")
+        account["password_hash"] = _hash_password(new_pass)
+        _save_accounts()
+        SESSION_STORE.clear()  # force re-login
+        resp = web.HTTPFound("/admin")
+        resp.del_cookie("admin_token")
+        return resp
 
     # ═══ API ═══
 

@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3357,6 +3357,81 @@ class Conversation(containers.Vertical):
             if doc.architecture: lines.append("  ✅ 架构图")
             if doc.known_issues: lines.append("  ✅ 已知问题")
             if doc.security: lines.append("  ✅ 安全建议")
+            await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "deepsearch":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.network.external_access import get_external_access
+            if not params:
+                await self.post(Note("用法: /deepsearch <关键词> — 多引擎聚合搜索+LLM重排"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            ext = get_external_access()
+            await self.post(Note(f"**🔍 深度搜索:** {params}"))
+            results = await ext.deep_search(params, hub=hub)
+            if not results:
+                await self.post(Note("[dim]所有搜索引擎均无结果[/dim]"))
+            else:
+                lines = [f"## 🔍 深度搜索: {params} ({len(results)} 条)", ""]
+                for r in results:
+                    score_str = f" [{r.relevance:.0%}]" if r.relevance else ""
+                    lines.append(f"**{r.title[:100]}** {score_str}")
+                    lines.append(f"  [dim]{r.url[:120]}[/dim]")
+                    if r.snippet:
+                        lines.append(f"  {r.snippet[:150]}")
+                    lines.append(f"  [dim]引擎: {r.engine}[/dim]")
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "ghmirror":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.network.external_access import get_external_access
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "watch"
+            ext = get_external_access()
+            if sub == "watch" and len(parts) > 1:
+                info = await ext.gh_watch(parts[1])
+                if info:
+                    lines = [f"## 📦 {info.repo}", f"版本: {info.tag} ({info.name})", f"发布时间: {info.published_at}"]
+                    if info.assets:
+                        lines.append("\n下载:")
+                        for a in info.assets:
+                            lines.append(f"  - {a['name']} ({a['size']/1024/1024:.1f}MB)")
+                    await self.post(Note("\n".join(lines)))
+                else:
+                    await self.post(Note(f"[red]无法获取 {parts[1]} 的发布信息[/red]"))
+            elif sub == "list":
+                watched = ext.github.watched_status()
+                if not watched:
+                    await self.post(Note("[dim]未监控任何仓库[/dim]"))
+                else:
+                    lines = [f"## 📦 监控的仓库 ({len(watched)})", ""]
+                    for repo, info in watched.items():
+                        lines.append(f"- **{repo}** → {info.tag} ({info.name})")
+                    await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /ghmirror watch <user/repo> | list"))
+            return True
+
+        elif command == "dns":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.network.external_access import get_external_access
+            if not params:
+                await self.post(Note("用法: /dns <域名> — DNS-over-HTTPS解析（绕过DNS污染）"))
+                return True
+            ext = get_external_access()
+            result = await ext.dns_lookup(params.strip())
+            lines = [
+                f"## 🌐 DNS: {result.domain}",
+                f"Provider: {result.provider} | TTL: {result.ttl}s",
+                f"{'[dim]缓存命中[/dim]' if result.cached else '实时查询'}",
+                "",
+            ]
+            for ip in result.ips:
+                lines.append(f"  → {ip}")
+            if not result.ips:
+                lines.append("  [red]解析失败[/red]")
             await self.post(Note("\n".join(lines)))
             return True
 

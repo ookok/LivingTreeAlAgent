@@ -2196,18 +2196,31 @@ class Conversation(containers.Vertical):
             parts = params.split(maxsplit=2) if params else []
             if len(parts) < 2:
                 await self.post(Note("用法: /replace <文件> <旧文本> [新文本]"))
-                await self.post(Note("/replace <文件> section|<标题> <新内容>"))
+                await self.post(Note("模式: heading|block|key|pattern (默认:模糊匹配)")
                 await self.post(Note("示例: /replace config.yaml port:8100 port:8888"))
                 return True
             editor = get_editor()
             path = parts[0]; arg = parts[1]; new = parts[2] if len(parts) > 2 else ""
+            # Smart mode detection
+            mode = "pattern"  # default: regex
             if arg.startswith("section|"):
                 heading = arg.split("|", 1)[1]
-                result = editor.replace_section(path, heading, new)
-                await self.post(Note(f"/section '{heading}': {result.preview} {'[已应用]' if result.applied else '[预览]'}"))
+                result = editor.smart_replace(path, heading, new, mode="heading")
+            elif arg.startswith("block|"):
+                anchor = arg.split("|", 1)[1]
+                result = editor.smart_replace(path, anchor, new, mode="block")
+            elif arg.startswith("key|"):
+                key = arg.split("|", 1)[1]
+                result = editor.smart_replace(path, key, new, mode="key")
+            elif len(arg) > 20 and arg == new[:len(arg)]:
+                # Looks like a block replacement (long text), use block mode
+                result = editor.smart_replace(path, arg, new, mode="block")
             else:
+                # Short pattern → try regex first, fall back to smart
                 result = editor.replace_pattern(path, arg, new)
-                await self.post(Note(f"替换: {result.replacements} 处 {result.preview} {'[已应用]' if result.applied else '[预览]'}"))
+                if result.replacements == 0:
+                    result = editor.smart_replace(path, arg, new, mode="key")
+            await self.post(Note(f"替换: {result.replacements} 处 {result.preview or ''} {'[已应用]' if result.applied else '[未找到匹配]'}"))
             return True
 
         elif command == "save":

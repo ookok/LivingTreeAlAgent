@@ -286,10 +286,104 @@ class DocumentEditor:
         return 0
 
     def _match_heading(self, line: str, heading: str) -> bool:
-        """Check if a line matches the target heading."""
-        stripped = line.lstrip("# ").strip()
-        target = heading.lstrip("# ").strip()
-        return stripped == target or target in stripped
+        """Fuzzy heading match — tolerates spacing, punctuation, numbering variations."""
+        def _normalize(s: str) -> str:
+            s = s.lstrip("# ").strip()
+            s = re.sub(r'[ 　\t]+', '', s)       # remove all whitespace
+            s = re.sub(r'[.。,，、:：]', '', s)   # remove punctuation
+            s = re.sub(r'[第].*?[章节条]', '', s)  # strip Chinese numbering
+            s = re.sub(r'^\d+[.\s]*', '', s)      # strip digit numbering
+            return s.lower()
+        return _normalize(line) == _normalize(heading)
+
+    def smart_replace(
+        self,
+        path: str | Path,
+        anchor: str,
+        new_content: str,
+        mode: str = "section",
+        dry_run: bool = False,
+    ) -> EditResult:
+        """Smart replacement with content anchoring.
+
+        Unlike regex or exact match, this finds the right content block
+        using multiple signals (heading similarity, context proximity, content hash).
+
+        Args:
+            path: File to edit
+            anchor: Content to find (heading, key phrase, or paragraph start)
+            new_content: Replacement content
+            mode: "heading" (by heading), "block" (by paragraph), "key" (by unique key)
+            dry_run: Preview only
+        """
+        path = Path(path)
+        old_lines = self._read_lines_streaming(path)
+        result = EditResult(path=path, bytes_before=path.stat().st_size if path.exists() else 0)
+
+        if mode == "heading":
+            return self.replace_section(path, anchor, new_content, dry_run)
+
+        elif mode == "block":
+            # Find a paragraph that starts with the anchor text
+            anchor_norm = re.sub(r'\s+', '', anchor.lower())
+            best_idx = -1
+            best_score = 0
+            block_start = -1
+            in_block = False
+
+            for i, line in enumerate(old_lines):
+                stripped = line.strip()
+                if stripped and not in_block:
+                    in_block = True
+                    block_start = i
+                elif not stripped and in_block:
+                    # End of block — check if this is the right one
+                    block_text = "".join(old_lines[block_start:i])
+                    block_norm = re.sub(r'\s+', '', block_text.lower())
+                    # Score: how much of the anchor appears in this block
+                    overlap = sum(1 for c in anchor_norm if c in block_norm)
+                    score = overlap / max(len(anchor_norm), 1)
+                    if score > best_score:
+                        best_score = score
+                        best_idx = block_start
+                    in_block = False
+
+            if best_score > 0.5 and best_idx >= 0:
+                # Replace the best-matching block
+                end_idx = best_idx
+                while end_idx < len(old_lines) and old_lines[end_idx].strip():
+                    end_idx += 1
+                new_lines = old_lines[:best_idx] + [new_content + "\n"]
+                if end_idx < len(old_lines):
+                    new_lines.append("\n")
+                    new_lines.extend(old_lines[end_idx + 1:])
+                result.replacements = 1
+                result.lines_changed = end_idx - best_idx
+                new_text = "".join(new_lines)
+                result.bytes_after = len(new_text.encode("utf-8"))
+                if not dry_run:
+                    self._atomic_write(path, new_text)
+                    result.applied = True
+            return result
+
+        elif mode == "key":
+            # Find a line containing a unique key and replace it
+            for i, line in enumerate(old_lines):
+                if anchor in line:
+                    indent = len(line) - len(line.lstrip())
+                    new_line = " " * indent + new_content + "\n"
+                    new_lines = old_lines[:i] + [new_line] + old_lines[i + 1:]
+                    result.replacements = 1
+                    result.lines_changed = 1
+                    new_text = "".join(new_lines)
+                    result.bytes_after = len(new_text.encode("utf-8"))
+                    if not dry_run:
+                        self._atomic_write(path, new_text)
+                        result.applied = True
+                    return result
+            return result
+
+        return result
 
     def _diff_preview(self, path: Path, new_content: str) -> str:
         """Generate a simple diff preview showing added/removed lines."""

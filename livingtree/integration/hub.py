@@ -551,6 +551,14 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"RemoteAssist: {e}")
 
+        # ── ErrorReplay: operation recording + self-healing ──
+        try:
+            from ..observability.error_replay import get_error_replay
+            self.world.error_replay = get_error_replay()
+            logger.info("ErrorReplay initialized")
+        except Exception as e:
+            logger.debug(f"ErrorReplay: {e}")
+
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""
         brain = getattr(self.world, 'network_brain', None)

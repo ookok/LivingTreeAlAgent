@@ -2385,6 +2385,67 @@ class Conversation(containers.Vertical):
                 await self.post(Note("\n".join(lines)))
             else:
                 await self.post(Note("[dim]暂无活动记录[/dim]"))
+        elif any(kw in pl for kw in ("错误", "error", "故障", "crash")):
+            from livingtree.observability.error_replay import get_error_replay
+            er = get_error_replay()
+            errors = er.recorder.recent_errors(10)
+            if not errors:
+                await self.post(Note("[dim]暂无错误记录[/dim]"))
+            else:
+                lines = [f"## ❌ 错误录像 ({len(errors)})", ""]
+                for s in errors:
+                    ts = time.strftime("%m-%d %H:%M", time.localtime(s.started_at))
+                    status = {"analyzed": "📋", "fixed": "✅", "escalated": "⚠️", "closed": "📌"}.get(s.status, "•")
+                    lines.append(f"{status} `{ts}` {s.task[:80]}")
+                    if s.root_cause:
+                        lines.append(f"  根因: {s.root_cause[:100]}")
+                    lines.append(f"  事件: {len(s.events)} | 错误: {s.error_count} | ID: {s.session_id[:16]}")
+            await self.post(Note("\n".join(lines)))
+        elif any(kw in pl for kw in ("replay", "回放", "重放")):
+            from livingtree.observability.error_replay import get_error_replay
+            er = get_error_replay()
+            sid = params.replace("replay", "").replace("回放", "").replace("fix", "").strip()
+            if not sid or sid == "fix":
+                errors = er.recorder.recent_errors(3)
+                if errors:
+                    sid = errors[0].session_id
+                else:
+                    await self.post(Note("[dim]没有可修复的错误[/dim]"))
+                    return True
+
+            session = er.recorder.get_session(sid)
+            if not session:
+                # Partial match
+                for s in er.recorder.list_sessions(50):
+                    if sid in s.session_id:
+                        session = s
+                        break
+            if not session:
+                await self.post(Note(f"[red]未找到录像: {sid}[/red]"))
+                return True
+
+            await self.post(Note(f"▶ 回放分析: {session.task[:60]}"))
+            analyzed = await er.replay.analyze(session.session_id, hub)
+            if analyzed and analyzed.root_cause:
+                lines = [
+                    f"## ▶ 回放: {session.task[:80]}",
+                    f"事件: {len(session.events)} | 错误: {session.error_count}",
+                    f"",
+                    f"**根因:** {analyzed.root_cause}",
+                    f"**修复:** {analyzed.fix_proposal}",
+                ]
+                if analyzed.lesson_id:
+                    lesson = er.recorder._lessons.get(analyzed.lesson_id)
+                    if lesson:
+                        lines.append(f"\n📚 已学习 ({lesson.occurrences}次, 置信度{lesson.auto_fix_confidence:.0%})")
+
+                # Auto-fix if confident
+                if params.lower().endswith("fix"):
+                    heal = await er.replay.self_heal(session.session_id, hub)
+                    lines.append(f"\n{'✅' if heal['success'] else '❌'} {heal['message']}")
+                await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("[dim]分析未产生结果[/dim]"))
         else:
             if not params:
                 await self.post(Note(COMMANDS["check"]["fallback"]))

@@ -2584,6 +2584,38 @@ class Conversation(containers.Vertical):
             profile = get_progressive_trust().get_user_profile(uid)
             if profile:
                 await self.post(Note(f"👤 {uid}: {profile['interactions']}次交互"))
+        elif any(kw in pl for kw in ("expert", "专家", "role", "角色", "矩阵", "分类")):
+            from livingtree.dna.expert_role_manager import get_expert_role_manager
+            erm = get_expert_role_manager()
+            pl_clean = params.replace("expert", "").replace("专家", "").replace("role", "").replace("角色", "").strip()
+            if "矩阵" in pl or "分类" in pl or "matrix" in pl:
+                await self.post(Note(erm.matrix()))
+            elif "树" in pl or "tree" in pl:
+                await self.post(Note(erm.classification_tree()))
+            elif pl_clean:
+                # Filter by keyword
+                results = erm.filter(keyword=pl_clean)
+                if results:
+                    lines = [f"## 👥 专家角色 ({len(results)} 匹配)", ""]
+                    for r in results[:15]:
+                        tmpl = "📋" if r["has_template"] else "📝"
+                        lines.append(f"{tmpl} **{r['name']}** [{r['industry']} | {r['profession']}]")
+                        if r["description"]:
+                            lines.append(f"  {r['description'][:100]}")
+                    await self.post(Note("\n".join(lines)))
+                else:
+                    await self.post(Note(f"[dim]未找到匹配 '{pl_clean}' 的专家角色[/dim]"))
+            else:
+                total = len(erm.filter())
+                with_tmpl = sum(1 for r in erm.filter() if r["has_template"])
+                lines = [
+                    f"## 👥 专家角色 ({total} 个, {with_tmpl} 含模板)",
+                    f"用 /team 专家 <关键词> 搜索",
+                    f"用 /team 矩阵 查看行业×职业矩阵",
+                    f"如: /team 专家 化工  /team 专家 制药",
+                ]
+                await self.post(Note("\n".join(lines)))
+            return True
         elif any(kw in pl for kw in ("mute", "静音", "静默", "笔记", "memo", "聊天")):
             self._muted = not self._muted
             if self._muted:

@@ -375,6 +375,24 @@ ROLE_TEMPLATES: dict[str, RoleTemplate] = {
         quality_gates=["噪声预测模型正确", "声屏障高度/长度合理", "动物通道设置", "服务区污水处理"],
         output_format="## 交通工程评价\n\n### 1. 工程概况\n{overview}\n\n### 2. 噪声评价\n{noise}\n\n### 3. 生态影响\n{ecology}\n\n### 4. 水环境\n{water}",
     ),
+    "航空专家": RoleTemplate(
+        name="航空专家",
+        role_prompt="你是资深航空制造专家，精通飞机制造(机身/机翼/发动机/航电)、钛合金/复合材料CFRP加工、表面处理(阳极氧化/化学铣切)和适航认证。",
+        few_shot_examples=[
+            {"input": "分析飞机总装线环评要点", "output": "产能: 窄体客机年产50架。产污: 1) 表面处理→化学铣切(槽液含NaOH/Na₂S/Na₂CO₃, 操作温度90-110℃)→废碱液(HW35), 铬酸阳极氧化→含Cr⁶⁺废水→离子交换+蒸发 2) 喷漆→VOCs(环氧底漆/聚氨酯面漆)→文丘里+沸石转轮+蓄热氧化RTO 3) 试车台→噪声140dB(A)→消声道+隔声墙+跑道定向 4) 钛合金加工→钛粉尘(有爆炸风险)→湿式除尘 5) CFRP切割→碳纤维粉尘(导电破坏设备)→高效过滤+定期清理..."},
+        ],
+        quality_gates=["化学铣切废液分类准确", "Cr⁶⁺处理达标", "试车噪声预测模型", "碳纤维粉尘爆炸防护", "适航认证要求"],
+        output_format="## 航空制造分析\n\n### 1. 制造工艺\n{process}\n\n### 2. 特种工艺\n{special}\n\n### 3. 噪声控制\n{noise}\n\n### 4. 适航合规\n{certification}",
+    ),
+    "电池制造专家": RoleTemplate(
+        name="电池制造专家",
+        role_prompt="你是资深电池制造专家，精通锂电(磷酸铁锂/三元/固态)/钠电全链条制造，熟悉NMP回收和含镍钴锰废水处理。",
+        few_shot_examples=[
+            {"input": "分析20GWh锂电池工厂环评", "output": "产能: 20GWh/a(方形铝壳LFP电芯)。产污: 1) 正极涂布NMP废气→风量80000m³/h, NMP浓度2000-5000mg/Nm³ → 水吸收+精馏回收(回收率≥99%, NMP纯度≥99.9%), 排放≤20mg/Nm³ 2) 负极石墨粉尘→布袋除尘, 排放≤10mg/Nm³ 3) 废水→正极清洗含NMP水→精馏回收, 实验室含重金属废水(Ni/Co/Mn)→化学沉淀(排放≤0.1mg/L) 4) 注液→电解液LiPF₆在手套箱(露点<-50℃)操作, HF废气→碱洗 5) 化成分容→高温老化(45-60℃)→车间空调能耗大→余热回收..."},
+        ],
+        quality_gates=["NMP回收率≥99%", "重金属废水达标", "电解液HF控制", "洁净度控制"],
+        output_format="## 电池制造分析\n\n### 1. 工艺流程\n{process}\n\n### 2. NMP回收\n{nmp}\n\n### 3. 废水处理\n{wastewater}\n\n### 4. 安全防护\n{safety}",
+    ),
 }
 
 # ═══ Prompt preprocessing ═══

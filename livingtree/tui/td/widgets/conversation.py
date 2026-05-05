@@ -10,6 +10,7 @@ from operator import attrgetter
 from typing import TYPE_CHECKING, Literal
 from pathlib import Path
 from time import monotonic
+import time
 
 from typing import Callable, Any
 
@@ -1885,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2733,6 +2734,186 @@ class Conversation(containers.Vertical):
                 f"- 内存最低: {stats['thresholds']['mem_low_mb']}MB",
             ]
             await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "render":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.template_engine import get_template_engine
+            parts = params.split(maxsplit=2) if params else []
+            if len(parts) < 2:
+                await self.post(Note("用法: /render <模板> <键=值...>"))
+                await self.post(Note("示例: /render 报告.md 项目名=XX大桥 日期=2026-05"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            engine = get_template_engine()
+            tpl_path, raw_args = parts[0], parts[1]
+            context = {}
+            if "=" in raw_args:
+                for kv in raw_args.replace("  ", " ").split():
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        context[k.strip()] = v.strip()
+            result = await engine.instantiate(tpl_path, context, hub=hub)
+            lines = [
+                f"## ✨ 模板渲染: {Path(result.path).name}",
+                f"变量: {result.variables_found} 个 / 填充 {result.variables_filled} 个",
+                result.preview,
+            ]
+            if result.applied:
+                lines.append(f"[green]✓ 已输出: {result.path}[/green]")
+            if result.variables_missing:
+                lines.append(f"[yellow]⚠ 未填充: {result.variables_missing} 个[/yellow]")
+            await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "dedup":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.content_dedup import get_dedup
+            parts = params.split() if params else []
+            sub = parts[0].lower() if parts else "scan"
+            hub = getattr(self.app, 'hub', None)
+            dedup = get_dedup()
+            if sub == "scan":
+                pattern = parts[1] if len(parts) > 1 else "*.py"
+                await self.post(Note(f"**🔍 扫描重复代码:** {pattern} ..."))
+                report = await dedup.scan(pattern=pattern, hub=hub)
+                lines = [f"## 🔍 重复代码扫描 ({report.scanned_files} 文件)", ""]
+                if report.duplicate_groups:
+                    lines.append(f"### 完全重复 ({len(report.duplicate_groups)} 组)")
+                    for d in report.duplicate_groups[:10]:
+                        files = ", ".join(Path(f).name for f in d.files)
+                        lines.append(f"- [{len(d.files)} 处] {files} (行 {d.lines[0][0]}-{d.lines[0][1]})")
+                if report.near_duplicate_groups:
+                    lines.append(f"\n### 近似重复 ({len(report.near_duplicate_groups)} 组)")
+                    for d in report.near_duplicate_groups[:5]:
+                        files = ", ".join(Path(f).name for f in d.files[:4])
+                        lines.append(f"- [{len(d.files)} 处] {files}")
+                if report.estimated_lines_saved:
+                    lines.append(f"\n[bold]💰 合并可节省 ~{report.estimated_lines_saved} 行代码[/bold]")
+                if report.suggestion:
+                    lines.append(f"\n[dim]{report.suggestion}[/dim]")
+                await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /dedup scan [文件模式]"))
+            return True
+
+        elif command == "patch":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.patch_manager import get_patch_manager
+            parts = params.split(maxsplit=3) if params else []
+            sub = parts[0].lower() if parts else "list"
+            pm = get_patch_manager()
+            if sub == "list":
+                patches = pm.list_patches()
+                if not patches:
+                    await self.post(Note("[dim]暂无补丁[/dim]"))
+                else:
+                    lines = [f"## 📦 补丁列表 ({len(patches)})", ""]
+                    for p in patches[:15]:
+                        lines.append(f"- **{p.name}** +{p.lines_added}/-{p.lines_removed}")
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "apply" and len(parts) > 1:
+                result = pm.apply(parts[1])
+                if result.applied:
+                    await self.post(Note(f"[green]✓ 补丁已应用: {result.name} ({len(result.files_changed)} 文件, +{result.lines_added}/-{result.lines_removed})[/green]"))
+                else:
+                    await self.post(Note(f"[red]补丁应用失败: {result.error or '未知错误'}[/red]"))
+            elif sub == "revert" and len(parts) > 1:
+                result = pm.revert(parts[1])
+                if result.reverted:
+                    await self.post(Note(f"[green]✓ 已回滚: {result.name}[/green]"))
+                else:
+                    await self.post(Note(f"[red]回滚失败: {result.error}[/red]"))
+            elif sub == "gen" and len(parts) > 1:
+                hub = getattr(self.app, 'hub', None)
+                if hub and hub.world:
+                    result = await pm.llm_patch(parts[1], parts[2] if len(parts) > 2 else "", hub)
+                    await self.post(Note(f"补丁生成: {result.name} +{result.lines_added}/-{result.lines_removed}"))
+            else:
+                await self.post(Note("用法: /patch list|apply <补丁名>|revert <补丁名>"))
+            return True
+
+        elif command == "backup":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.semantic_backup import get_semantic_backup
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "list"
+            sb = get_semantic_backup()
+            if sub == "list":
+                all_backups = sb.list_all()
+                if not all_backups:
+                    await self.post(Note("[dim]暂无备份[/dim]"))
+                else:
+                    lines = [f"## 💾 备份文件 ({sum(len(v) for v in all_backups.values())} 个)", ""]
+                    for path, entries in sorted(all_backups.items()):
+                        fname = Path(path).name
+                        latest = entries[0]
+                        ts = time.strftime("%m-%d %H:%M", time.localtime(latest.timestamp))
+                        lines.append(f"- **{fname}** ({len(entries)} 版) | {ts}: {latest.message[:60]}")
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "save" and len(parts) > 1:
+                hub = getattr(self.app, 'hub', None)
+                result = await sb.backup(parts[1], hub=hub)
+                if result.backed_up:
+                    await self.post(Note(f"💾 已备份: {result.path.name} → {result.message[:80]}"))
+                else:
+                    await self.post(Note(f"[red]备份失败: 文件不存在[/red]"))
+            elif sub == "restore" and len(parts) > 1:
+                args = parts[1].split(maxsplit=1)
+                filepath = args[0]
+                identifier = args[1] if len(args) > 1 else ""
+                result = await sb.restore(filepath, identifier)
+                if result.backup_path:
+                    await self.post(Note(f"♻ 已恢复: {result.path.name} ← {result.message[:80]}"))
+                else:
+                    await self.post(Note(f"[red]未找到备份[/red]"))
+            elif sub == "prune" and len(parts) > 1:
+                args = parts[1].split()
+                filepath = args[0]
+                keep = int(args[1]) if len(args) > 1 else 10
+                sb.prune(filepath, keep)
+                await self.post(Note(f"🧹 保留最近 {keep} 个备份"))
+            else:
+                await self.post(Note("用法: /backup list|save <文件>|restore <文件> [时间/关键词]|prune <文件> [数量]"))
+            return True
+
+        elif command == "watch":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.file_watcher import get_file_watcher
+            parts = params.split() if params else []
+            sub = parts[0].lower() if parts else "start"
+            watcher = get_file_watcher()
+            if sub == "start":
+                hub = getattr(self.app, 'hub', None)
+                interval = int(parts[1]) if len(parts) > 1 else 30
+                await self.post(Note(f"👁 FileWatcher 已启动 (间隔 {interval}s)"))
+                asyncio.create_task(watcher.start(hub=hub, interval=interval))
+            elif sub == "stop":
+                watcher.stop()
+                await self.post(Note("FileWatcher 已停止"))
+            else:
+                await self.post(Note("用法: /watch start [间隔秒] | stop"))
+            return True
+
+        elif command == "history":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.semantic_backup import get_semantic_backup
+            if not params:
+                await self.post(Note("用法: /history <文件名> — 查看文件的所有备份版本"))
+                return True
+            sb = get_semantic_backup()
+            entries = sb.list(params.strip())
+            if not entries:
+                await self.post(Note(f"[dim]文件 {params} 暂无备份[/dim]"))
+            else:
+                lines = [f"## 📜 {Path(params).name} 版本历史 ({len(entries)})", ""]
+                for e in entries[:20]:
+                    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(e.timestamp))
+                    size_kb = e.size / 1024
+                    lines.append(f"- **{ts}** {size_kb:.1f}KB")
+                    if e.message:
+                        lines.append(f"  {e.message[:100]}")
+                await self.post(Note("\n".join(lines)))
             return True
 
         return False

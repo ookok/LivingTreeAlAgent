@@ -14,6 +14,8 @@ Usage:
 """
 from __future__ import annotations
 
+import json as _json
+import logging
 import mmap
 import os
 import re
@@ -22,6 +24,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -218,19 +222,35 @@ class DocumentEditor:
 
         Example: json_path="config.server.port", new_value=8888
         """
-        import json
         path = Path(path)
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            data = _json.load(f)
 
-        # Navigate to the nested key
         keys = json_path.split(".")
         target = data
         for k in keys[:-1]:
             if k not in target:
-        return EditResult(path=path)
+                return EditResult(path=path)
+            target = target[k]
 
-    # ═══ Semantic navigation: LLM finds exact code locations ═══
+        last_key = keys[-1]
+        if last_key not in target:
+            return EditResult(path=path)
+
+        old_value = target[last_key]
+        target[last_key] = new_value
+
+        new_text = _json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        result = EditResult(
+            path=path, replacements=1,
+            bytes_before=path.stat().st_size,
+            bytes_after=len(new_text.encode("utf-8")),
+            preview=f"  - {json_path}: {old_value} → {new_value}",
+        )
+        if not dry_run:
+            self._atomic_write(path, new_text)
+            result.applied = True
+        return result
 
     async def find_location(
         self,
@@ -355,26 +375,6 @@ class DocumentEditor:
             return {"success": False, "results": results, "rollback": True}
 
         return {"success": True, "results": results, "rollback": False}
-            target = target[k]
-
-        last_key = keys[-1]
-        if last_key not in target:
-            return EditResult(path=path)
-
-        old_value = target[last_key]
-        target[last_key] = new_value
-
-        new_text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-        result = EditResult(
-            path=path, replacements=1,
-            bytes_before=path.stat().st_size,
-            bytes_after=len(new_text.encode("utf-8")),
-            preview=f"  - {json_path}: {old_value} → {new_value}",
-        )
-        if not dry_run:
-            self._atomic_write(path, new_text)
-            result.applied = True
-        return result
 
     # ═══ Large file performance helpers ═══
 

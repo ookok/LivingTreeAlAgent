@@ -203,7 +203,7 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         # ── Command outputs ──
         "cmd.not_ready": "系统未就绪",
         "cmd.status_title": "## 系统状态",
-        "cmd.help_text": "**命令:** /search <关键词>  /fetch <URL>  /clear  /status  /help  /evolve  /tools  /route <查询>  /optimize <提示词>  /role [名称]  /graph [节点]",
+        "cmd.help_text": "**文件:** /find <关键词>  /save <文件>  /replace <文件> <旧> <新>  /locate <描述>\n**文件操作:** /render <模板> <键=值>  /dedup [模式]  /patch list|apply|revert  /backup save|list|restore  /history <文件>  /watch start|stop\n**命令:** /search <关键词>  /fetch <URL>  /clear  /status  /help  /evolve  /tools  /route <查询>  /optimize <提示词>  /role [名称]  /graph [节点],
         "cmd.search_usage": "用法: /search <关键词>",
         "cmd.fetch_usage": "用法: /fetch <URL>",
         "cmd.searching": "**正在搜索:** {q}",
@@ -418,7 +418,7 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         # ── Command outputs ──
         "cmd.not_ready": "System not ready",
         "cmd.status_title": "## System Status",
-        "cmd.help_text": "**Commands:** /search <q>  /fetch <url>  /clear  /status  /help  /evolve  /tools  /route <q>  /optimize <p>  /role [name]  /graph [node]",
+        "cmd.help_text": "**Files:** /find <q>  /save <file>  /replace <f> <old> <new>  /locate <desc>\n**FileOps:** /render <tpl> <k=v>  /dedup [pat]  /patch list|apply|revert  /backup save|list|restore  /history <f>  /watch start|stop\n**Commands:** /search <q>  /fetch <url>  /clear  /status  /help  /evolve  /tools  /route <q>  /optimize <p>  /role [name]  /graph [node]",
         "cmd.search_usage": "Usage: /search <query>",
         "cmd.fetch_usage": "Usage: /fetch <url>",
         "cmd.searching": "**Searching:** {q}",

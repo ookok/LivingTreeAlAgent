@@ -22,9 +22,9 @@ if "%PYTHON_CMD%"=="" (
 if "%PYTHON_CMD%"=="" (
     echo Python 3.14 not found. Trying to install...
     if exist "%TEMP%\python314.exe" del "%TEMP%\python314.exe"
-    bitsadmin /transfer "Python314" /download /priority HIGH "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe" >nul 2>&1
+    bitsadmin /transfer "Python314" /download /priority HIGH "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe"
     if not exist "%TEMP%\python314.exe" (
-        bitsadmin /transfer "Python314" /download /priority HIGH "https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe" >nul 2>&1
+        bitsadmin /transfer "Python314" /download /priority HIGH "https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe" "%TEMP%\python314.exe"
     )
     if exist "%TEMP%\python314.exe" (
         "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0

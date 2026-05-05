@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3178,6 +3178,114 @@ class Conversation(containers.Vertical):
                     f"[dim]文件:[/dim]" if files else "",
                     files,
                     f"\n[dim]时长: {state.session_duration_minutes:.0f}分钟 | 决策: {len(state.decisions_made)}[/dim]",
+                ]
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "activity":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.observability.activity_feed import get_activity_feed
+            feed = get_activity_feed()
+            parts = params.split() if params else []
+            filter_type = parts[0] if parts else ""
+            events = feed.query(limit=30, event_type=filter_type)
+            if not events:
+                await self.post(Note("[dim]暂无活动记录[/dim]"))
+            else:
+                lines = [f"## 📡 活动流 ({len(events)} 条)"]
+                if not filter_type:
+                    lines.append("[dim]/activity election|tool_call|cache|eval|synthesize|modify|consolidate|error[/dim]")
+                lines.append("")
+                for e in events:
+                    icon = {"election": "⚡", "tool_call": "🔧", "cache": "💾", "eval": "📊",
+                            "synthesize": "🔧", "modify": "✏️", "consolidate": "🧠",
+                            "error": "❌", "system": "🖥"}.get(e.type, "•")
+                    ts = time.strftime("%H:%M:%S", time.localtime(e.timestamp))
+                    lines.append(f"{icon} `{ts}` **{e.agent[:20]}** {e.message[:120]}")
+                lines.append(f"\n{feed.summary_24h()}")
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "eval":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.observability.agent_eval import get_eval
+            ev = get_eval()
+            parts = params.split() if params else []
+            sub = parts[0].lower() if parts else "components"
+            if sub == "components" or sub == "comp":
+                reports = ev.all_component_reports()
+                if not reports:
+                    await self.post(Note("[dim]暂无组件评估数据[/dim]"))
+                else:
+                    lines = [f"## 📊 组件评测 ({len(reports)} 个)", ""]
+                    sorted_r = sorted(reports.values(), key=lambda r: -r.total_calls)
+                    for cm in sorted_r[:15]:
+                        health = "🟢" if cm.success_rate > 0.95 else "🟡" if cm.success_rate > 0.8 else "🔴"
+                        lines.append(
+                            f"{health} **{cm.tool}** | "
+                            f"成功率:{cm.success_rate:.0%} | "
+                            f"调用:{cm.total_calls} | "
+                            f"P50:{cm.p50_ms:.0f}ms P95:{cm.p95_ms:.0f}ms"
+                        )
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "drift":
+                drifts = ev.drift_status()
+                if not drifts:
+                    await self.post(Note("[dim]暂无漂移数据（需至少10次评估）[/dim]"))
+                else:
+                    lines = [f"## 📉 漂移检测", ""]
+                    for agent, d in drifts.items():
+                        alert = "🔴" if d.alert else "🟢"
+                        lines.append(
+                            f"{alert} **{agent}** | "
+                            f"基线:{d.baseline_score:.2f} → 当前:{d.current_score:.2f} | "
+                            f"漂移:{d.drift_pct:.1f}% (阈值:{d.threshold:.0f}%)"
+                        )
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "output":
+                evals = ev.recent_output_evals(10)
+                if not evals:
+                    await self.post(Note("[dim]暂无输出评测[/dim]"))
+                else:
+                    lines = [f"## 🎯 输出评测 ({len(evals)} 次)", ""]
+                    for e in evals[-10:]:
+                        icon = "🟢" if e.level == "pass" else "🟡" if e.level == "warn" else "🔴"
+                        lines.append(f"{icon} **{e.agent}** score={e.score:.2f} | {e.task[:60]}")
+                        if e.feedback:
+                            lines.append(f"  {e.feedback[:120]}")
+                    await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /eval components|drift|output"))
+            return True
+
+        elif command == "trust":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.observability.trust_scoring import get_trust_scorer
+            ts = get_trust_scorer()
+            parts = params.split() if params else []
+            sub = parts[0].lower() if parts else "all"
+            if sub == "profile" and len(parts) > 1:
+                ts.set_profile(parts[1])
+                await self.post(Note(f"✓ 安全配置切换为: {parts[1]} (阈值:{ts.PROFILE_THRESHOLDS.get(parts[1],60)})"))
+            elif sub == "all" or sub == "list":
+                summary = ts.summary()
+                lines = [
+                    f"## 🛡 信任评分 ({summary['agents']} 个智能体)",
+                    f"平均: {summary['avg_score']}/100 | 配置: {summary['profile']} (阈值:{summary['threshold']})",
+                    f"最低: {summary.get('lowest_agent','?')} ({summary.get('lowest_score','?')})",
+                    "",
+                ]
+                for name, p in summary.get("all", {}).items():
+                    lines.append(f"{p['level']} **{name}** | {p['score']}/{p['calls']}次 | 成功率:{p['success_rate']}%")
+                await self.post(Note("\n".join(lines)))
+            else:
+                score = ts.score(sub)
+                level = ts.trust_level(sub)
+                can = ts.can_auto_approve(sub)
+                lines = [
+                    f"## 🛡 {sub}",
+                    f"分数: {score:.1f}/100 {level}",
+                    f"自动审批: {'✅ 通过' if can else '❌ 需要审查'}",
                 ]
                 await self.post(Note("\n".join(lines)))
             return True

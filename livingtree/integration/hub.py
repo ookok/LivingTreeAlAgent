@@ -471,6 +471,32 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"Marketplace: {e}")
 
+        # ── ActivityFeed: unified event stream ──
+        try:
+            from ..observability.activity_feed import get_activity_feed
+            feed = get_activity_feed()
+            feed.log("system", "hub", "LivingTree booted", severity="info")
+            self.world.activity_feed = feed
+            logger.info("ActivityFeed initialized")
+        except Exception as e:
+            logger.debug(f"ActivityFeed: {e}")
+
+        # ── AgentEval: 4-layer evaluation ──
+        try:
+            from ..observability.agent_eval import get_eval
+            self.world.agent_eval = get_eval()
+            logger.info("AgentEval initialized (4-layer)")
+        except Exception as e:
+            logger.debug(f"AgentEval: {e}")
+
+        # ── TrustScoring: per-agent posture ──
+        try:
+            from ..observability.trust_scoring import get_trust_scorer
+            self.world.trust_scorer = get_trust_scorer()
+            logger.info("TrustScoring initialized (profile: standard)")
+        except Exception as e:
+            logger.debug(f"TrustScoring: {e}")
+
         if self.lsp_manager:
             try:
                 await self.lsp_manager.start()

@@ -176,6 +176,16 @@ class TreeLLM:
                         p.name, result.prompt_tokens,
                         result.cache_hit_tokens,
                     )
+                # ── Activity feed + trust scoring ──
+                try:
+                    from ..observability.activity_feed import get_activity_feed
+                    from ..observability.trust_scoring import get_trust_scorer
+                    feed = get_activity_feed()
+                    feed.election(p.name, 1.0, f"{result.tokens}t")
+                    ts = get_trust_scorer()
+                    ts.record(p.name, success=True, latency_ms=(time.monotonic() - t0) * 1000)
+                except Exception:
+                    pass
             elif result and (result.error or result.rate_limited):
                 self._record_failure(p.name, result.error, rate_limited=result.rate_limited)
             return result or ProviderResult.empty("No result")

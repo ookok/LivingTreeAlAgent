@@ -206,7 +206,6 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         "cmd.help_text": "## 8 个统一命令\n\n🔍 **/ask** — 搜索查资料 (搜索/网页/论文/知识库)\n⚡ **/do** — 执行操作 (命令/数据库/计算/代码修改)\n📁 **/files** — 文件管理 (查找/修改/备份/扫描重复)\n🧠 **/learn** — 学习进化 (挖掘知识/整理/自我练习)\n📊 **/check** — 检查诊断 (系统状态/质量/费用/溯源)\n📄 **/docs** — 文档生成 (批量报告/模板/系统文档)\n🌐 **/team** — 协作网络 (节点/辩论/分支/模型偏好)\n💡 **/help** — 帮助 (查看详细用法)",
     },
     "en": {
-        **zh,
         "cmd.help_text": "## 8 Unified Commands\n\n🔍 **/ask** — Search & Research\n⚡ **/do** — Execute actions\n📁 **/files** — File operations\n🧠 **/learn** — Learning & evolution\n📊 **/check** — Diagnostics & audits\n📄 **/docs** — Document generation\n🌐 **/team** — Collaboration & network\n💡 **/help** — Show help",
         "cmd.search_usage": "用法: /search <关键词>",
         "cmd.fetch_usage": "用法: /fetch <URL>",

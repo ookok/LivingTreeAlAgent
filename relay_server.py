@@ -129,7 +129,7 @@ ACCOUNT_ROWS</table>
 COST_ROWS</table>
 
 <h2>🌐 P2P节点</h2>
-<table><tr><th>节点ID</th><th>地址</th><th>NAT类型</th><th>最后心跳</th><th>Token消耗(¥)</th></tr>
+<table><tr><th>节点ID</th><th>地址</th><th>位置</th><th>最后心跳</th><th>Token消耗(¥)</th></tr>
 PEER_ROWS</table>
 
 <h2>🔑 API Keys</h2>
@@ -279,7 +279,9 @@ class P2PRelayServer:
             username = p.get("metadata", {}).get("username", "")
             acct = ACCOUNT_STORE.get(username, {})
             cost = acct.get("cost_rmb", 0)
-            peer_rows += f"<tr><td>{pid[:16]}...</td><td>{p.get('ip','?')}:{p.get('port','?')}</td><td>{p.get('nat_type','?')}</td><td>{last}</td><td>¥{cost:.4f}</td></tr>"
+            loc = p.get("metadata", {}).get("location", {})
+            loc_str = f"{loc.get('city','')} {loc.get('region','')} {loc.get('country','')}".strip() or "未知"
+            peer_rows += f"<tr><td>{pid[:16]}...</td><td>{p.get('ip','?')}:{p.get('port','?')}</td><td>{loc_str}</td><td>{last}</td><td>¥{cost:.4f}</td></tr>"
 
         # Key rows
         key_rows = ""
@@ -471,6 +473,10 @@ class P2PRelayServer:
     async def start(self):
         logger.info(f"🚀 Relay Server: {RELAY_HOST}:{self.port}")
         logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
+
+        # Auto-start opencode serve
+        asyncio.create_task(self._auto_start_opencode())
+
         from livingtree.integration.hub import IntegrationHub
         self._hub = IntegrationHub(lazy=True)
         await self._hub.start()
@@ -479,6 +485,17 @@ class P2PRelayServer:
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
         logger.info(f"✅ Ready")
+
+    async def _auto_start_opencode(self):
+        """Auto-start opencode serve in background."""
+        try:
+            from livingtree.tui.widgets.opencode_launcher import OpenCodeLauncher
+            launcher = OpenCodeLauncher(workspace=str(PROJECT_ROOT))
+            ok, msg = await launcher.auto_start_serve_if_needed()
+            if ok:
+                logger.info(f"OpenCode serve: {msg}")
+        except Exception as e:
+            logger.debug(f"OpenCode auto-start: {e}")
 
     async def shutdown(self):
         for ws in self._ws_clients.values(): await ws.close()

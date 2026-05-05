@@ -37,6 +37,13 @@ class NodeCapabilities:
     cpu_cores: int = 0
     memory_gb: float = 0.0
     platform: str = ""
+    # Location info
+    city: str = ""
+    region: str = ""
+    country: str = ""
+    latitude: float = 0.0
+    longitude: float = 0.0
+    isp: str = ""
 
 
 @dataclass
@@ -46,6 +53,7 @@ class PeerInfo:
     capabilities: NodeCapabilities | None = None
     last_seen: float = 0.0
     connected: bool = False
+    location: dict = field(default_factory=dict)
 
 
 class P2PNode:
@@ -115,6 +123,11 @@ class P2PNode:
                             },
                             "cpu": caps.cpu_cores, "memory_gb": caps.memory_gb,
                             "platform": caps.platform,
+                            "location": {
+                                "city": caps.city, "region": caps.region,
+                                "country": caps.country, "lat": caps.latitude,
+                                "lon": caps.longitude, "isp": caps.isp,
+                            },
                         }},
                         timeout=10,
                     ) as resp:
@@ -183,7 +196,30 @@ class P2PNode:
         except Exception:
             pass
 
+        # Location detection (lazy, cached)
+        self._fill_location(caps)
         return caps
+
+    def _fill_location(self, caps: NodeCapabilities):
+        """Auto-detect geographic location via IP lookup (cached)."""
+        if hasattr(self, '_location_filled') and self._location_filled:
+            return
+        try:
+            import urllib.request, json
+            # Use ip-api.com (free, no key needed)
+            req = urllib.request.Request("http://ip-api.com/json/", headers={"User-Agent": "LivingTree/2.1"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+                caps.city = data.get("city", "")
+                caps.region = data.get("regionName", "")
+                caps.country = data.get("country", "")
+                caps.latitude = data.get("lat", 0.0)
+                caps.longitude = data.get("lon", 0.0)
+                caps.isp = data.get("isp", "")
+                self._location_filled = True
+                logger.debug(f"Location: {caps.city}, {caps.region}, {caps.country}")
+        except Exception as e:
+            logger.debug(f"Location detect: {e}")
 
     # ═══ WebSocket: listen for peer messages ═══
 
@@ -224,7 +260,9 @@ class P2PNode:
                             pid = p["peer_id"]
                             if pid == self.node_id:
                                 continue
-                            info = PeerInfo(peer_id=pid, last_seen=p.get("last_seen", 0))
+                            info.location = meta.get("location", {})
+                            info = PeerInfo(peer_id=pid, last_seen=p.get("last_seen", 0),
+                                           location=meta.get("location", {}))
                             meta = p.get("metadata", {})
                             caps_data = meta.get("capabilities", {})
                             info.capabilities = NodeCapabilities(

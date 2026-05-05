@@ -157,7 +157,7 @@ MapPreviewWidget, PlotPreviewWidget {
     max-height: 25; overflow-y: auto;
 }
 .preview-title { text-style: bold; color: #d2a8ff; padding: 0 0 1 0; }
-.map-canvas, .plot-canvas { color: #58a6ff; font-family: monospace; }
+.map-canvas, .plot-canvas { color: #58a6ff; }
 .preview-hidden { display: none; }
 
 DocumentPreviewWidget {

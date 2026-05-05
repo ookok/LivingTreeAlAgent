@@ -169,6 +169,21 @@ class LongCatProvider(Provider):
         )
 
 
+class NvidiaProvider(Provider):
+    """NVIDIA NIM — OpenAI-compatible API with NVAPI keys.
+
+    Free tier models: deepseek-ai/deepseek-r1, nvidia/llama-3.1-nemotron-ultra-253b-v1,
+    meta/llama-3.3-70b-instruct, qwen/qwen2.5-7b-instruct.
+    """
+    def __init__(self, api_key: str, default_model: str = "deepseek-ai/deepseek-r1"):
+        super().__init__(
+            name="nvidia",
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key,
+            default_model=default_model,
+        )
+
+
 class OpenAILikeProvider(Provider):
     def __init__(self, name: str, base_url: str, api_key: str,
                  default_model: str = "gpt-4o-mini"):
@@ -182,3 +197,7 @@ def create_deepseek_provider(api_key: str) -> DeepSeekProvider:
 
 def create_longcat_provider(api_key: str, model: str = "LongCat-Flash-Lite") -> LongCatProvider:
     return LongCatProvider(api_key=api_key, default_model=model)
+
+
+def create_nvidia_provider(api_key: str, model: str = "deepseek-ai/deepseek-r1") -> NvidiaProvider:
+    return NvidiaProvider(api_key=api_key, default_model=model)

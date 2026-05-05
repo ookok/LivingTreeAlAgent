@@ -48,6 +48,7 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "opencode-serve": ["本地", "离线", "local", "offline"],
     "xiaomi": ["多模态", "图像", "multimodal", "image"],
     "aliyun": ["企业", "分析", "enterprise", "analysis"],
+    "nvidia": ["推理", "代码", "数学", "reasoning", "code", "math", "analysis"],
 }
 
 

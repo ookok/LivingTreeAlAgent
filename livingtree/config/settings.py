@@ -90,6 +90,10 @@ class ModelConfig(BaseModel):
     mofang_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
     mofang_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
 
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_api_key: str = ""
+    nvidia_default_model: str = "deepseek-ai/deepseek-r1"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -363,6 +367,13 @@ def _load_config() -> LTAIConfig:
         if mofang_key:
             config.model.mofang_api_key = mofang_key
             logger.info("Loaded mofang_api_key from encrypted vault")
+
+        nvidia_key = vault.get("nvidia_api_key", "")
+        if nvidia_key:
+            config.model.nvidia_api_key = nvidia_key
+            config.model.nvidia_base_url = vault.get("nvidia_base_url", "https://integrate.api.nvidia.com/v1")
+            config.model.nvidia_default_model = vault.get("nvidia_default_model", "deepseek-ai/deepseek-r1")
+            logger.info("Loaded nvidia_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

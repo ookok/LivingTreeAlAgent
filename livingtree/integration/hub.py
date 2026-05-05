@@ -106,6 +106,9 @@ class IntegrationHub:
                 mofang_pro_model=self.config.model.mofang_pro_model,
                 mofang_reasoning_model=self.config.model.mofang_reasoning_model,
                 mofang_small_model=self.config.model.mofang_small_model,
+                nvidia_api_key=self.config.model.nvidia_api_key,
+                nvidia_base_url=self.config.model.nvidia_base_url,
+                nvidia_default_model=self.config.model.nvidia_default_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )
@@ -294,6 +297,7 @@ class IntegrationHub:
                 ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
                 ("siliconflow", "siliconflow_api_key", "siliconflow_base_url", "siliconflow_default_model", "Qwen/Qwen2.5-7B-Instruct"),
                 ("mofang", "mofang_api_key", "mofang_base_url", "mofang_default_model", "Qwen/Qwen2.5-7B-Instruct"),
+                ("nvidia", "nvidia_api_key", "nvidia_base_url", "nvidia_default_model", "deepseek-ai/deepseek-r1"),
             ]
             for name, key_name, url_name, model_name, default_model in vault_providers:
                 key = vault.get(key_name, "")
@@ -379,6 +383,7 @@ class IntegrationHub:
                     "zhipu": ("https://open.bigmodel.cn/api/paas/v4", self.config.model.zhipu_api_key),
                     "siliconflow": ("https://api.siliconflow.cn/v1", self.config.model.siliconflow_api_key),
                     "mofang": ("https://ai.gitee.com/v1", self.config.model.mofang_api_key),
+                    "nvidia": ("https://integrate.api.nvidia.com/v1", self.config.model.nvidia_api_key),
                     "spark": ("https://maas-api.cn-huabei-1.xf-yun.com/v2", self.config.model.spark_api_key),
                 }
                 for name, (base_url, api_key) in provider_keys.items():

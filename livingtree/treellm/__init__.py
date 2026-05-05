@@ -15,15 +15,15 @@ Usage:
 from .core import TreeLLM, RouterStats
 from .providers import (
     Provider, ProviderResult,
-    DeepSeekProvider, LongCatProvider, OpenAILikeProvider,
-    create_deepseek_provider, create_longcat_provider,
+    DeepSeekProvider, LongCatProvider, NvidiaProvider, OpenAILikeProvider,
+    create_deepseek_provider, create_longcat_provider, create_nvidia_provider,
 )
 from .classifier import TinyClassifier
 
 __all__ = [
     "TreeLLM", "RouterStats",
     "Provider", "ProviderResult",
-    "DeepSeekProvider", "LongCatProvider", "OpenAILikeProvider",
-    "create_deepseek_provider", "create_longcat_provider",
+    "DeepSeekProvider", "LongCatProvider", "NvidiaProvider", "OpenAILikeProvider",
+    "create_deepseek_provider", "create_longcat_provider", "create_nvidia_provider",
     "TinyClassifier",
 ]

@@ -72,6 +72,10 @@ class DualModelConsciousness(Consciousness):
         mofang_pro_model: str = "deepseek-ai/DeepSeek-V3",
         mofang_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
         mofang_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
+        # NVIDIA NIM
+        nvidia_api_key: str = "",
+        nvidia_base_url: str = "",
+        nvidia_default_model: str = "deepseek-ai/deepseek-r1",
         # L4: user-specified locked model (not auto-elected)
         l4_provider: str = "",
         l4_model: str = "",
@@ -198,6 +202,12 @@ class DualModelConsciousness(Consciousness):
                 default_model=mofang_pro_model or "deepseek-ai/DeepSeek-V3",
             ))
 
+        if nvidia_api_key:
+            from ..treellm.providers import create_nvidia_provider
+            self._llm.add_provider(create_nvidia_provider(
+                nvidia_api_key, model=nvidia_default_model or "deepseek-ai/deepseek-r1"
+            ))
+
         # ── Election order: free models first ──
         self._free_models = []
         self._paid_models = []
@@ -215,6 +225,8 @@ class DualModelConsciousness(Consciousness):
             self._free_models.append("mofang-flash")
             self._free_models.append("mofang-reasoning")
             self._free_models.append("mofang-small")
+        if nvidia_api_key:
+            self._free_models.append("nvidia")
         if xiaomi_api_key:
             self._paid_models.append("xiaomi")
         if aliyun_api_key:

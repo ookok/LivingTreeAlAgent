@@ -25,12 +25,13 @@ STATS_FILE = Path(".livingtree/election_stats.json")
 
 # Scoring weights (sum to 1.0)
 WEIGHTS = {
-    "latency": 0.22,    # Speed matters
-    "quality": 0.28,     # Success matters most
-    "cost": 0.18,        # Free preferred
-    "capability": 0.14,  # Task match
-    "freshness": 0.08,   # Prefer recently-used providers
-    "rate_limit": 0.10,  # Penalize throttled providers
+    "latency": 0.20,    # Speed matters
+    "quality": 0.25,     # Success matters most
+    "cost": 0.16,        # Free preferred
+    "capability": 0.13,  # Task match
+    "freshness": 0.06,   # Prefer recently-used providers
+    "rate_limit": 0.08,  # Penalize throttled providers
+    "cache": 0.12,       # Prefer providers with high cache hit rates
 }
 
 # Provider capability profiles: which tasks each model excels at
@@ -208,6 +209,14 @@ class HolisticElection:
                 score.scores["freshness"] = max(0.0, 1.0 - hours_since / 24.0)
             else:
                 score.scores["freshness"] = 0.5  # neutral for never-used
+
+            # Score 6: Cache benefit (how much can prefix-cache save?)
+            try:
+                from .cache_director import get_cache_director
+                cd = get_cache_director()
+                score.scores["cache"] = cd.cache_score(name)
+            except Exception:
+                score.scores["cache"] = 0.0
 
             # Weighted total
             score.total = sum(

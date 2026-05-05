@@ -82,6 +82,9 @@ class IdleConsolidator:
 
         llm = hub.world.consciousness._llm
 
+        # ── Pre-warm KV cache for active providers ──
+        self._pre_warm_cache(hub)
+
         try:
             result = await llm.chat(
                 messages=[{"role": "user", "content": (
@@ -191,6 +194,40 @@ class IdleConsolidator:
                         source="idle_consolidation",
                         tags=entry.tags,
                     )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _pre_warm_cache(self, hub):
+        """Pre-warm KV cache for providers during idle time.
+
+        Sends a lightweight 'ping with context' to cache the system prompt
+        on providers that support prefix caching. This means the next real
+        user request gets cached tokens immediately.
+        """
+        try:
+            from ..treellm.cache_director import get_cache_director
+            director = get_cache_director()
+
+            llm = hub.world.consciousness._llm
+            for name in llm.provider_names:
+                if not director.supports_cache(name):
+                    continue
+                # Only pre-warm if we have cache stats showing benefit
+                s = director.provider_stats(name)
+                if s and s["hit_rate_pct"] < 10 and s["total_turns"] > 5:
+                    continue  # Not getting enough hits to be worth warming
+
+                try:
+                    # Send a lightweight system prompt warm-up
+                    provider = llm.get_provider(name)
+                    if provider:
+                        cap = director.get_capability(name)
+                        director.pre_warm(
+                            [{"role": "user", "content": "ping"}],
+                            name, hub
+                        )
                 except Exception:
                     pass
         except Exception:

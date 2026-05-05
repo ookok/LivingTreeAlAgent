@@ -29,6 +29,8 @@ RATE_LIMIT_MAX_DELAY = 30.0  # seconds
 class ProviderResult:
     text: str = ""
     tokens: int = 0
+    prompt_tokens: int = 0
+    cache_hit_tokens: int = 0
     reasoning: str = ""
     model: str = ""
     latency_ms: float = 0.0
@@ -88,6 +90,9 @@ class Provider:
                                 text=msg.get("content", ""),
                                 reasoning=msg.get("reasoning_content", ""),
                                 tokens=usage.get("total_tokens", 0),
+                                prompt_tokens=usage.get("prompt_tokens", 0),
+                                cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0)
+                                    or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
                                 model=data.get("model", payload.get("model", self.default_model)),
                                 latency_ms=(time.monotonic() - t0) * 1000,
                             )

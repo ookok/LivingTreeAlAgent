@@ -152,8 +152,12 @@ class TreeLLM:
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
 
-        # ── Token optimization: apply CacheOptimizer for prefix caching ──
-        messages = self._optimize_messages(messages)
+        # ── Token optimization: apply CacheDirector for prefix caching ──
+        provider_name = p.name if p else ""
+        from .cache_director import get_cache_director
+        director = get_cache_director()
+        if director.supports_cache(provider_name):
+            messages = director.prepare(messages, provider_name)
 
         t0 = time.monotonic()
         result = None
@@ -165,6 +169,13 @@ class TreeLLM:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
                                         chosen=p.name, success=True)
+                # ── Record cache performance ──
+                if result.prompt_tokens:
+                    from .cache_director import get_cache_director
+                    get_cache_director().record(
+                        p.name, result.prompt_tokens,
+                        result.cache_hit_tokens,
+                    )
             elif result and (result.error or result.rate_limited):
                 self._record_failure(p.name, result.error, rate_limited=result.rate_limited)
             return result or ProviderResult.empty("No result")

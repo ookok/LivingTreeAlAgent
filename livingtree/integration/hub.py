@@ -539,12 +539,24 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"NetworkBrain: {e}")
 
+        # ── RemoteAssist: observer message routing ──
+        try:
+            from ..capability.remote_assist import get_remote_assist
+            ra = get_remote_assist()
+            self.world.remote_assist = ra
+            from ..network.p2p_node import get_p2p_node
+            p2p = get_p2p_node()
+            p2p.on_message(lambda data: self._handle_observe_message(data, ra))
+            logger.info(f"RemoteAssist initialized (ID: {ra.client_id})")
+        except Exception as e:
+            logger.debug(f"RemoteAssist: {e}")
+
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""
         brain = getattr(self.world, 'network_brain', None)
         if not brain:
             return
-        await asyncio.sleep(60)  # initial delay
+        await asyncio.sleep(60)
         while True:
             try:
                 await brain.ingest_cycle(self)
@@ -552,6 +564,21 @@ class IntegrationHub:
             except Exception:
                 pass
             await asyncio.sleep(1800)  # 30 minutes
+
+    @staticmethod
+    def _handle_observe_message(data, ra):
+        """Route incoming P2P observe-related messages."""
+        try:
+            if isinstance(data, str):
+                data = json.loads(data)
+            msg_type = data.get("type", "")
+            if msg_type == "observe_request":
+                logger.info(f"Observe request from {data.get('from_id','?')}")
+            elif msg_type == "observe_sync":
+                fragment = ra.receive_fragment(data)
+                logger.debug(f"Sync: {fragment.sender_role} → {fragment.content[:50]}")
+        except Exception:
+            pass
 
         if self.lsp_manager:
             try:

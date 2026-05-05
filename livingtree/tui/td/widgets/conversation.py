@@ -2405,6 +2405,63 @@ class Conversation(containers.Vertical):
             profile = get_progressive_trust().get_user_profile(uid)
             if profile:
                 await self.post(Note(f"👤 {uid}: {profile['interactions']}次交互"))
+        elif any(kw in pl for kw in ("id", "我的id", "编号")):
+            from livingtree.capability.remote_assist import get_remote_assist, get_client_id
+            cid = get_client_id()
+            ra = get_remote_assist()
+            role = ra._get_my_role()
+            session = ra.my_session()
+            lines = [f"## 🆔 我的ID", f"**{cid}**"]
+            lines.append(f"角色: {role}")
+            if session:
+                other = session.observer_id if ra.am_i_host() else session.host_id
+                lines.append(f"状态: {session.status} | 对方: {other} | 消息: {session.message_count}")
+            await self.post(Note("\n".join(lines)))
+        elif any(kw in pl for kw in ("connect", "连接", "观察", "远程")):
+            from livingtree.capability.remote_assist import get_remote_assist
+            ra = get_remote_assist()
+            target = params.replace("连接", "").replace("connect", "").replace("观察", "").replace("远程", "").strip()
+            if not target.isdigit() or len(target) != 10:
+                await self.post(Note("用法: /team connect <10位数字ID>\n示例: /team connect 5193847261\n查看自己ID: /team id"))
+            else:
+                await self.post(Note(f"🔗 正在请求观察 {target}..."))
+                result = await ra.request_observe(target, hub=hub)
+                await self.post(Note(f"{result['message']}"))
+            return True
+        elif any(kw in pl for kw in ("observe", "接受", "拒绝", "decline", "结束观察")):
+            from livingtree.capability.remote_assist import get_remote_assist
+            ra = get_remote_assist()
+            if "接受" in pl or "accept" in pl:
+                sid = params.split()[-1] if params.split()[-1] != "接受" else ""
+                for s in ra._sessions.values():
+                    if s.status == "pending" and s.host_id == ra._client_id:
+                        sid = s.session_id
+                        break
+                result = ra.accept_observer(sid)
+                await self.post(Note(f"✅ {result.get('message','观察者已连接')}"))
+            elif "拒绝" in pl or "decline" in pl:
+                for s in ra._sessions.values():
+                    if s.status == "pending" and s.host_id == ra._client_id:
+                        ra.decline_observer(s.session_id)
+                        break
+                await self.post(Note("❌ 已拒绝观察请求"))
+            elif "结束" in pl or "end" in pl:
+                result = await ra.end_observation()
+                await self.post(Note(f"🔌 {result.get('message','观察已结束')}"))
+            else:
+                await self.post(Note("用法: /team observe accept|decline|end"))
+            return True
+        elif any(kw in pl for kw in ("移交", "transfer", "转让")):
+            from livingtree.capability.remote_assist import get_remote_assist
+            ra = get_remote_assist()
+            session = ra.my_session()
+            if session:
+                session.control_transferred = not session.control_transferred
+                state = "已移交" if session.control_transferred else "已收回"
+                await self.post(Note(f"🔄 控制权{state}"))
+            else:
+                await self.post(Note("[dim]当前没有活跃的观察会话[/dim]"))
+            return True
         else:
             await self.post(Note(COMMANDS["team"]["fallback"]))
             await self.post(Note(format_command_help("team")))

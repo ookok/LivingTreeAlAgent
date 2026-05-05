@@ -86,6 +86,11 @@ ROLE_CLASSIFICATION: dict[str, dict[str, str]] = {
     "translator_en_cn":       {"industry": "通用", "profession": "翻译出版"},
     "procurement_sales":      {"industry": "通用", "profession": "商务采购"},
     "land_urban_expert":      {"industry": "通用", "profession": "土地规划"},
+    "trade_expert":           {"industry": "通用", "profession": "国际贸易"},
+    "customs_expert":         {"industry": "通用", "profession": "海关物流"},
+    "logistics_expert":       {"industry": "通用", "profession": "运输物流"},
+    "metals_expert":          {"industry": "冶金", "profession": "材料工程"},
+    "petroleum_expert":       {"industry": "石油", "profession": "工艺设计"},
 }
 
 

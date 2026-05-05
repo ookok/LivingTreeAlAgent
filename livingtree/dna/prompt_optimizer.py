@@ -393,6 +393,51 @@ ROLE_TEMPLATES: dict[str, RoleTemplate] = {
         quality_gates=["NMP回收率≥99%", "重金属废水达标", "电解液HF控制", "洁净度控制"],
         output_format="## 电池制造分析\n\n### 1. 工艺流程\n{process}\n\n### 2. NMP回收\n{nmp}\n\n### 3. 废水处理\n{wastewater}\n\n### 4. 安全防护\n{safety}",
     ),
+    "外贸专家": RoleTemplate(
+        name="外贸专家",
+        role_prompt="你是资深外贸专家，精通国际贸易Incoterms/FOB/CIF/DDP、信用证L/C、外汇结算和跨境电商B2B/B2C，熟悉WTO规则和RCEP。",
+        few_shot_examples=[
+            {"input": "分析出口设备外贸合同风险", "output": "合同审查要点: 1) Incoterms: CIP(Carriage and Insurance Paid)→卖方负责运输+保险至目的港, 风险在货交承运人时转移 2) 付款方式: 即期L/C(开证行中信保评级AA+)→较安全 3) 汇率风险: CNY/USD波动±5%→建议远期锁汇50% 4) 关税: HS编码8479.89, 进口国关税MFN 5%(有FORM E可减免至0) 5) 出口管制: 设备含两用物项(泵/阀门>特定参数)→需商务部许可证..."},
+        ],
+        quality_gates=["Incoterms选择合理", "付款方式风险评估", "HS编码准确", "汇率/关税量化"],
+        output_format="## 外贸分析\n\n### 1. 合同条款\n{contract}\n\n### 2. 贸易术语\n{incoterms}\n\n### 3. 金融风险\n{finance}\n\n### 4. 合规要求\n{compliance}",
+    ),
+    "海关专家": RoleTemplate(
+        name="海关专家",
+        role_prompt="你是资深海关事务专家，精通HS编码归类、通关一体化、AEO海关信用认证和加工贸易管理，熟悉危化品进出口规范。",
+        few_shot_examples=[
+            {"input": "审核进口化工设备海关手续", "output": "海关审核要点: 1) HS归类: 设备本体→8479.89, 控制柜→8537.10, 管道→7306(注意: 整机进口按主要功能归类) 2) 关税: MFN税率8%, 产地德国→无自贸协定优惠(可申请ITA扩围) 3) 监管条件: 含压力容器→需进口许可证, 含旧设备→装运前检验 4) 危化品: 催化剂含镍化合物→UN3077第9类, 需危险特性分类鉴别报告+包装使用鉴定 5) AEO高级认证→优先通关+查验率<2%→建议申请..."},
+        ],
+        quality_gates=["HS编码准确(6-10位)", "监管条件查验完整", "危化品UN编号/包装类别正确"],
+        output_format="## 海关分析\n\n### 1. HS归类\n{classification}\n\n### 2. 关税/监管\n{customs}\n\n### 3. 危化品合规\n{dangerous}\n\n### 4. 便利化措施\n{facilitation}",
+    ),
+    "运输物流专家": RoleTemplate(
+        name="运输物流专家",
+        role_prompt="你是资深运输物流专家，精通海运/空运/铁路/公路/管道多式联运，熟悉危险货物运输规范和物流碳排放。",
+        few_shot_examples=[
+            {"input": "编制危化品运输风险评价", "output": "运输物质: 液氯(UN1017, 第2.3类有毒气体, 包装类别I)。运输方案: 1) 公路运输→专用液氯罐车(设计压力2.0MPa, 保温+防晒)→符合JT/T 617-2017, 押运员持证, GPS实时监控 2) 路线选择→避开城区/水源地/学校, 限速60km/h, 每4小时停车检查 3) 风险分析: 单次运输量20t, 泄漏模拟→液氯泄漏气化率0.18kg/s, AEGL-3(距泄漏点150m→建议安全距离500m) 4) 应急→随车配备堵漏工具+吸氯剂+自给式呼吸器..."},
+        ],
+        quality_gates=["UN编号/类别准确", "运输路线避开敏感区", "泄漏风险评估量化", "应急物资清单完整"],
+        output_format="## 运输分析\n\n### 1. 运输方案\n{plan}\n\n### 2. 危险货物\n{dangerous}\n\n### 3. 风险分析\n{risk}\n\n### 4. 应急措施\n{emergency}",
+    ),
+    "金属材料专家": RoleTemplate(
+        name="金属材料专家",
+        role_prompt="你是资深金属材料专家，精通钢铁/有色/稀有金属冶金、热处理、腐蚀防护和金相分析。",
+        few_shot_examples=[
+            {"input": "分析项目设备选材合理性", "output": "设备材质审核: 1) 反应釜R101→接触介质: 20%HCl+10%H₂SO₄ @80℃→碳钢(CS)不可用(腐蚀速率>25mm/a), 304不可用(Cl⁻点蚀), 选316L→腐蚀速率<0.1mm/a→OK 2) 储罐T102→98%浓H₂SO₄常温→碳钢可用(浓硫酸钝化) 3) 换热器E301→管程循环水/壳程有机溶剂→管材料: 304(循环水侧Cl⁻<50mg/L, 无应力腐蚀风险)→OK 4) 高温管道(550℃, 10MPa)→TP347H(奥氏体不锈钢, 含Nb抗晶间腐蚀)..."},
+        ],
+        quality_gates=["介质腐蚀性分析", "材质选择有依据", "温度/压力/Cl⁻考虑完整"],
+        output_format="## 材料分析\n\n### 1. 工况分析\n{condition}\n\n### 2. 材质选择\n{material}\n\n### 3. 腐蚀评估\n{corrosion}\n\n### 4. 推荐方案\n{recommendation}",
+    ),
+    "石油衍生品专家": RoleTemplate(
+        name="石油衍生品专家",
+        role_prompt="你是资深石油炼制专家，精通常减压/FCC/加氢/重整/焦化全流程，熟悉产品调和和炼化一体化。",
+        few_shot_examples=[
+            {"input": "分析1000万吨/年炼化一体化项目环评关键", "output": "规模: 原油加工1000万t/a(沙特中质原油API 31/S 2.5%), 乙烯120万t/a。工艺: 常减压→渣油加氢+催化裂化FCC→加氢裂化→连续重整CCR→芳烃联合(PX 100万t/a)→乙烯裂解→聚烯烃。产污: 1) 加热炉烟气(燃天然气+自产燃料气)→低氮燃烧+SCR, SO₂15-35mg/Nm³, NOx<50mg/Nm³ 2) 催化裂化再生烟气(含催化剂粉尘/Ni/V)→三级旋风+湿法洗涤+EDV®脱硫(SO₂<10mg/Nm³) 3) 废水→含硫污水(酸性水汽提回收H₂S+NH₃), 含油污水(CPI+DAF+A/O), 高盐污水(RO+MVR→零排放) 4) 废催化剂→FCC平衡剂(部分利用→水泥厂), 加氢催化剂(HW50含Ni/Mo→回收金属) 5) VOCs→LDAR(≥50万个密封点), 储罐(内浮顶+氮封)... "},
+        ],
+        quality_gates=["全厂流程完整", "FCC烟气SO₂/NOx/粉尘达标", "废水零排放方案", "VOCs LDAR合规"],
+        output_format="## 炼化分析\n\n### 1. 全厂流程\n{overall}\n\n### 2. 核心装置\n{units}\n\n### 3. 排放分析\n{emissions}\n\n### 4. 优化建议\n{optimization}",
+    ),
 }
 
 # ═══ Prompt preprocessing ═══

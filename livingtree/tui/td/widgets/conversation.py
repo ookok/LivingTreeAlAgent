@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3288,6 +3288,76 @@ class Conversation(containers.Vertical):
                     f"自动审批: {'✅ 通过' if can else '❌ 需要审查'}",
                 ]
                 await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "branch":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.conversation_branch import get_conversation_brancher
+            cb = get_conversation_brancher()
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "list"
+            if sub == "list" or sub == "tree":
+                tree = cb.render_tree()
+                await self.post(Note(tree))
+            elif sub == "fork" and len(parts) > 1:
+                args = parts[1].split(maxsplit=1)
+                name = args[0]
+                snapshot = args[1] if len(args) > 1 else ""
+                cb.fork(name, snapshot)
+                await self.post(Note(f"🌿 已分叉: {name}"))
+            elif sub == "switch" and len(parts) > 1:
+                branch = cb.switch(parts[1])
+                if branch:
+                    await self.post(Note(f"🔄 已切换: {branch.name} ({len(branch.turns)}轮)"))
+                else:
+                    await self.post(Note(f"[red]分支 {parts[1]} 不存在[/red]"))
+            elif sub == "merge" and len(parts) > 1:
+                args = parts[1].split(maxsplit=1)
+                branch = cb.merge(args[0], args[1] if len(args) > 1 else "")
+                if branch:
+                    await self.post(Note(f"✅ 已合并: {branch.name} → {branch.merged_into}"))
+                else:
+                    await self.post(Note(f"[red]合并失败[/red]"))
+            elif sub == "abandon" and len(parts) > 1:
+                branch = cb.abandon(parts[1])
+                if branch:
+                    await self.post(Note(f"❌ 已放弃: {branch.name}"))
+            else:
+                await self.post(Note("用法: /branch list|fork <名> [上下文]|switch <名>|merge <名> [摘要]|abandon <名>"))
+            return True
+
+        elif command == "semdiff":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.semantic_diff import get_semantic_diff
+            hub = getattr(self.app, 'hub', None)
+            sd = get_semantic_diff()
+            target = params.strip() if params else ""
+            await self.post(Note(f"**📊 语义差异分析...**"))
+            explanation = await sd.explain_diff(hub, target=target)
+            result = sd.format(explanation)
+            await self.post(Note(result))
+            return True
+
+        elif command == "selfdocs":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.self_documentation import get_self_documenter
+            hub = getattr(self.app, 'hub', None)
+            sdoc = get_self_documenter()
+            await self.post(Note("**📝 自动生成系统文档...**"))
+            doc = await sdoc.generate(hub)
+            lines = [
+                f"## 📝 {doc.title}",
+                f"已保存到 .livingtree/self_docs/",
+                f"",
+                f"包含章节:",
+            ]
+            if doc.feature_timeline: lines.append("  ✅ 功能时间线")
+            if doc.provider_stats: lines.append("  ✅ Provider 使用统计")
+            if doc.tool_inventory: lines.append("  ✅ 工具清单")
+            if doc.architecture: lines.append("  ✅ 架构图")
+            if doc.known_issues: lines.append("  ✅ 已知问题")
+            if doc.security: lines.append("  ✅ 安全建议")
+            await self.post(Note("\n".join(lines)))
             return True
 
         return False

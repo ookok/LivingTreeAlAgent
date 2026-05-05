@@ -2240,6 +2240,37 @@ class Conversation(containers.Vertical):
             await self.post(Note(f"✨ 模板渲染: {params}"))
             result = await get_template_engine().instantiate("template.md", {}, hub=hub)
             await self.post(Note(f"{result.preview} {'[已输出]' if result.applied else ''}"))
+        elif any(kw in pl for kw in ("解析", "parse")):
+            from livingtree.capability.universal_parser import get_universal_parser
+            # Extract filename: "解析 site_plan.dwg" → "site_plan.dwg"
+            import re
+            words = params.split()
+            fpath = words[-1] if words else ""
+            if not Path(fpath).exists():
+                await self.post(Note(f"[red]文件不存在: {fpath}[/red]\n[dim]用法: /files 解析 <文件路径>[/dim]"))
+            else:
+                await self.post(Note(f"📂 解析: {Path(fpath).name}"))
+                result = await get_universal_parser().parse(fpath)
+                if result.success:
+                    lines = [f"## 📂 {result.format} — {result.parser_used}", ""]
+                    if result.metadata:
+                        lines.append("**元数据:**")
+                        for k, v in list(result.metadata.items())[:8]:
+                            lines.append(f"  {k}: {v}")
+                    if result.tables:
+                        lines.append(f"\n**表格:** {len(result.tables)} 个")
+                        for t in result.tables[:2]:
+                            h = t.get("headers", [])[:8]
+                            lines.append(f"  列: {', '.join(str(hh)[:20] for hh in h)}")
+                            lines.append(f"  行数: {len(t.get('rows', []))}")
+                    if result.structure:
+                        lines.append(f"\n**结构:** {str(result.structure)[:300]}")
+                    lines.append(f"\n文本预览:\n```\n{result.text[:2000]}\n```")
+                    if result.text:
+                        lines.append(f"[dim]{len(result.text)} 字符 | {result.elapsed_ms:.0f}ms[/dim]")
+                    await self.post(Note("\n".join(lines)))
+                else:
+                    await self.post(Note(f"[red]解析失败: {result.error}[/red]\n[dim]格式: {result.format} | 尝试了 {len(result.metadata)} 个解析器[/dim]"))
         else:
             from livingtree.capability.document_editor import get_editor
             result = editor.smart_replace(params, "", "", mode="key")

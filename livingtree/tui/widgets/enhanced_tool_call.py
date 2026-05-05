@@ -373,6 +373,7 @@ SYSTEM_TOOLS: dict[str, dict] = {
 }
 
 EXPERT_ROLES = {
+    # ── IT (original) ──
     "full_stack_engineer": "全栈工程师 — Python/JS/React/SQL 全栈开发",
     "ui_designer": "UI 设计师 — 界面设计、原型、样式指南",
     "product_manager": "产品经理 — PRD、用户故事、路线图",
@@ -381,6 +382,18 @@ EXPERT_ROLES = {
     "ai_researcher": "AI 研究员 — 算法模型、技术报告、论文",
     "devops_engineer": "DevOps 工程师 — 部署脚本、监控配置",
     "qa_engineer": "QA 工程师 — 测试计划、测试报告、Bug列表",
+
+    # ── 环评专业 ──
+    "eia_engineer": "环评工程师 — GB3095/3096/3838/3840 标准, 高斯模型, AERMOD, CALPUFF, 污染源核算, 防护距离",
+    "air_quality_expert": "大气环境专家 — 气象数据分析, 扩散模型, AERSCREEN估算, 环境空气监测, PM2.5/PM10/O3/SO2/NOx/VOCs",
+    "water_env_expert": "水环境专家 — 地表水/地下水评价, COD/BOD5/氨氮, 水质模型, HJ 2.3-2018, 水文地质参数",
+    "noise_expert": "噪声控制专家 — GB3096-2008, 点/线/面声源, 隔声降噪, 厂界噪声预测, 交通噪声模型",
+    "ecology_expert": "生态评价师 — 植被调查, 生物量估算, 生态红线, 水土保持, 景观生态学, HJ 19-2022",
+    "env_monitoring_expert": "环境监测师 — 监测方案设计, 采样规范HJ/T 166, 实验室质控, 在线监测, 数据审核",
+    "regulatory_expert": "法规合规师 — 产业政策, 环保法律法规, 排污许可, 总量控制, 三同时制度, 环境税",
+    "safety_assessor": "安全评价师 — 危险源辨识HAZOP/LEC, 重大危险源, 事故后果模拟, 安全距离, AQ标准",
+    "feasibility_analyst": "可行性研究员 — 市场分析, 技术方案比选, 投资估算, 财务评价NPV/IRR, 敏感性分析, 国民经济评价",
+    "carbon_expert": "碳评估专家 — 碳排放核算IPCC, 碳达峰碳中和, CCER, 碳交易, 碳足迹LCA, 绿色建筑评价",
 }
 
 MCP_METHODS = {

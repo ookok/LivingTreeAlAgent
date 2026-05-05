@@ -2451,6 +2451,10 @@ class Conversation(containers.Vertical):
             sd = get_service_discovery()
             text = sd.status_text()
             await self.post(Note(text))
+        elif any(kw in pl for kw in ("test", "测试", "自检", "selftest")):
+            from tests.self_test import run_and_format
+            result = run_and_format()
+            await self.post(Note(result))
         else:
             if not params:
                 await self.post(Note(COMMANDS["check"]["fallback"]))

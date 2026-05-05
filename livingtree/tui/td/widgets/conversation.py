@@ -1372,6 +1372,7 @@ class Conversation(containers.Vertical):
             SlashCommand("/check", "检查 & 诊断", "系统状态"),
             SlashCommand("/docs", "文档生成", "批量生成10份报告"),
             SlashCommand("/team", "协作 & 网络", "查看在线节点"),
+            SlashCommand("/layout", "布局管理", "切换到环评布局"),
             SlashCommand("/help", "帮助", "查看帮助"),
         ]
 
@@ -1911,7 +1912,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands (8 unified commands) ═══
-        if command in ("help", "ask", "do", "files", "learn", "check", "docs", "team"):
+        if command in ("help", "ask", "do", "files", "learn", "check", "docs", "team", "layout"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2106,6 +2107,8 @@ class Conversation(containers.Vertical):
             return await self._cmd_docs(params, hub)
         elif command == "team":
             return await self._cmd_team(params, hub)
+        elif command == "layout":
+            return await self._cmd_layout(params, hub)
 
         return False
 
@@ -2530,4 +2533,58 @@ class Conversation(containers.Vertical):
         else:
             await self.post(Note(COMMANDS["team"]["fallback"]))
             await self.post(Note(format_command_help("team")))
+        return True
+
+    async def _cmd_layout(self, params: str, hub) -> bool:
+        from livingtree.tui.td.widgets.note import Note
+        from livingtree.tui.layout_engine import get_layout_engine, PRESETS
+        engine = get_layout_engine()
+        pl = params.lower() if params else "list"
+
+        if not params or pl == "list":
+            info = engine.list_all()
+            lines = ["## 🎨 布局管理", ""]
+            lines.append("### 内置布局")
+            for name, desc in info["presets"].items():
+                marker = " *" if name == info["current"]["preset"] else ""
+                lines.append(f"  {name} — {desc}{marker}")
+            lines.append(f"\n### 风格 ({len(info['styles'])})")
+            for name, desc in info["styles"].items():
+                lines.append(f"  {name} — {desc}")
+            lines.append(f"\n当前: {info['current']['preset']} | {info['current']['style']}")
+            await self.post(Note("\n".join(lines)))
+            return True
+
+        if pl in ("tree", "tabs", "minimal", "full", "eia"):
+            result = engine.apply_preset(pl)
+            if result.applied:
+                await self.post(Note(f"✅ {PRESETS.get(pl,{}).get('description',pl)}"))
+            return True
+
+        if pl.startswith("style "):
+            style = pl.replace("style ", "").strip()
+            style_map = {"dark": "dark-compact", "light": "light-spacious"}
+            style = style_map.get(style, style)
+            if engine.apply_style(style):
+                await self.post(Note(f"✅ {style}"))
+            return True
+
+        if pl.startswith("save "):
+            name = params[5:].strip()
+            engine.save(name, f"Custom: {name}")
+            await self.post(Note(f"💾 {name}"))
+            return True
+
+        if pl.startswith("load "):
+            name = params[5:].strip()
+            result = engine.load(name)
+            await self.post(Note(f"📂 {name}" if result.applied else f"[red]未找到: {name}[/red]"))
+            return True
+
+        await self.post(Note(f"🎨 生成: {params}"))
+        result = await engine.apply(params, hub)
+        if result.applied:
+            await self.post(Note(f"✅ 已应用" + (f" (修正{result.fix_attempts}次)" if result.fix_attempts else "")))
+        else:
+            await self.post(Note(f"[red]{', '.join(result.parse_errors) or '无法生成'}[/red]"))
         return True

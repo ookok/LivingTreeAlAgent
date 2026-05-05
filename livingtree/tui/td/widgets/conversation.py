@@ -2415,7 +2415,6 @@ class Conversation(containers.Vertical):
 
             session = er.recorder.get_session(sid)
             if not session:
-                # Partial match
                 for s in er.recorder.list_sessions(50):
                     if sid in s.session_id:
                         session = s
@@ -2438,14 +2437,17 @@ class Conversation(containers.Vertical):
                     lesson = er.recorder._lessons.get(analyzed.lesson_id)
                     if lesson:
                         lines.append(f"\n📚 已学习 ({lesson.occurrences}次, 置信度{lesson.auto_fix_confidence:.0%})")
-
-                # Auto-fix if confident
                 if params.lower().endswith("fix"):
                     heal = await er.replay.self_heal(session.session_id, hub)
                     lines.append(f"\n{'✅' if heal['success'] else '❌'} {heal['message']}")
                 await self.post(Note("\n".join(lines)))
             else:
                 await self.post(Note("[dim]分析未产生结果[/dim]"))
+        elif any(kw in pl for kw in ("服务", "service", "services", "url", "端口", "域名")):
+            from livingtree.network.service_discovery import get_service_discovery
+            sd = get_service_discovery()
+            text = sd.status_text()
+            await self.post(Note(text))
         else:
             if not params:
                 await self.post(Note(COMMANDS["check"]["fallback"]))

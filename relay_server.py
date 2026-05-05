@@ -975,6 +975,18 @@ class P2PRelayServer:
         logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🔑 User keys: {len(USER_KEYS)}")
         logger.info(f"🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
 
+        # ── Service Discovery: named URL + HTTPS + mDNS ──
+        try:
+            from livingtree.network.service_discovery import get_service_discovery
+            sd = get_service_discovery()
+            await sd.setup()
+            svc = await sd.register("relay", self.port, protocol="https")
+            logger.info(f"🌐 Named URL: {svc.url}")
+            if svc.lan_url:
+                logger.info(f"📱 LAN: {svc.lan_url}")
+        except Exception as e:
+            logger.debug(f"ServiceDiscovery: {e}")
+
         # Connectivity heartbeat
         asyncio.create_task(self._connectivity_check())
         # Relay pool auto-sync

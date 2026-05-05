@@ -12,6 +12,7 @@ echo Set Shortcut = WshShell.CreateShortcut("%SHORTCUT%") >> "%TEMP%\mkshortcut.
 echo Shortcut.TargetPath = "%~dp0run.bat" >> "%TEMP%\mkshortcut.vbs"
 echo Shortcut.WorkingDirectory = "%~dp0" >> "%TEMP%\mkshortcut.vbs"
 echo Shortcut.WindowStyle = 7 >> "%TEMP%\mkshortcut.vbs"
+echo Shortcut.IconLocation = "%SystemRoot%\System32\shell32.dll,41" >> "%TEMP%\mkshortcut.vbs"
 echo Shortcut.Save >> "%TEMP%\mkshortcut.vbs"
 
 cscript //nologo "%TEMP%\mkshortcut.vbs"

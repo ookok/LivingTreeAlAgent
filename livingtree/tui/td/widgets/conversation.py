@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "batchrun", "evolvetool"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2914,6 +2914,166 @@ class Conversation(containers.Vertical):
                     if e.message:
                         lines.append(f"  {e.message[:100]}")
                 await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "web":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_executor import get_executor
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else ""
+            exe = get_executor()
+            if sub == "fetch" and len(parts) > 1:
+                r = await exe.url_fetch(parts[1])
+                await self.post(Note(f"🌐 URL_FETCH:\n```\n{r.output[:3000]}\n```" if r.success else f"[red]Web error: {r.error}[/red]"))
+            elif sub == "scrape" and len(parts) > 1:
+                r = await exe.web_scrape(parts[1])
+                await self.post(Note(f"🕷 WEB_SCRAPE:\n{r.output[:3000]}" if r.success else f"[red]Scrape error: {r.error}[/red]"))
+            else:
+                await self.post(Note("用法: /web fetch <URL> | scrape <URL>"))
+            return True
+
+        elif command == "sql":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_executor import get_executor
+            parts = params.split(maxsplit=2) if params else []
+            if len(parts) < 2:
+                await self.post(Note("用法: /sql query <SQL> [db_path] | schema <db_path> [table]"))
+                return True
+            exe = get_executor()
+            sub = parts[0].lower()
+            if sub == "query":
+                db = parts[2] if len(parts) > 2 else ":memory:"
+                r = exe.db_query(parts[1], db)
+                await self.post(Note(f"🗄 SQL:\n{r.output[:3000]}" if r.success else f"[red]DB error: {r.error}[/red]"))
+            elif sub == "schema":
+                db = parts[1]
+                table = parts[2] if len(parts) > 2 else ""
+                r = exe.db_schema(db, table)
+                await self.post(Note(f"📋 SCHEMA:\n{r.output[:3000]}" if r.success else f"[red]Schema error: {r.error}[/red]"))
+            return True
+
+        elif command == "git":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_executor import get_executor
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "log"
+            exe = get_executor()
+            arg = parts[1] if len(parts) > 1 else ""
+            if sub == "log":
+                n = int(arg) if arg.isdigit() else 10
+                r = exe.git_log(n=n)
+                await self.post(Note(f"📜 GIT LOG:\n```\n{r.output[:5000]}\n```" if r.success else f"[red]Git error: {r.error}[/red]"))
+            elif sub == "diff":
+                r = exe.git_diff(path=arg)
+                await self.post(Note(f"📊 GIT DIFF:\n```diff\n{r.output[:5000]}\n```" if r.success else f"[red]Git error: {r.error}[/red]"))
+            elif sub == "blame" and arg:
+                r = exe.git_blame(arg)
+                await self.post(Note(f"🔎 GIT BLAME:\n```\n{r.output[:3000]}\n```" if r.success else f"[red]Git error: {r.error}[/red]"))
+            else:
+                await self.post(Note("用法: /git log [N] | diff [path] | blame <file>"))
+            return True
+
+        elif command == "shell":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_executor import get_executor
+            exe = get_executor()
+            if not params:
+                await self.post(Note("用法: /shell <命令>"))
+                return True
+            r = await exe.run_command(params.strip())
+            await self.post(Note(f"⚡ CMD:\n```\n{r.output[:5000]}\n```" if r.success else f"[red]Shell error ({r.elapsed_ms:.0f}ms): {r.error}[/red]"))
+            return True
+
+        elif command == "debate":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_meta import get_tool_meta
+            parts = params.split(maxsplit=2) if params else []
+            if not params:
+                await self.post(Note("用法: /debate <主题> [角色列表] [轮数]"))
+                await self.post(Note("默认: 全栈工程师, 产品经理, 数据分析师 × 3轮"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            meta = get_tool_meta()
+            topic = parts[0]
+            roles = parts[1].split(",") if len(parts) > 1 else None
+            rounds = int(parts[2]) if len(parts) > 2 else 3
+            await self.post(Note(f"**🗣 辩论开始:** {topic}"))
+            result = await meta.debate(topic, roles=roles, rounds=rounds, hub=hub)
+            lines = [f"## 🗣 辩论结果: {topic}", ""]
+            for role, pos in result.positions.items():
+                lines.append(f"### {role}")
+                lines.append(f"{pos[:300]}")
+            if result.consensus:
+                lines.append(f"\n### 🎯 共识\n{result.consensus[:1000]}")
+            if result.voting:
+                lines.append(f"\n### 📊 评分\n" + " | ".join(f"{r}:{s}/5" for r, s in result.voting.items()))
+            await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "snapshot":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_orchestrator import get_orchestrator
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "list"
+            orch = get_orchestrator()
+            if sub == "list":
+                snaps = orch.snapshot_list()
+                if not snaps:
+                    await self.post(Note("[dim]暂无快照[/dim]"))
+                else:
+                    lines = [f"## 📸 快照 ({len(snaps)})", ""]
+                    for s in snaps[:15]:
+                        ts = time.strftime("%m-%d %H:%M", time.localtime(s.timestamp))
+                        lines.append(f"- **{s.name}** [{ts}] | 工具:{s.tool_state.get('tools_count', '?')} 技能:{s.tool_state.get('skills_count', '?')}")
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "save":
+                name = parts[1] if len(parts) > 1 else ""
+                snap = orch.snapshot_save(name)
+                await self.post(Note(f"📸 快照已保存: {snap.name}"))
+            elif sub == "restore" and len(parts) > 1:
+                ok = orch.snapshot_restore(parts[1])
+                await self.post(Note(f"♻ 快照已恢复: {parts[1]}" if ok else f"[red]快照 {parts[1]} 未找到[/red]"))
+            else:
+                await self.post(Note("用法: /snapshot list|save [name]|restore <name>"))
+            return True
+
+        elif command == "batchrun":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_orchestrator import get_orchestrator
+            if not params:
+                await self.post(Note("用法: /batchrun <目标描述> — LLM编排并执行工具流水线"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            orch = get_orchestrator()
+            await self.post(Note(f"**🎻 编排执行:** {params}"))
+            plan = await orch.compose(params, hub=hub)
+            if not plan.pipeline:
+                await self.post(Note("[dim]无法生成执行计划[/dim]"))
+            else:
+                lines = [f"## 🎻 执行计划", ""]
+                for s in plan.pipeline:
+                    lines.append(f"{s.get('step')}. **{s.get('tool')}** — {s.get('reason', '')[:80]}")
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "evolvetool":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_meta import get_tool_meta
+            parts = params.split(maxsplit=1) if params else []
+            if len(parts) < 2:
+                await self.post(Note("用法: /evolvetool <工具名> <错误日志>"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            meta = get_tool_meta()
+            result = await meta.self_evolve(parts[0], parts[1], hub=hub)
+            lines = [f"## 🧬 工具进化: {result.tool_name}"]
+            if result.improvement:
+                lines.append(f"改进: {result.improvement[:300]}")
+            if result.applied:
+                lines.append(f"[green]✓ 热修复已保存到 .livingtree/hotfixes/[/green]")
+            else:
+                lines.append("[dim]未生成修复方案[/dim]")
+            await self.post(Note("\n".join(lines)))
             return True
 
         return False

@@ -242,6 +242,183 @@ SYSTEM_TOOLS: dict[str, dict] = {
         "params": {"task": "任务描述"},
         "icon": "🤖",
     },
+
+    # ── Web tools ──
+    "url_fetch": {
+        "name": "网页获取",
+        "category": "web",
+        "description": "获取网页内容并转为Markdown（支持文本/HTML）",
+        "params": {"url": "网页URL", "format": "markdown|text|html"},
+        "icon": "🌐",
+    },
+    "api_call": {
+        "name": "API调用",
+        "category": "web",
+        "description": "调用外部API（支持GET/POST/JSON鉴权）",
+        "params": {"url": "API地址", "method": "GET|POST", "headers": "请求头JSON", "body": "请求体"},
+        "icon": "📡",
+    },
+    "web_scrape": {
+        "name": "网页抓取",
+        "category": "web",
+        "description": "智能抓取网页结构化内容（表格/列表/段落）",
+        "params": {"url": "目标网页", "selectors": "CSS选择器（可选）"},
+        "icon": "🕷",
+    },
+
+    # ── Database tools ──
+    "db_query": {
+        "name": "数据库查询",
+        "category": "database",
+        "description": "执行SQL查询（支持SQLite/PostgreSQL/MySQL）",
+        "params": {"sql": "SQL语句", "db_path": "数据库路径或URI"},
+        "icon": "🗄",
+    },
+    "db_schema": {
+        "name": "数据库结构",
+        "category": "database",
+        "description": "读取数据库表结构/索引/关系",
+        "params": {"db_path": "数据库路径或URI", "table": "表名（可选，空=全部）"},
+        "icon": "📋",
+    },
+
+    # ── Git tools ──
+    "git_diff": {
+        "name": "Git差异",
+        "category": "git",
+        "description": "查看文件差异（unstaged/staged/committed）",
+        "params": {"path": "文件路径（可选）", "staged": "是否只看staged"},
+        "icon": "📊",
+    },
+    "git_log": {
+        "name": "Git历史",
+        "category": "git",
+        "description": "查看提交历史（带作者/日期/消息）",
+        "params": {"n": "显示N条", "path": "文件路径（可选）"},
+        "icon": "📜",
+    },
+    "git_blame": {
+        "name": "Git溯源",
+        "category": "git",
+        "description": "查看每行代码的作者和提交信息",
+        "params": {"path": "文件路径", "start_line": "起始行", "end_line": "结束行"},
+        "icon": "🔎",
+    },
+
+    # ── Shell tools ──
+    "run_command": {
+        "name": "执行命令",
+        "category": "shell",
+        "description": "执行shell命令并返回输出（带超时/沙箱）",
+        "params": {"command": "命令", "workdir": "工作目录", "timeout": "超时秒数"},
+        "icon": "⚡",
+    },
+    "run_script": {
+        "name": "执行脚本",
+        "category": "shell",
+        "description": "执行Python/Shell脚本并返回结果",
+        "params": {"script": "脚本内容", "language": "python|bash|powershell"},
+        "icon": "📝",
+    },
+
+    # ── Notification tools ──
+    "send_email": {
+        "name": "发送邮件",
+        "category": "notify",
+        "description": "发送邮件（SMTP，支持附件）",
+        "params": {"to": "收件人", "subject": "主题", "body": "正文", "attachments": "附件列表"},
+        "icon": "📧",
+    },
+    "send_notification": {
+        "name": "发送通知",
+        "category": "notify",
+        "description": "发送系统通知/消息（Telegram/Webhook/CLI）",
+        "params": {"message": "通知内容", "channel": "telegram|webhook|cli"},
+        "icon": "🔔",
+    },
+
+    # ── Multimedia tools ──
+    "pdf_parse": {
+        "name": "PDF解析",
+        "category": "multimedia",
+        "description": "解析PDF文档内容（文本/表格/图片描述）",
+        "params": {"path": "PDF文件路径", "pages": "页码范围（可选，如1-5）"},
+        "icon": "📑",
+    },
+    "ocr_extract": {
+        "name": "OCR识别",
+        "category": "multimedia",
+        "description": "图片文字识别OCR（中英文）",
+        "params": {"path": "图片路径", "language": "识别语言 chi_sim|eng"},
+        "icon": "👁",
+    },
+
+    # ── Data tools ──
+    "csv_analyze": {
+        "name": "CSV分析",
+        "category": "data",
+        "description": "分析CSV文件（统计/图表/异常检测）",
+        "params": {"path": "CSV文件路径", "columns": "分析列（可选）"},
+        "icon": "📈",
+    },
+    "json_transform": {
+        "name": "JSON转换",
+        "category": "data",
+        "description": "JSON结构转换/过滤/合并/JMESPath查询",
+        "params": {"input": "JSON输入", "expression": "JMESPath表达式或转换规则"},
+        "icon": "🔄",
+    },
+    "excel_export": {
+        "name": "Excel导出",
+        "category": "data",
+        "description": "导出数据到Excel/CSV（带格式/图表）",
+        "params": {"data": "导出数据", "path": "输出路径", "format": "xlsx|csv"},
+        "icon": "📥",
+    },
+
+    # ── Meta tools ──
+    "tool_compose": {
+        "name": "工具编排",
+        "category": "meta",
+        "description": "LLM将多个工具编排为流水线: 搜索→分析→生成报告",
+        "params": {"goal": "最终目标", "available_tools": "可用工具列表"},
+        "icon": "🎻",
+    },
+    "peer_ask": {
+        "name": "P2P请求",
+        "category": "meta",
+        "description": "广播任务到P2P网络，寻求其他节点帮助",
+        "params": {"task": "任务描述", "timeout": "等待超时秒数"},
+        "icon": "🌐",
+    },
+    "snapshot": {
+        "name": "状态快照",
+        "category": "meta",
+        "description": "保存/恢复完整智能体状态（回滚点）",
+        "params": {"action": "save|restore|list", "name": "快照名称"},
+        "icon": "📸",
+    },
+    "batch_tool": {
+        "name": "批量执行",
+        "category": "meta",
+        "description": "并行执行N个工具调用，合并结果",
+        "params": {"tasks": "任务列表 [{tool, params}]", "concurrency": "并行数"},
+        "icon": "⚙",
+    },
+    "debate": {
+        "name": "多智能体辩论",
+        "category": "meta",
+        "description": "多角色辩论决策（不单点判断）",
+        "params": {"topic": "辩论主题", "roles": "参与角色列表", "rounds": "辩论轮数"},
+        "icon": "🗣",
+    },
+    "self_evolve": {
+        "name": "自我进化",
+        "category": "meta",
+        "description": "工具执行失败3次后LLM自动重写工具代码",
+        "params": {"tool_name": "失败的工具名", "error_log": "错误日志"},
+        "icon": "🧬",
+    },
 }
 
 EXPERT_ROLES = {

@@ -55,6 +55,8 @@ def main():
             "--hidden-import", "loguru",
             "--hidden-import", "livingtree.config.secrets",
             "--hidden-import", "livingtree.config.settings",
+            "--hidden-import", "bs4",
+            "--hidden-import", "lxml",
             "--clean",
             "--noconfirm",
             "relay_server.py",

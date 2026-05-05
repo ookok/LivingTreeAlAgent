@@ -58,7 +58,7 @@ RMB_PER_M_TOKENS = {
     "deepseek": 2.0, "siliconflow": 0.0, "mofang": 0.0,
     "longcat": 0.0, "zhipu": 0.0, "spark": 0.0,
     "xiaomi": 8.0, "aliyun": 4.0, "dmxapi": 3.5,
-    "opencode-serve": 0.0, "default": 4.0,
+    "default": 4.0,
 }
 
 
@@ -567,7 +567,7 @@ class P2PRelayServer:
         logger.info(f"👤 Accounts: {len(ACCOUNT_STORE)} | 🖥 Admin: http://{RELAY_HOST}:{self.port}/admin")
 
         # Auto-start opencode serve
-        asyncio.create_task(self._auto_start_opencode())
+        # asyncio.create_task(self._auto_start_opencode())
 
         from livingtree.integration.hub import IntegrationHub
         self._hub = IntegrationHub(lazy=True)
@@ -577,17 +577,6 @@ class P2PRelayServer:
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
         logger.info(f"✅ Ready")
-
-    async def _auto_start_opencode(self):
-        """Auto-start opencode serve in background."""
-        try:
-            from livingtree.tui.widgets.opencode_launcher import OpenCodeLauncher
-            launcher = OpenCodeLauncher(workspace=str(PROJECT_ROOT))
-            ok, msg = await launcher.auto_start_serve_if_needed()
-            if ok:
-                logger.info(f"OpenCode serve: {msg}")
-        except Exception as e:
-            logger.debug(f"OpenCode auto-start: {e}")
 
     async def shutdown(self):
         for ws in self._ws_clients.values(): await ws.close()

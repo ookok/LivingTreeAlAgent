@@ -30,13 +30,28 @@ def setup_base(workspace: str | Path = ".") -> tuple[bool, str]:
     base = workspace / ".livingtree" / "base"
     base.mkdir(parents=True, exist_ok=True)
 
-    ok, msg = _ensure_nodejs(base)
-    if not ok:
-        return False, f"Node.js: {msg}"
+    from ..integration.pkg_manager import install_nodejs, install_opencode
 
-    ok, msg = _ensure_opencode(base, workspace)
-    if not ok:
-        return False, f"opencode: {msg}"
+    if not (base / "nodejs" / "node.exe").exists():
+        print("[base] Downloading Node.js...")
+        result = install_nodejs()
+        if not result.installed:
+            return False, f"Node.js: {result.error}"
+        if result.path:
+            node_dir = Path(result.path).parent
+            dest = base / "nodejs"
+            dest.mkdir(parents=True, exist_ok=True)
+            for item in node_dir.iterdir():
+                d = dest / item.name
+                if not d.exists():
+                    shutil.move(str(item), str(d))
+        print(f"[base] Node.js cached")
+
+    if not (base / "opencode" / "node_modules" / ".bin" / "opencode").exists():
+        print("[base] Installing opencode...")
+        result = install_opencode()
+        if not result.installed:
+            return False, f"opencode: {result.error}"
 
     return True, "Base environment ready"
 

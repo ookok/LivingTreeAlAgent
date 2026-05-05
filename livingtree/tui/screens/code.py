@@ -7,11 +7,12 @@ from typing import Optional
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, DirectoryTree, Input, Label, RichLog, Static, TabbedContent, TabPane, TextArea
+from textual.widgets import Button, DirectoryTree, Input, Label, RichLog, Static, TabbedContent, TabPane, TextArea, Collapsible
 
 from ...config.system_config import EXT_TO_LANG, LANG_DISPLAY_NAMES as LANGUAGES
+from ..widgets.coding_agent_panel import CodingAgentPanel, AgentRunRequest
 
 
 class CodeScreen(Screen):
@@ -47,13 +48,15 @@ class CodeScreen(Screen):
                     Button("AI Gen", variant="primary", id="ai-gen-btn"),
                     Button("Run", variant="primary", id="run-btn"),
                     Button("Goto", variant="default", id="goto-btn"),
-                    Button("[#58a6ff]OpenCode[/#58a6ff]", variant="default", id="opencode-btn"),
-                    Button("[#3fb950]Serve[/#3fb950]", variant="default", id="opencode-serve-btn"),
                     id="code-toolbar",
                 ),
                 TabbedContent(id="code-tabs"),
                 RichLog(id="code-output", highlight=True, markup=True, wrap=True),
                 id="code-main",
+            ),
+            Vertical(
+                CodingAgentPanel(id="agent-panel"),
+                id="code-agent-sidebar",
             ),
         )
 
@@ -322,6 +325,53 @@ class CodeScreen(Screen):
             return json.loads(self._recent_path.read_text())
         except Exception:
             return []
+
+    @on(AgentRunRequest)
+    async def on_agent_launch(self, event: AgentRunRequest) -> None:
+        output = self.query_one("#code-output", RichLog)
+        output.write(f"[bold #58a6ff]Launching {event.agent_name}...[/bold #58a6ff]")
+
+        try:
+            from ..widgets.coding_agent_panel import AGENTS_DIR
+            agent_file = AGENTS_DIR / f"{event.agent_id}.toml"
+            if not agent_file.exists():
+                output.write(f"[red]Agent not found: {event.agent_id}[/red]")
+                return
+
+            import tomllib
+            with open(agent_file, "rb") as f:
+                agent_data = tomllib.load(f)
+
+            run_cmds = agent_data.get("run_command", {})
+            run_cmd = run_cmds.get("*", run_cmds.get(os.name, ""))
+            if not run_cmd:
+                output.write("[red]No run command configured[/red]")
+                return
+
+            output.write(f"[dim]$ {run_cmd}[/dim]")
+
+            proc = await asyncio.create_subprocess_shell(
+                run_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(self._workspace) if self._workspace else None,
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=60
+                )
+                if stdout:
+                    output.write(stdout.decode(errors="replace")[:8000])
+                if stderr:
+                    output.write(f"[red]{stderr.decode(errors="replace")[:4000]}[/red]")
+                output.write(f"[dim]Exit: {proc.returncode}[/dim]")
+            except asyncio.TimeoutError:
+                proc.kill()
+                output.write("[yellow]Agent timed out (60s)[/yellow]")
+
+        except Exception as e:
+            output.write(f"[red]Agent error: {e}[/red]")
 
     def _load_recent(self) -> None:
         recent = self._load_recent_list()

@@ -12,11 +12,14 @@ from typing import Optional
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import (
     Button, Input, Label, RichLog, Select, Static, TabbedContent, TabPane, TextArea,
 )
+
+from ..widgets.model_selector import ModelSelector
+from ..widgets.pkg_manager_widget import PackageManagerWidget
 
 
 class ToolsScreen(Screen):
@@ -76,6 +79,12 @@ class ToolsScreen(Screen):
                     RichLog(id="map-display", highlight=True, markup=True, wrap=True),
                     id="map-container",
                 )
+
+            with TabPane("🔬 模型", id="models-tab"):
+                yield ModelSelector()
+
+            with TabPane("📦 包管理", id="packages-tab"):
+                yield PackageManagerWidget()
 
     def on_mount(self) -> None:
         hub = getattr(self.app, '_hub', None)

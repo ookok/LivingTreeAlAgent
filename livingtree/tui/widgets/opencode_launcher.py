@@ -54,36 +54,36 @@ class OpenCodeLauncher:
     # ── Public ──
 
     async def ensure_nodejs(self, on_progress=None) -> bool:
-        if self._node_exe.exists() and self._npm_cmd.exists():
+        if self._node_exe.exists():
             return True
 
         try:
-            from .setup_base import is_base_ready, setup_base
-            if is_base_ready(self._workspace):
+            from ...integration.pkg_manager import install_nodejs, has_binary
+            if on_progress:
+                on_progress("Checking Node.js...")
+
+            if has_binary("node"):
+                system_node = shutil.which("node")
+                if system_node:
+                    self._node_dir.mkdir(parents=True, exist_ok=True)
+                    node_dest = self._node_dir / ("node.exe" if sys.platform == "win32" else "node")
+                    shutil.copy2(system_node, str(node_dest))
+                    self._log("Node.js cached from system")
+                    self._node_exe = node_dest.resolve()
+                    return self._node_exe.exists()
+
+            if on_progress:
+                on_progress("Downloading Node.js...")
+            result = install_nodejs()
+            if result.installed and result.path:
+                self._node_dir = Path(result.path).parent
+                self._node_exe = Path(result.path)
+                self._npm_cmd = self._node_dir / ("npm.cmd" if sys.platform == "win32" else "npm")
                 return True
-        except ImportError:
-            pass
-
-        if on_progress:
-            on_progress("Downloading Node.js (portable, no install)...")
-
-        try:
-            import urllib.request, zipfile
-            self._node_dir.mkdir(parents=True, exist_ok=True)
-
-            zip_path = self._node_dir / "node.zip"
-            self._log("Downloading Node.js...")
-
-            urllib.request.urlretrieve(self.NODE_URL, str(zip_path))
-
-            with zipfile.ZipFile(str(zip_path), 'r') as zf:
-                zf.extractall(str(self._node_dir))
-
-            zip_path.unlink()
-
-            node_subdir = list(self._node_dir.glob("node-v*"))
-            if not node_subdir:
-                return False
+            return False
+        except Exception as e:
+            self._log(f"Node.js setup failed: {e}")
+            return False
 
             node_src = node_subdir[0]
             for item in node_src.iterdir():
@@ -125,27 +125,16 @@ class OpenCodeLauncher:
         if on_progress:
             on_progress("Installing opencode via npm...")
 
-        self._opencode_dir.mkdir(parents=True, exist_ok=True)
-
         try:
-            env = os.environ.copy()
-            env["PATH"] = str(self._node_dir) + os.pathsep + env.get("PATH", "")
-            env["npm_config_prefix"] = str(self._opencode_dir)
-
-            proc = await asyncio.create_subprocess_exec(
-                str(self._npm_cmd), "install", "--prefix", str(self._opencode_dir),
-                "opencode", "--no-save",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120.0)
-
-            if self._opencode_npm_bin.exists():
-                self._log("opencode installed via npm")
+            from ...integration.pkg_manager import install_opencode
+            result = install_opencode()
+            if result.installed:
+                if result.path:
+                    self._opencode_bin = Path(result.path)
+                self._log("opencode installed via pkg_manager")
                 return True
 
-            self._log(f"npm install failed (rc={proc.returncode})")
+            self._log(f"opencode install failed: {result.error}")
             return False
 
         except asyncio.TimeoutError:
@@ -180,8 +169,34 @@ class OpenCodeLauncher:
 
     async def auto_start_serve_if_needed(self, on_progress=None) -> tuple[bool, str]:
         if await self.is_serve_running():
+            # Check for opencode updates in background
+            asyncio.create_task(self._check_and_update_opencode())
             return True, "opencode serve already running"
         return await self.auto_start_serve(on_progress)
+
+    async def _check_and_update_opencode(self):
+        """Check npm for opencode updates in background."""
+        try:
+            if not self._node_exe.exists():
+                return
+            env = os.environ.copy()
+            env["PATH"] = str(self._node_dir) + os.pathsep + env.get("PATH", "")
+            npm = str(self._node_dir / ("npm.cmd" if sys.platform == "win32" else "npm"))
+            proc = await asyncio.create_subprocess_exec(
+                npm, "outdated", "opencode-ai", "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            if proc.returncode == 0 and stdout.strip():
+                import json
+                data = json.loads(stdout)
+                latest = data.get("opencode-ai", {}).get("latest", "")
+                if latest:
+                    self._log(f"opencode update available: {latest}. Run 'npm update -g opencode-ai'")
+        except Exception:
+            pass
 
     async def launch_tui(self, on_progress=None) -> tuple[bool, str]:
         if not await self.ensure_opencode(on_progress):

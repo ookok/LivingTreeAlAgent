@@ -55,7 +55,8 @@ class TaskCheckpoint:
         self._in_memory[session_id] = state
 
         path = self._store / f"{session_id}.json"
-        path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
+        from ..core.task_guard import TaskGuard
+        TaskGuard.atomic_write(path, state.model_dump_json(indent=2))
         logger.debug(f"Checkpoint saved: {session_id} v{state.version} ({state.current_step}/{len(state.plan)} steps)")
         return path
 

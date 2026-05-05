@@ -7,11 +7,11 @@ extraction. Replaces the old stub with actual HTML parsing and main content extr
 from __future__ import annotations
 
 import asyncio
-import os
-import urllib.request
-from typing import Any, Dict, List
+from typing import Any
 
 from loguru import logger
+
+from .document_processor import process_long_text
 
 
 class MaterialCollector:
@@ -32,7 +32,7 @@ class MaterialCollector:
                     if urls:
                         pages = await reach.fetch_multiple(urls[:3])
                         return [{"source": "web", "url": p.url, "title": p.title,
-                                 "content": p.text[:2000], "links": len(p.links)}
+                                 "content": process_long_text(p.text, 2000), "links": len(p.links)}
                                 for p in pages if p.text]
                 except ImportError:
                     pass
@@ -46,7 +46,7 @@ class MaterialCollector:
                 reach = WebReach()
                 page = await reach.fetch(query)
                 return [{"source": "web", "url": page.url, "title": page.title,
-                         "content": page.text[:3000], "links": len(page.links)}]
+                         "content": process_long_text(page.text, 3000), "links": len(page.links)}]
             except ImportError:
                 return [{"source": "web", "url": query, "content": "WebReach not available"}]
 

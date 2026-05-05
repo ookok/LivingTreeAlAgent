@@ -58,6 +58,23 @@ class DualModelConsciousness(Consciousness):
         spark_api_key: str = "",
         spark_base_url: str = "",
         spark_default_model: str = "xdeepseekv3",
+        siliconflow_api_key: str = "",
+        siliconflow_base_url: str = "",
+        siliconflow_flash_model: str = "Qwen/Qwen2.5-7B-Instruct",
+        siliconflow_default_model: str = "Qwen/Qwen2.5-7B-Instruct",
+        siliconflow_pro_model: str = "deepseek-ai/DeepSeek-V3",
+        siliconflow_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        siliconflow_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
+        mofang_api_key: str = "",
+        mofang_base_url: str = "",
+        mofang_flash_model: str = "Qwen/Qwen2.5-7B-Instruct",
+        mofang_default_model: str = "Qwen/Qwen2.5-7B-Instruct",
+        mofang_pro_model: str = "deepseek-ai/DeepSeek-V3",
+        mofang_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        mofang_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
+        # L4: user-specified locked model (not auto-elected)
+        l4_provider: str = "",
+        l4_model: str = "",
     ):
         self.flash_model = flash_model
         self.pro_model = pro_model
@@ -65,6 +82,10 @@ class DualModelConsciousness(Consciousness):
         self.flash_temperature = flash_temperature
         self.pro_temperature = pro_temperature
         self.timeout = timeout
+
+        # L4 locked model — user-specified, never auto-switched
+        self._l4_provider = l4_provider
+        self._l4_model = l4_model
 
         self._longcat_key = longcat_api_key
         self._longcat_base = longcat_base_url
@@ -123,6 +144,59 @@ class DualModelConsciousness(Consciousness):
                 api_key=spark_api_key,
                 default_model=spark_default_model,
             ))
+        if siliconflow_api_key:
+            from ..treellm.providers import OpenAILikeProvider
+            self._llm.add_provider(OpenAILikeProvider(
+                name="siliconflow-flash",
+                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
+                api_key=siliconflow_api_key,
+                default_model=siliconflow_flash_model or "Qwen/Qwen2.5-7B-Instruct",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="siliconflow-reasoning",
+                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
+                api_key=siliconflow_api_key,
+                default_model=siliconflow_reasoning_model or "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="siliconflow-pro",
+                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
+                api_key=siliconflow_api_key,
+                default_model=siliconflow_pro_model or "deepseek-ai/DeepSeek-V3",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="siliconflow-small",
+                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
+                api_key=siliconflow_api_key,
+                default_model=siliconflow_small_model or "Qwen/Qwen2.5-1.5B-Instruct",
+            ))
+
+        if mofang_api_key:
+            from ..treellm.providers import OpenAILikeProvider
+            self._llm.add_provider(OpenAILikeProvider(
+                name="mofang-flash",
+                base_url=mofang_base_url or "https://ai.gitee.com/v1",
+                api_key=mofang_api_key,
+                default_model=mofang_flash_model or "Qwen/Qwen2.5-7B-Instruct",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="mofang-reasoning",
+                base_url=mofang_base_url or "https://ai.gitee.com/v1",
+                api_key=mofang_api_key,
+                default_model=mofang_reasoning_model or "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="mofang-small",
+                base_url=mofang_base_url or "https://ai.gitee.com/v1",
+                api_key=mofang_api_key,
+                default_model=mofang_small_model or "Qwen/Qwen2.5-1.5B-Instruct",
+            ))
+            self._llm.add_provider(OpenAILikeProvider(
+                name="mofang-pro",
+                base_url=mofang_base_url or "https://ai.gitee.com/v1",
+                api_key=mofang_api_key,
+                default_model=mofang_pro_model or "deepseek-ai/DeepSeek-V3",
+            ))
 
         # ── Election order: free models first ──
         self._free_models = []
@@ -133,6 +207,14 @@ class DualModelConsciousness(Consciousness):
             self._free_models.append("zhipu")
         if spark_api_key:
             self._free_models.append("spark")
+        if siliconflow_api_key:
+            self._free_models.append("siliconflow-flash")
+            self._free_models.append("siliconflow-reasoning")
+            self._free_models.append("siliconflow-small")
+        if mofang_api_key:
+            self._free_models.append("mofang-flash")
+            self._free_models.append("mofang-reasoning")
+            self._free_models.append("mofang-small")
         if xiaomi_api_key:
             self._paid_models.append("xiaomi")
         if aliyun_api_key:
@@ -141,6 +223,8 @@ class DualModelConsciousness(Consciousness):
             self._paid_models.append("dmxapi")
         if spark_api_key:
             self._paid_models.append("spark")
+        if siliconflow_api_key:
+            self._paid_models.append("siliconflow")
         if api_key:
             self._paid_models.append("deepseek")
 
@@ -152,6 +236,57 @@ class DualModelConsciousness(Consciousness):
         self._opencode_cache = []
 
     # ── Election ──
+
+    # ═══ L4 locked model ── user-specified, never auto-elected ═══
+
+    @property
+    def l4_provider(self) -> str:
+        return self._l4_provider
+
+    @property
+    def l4_model(self) -> str:
+        return self._l4_model
+
+    def set_l4_model(self, provider: str, model: str):
+        self._l4_provider = provider
+        self._l4_model = model
+        logger.info(f"L4 model locked: {provider}/{model}")
+
+    def get_l4_provider(self):
+        """Get the L4 provider instance, or None."""
+        if self._l4_provider:
+            return self._llm.get_provider(self._l4_provider)
+        for name in self._free_models + self._paid_models:
+            p = self._llm.get_provider(name)
+            if p:
+                return p
+        return None
+
+    # ═══ Local model registration ═══
+
+    async def register_local_models(self):
+        """Scan local device for LLM services and auto-register."""
+        try:
+            from ..treellm.local_scanner import LocalScanner
+            from ..treellm.providers import OpenAILikeProvider
+            scanner = LocalScanner()
+            services = await scanner.scan()
+
+            for svc in services:
+                for model in svc.models:
+                    provider_name = f"local-{svc.name}-{model['id'].replace('/', '-').replace(':', '-')[:30]}"
+                    self._llm.add_provider(OpenAILikeProvider(
+                        name=provider_name,
+                        base_url=svc.base_url,
+                        api_key=svc.api_key or "local",
+                        default_model=model["id"],
+                    ))
+                    self._free_models.insert(0, provider_name)
+                    logger.info(f"  local: {provider_name}")
+        except Exception as e:
+            logger.debug(f"Local scan failed: {e}")
+
+    # ═══ Election ═══
 
     async def _elect(self) -> str:
         async with self._election_lock:
@@ -175,12 +310,23 @@ class DualModelConsciousness(Consciousness):
                 if p.get("source") == "opencode_serve":
                     try:
                         from ..integration.opencode_serve import OpenCodeServeAdapter
+                        from ..treellm.providers import OpenAILikeProvider
                         adapter = OpenCodeServeAdapter(base_url=p["base_url"])
                         if await adapter.ping():
-                            self._elected = "opencode-serve"
+                            # Register opencode-serve as a real provider so it can be used
+                            name = "opencode-serve"
+                            model = p.get("model", "opencode")
+                            if name not in self._llm._providers:
+                                self._llm.add_provider(OpenAILikeProvider(
+                                    name=name,
+                                    base_url=p["base_url"],
+                                    api_key=p.get("api_key", "opencode-local"),
+                                    default_model=model,
+                                ))
+                            self._elected = name
                             self._elected_at = now
-                            logger.info(f"Elected: opencode-serve")
-                            return "opencode-serve"
+                            logger.info(f"Elected: opencode-serve ({model})")
+                            return name
                     except Exception:
                         pass
                     continue
@@ -193,6 +339,9 @@ class DualModelConsciousness(Consciousness):
                 ))
                 candidates.append(name)
 
+            # ── Filter L4 from candidates (user-locked, not auto-elected) ──
+            candidates = [c for c in candidates if c != self._l4_provider]
+
             elected = await self._llm.elect(candidates)
             if elected:
                 self._elected = elected
@@ -200,13 +349,33 @@ class DualModelConsciousness(Consciousness):
                 logger.info(f"Elected: {elected} (pool={len(candidates)})")
                 return elected
 
+            # ── Fallback: use L4 model if configured ──
+            if self._l4_provider:
+                l4_p = self._llm.get_provider(self._l4_provider)
+                if l4_p:
+                    ok, _ = await l4_p.ping()
+                    if ok:
+                        self._elected = self._l4_provider
+                        self._elected_at = now
+                        logger.info(f"Fallback to L4: {self._l4_provider}")
+                        return self._l4_provider
+
             self._elected = ""
-            logger.warning(f"All {len(candidates)} providers unavailable")
+            logger.warning(f"All {len(candidates)} providers unavailable, no L4 fallback")
             return ""
 
     async def _check_available(self) -> bool:
         if self._available is not None:
             return self._available
+        elected = self._llm._elected
+        if elected:
+            p = self._llm.get_provider(elected)
+            if p:
+                ok, _ = await p.ping()
+                self._available = ok
+                if ok:
+                    logger.info(f"Provider elected: {elected}")
+                return ok
         ds = self._llm.get_provider("deepseek")
         if not ds:
             self._available = False
@@ -220,6 +389,7 @@ class DualModelConsciousness(Consciousness):
     # ── Core methods ──
 
     async def stream_of_thought(self, prompt: str, **kwargs) -> AsyncIterator[str]:
+        """Stream thinking tokens. Priority: elected free model → any free reasoning model → any alive."""
         elected = await self._elect()
         if elected:
             try:
@@ -238,78 +408,152 @@ class DualModelConsciousness(Consciousness):
             except Exception:
                 pass
 
-        if not await self._check_available():
-            async for t in self._heuristic_stream(prompt):
-                yield t
-            return
+        for fallback in self._free_models + self._paid_models:
+            if fallback == elected:
+                continue
+            try:
+                p = self._llm.get_provider(fallback)
+                if not p:
+                    continue
+                ok, _ = await p.ping()
+                if not ok:
+                    continue
+                async for t in self._llm.stream(
+                    messages=[
+                        {"role": "system", "content": "快速分析用户意图。流式输出思考过程。"},
+                        {"role": "user", "content": prompt},
+                    ],
+                    provider=fallback,
+                    temperature=self.flash_temperature,
+                    max_tokens=min(kwargs.get("max_tokens", 1024), 4096),
+                    timeout=self.timeout,
+                ):
+                    yield t
+                return
+            except Exception:
+                continue
 
-        try:
-            async for t in self._llm.stream(
-                messages=[
-                    {"role": "system", "content": "快速分析用户意图。流式输出思考过程。"},
-                    {"role": "user", "content": prompt},
-                ],
-                provider="deepseek",
-                temperature=self.flash_temperature,
-                max_tokens=min(kwargs.get("max_tokens", 1024), 4096),
-                timeout=self.timeout,
-            ):
-                yield t
-        except Exception as e:
-            logger.debug(f"Flash stream: {e}")
-            async for t in self._heuristic_stream(prompt):
-                yield t
+        async for t in self._heuristic_stream(prompt):
+            yield t
 
     async def chain_of_thought(self, question: str, steps: int = 3, **kwargs) -> str:
-        if not await self._check_available():
-            return self._heuristic_cot(question, steps)
+        """L4 reasoning: free reasoning models first, deepseek-pro last resort."""
+        system_msg = f"深度{steps}步推理。Output reasoning steps then final answer."
+        user_msg = f"深度推理以下问题 ({steps}步):\n\n{question}"
+
+        # Step 1: Use elected free model
+        elected = self._llm._elected
+        if elected:
+            try:
+                result = await self._llm.chat(
+                    messages=[{"role": "system", "content": system_msg},
+                              {"role": "user", "content": user_msg}],
+                    provider=elected,
+                    temperature=kwargs.get("temperature", self.pro_temperature),
+                    max_tokens=min(kwargs.get("max_tokens", 8192), 8192),
+                    timeout=self.timeout,
+                )
+                if result and result.text:
+                    reasoning = getattr(result, 'reasoning', None)
+                    content = result.text
+                    if reasoning:
+                        reasoning = self._harvest_reasoning(reasoning)
+                    return f"{reasoning}\n\n{content}" if reasoning else content
+            except Exception:
+                pass
+
+        # Step 2: Try dedicated reasoning providers (free tier)
+        reasoning_providers = [
+            "siliconflow-reasoning", "mofang-reasoning",
+            "siliconflow-pro", "mofang-pro",
+        ]
+        # L4 last (user-specified)
+        if self._l4_provider:
+            reasoning_providers.append(self._l4_provider)
+        for provider_name in reasoning_providers:
+            if provider_name == elected:
+                continue
+            p = self._llm.get_provider(provider_name)
+            if not p:
+                continue
+            if provider_name == "deepseek":
+                await self._check_available()
+                if not self._available:
+                    continue
+            try:
+                result = await self._llm.chat(
+                    messages=[{"role": "system", "content": system_msg},
+                              {"role": "user", "content": user_msg}],
+                    provider=provider_name,
+                    temperature=kwargs.get("temperature", self.pro_temperature),
+                    max_tokens=min(kwargs.get("max_tokens", 8192), 8192),
+                    timeout=self.timeout,
+                )
+                if result and result.text:
+                    reasoning = getattr(result, 'reasoning', None)
+                    content = result.text
+                    if reasoning:
+                        reasoning = self._harvest_reasoning(reasoning)
+                    return f"{reasoning}\n\n{content}" if reasoning else content
+            except Exception:
+                continue
+
+        return self._heuristic_cot(question, steps)
+
+    def _harvest_reasoning(self, reasoning: str) -> str:
         try:
-            result = await self._llm.chat(
-                messages=[
-                    {"role": "system", "content": f"深度{steps}步推理。Output reasoning steps then final answer."},
-                    {"role": "user", "content": f"深度推理以下问题 ({steps}步):\n\n{question}"},
-                ],
-                provider="deepseek",
-                temperature=kwargs.get("temperature", self.pro_temperature),
-                max_tokens=min(kwargs.get("max_tokens", 8192), 8192),
-                timeout=self.timeout,
-                model_extra="deepseek-v4-pro",
-            )
-            content = result.text
-            reasoning = result.reasoning
-            if reasoning:
-                try:
-                    from .thought_harvest import ThoughtHarvester
-                    harvest = ThoughtHarvester().harvest(reasoning)
-                    if harvest.found:
-                        reasoning = harvest.cleaned_text
-                except Exception:
-                    pass
-            return reasoning + "\n\n" + content if reasoning else content
-        except Exception as e:
-            logger.debug(f"CoT: {e}")
-            return self._heuristic_cot(question, steps)
+            from .thought_harvest import ThoughtHarvester
+            harvest = ThoughtHarvester().harvest(reasoning)
+            if harvest.found:
+                return harvest.cleaned_text
+        except Exception:
+            pass
+        return reasoning
 
     async def hypothesis_generation(self, problem: str, count: int = 3, **kwargs) -> list[str]:
-        if not await self._check_available():
-            return self._heuristic_hypotheses(problem, count)
-        try:
-            result = await self._llm.chat(
-                messages=[
-                    {"role": "system", "content": f"Generate {count} distinct hypotheses. One per line."},
-                    {"role": "user", "content": f"Problem:\n\n{problem}"},
-                ],
-                provider="deepseek",
-                temperature=0.9,
-                max_tokens=min(kwargs.get("max_tokens", 4096), 8192),
-                timeout=self.timeout,
-                model_extra="deepseek-v4-pro",
-            )
-            hypotheses = [l.strip() for l in result.text.split("\n") if l.strip() and len(l.strip()) > 20]
-            return hypotheses[:count] if len(hypotheses) >= count else self._heuristic_hypotheses(problem, count)
-        except Exception as e:
-            logger.debug(f"Hypothesis: {e}")
-            return self._heuristic_hypotheses(problem, count)
+        """Generate hypotheses. Uses elected free model first, falls back through providers."""
+        system_msg = f"Generate {count} distinct hypotheses. One per line."
+        user_msg = f"Problem:\n\n{problem}"
+
+        elected = self._llm._elected
+        if elected:
+            try:
+                result = await self._llm.chat(
+                    messages=[{"role": "system", "content": system_msg},
+                              {"role": "user", "content": user_msg}],
+                    provider=elected,
+                    temperature=0.9,
+                    max_tokens=min(kwargs.get("max_tokens", 4096), 8192),
+                    timeout=self.timeout,
+                )
+                hypotheses = [l.strip() for l in result.text.split("\n") if l.strip() and len(l.strip()) > 20]
+                if len(hypotheses) >= count:
+                    return hypotheses[:count]
+            except Exception:
+                pass
+
+        for fallback in self._free_models + self._paid_models + ["deepseek"]:
+            if fallback == elected:
+                continue
+            try:
+                p = self._llm.get_provider(fallback)
+                if not p:
+                    continue
+                result = await self._llm.chat(
+                    messages=[{"role": "system", "content": system_msg},
+                              {"role": "user", "content": user_msg}],
+                    provider=fallback,
+                    temperature=0.9,
+                    max_tokens=min(kwargs.get("max_tokens", 4096), 8192),
+                    timeout=self.timeout,
+                )
+                hypotheses = [l.strip() for l in result.text.split("\n") if l.strip() and len(l.strip()) > 20]
+                if len(hypotheses) >= count:
+                    return hypotheses[:count]
+            except Exception:
+                continue
+
+        return self._heuristic_hypotheses(problem, count)
 
     async def self_questioning(self, context: str, **kwargs) -> list[str]:
         elected = await self._elect()
@@ -331,25 +575,31 @@ class DualModelConsciousness(Consciousness):
             except Exception:
                 pass
 
-        if not await self._check_available():
-            return self._heuristic_questions(context)
-        try:
-            result = await self._llm.chat(
-                messages=[
-                    {"role": "system", "content": "Identify knowledge gaps. Output 3-5 questions."},
-                    {"role": "user", "content": f"Context:\n\n{context}"},
-                ],
-                provider="deepseek",
-                temperature=self.flash_temperature,
-                max_tokens=1024,
-                timeout=self.timeout,
-            )
-            qs = [l.strip().lstrip("- ").rstrip("?") + "?"
-                  for l in result.text.split("\n") if "?" in l or any(q in l for q in ["如何", "是否", "哪些", "什么", "怎样"])]
-            return qs if qs else self._heuristic_questions(context)
-        except Exception as e:
-            logger.debug(f"Questions: {e}")
-            return self._heuristic_questions(context)
+        for fallback in self._free_models + self._paid_models:
+            if fallback == elected:
+                continue
+            try:
+                p = self._llm.get_provider(fallback)
+                if not p:
+                    continue
+                result = await self._llm.chat(
+                    messages=[
+                        {"role": "system", "content": "Identify knowledge gaps. Output 3-5 questions."},
+                        {"role": "user", "content": f"Context:\n\n{context}"},
+                    ],
+                    provider=fallback,
+                    temperature=self.flash_temperature,
+                    max_tokens=1024,
+                    timeout=self.timeout,
+                )
+                qs = [l.strip().lstrip("- ").rstrip("?") + "?"
+                      for l in result.text.split("\n") if "?" in l or any(q in l for q in ["如何", "是否", "哪些", "什么", "怎样"])]
+                if qs:
+                    return qs
+            except Exception:
+                continue
+
+        return self._heuristic_questions(context)
 
     async def recognize_intent(self, user_input: str) -> dict[str, any]:
         elected = await self._elect()

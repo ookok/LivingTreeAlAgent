@@ -1,8 +1,54 @@
-/* LivingTree TUI — deep dark terminal aesthetic */
+/* LivingTree TUI v2.1 — hardcoded dark theme colors + mouse-friendly */
+Screen { background: #0a0c10; color: #c9d1d9; }
 
-Screen { background: #0a0c10; color: #c9d1d9; layers: base overlay; }
+/* ═══ Mouse-friendly: visible toolbar ═══ */
+#action-bar {
+    dock: top; height: 1; padding: 0 1;
+    background: #1a2332; border-bottom: solid #30363d;
+}
+#action-bar Button {
+    min-width: 6; margin: 0 1 0 0; padding: 0 1;
+}
+#action-bar Static {
+    color: #58a6ff; width: auto; padding: 0 1;
+}
 
-/* ═══ Title bar ═══ */
+/* ═══ Mouse-friendly: context hints in status ═══ */
+#context-hint {
+    dock: top; height: 1; padding: 0 2;
+    background: #1a2332; color: #8b949e;
+    text-style: dim;
+}
+
+/* ═══ Mouse-friendly: clickable cards ═══ */
+Card {
+    pointer: pointer;
+    &:hover { background: #58a6ff 10%; }
+}
+
+/* ═══ Mouse-friendly: back/home links ═══ */
+#back-link {
+    pointer: pointer; text-style: underline;
+    &:hover { color: #79c0ff; text-style: bold underline; }
+}
+
+/* ═══ Mouse-friendly: buttons ═══ */
+Button {
+    pointer: pointer;
+    &:hover { background: #58a6ff 15%; }
+}
+
+/* ═══ Mouse-friendly: collapsible headers ═══ */
+Collapsible > .collapsible-title {
+    pointer: pointer;
+    &:hover { background: #30363d; }
+}
+
+/* ═══ Mouse-friendly: input border on focus ═══ */
+TextArea:focus { border: tall #58a6ff; }
+Input:focus { border: tall #58a6ff; }
+
+/* Title bar */
 #title-bar {
     dock: top; height: 1;
     content-align: center middle; text-style: bold;
@@ -10,101 +56,139 @@ Screen { background: #0a0c10; color: #c9d1d9; layers: base overlay; }
     border-bottom: solid #30363d;
 }
 
-/* ═══ Search ═══ */
-#card-search { dock: top; height: 1; margin: 0 4; border: solid #30363d; background: #0d1117; color: #c9d1d9; }
+#card-search {
+    dock: top; height: 1; margin: 0 4;
+    border: solid #30363d; background: #0d1117; color: #c9d1d9;
+}
 #card-search:focus { border: solid #58a6ff; }
 
-/* ═══ Card layout ═══ */
+/* Card home */
 #card-scroll { height: 1fr; overflow-y: auto; }
 .card-row { height: auto; align-horizontal: center; padding: 1 4; }
 
-/* ═══ Status bar ═══ */
-StatusBar { dock: bottom; height: 1; min-height: 1; background: #161b22; border-top: solid #30363d; padding: 0 2; }
-ChatView { height: 1fr; }
-#footer-keys { width: 2fr; color: #484f58; }
-#footer-llm { width: auto; color: #58a6ff; padding: 0 1; }
-#footer-pulse { width: auto; padding: 0 1; }
-#error-chip { width: auto; }
-#footer-status { width: auto; color: #58a6ff; }
+/* Sidebar */
+.sidebar { width: 32; height: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; }
+.sidebar-title { text-style: bold; color: #58a6ff; padding: 1 0; }
 
-/* ═══ Back link ═══ */
-#back-link { dock: top; height: 1; color: #58a6ff; padding: 0 2; background: #161b22; border-bottom: solid #30363d; }
-#back-link:hover { color: #79c0ff; text-style: bold; }
-
-/* ═══ Module screens ═══ */
-ChatScreen, CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: vertical; height: 1fr; }
-
-/* ═══ Chat — deep dark terminal style ═══ */
-#chat-topbar {
-    dock: top; height: 1; background: #161b22; padding: 0 2; border-bottom: solid #30363d;
+/* StatusBar */
+StatusBar {
+    dock: bottom; height: 1; min-height: 1;
+    background: #161b22; border-top: solid #30363d;
+    padding: 0 2; color: #484f58;
 }
-#chat-model-label { width: auto; color: #58a6ff; text-style: bold; }
-#chat-tokens-label { width: auto; color: #8b949e; padding: 0 1; }
-#chat-cost-label { width: auto; color: #3fb950; }
-#chat-effort-label { width: auto; color: #d2a8ff; padding: 0 1; }
-#chat-cache-label { width: 2fr; color: #484f58; content-align: right middle; }
 
-#sidebar { width: 30; height: 1fr; background: #161b22; border-right: solid #30363d; padding: 1; }
-#sidebar.folded { width: 3; }
-#main-area { width: 1fr; height: 1fr; }
-#chat-body { height: 1fr; }
-#chat-display {
-    height: 1fr; border: solid #30363d; overflow-y: scroll;
-    scrollbar-size: 1 1; padding: 0 2; background: #0d1117;
+/* ChatScreen */
+ChatScreen {
+    background: #0a0c10;
+    layers: sidebar screen base;
 }
-#chat-display:focus { border: solid #58a6ff; }
 
-#chat-input-container {
-    dock: bottom; height: auto; min-height: 9; max-height: 14;
-    background: #161b22; border-top: solid #30363d; padding: 1 1;
+#neon-conversation {
+    height: 1fr;
+    width: 1fr;
 }
-#chat-input {
-    width: 1fr; height: 6; border: solid #30363d;
-    background: #0d1117; color: #c9d1d9; padding: 0 1;
-}
-#chat-input:focus { border: solid #58a6ff; }
-#attachment-bar {
-    dock: bottom; min-height: 0; max-height: 3;
-}
-#effort-btn { margin: 0 1 0 0; border: solid #d2a8ff; color: #d2a8ff; }
-#chat-display .user-label { color: #3fb950; text-style: bold; }
-#chat-display .ai-label { color: #58a6ff; text-style: bold; }
-#chat-display .think-label { color: #d2a8ff; }
-#chat-display .error-label { color: #f85149; text-style: bold; }
-#chat-display .warn-label { color: #d29922; }
 
-/* ═══ Code ═══ */
-#code-sidebar { width: 28; background: #161b22; border-right: solid #30363d; padding: 1; }
+/* NeonPrompt */
+NeonPrompt {
+    padding: 0 0 0 0;
+    height: auto;
+    dock: bottom;
+
+    #prompt-container {
+        height: auto;
+        margin: 0 0 1 0;
+        border: tall transparent;
+        padding: 0;
+        &:focus-within { border: tall #58a6ff; }
+    }
+
+    #prompt-icon { padding: 0 1; text-opacity: 30%; }
+
+    #prompt-input {
+        padding: 0 1 0 0; background: transparent;
+        border: none; height: auto;
+        max-height: 50vh; min-height: 3;
+    }
+
+    #info-container { height: 1; margin: 1 1; }
+
+    AgentInfo, .agent-info {
+        padding: 0 1; margin: 0 1 0 0;
+        color: #c9d1d9; background: #161b22;
+        width: auto;
+    }
+
+    .status-line { color: #8b949e; margin: 0 1; width: auto; height: 1; text-align: right; }
+
+    .mode-info {
+        padding: 0 1; margin: 0 0;
+        color: #8b949e; background: #1a2332;
+        dock: right;
+    }
+}
+
+/* NeonConversation */
+#neon-conversation {
+    #chat-window {
+        layout: stream; margin: 0;
+        scrollbar-size-vertical: 2; padding: 0 1; height: 1fr;
+    }
+    #contents {
+        layout: stream; width: 1fr; overflow: hidden;
+        height: auto; padding: 0; background: transparent; border: none;
+    }
+    .throbber { width: 100%; height: 1; visibility: hidden; background: #58a6ff 30%; }
+}
+
+/* Collapsible */
+Collapsible { border: solid #30363d; margin: 1 0; }
+
+/* ToolCallWidget */
+ToolCallWidget { border: solid #30363d; margin: 1 0; padding: 0 1; background: #161b22; }
+.tool-header { height: auto; padding: 1 0; }
+.tool-icon { width: 3; color: #fea62b; }
+.tool-name { width: 1fr; color: #58a6ff; text-style: bold; }
+.tool-params { width: 2fr; color: #8b949e; }
+.tool-status { width: 5; }
+.tool-output { padding: 1; color: #c9d1d9; max-height: 20; overflow-y: auto; }
+
+MapPreviewWidget, PlotPreviewWidget {
+    margin: 1 0; padding: 1; border: solid #30363d; border-left: solid #58a6ff;
+    max-height: 25; overflow-y: auto;
+}
+.preview-title { text-style: bold; color: #d2a8ff; padding: 0 0 1 0; }
+.map-canvas, .plot-canvas { color: #58a6ff; font-family: monospace; }
+.preview-hidden { display: none; }
+
+DocumentPreviewWidget {
+    margin: 1 0; padding: 1; border: solid #30363d; border-left: solid #fea62b;
+    max-height: 30; overflow-y: auto;
+}
+.doc-content { padding: 1 0; color: #c9d1d9; }
+.doc-pager { text-style: bold; color: #58a6ff; padding: 1 0 0 0; }
+
+/* Code, Tools, Docs */
+CodeScreen, KnowledgeScreen, ToolsScreen, SettingsScreen { layout: vertical; height: 1fr; }
+
+/* Code agent panel */
+#code-agent-sidebar { width: 34; height: 1fr; border-left: solid #30363d; background: #161b22; }
+#code-sidebar { width: 28; }
 #code-main { width: 1fr; }
-#code-tree { height: 1fr; overflow-y: auto; }
-#code-search { height: 3; margin: 1 0; border: solid #30363d; }
-#code-search:focus { border: solid #58a6ff; }
-#code-file-info { color: #8b949e; height: 1; }
-#code-toolbar { height: 2; background: #161b22; padding: 0 1; }
-#code-tabs { height: 1fr; }
-#code-output { height: 12; background: #161b22; border-top: solid #30363d; overflow-y: auto; }
 
-/* ═══ Help ═══ */
-#help-content { height: 1fr; padding: 2 4; background: #161b22; border: solid #30363d; overflow-y: auto; }
-#help-close { dock: bottom; margin: 1 0; }
+/* Agent cards */
+CodingAgentPanel { padding: 1; height: 1fr; }
+.panel-title { text-style: bold; color: #58a6ff; padding: 1 0; }
+.agent-status { color: #8b949e; padding: 0 0 1 0; }
+AgentCard {
+    border: solid #30363d; margin: 0 0 1 0; padding: 1;
+    background: #0d1117; height: auto; min-height: 4;
+}
+.card-name { color: #58a6ff; }
+.card-desc { color: #8b949e; padding: 1 0; }
+.card-status { padding: 0 0 1 0; }
+.card-actions { height: auto; }
+.card-btn { margin: 0 1 0 0; }
 
-/* ═══ Widgets ═══ */
-Button { margin: 0 1 0 0; color: #c9d1d9; background: #21262d; border: solid #30363d; }
-Button:hover { background: #30363d; }
-Button.primary { border: solid #58a6ff; color: #58a6ff; }
-Input { height: 3; margin: 0 1 0 0; border: solid #30363d; background: #0d1117; color: #c9d1d9; }
-Input:focus { border: solid #58a6ff; }
-Select { margin: 0 1 0 0; }
-RichLog { border: none; padding: 0 1; background: #0d1117; }
-
-/* ═══ DataTable ═══ */
-DataTable { height: 1fr; scrollbar-size: 1 1; background: #0d1117; }
-DataTable > .datatable--header { text-style: bold; background: #21262d; }
-DataTable > .datatable--cursor { background: #58a6ff 20%; }
-
-/* ═══ Palette ═══ */
-#palette-container { max-width: 52; max-height: 24; background: #161b22; border: solid #30363d; padding: 1; align: center middle; }
-#palette-input { height: 3; margin: 1; }
-#palette-input:focus { border: solid #58a6ff; }
-#palette-list { height: 16; margin: 1; background: #0d1117; overflow-y: scroll; }
-#palette-hint { color: #8b949e; text-style: italic; margin: 0 2; }
+/* Toast */
+Toast.-warning { border: solid #fea62b; }
+Toast.-error { border: solid #f85149; }

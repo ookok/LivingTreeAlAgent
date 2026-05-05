@@ -12,6 +12,7 @@ Usage:
 
 import sys
 import os
+import json
 
 
 def main():
@@ -31,10 +32,6 @@ def main():
         workspace_args = [a for a in args if not a.startswith("-")]
         workspace = workspace_args[0] if workspace_args else os.getcwd()
         if "--direct" in args:
-            # Use local textual source (same as debug_tui.py)
-            _local_textual = os.path.join(project_root, "livingtree", "tui", "textual", "src")
-            if os.path.isdir(_local_textual):
-                sys.path.insert(0, _local_textual)
             os.chdir(project_root)
             from .tui.app import run_tui
             run_tui(workspace=workspace)
@@ -65,6 +62,24 @@ def main():
         launch(LaunchMode.CHECK)
     elif command in ("quick", "q"):
         launch(LaunchMode.QUICK)
+    elif command in ("update", "upgrade"):
+        from .integration.self_updater import run_update
+        import asyncio
+        result = asyncio.run(run_update())
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if result.get("restart_required"):
+            print("\n⚠ 重启以应用更新: python -m livingtree tui --update")
+    elif command == "_update_cli":
+        # Internal: direct update from CLI without full hub boot
+        from .integration.self_updater import run_update
+        import asyncio
+        result = asyncio.run(run_update(
+            check_only="--check" in args,
+            dry_run="--dry-run" in args,
+            use_mirror="--mirror" in args,
+            install_deps="--no-deps" not in args,
+        ))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
         print(f"Unknown command: {command}")
         _print_usage()

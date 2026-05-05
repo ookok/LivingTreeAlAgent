@@ -1,53 +1,56 @@
-"""LivingTree TUI — smooth progressive boot architecture."""
+"""LivingTree TUI — extends ToadApp for full Toad panel integration."""
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from loguru import logger
 
-# ── Install error interceptor FIRST, before any imports ──
 try:
     from ..observability.error_interceptor import install as _install_interceptor
     _install_interceptor()
 except Exception:
     pass
 
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static, Input
+from textual.containers import VerticalScroll, Horizontal
+from textual import on
 
-from .screens.chat import ChatScreen
-from .screens.code import CodeScreen
-from .screens.docs import KnowledgeScreen
-from .screens.tools import ToolsScreen
-from .screens.settings import SettingsScreen
-from .screens.help import HelpScreen
-from .screens.boot import BootScreen
+from .td.app import ToadApp
+from .td import messages
+from .td.agent_schema import Agent as AgentData
+
 from .widgets.footer_bar import StatusBar
 from .widgets.card import Card
+from .i18n import t
 
-BOOT_STEPS = ["配置系统", "导入引擎", "构建世界", "启动服务", "初始化完成"]
 
-class LivingTreeTuiApp(App):
+class LivingTreeTuiApp(ToadApp):
+    """LivingTree TUI — inherits Toad settings/sessions/tracker/signals."""
+
     TITLE = "LivingTree"
-    SUB_TITLE = "数字生命体 v2.0"
+    SUB_TITLE = "Digital Life Form v2.1"
+
     CSS_PATH = "styles/theme.tcss"
 
-    BINDINGS = [
-        Binding("ctrl+q", "quit", "退出"),
-        Binding("ctrl+d", "toggle_dark", "主题"),
-        Binding("ctrl+p", "command_palette", "命令", show=False),
-        Binding("f1", "show_help", "帮助"),
-        Binding("enter", "activate_card", "进入", show=False),
+    BINDINGS: ClassVar = [
+        Binding("ctrl+t", "push_chat", t("bind.chat")),
+        Binding("ctrl+e", "push_code", t("bind.code")),
+        Binding("ctrl+d", "push_docs", t("bind.docs")),
+        Binding("ctrl+k", "push_tools", t("bind.tools")),
+        Binding("f2", "push_settings", t("bind.settings")),
+        Binding("ctrl+q", "quit", t("bind.quit")),
+        Binding("f1", "show_help", t("bind.help")),
+        Binding("ctrl+l", "toggle_lang", "语言/Lang"),
+        Binding("enter", "activate_card", t("bind.enter"), show=False),
     ]
 
-    ENABLE_COMMAND_PALETTE = True
+    ALLOW_IN_MAXIMIZED_VIEW = ""
 
-    SCREENS = {"chat": ChatScreen, "code": CodeScreen, "docs": KnowledgeScreen,
-               "tools": ToolsScreen, "settings": SettingsScreen}
+    SCREENS = {}
 
     def __init__(self, workspace: str = "", hub=None):
         super().__init__()
@@ -55,26 +58,63 @@ class LivingTreeTuiApp(App):
         self._hub = hub
         self._boot_done = hub is not None
         self._boot_task: Optional[asyncio.Task] = None
+        self.project_dir = self.workspace
+
+        # Override Toad's settings pages with our screens
+        self._override_toad_screens()
+
+    def _override_toad_screens(self):
+        from .td.screens.settings import SettingsScreen as ToadSettings
+        from .td.screens.sessions import SessionsScreen as ToadSessions
+        from .td.screens.store import StoreScreen
+
+        self.SCREENS = {
+            "settings": lambda: ToadSettings(),
+            "sessions": lambda: ToadSessions(),
+        }
+        self.MODES = {"store": lambda: StoreScreen()}
 
     def compose(self) -> ComposeResult:
-        yield Static("LivingTree AI Agent  v2.0", id="title-bar")
-        yield Input(placeholder="搜索...", id="card-search")
+        yield Static("🌳 LivingTree AI Agent  v2.1", id="title-bar")
+        yield Input(placeholder=t("app.search_placeholder"), id="card-search")
         with VerticalScroll(id="card-scroll"):
             with Horizontal(classes="card-row"):
-                yield Card("💬\nAI 对话\n多模态智能助手", "chat")
-                yield Card("📝\n代码编辑器\n编辑 · 运行 · Diff", "code")
-                yield Card("📚\n知识库\n文档管理与检索", "docs")
+                yield Card(t("card.chat"), "neon-chat")
+                yield Card(t("card.code"), "code")
+                yield Card(t("card.docs"), "docs")
             with Horizontal(classes="card-row"):
-                yield Card("🔧\n工具箱\nPDF · 翻译 · 图表", "tools")
-                yield Card("⚙\n系统配置\nAPI · 基因组 · 训练", "settings")
+                yield Card(t("card.tools"), "tools")
+                yield Card(t("card.settings"), "settings")
         yield StatusBar()
 
     async def on_mount(self) -> None:
-        self.sub_title = f"v2.0 · {self.workspace.name}"
+        from .screens.neon_chat import NeonChatScreen
+        from .screens.code import CodeScreen
+        from .screens.docs import KnowledgeScreen
+        from .screens.tools import ToolsScreen
+        from .screens.help import HelpScreen
+        from .td.screens.settings import SettingsScreen as ToadSettings
+
+        self.SCREENS.update({
+            "neon-chat": NeonChatScreen,
+            "code": CodeScreen,
+            "docs": KnowledgeScreen,
+            "tools": ToolsScreen,
+            "settings": lambda: ToadSettings(),
+        })
+        self.install_screen(HelpScreen(), "help")
+
+        self.sub_title = f"v2.1 · {self.workspace.name}"
         self.query_one("#card-search", Input).display = False
         self._focus_first_card()
 
         if not self._boot_done:
+            from .screens.boot import BootScreen
+            BOOT_STEPS = [
+                t("boot.step_config"), t("boot.step_engine"),
+                t("boot.step_world"), t("boot.step_service"),
+                t("boot.step_done"),
+            ]
             boot = BootScreen(BOOT_STEPS)
             await self.push_screen(boot)
             self._boot_task = asyncio.create_task(self._run_boot(boot))
@@ -83,116 +123,125 @@ class LivingTreeTuiApp(App):
 
         self._status_timer = self.set_interval(5, self._update_status)
 
-    # ═══ Boot: everything async, nothing blocks ═══
-    async def _run_boot(self, boot: BootScreen) -> None:
+    async def _run_boot(self, boot) -> None:
         loop = asyncio.get_event_loop()
         try:
             boot.current = 0
-            await asyncio.sleep(0.3)
             boot.advance()
             boot.current = 1
-            await asyncio.sleep(0.2)
 
             def _create_hub():
                 from ..integration.hub import IntegrationHub
-                return IntegrationHub()
+                return IntegrationHub(lazy=True)
             self._hub = await loop.run_in_executor(None, _create_hub)
             boot.advance()
             boot.current = 2
-            await asyncio.sleep(0.2)
 
             await loop.run_in_executor(None, self._hub._init_sync)
             boot.advance()
             boot.current = 3
-            await asyncio.sleep(0.3)
 
             await self._hub._init_async()
             boot.advance()
             boot.current = 4
-            await asyncio.sleep(0.5)
 
             self._boot_done = True
             self._update_status()
             self.pop_screen()
-            self.notify("系统就绪 — 全部功能已启用", timeout=3)
-            await self._auto_start_opencode_serve()
+            self.notify("系统就绪", timeout=2)
+
+            # ── Start panel agents ──
+            asyncio.create_task(self._start_panel_agents())
+            asyncio.create_task(self._auto_start_opencode_serve())
 
         except Exception as e:
             logger.error(f"Boot failed: {e}")
             self._boot_done = True
             self._update_status()
-            try:
-                self.pop_screen()
-            except Exception:
-                pass
-            self.notify(f"启动失败: {e}", severity="error", timeout=5)
+            try: self.pop_screen()
+            except Exception: pass
+            self.notify(t("app.boot_failed") + f": {e}", severity="error", timeout=5)
 
-    # ═══ Interaction ═══
-    async def on_click(self, event) -> None:
-        try:
-            widget, _ = self.screen.get_widget_at(event.x, event.y)
-            for node in widget.ancestors_with_self:
-                if isinstance(node, Card):
-                    self.push_screen(node.screen_name)
-                    return
-                if getattr(node, 'id', '') == 'back-link':
-                    self.pop_screen()
-                    return
-        except Exception:
-            pass
+    def action_push_chat(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("neon-chat")
+
+    def action_push_code(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("code")
+
+    def action_push_docs(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("docs")
+
+    def action_push_tools(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("tools")
+
+    def action_push_settings(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("settings")
 
     def action_activate_card(self) -> None:
         if not self._boot_done:
-            self.notify("系统初始化中，请稍候...", timeout=2, severity="warning")
+            self.notify(t("app.booting"), timeout=2, severity="warning")
             return
         f = self.focused
         if isinstance(f, Card):
             self.push_screen(f.screen_name)
 
     def action_show_help(self) -> None:
-        self.push_screen(HelpScreen())
+        self.push_screen("help")
+
+    def action_toggle_lang(self) -> None:
+        from .i18n import i18n
+        current = i18n.lang
+        new_lang = "en" if current == "zh" else "zh"
+        i18n.switch(new_lang)
+        self.notify(f"Language: {'中文' if new_lang == 'zh' else 'English'}", timeout=2)
 
     def action_toggle_dark(self) -> None:
         self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
 
+    def on_click(self, event) -> None:
+        try:
+            widget, _ = self.screen.get_widget_at(event.x, event.y)
+            for node in widget.ancestors_with_self:
+                if isinstance(node, Card):
+                    if self._boot_done:
+                        self.push_screen(node.screen_name)
+                    return
+        except Exception:
+            pass
+
     def _focus_first_card(self) -> None:
         try:
             cards = list(self.query(Card))
-            if cards:
-                self.set_focus(cards[0])
-        except Exception:
-            pass
+            if cards: self.set_focus(cards[0])
+        except Exception: pass
 
     def _update_status(self) -> None:
         try:
             bar = self.query_one(StatusBar)
             bar.update_system_status(self._hub)
-            if self._hub and self._hub._started:
-                bar.update_mcp_health(healthy=0, total=0)
-
-            bio = getattr(self._hub.world, 'biorhythm', None) if self._hub else None
-            if bio:
-                bar.update_pulse(bio._get_snapshot())
-
-            try:
-                from ..observability.error_interceptor import get_interceptor
-                interceptor = get_interceptor()
-                if interceptor:
-                    stats = interceptor.get_stats()
-                    bar.update_error_count(stats["total_errors"], stats["recent_60s"])
-            except Exception:
-                pass
-        except Exception:
-            pass
+        except Exception: pass
 
     async def on_unmount(self) -> None:
         if self._boot_task:
             self._boot_task.cancel()
         if self._hub:
-            try:
-                await self._hub.shutdown()
-            except Exception:
-                pass
+            try: await self._hub.shutdown()
+            except Exception: pass
 
     @property
     def hub(self):
@@ -202,23 +251,94 @@ class LivingTreeTuiApp(App):
         try:
             from ..observability.error_interceptor import get_interceptor
             ei = get_interceptor()
-            if ei:
-                ei.capture(error, context="textual_app_handler")
-        except Exception:
-            pass
+            if ei: ei.capture(error, context="textual_app_handler")
+        except Exception: pass
         super()._handle_exception(error)
+
+    async def _start_panel_agents(self):
+        """Register and start self-healing agents for each panel."""
+        try:
+            from ..execution.panel_agent import (
+                ChatPanelAgent, CodePanelAgent, KnowledgePanelAgent, ToolsPanelAgent, get_agent_manager
+            )
+            manager = get_agent_manager()
+            root = Path.cwd()
+            manager.register("chat", ChatPanelAgent(root, self._hub))
+            manager.register("code", CodePanelAgent(root, self._hub))
+            manager.register("knowledge", KnowledgePanelAgent(root, self._hub))
+            manager.register("tools", ToolsPanelAgent(root, self._hub))
+            await manager.start_all()
+            logger.info("Panel agents started with self-healing")
+        except Exception as e:
+            logger.debug(f"Panel agents: {e}")
 
     async def _auto_start_opencode_serve(self) -> None:
         try:
             from .widgets.opencode_launcher import OpenCodeLauncher
             launcher = OpenCodeLauncher(workspace=str(self.workspace), hub=self._hub)
             ok, msg = await launcher.auto_start_serve_if_needed()
-            if ok and "already" not in msg.lower():
-                logger.info(f"OpenCode serve auto-started: {msg}")
-            elif ok:
-                logger.debug(f"OpenCode serve: {msg}")
+            if ok: logger.info(f"OpenCode: {msg}")
+        except Exception: pass
+
+    # ── Toad message handlers we forward ──
+
+    @on(messages.LaunchAgent)
+    async def on_launch_agent(self, event: messages.LaunchAgent) -> None:
+        """Handle LaunchAgent from Toad's store/agent panels."""
+        try:
+            agent_id = event.identity
+            from .td.agents import read_agents
+            agents = await read_agents()
+            agent_data = agents.get(agent_id)
+            if not agent_data:
+                self.notify(f"Agent not found: {agent_id}", severity="error")
+                return
+            await self.launch_agent(agent_data, session_id=event.session_id,
+                                     pk=event.pk, prompt=event.prompt)
         except Exception as e:
-            logger.debug(f"OpenCode serve auto-start skipped: {e}")
+            logger.debug(f"Launch agent: {e}")
+
+    async def launch_agent(self, agent_data: dict, session_id=None, pk=None, prompt=None):
+        """Launch a Toad agent as a new session."""
+        from .td.screens.main import MainScreen
+        from pathlib import Path
+
+        async def get_screen() -> MainScreen:
+            return MainScreen(
+                project_path=self.workspace,
+                agent=agent_data,
+                agent_session_id=session_id,
+                session_pk=pk,
+            )
+
+        await self.new_session_screen(get_screen, prompt=prompt)
+
+    async def new_session_screen(self, get_screen, prompt=None):
+        """Create a new Toad managed session."""
+        details = self.session_tracker.create_session()
+        mode_name = details.mode_name
+
+        async def make_screen():
+            screen = await get_screen()
+            if prompt:
+                screen._initial_prompt = prompt
+            return screen
+
+        self.add_mode(mode_name, make_screen)
+        await self.switch_mode(mode_name)
+        return details
+
+    # ── Required ToadApp overrides ──
+
+    def update_terminal_title(self):
+        pass
+
+    def open_url(self, url: str):
+        import webbrowser
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
 
 
 def run_tui(workspace: str = "", hub=None) -> None:
@@ -227,12 +347,4 @@ def run_tui(workspace: str = "", hub=None) -> None:
         app.run()
     except Exception as e:
         logger.exception(f"TUI crashed: {e}")
-        try:
-            from ..observability.error_interceptor import get_interceptor
-            ei = get_interceptor()
-            if ei:
-                ei.capture(e, context="run_tui_fatal")
-        except Exception:
-            pass
         raise
-

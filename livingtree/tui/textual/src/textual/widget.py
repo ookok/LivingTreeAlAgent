@@ -4268,7 +4268,7 @@ class Widget(DOMNode):
             self._render_content()
         try:
             line = self._render_cache.lines[y]
-        except IndexError:
+        except (IndexError, AttributeError):
             line = Strip.blank(self.size.width, self.visual_style.rich_style)
 
         return line

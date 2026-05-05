@@ -39,7 +39,7 @@ class ModelConfig(BaseModel):
     pro_thinking_enabled: bool = True
 
     ollama_base_url: str = "http://localhost:11434"
-    fallback_model: str = "ollama/qwen3:latest"
+    fallback_model: str = ""  # Local fallback disabled by default — use online free models
 
     longcat_base_url: str = "https://api.longcat.chat/openai/v1"
     longcat_api_key: str = ""
@@ -73,6 +73,22 @@ class ModelConfig(BaseModel):
     spark_base_url: str = "https://maas-api.cn-huabei-1.xf-yun.com/v2"
     spark_api_key: str = ""
     spark_default_model: str = "xdeepseekv3"
+
+    siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
+    siliconflow_api_key: str = ""
+    siliconflow_flash_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    siliconflow_default_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    siliconflow_pro_model: str = "deepseek-ai/DeepSeek-V3"
+    siliconflow_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+    siliconflow_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
+
+    mofang_base_url: str = "https://ai.gitee.com/v1"
+    mofang_api_key: str = ""
+    mofang_flash_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    mofang_default_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    mofang_pro_model: str = "deepseek-ai/DeepSeek-V3"
+    mofang_reasoning_model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+    mofang_small_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
 
     temperature: float = 0.7
     max_tokens: int = 4096
@@ -337,6 +353,16 @@ def _load_config() -> LTAIConfig:
         if spark_key:
             config.model.spark_api_key = spark_key
             logger.info("Loaded spark_api_key from encrypted vault")
+
+        siliconflow_key = vault.get("siliconflow_api_key", "")
+        if siliconflow_key:
+            config.model.siliconflow_api_key = siliconflow_key
+            logger.info("Loaded siliconflow_api_key from encrypted vault")
+
+        mofang_key = vault.get("mofang_api_key", "")
+        if mofang_key:
+            config.model.mofang_api_key = mofang_key
+            logger.info("Loaded mofang_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

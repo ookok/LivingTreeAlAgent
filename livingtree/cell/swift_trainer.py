@@ -260,14 +260,12 @@ class SwiftDrillTrainer:
         return self._swift_available
 
     def install_swift(self) -> bool:
-        """Install MS-SWIFT via pip."""
+        """Install MS-SWIFT via pip (using pkg_manager)."""
         try:
             logger.info("Installing MS-SWIFT...")
-            result = subprocess.run(
-                ["pip", "install", "ms-swift", "-U"],
-                capture_output=True, text=True, timeout=600,
-            )
-            if result.returncode == 0:
+            from ..integration.pkg_manager import install as pkg_install
+            result = pkg_install("ms-swift", providers=["pip"])
+            if result.installed:
                 logger.info("MS-SWIFT installed successfully")
                 self._swift_available = True
                 self._checked = True

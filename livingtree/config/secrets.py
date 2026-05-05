@@ -35,11 +35,10 @@ except ImportError:
 
 
 def _machine_key() -> bytes:
-    """Generate a machine-specific encryption key."""
+    """Generate a machine-specific encryption key (stable across Python versions)."""
     parts = [
         platform.node() or "unknown",
         str(uuid.getnode()),
-        sys.prefix,
         "livingtree-secret-vault-v2",
     ]
     combined = "|".join(parts)

@@ -13,29 +13,24 @@ from ..observability import setup_observability
 
 
 class IntegrationHub:
-    """Progressive boot: minimal __init__ for instant UI, heavy init in start()."""
+    """Progressive boot: minimal __init__ for instant UI, heavy init deferred.
 
-    def __init__(self, config: Optional[LTAIConfig] = None):
-        # Phase 1: Truly minimal — instant from any thread
+    lazy=True skips ModelRegistry fetch + LocalScanner scan + package manager check.
+    These fire in background after UI is visible.
+    """
+
+    def __init__(self, config: Optional[LTAIConfig] = None, lazy: bool = False):
         self.config = config or get_config()
         self.obs = setup_observability(self.config)
         self._session = None
         self._started = False
-        self._phase = 0
+        self._lazy = lazy
         self.world = None
         self.engine = None
-        self.daemon = None
-
-        # Auto-wired new modules (Phase 1 — instant constructors)
         self.cache_optimizer = None
-        self.side_git = None
-        self.session_manager = None
         self.lsp_manager = None
         self.sub_agent_roles = None
-        self.rlm_runner = None
-        self.sse_server = None
         self.struct_memory = None
-        self.extraction_engine = None
 
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -97,6 +92,20 @@ class IntegrationHub:
                 spark_api_key=self.config.model.spark_api_key,
                 spark_base_url=self.config.model.spark_base_url,
                 spark_default_model=self.config.model.spark_default_model,
+                siliconflow_api_key=self.config.model.siliconflow_api_key,
+                siliconflow_base_url=self.config.model.siliconflow_base_url,
+                siliconflow_flash_model=self.config.model.siliconflow_flash_model,
+                siliconflow_default_model=self.config.model.siliconflow_default_model,
+                siliconflow_pro_model=self.config.model.siliconflow_pro_model,
+                siliconflow_reasoning_model=self.config.model.siliconflow_reasoning_model,
+                siliconflow_small_model=self.config.model.siliconflow_small_model,
+                mofang_api_key=self.config.model.mofang_api_key,
+                mofang_base_url=self.config.model.mofang_base_url,
+                mofang_flash_model=self.config.model.mofang_flash_model,
+                mofang_default_model=self.config.model.mofang_default_model,
+                mofang_pro_model=self.config.model.mofang_pro_model,
+                mofang_reasoning_model=self.config.model.mofang_reasoning_model,
+                mofang_small_model=self.config.model.mofang_small_model,
             ),
             safety=SafetyGuard(workspace=str(Path.cwd())),
         )
@@ -283,6 +292,8 @@ class IntegrationHub:
             vault = get_secret_vault()
             vault_providers = [
                 ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
+                ("siliconflow", "siliconflow_api_key", "siliconflow_base_url", "siliconflow_default_model", "Qwen/Qwen2.5-7B-Instruct"),
+                ("mofang", "mofang_api_key", "mofang_base_url", "mofang_default_model", "Qwen/Qwen2.5-7B-Instruct"),
             ]
             for name, key_name, url_name, model_name, default_model in vault_providers:
                 key = vault.get(key_name, "")
@@ -337,11 +348,96 @@ class IntegrationHub:
         logger.info(f"  Flash: {self.config.model.flash_model} | Pro: {self.config.model.pro_model}")
         logger.info(f"  Node: {self.world.node.info.name} ({self.world.node.info.id[:12]})")
 
+        # ── AsyncDisk: batched file I/O ──
+        from ..core.async_disk import get_disk
+        await get_disk().start()
+
+        # ── Auto-setup environment (package managers + deps) ──
+        try:
+            from .pkg_manager import ensure_environment
+            await ensure_environment(str(self.config._project_root or Path.cwd()))
+        except Exception as e:
+            logger.debug(f"Env setup skipped: {e}")
+
         await self._register_health_checks()
         await self.world.self_healer.start()
         await self.world.node.register()
         asyncio.create_task(self.world.node.heartbeat(self.config.network.heartbeat_interval))
         self._register_agents()
+
+        # ── Model registry (deferred if lazy) ──
+        if not self._lazy:
+            try:
+                from ..treellm.model_registry import get_model_registry
+                registry = get_model_registry()
+                self._model_registry = registry
+                provider_keys = {
+                    "deepseek": ("https://api.deepseek.com/v1", self.config.model.deepseek_api_key),
+                    "longcat": ("https://api.longcat.chat/openai/v1", self.config.model.longcat_api_key),
+                    "xiaomi": ("https://api.xiaomimimo.com/v1", self.config.model.xiaomi_api_key),
+                    "aliyun": ("https://dashscope.aliyuncs.com/compatible-mode/v1", self.config.model.aliyun_api_key),
+                    "zhipu": ("https://open.bigmodel.cn/api/paas/v4", self.config.model.zhipu_api_key),
+                    "siliconflow": ("https://api.siliconflow.cn/v1", self.config.model.siliconflow_api_key),
+                    "mofang": ("https://ai.gitee.com/v1", self.config.model.mofang_api_key),
+                    "spark": ("https://maas-api.cn-huabei-1.xf-yun.com/v2", self.config.model.spark_api_key),
+                }
+                for name, (base_url, api_key) in provider_keys.items():
+                    if api_key:
+                        registry.register_provider(name, base_url, api_key)
+                registry.load_cache()
+                asyncio.create_task(self._refresh_models_async(registry))
+                await registry.start_periodic_refresh(86400)
+                logger.info("Model registry initialized")
+            except Exception as e:
+                logger.debug(f"Model registry skipped: {e}")
+        else:
+            logger.info("Model registry deferred (lazy boot)")
+
+        # ── Local LLM scan (deferred if lazy) ──
+        if not self._lazy:
+            try:
+                await self.world.consciousness.register_local_models()
+            except Exception as e:
+                logger.debug(f"Local scan skipped: {e}")
+
+        # ── OpenCode serve: force discovery + refresh election ──
+        try:
+            self.world.consciousness._opencode_cache = []
+            await self.world.consciousness._elect()
+            status = self.world.consciousness.get_election_status()
+            oc_count = len(status.get("opencode_providers", []))
+            if oc_count:
+                logger.info(f"OpenCode: {oc_count} providers discovered")
+        except Exception as e:
+            logger.debug(f"OpenCode election: {e}")
+
+        # ── P2P Network (default component, always on) ──
+        try:
+            from ..network.p2p_node import get_p2p_node
+            self._p2p_node = get_p2p_node(self)
+            await self._p2p_node.start()
+        except Exception as e:
+            logger.debug(f"P2P: {e}")
+
+        # ── Autonomous learner: self-evolving engine ──
+        try:
+            from ..dna.autonomous_learner import get_autonomous_learner
+            learner = get_autonomous_learner()
+            learner.set_hub(self)
+            await learner.start()
+        except Exception as e:
+            logger.debug(f"Learner init: {e}")
+
+        # ── Cron scheduler ──
+        try:
+            from ..execution.cron_scheduler import get_scheduler
+            sched = get_scheduler()
+            async def cron_callback(job):
+                logger.info(f"Cron: {job.id} — {job.description}")
+            sched.set_callback(cron_callback)
+            await sched.start()
+        except Exception as e:
+            logger.debug(f"Cron init: {e}")
 
         if self.lsp_manager:
             try:
@@ -389,23 +485,27 @@ class IntegrationHub:
             await self.start()
         self.world.metrics.life_cycles.inc()
 
-        pipe_keywords = ["提取", "汇总", "去重", "排序", "过滤", "筛选", "合并",
-                         "extract", "summarize", "dedup", "sort", "filter", "merge",
-                         "pipeline", "管道", "处理这些文档", "分析这些文件"]
-        if self.world.pipeline_engine and any(kw in message.lower() for kw in pipe_keywords):
-            try:
-                pipe_result = await self.world.pipeline_engine.run_nl(message)
-                return {
-                    "mode": "pipeline",
-                    "pipeline": pipe_result.get("generated_pipeline", {}),
-                    "results": pipe_result.get("results", [])[:20],
-                    "stats": {
-                        "steps": pipe_result.get("steps_executed", 0),
-                        "outputs": pipe_result.get("output_count", 0),
-                    },
-                }
-            except Exception as e:
-                logger.debug(f"Pipeline auto-dispatch: {e}")
+        # ── Intent-driven routing (replaces keyword gating) ──
+        try:
+            intent_result = self.world.consciousness.recognize_intent(message)
+            intent = intent_result.get("intent", "general")
+            domain = intent_result.get("domain", "general")
+
+            if intent in ("code", "training", "analysis") or domain in ("code", "training"):
+                from ..execution.real_pipeline import get_real_orchestrator
+                orch = get_real_orchestrator(self)
+                ctx = await orch.plan(message)
+                if ctx.steps and len(ctx.steps) >= 3:
+                    ctx = await orch.execute(ctx)
+                    status = orch.get_status(ctx)
+                    return {
+                        "mode": "pipeline", "intent": intent, "domain": domain,
+                        "pipeline": {"steps": [s.__dict__ for s in ctx.steps]},
+                        "results": [s.result[:500] for s in ctx.steps if s.result],
+                        "stats": {"total": status["total"], "done": status["done"], "failed": status["failed"]},
+                    }
+        except Exception as e:
+            logger.debug(f"Intent routing: {e}")
 
         mem_context = ""
         if self.struct_memory:
@@ -415,7 +515,7 @@ class IntegrationHub:
             except Exception:
                 pass
 
-        ctx = await self.engine.run(message, memory_context=mem_context, **kwargs)
+        ctx = await self._run_engine(message, mem_context, **kwargs)
 
         if self.session_manager:
             try:
@@ -702,4 +802,39 @@ class IntegrationHub:
                 return False, {"error": str(e)}
         for name, fn in [("kb", _check_kb), ("cells", _check_cells), ("network", _check_network)]:
             self.world.self_healer.register_check(name, fn)
+
+    async def _refresh_models_async(self, registry):
+        """Background: fetch models from all providers (resource-gated)."""
+        from ..observability.system_monitor import get_monitor
+        if not get_monitor().can_run_task("ModelRefresh", heavy=True):
+            logger.debug("Model refresh deferred (resources)")
+            return
+        try:
+            await registry.refresh_all()
+            stats = registry.get_stats()
+            total = sum(s["models"] for s in stats.values())
+            logger.info(f"Model refresh complete: {total} models from {len(stats)} platforms")
+        except Exception as e:
+            logger.debug(f"Model refresh: {e}")
+
+    async def _run_engine(self, message: str, mem_context: str = "", **kwargs) -> Any:
+        """Protected engine execution with timeout + circuit breaker."""
+        from ..core.task_guard import get_guard
+        guard = get_guard()
+
+        async def _run():
+            return await self.engine.run(message, memory_context=mem_context, **kwargs)
+
+        result = await guard.run("chat", _run(), timeout=120, max_retries=1)
+        if result.success:
+            return result.data
+        if result.timed_out:
+            return {"response": "任务执行超时，请简化问题后重试。", "error": "timeout"}
+        if result.circuit_open:
+            return {"response": "系统繁忙，请稍后重试。", "error": "circuit_open"}
+        return {"response": f"执行异常: {result.error[:200]}", "error": result.error}
+
+    @property
+    def model_registry(self):
+        return getattr(self, "_model_registry", None)
 

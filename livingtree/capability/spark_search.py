@@ -1,13 +1,8 @@
 """Spark Search Tool — Web search via iFlytek ONE Search API.
 
-Unlimited free web search. Returns title, summary, URL for each result.
+Unlimited free web search. Auto-retry with resilience layer.
 Auto-wired into chat: '/search query' triggers this engine.
-
-Usage:
-    search = SparkSearch(api_password="...")
-    results = await search.query("Python best practices", limit=5)
 """
-
 from __future__ import annotations
 
 import json
@@ -15,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from loguru import logger
+
+from ..network.resilience import resilient_fetch
 
 
 @dataclass
@@ -46,44 +43,51 @@ class SparkSearch:
         if not self._api_password or not query.strip():
             return []
 
-        import aiohttp
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    self.SEARCH_URL,
-                    json={
-                        "search_params": {
-                            "query": query[:500],
-                            "limit": min(limit, 20),
-                            "enhance": {
-                                "open_rerank": open_rerank,
-                                "open_full_text": open_full_text,
-                            },
-                        }
+            import json
+            body = json.dumps({
+                "search_params": {
+                    "query": query[:500],
+                    "limit": min(limit, 20),
+                    "enhance": {
+                        "open_rerank": open_rerank,
+                        "open_full_text": open_full_text,
                     },
-                    headers={
-                        "Authorization": f"Bearer {self._api_password}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    if resp.status != 200:
-                        return []
-                    data = await resp.json()
-                    if data.get("err_code") != "0":
-                        return []
+                }
+            }).encode()
 
-                    docs = data.get("data", {}).get("search_results", {}).get("documents", [])
-                    return [
-                        SearchResult(
-                            title=d.get("name", ""),
-                            url=d.get("url", ""),
-                            summary=d.get("summary", ""),
-                            content=d.get("content", ""),
-                            published_date=d.get("published_date", ""),
-                        )
-                        for d in docs
-                    ]
+            status, raw_body, _ = await resilient_fetch(
+                self.SEARCH_URL,
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {self._api_password}",
+                    "Content-Type": "application/json",
+                },
+                data=body,
+                timeout=15.0,
+                max_retries=2,
+                use_mirror=False,
+                use_proxy=True,
+            )
+
+            if status != 200:
+                return []
+
+            data = json.loads(raw_body.decode(errors="replace"))
+            if data.get("err_code") != "0":
+                return []
+
+            docs = data.get("data", {}).get("search_results", {}).get("documents", [])
+            return [
+                SearchResult(
+                    title=d.get("name", ""),
+                    url=d.get("url", ""),
+                    summary=d.get("summary", ""),
+                    content=d.get("content", ""),
+                    published_date=d.get("published_date", ""),
+                )
+                for d in docs
+            ]
 
         except Exception as e:
             logger.debug(f"SparkSearch: {e}")

@@ -82,15 +82,26 @@ class TreeLLM:
     # ── Routing ──
 
     async def elect(self, candidates: list[str] | None = None) -> str:
+        """Elect best provider: holistic scoring (latency + quality + cost + capability)."""
         names = candidates or list(self._providers.keys())
-        for name in names:
-            p = self._providers.get(name)
-            if not p:
-                continue
-            ok, _ = await p.ping()
-            if ok:
-                self._elected = name
-                return name
+        from .holistic_election import get_election
+        election = get_election()
+
+        # Holistic scoring
+        free_models = []  # populated externally
+        scored = await election.score_providers(names, self._providers, free_models)
+        if scored:
+            best = scored[0]
+            self._elected = best.name
+            logger.info(
+                f"Elected {best.name}: "
+                f"score={best.total:.2f} "
+                f"latency={best.latency_ms:.0f}ms "
+                f"quality={best.scores.get('quality',0):.1%} "
+                f"match={best.capability_match:.1%}"
+            )
+            return best.name
+
         self._elected = ""
         return ""
 
@@ -110,10 +121,25 @@ class TreeLLM:
         if len(alive) == 1:
             return alive[0]
 
+        # Step 1: TinyClassifier (fast, keyword-based)
         route = self._classifier.predict(prompt, alive, self._stats)
         if route and route in alive:
-            return route
+            score = self._classifier._last_score if hasattr(self._classifier, '_last_score') else 0.5
+            if score > 0.3:  # High confidence → use classifier
+                return route
 
+        # Step 2: UnifiedSkillSystem (semantic, full-text based)
+        try:
+            from ..dna.unified_skill_system import get_skill_system
+            router = get_skill_system()
+            decision = router.route(prompt)
+            for candidate in decision.providers:
+                if candidate.name in alive:
+                    return candidate.name
+        except Exception:
+            pass
+
+        # Step 3: Fallback to best success rate
         best = max(alive, key=lambda n: self._stats.get(n, RouterStats(n)).success_rate)
         return best
 
@@ -126,6 +152,9 @@ class TreeLLM:
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
 
+        # ── Token optimization: apply CacheOptimizer for prefix caching ──
+        messages = self._optimize_messages(messages)
+
         t0 = time.monotonic()
         try:
             result = await p.chat(messages, temperature=temperature,
@@ -134,7 +163,7 @@ class TreeLLM:
             self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
             if result.text:
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
-                                       chosen=p.name, success=True)
+                                        chosen=p.name, success=True)
             return result
         except Exception as e:
             self._record_failure(p.name, str(e))
@@ -147,6 +176,9 @@ class TreeLLM:
         if not p:
             yield f"[No provider: {provider}]"
             return
+
+        # ── Token optimization ──
+        messages = self._optimize_messages(messages)
 
         t0 = time.monotonic()
         tokens = 0
@@ -172,6 +204,17 @@ class TreeLLM:
             for name, s in self._stats.items()
         }
 
+    def _optimize_messages(self, messages: list[dict]) -> list[dict]:
+        """Apply token optimizations: prefix caching + system prompt trimming."""
+        try:
+            from ..dna.cache_optimizer import CacheOptimizer
+            # Use a shared optimizer instance per TreeLLM
+            if not hasattr(self, '_cache_optimizer'):
+                self._cache_optimizer = CacheOptimizer(max_tokens=64000, cache_budget=0.85)
+            return self._cache_optimizer.prepare(messages)
+        except Exception:
+            return messages
+
     # ── Private ──
 
     def _resolve_provider(self, name: str) -> Provider | None:
@@ -185,16 +228,33 @@ class TreeLLM:
 
     def _record_success(self, name: str, tokens: int, latency_ms: float) -> None:
         s = self._stats.get(name)
-        if s:
-            s.calls += 1
-            s.successes += 1
-            s.total_tokens += tokens
-            s.total_latency_ms += latency_ms
-            s.last_latency_ms = latency_ms
+        if not s:
+            return
+        s.calls += 1; s.successes += 1
+        s.total_tokens += tokens; s.total_latency_ms += latency_ms
+        s.last_latency_ms = latency_ms
+        s.recent_successes.append(True)
+        s.recent_latencies.append(latency_ms)
+        if len(s.recent_successes) > 20:
+            s.recent_successes = s.recent_successes[-20:]
+            s.recent_latencies = s.recent_latencies[-20:]
+        from .holistic_election import get_election
+        get_election().record_result(name, True, latency_ms, tokens)
+        # ── Cost tracking ──
+        try:
+            from ..capability.industrial_doc_engine import get_cost_dash
+            get_cost_dash().record(name, tokens, tokens)  # estimate input≈output for now
+        except Exception:
+            pass
 
     def _record_failure(self, name: str, error: str) -> None:
         s = self._stats.get(name)
-        if s:
-            s.calls += 1
-            s.failures += 1
-            s.last_error = error
+        if not s:
+            return
+        s.calls += 1; s.failures += 1
+        s.last_error = error
+        s.recent_successes.append(False)
+        if len(s.recent_successes) > 20:
+            s.recent_successes = s.recent_successes[-20:]
+        from .holistic_election import get_election
+        get_election().record_result(name, False, 0, 0, error)

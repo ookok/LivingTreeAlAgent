@@ -20,7 +20,9 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,8 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 from loguru import logger
+
+from ..network.resilience import resilient_fetch, with_resilience
 
 try:
     from readability import Document as ReadabilityDocument
@@ -81,37 +85,38 @@ class WebReach:
         self._consciousness = consciousness
 
     async def fetch(self, url: str) -> PageContent:
-        import time
         t0 = time.monotonic()
         page = PageContent(url=url)
 
         try:
-            async with aiohttp.ClientSession(
+            status, body, final_url = await resilient_fetch(
+                url,
                 headers={"User-Agent": self.USER_AGENT},
-                timeout=self.TIMEOUT,
-            ) as s:
-                async with s.get(url, allow_redirects=True, max_redirects=5) as resp:
-                    page.status_code = resp.status
-                    page.content_type = resp.content_type or ""
+                timeout=15.0,
+                max_retries=2,
+                use_mirror=False,  # generic URLs don't have mirrors
+                use_proxy=True,
+            )
 
-                    if resp.status != 200:
-                        page.text = f"HTTP {resp.status}"
-                        return page
+            page.status_code = status
+            page.url = final_url
 
-                    raw = await resp.text()
-                    if len(raw) > self.MAX_CONTENT_LENGTH:
-                        raw = raw[:self.MAX_CONTENT_LENGTH]
+            if status != 200:
+                page.text = f"HTTP {status}"
+                page.fetch_time_ms = (time.monotonic() - t0) * 1000
+                return page
 
-                    page.html = raw
-                    page = self._extract_content(page, raw, url)
-                    page.fetch_time_ms = (time.monotonic() - t0) * 1000
+            raw = body.decode(errors="replace")
+            if len(raw) > self.MAX_CONTENT_LENGTH:
+                raw = raw[:self.MAX_CONTENT_LENGTH]
 
-        except aiohttp.ClientError as e:
-            page.text = f"Fetch error: {e}"
-        except asyncio.TimeoutError:
-            page.text = "Timeout"
+            page.html = raw
+            page = self._extract_content(page, raw, url)
+            page.fetch_time_ms = (time.monotonic() - t0) * 1000
+
         except Exception as e:
             page.text = f"Error: {e}"
+            page.fetch_time_ms = (time.monotonic() - t0) * 1000
 
         return page
 
@@ -263,6 +268,3 @@ class WebReach:
             lines.append("")
 
         return "\n".join(lines)
-
-
-import asyncio as _asyncio

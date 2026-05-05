@@ -1885,7 +1885,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2188,6 +2188,26 @@ class Conversation(containers.Vertical):
                     if h.relevance:
                         lines.append(f"  [dim]{h.relevance}[/dim]")
                 await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "replace":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.document_editor import get_editor
+            parts = params.split(maxsplit=2) if params else []
+            if len(parts) < 2:
+                await self.post(Note("用法: /replace <文件> <旧文本> [新文本]"))
+                await self.post(Note("/replace <文件> section|<标题> <新内容>"))
+                await self.post(Note("示例: /replace config.yaml port:8100 port:8888"))
+                return True
+            editor = get_editor()
+            path = parts[0]; arg = parts[1]; new = parts[2] if len(parts) > 2 else ""
+            if arg.startswith("section|"):
+                heading = arg.split("|", 1)[1]
+                result = editor.replace_section(path, heading, new)
+                await self.post(Note(f"/section '{heading}': {result.preview} {'[已应用]' if result.applied else '[预览]'}"))
+            else:
+                result = editor.replace_pattern(path, arg, new)
+                await self.post(Note(f"替换: {result.replacements} 处 {result.preview} {'[已应用]' if result.applied else '[预览]'}"))
             return True
 
         elif command == "save":

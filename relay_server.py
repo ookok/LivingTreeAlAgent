@@ -700,15 +700,45 @@ class P2PRelayServer:
             url = data.get("url", "")
             if not url: return web.json_response({"error": "url required"}, status=400)
             import urllib.request, re
-            req = urllib.request.Request(url, headers={"User-Agent": "LivingTreeRelay/2.1"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-            # Strip to text
-            clean = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL|re.IGNORECASE)
+            url = url if url.startswith("http") else "https://" + url
+
+            # ── Auto proxy ──
+            proxy_url = ""
+            try:
+                from livingtree.network.proxy_fetcher import get_proxy_pool
+                p = get_proxy_pool().get_best()
+                if p: proxy_url = p.url
+            except Exception: pass
+
+            # Failover: proxy first, then mirror
+            result_text = ""
+            for attempt_url in [url]:
+                if "github" in attempt_url:
+                    attempt_url = attempt_url.replace(
+                        "https://github.com", "https://ghproxy.com/https://github.com", 1
+                    ).replace(
+                        "https://raw.githubusercontent.com",
+                        "https://ghproxy.com/https://raw.githubusercontent.com", 1
+                    )
+                try:
+                    req = urllib.request.Request(attempt_url, headers={"User-Agent": "LivingTreeRelay/2.1"})
+                    if proxy_url:
+                        req.set_proxy(proxy_url, "http")
+                        req.set_proxy(proxy_url, "https")
+                    with urllib.request.urlopen(req, timeout=12) as resp:
+                        result_text = resp.read().decode("utf-8", errors="replace")
+                        break
+                except Exception:
+                    continue
+
+            if not result_text:
+                return web.json_response({"error": "Fetch failed via all paths"}, status=502)
+
+            clean = re.sub(r'<script[^>]*>.*?</script>', '', result_text, flags=re.DOTALL|re.IGNORECASE)
             clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL|re.IGNORECASE)
             clean = re.sub(r'<[^>]+>', ' ', clean)
             clean = re.sub(r'\s+', ' ', clean)
-            return web.json_response({"content": clean[:30000], "url": url})
+            return web.json_response({"content": clean[:30000], "url": url, "proxied": bool(proxy_url)})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
@@ -720,22 +750,47 @@ class P2PRelayServer:
             data = await request.json()
             query = data.get("query", "")
             if not query: return web.json_response({"error": "query required"}, status=400)
+
+            # Try SparkSearch first
             try:
                 from livingtree.search.spark_search import SparkSearch
                 results = SparkSearch().search(query, limit=data.get("limit", 5))
-                return web.json_response({"results": results, "query": query})
+                return web.json_response({"results": results, "query": query, "engine": "spark"})
             except Exception:
                 pass
-            # Fallback: DuckDuckGo HTML search
+
+            # Use DeepSearch from external_access
+            try:
+                from livingtree.network.external_access import get_external_access
+                results = await get_external_access().deep_search(query, max_results=10)
+                return web.json_response({
+                    "results": [{"title": r.title, "url": r.url, "snippet": r.snippet, "engine": r.engine}
+                               for r in results],
+                    "query": query, "engine": "federated",
+                })
+            except Exception:
+                pass
+
+            # Fallback: DuckDuckGo HTML
             import urllib.request, urllib.parse, re
+            proxy_url = ""
+            try:
+                from livingtree.network.proxy_fetcher import get_proxy_pool
+                p = get_proxy_pool().get_best()
+                if p: proxy_url = p.url
+            except Exception: pass
+
             url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
             req = urllib.request.Request(url, headers={"User-Agent": "LivingTreeRelay/2.1"})
+            if proxy_url:
+                req.set_proxy(proxy_url, "http")
+                req.set_proxy(proxy_url, "https")
             with urllib.request.urlopen(req, timeout=10) as resp:
                 html = resp.read().decode("utf-8", errors="replace")
             results = []
             for m in re.finditer(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.DOTALL):
                 results.append({"url": m.group(1), "title": re.sub(r'<[^>]+>', '', m.group(2)).strip()})
-            return web.json_response({"results": results[:5], "query": query})
+            return web.json_response({"results": results[:5], "query": query, "engine": "ddg", "proxied": bool(proxy_url)})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 

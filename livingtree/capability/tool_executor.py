@@ -47,19 +47,41 @@ class ToolExecutor:
     # ═══ Web tools ═══
 
     async def url_fetch(self, url: str, format: str = "markdown") -> ToolResult:
-        """Fetch a URL and return content. Auto-extracts tables/lists/headings."""
+        """Fetch a URL. Auto-detects proxy from pool + mirrors."""
         t0 = time.monotonic()
         try:
             import urllib.request
             url = url if url.startswith("http") else "https://" + url
-            req = urllib.request.Request(url, headers={"User-Agent": "LivingTree/2.1"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
+
+            # ── Auto proxy + mirror ──
+            proxied_url = url
+            proxy_url = self._get_auto_proxy()
+            if proxy_url:
+                logger.debug(f"Proxy: {proxy_url[:30]}... for {url[:50]}")
+
+            result_text = ""
+            # Try with proxy first, fallback to direct + mirrors
+            for attempt_url in self._get_failover_urls(url):
+                try:
+                    req = urllib.request.Request(attempt_url, headers={"User-Agent": "LivingTree/2.1"})
+                    if proxy_url:
+                        req.set_proxy(proxy_url, "http")
+                        req.set_proxy(proxy_url, "https")
+                    with urllib.request.urlopen(req, timeout=12) as resp:
+                        raw = resp.read().decode("utf-8", errors="replace")
+                        result_text = raw
+                        break
+                except Exception:
+                    continue
+
+            if not result_text:
+                return ToolResult("url_fetch", False, error="All failover URLs failed", elapsed_ms=(time.monotonic()-t0)*1000)
+
             if format in ("text", "html"):
-                return ToolResult("url_fetch", True, raw[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
-            # Structured extraction: tables > headings > lists
+                return ToolResult("url_fetch", True, result_text[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
+            # Structured extraction
             parts = []
-            for m in re.finditer(r'<table[^>]*>(.*?)</table>', raw, re.DOTALL|re.IGNORECASE):
+            for m in re.finditer(r'<table[^>]*>(.*?)</table>', result_text, re.DOTALL|re.IGNORECASE):
                 rows = re.findall(r'<tr[^>]*>(.*?)</tr>', m.group(1), re.DOTALL|re.IGNORECASE)
                 tbl = []
                 for row in rows[:30]:
@@ -67,13 +89,13 @@ class ToolExecutor:
                     tbl.append("| " + " | ".join(re.sub(r'<[^>]+>', '', c).strip()[:80] for c in cells) + " |")
                 if tbl:
                     parts.append("[TABLE]\n" + "\n".join(tbl) + "\n[/TABLE]")
-            for m in re.finditer(r'<h[1-3][^>]*>(.*?)</h[1-3]>', raw, re.IGNORECASE):
+            for m in re.finditer(r'<h[1-3][^>]*>(.*?)</h[1-3]>', result_text, re.IGNORECASE):
                 parts.append("## " + re.sub(r'<[^>]+>', '', m.group(1)).strip())
-            for m in re.finditer(r'<(ul|ol)[^>]*>(.*?)</\1>', raw, re.DOTALL|re.IGNORECASE):
+            for m in re.finditer(r'<(ul|ol)[^>]*>(.*?)</\1>', result_text, re.DOTALL|re.IGNORECASE):
                 items = re.findall(r'<li[^>]*>(.*?)</li>', m.group(2), re.DOTALL|re.IGNORECASE)
                 parts.append("\n".join(f"- {re.sub(r'<[^>]+>', '', i).strip()}" for i in items[:20]))
             if not parts:
-                clean = re.sub(r'<script[^>]*>.*?</script>', '', raw, flags=re.DOTALL|re.IGNORECASE)
+                clean = re.sub(r'<script[^>]*>.*?</script>', '', result_text, flags=re.DOTALL|re.IGNORECASE)
                 clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL|re.IGNORECASE)
                 clean = re.sub(r'<[^>]+>', '', clean)
                 clean = re.sub(r'\n{3,}', '\n\n', clean)
@@ -81,6 +103,29 @@ class ToolExecutor:
             return ToolResult("url_fetch", True, "\n\n".join(parts)[:30000], elapsed_ms=(time.monotonic()-t0)*1000)
         except Exception as e:
             return ToolResult("url_fetch", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    @staticmethod
+    def _get_auto_proxy() -> str:
+        """Auto-detect proxy from pool or env."""
+        try:
+            from ..network.proxy_fetcher import get_proxy_pool
+            pool = get_proxy_pool()
+            p = pool.get_best()
+            if p and p.failure_count < 5:
+                return p.url
+        except Exception:
+            pass
+        return ""
+
+    @staticmethod
+    def _get_failover_urls(url: str) -> list[str]:
+        """Generate failover URL chain: original + mirrors."""
+        urls = [url]
+        if "github.com" in url or "raw.githubusercontent.com" in url:
+            urls.append(url.replace("https://github.com", "https://ghproxy.com/https://github.com", 1)
+                         .replace("https://raw.githubusercontent.com", "https://ghproxy.com/https://raw.githubusercontent.com", 1))
+            urls.append(url.replace("https://github.com", "https://mirror.ghproxy.com/https://github.com", 1))
+        return urls
 
     async def api_call(self, url: str, method: str = "GET", headers: str = "{}", body: str = "") -> ToolResult:
         """Call an external API."""

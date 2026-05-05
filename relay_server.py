@@ -53,6 +53,10 @@ RELAY_PORT = 8888
 RELAY_POOL: list[str] = []  # ["host:port", ...]
 RELAY_POOL_FILE = Path(".livingtree/relay_pool.json")
 
+# ═══ LLM Subscription Pool (shared API keys, sub2api-style) ═══
+SUBSCRIPTION_POOL: dict[str, dict] = {}  # name → {base_url, api_key, models, cost_per_1m}
+SUBSCRIPTION_FILE = Path(".livingtree/subscription_pool.json")
+
 # ═══ External network status ═══
 _external_ok: bool = False
 GITHUB_CHECK = "github.com"
@@ -135,6 +139,20 @@ def _save_relay_pool():
     try:
         RELAY_POOL_FILE.parent.mkdir(parents=True, exist_ok=True)
         RELAY_POOL_FILE.write_text(json.dumps(RELAY_POOL))
+    except Exception: pass
+
+def _load_subscriptions():
+    global SUBSCRIPTION_POOL
+    try:
+        if SUBSCRIPTION_FILE.exists():
+            SUBSCRIPTION_POOL = json.loads(SUBSCRIPTION_FILE.read_text())
+    except Exception:
+        pass
+
+def _save_subscriptions():
+    try:
+        SUBSCRIPTION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SUBSCRIPTION_FILE.write_text(json.dumps(SUBSCRIPTION_POOL, indent=2))
     except Exception: pass
 
 def _ensure_api_keys():
@@ -231,8 +249,22 @@ window._copyKeys=PASS_TO_JS
 function copyKey(k){navigator.clipboard.writeText(k).then(()=>{var e=event.target;e.textContent='已复制!';setTimeout(()=>e.textContent=e.dataset.key,1500)}).catch(()=>prompt('复制:',k))}
 </script>
 
+<h2>🚀 订阅池 (LLM拼车)</h2>
+<form class="add-form" method="POST" action="/admin/subscriptions/add">
+  <input name="name" placeholder="名称 (如: claude-team)" required style="flex:1">
+  <input name="base_url" placeholder="API地址 (https://api.openai.com/v1)" required style="flex:2">
+  <input name="api_key" placeholder="API Key" required style="flex:2">
+  <input name="model" placeholder="模型 (如: gpt-4o)" style="flex:1">
+  <input name="cost" placeholder="¥/M tokens" value="4.0" style="flex:0.5">
+  <button type="submit">+ 添加</button>
+</form>
+<table><tr><th>名称</th><th>模型</th><th>地址</th><th>单价</th><th>操作</th></tr>
+SUB_ROWS</table>
+
 <h2>📡 API端点</h2>
-<div class="endpoint">POST /login — {"username":"","password":""} → {"token":"...","api_key":"lt-..."}</div>
+<div class="endpoint">POST /v1/chat/completions — OpenAI兼容 (Bearer &lt;api_key&gt;)</div>
+<div class="endpoint">GET /v1/models — 可用模型列表</div>
+<div class="endpoint">POST /login — {"username":"","password":""} → {"api_key":"lt-..."}</div>
 <div class="endpoint">POST /chat — Authorization: Bearer &lt;api_key&gt; {"message":"..."}</div>
 <div class="endpoint">POST /web/fetch — 中继帮节点抓取网页（需外网连通）</div>
 <div class="endpoint">POST /web/search — 中继帮节点搜索（需外网连通）</div>
@@ -275,6 +307,7 @@ class P2PRelayServer:
         _ensure_accounts()
         _ensure_api_keys()
         _load_relay_pool()
+        _load_subscriptions()
         self._setup_routes()
 
     def _setup_routes(self):
@@ -295,20 +328,11 @@ class P2PRelayServer:
         app.router.add_post("/admin/keys/add", self._admin_add_key)
         app.router.add_get("/admin/keys/revoke", self._admin_revoke_key)
         app.router.add_post("/admin/password", self._admin_change_password)
-        # API (all require API key except /login and /health)
-        app.router.add_get("/health", self._health)
-        app.router.add_post("/chat", self._handle_chat)
-        app.router.add_get("/status", self._handle_status)
-        app.router.add_post("/cost/report", self._cost_report)
-        # Web delegation (relay fetches for nodes)
-        app.router.add_post("/web/fetch", self._web_fetch)
-        app.router.add_post("/web/search", self._web_search)
-        # P2P
-        app.router.add_post("/peers/register", self._peer_register)
-        app.router.add_get("/peers/discover", self._peer_discover)
-        app.router.add_post("/peers/sync", self._peer_sync)
-        app.router.add_get("/peers/best", self._peer_best_relay)
-        app.router.add_get("/ws/relay", self._ws_relay)
+        app.router.add_post("/admin/subscriptions/add", self._admin_add_subscription)
+        app.router.add_get("/admin/subscriptions/remove", self._admin_remove_subscription)
+        # LLM Proxy (sub2api-style)
+        app.router.add_post("/v1/chat/completions", self._llm_proxy)
+        app.router.add_get("/v1/models", self._llm_proxy_models)
         # Metrics
         app.router.add_get("/metrics", self._metrics)
         # WeChat
@@ -432,7 +456,17 @@ class P2PRelayServer:
             revoke_key = key_val[:12] + key_val[-8:]  # use partial for revoke link
             key_rows += f"<tr><td>{info['name']}</td><td><code data-key='{key_val}' onclick='copyKey(this.dataset.key)' style='cursor:pointer' title='点击复制'>{display} 📋</code></td><td>{created}</td><td><a href='/admin/keys/revoke?key={display}'><button class='small danger'>吊销</button></a></td></tr>"
 
+        # Subscription pool rows
+        sub_rows = ""
+        for name, p in SUBSCRIPTION_POOL.items():
+            model = p.get("default_model", "?")[:40]
+            url = p.get("base_url", "")[:50]
+            cost = p.get("cost_per_1m", 0)
+            remove_link = f"/admin/subscriptions/remove?name={name}"
+            sub_rows += f"<tr><td>{name}</td><td>{model}</td><td>{url}</td><td>¥{cost}/M</td><td><a href='{remove_link}'><button class='small danger'>移除</button></a></td></tr>"
+
         html = ADMIN_HTML
+        html = html.replace("SUB_ROWS", sub_rows or "<tr><td colspan=5>暂无订阅 — 添加后可拼车共享</td></tr>")
         html = html.replace("PWD_MSG", "")
         html = html.replace("PASS_TO_JS", json.dumps(key_list))
         html = html.replace("UPTIME", f"{(time.time()-self._started_at):.0f}")
@@ -893,7 +927,142 @@ class P2PRelayServer:
         candidates.sort(key=lambda r: (not r["external_ok"], r["peers"]))
         return web.json_response({"best": candidates[0] if candidates else best, "candidates": candidates})
 
-    # ═══ Prometheus metrics ═══
+    # ═══ LLM Proxy (sub2api-style subscription pooling) ═══
+
+    async def _llm_proxy(self, request: web.Request) -> web.Response:
+        """OpenAI-compatible chat completions proxy. Routes through relay's subscription pool.
+
+        Clients use their relay API key, relay picks the best backend from pool.
+        """
+        user = self._check_auth(request)
+        if not user:
+            return web.json_response({"error": "Unauthorized — Bearer <your_api_key>"}, status=401)
+
+        if not SUBSCRIPTION_POOL:
+            return web.json_response({"error": "No subscription configured. Admin: add via /admin"}, status=503)
+
+        try:
+            data = await request.json()
+            messages = data.get("messages", [])
+            model_requested = data.get("model", "")
+            temperature = data.get("temperature", 0.7)
+            max_tokens = data.get("max_tokens", 4096)
+
+            # Pick best backend from pool
+            provider_name, provider = self._pick_best_subscription(model_requested)
+            if not provider:
+                return web.json_response({"error": "No available backend"}, status=503)
+
+            # Forward to actual LLM
+            import aiohttp
+            payload = {
+                "model": provider.get("default_model", model_requested),
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": min(max_tokens, 8192),
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {provider['api_key']}",
+            }
+
+            t0 = time.monotonic()
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"{provider['base_url']}/chat/completions",
+                    json=payload, headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                ) as resp:
+                    result = await resp.json()
+
+            latency_ms = (time.monotonic() - t0) * 1000
+            usage = result.get("usage", {})
+
+            # Cost tracking
+            tokens_total = usage.get("total_tokens", 0)
+            cost_per_1m = provider.get("cost_per_1m", 4.0)
+            cost = tokens_total / 1_000_000 * cost_per_1m
+
+            if user in ACCOUNT_STORE:
+                a = ACCOUNT_STORE[user]
+                a["token_in"] = a.get("token_in", 0) + usage.get("prompt_tokens", tokens_total)
+                a["token_out"] = a.get("token_out", 0) + usage.get("completion_tokens", 0)
+                a["cost_rmb"] = a.get("cost_rmb", 0) + cost
+                cb = a.setdefault("cost_breakdown", {}).setdefault(provider_name, {"in": 0, "out": 0, "cost": 0})
+                cb["in"] += usage.get("prompt_tokens", 0)
+                cb["out"] += usage.get("completion_tokens", 0)
+                cb["cost"] += cost
+
+            return web.json_response({
+                **result,
+                "proxy_info": {
+                    "backend": provider_name,
+                    "model": provider.get("default_model", ""),
+                    "latency_ms": round(latency_ms),
+                    "cost_rmb": round(cost, 6),
+                }
+            })
+        except Exception as e:
+            return web.json_response({"error": f"Proxy error: {str(e)[:200]}"}, status=500)
+
+    async def _llm_proxy_models(self, request: web.Request) -> web.Response:
+        """List available models from subscription pool."""
+        models = []
+        for name, p in SUBSCRIPTION_POOL.items():
+            models.append({
+                "id": p.get("default_model", name),
+                "object": "model",
+                "owned_by": name,
+                "cost_per_1m_rmb": p.get("cost_per_1m", 4.0),
+            })
+        return web.json_response({"object": "list", "data": models})
+
+    def _pick_best_subscription(self, model_hint: str = "") -> tuple[str, dict | None]:
+        """Pick the best backend from subscription pool."""
+        if not SUBSCRIPTION_POOL:
+            return "", None
+
+        # Try exact model match first
+        for name, p in SUBSCRIPTION_POOL.items():
+            if model_hint and model_hint in p.get("default_model", ""):
+                return name, p
+
+        # Prefer free/cached providers
+        best = None
+        best_cost = float("inf")
+        for name, p in SUBSCRIPTION_POOL.items():
+            cost = p.get("cost_per_1m", 4.0)
+            if cost < best_cost:
+                best_cost = cost
+                best = (name, p)
+
+        return best or (list(SUBSCRIPTION_POOL.items())[0] if SUBSCRIPTION_POOL else ("", None))
+
+    async def _admin_add_subscription(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        data = await request.post()
+        name = data.get("name", "").strip()
+        base_url = data.get("base_url", "").strip()
+        api_key = data.get("api_key", "").strip()
+        model = data.get("model", "").strip()
+        cost = float(data.get("cost", "4.0"))
+        if name and base_url and api_key:
+            SUBSCRIPTION_POOL[name] = {
+                "base_url": base_url, "api_key": api_key,
+                "default_model": model or "gpt-4o", "cost_per_1m": cost,
+                "added_at": time.time(),
+            }
+            _save_subscriptions()
+            logger.info(f"Subscription added: {name}")
+        raise web.HTTPFound("/admin")
+
+    async def _admin_remove_subscription(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        name = request.query.get("name", "")
+        if name in SUBSCRIPTION_POOL:
+            del SUBSCRIPTION_POOL[name]
+            _save_subscriptions()
+        raise web.HTTPFound("/admin")
 
     async def _metrics(self, request: web.Request) -> web.Response:
         """Prometheus /metrics endpoint for Grafana integration."""

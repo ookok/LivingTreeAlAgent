@@ -2455,6 +2455,56 @@ class Conversation(containers.Vertical):
             from tests.self_test import run_and_format
             result = run_and_format()
             await self.post(Note(result))
+        elif any(kw in pl for kw in ("词典", "dict", "术语", "term", "缩写", "词汇")):
+            from livingtree.capability.knowledge_quality import get_term_dictionary
+            td = get_term_dictionary()
+            query = pl.replace("词典", "").replace("dict", "").replace("术语", "").replace("缩写", "").strip()
+            if query:
+                terms = td.search(query)
+                if terms:
+                    lines = [f"## 📖 术语: {query}", ""]
+                    for t in terms[:8]:
+                        parts = [f"**{t.term}**"]
+                        if t.abbreviation:
+                            parts.append(f"({t.abbreviation})")
+                        if t.english:
+                            parts.append(f"[{t.english}]")
+                        lines.append(" ".join(parts))
+                        if t.category:
+                            lines.append(f"  [{t.category}] 出现{t.frequency}次")
+                    await self.post(Note("\n".join(lines)))
+                else:
+                    await self.post(Note(f"[dim]未找到术语: {query}[/dim]"))
+            else:
+                stats = td.stats()
+                lines = [f"## 📖 行业词典 ({stats['total_terms']} 词条)", ""]
+                for t in stats.get("most_frequent", []):
+                    lines.append(f"**{t.term}** ({t.abbreviation}) [{t.category}] ×{t.frequency}")
+                await self.post(Note("\n".join(lines)))
+        elif any(kw in pl for kw in ("审计", "audit", "治理", "规则", "governance")):
+            from livingtree.capability.knowledge_quality import get_governance
+            ig = get_governance()
+            if "规则" in pl or "rule" in pl:
+                lines = [f"## 📋 治理规则 ({len(ig.get_rules())} 条)", ""]
+                for r in ig.get_rules()[:15]:
+                    sev = {"block": "🚫", "error": "❌", "warning": "⚠️"}.get(r.severity, "•")
+                    lines.append(f"{sev} [{r.domain}] {r.rule}")
+                await self.post(Note("\n".join(lines)))
+            else:
+                entries = ig.recent_audits(10)
+                lines = [f"## 📋 审计追踪 ({len(entries)} 条)", ""]
+                for e in entries[-10:]:
+                    ts = time.strftime("%m-%d %H:%M", time.localtime(e.timestamp))
+                    icon = "✅" if e.auto_approved else "⚠️"
+                    lines.append(f"{icon} `{ts}` {e.domain}/{e.section} — {e.action}")
+                    for v in e.rule_violations[:3]:
+                        lines.append(f"   ⚠ {v[:80]}")
+                await self.post(Note("\n".join(lines)))
+        elif any(kw in pl for kw in ("噪音", "noise", "噪声过滤")):
+            from livingtree.capability.knowledge_quality import get_noise_filter
+            nf = get_noise_filter()
+            stats = nf.stats()
+            await self.post(Note(f"📡 噪声过滤: 已见{stats['seen_messages']}条 | 均信号{stats['avg_signal']} | 心跳源{stats['heartbeat_senders']}"))
         else:
             if not params:
                 await self.post(Note(COMMANDS["check"]["fallback"]))

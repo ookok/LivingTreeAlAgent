@@ -99,6 +99,17 @@ class MessageQueue:
         if self._cancelled:
             return
 
+        # ── Noise filter: skip low-signal messages ──
+        try:
+            from livingtree.capability.knowledge_quality import get_noise_filter
+            nf = get_noise_filter()
+            sig = nf.score(str(args[0])[:200] if args else "", sender=msg_type)
+            if sig.score < 0.15 and not kwargs.get("force", False):
+                self._dropped += 1
+                return  # drop noise
+        except Exception:
+            pass
+
         self._seq += 1
         p = priority if priority is not None else PRIORITY_MAP.get(msg_type, 4)
         qm = QueuedMessage(

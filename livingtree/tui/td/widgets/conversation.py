@@ -1326,30 +1326,20 @@ class Conversation(containers.Vertical):
     def _build_slash_commands(self) -> list[SlashCommand]:
         slash_commands = [
             SlashCommand("/toad:about", "About Toad"),
-            SlashCommand(
-                "/toad:clear",
-                "Clear conversation window",
-                "<optional number of lines to preserve>",
-            ),
-            SlashCommand(
-                "/toad:rename",
-                "Give the current session a friendly name",
-                "<session name>",
-            ),
-            SlashCommand(
-                "/toad:session-close",
-                "Close the current session",
-            ),
-            SlashCommand(
-                "/toad:session-new",
-                "Open a new session in the current working directory",
-                "<initial prompt or command>",
-            ),
-            SlashCommand(
-                "/toad:testimonial",
-                "Tweet a testimonial regarding Toad",
-                "<what you think of toad>",
-            ),
+            SlashCommand("/toad:clear", "Clear conversation window", "<optional lines to preserve>"),
+            SlashCommand("/toad:rename", "Rename session", "<name>"),
+            SlashCommand("/toad:session-close", "Close session"),
+            SlashCommand("/toad:session-new", "New session"),
+            SlashCommand("/toad:testimonial", "Tweet a testimonial"),
+            # ── LivingTree (8 unified) ──
+            SlashCommand("/ask", "搜索 & 查资料", "搜一下transformer最新进展"),
+            SlashCommand("/do", "执行操作", "执行SQL查询"),
+            SlashCommand("/files", "文件管理", "把config.py的端口改成8888"),
+            SlashCommand("/learn", "学习 & 进化", "挖掘项目知识"),
+            SlashCommand("/check", "检查 & 诊断", "系统状态"),
+            SlashCommand("/docs", "文档生成", "批量生成10份报告"),
+            SlashCommand("/team", "协作 & 网络", "查看在线节点"),
+            SlashCommand("/help", "帮助", "查看帮助"),
         ]
 
         slash_commands.extend(self.agent_slash_commands)

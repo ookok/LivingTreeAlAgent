@@ -144,7 +144,12 @@ KEY_ROWS</table>
 <div class="endpoint">GET /peers/discover — P2P节点发现</div>
 <div class="endpoint">WS /ws/relay — WebSocket消息中继</div>
 <div class="endpoint">POST /cost/report — 上报token消耗</div>
-<div style="margin-top:15px"><a href="/admin/logout"><button class="danger">退出登录</button></a></div>
+<div style="margin-top:15px">
+<a href="/admin/stats/reset?scope=costs"><button class="danger">🗑 清空费用统计</button></a>
+<a href="/admin/stats/reset?scope=peers"><button class="danger">🗑 清空节点列表</button></a>
+<a href="/admin/stats/reset?scope=all"><button class="danger">🗑 清空全部统计</button></a>
+<a href="/admin/logout" style="margin-left:20px"><button>退出登录</button></a>
+</div>
 </body></html>"""
 
 LOGIN_HTML = """<!DOCTYPE html>
@@ -187,6 +192,7 @@ class P2PRelayServer:
         app.router.add_post("/admin/accounts/add", self._admin_add_account)
         app.router.add_get("/admin/accounts/reset", self._admin_reset_password)
         app.router.add_get("/admin/accounts/delete", self._admin_delete_account)
+        app.router.add_get("/admin/stats/reset", self._admin_reset_stats)
         app.router.add_post("/admin/keys/add", self._admin_add_key)
         app.router.add_get("/admin/keys/revoke", self._admin_revoke_key)
         # API
@@ -348,6 +354,21 @@ class P2PRelayServer:
         if username in ACCOUNT_STORE and not ACCOUNT_STORE[username].get("is_admin"):
             del ACCOUNT_STORE[username]
             _save_accounts()
+        raise web.HTTPFound("/admin")
+
+    async def _admin_reset_stats(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        scope = request.query.get("scope", "all")  # all | peers | costs
+        if scope in ("all", "peers"):
+            PEER_STORE.clear()
+        if scope in ("all", "costs"):
+            for a in ACCOUNT_STORE.values():
+                a["token_in"] = 0; a["token_out"] = 0; a["cost_rmb"] = 0.0
+                a["cost_breakdown"] = {}
+            _save_accounts()
+        if scope in ("all", "requests"):
+            self._request_count = 0
+        logger.info(f"Stats reset: scope={scope}")
         raise web.HTTPFound("/admin")
 
     async def _admin_add_key(self, request: web.Request) -> web.Response:

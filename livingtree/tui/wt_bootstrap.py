@@ -110,7 +110,7 @@ def _check_wt_update_needed() -> tuple[bool, str]:
 def check_version_github() -> Optional[dict]:
     """Standalone version check via GitHub API with mirror fallback."""
     code, body, _ = _fetch_with_mirrors(
-        "https://api.github.com/repos/your-org/LivingTreeAlAgent/releases/latest"
+        "https://api.github.com/repos/ookok/LivingTreeAlAgent/releases/latest"
     )
     if code == 200:
         data = json.loads(body)
@@ -123,7 +123,7 @@ def check_version_github() -> Optional[dict]:
     # Fallback: Gitee
     try:
         req = Request(
-            "https://gitee.com/api/v5/repos/your-org/LivingTreeAlAgent/releases/latest",
+            "https://gitee.com/api/v5/repos/ookok/LivingTreeAlAgent/releases/latest",
             headers={"User-Agent": "LivingTree/2.1", "Accept": "application/json"},
         )
         with urlopen(req, timeout=10) as resp:

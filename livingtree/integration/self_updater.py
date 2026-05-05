@@ -28,12 +28,12 @@ import aiohttp
 from loguru import logger
 
 # ═══ Repo config ═══
-GITHUB_REPO = "your-org/LivingTreeAlAgent"
+GITHUB_REPO = "ookok/LivingTreeAlAgent"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_ZIP = f"https://github.com/{GITHUB_REPO}/archive/refs/tags/{{tag}}.zip"
 
 # Gitee mirror (same repo name convention)
-GITEE_REPO = "your-org/LivingTreeAlAgent"
+GITEE_REPO = "ookok/LivingTreeAlAgent"
 GITEE_API = f"https://gitee.com/api/v5/repos/{GITEE_REPO}/releases/latest"
 GITEE_ZIP = f"https://gitee.com/{GITEE_REPO}/repository/archive/{{tag}}.zip"
 

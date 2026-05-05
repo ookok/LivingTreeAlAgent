@@ -34,8 +34,8 @@ if (-not $python) {
 
 # [2/7] Clone
 Write-Host "[2/7] Downloading project..." -ForegroundColor Yellow
-$githubUrl = "https://github.com/your-org/LivingTreeAlAgent.git"
-$giteeUrl = "https://gitee.com/your-org/LivingTreeAlAgent.git"
+$githubUrl = "https://github.com/ookok/LivingTreeAlAgent.git"
+$giteeUrl = "https://gitee.com/ookok/LivingTreeAlAgent.git"
 
 if (Test-Path $InstallDir) {
     Write-Host "   Directory exists — updating..."

@@ -13,8 +13,8 @@ if "%2"=="--relay" set MODE=relay
 if "%1"=="--relay" set MODE=relay
 
 set INSTALL_DIR=%USERPROFILE%\livingtree
-set GITHUB_URL=https://github.com/your-org/LivingTreeAlAgent.git
-set GITEE_URL=https://gitee.com/your-org/LivingTreeAlAgent.git
+set GITHUB_URL=https://github.com/ookok/LivingTreeAlAgent.git
+set GITEE_URL=https://gitee.com/ookok/LivingTreeAlAgent.git
 
 echo.
 echo ╔══════════════════════════════════════════╗

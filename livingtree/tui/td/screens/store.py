@@ -410,8 +410,8 @@ class StoreScreen(Screen):
             "\n\n",
             (
                 Content.from_markup(
-                    "[dim]Code: [@click=screen.url('https://github.com/your-org/LivingTreeAlAgent')]Repository[/] • "
-                    "Bugs: [@click=screen.url('https://github.com/your-org/LivingTreeAlAgent/discussions')]Discussions[/] • "
+                    "[dim]Code: [@click=screen.url('https://github.com/ookok/LivingTreeAlAgent')]Repository[/] • "
+                    "Bugs: [@click=screen.url('https://github.com/ookok/LivingTreeAlAgent/discussions')]Discussions[/] • "
                     "Sponsor: [@click=screen.url('https://github.com/sponsors/willmcgugan')]@willmcgugan[/]"
                 )
             ),

@@ -5,8 +5,8 @@
 
 set -e
 
-GITHUB_REPO="https://github.com/your-org/LivingTreeAlAgent.git"
-GITEE_REPO="https://gitee.com/your-org/LivingTreeAlAgent.git"
+GITHUB_REPO="https://github.com/ookok/LivingTreeAlAgent.git"
+GITEE_REPO="https://gitee.com/ookok/LivingTreeAlAgent.git"
 INSTALL_DIR="${HOME}/livingtree"
 PYTHON_CMD=""
 PORT="8100"

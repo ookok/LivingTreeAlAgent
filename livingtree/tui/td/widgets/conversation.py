@@ -87,7 +87,7 @@ Note that some agents require an ACP adapter to be installed to work with Toad.
 
 Some agents may require you to restart your shell (open a new terminal) after installing.
 
-If that fails, ask for help in [Discussions](https://github.com/your-org/LivingTreeAlAgent/discussions)!
+If that fails, ask for help in [Discussions](https://github.com/ookok/LivingTreeAlAgent/discussions)!
 """,
     "no_resume": """\
 ## Agent does not support resume
@@ -101,11 +101,11 @@ Try updating to see if support has been added.
 - Click the dropdown, select "Update" or "Install" again
 - Repeat the process to update the ACP adapter (if required)
 
-If that fails, ask for help in [Discussions](https://github.com/your-org/LivingTreeAlAgent/discussions)!
+If that fails, ask for help in [Discussions](https://github.com/ookok/LivingTreeAlAgent/discussions)!
 """,
 }
 
-HELP_URL = "https://github.com/your-org/LivingTreeAlAgent/discussions"
+HELP_URL = "https://github.com/ookok/LivingTreeAlAgent/discussions"
 
 INTERNAL_EROR = f"""\
 ## Internal error
@@ -1958,7 +1958,7 @@ class Conversation(containers.Vertical):
 
             open_tweet_intent(
                 testimonial,
-                url="https://github.com/your-org/LivingTreeAlAgent",
+                url="https://github.com/ookok/LivingTreeAlAgent",
                 via="willmcgugan",
                 hashtags=["ai"],
             )

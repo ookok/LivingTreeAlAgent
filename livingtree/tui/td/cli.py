@@ -213,7 +213,7 @@ def acp(
         "identity": identity,
         "name": title or command.partition(" ")[0],
         "short_name": "agent",
-        "url": "https://github.com/your-org/LivingTreeAlAgent",
+        "url": "https://github.com/ookok/LivingTreeAlAgent",
         "protocol": "acp",
         "type": "coding",
         "author_name": "Will McGugan",
@@ -252,7 +252,7 @@ def acp(
     print("")
     print("[bold magenta]Thanks for trying out Toad!")
     print("Please head to Discussions to share your experiences (good or bad).")
-    print("https://github.com/your-org/LivingTreeAlAgent/discussions")
+    print("https://github.com/ookok/LivingTreeAlAgent/discussions")
 
 
 @main.command("settings")

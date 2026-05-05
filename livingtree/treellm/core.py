@@ -159,6 +159,15 @@ class TreeLLM:
         if director.supports_cache(provider_name):
             messages = director.prepare(messages, provider_name)
 
+        # ── Session binding: inject transition context if model switched ──
+        sid = kwargs.get("session_id", f"session_{id(self)}")
+        from .session_binding import get_session_binding
+        sb = get_session_binding()
+        old_model = sb.get_session(sid).bound_model
+        if old_model and old_model != provider_name:
+            ctx = sb.transition_context(sid, old_model, provider_name)
+            messages = [{"role": "system", "content": ctx}] + messages
+
         t0 = time.monotonic()
         result = None
         try:
@@ -169,6 +178,8 @@ class TreeLLM:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
                                         chosen=p.name, success=True)
+                # ── Record session binding ──
+                sb.bind(sid, p.name)
                 # ── Record cache performance ──
                 if result.prompt_tokens:
                     from .cache_director import get_cache_director

@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns", "lineage", "practice", "profile", "brain"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns", "lineage", "practice", "profile", "brain", "prefer", "binding"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3565,6 +3565,39 @@ class Conversation(containers.Vertical):
                     await self.post(Note("\n".join(lines)))
             else:
                 await self.post(Note("用法: /brain status|report|search <关键词>"))
+            return True
+
+        elif command == "prefer":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.treellm.session_binding import get_session_binding
+            sb = get_session_binding()
+            sid = getattr(self.app, '_session_id', 'default')
+            model = params.strip() if params else ""
+            if model:
+                sb.set_preference(sid, model)
+                await self.post(Note(f"🔒 会话绑定: {model} (不再自动切换)"))
+            else:
+                sb.set_preference(sid, "")
+                await self.post(Note("🔓 已解除绑定，恢复自动选举"))
+            return True
+
+        elif command == "binding":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.treellm.session_binding import get_session_binding
+            sb = get_session_binding()
+            sid = getattr(self.app, '_session_id', 'default')
+            stats = sb.stats(sid)
+            lines = [
+                f"## 🔗 会话绑定",
+                f"当前模型: **{stats['bound_model'] or '未绑定'}**",
+                f"模式: {'🔒 ' + stats['preference'] if stats['preference'] else '🔓 自动选举'}",
+                f"轮次: {stats['turns']} | 连续: {stats['consecutive']} | 切换: {stats['switches']}",
+            ]
+            if stats['switch_history']:
+                lines.append(f"\n切换历史:")
+                for h in stats['switch_history'][-5:]:
+                    lines.append(f"  第{h['at_turn']}轮: {h['from']} → {h['to']}")
+            await self.post(Note("\n".join(lines)))
             return True
 
         return False

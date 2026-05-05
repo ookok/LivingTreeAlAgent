@@ -25,13 +25,14 @@ STATS_FILE = Path(".livingtree/election_stats.json")
 
 # Scoring weights (sum to 1.0)
 WEIGHTS = {
-    "latency": 0.20,    # Speed matters
-    "quality": 0.25,     # Success matters most
-    "cost": 0.16,        # Free preferred
-    "capability": 0.13,  # Task match
-    "freshness": 0.06,   # Prefer recently-used providers
-    "rate_limit": 0.08,  # Penalize throttled providers
-    "cache": 0.12,       # Prefer providers with high cache hit rates
+    "latency": 0.18,
+    "quality": 0.23,
+    "cost": 0.15,
+    "capability": 0.12,
+    "freshness": 0.05,
+    "rate_limit": 0.07,
+    "cache": 0.10,
+    "sticky": 0.10,       # Session binding: prefer same model
 }
 
 # Provider capability profiles: which tasks each model excels at
@@ -217,6 +218,16 @@ class HolisticElection:
                 score.scores["cache"] = cd.cache_score(name)
             except Exception:
                 score.scores["cache"] = 0.0
+
+            # Score 7: Session stickiness (prefer same model across turns)
+            try:
+                from .session_binding import get_session_binding
+                sb = get_session_binding()
+                # Get session ID from query context (passed via kwargs or global)
+                sid = query[:20] if query else "default"
+                score.scores["sticky"] = sb.stickiness_score(sid, name)
+            except Exception:
+                score.scores["sticky"] = 0.0
 
             # Weighted total
             score.total = sum(

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivingTree AI Agent — 工业级自主数字生命体</title>
+<style>
+:root {
+  --bg: #0a0c10; --surface: #161b22; --border: #30363d;
+  --primary: #58a6ff; --text: #c9d1d9; --muted: #8b949e;
+  --green: #3fb950; --orange: #fea62b; --red: #f85149;
+}
+* { box-sizing:border-box; margin:0; padding:0 }
+body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; line-height:1.6 }
+a { color:var(--primary); text-decoration:none } a:hover { text-decoration:underline }
+.container { max-width:1000px; margin:0 auto; padding:0 20px }
+
+/* Hero */
+.hero { text-align:center; padding:80px 20px 60px; background:linear-gradient(180deg,var(--surface),var(--bg)) }
+.hero h1 { font-size:48px; color:var(--primary); margin-bottom:10px }
+.hero .tagline { font-size:20px; color:var(--muted); margin-bottom:30px }
+.hero .btns { display:flex; gap:12px; justify-content:center; flex-wrap:wrap }
+.btn { display:inline-block; padding:12px 28px; border-radius:6px; font-size:16px; font-weight:600; cursor:pointer; text-decoration:none; border:none }
+.btn-primary { background:var(--green); color:#fff }
+.btn-primary:hover { background:#2ea043; text-decoration:none }
+.btn-secondary { background:var(--surface); color:var(--text); border:1px solid var(--border) }
+.btn-secondary:hover { background:#1a2332; text-decoration:none }
+.code { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:16px 20px; margin:10px 0; font-family:monospace; color:var(--primary); overflow-x:auto }
+
+/* Features */
+.features { padding:60px 0 }
+.features h2 { text-align:center; font-size:32px; color:var(--primary); margin-bottom:40px }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; transition:border-color .2s }
+.card:hover { border-color:var(--primary) }
+.card h3 { color:var(--primary); margin-bottom:8px; font-size:18px }
+.card p { color:var(--muted); font-size:14px }
+
+/* Stats */
+.stats { padding:40px 0; text-align:center }
+.stats h2 { color:var(--primary); margin-bottom:30px }
+.stat-row { display:flex; justify-content:center; gap:40px; flex-wrap:wrap }
+.stat { text-align:center }
+.stat .num { font-size:36px; color:var(--primary); font-weight:700 }
+.stat .label { font-size:14px; color:var(--muted) }
+
+/* Commands table */
+.commands { padding:40px 0 }
+.commands h2 { text-align:center; color:var(--primary); margin-bottom:20px }
+table { width:100%; border-collapse:collapse; margin:20px 0 }
+th,td { border:1px solid var(--border); padding:10px 14px; text-align:left }
+th { background:var(--surface); color:var(--primary) }
+td code { background:var(--bg); padding:2px 6px; border-radius:3px; color:var(--orange) }
+
+/* Footer */
+footer { padding:40px 20px; text-align:center; border-top:1px solid var(--border); color:var(--muted); font-size:14px }
+footer a { color:var(--primary) }
+
+/* Responsive */
+@media(max-width:640px) {
+  .hero h1 { font-size:32px }
+  .hero .tagline { font-size:16px }
+  .stat-row { gap:20px }
+}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <h1>🌳 LivingTree AI Agent</h1>
+  <p class="tagline">工业级自主数字生命体 — 批量文档写作 · 项目开发 · 自我进化</p>
+  <div class="btns">
+    <a href="https://github.com/ookok/LivingTreeAlAgent#readme" class="btn btn-primary">🚀 快速开始</a>
+    <a href="https://github.com/ookok/LivingTreeAlAgent" class="btn btn-secondary">📦 GitHub</a>
+    <a href="docs/user-guide.html" class="btn btn-secondary">📖 用户手册</a>
+  </div>
+  <div class="code" style="max-width:600px;margin:30px auto 0">
+    curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.sh | bash
+  </div>
+</section>
+
+<section class="features">
+  <div class="container">
+    <h2>核心能力</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>🤖 多 Provider LLM</h3>
+        <p>DeepSeek · 硅基流动 · 模力方舟 · 智谱 · 讯飞 · 阿里 · 小米等 10+ 平台，免费优先自动选举</p>
+      </div>
+      <div class="card">
+        <h3>📝 批量文档生成</h3>
+        <p>CSV 参数表 → 并行 LLM 生成 → DOCX/PDF 导出，含审批工作流和法规合规检查</p>
+      </div>
+      <div class="card">
+        <h3>🔍 混合知识检索</h3>
+        <p>FTS5 全文 + 向量语义 + 知识图谱 4 路融合，百万字文档子毫秒搜索</p>
+      </div>
+      <div class="card">
+        <h3>🧠 自主进化</h3>
+        <p>每小时互联网学习 8 个领域，每天自动挖掘项目模板，持续自我改进</p>
+      </div>
+      <div class="card">
+        <h3>🌐 P2P 网络</h3>
+        <p>节点能力共享、中继服务器内网穿透、负载均衡、位置广播</p>
+      </div>
+      <div class="card">
+        <h3>🔧 21 个内置工具</h3>
+        <p>高斯烟羽 · 噪声衰减 · 代码图谱 · AI 训练 · 多引擎搜索 · 图表生成</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="container">
+    <h2>技术指标</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="num">10+</div><div class="label">LLM Provider</div></div>
+      <div class="stat"><div class="num">21</div><div class="label">内置工具</div></div>
+      <div class="stat"><div class="num">8</div><div class="label">专家角色</div></div>
+      <div class="stat"><div class="num">30+</div><div class="label">命令</div></div>
+      <div class="stat"><div class="num">100+</div><div class="label">模块</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="commands">
+  <div class="container">
+    <h2>常用命令</h2>
+    <table>
+      <tr><th>命令</th><th>说明</th><th>示例</th></tr>
+      <tr><td><code>/search</code></td><td>多引擎搜索</td><td><code>/search 大气污染标准</code></td></tr>
+      <tr><td><code>/plan</code></td><td>任务分解规划</td><td><code>/plan 编写环评报告</code></td></tr>
+      <tr><td><code>/batch</code></td><td>批量文档生成</td><td><code>/batch data.csv 环评模板</code></td></tr>
+      <tr><td><code>/factcheck</code></td><td>事实核查</td><td><code>/factcheck SO2标准500μg/m³</code></td></tr>
+      <tr><td><code>/compute</code></td><td>数值计算</td><td><code>/compute gaussian_plume Q=100 u=3.5</code></td></tr>
+      <tr><td><code>/mine</code></td><td>自动挖掘知识</td><td><code>/mine ./enterprise_docs</code></td></tr>
+      <tr><td><code>/peers</code></td><td>P2P 节点发现</td><td><code>/peers</code></td></tr>
+      <tr><td><code>/cost</code></td><td>Token 费用</td><td><code>/cost</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      <a href="https://github.com/ookok/LivingTreeAlAgent">GitHub</a> ·
+      <a href="https://github.com/ookok/LivingTreeAlAgent/blob/main/docs/architecture.md">系统架构</a> ·
+      <a href="https://github.com/ookok/LivingTreeAlAgent/blob/main/docs/development.md">开发手册</a> ·
+      <a href="https://github.com/ookok/LivingTreeAlAgent/blob/main/docs/user-guide.md">用户手册</a>
+    </p>
+    <p style="margin-top:10px">LivingTree AI Agent v2.1 · MIT License · Built with Toad</p>
+  </div>
+</footer>
+
+</body>
+</html>

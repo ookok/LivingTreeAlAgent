@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>用户手册 — LivingTree</title>
+<style>
+:root{--bg:#0a0c10;--surface:#161b22;--border:#30363d;--primary:#58a6ff;--text:#c9d1d9;--muted:#8b949e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:20px;max-width:800px;margin:0 auto}
+h1{color:var(--primary);font-size:28px;border-bottom:1px solid var(--border);padding-bottom:10px;margin:30px 0 15px}
+h2{color:var(--primary);font-size:22px;margin:25px 0 10px}
+h3{color:var(--primary);font-size:18px;margin:20px 0 8px}
+code{background:var(--surface);padding:2px 6px;border-radius:3px;color:var(--primary);font-size:13px}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 16px;overflow-x:auto;margin:10px 0;font-size:13px}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;font-size:14px}
+th{background:var(--surface);color:var(--primary)}
+a{color:var(--primary)}
+.nav{margin-bottom:20px}.nav a{padding:0 10px}
+</style></head>
+<body>
+<p class="nav"><a href="../index.html">← 首页</a> | <a href="https://github.com/ookok/LivingTreeAlAgent">GitHub</a></p>
+
+<h1>📖 用户手册</h1>
+
+<h2>快速开始</h2>
+<h3>安装</h3>
+<pre># Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.sh | bash
+
+# Windows
+powershell -c "irm https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.ps1 | iex"</pre>
+
+<h3>启动</h3>
+<pre>livingtree          # TUI 对话界面
+livingtree relay    # 启动中继服务器 (端口 8888)</pre>
+
+<h2>登录</h2>
+<p>首次启动后系统弹出登录界面。使用管理员分配的账户和密码登录。内部验证通过中继服务器。</p>
+<pre>/login admin admin123</pre>
+
+<h2>对话操作</h2>
+<h3>快捷键</h3>
+<table>
+<tr><th>快捷键</th><th>功能</th></tr>
+<tr><td>Ctrl+Enter</td><td>发送消息</td></tr>
+<tr><td>Ctrl+T</td><td>对话面板</td></tr>
+<tr><td>Ctrl+E</td><td>代码面板</td></tr>
+<tr><td>Ctrl+D</td><td>知识库</td></tr>
+<tr><td>Ctrl+K</td><td>工具箱</td></tr>
+<tr><td>Ctrl+B</td><td>切换侧栏</td></tr>
+<tr><td>Esc</td><td>返回主页</td></tr>
+<tr><td>Ctrl+L</td><td>中/英切换</td></tr>
+<tr><td>Ctrl+Q</td><td>退出</td></tr>
+</table>
+
+<h2>命令参考</h2>
+<h3>搜索与获取</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/search &lt;关键词&gt;</code></td><td>多引擎搜索</td></tr>
+<tr><td><code>/fetch &lt;URL&gt;</code></td><td>抓取网页内容</td></tr>
+<tr><td><code>/recall &lt;关键词&gt;</code></td><td>搜索历史对话</td></tr></table>
+
+<h3>知识与技能</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/tools</code></td><td>列出所有工具</td></tr>
+<tr><td><code>/route &lt;查询&gt;</code></td><td>查询路由推荐</td></tr>
+<tr><td><code>/role [名称]</code></td><td>查看/列出角色</td></tr>
+<tr><td><code>/graph [节点]</code></td><td>技能关系图谱</td></tr>
+<tr><td><code>/mine [目录]</code></td><td>自动挖掘知识</td></tr></table>
+
+<h3>推理与验证</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/plan &lt;任务&gt;</code></td><td>任务分解规划</td></tr>
+<tr><td><code>/factcheck &lt;陈述&gt;</code></td><td>事实核查</td></tr>
+<tr><td><code>/gaps</code></td><td>知识缺口分析</td></tr>
+<tr><td><code>/compute &lt;模型&gt; &lt;参数&gt;</code></td><td>数值计算</td></tr>
+<tr><td><code>/compliance &lt;标准&gt; &lt;文本&gt;</code></td><td>合规检查</td></tr></table>
+
+<h3>文档生成</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/batch &lt;CSV&gt; &lt;模板&gt;</code></td><td>批量生成文档</td></tr>
+<tr><td><code>/template list|save</code></td><td>模板管理</td></tr>
+<tr><td><code>/optimize &lt;提示词&gt;</code></td><td>提示词优化</td></tr></table>
+
+<h3>系统管理</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/status</code></td><td>系统状态</td></tr>
+<tr><td><code>/sysinfo</code></td><td>资源监控</td></tr>
+<tr><td><code>/cost</code></td><td>Token 费用</td></tr>
+<tr><td><code>/cron list|add</code></td><td>定时任务</td></tr>
+<tr><td><code>/evolve</code></td><td>进化状态</td></tr>
+<tr><td><code>/login &lt;用户&gt; &lt;密码&gt;</code></td><td>登录/切换账户</td></tr></table>
+
+<h3>P2P 网络</h3>
+<table><tr><th>命令</th><th>说明</th></tr>
+<tr><td><code>/peers</code></td><td>发现网络节点</td></tr>
+<tr><td><code>/connect &lt;ID&gt;</code></td><td>连接节点</td></tr></table>
+
+<h2>中继服务器</h2>
+<h3>管理员后台</h3>
+<p><code>http://www.mogoo.com.cn:8888/admin</code></p>
+<p>默认管理员: admin / admin123</p>
+
+<h2>Token 成本</h2>
+<table><tr><th>Provider</th><th>单价 (¥/M tokens)</th></tr>
+<tr><td>硅基流动</td><td>0.00 (免费)</td></tr>
+<tr><td>模力方舟</td><td>0.00 (免费)</td></tr>
+<tr><td>智谱/讯飞/LongCat</td><td>0.00 (免费)</td></tr>
+<tr><td>DeepSeek</td><td>2.00</td></tr>
+<tr><td>阿里云</td><td>4.00</td></tr>
+<tr><td>小米</td><td>8.00</td></tr>
+</table>
+</body>
+</html>

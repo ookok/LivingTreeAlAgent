@@ -825,7 +825,7 @@ class IntegrationHub:
         async def _run():
             return await self.engine.run(message, memory_context=mem_context, **kwargs)
 
-        result = await guard.run("chat", _run(), timeout=120, max_retries=1)
+        result = await guard.run("chat", _run, timeout=120, max_retries=1)
         if result.success:
             return result.data
         if result.timed_out:

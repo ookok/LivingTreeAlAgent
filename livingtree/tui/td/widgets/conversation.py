@@ -1885,7 +1885,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2162,7 +2162,32 @@ class Conversation(containers.Vertical):
                 return True
             node = get_p2p_node()
             result = await node.connect_to(params.strip())
-            await self.post(Note(result))
+                await self.post(Note(result))
+            return True
+
+        elif command == "find":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.unified_file_tool import UnifiedFileTool
+            if not params:
+                await self.post(Note("用法: /find <关键词> — 搜索文件/代码/文档/历史/知识库"))
+                return True
+            await self.post(Note(f"**🔍 全域搜索:** {params}"))
+            tool = UnifiedFileTool()
+            hits = await tool.search(params, max_results=15)
+            if not hits:
+                await self.post(Note("[dim]未找到任何结果[/dim]"))
+            else:
+                lines = [f"## 🔍 搜索结果 ({len(hits)} 条)", ""]
+                for h in hits:
+                    icon = {"filesystem": "📁", "code": "💻", "document": "📄", "history": "💬", "kb": "📚", "graph": "🕸"}.get(h.source, "🔗")
+                    lines.append(f"{icon} **{h.name[:80]}** [{h.source}]")
+                    if h.path:
+                        lines.append(f"  [dim]{h.path[:100]}[/dim]")
+                    if h.content_preview:
+                        lines.append(f"  {h.content_preview[:120]}")
+                    if h.relevance:
+                        lines.append(f"  [dim]{h.relevance}[/dim]")
+                await self.post(Note("\n".join(lines)))
             return True
 
         elif command == "peers":

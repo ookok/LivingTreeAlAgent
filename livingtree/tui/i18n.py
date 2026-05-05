@@ -207,7 +207,7 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
     },
     "en": {
         **zh,
-        "cmd.help_text": "## 8 Unified Commands\n\n🔍 **/ask** — Search & Research\n⚡ **/do** — Execute actions\n📁 **/files** — File operations\n🧠 **/learn** — Learning & evolution\n📊 **/check** — Diagnostics & audits\n📄 **/docs** — Document generation\n🌐 **/team** — Collaboration & network\n💡 **/help** — Show help",,
+        "cmd.help_text": "## 8 Unified Commands\n\n🔍 **/ask** — Search & Research\n⚡ **/do** — Execute actions\n📁 **/files** — File operations\n🧠 **/learn** — Learning & evolution\n📊 **/check** — Diagnostics & audits\n📄 **/docs** — Document generation\n🌐 **/team** — Collaboration & network\n💡 **/help** — Show help",
         "cmd.search_usage": "用法: /search <关键词>",
         "cmd.fetch_usage": "用法: /fetch <URL>",
         "cmd.searching": "**正在搜索:** {q}",

@@ -203,7 +203,11 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         # ── Command outputs ──
         "cmd.not_ready": "系统未就绪",
         "cmd.status_title": "## 系统状态",
-        "cmd.help_text": "**文件:** /find <关键词>  /save <文件>  /replace <文件> <旧> <新>  /locate <描述>\n**文件操作:** /render <模板> <键=值>  /dedup  /patch  /backup  /history  /watch\n**实用工具:** /web <URL>  /sql query|schema  /git log|diff|blame  /shell <命令>  /debate  /snapshot  /evolvetool\n**命令:** /search /fetch /clear /status /help /evolve /tools /route /optimize /role /graph,
+        "cmd.help_text": "## 8 个统一命令\n\n🔍 **/ask** — 搜索查资料 (搜索/网页/论文/知识库)\n⚡ **/do** — 执行操作 (命令/数据库/计算/代码修改)\n📁 **/files** — 文件管理 (查找/修改/备份/扫描重复)\n🧠 **/learn** — 学习进化 (挖掘知识/整理/自我练习)\n📊 **/check** — 检查诊断 (系统状态/质量/费用/溯源)\n📄 **/docs** — 文档生成 (批量报告/模板/系统文档)\n🌐 **/team** — 协作网络 (节点/辩论/分支/模型偏好)\n💡 **/help** — 帮助 (查看详细用法)",
+    },
+    "en": {
+        **zh,
+        "cmd.help_text": "## 8 Unified Commands\n\n🔍 **/ask** — Search & Research\n⚡ **/do** — Execute actions\n📁 **/files** — File operations\n🧠 **/learn** — Learning & evolution\n📊 **/check** — Diagnostics & audits\n📄 **/docs** — Document generation\n🌐 **/team** — Collaboration & network\n💡 **/help** — Show help",,
         "cmd.search_usage": "用法: /search <关键词>",
         "cmd.fetch_usage": "用法: /fetch <URL>",
         "cmd.searching": "**正在搜索:** {q}",

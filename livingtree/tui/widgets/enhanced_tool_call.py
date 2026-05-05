@@ -173,13 +173,6 @@ SYSTEM_TOOLS: dict[str, dict] = {
         "params": {"name": "名称", "description": "描述", "language": "编程语言", "domain": "领域"},
         "icon": "💻",
     },
-    "generate_report": {
-        "name": "报告生成",
-        "category": "gen",
-        "description": "生成工业级报告 (环评/应急预案/验收/可行性)",
-        "params": {"template_type": "报告类型", "data": "报告数据"},
-        "icon": "📄",
-    },
     "generate_diagram": {
         "name": "图表生成",
         "category": "gen",
@@ -247,7 +240,7 @@ SYSTEM_TOOLS: dict[str, dict] = {
     "url_fetch": {
         "name": "网页获取",
         "category": "web",
-        "description": "获取网页内容并转为Markdown（支持文本/HTML）",
+        "description": "获取网页内容并提取结构化信息（文本/表格/列表/段落）",
         "params": {"url": "网页URL", "format": "markdown|text|html"},
         "icon": "🌐",
     },
@@ -257,13 +250,6 @@ SYSTEM_TOOLS: dict[str, dict] = {
         "description": "调用外部API（支持GET/POST/JSON鉴权）",
         "params": {"url": "API地址", "method": "GET|POST", "headers": "请求头JSON", "body": "请求体"},
         "icon": "📡",
-    },
-    "web_scrape": {
-        "name": "网页抓取",
-        "category": "web",
-        "description": "智能抓取网页结构化内容（表格/列表/段落）",
-        "params": {"url": "目标网页", "selectors": "CSS选择器（可选）"},
-        "icon": "🕷",
     },
 
     # ── Database tools ──
@@ -309,32 +295,18 @@ SYSTEM_TOOLS: dict[str, dict] = {
     "run_command": {
         "name": "执行命令",
         "category": "shell",
-        "description": "执行shell命令并返回输出（带超时/沙箱）",
+        "description": "执行shell命令/脚本并返回输出（带超时/沙箱）",
         "params": {"command": "命令", "workdir": "工作目录", "timeout": "超时秒数"},
         "icon": "⚡",
-    },
-    "run_script": {
-        "name": "执行脚本",
-        "category": "shell",
-        "description": "执行Python/Shell脚本并返回结果",
-        "params": {"script": "脚本内容", "language": "python|bash|powershell"},
-        "icon": "📝",
     },
 
     # ── Notification tools ──
     "send_email": {
         "name": "发送邮件",
         "category": "notify",
-        "description": "发送邮件（SMTP，支持附件）",
-        "params": {"to": "收件人", "subject": "主题", "body": "正文", "attachments": "附件列表"},
+        "description": "发送邮件（SMTP）",
+        "params": {"to": "收件人", "subject": "主题", "body": "正文"},
         "icon": "📧",
-    },
-    "send_notification": {
-        "name": "发送通知",
-        "category": "notify",
-        "description": "发送系统通知/消息（Telegram/Webhook/CLI）",
-        "params": {"message": "通知内容", "channel": "telegram|webhook|cli"},
-        "icon": "🔔",
     },
 
     # ── Multimedia tools ──
@@ -377,33 +349,12 @@ SYSTEM_TOOLS: dict[str, dict] = {
     },
 
     # ── Meta tools ──
-    "tool_compose": {
-        "name": "工具编排",
-        "category": "meta",
-        "description": "LLM将多个工具编排为流水线: 搜索→分析→生成报告",
-        "params": {"goal": "最终目标", "available_tools": "可用工具列表"},
-        "icon": "🎻",
-    },
-    "peer_ask": {
-        "name": "P2P请求",
-        "category": "meta",
-        "description": "广播任务到P2P网络，寻求其他节点帮助",
-        "params": {"task": "任务描述", "timeout": "等待超时秒数"},
-        "icon": "🌐",
-    },
     "snapshot": {
         "name": "状态快照",
         "category": "meta",
         "description": "保存/恢复完整智能体状态（回滚点）",
         "params": {"action": "save|restore|list", "name": "快照名称"},
         "icon": "📸",
-    },
-    "batch_tool": {
-        "name": "批量执行",
-        "category": "meta",
-        "description": "并行执行N个工具调用，合并结果",
-        "params": {"tasks": "任务列表 [{tool, params}]", "concurrency": "并行数"},
-        "icon": "⚙",
     },
     "debate": {
         "name": "多智能体辩论",
@@ -440,7 +391,6 @@ MCP_METHODS = {
     "search_code": "搜索代码",
     "search_knowledge": "搜索知识库",
     "generate_code": "生成代码",
-    "generate_report": "生成报告",
     "train_cell": "训练细胞",
     "absorb_codebase": "吸收代码库",
     "get_status": "系统状态",

@@ -47,48 +47,40 @@ class ToolExecutor:
     # ═══ Web tools ═══
 
     async def url_fetch(self, url: str, format: str = "markdown") -> ToolResult:
-        """Fetch a URL and return content in requested format."""
+        """Fetch a URL and return content. Auto-extracts tables/lists/headings."""
         t0 = time.monotonic()
         try:
             import urllib.request
+            url = url if url.startswith("http") else "https://" + url
             req = urllib.request.Request(url, headers={"User-Agent": "LivingTree/2.1"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
             if format in ("text", "html"):
                 return ToolResult("url_fetch", True, raw[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
-            # Strip HTML to markdown
-            clean = re.sub(r'<script[^>]*>.*?</script>', '', raw, flags=re.DOTALL|re.IGNORECASE)
-            clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL|re.IGNORECASE)
-            clean = re.sub(r'<[^>]+>', '', clean)
-            clean = re.sub(r'\n{3,}', '\n\n', clean)
-            return ToolResult("url_fetch", True, clean[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
-        except Exception as e:
-            return ToolResult("url_fetch", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
-
-    async def web_scrape(self, url: str, selectors: str = "") -> ToolResult:
-        """Scrape structured content from a webpage."""
-        t0 = time.monotonic()
-        try:
-            import urllib.request
-            req = urllib.request.Request(url, headers={"User-Agent": "LivingTree/2.1"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-            # Extract tables, lists, headings
+            # Structured extraction: tables > headings > lists
             parts = []
-            for m in re.finditer(r'<table[^>]*>(.*?)</table>', html, re.DOTALL|re.IGNORECASE):
-                parts.append("[TABLE]\n" + self._strip_table(m.group(1)) + "\n[/TABLE]")
-            for m in re.finditer(r'<h[1-3][^>]*>(.*?)</h[1-3]>', html, re.IGNORECASE):
+            for m in re.finditer(r'<table[^>]*>(.*?)</table>', raw, re.DOTALL|re.IGNORECASE):
+                rows = re.findall(r'<tr[^>]*>(.*?)</tr>', m.group(1), re.DOTALL|re.IGNORECASE)
+                tbl = []
+                for row in rows[:30]:
+                    cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL|re.IGNORECASE)
+                    tbl.append("| " + " | ".join(re.sub(r'<[^>]+>', '', c).strip()[:80] for c in cells) + " |")
+                if tbl:
+                    parts.append("[TABLE]\n" + "\n".join(tbl) + "\n[/TABLE]")
+            for m in re.finditer(r'<h[1-3][^>]*>(.*?)</h[1-3]>', raw, re.IGNORECASE):
                 parts.append("## " + re.sub(r'<[^>]+>', '', m.group(1)).strip())
-            for m in re.finditer(r'<(ul|ol)[^>]*>(.*?)</\1>', html, re.DOTALL|re.IGNORECASE):
+            for m in re.finditer(r'<(ul|ol)[^>]*>(.*?)</\1>', raw, re.DOTALL|re.IGNORECASE):
                 items = re.findall(r'<li[^>]*>(.*?)</li>', m.group(2), re.DOTALL|re.IGNORECASE)
                 parts.append("\n".join(f"- {re.sub(r'<[^>]+>', '', i).strip()}" for i in items[:20]))
             if not parts:
-                clean = re.sub(r'<[^>]+>', ' ', html)
-                clean = re.sub(r'\s+', ' ', clean)
-                parts.append(clean[:8000])
-            return ToolResult("web_scrape", True, "\n\n".join(parts)[:30000], elapsed_ms=(time.monotonic()-t0)*1000)
+                clean = re.sub(r'<script[^>]*>.*?</script>', '', raw, flags=re.DOTALL|re.IGNORECASE)
+                clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL|re.IGNORECASE)
+                clean = re.sub(r'<[^>]+>', '', clean)
+                clean = re.sub(r'\n{3,}', '\n\n', clean)
+                parts.append(clean[:10000])
+            return ToolResult("url_fetch", True, "\n\n".join(parts)[:30000], elapsed_ms=(time.monotonic()-t0)*1000)
         except Exception as e:
-            return ToolResult("web_scrape", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+            return ToolResult("url_fetch", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
 
     async def api_call(self, url: str, method: str = "GET", headers: str = "{}", body: str = "") -> ToolResult:
         """Call an external API."""
@@ -207,7 +199,10 @@ class ToolExecutor:
     # ═══ Shell tools ═══
 
     async def run_command(self, command: str, workdir: str = ".", timeout: int = 30) -> ToolResult:
-        """Execute a shell command."""
+        """Execute a shell command or run an inline script.
+
+        For scripts, use 'python -c ...' or 'bash -c ...'.
+        """
         t0 = time.monotonic()
         try:
             p = await asyncio.create_subprocess_shell(
@@ -225,29 +220,6 @@ class ToolExecutor:
             return ToolResult("run_command", False, error=f"Timeout after {timeout}s", elapsed_ms=timeout*1000)
         except Exception as e:
             return ToolResult("run_command", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
-
-    async def run_script(self, script: str, language: str = "python") -> ToolResult:
-        """Execute a script."""
-        t0 = time.monotonic()
-        try:
-            suffix = {"python": ".py", "bash": ".sh", "powershell": ".ps1"}.get(language, ".py")
-            with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8") as f:
-                f.write(script)
-                tmp = f.name
-            runner = {"python": sys.executable, "bash": "bash", "powershell": "powershell"}.get(language, sys.executable)
-            p = await asyncio.create_subprocess_exec(
-                runner, tmp, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(p.communicate(), timeout=30)
-            os.unlink(tmp)
-            out = stdout.decode("utf-8", errors="replace")[:50000]
-            err = stderr.decode("utf-8", errors="replace")[:10000]
-            if err:
-                out += "\n\n[stderr]\n" + err
-            return ToolResult("run_script", p.returncode == 0, out, error=err if p.returncode else "",
-                            elapsed_ms=(time.monotonic()-t0)*1000)
-        except Exception as e:
-            return ToolResult("run_script", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
 
     # ═══ Notification tools ═══
 
@@ -289,37 +261,7 @@ class ToolExecutor:
         s.sendmail(user, [to], msg_str)
         s.quit()
 
-    async def send_notification(self, message: str, channel: str = "cli") -> ToolResult:
-        """Send notification through available channels."""
-        t0 = time.monotonic()
-        output_parts = []
-        try:
-            # Telegram
-            if channel in ("telegram", "all"):
-                from ..integration.message_gateway import get_gateway
-                gw = get_gateway()
-                if gw._tg_bot:
-                    output_parts.append("[Telegram] sent" if True else "[Telegram] unavailable")
-
-            # Webhook  
-            if channel in ("webhook", "all"):
-                wu = os.environ.get("WEBHOOK_URL", "")
-                if wu:
-                    import urllib.request
-                    req = urllib.request.Request(wu, data=json.dumps({"text": message}).encode(),
-                                                headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        output_parts.append("[Webhook] sent")
-
-            # CLI always works
-            if channel in ("cli", "all") or not output_parts:
-                output_parts.append(f"[CLI] {message[:200]}")
-
-            return ToolResult("send_notification", True, "\n".join(output_parts), elapsed_ms=(time.monotonic()-t0)*1000)
-        except Exception as e:
-            return ToolResult("send_notification", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
-
-    # ═══ Multimedia tools ═══
+    # ═══ Notification tools ═══
 
     def pdf_parse(self, path: str, pages: str = "") -> ToolResult:
         """Parse PDF content."""

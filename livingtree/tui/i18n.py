@@ -203,7 +203,7 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         # ── Command outputs ──
         "cmd.not_ready": "系统未就绪",
         "cmd.status_title": "## 系统状态",
-        "cmd.help_text": "**文件:** /find <关键词>  /save <文件>  /replace <文件> <旧> <新>  /locate <描述>\n**文件操作:** /render <模板> <键=值>  /dedup [模式]  /patch list|apply|revert  /backup save|list|restore  /history <文件>  /watch start|stop\n**实用工具:** /web fetch|scrape <URL>  /sql query|schema  /git log|diff|blame  /shell <命令>  /debate <主题>  /snapshot list|save|restore  /batchrun <目标>  /evolvetool <工具> <日志>\n**命令:** /search <关键词>  /fetch <URL>  /clear  /status  /help  /evolve  /tools  /route <查询>  /optimize <提示词>  /role [名称]  /graph [节点],
+        "cmd.help_text": "**文件:** /find <关键词>  /save <文件>  /replace <文件> <旧> <新>  /locate <描述>\n**文件操作:** /render <模板> <键=值>  /dedup  /patch  /backup  /history  /watch\n**实用工具:** /web <URL>  /sql query|schema  /git log|diff|blame  /shell <命令>  /debate  /snapshot  /evolvetool\n**命令:** /search /fetch /clear /status /help /evolve /tools /route /optimize /role /graph,
         "cmd.search_usage": "用法: /search <关键词>",
         "cmd.fetch_usage": "用法: /fetch <URL>",
         "cmd.searching": "**正在搜索:** {q}",
@@ -418,7 +418,7 @@ _LANG_TABLE: dict[str, dict[str, str]] = {
         # ── Command outputs ──
         "cmd.not_ready": "System not ready",
         "cmd.status_title": "## System Status",
-        "cmd.help_text": "**Files:** /find <q>  /save <file>  /replace <f> <old> <new>  /locate <desc>\n**FileOps:** /render <tpl> <k=v>  /dedup [pat]  /patch list|apply|revert  /backup save|list|restore  /history <f>  /watch start|stop\n**Utils:** /web fetch|scrape <URL>  /sql query|schema  /git log|diff|blame  /shell <cmd>  /debate <topic>  /snapshot list|save|restore  /batchrun <goal>  /evolvetool <tool> <log>\n**Commands:** /search <q>  /fetch <url>  /clear  /status  /help  /evolve  /tools  /route <q>  /optimize <p>  /role [name]  /graph [node]",
+        "cmd.help_text": "**Files:** /find /save /replace /locate\n**FileOps:** /render /dedup /patch /backup /history /watch\n**Utils:** /web <URL>  /sql query|schema  /git log|diff|blame  /shell <cmd>  /debate  /snapshot  /evolvetool\n**Commands:** /search /fetch /clear /status /help /evolve /tools /route /optimize /role /graph",
         "cmd.search_usage": "Usage: /search <query>",
         "cmd.fetch_usage": "Usage: /fetch <url>",
         "cmd.searching": "**Searching:** {q}",

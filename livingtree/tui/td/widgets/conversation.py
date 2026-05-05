@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "batchrun", "evolvetool"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2919,17 +2919,12 @@ class Conversation(containers.Vertical):
         elif command == "web":
             from livingtree.tui.td.widgets.note import Note
             from livingtree.capability.tool_executor import get_executor
-            parts = params.split(maxsplit=1) if params else []
-            sub = parts[0].lower() if parts else ""
+            if not params:
+                await self.post(Note("用法: /web <URL> — 获取网页内容（自动提取表格/列表/标题）"))
+                return True
             exe = get_executor()
-            if sub == "fetch" and len(parts) > 1:
-                r = await exe.url_fetch(parts[1])
-                await self.post(Note(f"🌐 URL_FETCH:\n```\n{r.output[:3000]}\n```" if r.success else f"[red]Web error: {r.error}[/red]"))
-            elif sub == "scrape" and len(parts) > 1:
-                r = await exe.web_scrape(parts[1])
-                await self.post(Note(f"🕷 WEB_SCRAPE:\n{r.output[:3000]}" if r.success else f"[red]Scrape error: {r.error}[/red]"))
-            else:
-                await self.post(Note("用法: /web fetch <URL> | scrape <URL>"))
+            r = await exe.url_fetch(params.strip())
+            await self.post(Note(f"🌐 {r.output[:5000]}" if r.success else f"[red]Web error: {r.error}[/red]"))
             return True
 
         elif command == "sql":
@@ -3035,25 +3030,6 @@ class Conversation(containers.Vertical):
                 await self.post(Note(f"♻ 快照已恢复: {parts[1]}" if ok else f"[red]快照 {parts[1]} 未找到[/red]"))
             else:
                 await self.post(Note("用法: /snapshot list|save [name]|restore <name>"))
-            return True
-
-        elif command == "batchrun":
-            from livingtree.tui.td.widgets.note import Note
-            from livingtree.capability.tool_orchestrator import get_orchestrator
-            if not params:
-                await self.post(Note("用法: /batchrun <目标描述> — LLM编排并执行工具流水线"))
-                return True
-            hub = getattr(self.app, 'hub', None)
-            orch = get_orchestrator()
-            await self.post(Note(f"**🎻 编排执行:** {params}"))
-            plan = await orch.compose(params, hub=hub)
-            if not plan.pipeline:
-                await self.post(Note("[dim]无法生成执行计划[/dim]"))
-            else:
-                lines = [f"## 🎻 执行计划", ""]
-                for s in plan.pipeline:
-                    lines.append(f"{s.get('step')}. **{s.get('tool')}** — {s.get('reason', '')[:80]}")
-                await self.post(Note("\n".join(lines)))
             return True
 
         elif command == "evolvetool":

@@ -1885,7 +1885,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -2188,6 +2188,22 @@ class Conversation(containers.Vertical):
                     if h.relevance:
                         lines.append(f"  [dim]{h.relevance}[/dim]")
                 await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "save":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.core.file_resolver import get_resolver
+            parts = params.split(maxsplit=1) if params else []
+            filename = parts[0].strip() if parts else ""
+            content = parts[1] if len(parts) > 1 else ""
+            if not filename:
+                await self.post(Note("用法: /save <文件名> [内容]"))
+                await self.post(Note("目录自动选择: .py→src/  .docx→output/  .md→docs/"))
+                return True
+            resolver = get_resolver()
+            resolved = resolver.resolve(filename, content=content)
+            rel = resolver.write(resolved, content or "")
+            await self.post(Note(f"已保存: {rel}"))
             return True
 
         elif command == "peers":

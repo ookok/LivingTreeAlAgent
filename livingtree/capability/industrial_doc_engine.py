@@ -128,14 +128,18 @@ class BatchGenerator:
         )
         return result.text if result and result.text else "生成失败"
 
-    def export_docx(self, job_id: str, output_dir: str | Path = DOC_OUTPUT_DIR) -> str:
-        """Export a generated document as DOCX."""
+    def export_docx(self, job_id: str, output_dir: str | Path = "") -> str:
+        """Export a generated document as DOCX with smart path resolution."""
+        from ..core.file_resolver import get_resolver
+        resolver = get_resolver()
+
         job = self._jobs.get(job_id)
         if not job or job.status != BatchStatus.DONE:
             return "Job not ready"
 
-        output = Path(output_dir) / f"{job.id}_{job.template}.docx"
-        output.parent.mkdir(parents=True, exist_ok=True)
+        name = f"{job.id}_{job.template}.docx"
+        resolved = resolver.resolve(name, directory=str(output_dir) if output_dir else "")
+        path = resolved.path
         try:
             from docx import Document
             doc = Document()
@@ -147,12 +151,12 @@ class BatchGenerator:
                     doc.add_heading(line[3:], level=3)
                 else:
                     doc.add_paragraph(line)
-            doc.save(str(output))
-            job.export_path = str(output)
+            doc.save(str(path))
+            job.export_path = str(path)
             job.status = BatchStatus.EXPORTED
-            return str(output)
+            return str(path)
         except ImportError:
-            txt = output.with_suffix(".txt")
+            txt = path.with_suffix(".txt")
             txt.write_text(job.result, encoding="utf-8")
             return str(txt)
 

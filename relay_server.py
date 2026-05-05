@@ -58,6 +58,10 @@ _external_ok: bool = False
 GITHUB_CHECK = "github.com"
 CHECK_INTERVAL = 30  # seconds
 
+# ═══ Offline message queue ═══
+OFFLINE_QUEUE: dict[str, list[dict]] = {}  # peer_id → [{from, data, time}, ...]
+MAX_QUEUE_SIZE = 50
+
 # ═══ User API keys (one per user) ═══
 USER_KEYS: dict[str, str] = {}  # username → api_key
 
@@ -303,7 +307,10 @@ class P2PRelayServer:
         app.router.add_post("/peers/register", self._peer_register)
         app.router.add_get("/peers/discover", self._peer_discover)
         app.router.add_post("/peers/sync", self._peer_sync)
+        app.router.add_get("/peers/best", self._peer_best_relay)
         app.router.add_get("/ws/relay", self._ws_relay)
+        # Metrics
+        app.router.add_get("/metrics", self._metrics)
         # WeChat
         app.router.add_get("/wechat", self._wechat_verify)
         app.router.add_post("/wechat", self._wechat_message)
@@ -563,7 +570,10 @@ class P2PRelayServer:
     # ═══ API ═══
 
     async def _health(self, request: web.Request) -> web.Response:
-        return web.json_response({"status": "ok", "uptime": time.time() - self._started_at})
+        return web.json_response({
+            "status": "ok", "uptime": time.time() - self._started_at,
+            "external_ok": _external_ok, "peers": len(PEER_STORE),
+        })
 
     async def _handle_status(self, request: web.Request) -> web.Response:
         user = self._check_auth(request)
@@ -634,13 +644,47 @@ class P2PRelayServer:
         await ws.prepare(request)
         client_id = secrets.token_hex(8)
         self._ws_clients[client_id] = ws
+
+        # Replay offline queue for this peer
+        queued = OFFLINE_QUEUE.pop(client_id, [])
+        for m in queued:
+            try:
+                await ws.send_json({"from": "relay", "data": m.get("data",""), "queued": True})
+            except Exception:
+                break
+
+        username = request.headers.get("X-Peer-Username", "")
+        if username:
+            # Also replay messages addressed to username
+            for uname_q in [client_id, username, f"user:{username}"]:
+                q = OFFLINE_QUEUE.pop(uname_q, [])
+                for m in q:
+                    try:
+                        await ws.send_json({"from": "relay", "data": m.get("data",""), "queued": True})
+                    except Exception:
+                        break
+
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
                     target = data.get("to", "")
+                    payload = data.get("data", "")
                     if target in self._ws_clients:
-                        await self._ws_clients[target].send_json({"from": client_id, "data": data.get("data", "")})
+                        await self._ws_clients[target].send_json({"from": client_id, "data": payload})
+                    else:
+                        # Queue for offline delivery
+                        queue = OFFLINE_QUEUE.setdefault(target, [])
+                        queue.append({"from": client_id, "data": payload, "time": time.time()})
+                        if len(queue) > MAX_QUEUE_SIZE:
+                            queue = queue[-MAX_QUEUE_SIZE:]
+                        # Also queue by user ID
+                        user_target = data.get("user", "")
+                        if user_target:
+                            uq = OFFLINE_QUEUE.setdefault(f"user:{user_target}", [])
+                            uq.append({"from": client_id, "data": payload, "time": time.time()})
+                            if len(uq) > MAX_QUEUE_SIZE:
+                                uq = uq[-MAX_QUEUE_SIZE:]
         finally:
             self._ws_clients.pop(client_id, None)
         return ws
@@ -763,6 +807,90 @@ class P2PRelayServer:
                     except Exception:
                         pass
             await asyncio.sleep(60)
+
+    # ═══ Health routing ═══
+
+    async def _peer_best_relay(self, request: web.Request) -> web.Response:
+        """Return the best relay server based on load (fewer peers = preferred)."""
+        my_peer_count = len(PEER_STORE)
+        best = {"host": RELAY_HOST, "port": RELAY_PORT, "peers": my_peer_count, "external_ok": _external_ok}
+
+        candidates = [best]
+        for addr in RELAY_POOL:
+            try:
+                host, port = addr.rsplit(":", 1)
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        f"http://{host}:{port}/health",
+                        timeout=aiohttp.ClientTimeout(total=3),
+                    ) as resp:
+                        if resp.status == 200:
+                            d = await resp.json()
+                            candidates.append({
+                                "host": host, "port": int(port),
+                                "peers": d.get("peers", 999),
+                                "external_ok": d.get("external_ok", False),
+                            })
+            except Exception:
+                pass
+
+        # Prefer relays with external network, then lowest load
+        candidates.sort(key=lambda r: (not r["external_ok"], r["peers"]))
+        return web.json_response({"best": candidates[0] if candidates else best, "candidates": candidates})
+
+    # ═══ Prometheus metrics ═══
+
+    async def _metrics(self, request: web.Request) -> web.Response:
+        """Prometheus /metrics endpoint for Grafana integration."""
+        uptime = time.time() - self._started_at
+        total_cost = sum(a.get("cost_rmb", 0) for a in ACCOUNT_STORE.values())
+        total_tokens_in = sum(a.get("token_in", 0) for a in ACCOUNT_STORE.values())
+        total_tokens_out = sum(a.get("token_out", 0) for a in ACCOUNT_STORE.values())
+        queue_size = sum(len(v) for v in OFFLINE_QUEUE.values())
+
+        lines = [
+            "# HELP relay_uptime_seconds Relay server uptime",
+            "# TYPE relay_uptime_seconds gauge",
+            f"relay_uptime_seconds {uptime:.0f}",
+            "# HELP relay_requests_total Total requests served",
+            "# TYPE relay_requests_total counter",
+            f"relay_requests_total {self._request_count}",
+            "# HELP relay_peers_online Online P2P peers",
+            "# TYPE relay_peers_online gauge",
+            f"relay_peers_online {len(PEER_STORE)}",
+            "# HELP relay_accounts_total Registered accounts",
+            "# TYPE relay_accounts_total gauge",
+            f"relay_accounts_total {len(ACCOUNT_STORE)}",
+            "# HELP relay_external_ok External network reachable (1=yes)",
+            "# TYPE relay_external_ok gauge",
+            f"relay_external_ok {1 if _external_ok else 0}",
+            "# HELP relay_tokens_in_total Total input tokens",
+            "# TYPE relay_tokens_in_total counter",
+            f"relay_tokens_in_total {total_tokens_in}",
+            "# HELP relay_tokens_out_total Total output tokens",
+            "# TYPE relay_tokens_out_total counter",
+            f"relay_tokens_out_total {total_tokens_out}",
+            "# HELP relay_cost_rmb_total Accumulated cost in RMB",
+            "# TYPE relay_cost_rmb_total counter",
+            f"relay_cost_rmb_total {total_cost:.4f}",
+            "# HELP relay_ws_clients WebSocket clients",
+            "# TYPE relay_ws_clients gauge",
+            f"relay_ws_clients {len(self._ws_clients)}",
+            "# HELP relay_offline_queue_size Pending offline messages",
+            "# TYPE relay_offline_queue_size gauge",
+            f"relay_offline_queue_size {queue_size}",
+            "# HELP relay_pool_size Relay pool members",
+            "# TYPE relay_pool_size gauge",
+            f"relay_pool_size {len(RELAY_POOL) + 1}",
+        ]
+        # Per-user cost
+        for name, a in ACCOUNT_STORE.items():
+            safe = name.replace('"', '').replace("'", "")
+            lines.append(f'# HELP relay_user_cost_rmb Cost for user {safe}')
+            lines.append(f'# TYPE relay_user_cost_rmb gauge')
+            lines.append(f'relay_user_cost_rmb{{user="{safe}"}} {a.get("cost_rmb",0):.4f}')
+
+        return web.Response(text="\n".join(lines) + "\n", content_type="text/plain")
 
     # ═══ WeChat ═══
 

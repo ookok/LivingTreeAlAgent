@@ -397,6 +397,74 @@ class DocumentEditor:
         removed = len(old_lines - new_lines)
         return f"+{added}/-{removed} lines"
 
+    # ═══ LLM-powered replacement ═══
+
+    async def llm_replace(
+        self,
+        path: str | Path,
+        instruction: str,
+        hub=None,
+        dry_run: bool = False,
+    ) -> EditResult:
+        """Let the LLM read the file, figure out what to change, and generate the regex.
+
+        Args:
+            path: File to edit
+            instruction: Natural language description of what to change
+            hub: IntegrationHub for LLM access
+
+        Example:
+            await editor.llm_replace("config.yaml", "把端口从8100改成8888", hub)
+        """
+        path = Path(path)
+        if not path.exists():
+            return EditResult(path=path)
+
+        # Read file (first 50KB for context)
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read(50000)
+
+        if not hub or not hub.world:
+            # Fallback: use the simplest possible approach
+            return self.replace_pattern(path, instruction, "", dry_run=dry_run)
+
+        llm = hub.world.consciousness._llm
+        try:
+            result = await llm.chat(
+                messages=[{"role": "user", "content": (
+                    "You are a precise file editor. Given a file and an instruction, "
+                    "output a JSON with the exact regex pattern and replacement to apply.\n\n"
+                    "FILE CONTENT:\n```\n" + content[:10000] + "\n```\n\n"
+                    "INSTRUCTION: " + instruction + "\n\n"
+                    "Output ONLY this JSON (no explanation):\n"
+                    '{"pattern": "regex_pattern_here", "replacement": "replacement_text_here", "count": 0}\n'
+                    "- pattern: Python regex to find the text to replace\n"
+                    "- replacement: the new text\n"
+                    "- count: 0 means replace all matches, 1 means first only\n"
+                    "Make the pattern specific enough to match only the intended target."
+                )}],
+                provider=getattr(llm, '_elected', ''),
+                temperature=0.0,
+                max_tokens=500,
+                timeout=20,
+            )
+            if result and result.text:
+                import json, re
+                m = re.search(r'\{[\s\S]*\}', result.text)
+                if m:
+                    data = json.loads(m.group())
+                    return self.replace_pattern(
+                        path,
+                        data["pattern"],
+                        data["replacement"],
+                        count=data.get("count", 0),
+                        dry_run=dry_run,
+                    )
+        except Exception as e:
+            logger.debug(f"LLM replace: {e}")
+
+        return EditResult(path=path)
+
 
 # ═══ Convenience ═══
 

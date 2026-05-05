@@ -25,11 +25,12 @@ STATS_FILE = Path(".livingtree/election_stats.json")
 
 # Scoring weights (sum to 1.0)
 WEIGHTS = {
-    "latency": 0.25,   # Speed matters
-    "quality": 0.30,   # Success matters most
-    "cost": 0.20,      # Free preferred
-    "capability": 0.15, # Task match
-    "freshness": 0.10,  # Prefer recently-used providers
+    "latency": 0.22,    # Speed matters
+    "quality": 0.28,     # Success matters most
+    "cost": 0.18,        # Free preferred
+    "capability": 0.14,  # Task match
+    "freshness": 0.08,   # Prefer recently-used providers
+    "rate_limit": 0.10,  # Penalize throttled providers
 }
 
 # Provider capability profiles: which tasks each model excels at
@@ -48,7 +49,10 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "opencode-serve": ["本地", "离线", "local", "offline"],
     "xiaomi": ["多模态", "图像", "multimodal", "image"],
     "aliyun": ["企业", "分析", "enterprise", "analysis"],
-    "nvidia": ["推理", "代码", "数学", "reasoning", "code", "math", "analysis"],
+    "nvidia-reasoning": ["推理", "深度思考", "数学", "逻辑", "reasoning", "deep", "math", "logic", "分析"],
+    "nvidia-pro": ["推理", "代码", "综合", "reasoning", "code", "comprehensive"],
+    "nvidia-flash": ["对话", "摘要", "翻译", "chat", "summary", "translate"],
+    "nvidia-small": ["分类", "简单", "快速", "classify", "simple", "fast"],
 }
 
 
@@ -71,6 +75,7 @@ class RouterStats:
     calls: int = 0
     successes: int = 0
     failures: int = 0
+    rate_limits: int = 0
     total_tokens: int = 0
     total_latency_ms: float = 0.0
     last_latency_ms: float = 0.0
@@ -82,12 +87,14 @@ class RouterStats:
     recent_latencies: list[float] = field(default_factory=list)
     WINDOW_SIZE: int = 20
 
-    def record(self, success: bool, latency_ms: float, tokens: int = 0, error: str = ""):
+    def record(self, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         self.calls += 1
         if success:
             self.successes += 1
         else:
             self.failures += 1
+        if rate_limited:
+            self.rate_limits += 1
         self.total_tokens += tokens
         self.total_latency_ms += latency_ms
         self.last_latency_ms = latency_ms
@@ -176,6 +183,21 @@ class HolisticElection:
             # Score 3: Cost (free = 1.0, paid = 0.3)
             score.scores["cost"] = 1.0 if score.is_free else 0.3
 
+            # Score 3.5: Rate-limit penalty (temp -0.5 if recently throttled)
+            rl_count = getattr(p, '_rate_limit_count', 0)
+            rl_last = getattr(p, '_last_rate_limit', 0.0)
+            rl_penalty = 0.0
+            if rl_last > 0:
+                seconds_since = time.time() - rl_last
+                if seconds_since < 60:  # within last minute: full penalty
+                    rl_penalty = 0.5
+                elif seconds_since < 300:  # within 5 min: decay
+                    rl_penalty = 0.5 * (1.0 - (seconds_since - 60) / 240)
+                # Accumulated rate limits also count
+                if rl_count > 3:
+                    rl_penalty = min(0.8, rl_penalty + 0.1 * (rl_count - 3))
+            score.scores["rate_limit"] = max(0.0, 1.0 - rl_penalty)
+
             # Score 4: Capability match
             score.capability_match = self._capability_match(name, query)
             score.scores["capability"] = score.capability_match
@@ -209,9 +231,9 @@ class HolisticElection:
             return min(1.0, 0.5 + matches * 0.15)
         return 0.1  # no match
 
-    def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = ""):
+    def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         stats = self.get_stats(name)
-        stats.record(success, latency_ms, tokens, error)
+        stats.record(success, latency_ms, tokens, error, rate_limited)
         if stats.calls % 50 == 0:
             self._save()
 

@@ -203,9 +203,35 @@ class DualModelConsciousness(Consciousness):
             ))
 
         if nvidia_api_key:
-            from ..treellm.providers import create_nvidia_provider
-            self._llm.add_provider(create_nvidia_provider(
-                nvidia_api_key, model=nvidia_default_model or "deepseek-ai/deepseek-r1"
+            from ..treellm.providers import OpenAILikeProvider
+            nvidia_url = nvidia_base_url or "https://integrate.api.nvidia.com/v1"
+            # Reasoning tier: deepseek-r1 — strongest free reasoning model
+            self._llm.add_provider(OpenAILikeProvider(
+                name="nvidia-reasoning",
+                base_url=nvidia_url,
+                api_key=nvidia_api_key,
+                default_model="deepseek-ai/deepseek-r1",
+            ))
+            # Pro tier: nemotron ultra — 253B flagship
+            self._llm.add_provider(OpenAILikeProvider(
+                name="nvidia-pro",
+                base_url=nvidia_url,
+                api_key=nvidia_api_key,
+                default_model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+            ))
+            # Flash tier: llama 70B — fast general purpose
+            self._llm.add_provider(OpenAILikeProvider(
+                name="nvidia-flash",
+                base_url=nvidia_url,
+                api_key=nvidia_api_key,
+                default_model="meta/llama-3.3-70b-instruct",
+            ))
+            # Small tier: phi-3.5-mini — lightweight fast
+            self._llm.add_provider(OpenAILikeProvider(
+                name="nvidia-small",
+                base_url=nvidia_url,
+                api_key=nvidia_api_key,
+                default_model="microsoft/phi-3.5-mini-instruct",
             ))
 
         # ── Election order: free models first ──
@@ -226,7 +252,9 @@ class DualModelConsciousness(Consciousness):
             self._free_models.append("mofang-reasoning")
             self._free_models.append("mofang-small")
         if nvidia_api_key:
-            self._free_models.append("nvidia")
+            self._free_models.append("nvidia-reasoning")
+            self._free_models.append("nvidia-flash")
+            self._free_models.append("nvidia-small")
         if xiaomi_api_key:
             self._paid_models.append("xiaomi")
         if aliyun_api_key:

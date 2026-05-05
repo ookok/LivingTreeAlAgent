@@ -156,17 +156,20 @@ class TreeLLM:
         messages = self._optimize_messages(messages)
 
         t0 = time.monotonic()
+        result = None
         try:
             result = await p.chat(messages, temperature=temperature,
                                   max_tokens=max_tokens, timeout=timeout,
                                   model=model or kwargs.get("model_extra", ""))
-            self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
-            if result.text:
+            if result and result.text:
+                self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
                                         chosen=p.name, success=True)
-            return result
+            elif result and (result.error or result.rate_limited):
+                self._record_failure(p.name, result.error, rate_limited=result.rate_limited)
+            return result or ProviderResult.empty("No result")
         except Exception as e:
-            self._record_failure(p.name, str(e))
+            self._record_failure(p.name, str(e), rate_limited=getattr(result, 'rate_limited', False))
             return ProviderResult.empty(str(e))
 
     async def stream(self, messages: list[dict], provider: str = "",
@@ -251,14 +254,16 @@ class TreeLLM:
             get_p2p_node().report_cost(name, tokens, tokens)
         except Exception: pass
 
-    def _record_failure(self, name: str, error: str) -> None:
+    def _record_failure(self, name: str, error: str, rate_limited: bool = False) -> None:
         s = self._stats.get(name)
         if not s:
             return
         s.calls += 1; s.failures += 1
+        if rate_limited:
+            s.rate_limits += 1
         s.last_error = error
         s.recent_successes.append(False)
         if len(s.recent_successes) > 20:
             s.recent_successes = s.recent_successes[-20:]
         from .holistic_election import get_election
-        get_election().record_result(name, False, 0, 0, error)
+        get_election().record_result(name, False, 0, 0, error, rate_limited)

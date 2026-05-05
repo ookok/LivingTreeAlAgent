@@ -11,12 +11,18 @@ Supports: DeepSeek, LongCat, OpenAI-compatible, opencode-serve.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
 import aiohttp
+
+# Rate-limit configuration
+RATE_LIMIT_MAX_RETRIES = 3
+RATE_LIMIT_BASE_DELAY = 2.0  # seconds
+RATE_LIMIT_MAX_DELAY = 30.0  # seconds
 
 
 @dataclass
@@ -27,6 +33,7 @@ class ProviderResult:
     model: str = ""
     latency_ms: float = 0.0
     error: str = ""
+    rate_limited: bool = False
 
     @staticmethod
     def empty(error: str = "") -> "ProviderResult":
@@ -34,7 +41,7 @@ class ProviderResult:
 
 
 class Provider:
-    """Base class for all LLM providers."""
+    """Base class for all LLM providers with rate-limit resilience."""
 
     def __init__(self, name: str, base_url: str, api_key: str = "",
                  default_model: str = ""):
@@ -42,6 +49,8 @@ class Provider:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.default_model = default_model
+        self._rate_limit_count = 0
+        self._last_rate_limit = 0.0
 
     async def ping(self) -> tuple[bool, str]:
         try:
@@ -52,9 +61,57 @@ class Provider:
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
-                    return resp.status == 200, ""
+                    return resp.status in (200, 429), ""  # 429 = alive but throttled
         except Exception as e:
             return False, str(e)
+
+    async def _request_with_retry(
+        self, payload: dict, timeout: int = 120, t0: float = 0.0
+    ) -> ProviderResult:
+        """HTTP request with exponential backoff on 429 rate limits."""
+        last_error = ""
+        for attempt in range(RATE_LIMIT_MAX_RETRIES):
+            try:
+                async with aiohttp.ClientSession() as s:
+                    async with s.post(
+                        f"{self.base_url}/chat/completions",
+                        json=payload,
+                        headers=self._headers(),
+                        timeout=aiohttp.ClientTimeout(total=timeout),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            choice = data["choices"][0]
+                            msg = choice.get("message", {})
+                            usage = data.get("usage", {})
+                            return ProviderResult(
+                                text=msg.get("content", ""),
+                                reasoning=msg.get("reasoning_content", ""),
+                                tokens=usage.get("total_tokens", 0),
+                                model=data.get("model", payload.get("model", self.default_model)),
+                                latency_ms=(time.monotonic() - t0) * 1000,
+                            )
+                        elif resp.status == 429:
+                            self._rate_limit_count += 1
+                            self._last_rate_limit = time.time()
+                            body = await resp.text()
+                            last_error = f"HTTP 429 (rate limited): {body[:100]}"
+                            if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                                delay = min(RATE_LIMIT_BASE_DELAY * (2 ** attempt), RATE_LIMIT_MAX_DELAY)
+                                await asyncio.sleep(delay)
+                                continue
+                            return ProviderResult(error=last_error, rate_limited=True,
+                                                   latency_ms=(time.monotonic() - t0) * 1000)
+                        else:
+                            body = await resp.text()
+                            return ProviderResult(error=f"HTTP {resp.status}: {body[:200]}",
+                                                   latency_ms=(time.monotonic() - t0) * 1000)
+            except Exception as e:
+                last_error = str(e)
+                if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                    await asyncio.sleep(RATE_LIMIT_BASE_DELAY)
+                    continue
+        return ProviderResult(error=last_error, latency_ms=(time.monotonic() - t0) * 1000)
 
     async def chat(self, messages: list[dict], temperature: float = 0.7,
                    max_tokens: int = 4096, timeout: int = 120,
@@ -67,31 +124,7 @@ class Provider:
             "max_tokens": max_tokens,
             **kwargs,
         }
-        try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/chat/completions",
-                    json=payload,
-                    headers=self._headers(),
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as resp:
-                    if resp.status != 200:
-                        body = await resp.text()
-                        return ProviderResult(error=f"HTTP {resp.status}: {body[:200]}",
-                                              latency_ms=(time.monotonic() - t0) * 1000)
-                    data = await resp.json()
-                    choice = data["choices"][0]
-                    msg = choice.get("message", {})
-                    usage = data.get("usage", {})
-                    return ProviderResult(
-                        text=msg.get("content", ""),
-                        reasoning=msg.get("reasoning_content", ""),
-                        tokens=usage.get("total_tokens", 0),
-                        model=data.get("model", model or self.default_model),
-                        latency_ms=(time.monotonic() - t0) * 1000,
-                    )
-        except Exception as e:
-            return ProviderResult(error=str(e), latency_ms=(time.monotonic() - t0) * 1000)
+        return await self._request_with_retry(payload, timeout, t0)
 
     async def stream(self, messages: list[dict], temperature: float = 0.3,
                      max_tokens: int = 4096, timeout: int = 120,
@@ -112,6 +145,9 @@ class Provider:
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
+                    if resp.status == 429:
+                        yield f"\n[NVIDIA rate limited — backoff triggered]"
+                        return
                     if resp.status != 200:
                         yield f"\n[HTTP {resp.status}]"
                         return

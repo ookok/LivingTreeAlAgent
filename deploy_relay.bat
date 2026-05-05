@@ -22,26 +22,29 @@ if "%PYTHON_CMD%"=="" (
 if "%PYTHON_CMD%"=="" (
     echo Python 3.14 not found. Trying to install...
 
-    set DL_PYTHON=
-    for /f "tokens=*" %%i in ('where python 2^>nul') do set DL_PYTHON=%%i
-    if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where python3 2^>nul') do set DL_PYTHON=%%i
-    if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where py 2^>nul') do set DL_PYTHON=%%i
-
     set DL_FILE=%TEMP%\python314.exe
-    if exist "!DL_FILE!" del "!DL_FILE!"
 
-    if not "!DL_PYTHON!"=="" (
-        echo Downloading with Python...
-        "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
+    REM Check if installer exists locally
+    if exist "python-3.14.0-amd64.exe" (
+        echo Found local installer...
+        copy /y "python-3.14.0-amd64.exe" "!DL_FILE!" >nul
     )
+
+    REM Try online download (skip if already have local)
     if not exist "!DL_FILE!" (
-        echo Trying certutil fallback...
-        certutil -urlcache -split -f "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "!DL_FILE!"
-    )
-    if not exist "!DL_FILE!" (
-        echo Trying python.org...
-        if not "!DL_PYTHON!"=="" "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
-        if not exist "!DL_FILE!" certutil -urlcache -split -f "https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe" "!DL_FILE!"
+        set DL_PYTHON=
+        for /f "tokens=*" %%i in ('where python 2^>nul') do set DL_PYTHON=%%i
+        if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where python3 2^>nul') do set DL_PYTHON=%%i
+        if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where py 2^>nul') do set DL_PYTHON=%%i
+
+        if not "!DL_PYTHON!"=="" (
+            echo Downloading with Python...
+            "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
+        )
+        if not exist "!DL_FILE!" certutil -urlcache -split -f "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "!DL_FILE!" >nul
+        if not exist "!DL_FILE!" (
+            if not "!DL_PYTHON!"=="" "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
+        )
     )
 
     if exist "!DL_FILE!" (

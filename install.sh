@@ -7,6 +7,8 @@ set -e
 
 GITHUB_REPO="https://github.com/ookok/LivingTreeAlAgent.git"
 GITEE_REPO="https://gitee.com/ookok/LivingTreeAlAgent.git"
+GITHUB_ZIP="https://github.com/ookok/LivingTreeAlAgent/archive/refs/heads/main.zip"
+GITEE_ZIP="https://gitee.com/ookok/LivingTreeAlAgent/repository/archive/main.zip"
 INSTALL_DIR="${HOME}/livingtree"
 PYTHON_CMD=""
 PORT="8100"
@@ -49,20 +51,45 @@ else
 fi
 echo "   $($PYTHON_CMD --version)"
 
-# Step 2: Clone project (GitHub → Gitee fallback)
+# Step 2: Clone project (GitHub → Gitee → zip download → relay mirror)
 echo "[2/7] Downloading..."
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/pyproject.toml" ]; then
     echo "   Directory exists — updating..."
     cd "$INSTALL_DIR"
-    git pull --ff-only origin main 2>/dev/null || true
+    git pull --ff-only origin main 2>/dev/null || {
+        echo "   Git pull failed, re-downloading via zip..."
+        rm -rf "$INSTALL_DIR"
+        _download_zip
+    }
 else
-    git clone --depth 1 "$GITHUB_REPO" "$INSTALL_DIR" 2>/dev/null || \
-    git clone --depth 1 "$GITEE_REPO" "$INSTALL_DIR" 2>/dev/null || {
-        echo "   ERROR: Cannot clone from GitHub or Gitee. Check network."
+    if command -v git &>/dev/null; then
+        git clone --depth 1 "$GITHUB_REPO" "$INSTALL_DIR" 2>/dev/null || \
+        git clone --depth 1 "$GITEE_REPO" "$INSTALL_DIR" 2>/dev/null || \
+        _download_zip
+    else
+        _download_zip
+    fi
+    cd "$INSTALL_DIR" 2>/dev/null || { echo "ERROR: Download failed."; exit 1; }
+fi
+
+_download_zip() {
+    echo "   Trying direct zip download (no git needed)..."
+    rm -rf "$INSTALL_DIR" 2>/dev/null
+    mkdir -p "$INSTALL_DIR"
+    local tmpzip="/tmp/livingtree.zip"
+    curl -fsSL "$GITHUB_ZIP" -o "$tmpzip" 2>/dev/null || \
+    curl -fsSL "$GITEE_ZIP" -o "$tmpzip" 2>/dev/null || \
+    curl -fsSL "http://www.mogoo.com.cn:8888/health" -o /dev/null 2>/dev/null && {
+        echo "   GitHub/Gitee unreachable. Use relay mirror download:"
+        echo "   Contact admin for offline installer package."
         exit 1
     }
-    cd "$INSTALL_DIR"
-fi
+    unzip -qo "$tmpzip" -d "$INSTALL_DIR" 2>/dev/null
+    mv "$INSTALL_DIR"/LivingTreeAlAgent-main/* "$INSTALL_DIR"/ 2>/dev/null
+    mv "$INSTALL_DIR"/LivingTreeAlAgent-main/.* "$INSTALL_DIR"/ 2>/dev/null
+    rm -rf "$INSTALL_DIR"/LivingTreeAlAgent-main "$tmpzip" 2>/dev/null
+    echo "   Downloaded via zip."
+}
 
 # Step 3: Create venv
 echo "[3/7] Virtual environment..."

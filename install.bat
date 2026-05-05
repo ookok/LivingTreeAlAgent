@@ -15,6 +15,8 @@ if "%1"=="--relay" set MODE=relay
 set INSTALL_DIR=%USERPROFILE%\livingtree
 set GITHUB_URL=https://github.com/ookok/LivingTreeAlAgent.git
 set GITEE_URL=https://gitee.com/ookok/LivingTreeAlAgent.git
+set GITHUB_ZIP=https://github.com/ookok/LivingTreeAlAgent/archive/refs/heads/main.zip
+set GITEE_ZIP=https://gitee.com/ookok/LivingTreeAlAgent/repository/archive/main.zip
 
 echo.
 echo ╔══════════════════════════════════════════╗
@@ -39,18 +41,35 @@ python --version
 
 :: [2/7] Clone/Update project
 echo [2/7] Downloading project...
-if exist "%INSTALL_DIR%" (
+if exist "%INSTALL_DIR%\pyproject.toml" (
     echo   Directory exists — updating...
     cd /d "%INSTALL_DIR%"
     git pull --ff-only origin main 2>nul
 ) else (
-    git clone --depth 1 "%GITHUB_URL%" "%INSTALL_DIR%" 2>nul || (
-        echo   GitHub failed, trying Gitee mirror...
-        git clone --depth 1 "%GITEE_URL%" "%INSTALL_DIR%" 2>nul || (
-            echo   ERROR: Cannot clone. Check network or install git.
-            pause
-            exit /b 1
+    where git >nul 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        git clone --depth 1 "%GITHUB_URL%" "%INSTALL_DIR%" 2>nul || (
+            echo   GitHub failed, trying Gitee mirror...
+            git clone --depth 1 "%GITEE_URL%" "%INSTALL_DIR%" 2>nul
         )
+    )
+    if not exist "%INSTALL_DIR%\pyproject.toml" (
+        echo   Git clone failed, trying direct zip download...
+        powershell -c "Invoke-WebRequest -Uri '%GITHUB_ZIP%' -OutFile '%TEMP%\livingtree.zip'" 2>nul
+        if not exist "%TEMP%\livingtree.zip" (
+            powershell -c "Invoke-WebRequest -Uri '%GITEE_ZIP%' -OutFile '%TEMP%\livingtree.zip'" 2>nul
+        )
+        if exist "%TEMP%\livingtree.zip" (
+            powershell -c "Expand-Archive '%TEMP%\livingtree.zip' '%INSTALL_DIR%'" 2>nul
+            move "%INSTALL_DIR%\LivingTreeAlAgent-main\*" "%INSTALL_DIR%\" 2>nul
+            rmdir /s /q "%INSTALL_DIR%\LivingTreeAlAgent-main" 2>nul
+            del "%TEMP%\livingtree.zip" 2>nul
+        )
+    )
+    if not exist "%INSTALL_DIR%\pyproject.toml" (
+        echo   ERROR: Cannot download. Check network or contact admin.
+        pause
+        exit /b 1
     )
 )
 cd /d "%INSTALL_DIR%"

@@ -394,6 +394,20 @@ EXPERT_ROLES = {
     "safety_assessor": "安全评价师 — 危险源辨识HAZOP/LEC, 重大危险源, 事故后果模拟, 安全距离, AQ标准",
     "feasibility_analyst": "可行性研究员 — 市场分析, 技术方案比选, 投资估算, 财务评价NPV/IRR, 敏感性分析, 国民经济评价",
     "carbon_expert": "碳评估专家 — 碳排放核算IPCC, 碳达峰碳中和, CCER, 碳交易, 碳足迹LCA, 绿色建筑评价",
+
+    # ── 科学计算 ──
+    "math_modeler": "数学建模专家 — 微分方程/偏微分, 数值方法(FEM/FDM/FVM), 优化(线性/非线性/整数), 蒙特卡洛, 统计分析, MATLAB/NumPy/SciPy",
+    "scientific_computing": "科学计算专家 — 高性能计算(HPC/MPI/OpenMP), CFD计算流体力学, FEA有限元, 分子动力学, 量子化学Gaussian/VASP, 并行算法",
+    "gis_expert": "GIS地理信息专家 — ArcGIS/QGIS, 空间分析(缓冲区/叠加/插值), 遥感ENVI/ERDAS, 坐标转换, 地形分析DEM/DSM, GeoJSON/Shapefile/GeoDatabase",
+    "process_engineer": "工艺流程专家 — PFD/P&ID, 物料衡算, 能量衡算, 化工单元操作, Aspen Plus/HYSYS, 设备选型, 管道仪表, 工艺安全HAZOP",
+    "flowchart_designer": "流程图设计专家 — 工艺流程图PFD, 管道仪表图P&ID, 组织结构图, 数据流图DFD, UML, BPMN, Visio/draw.io/Mermaid/PlantUML",
+
+    # ── 审批/评估/学术 ──
+    "gov_reviewer": "政府审批专家 — 发改委立项, 环保局环评审批, 规划局用地规划许可, 建设局施工许可, 安监局安全审查, 审批流程, 申报材料, 补正通知",
+    "third_party_evaluator": "第三方评估专家 — 独立环评/安评/能评, 专家评审会, 技术评估报告, 公众参与, 听证会, 质疑与答辩, 评估标准和规范",
+    "university_professor": "高校教授 — 环境工程/化学工程/安全工程/生态学, 学术论文, 实验设计, 研究生指导, 基金申请, SCI/EI期刊, 学术伦理, 交叉学科",
+    "translator_en_cn": "翻译专家 — 中英互译, 技术文档翻译, 标准规范翻译(GB/ISO/IEC), 论文翻译, 合同翻译, 专业术语准确, 保持原文格式和图表",
+    "procurement_sales": "采购销售专家 — 设备采购(RFQ/RFP), 供应商评估, 招投标, 合同谈判, 成本分析TCO, 供应链管理, 进出口报关, 定价策略, 销售方案",
 }
 
 MCP_METHODS = {

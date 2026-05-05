@@ -1,17 +1,12 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
-title LivingTree — One-Command Auto-Deploy (Windows)
-:: Usage: powershell -c "irm https://...install.ps1 | iex"
-::        install.bat --port 8100 --relay
+title LivingTree Installer
 
-set PORT=%1
-if "%PORT%"=="" set PORT=8100
-if "%PORT:~0,2%"=="--" set PORT=8100
-
+set PORT=8888
 set MODE=client
-if "%2"=="--relay" set MODE=relay
 if "%1"=="--relay" set MODE=relay
+if "%2"=="--relay" set MODE=relay
 
 set INSTALL_DIR=%USERPROFILE%\livingtree
 set GITHUB_URL=https://github.com/ookok/LivingTreeAlAgent.git
@@ -20,105 +15,85 @@ set GITHUB_ZIP=https://github.com/ookok/LivingTreeAlAgent/archive/refs/heads/mai
 set GITEE_ZIP=https://gitee.com/ookok/LivingTreeAlAgent/repository/archive/main.zip
 
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║  LivingTree Auto-Deploy (Windows)       ║
-echo ║  Mode: %MODE%  Port: %PORT%               ║
-echo ╚══════════════════════════════════════════╝
+echo ===========================================
+echo   LivingTree Auto-Deploy (Windows)
+echo   Mode: %MODE%
+echo ===========================================
 echo.
 
-:: [1/7] Check Python
-echo [1/7] Checking Python...
-where python >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo   Python not found. Downloading Python 3.14...
-    powershell -c "Invoke-WebRequest -Uri 'https://mirrors.huaweicloud.com/python/3.14.0/python-3.14.0-amd64.exe' -OutFile '%TEMP%\python314.exe'" 2>nul
-    if exist "%TEMP%\python314.exe" (
-        start /wait "" "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
-        echo   Python 3.14 installed. Please re-run this script.
-        exit /b 0
+echo [1/7] Checking Python 3.14...
+set PYTHON_CMD=
+if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" (
+    set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
+)
+if "%PYTHON_CMD%"=="" (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        "%%i" -c "import sys; sys.exit(0 if sys.version_info>=(3,14) else 1)" >nul 2>&1
+        if !ERRORLEVEL! EQU 0 set PYTHON_CMD=%%i
     )
 )
-python --version
+if "%PYTHON_CMD%"=="" (
+    echo   Downloading Python 3.14...
+    powershell -c "$u='https://mirrors.huaweicloud.com/python/3.14.0/python-3.14.0-amd64.exe';$o='%TEMP%\python314.exe';(New-Object Net.WebClient).DownloadFile($u,$o)" 2>nul
+    if exist "%TEMP%\python314.exe" (
+        start /wait "" "%TEMP%\python314.exe" /quiet InstallAllUsers=0 Include_test=0
+        del "%TEMP%\python314.exe" 2>nul
+    )
+    if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
+)
+if "%PYTHON_CMD%"=="" (
+    echo   ERROR: Python 3.14 required. https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
+echo   OK
 
-:: [2/7] Clone/Update project
 echo [2/7] Downloading project...
 if exist "%INSTALL_DIR%\pyproject.toml" (
-    echo   Directory exists — updating...
-    cd /d "%INSTALL_DIR%"
+    cd /d "%INSTALL_DIR%" 2>nul
     git pull --ff-only origin main 2>nul
 ) else (
-    where git >nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        git clone --depth 1 "%GITHUB_URL%" "%INSTALL_DIR%" 2>nul || (
-            echo   GitHub failed, trying Gitee mirror...
-            git clone --depth 1 "%GITEE_URL%" "%INSTALL_DIR%" 2>nul
-        )
-    )
+    where git >nul 2>&1 && git clone --depth 1 "%GITHUB_URL%" "%INSTALL_DIR%" 2>nul
     if not exist "%INSTALL_DIR%\pyproject.toml" (
-        echo   Git clone failed, trying direct zip download...
-        powershell -c "Invoke-WebRequest -Uri '%GITHUB_ZIP%' -OutFile '%TEMP%\livingtree.zip'" 2>nul
-        if not exist "%TEMP%\livingtree.zip" (
-            powershell -c "Invoke-WebRequest -Uri '%GITEE_ZIP%' -OutFile '%TEMP%\livingtree.zip'" 2>nul
-        )
-        if exist "%TEMP%\livingtree.zip" (
-            powershell -c "Expand-Archive '%TEMP%\livingtree.zip' '%INSTALL_DIR%'" 2>nul
-            move "%INSTALL_DIR%\LivingTreeAlAgent-main\*" "%INSTALL_DIR%\" 2>nul
-            rmdir /s /q "%INSTALL_DIR%\LivingTreeAlAgent-main" 2>nul
-            del "%TEMP%\livingtree.zip" 2>nul
-        )
+        powershell -c "Invoke-WebRequest '%GITHUB_ZIP%' -OutFile '%TEMP%\lt.zip'" 2>nul
+        powershell -c "Expand-Archive '%TEMP%\lt.zip' '%INSTALL_DIR%' -Force" 2>nul
+        move "%INSTALL_DIR%\LivingTreeAlAgent-main\*" "%INSTALL_DIR%\" 2>nul
+        rmdir /s /q "%INSTALL_DIR%\LivingTreeAlAgent-main" 2>nul
     )
-    if not exist "%INSTALL_DIR%\pyproject.toml" (
-        echo   ERROR: Cannot download. Check network or contact admin.
-        pause
-        exit /b 1
-    )
+)
+if not exist "%INSTALL_DIR%\pyproject.toml" (
+    echo   ERROR: Cannot download. Check network.
+    pause & exit /b 1
 )
 cd /d "%INSTALL_DIR%"
 
-:: [3/7] Venv
 echo [3/7] Virtual environment...
-if not exist ".venv" python -m venv .venv
-call .venv\Scripts\activate.bat
+if not exist ".venv" "%PYTHON_CMD%" -m venv .venv
+call .venv\Scripts\activate.bat >nul 2>&1
 
-:: [4/7] Dependencies
-echo [4/7] Installing dependencies...
-pip install -e . --quiet 2>nul
-pip install aiohttp pyyaml pydantic loguru rich textual --quiet 2>nul
-echo   Dependencies ready.
+echo [4/7] Dependencies...
+.venv\Scripts\python.exe -m pip install -e . --quiet 2>nul
+.venv\Scripts\python.exe -m pip install aiohttp pyyaml pydantic loguru rich textual --quiet 2>nul
 
-:: [5/7] Verify
 echo [5/7] Verifying...
-.venv\Scripts\python.exe -c "from livingtree.tui.app import LivingTreeTuiApp; print('   OK')" 2>nul || echo   WARNING: Import check failed
+.venv\Scripts\python.exe -c "from livingtree.tui.app import LivingTreeTuiApp; print('OK')" 2>nul || echo   WARNING
 
-:: [6/7] Launcher
 echo [6/7] Creating launcher...
 echo @echo off > livingtree.bat
 echo cd /d "%%~dp0" >> livingtree.bat
 echo call .venv\Scripts\activate.bat >> livingtree.bat
 echo if "%%1"=="relay" ( >> livingtree.bat
-echo     python relay_server.py --port %PORT% %%2 %%3 %%4 %%5 >> livingtree.bat
+echo     python relay_server.py --port 8888 %%2 %%3 %%4 %%5 >> livingtree.bat
 echo ) else ( >> livingtree.bat
 echo     python -m livingtree tui %%* >> livingtree.bat
 echo ) >> livingtree.bat
 
-:: Add to PATH
-setx PATH "%INSTALL_DIR%;%PATH%" >nul 2>&1
-
-:: [7/7] Start
-echo [7/7] Done^^!
+echo [7/7] Done
 echo.
 if "%MODE%"=="relay" (
-    echo Starting relay server on port %PORT%...
-    echo.
-    .venv\Scripts\python.exe relay_server.py --port %PORT%
+    .venv\Scripts\python.exe relay_server.py --port 8888
 ) else (
-    echo ╔══════════════════════════════════════════╗
-    echo ║  LivingTree installed successfully!      ║
-    echo ║                                          ║
-    echo ║  Launch TUI:    livingtree                ║
-    echo ║  Relay server:  livingtree relay          ║
-    echo ║  Update:        git pull                  ║
-    echo ╚══════════════════════════════════════════╝
-    echo.
-    pause
+    echo   Run: livingtree
+    echo   or: cd %INSTALL_DIR% ^&^& python -m livingtree tui
 )
+pause

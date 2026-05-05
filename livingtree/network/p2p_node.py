@@ -23,7 +23,9 @@ from loguru import logger
 
 NODE_ID_FILE = Path(".livingtree/node_id.json")
 RELAY_URL = "http://www.mogoo.com.cn:8888"
-HEARTBEAT_INTERVAL = 30  # seconds
+_relay_pool: list[str] = []  # Auto-populated from discovery
+_current_relay_index = 0
+HEARTBEAT_INTERVAL = 30
 WS_RECONNECT_DELAY = 5
 
 
@@ -69,9 +71,22 @@ class P2PNode:
         self._on_message_handlers: list[callable] = []
         logger.info(f"P2P Node: {self.node_id[:16]}")
 
-    @property
-    def peer_count(self) -> int:
-        return len(self._peers)
+    def _get_active_relay(self) -> str:
+        """Get the currently active relay URL, cycling on failure."""
+        global _relay_pool, _current_relay_index
+        pool = [RELAY_URL] + _relay_pool
+        if not pool:
+            return RELAY_URL
+        return pool[_current_relay_index % len(pool)]
+
+    def _switch_relay(self):
+        """Switch to next relay on failure."""
+        global _current_relay_index
+        _current_relay_index += 1
+        pool = [RELAY_URL] + _relay_pool
+        url = self._get_active_relay()
+        logger.info(f"Switched relay: {url} ({_current_relay_index % len(pool)}/{len(pool)})")
+        return url
 
     # ═══ Node ID ═══
 
@@ -108,12 +123,14 @@ class P2PNode:
 
     async def _heartbeat_loop(self):
         await asyncio.sleep(2)
+        fail_count = 0
         while self._running:
             try:
                 caps = self._collect_capabilities()
+                relay_url = self._get_active_relay()
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        f"{RELAY_URL}/peers/register",
+                        f"{relay_url}/peers/register",
                         json={"peer_id": self.node_id, "port": 0, "nat_type": "client", "metadata": {
                             "username": getattr(self, "_username", ""),
                             "capabilities": {
@@ -132,11 +149,14 @@ class P2PNode:
                         timeout=10,
                     ) as resp:
                         if resp.status == 200:
-                            data = await resp.json()
-                            logger.debug(f"Heartbeat OK")
+                            fail_count = 0
+                await asyncio.sleep(HEARTBEAT_INTERVAL)
             except Exception:
-                pass
-            await asyncio.sleep(HEARTBEAT_INTERVAL)
+                fail_count += 1
+                if fail_count >= 3:
+                    self._switch_relay()
+                    fail_count = 0
+                await asyncio.sleep(5)
 
     async def report_cost(self, provider: str, tokens_in: int, tokens_out: int):
         """Report token usage to relay server for cost tracking."""
@@ -249,10 +269,12 @@ class P2PNode:
     # ═══ Peer discovery ═══
 
     async def discover_peers(self) -> list[PeerInfo]:
-        """Fetch peer list from relay server."""
+        """Fetch peer list + relay pool from relay server."""
+        global _relay_pool
+        relay_url = self._get_active_relay()
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{RELAY_URL}/peers/discover", timeout=10) as resp:
+                async with session.get(f"{relay_url}/peers/discover", timeout=10) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         peers = []
@@ -260,11 +282,10 @@ class P2PNode:
                             pid = p["peer_id"]
                             if pid == self.node_id:
                                 continue
-                            info.location = meta.get("location", {})
-                            info = PeerInfo(peer_id=pid, last_seen=p.get("last_seen", 0),
-                                           location=meta.get("location", {}))
                             meta = p.get("metadata", {})
                             caps_data = meta.get("capabilities", {})
+                            info = PeerInfo(peer_id=pid, last_seen=p.get("last_seen", 0),
+                                           location=meta.get("location", {}))
                             info.capabilities = NodeCapabilities(
                                 providers=caps_data.get("providers", []),
                                 tools=caps_data.get("tools", []),
@@ -277,6 +298,10 @@ class P2PNode:
                             )
                             peers.append(info)
                         self._peers = {p.peer_id: p for p in peers}
+                        # Update relay pool from server broadcast
+                        pool = data.get("relay_pool", [])
+                        if pool:
+                            _relay_pool = [u for u in pool if u != RELAY_URL]
                         return peers
         except Exception as e:
             logger.debug(f"Peer discovery: {e}")

@@ -33,6 +33,10 @@ API_KEY_STORE: dict[str, dict] = {}
 RELAY_HOST = "www.mogoo.com.cn"
 RELAY_PORT = 8888
 
+# ═══ Load balance pool (P2P only) ═══
+RELAY_POOL: list[str] = []  # ["host:port", ...]
+RELAY_POOL_FILE = Path(".livingtree/relay_pool.json")
+
 # RMB per 1M tokens (approximate)
 RMB_PER_M_TOKENS = {
     "deepseek": 2.0, "siliconflow": 0.0, "mofang": 0.0,
@@ -68,6 +72,21 @@ def _save_accounts():
 
 def _hash_password(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
+
+
+def _load_relay_pool():
+    global RELAY_POOL
+    try:
+        if RELAY_POOL_FILE.exists():
+            RELAY_POOL = json.loads(RELAY_POOL_FILE.read_text())
+    except Exception:
+        RELAY_POOL = []
+
+def _save_relay_pool():
+    try:
+        RELAY_POOL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        RELAY_POOL_FILE.write_text(json.dumps(RELAY_POOL))
+    except Exception: pass
 
 def _ensure_api_keys():
     if not API_KEY_STORE:
@@ -128,6 +147,11 @@ ACCOUNT_ROWS</table>
 <table><tr><th>用户名</th><th>Provider</th><th>Token输入</th><th>Token输出</th><th>单价(¥/M)</th><th>费用(¥)</th></tr>
 COST_ROWS</table>
 
+<h2>🔄 负载均衡 (P2P)</h2>
+<form method="POST" action="/admin/relays/add"><input name="address" placeholder="host:port" required style="width:70%"><button type="submit">+ 添加</button></form>
+<table><tr><th>地址</th><th>操作</th></tr>
+RELAY_ROWS</table>
+
 <h2>🌐 P2P节点</h2>
 <table><tr><th>节点ID</th><th>地址</th><th>位置</th><th>最后心跳</th><th>Token消耗(¥)</th></tr>
 PEER_ROWS</table>
@@ -178,6 +202,7 @@ class P2PRelayServer:
         self._ws_clients: dict[str, web.WebSocketResponse] = {}
         _ensure_accounts()
         _ensure_api_keys()
+        _load_relay_pool()
         self._setup_routes()
 
     def _setup_routes(self):
@@ -193,6 +218,8 @@ class P2PRelayServer:
         app.router.add_get("/admin/accounts/reset", self._admin_reset_password)
         app.router.add_get("/admin/accounts/delete", self._admin_delete_account)
         app.router.add_get("/admin/stats/reset", self._admin_reset_stats)
+        app.router.add_post("/admin/relays/add", self._admin_add_relay)
+        app.router.add_get("/admin/relays/remove", self._admin_remove_relay)
         app.router.add_post("/admin/keys/add", self._admin_add_key)
         app.router.add_get("/admin/keys/revoke", self._admin_revoke_key)
         # API
@@ -289,6 +316,16 @@ class P2PRelayServer:
             loc_str = f"{loc.get('city','')} {loc.get('region','')} {loc.get('country','')}".strip() or "未知"
             peer_rows += f"<tr><td>{pid[:16]}...</td><td>{p.get('ip','?')}:{p.get('port','?')}</td><td>{loc_str}</td><td>{last}</td><td>¥{cost:.4f}</td></tr>"
 
+        # Relay pool rows
+        all_relays = [f"{RELAY_HOST}:{RELAY_PORT}"] + RELAY_POOL
+        relay_rows = ""
+        for addr in all_relays:
+            is_primary = addr == f"{RELAY_HOST}:{RELAY_PORT}"
+            label = f"{addr} [主]" if is_primary else addr
+            remove_link = f"/admin/relays/remove?addr={addr}" if not is_primary else ""
+            action = f"<a href='{remove_link}'><button class='small danger'>移除</button></a>" if remove_link else "主服务器"
+            relay_rows += f"<tr><td>{label}</td><td>{action}</td></tr>"
+
         # Key rows
         key_rows = ""
         for key_val, info in API_KEY_STORE.items():
@@ -304,6 +341,7 @@ class P2PRelayServer:
         html = html.replace("¥COST", f"{total_cost:.2f}")
         html = html.replace("ACCOUNT_ROWS", account_rows or "<tr><td colspan=7>暂无账户</td></tr>")
         html = html.replace("COST_ROWS", cost_rows or "<tr><td colspan=6>暂无消费记录</td></tr>")
+        html = html.replace("RELAY_ROWS", relay_rows or "<tr><td colspan=2>暂无其他中继服务器</td></tr>")
         html = html.replace("PEER_ROWS", peer_rows or "<tr><td colspan=5>暂无节点</td></tr>")
         html = html.replace("KEY_ROWS", key_rows or "<tr><td colspan=4>暂无Key</td></tr>")
         return web.Response(text=html, content_type="text/html")
@@ -358,17 +396,31 @@ class P2PRelayServer:
 
     async def _admin_reset_stats(self, request: web.Request) -> web.Response:
         if not self._check_admin(request): return web.HTTPFound("/admin")
-        scope = request.query.get("scope", "all")  # all | peers | costs
-        if scope in ("all", "peers"):
-            PEER_STORE.clear()
+        scope = request.query.get("scope", "all")
+        if scope in ("all", "peers"): PEER_STORE.clear()
         if scope in ("all", "costs"):
             for a in ACCOUNT_STORE.values():
-                a["token_in"] = 0; a["token_out"] = 0; a["cost_rmb"] = 0.0
-                a["cost_breakdown"] = {}
+                a["token_in"] = 0; a["token_out"] = 0; a["cost_rmb"] = 0.0; a["cost_breakdown"] = {}
             _save_accounts()
-        if scope in ("all", "requests"):
-            self._request_count = 0
-        logger.info(f"Stats reset: scope={scope}")
+        if scope in ("all", "requests"): self._request_count = 0
+        raise web.HTTPFound("/admin")
+
+    async def _admin_add_relay(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        data = await request.post()
+        addr = data.get("address", "").strip()
+        if addr and ":" in addr and addr not in RELAY_POOL and addr != f"{RELAY_HOST}:{RELAY_PORT}":
+            RELAY_POOL.append(addr)
+            _save_relay_pool()
+            logger.info(f"Relay pool added: {addr}")
+        raise web.HTTPFound("/admin")
+
+    async def _admin_remove_relay(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        addr = request.query.get("addr", "")
+        if addr in RELAY_POOL:
+            RELAY_POOL.remove(addr)
+            _save_relay_pool()
         raise web.HTTPFound("/admin")
 
     async def _admin_add_key(self, request: web.Request) -> web.Response:
@@ -451,7 +503,10 @@ class P2PRelayServer:
     async def _peer_discover(self, request: web.Request) -> web.Response:
         cutoff = time.time() - 300
         peers = {k: v for k, v in PEER_STORE.items() if v["last_seen"] > cutoff}
-        return web.json_response({"peers": list(peers.values()), "count": len(peers)})
+        return web.json_response({
+            "peers": list(peers.values()), "count": len(peers),
+            "relay_pool": [f"{RELAY_HOST}:{RELAY_PORT}"] + RELAY_POOL,
+        })
 
     async def _ws_relay(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse()

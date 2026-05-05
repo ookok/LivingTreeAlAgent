@@ -1,128 +1,125 @@
 # 系统架构手册
 
-## 1. 顶层架构
+## 1. 总体架构
+
+LivingTree 是一个工业级自主 AI Agent 平台，采用分层架构设计：
 
 ```
-LivingWorld (统一上下文)
-    │
-    ├── LifeEngine (6阶段管线)
-    │   ├── perceive  → DualModelConsciousness.stream_of_thought()
-    │   ├── cognize   → KnowledgeBase.search() + chain_of_thought()
-    │   ├── plan      → TaskPlanner.decompose_task()
-    │   ├── execute   → Orchestrator + HITL + CostAware + Checkpoint
-    │   ├── reflect   → 成功率计算 + 质量报告汇总
-    │   └── evolve    → 精英保留 + 交叉变异 + 细胞进化
-    │
-    ├── DualModelConsciousness (LiteLLM路由)
-    │   ├── flash: deepseek/deepseek-v4-flash (t=0.3)
-    │   └── pro:   deepseek/deepseek-v4-pro  (t=0.7, thinking)
-    │
-    ├── SafetyGuard (16层安全)
-    │   ├── MerkleAuditChain (SHA-256链式审计)
-    │   ├── PathGuard (路径穿越防护)
-    │   ├── SSRFGuard (内网/元数据阻断)
-    │   └── PromptInjectionScanner (9种攻击模式)
-    │
-    └── Subsystems
-        ├── Cell: CellAI, Distillation, Mitosis, Phage, Regen, SwiftDrillTrainer
-        ├── Knowledge: Bi-temporal KB, VectorStore, KnowledgeGraph
-        ├── Capability: ToolMarket(30 tools), DocEngine, CodeEngine, ASTParser, CodeGraph
-        ├── Execution: TaskPlanner, Orchestrator, HITL, Checkpoint, CostAware, QualityChecker
-        ├── Network: P2P Node, Discovery, NATTraverser, EncryptedChannel, Reputation
-        └── TUI: Chat/Code/Docs/Settings screens + TaskTree + CommandPalette
+┌──────────────────────────────────────────────────────┐
+│                   表示层 (TUI/API)                     │
+│  Toad Textual · Relay Server · WeChat Gateway        │
+├──────────────────────────────────────────────────────┤
+│                   编排层 (Orchestration)               │
+│  RealPipeline · PanelAgent · CronScheduler            │
+├──────────────────────────────────────────────────────┤
+│                   智能层 (Intelligence)                │
+│  DualConsciousness · AutonomousLearner · PromptOpt    │
+├──────────────────────────────────────────────────────┤
+│                   知识层 (Knowledge)                   │
+│  KnowledgeBase · DocumentKB · StructMem · Graph       │
+├──────────────────────────────────────────────────────┤
+│                   路由层 (Routing)                     │
+│  TreeLLM · HolisticElection · SkillRouter             │
+├──────────────────────────────────────────────────────┤
+│                   基础层 (Infrastructure)              │
+│  AsyncDisk · TaskGuard · SystemMonitor · Registry     │
+└──────────────────────────────────────────────────────┘
 ```
 
-## 2. LifeEngine 管线详解
+## 2. 数据流
 
-### 2.1 perceive (感知)
-- `DualModelConsciousness.stream_of_thought()` 流式分析输入
-- `MaterialCollector.collect_from_web()` 外部资料收集
-- `SafetyGuard.scan_prompt()` 提示注入扫描
+### 2.1 用户对话流程
 
-### 2.2 cognize (认知)
-- `chain_of_thought()` 深度推理理解意图
-- `KnowledgeBase.search()` bi-temporal知识检索
-- `_context_budget()` 根据复杂度动态分配知识注入量
-- `self_questioning()` 识别知识空白
-
-### 2.3 plan (规划)
-- `TaskPlanner.decompose_task()` 5领域模板匹配
-- `hypothesis_generation()` 多假设生成
-- `Checkpoint.resume()` 检测断点续传
-
-### 2.4 execute (执行)
-- `CostAware.can_use()` 预算检查 → 超85%自动降级
-- `HITL.request_approval()` needs_approval步骤暂停等人类决策
-- `Orchestrator.assign_task()` 17Agent多智能体调度
-- `QualityChecker.check()` 7阶段质量验证
-- `Checkpoint.save()` 每步自动保存
-
-### 2.5 reflect (反思)
-- 成功率计算
-- 错误归因
-- 质量报告汇总
-
-### 2.6 evolve (进化)
-- **精英保留**: >=80%成功率的会话存入elite_registry
-- **交叉变异**: 3+精英会话自动合成新策略
-- **细胞进化**: 失败时触发cell.evolve()
-- **基因突变**: mutation_history记录
-- **自愈**: SelfHealer.run_all_checks()
-
-## 3. 数据流
-
-### 3.1 知识管道
 ```
-Raw Ledger (SQLiteBackend)
-    → Views (VectorStore.search + GapDetector)
-    → Policy (Genome.expressed_genes)
-    → Commit (merge_knowledge)
-    → Provenance (MerkleAuditChain + Document.source/author/revision)
+用户输入 → NeonAgent.send_prompt()
+  → PromptOptimizer: 提示词增强 + 动态工具选择
+  → TreeLLM: 选举最优免费 provider (5 维评分)
+  → CacheOptimizer: 前缀缓存优化 token
+  → LLM 流式输出 → ToadOrchestrator: 结构化解析
+  → Toad Widgets: AgentResponse/ToolCall/Plan 渲染
+  → SessionSearch: FTS5 索引
+  → SkillSelfLearn: 分析任务模式
+  → CostDashboard: token 成本记录
 ```
 
-### 3.2 Bi-temporal 时序
-```
-Document.valid_from / valid_to     ← 真实世界有效性窗口
-Document.created_at / updated_at   ← 系统记录时间
+### 2.2 批量文档生成流程
 
-search(as_of=datetime(2023,6,15))  → 时间点回溯
-search_current()                   → 仅当前有效
-history()                          → 全部含已失效
-at_time(point)                     → "当时的KB快照"
 ```
-
-### 3.3 成本追踪
-```
-TokenUsage → CostAware.record()
-    → BudgetStatus.usage_pct
-    → >=85% 自动 degrade(): pro→flash
-    → <85% 自动 restore(): flash→pro
-    → API: /api/cost/status
+/batch data.csv 环评模板
+  → BatchGenerator.enqueue_csv(): 解析参数表
+  → generate_all(): 4 并发 LLM 调用
+  → 进度回调 → 全部完成
+  → export_docx(): 导出 DOCX
 ```
 
-## 4. 安全架构
+### 2.3 P2P 通信流程
 
-### 4.1 Merkle 审计链
 ```
-entry_n.hash = SHA256(entry_n.data + entry_{n-1}.hash)
-verify() → 全链验证 → 篡改即断裂
-export_proof(index) → 包含证明
+Node A (内网)          Relay Server (公网)        Node B (内网)
+    │  POST /peers/register    │                        │
+    │─────────────────────────►│◄───────────────────────│
+    │  {peer_id, location}     │  {peer_id, location}   │
+    │                          │                        │
+    │  GET /peers/discover     │                        │
+    │◄─────────────────────────│                        │
+    │  {peers, relay_pool}     │                        │
+    │                          │                        │
+    │  WS /ws/relay ──────────►│◄───────────────────────│
+    │  {"to":"B","data":"hi"}  │  forward →             │
 ```
 
-### 4.2 防护矩阵
+## 3. 模型选举
 
-| 防护层 | 实现 | 检测模式 |
-|--------|------|---------|
-| 路径穿越 | PathGuard | ../检测 + 工作区沙箱 |
-| SSRF | SSRFGuard | 私有IP段 + 云元数据端点黑名单 |
-| 提示注入 | PromptInjectionScanner | 9种攻击模式正则 |
-| 密钥保护 | ZeroizingSecret | 字节数组 + __del__自动清零 |
-| 代码安全 | SandboxedExecutor | 子进程隔离 + 超时 |
+### 3.1 5 维评分体系
 
-## 5. 扩展点
+| 维度 | 权重 | 计算方式 |
+|------|------|---------|
+| 质量 | 30% | 最近 20 次调用的加权成功率 |
+| 延迟 | 25% | 归一化响应时间 |
+| 成本 | 20% | 免费=1.0, 付费=0.3 |
+| 能力 | 15% | 查询关键词 vs provider 专长 |
+| 新鲜度 | 10% | 24h 内使用过加分 |
 
-- **新LLM提供商**: 修改 `config.ltaiconfig.yaml` 中的 model 字段 (`provider/model` 格式)
-- **新工具**: 在 `capability/tool_market.py` 中添加 handler + ALL_TOOLS 条目
-- **新报告模板**: 在 `capability/doc_engine.py` 的 `INDUSTRIAL_TEMPLATES` 中添加
-- **新Agent角色**: 在 `integration/hub.py` 的 `_register_agents()` 中添加
-- **新TaskPlanner模板**: 在 `execution/task_planner.py` 的 `DOMAIN_TEMPLATES` 中添加
+### 3.2 选举流程
+
+```
+1. 构建候选列表: free_models + paid_models + oc-* + local-*
+2. 排除 L4 锁定模型
+3. 序列 ping 所有候选
+4. 对存活候选 5 维评分
+5. 最高分当选
+6. 全灭 → 使用 L4
+```
+
+## 4. 知识检索架构
+
+### 4.1 多路融合检索
+
+```
+用户查询 → expand_query()
+  ├→ DocumentKB: FTS5 全文 + embedding cosine → RRF merge
+  ├→ KnowledgeBase: bi-temporal cosine
+  ├→ StructMem: 层次化记忆检索
+  ├→ KnowledgeGraph: 实体链接 + 图遍历
+  └→ 结果融合排序 → 返回 top_k
+```
+
+### 4.2 情感记忆 (StructMem)
+
+```
+每个对话轮次 → 双视角绑定 (FACT + RELATION)
+  → 缓冲 ≥ 3 条 + 超过 300s → 跨事件合并
+  → 语义检索 → 合成块
+```
+
+## 5. 关键设计决策
+
+| 决策 | 原因 |
+|------|------|
+| 纯 Python，零本地模型加载 | 启动秒级，不依赖 torch |
+| Toad 全源集成 | 复用成熟 UI 组件 |
+| AsyncDisk 批量写 | 避免热路径磁盘阻塞 |
+| UnifiedRegistry 单例 | 30 全局单例 → 1 个 |
+| Token 前缀缓存 | DeepSeek 90% 节省 |
+| 免费模型优先选举 | 零成本运行 |
+| P2P 默认组件 | 节点自动互联 |

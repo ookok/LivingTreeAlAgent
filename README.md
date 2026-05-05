@@ -1,204 +1,169 @@
-# 🌳 LivingTree AI Agent
+# 🌳 LivingTree AI Agent v2.1
 
-> 🌳 数字生命体 — AI驱动的自我进化智能代理平台 | v2.0.0
+> 工业级自主数字生命体 — 批量文档写作 · 项目开发 · 自我进化
 
-**LivingTree** 是一个开源的数字生命体平台。它不是一个聊天框架，也不是一个 LLM 封装器——它是一个具备**认知、规划、执行、反思、进化**完整闭环的自治系统。
-
-基于 **Python** + **Textual TUI** + **LiteLLM** 构建，通过 **Windows Terminal** 启动，提供接近原生 GUI 的终端体验。
-
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![Textual](https://img.shields.io/badge/Textual-8.2%2B-green)](https://textual.textualize.io)
-
----
-
-## 概述
-
-LivingTree 的核心是一个 **6 阶段数字生命管线**：
-
-```
-感知 → 认知 → 规划 → 执行 → 反思 → 进化
-```
-
-- **DeepSeek 双模型驱动**: flash (快速意图) + pro (深度推理+思考模式)
-- **30 个内置工具**: 文件/代码/知识库/文档/地图/邮箱/模型计算/专家训练/技能
-- **自进化**: 精英保留 + 思维交叉变异 + 基因组策略控制
-- **Bi-temporal 知识库**: 时间点查询，"曾经为真≠当前为真"
-- **16 层安全**: Merkle 审计链 + 路径防护 + SSRF + 提示注入扫描 + 密钥零化
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Toad](https://img.shields.io/badge/UI-Toad-blue)](https://github.com/batrachianai/toad)
 
 ---
 
 ## 快速开始
 
-### 安装
+### 一键安装
 
-```powershell
-git clone https://github.com/ookok/LivingTreeAlAgent.git
-cd LivingTreeAlAgent
-pip install -r requirements.txt
+**Linux/macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.sh | bash
 ```
 
-### 配置 DeepSeek API Key
-
+**Windows (PowerShell):**
 ```powershell
-python -c "from livingtree.config.secrets import SecretVault; v=SecretVault('config/secrets.enc'); v.set('deepseek_api_key','sk-your-key')"
+powershell -c "irm https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.ps1 | iex"
+```
+
+**Windows (CMD):**
+```cmd
+curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.bat -o install.bat && install.bat
 ```
 
 ### 启动
 
-```powershell
-# TUI 终端界面 (推荐)
-python -m livingtree tui
-
-# FastAPI 服务
-python -m livingtree server
-
-# 集成测试
-python -m livingtree test
+```bash
+livingtree          # TUI 对话界面
+livingtree relay    # 启动中继服务器
 ```
 
-首次启动会自动检查 Windows Terminal，如未安装则自动下载。
+部署后系统自动完成：Python 环境检测、依赖安装、LLM 密钥加载、模型选举、知识库初始化。用户只需登录即可使用。
 
 ---
 
-## 核心架构
-
-```
-livingtree/
-├── dna/              # 生命蓝图
-│   ├── life_engine.py      # 6阶段管线引擎
-│   ├── dual_consciousness.py # LiteLLM 双模型路由
-│   ├── living_world.py     # 统一系统上下文
-│   ├── genome.py           # 数字基因组
-│   └── safety.py           # 16层安全防护
-├── cell/             # 细胞AI
-│   ├── cell_ai.py          # 可训练细胞
-│   ├── distillation.py     # 知识蒸馏
-│   ├── mitosis.py          # 细胞分裂
-│   ├── phage.py            # 代码吞噬(AST)
-│   └── swift_trainer.py    # MS-SWIFT训练
-├── knowledge/        # 知识管理
-│   ├── knowledge_base.py   # Bi-temporal知识库
-│   ├── vector_store.py     # 向量存储
-│   └── knowledge_graph.py  # 知识图谱
-├── capability/       # 能力工厂
-│   ├── tool_market.py      # 30个工具注册
-│   ├── doc_engine.py       # 5类报告/176节
-│   ├── code_engine.py      # 自注释代码生成
-│   ├── ast_parser.py       # Tree-sitter AST
-│   ├── code_graph.py       # 代码知识图
-│   └── tianditu.py         # 天地图集成
-├── execution/        # 任务编排
-│   ├── task_planner.py     # 5领域模板
-│   ├── orchestrator.py     # 17Agent调度
-│   ├── thinking_evolution.py # 认知进化
-│   ├── quality_checker.py  # 7阶段质量检查
-│   ├── hitl.py             # 人机协同暂停
-│   ├── checkpoint.py       # 断点续传
-│   └── cost_aware.py       # 预算管控
-├── network/          # P2P网络
-├── integration/      # 系统集成中枢
-├── api/              # FastAPI服务
-├── config/           # 配置+加密保险库
-├── observability/    # 日志/追踪/指标
-├── tui/              # Textual终端界面
-│   ├── screens/      # Chat/Code/Docs/Settings
-│   └── widgets/      # 任务树/文件选择器/仪表盘
-└── mcp/              # MCP协议服务(21工具)
-```
-
----
-
-## 功能矩阵
+## 核心能力
 
 | 能力 | 说明 |
 |------|------|
-| **AI 对话** | DeepSeek 双模型, Markdown渲染, 流式输出, 思考模式 |
-| **代码生成** | 自注释代码, AST解析, 调用链分析, 爆炸半径, 14语言语法高亮 |
-| **知识管理** | Bi-temporal知识库, 时间点回溯, 向量搜索, 格式发现, 空白检测 |
-| **文档生成** | 环评/应急预案/验收/可研报告, 共176节标准模板 |
-| **细胞训练** | LoRA微调 + MS-SWIFT全流程 + 知识蒸馏 + 课程学习 |
-| **P2P网络** | 节点发现(LAN/DHT), NAT穿透, 加密通道, 信誉系统 |
-| **自进化** | 精英保留, 思维交叉变异, 基因组策略, 自我修复 |
-| **安全防护** | Merkle审计链, 路径穿越, SSRF, 提示注入, 零化密钥 |
-| **地图服务** | 天地图瓦片, 地理编码, 终端地图渲染 |
-| **邮箱** | SMTP真实发送 (163.com) |
-| **计算模型** | 高斯扩散, 噪声衰减, 河流稀释, Pasquill-Gifford参数 |
+| 🤖 **10+ LLM Provider** | DeepSeek/硅基流动/模力方舟/智谱/讯飞/阿里/小米等，免费优先 |
+| 📝 **批量文档生成** | CSV 参数表 → 并行 LLM 生成 → DOCX/PDF 导出 |
+| 🔍 **混合知识检索** | FTS5 全文 + 向量语义 + 知识图谱，4 路融合 |
+| 🧠 **自主进化** | 每小时互联网学习，每天自动挖掘项目模板 |
+| 🌐 **P2P 网络** | 节点能力共享，中继服务器内网穿透 |
+| 🔧 **21 个内置工具** | 高斯烟羽/噪声衰减/代码图谱/AI 训练等 |
+| 👤 **8 个专家角色** | 环评专家/全栈工程师/数据分析师/AI 研究员等 |
+| 📋 **审批工作流** | draft→review→approve→publish 多级审批 |
+| ⚖️ **法规合规检查** | GB3095/3096/3838/3840 自动审计 |
 
-### 30 个内置工具
-
-| 类别 | 工具 |
-|------|------|
-| **文件** | read_file, write_file, list_directory, search_files |
-| **代码** | parse_ast, find_callers, find_callees, blast_radius, index_codebase, search_code, generate_code |
-| **知识** | search_knowledge, add_knowledge, detect_gaps, discover_formats |
-| **文档** | generate_report |
-| **网络** | fetch_url |
-| **系统** | get_status, list_cells |
-| **地图** | lookup_location, geocode_reverse, static_map |
-| **邮箱** | send_email |
-| **训练** | distill_knowledge, curriculum_learning |
-| **技能** | list_skills, create_skill |
-| **模型** | gaussian_plume, noise_attenuation, water_dilution, dispersion_coeff |
-
----
-
-## TUI 界面
+## 系统架构
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  LivingTree AI Agent — www.livingtree-ai.com        │
-├──────────────────────────────────────────────────────┤
-│  Chat │ Code │ Docs │ Settings                       │
-├─────────┬────────────────────────────────────────────┤
-│ ⠋ Task  │  ### You                                  │
-│ Pipeline│  帮我生成环评报告                           │
-│         │                                            │
-│ ● 感知  │  ### AI                                    │
-│ ● 认知  │  **分析结果:**                              │
-│ ◐ 规划  │  │章节    │状态  │                        │
-│ ○ 执行  │  │总论    │完成  │                        │
-│ ○ 反思  │  │工程…   │进行中│                        │
-│ ○ 进化  │                                            │
-│         ├────────────────────────────────────────────┤
-│ tokens  │ [输入框]                         ▸ Send    │
-│ ¥0.001  │                                            │
-├─────────┴────────────────────────────────────────────┤
-│ ^Q Quit │ www.livingtree-ai.com │ livingtreeai@163  │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    TUI (Toad)                             │
+│  ┌──────────┬──────────┬──────────┬──────────────────┐   │
+│  │ 对话面板  │ 代码面板  │ 知识库    │ 工具箱           │   │
+│  │ ChatAgent│ CodeAgent│ KBAgent │ ToolsAgent       │   │
+│  └────┬─────┴────┬─────┴────┬─────┴────────┬─────────┘   │
+│       │          │          │              │              │
+│  ┌────▼──────────▼──────────▼──────────────▼──────────┐  │
+│  │              UnifiedRegistry                        │  │
+│  │  21 tools · 12 roles · 4 KB stores → single source │  │
+│  └──────────────────────┬───────────────────────────────┘  │
+│                         │                                  │
+│  ┌──────────────────────▼───────────────────────────────┐  │
+│  │                  LifeEngine                           │  │
+│  │  perceive → cognize → plan → execute → reflect → evolve│  │
+│  └──────────────────────┬───────────────────────────────┘  │
+│                         │                                  │
+│  ┌──────────────────────▼───────────────────────────────┐  │
+│  │                  TreeLLM                              │  │
+│  │  HolisticElection · CacheOptimizer · SkillRouter     │  │
+│  └──────────────────────┬───────────────────────────────┘  │
+│                         │                                  │
+│  ┌──────────────────────▼───────────────────────────────┐  │
+│  │  DeepSeek · SiliconFlow · MoFang · Zhipu · Spark     │  │
+│  │  LongCat · XiaoMi · Aliyun · DMXAPI · OpenCode-Serve │  │
+│  └──────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**快捷键**: `Ctrl+1-4` 切换标签 | `Ctrl+P` 命令面板 | `Ctrl+D` 主题 | `Ctrl+Q` 退出
-
----
-
-## API 端点
+## 项目结构
 
 ```
-POST /api/chat              — AI 对话
-GET  /api/health            — 健康检查
-GET  /api/status            — 系统状态
-GET  /api/tools             — 工具列表
-GET  /api/skills            — 技能列表
-GET  /api/metrics           — 指标
-POST /api/report/generate   — 生成报告
-POST /api/cell/train        — 训练细胞
-POST /api/drill/train       — MS-SWIFT训练
-GET  /api/hitl/pending      — 待审批
-POST /api/hitl/approve      — 批准
-GET  /api/cost/status       — 预算/成本
-GET  /api/checkpoint/sessions — 检查点
-WS   /ws                    — WebSocket
+LivingTreeAlAgent/
+├── relay_server.py          # P2P 中继服务器
+├── install.sh/bat/ps1       # 一键部署脚本
+├── deploy_relay.*           # 中继服务器部署
+├── livingtree/
+│   ├── tui/                 # Toad TUI 界面
+│   │   ├── app.py           # App 主类
+│   │   ├── screens/         # 各面板 Screen
+│   │   ├── widgets/         # UI 组件
+│   │   ├── td/              # Toad 源码 (165+ 文件)
+│   │   ├── styles/          # CSS 主题
+│   │   └── i18n.py          # 中英文翻译
+│   ├── treellm/             # LLM 路由引擎
+│   │   ├── core.py          # TreeLLM 主类
+│   │   ├── providers.py     # 各 Provider 实现
+│   │   ├── holistic_election.py  # 5 维评分选举
+│   │   ├── structured_enforcer.py # JSON Schema 校验
+│   │   ├── skill_router.py  # 全文本路由
+│   │   └── model_registry.py # 模型自动发现
+│   ├── dna/                 # 数字生命体
+│   │   ├── dual_consciousness.py  # 双模型意识
+│   │   ├── life_engine.py   # 6 阶段生命循环
+│   │   ├── autonomous_learner.py  # 自主互联网学习
+│   │   ├── prompt_optimizer.py    # 提示词优化
+│   │   ├── tui_orchestrator.py    # LLM→TUI 路由
+│   │   ├── skill_graph.py   # 技能关系图谱
+│   │   └── unified_skill_system.py # 统一技能系统
+│   ├── capability/          # 能力层
+│   │   ├── industrial_doc_engine.py # 工业文档引擎
+│   │   ├── document_processor.py   # 长文档处理
+│   │   ├── unified_search.py       # 多引擎搜索
+│   │   ├── web_reach.py     # 智能网页抓取
+│   │   └── ddg_search.py    # DuckDuckGo 搜索
+│   ├── knowledge/           # 知识层
+│   │   ├── knowledge_base.py     # 主知识库
+│   │   ├── document_kb.py        # 分块文档知识库
+│   │   ├── intelligent_kb.py     # 智能检索+事实核查
+│   │   ├── auto_knowledge_miner.py # 自动知识挖掘
+│   │   ├── struct_mem.py    # 层次化记忆
+│   │   └── session_search.py     # FTS5 会话搜索
+│   ├── execution/           # 执行层
+│   │   ├── real_pipeline.py      # 真实任务编排
+│   │   ├── panel_agent.py        # 面板自愈 Agent
+│   │   ├── auto_skill_resolver.py # 自动技能补全
+│   │   ├── cron_scheduler.py     # 定时任务
+│   │   └── task_guard.py         # 任务防护
+│   ├── network/             # 网络层
+│   │   ├── p2p_node.py     # P2P 节点
+│   │   └── resilience.py   # 网络韧性
+│   ├── config/              # 配置
+│   │   ├── settings.py     # 全局配置
+│   │   ├── secrets.py      # 加密密钥存储
+│   │   └── system_config.py # 系统常量
+│   ├── integration/         # 集成
+│   │   ├── hub.py          # 集成中枢
+│   │   ├── message_gateway.py   # 多平台消息网关
+│   │   ├── pkg_manager.py       # 统一包管理
+│   │   └── self_updater.py      # 自动更新
+│   ├── core/                # 核心基础
+│   │   ├── unified_registry.py  # 统一注册表
+│   │   ├── async_disk.py        # 异步磁盘 I/O
+│   │   └── task_guard.py        # 任务守护
+│   └── observability/       # 可观测性
+│       ├── error_interceptor.py  # 全局错误捕获
+│       └── system_monitor.py     # 系统资源监控
+└── docs/                    # 文档
 ```
 
----
+## 技术栈
 
-## 联系方式
+- **UI**: Toad (Textual 8.2.5) — 终端原生界面
+- **LLM 路由**: TreeLLM (自研) — 10+ provider 多路复用
+- **知识库**: SQLite FTS5 + 向量余弦 + NetworkX 图谱
+- **网络**: aiohttp + WebSocket P2P 中继
+- **配置**: Pydantic + YAML + Fernet 加密
+- **持久化**: AsyncDisk 批量异步 + SQLite WAL
 
-- 🌐 官网: [www.livingtree-ai.com](https://www.livingtree-ai.com)
-- 📧 邮箱: livingtreeai@163.com
-- 🐙 GitHub: [ookok/LivingTreeAlAgent](https://github.com/ookok/LivingTreeAlAgent)
-
-## 许可
+## 许可证
 
 MIT License — 详见 [LICENSE](LICENSE)

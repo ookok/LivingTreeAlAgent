@@ -55,3 +55,5 @@ livingtree/tui/textual/
 .livingtree/nodejs/
 .livingtree/
 toad/
+build_relay/
+relay_server.spec

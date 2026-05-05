@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 title LivingTree — One-Command Auto-Deploy (Windows)
 :: Usage: powershell -c "irm https://...install.ps1 | iex"

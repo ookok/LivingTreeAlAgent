@@ -444,6 +444,33 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"Cron init: {e}")
 
+        # ── IdleConsolidator: background knowledge consolidation ──
+        try:
+            from ..capability.idle_consolidator import get_idle_consolidator
+            ic = get_idle_consolidator()
+            asyncio.create_task(ic.start(self, idle_threshold=60))
+            logger.info("IdleConsolidator started (60s threshold)")
+        except Exception as e:
+            logger.debug(f"IdleConsolidator: {e}")
+
+        # ── SessionContinuity: cross-session resume ──
+        try:
+            from ..capability.session_continuity import get_session_continuity
+            sc = get_session_continuity()
+            state = sc.load()
+            if state and state.last_conversation_summary:
+                logger.info(f"Session resume: {state.last_conversation_summary[:60]}...")
+        except Exception as e:
+            logger.debug(f"SessionContinuity: {e}")
+
+        # ── AgentMarketplace: auto-sync with relay ──
+        try:
+            from ..capability.agent_marketplace import get_marketplace
+            am = get_marketplace()
+            asyncio.create_task(am.sync_with_relay(self))
+        except Exception as e:
+            logger.debug(f"Marketplace: {e}")
+
         if self.lsp_manager:
             try:
                 await self.lsp_manager.start()
@@ -477,6 +504,14 @@ class IntegrationHub:
         if not self._started:
             return
         logger.info("Shutting down...")
+
+        # ── Save session continuity ──
+        try:
+            from ..capability.session_continuity import get_session_continuity
+            await get_session_continuity().save(self)
+        except Exception:
+            pass
+
         await self.daemon.stop()
         await self.world.self_healer.stop()
         await self.world.node.shutdown()

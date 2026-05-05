@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3050,6 +3050,136 @@ class Conversation(containers.Vertical):
             else:
                 lines.append("[dim]未生成修复方案[/dim]")
             await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "modify":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.self_modifier import get_self_modifier
+            if not params:
+                await self.post(Note("用法: /modify <功能描述> — LLM 自动修改自己的代码"))
+                await self.post(Note("示例: /modify 添加 WebSocket 实时推送"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            sm = get_self_modifier()
+            await self.post(Note(f"**🔧 自我修改:** {params}"))
+            result = await sm.modify(params, hub)
+            lines = [f"## 🔧 修改结果", f"任务: {result.task}"]
+            if result.files_changed:
+                lines.append(f"\n文件: {', '.join(Path(f).name for f in result.files_changed[:5])}")
+            if result.diff_summary:
+                lines.append(f"{result.diff_summary}")
+            if result.test_result:
+                lines.append(f"\n测试: {result.test_result}")
+            if result.success and not result.rolled_back:
+                lines.append(f"\n[green]✓ 已应用 - 使用 /git diff 查看变化[/green]")
+            elif result.rolled_back:
+                lines.append(f"\n[red]已回滚 - {result.error or '导入验证失败'}[/red]")
+            else:
+                lines.append(f"\n[red]失败: {result.error}[/red]")
+            await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "consolidate":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.idle_consolidator import get_idle_consolidator
+            ic = get_idle_consolidator()
+            entries = ic.recent_consolidations(10)
+            if not entries:
+                await self.post(Note("[dim]暂无巩固记录。系统会在空闲时自动整理对话知识。[/dim]"))
+            else:
+                lines = [f"## 🧠 知识巩固 ({len(entries)} 条)", ""]
+                for e in entries:
+                    tags = " ".join(f"`{t}`" for t in e.tags[:4]) if hasattr(e, 'tags') else ""
+                    ts = time.strftime("%H:%M", time.localtime(e.timestamp))
+                    lines.append(f"**[{ts}]** {e.topic[:80]}")
+                    lines.append(f"  {e.summary[:120]}")
+                    if tags:
+                        lines.append(f"  {tags}")
+                await self.post(Note("\n".join(lines)))
+            return True
+
+        elif command == "market":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.agent_marketplace import get_marketplace
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "list"
+            am = get_marketplace()
+            if sub == "list":
+                items = am.search()
+                if not items:
+                    await self.post(Note("[dim]市场暂无技能/工具[/dim]"))
+                else:
+                    lines = [f"## 🏪 技能市场 ({len(items)} 项)", ""]
+                    for item in items[:15]:
+                        icon = "🔧" if item.type == "tool" else "🧩"
+                        lines.append(f"{icon} **{item.name}** [{item.type}]")
+                        lines.append(f"  {item.description[:100]}")
+                        if item.author and item.author != "self":
+                            lines.append(f"  [dim]by {item.author[:20]}[/dim]")
+                    lines.append("\n/discover — 从P2P网络发现新技能")
+                    await self.post(Note("\n".join(lines)))
+            elif sub == "discover":
+                hub = getattr(self.app, 'hub', None)
+                new_items = await am.discover_skills(hub)
+                await self.post(Note(f"🔍 发现 {len(new_items)} 个新技能/工具"))
+            elif sub == "publish" and len(parts) > 1:
+                args = parts[1].split(maxsplit=2)
+                name = args[0]; desc = args[1] if len(args) > 1 else ""
+                code = args[2] if len(args) > 2 else ""
+                if code:
+                    am.publish_tool(name, code, desc)
+                else:
+                    am.publish_skill(name, desc or name)
+                await self.post(Note(f"✓ 已发布: {name}"))
+            else:
+                await self.post(Note("用法: /market list|discover|publish <名> <描述> [代码]"))
+            return True
+
+        elif command == "synthesize":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.tool_synthesis import get_tool_synthesizer
+            if not params:
+                await self.post(Note("用法: /synthesize <任务描述> — LLM 现场生成工具代码"))
+                await self.post(Note("示例: /synthesize 对比两个CSV的第三列差异"))
+                return True
+            hub = getattr(self.app, 'hub', None)
+            ts = get_tool_synthesizer()
+            await self.post(Note(f"**🔧 工具合成中:** {params}"))
+            result = await ts.synthesize(params, hub)
+            if result.registered and result.tool:
+                lines = [
+                    f"## 🔧 工具合成完成",
+                    f"**{result.tool.name}** v{result.tool.version} [{result.tool.category}]",
+                    f"描述: {result.tool.description}",
+                    f"成功: {result.tool.success_count} | 失败: {result.tool.fail_count}",
+                ]
+                if result.output:
+                    lines.append(f"\n测试输出:\n```\n{result.output[:2000]}\n```")
+                lines.append(f"\n[green]✓ 已注册为永久工具 — 现在可用于 /synthesize 或其他调用[/green]")
+                await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note(f"[red]合成失败: {result.error}[/red]"))
+            return True
+
+        elif command == "continue":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.session_continuity import get_session_continuity
+            sc = get_session_continuity()
+            state = sc.load()
+            if not state:
+                await self.post(Note("[dim]没有上一轮的会话记录[/dim]"))
+            else:
+                text = sc.resume_text()
+                files = "\n".join(f"- {f}" for f in state.open_files[:5]) if state.open_files else ""
+                lines = [
+                    text,
+                    "",
+                    "[dim]--- 上次会话详情 ---[/dim]",
+                    f"[dim]文件:[/dim]" if files else "",
+                    files,
+                    f"\n[dim]时长: {state.session_duration_minutes:.0f}分钟 | 决策: {len(state.decisions_made)}[/dim]",
+                ]
+                await self.post(Note("\n".join(lines)))
             return True
 
         return False

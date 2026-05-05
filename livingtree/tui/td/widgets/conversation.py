@@ -1886,7 +1886,7 @@ class Conversation(containers.Vertical):
         """
         command, _, parameters = text[1:].partition(" ")
         # ═══ LivingTree slash commands ═══
-        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns", "lineage", "practice", "profile"):
+        if command in ("search", "fetch", "clear", "status", "help", "evolve", "tools", "route", "optimize", "role", "graph", "cron", "recall", "gateway", "compute", "sysinfo", "factcheck", "gaps", "plan", "batch", "template", "compliance", "cost", "mine", "connect", "peers", "login", "find", "save", "replace", "locate", "dedup", "patch", "render", "backup", "watch", "history", "web", "sql", "git", "shell", "debate", "snapshot", "evolvetool", "modify", "consolidate", "market", "synthesize", "continue", "activity", "eval", "trust", "branch", "semdiff", "selfdocs", "deepsearch", "ghmirror", "dns", "lineage", "practice", "profile", "brain"):
             return await self._handle_livingtree_command(command, parameters.strip())
         if command == "toad:about":
             from livingtree.tui.td import about
@@ -3523,6 +3523,48 @@ class Conversation(containers.Vertical):
                     await self.post(Note("\n".join(lines)))
             else:
                 await self.post(Note("用法: /profile <用户名>"))
+            return True
+
+        elif command == "brain":
+            from livingtree.tui.td.widgets.note import Note
+            from livingtree.capability.network_brain import get_network_brain
+            brain = get_network_brain()
+            parts = params.split(maxsplit=1) if params else []
+            sub = parts[0].lower() if parts else "status"
+            if sub == "status" or sub == "stats":
+                stats = brain.stats()
+                lines = [
+                    f"## 🧠 NetworkBrain",
+                    f"总摄入: {stats['total_ingested']} 条 | 今日: {stats['today']} 条",
+                    f"交叉验证: {stats['cross_verified']} | 含方法论: {stats['with_methodology']}",
+                    f"",
+                    f"### 来源分布",
+                ]
+                for s, c in stats.get("by_source", {}).items():
+                    lines.append(f"  {s}: {c}")
+                lines.append(f"\n### 领域分布")
+                for c, n in stats.get("by_category", {}).items():
+                    lines.append(f"  {c}: {n}")
+                await self.post(Note("\n".join(lines)))
+            elif sub == "report" or sub == "today":
+                report = brain.today_report()
+                await self.post(Note(report))
+            elif sub == "search" and len(parts) > 1:
+                results = brain.search(parts[1])
+                if not results:
+                    await self.post(Note(f"[dim]未找到'{parts[1]}'相关知识[/dim]"))
+                else:
+                    lines = [f"## 🧠 知识搜索: {parts[1]} ({len(results)} 条)", ""]
+                    for r in results[:10]:
+                        src = {"arxiv": "📄", "github_trending": "⭐", "github_releases": "📦",
+                               "stackoverflow": "💡", "hackernews": "📰", "rss": "📡"}.get(r.source, "•")
+                        lines.append(f"{src} **{r.title[:100]}**")
+                        if r.methodology:
+                            lines.append(f"  方法: {r.methodology[:120]}")
+                        lines.append(f"  [dim]{r.source_url[:100]}[/dim]")
+                    await self.post(Note("\n".join(lines)))
+            else:
+                await self.post(Note("用法: /brain status|report|search <关键词>"))
             return True
 
         return False

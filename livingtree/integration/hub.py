@@ -530,6 +530,29 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"ProgressiveTrust: {e}")
 
+        # ── NetworkBrain: autonomous internet knowledge ingestion ──
+        try:
+            from ..capability.network_brain import get_network_brain
+            self.world.network_brain = get_network_brain()
+            asyncio.create_task(self._brain_loop())
+            logger.info("NetworkBrain initialized (arxiv + github + hn + so + rss)")
+        except Exception as e:
+            logger.debug(f"NetworkBrain: {e}")
+
+    async def _brain_loop(self):
+        """Periodic knowledge ingestion cycle."""
+        brain = getattr(self.world, 'network_brain', None)
+        if not brain:
+            return
+        await asyncio.sleep(60)  # initial delay
+        while True:
+            try:
+                await brain.ingest_cycle(self)
+                await brain.deep_digest(self, max_items=5)
+            except Exception:
+                pass
+            await asyncio.sleep(1800)  # 30 minutes
+
         if self.lsp_manager:
             try:
                 await self.lsp_manager.start()

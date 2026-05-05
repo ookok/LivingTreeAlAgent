@@ -410,6 +410,10 @@ class Conversation(containers.Vertical):
         from livingtree.tui.message_queue import MessageQueue
         self._mq = MessageQueue()
 
+        # ── Mute mode (memo chat) ──
+        self._muted: bool = False
+        self._memo_messages: list[str] = []
+
     def update_title(self) -> None:
         """Update the screen title."""
 
@@ -825,8 +829,29 @@ class Conversation(containers.Vertical):
             await self.prompt_history.append(event.body)
             self.prompt_history_index = 0
             if text.startswith("/") and await self.slash_command(text):
-                # Toad has processed the slash command.
                 return
+
+            # ═══ Mute mode: memo chat, no LLM ───
+            if self._muted:
+                from livingtree.tui.td.widgets.note import Note
+                self._memo_messages.append(text)
+                # Sync to observer if connected
+                try:
+                    from livingtree.capability.remote_assist import get_remote_assist
+                    ra = get_remote_assist()
+                    if ra.am_i_host() or ra.am_i_observer():
+                        from livingtree.capability.remote_assist import SyncFragment
+                        await ra.sync_fragment(SyncFragment(
+                            fragment_id=f"memo_{int(time.monotonic())}",
+                            sender_id=ra.client_id, sender_role=ra._get_my_role(),
+                            content=text, msg_type="memo", timestamp=time.time(),
+                        ))
+                except Exception:
+                    pass
+                role = "你" if not self._muted else "📝"
+                await self.post(Note(f"{role}: {text}", style="dim"))
+                return
+
             await self.post(UserInput(text))
             self.window.scroll_end(animate=False)
             self._loading = await self.post(Loading("Please wait..."), loading=True)
@@ -2405,6 +2430,15 @@ class Conversation(containers.Vertical):
             profile = get_progressive_trust().get_user_profile(uid)
             if profile:
                 await self.post(Note(f"👤 {uid}: {profile['interactions']}次交互"))
+        elif any(kw in pl for kw in ("mute", "静音", "静默", "笔记", "memo", "聊天")):
+            self._muted = not self._muted
+            if self._muted:
+                await self.post(Note("🔇 **已静音** — 输入不会被LLM处理，可用于观察者间交流\n/mute 恢复", style="dim"))
+            else:
+                count = len(self._memo_messages)
+                self._memo_messages.clear()
+                await self.post(Note(f"🔊 **已恢复** — LLM继续处理 ({count}条笔记已清除)"))
+            return True
         elif any(kw in pl for kw in ("id", "我的id", "编号")):
             from livingtree.capability.remote_assist import get_remote_assist, get_client_id
             cid = get_client_id()

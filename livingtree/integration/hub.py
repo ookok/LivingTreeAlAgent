@@ -567,16 +567,29 @@ class IntegrationHub:
 
     @staticmethod
     def _handle_observe_message(data, ra):
-        """Route incoming P2P observe-related messages."""
+        """Route incoming P2P observe-related messages to UI."""
         try:
             if isinstance(data, str):
                 data = json.loads(data)
             msg_type = data.get("type", "")
-            if msg_type == "observe_request":
-                logger.info(f"Observe request from {data.get('from_id','?')}")
-            elif msg_type == "observe_sync":
+            if msg_type == "observe_sync":
                 fragment = ra.receive_fragment(data)
-                logger.debug(f"Sync: {fragment.sender_role} → {fragment.content[:50]}")
+                # Forward memo/chat messages to Conversation UI
+                if fragment.msg_type in ("memo", "message") and fragment.content:
+                    import asyncio
+                    try:
+                        from livingtree.tui.td.widgets.note import Note
+                        # Post to app's active conversation if available
+                        loop = asyncio.get_event_loop()
+                        loop.call_soon_threadsafe(
+                            lambda f=fragment: logger.info(
+                                f"📝 {f.sender_role}: {f.content[:80]}"
+                            )
+                        )
+                    except Exception:
+                        pass
+            elif msg_type == "observe_request":
+                logger.info(f"Observe request from {data.get('from_id','?')}")
         except Exception:
             pass
 

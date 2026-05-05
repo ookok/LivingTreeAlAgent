@@ -192,3 +192,14 @@ AgentCard {
 /* Toast */
 Toast.-warning { border: solid #fea62b; }
 Toast.-error { border: solid #f85149; }
+
+/* Login screen */
+#login-box {
+    width: 40; margin: 5 0; padding: 2 3;
+    background: #161b22; border: solid #30363d;
+}
+#login-title { text-style: bold; color: #58a6ff; content-align: center middle; padding: 1 0; }
+#login-subtitle { color: #8b949e; content-align: center middle; padding: 0 0 2 0; }
+#login-error { color: #f85149; content-align: center middle; height: 1; }
+#login-user, #login-pass { margin: 1 0; }
+#btn-login { margin: 1 0; }

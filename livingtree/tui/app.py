@@ -150,6 +150,11 @@ class LivingTreeTuiApp(ToadApp):
             self.pop_screen()
             self.notify("系统就绪", timeout=2)
 
+            # ── Mandatory login check ──
+            if not self._auth_verified:
+                from .screens.login import LoginScreen
+                await self.push_screen(LoginScreen())
+
             # ── Start panel agents ──
             asyncio.create_task(self._start_panel_agents())
             asyncio.create_task(self._auto_start_opencode_serve())

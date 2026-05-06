@@ -19,6 +19,16 @@ from .providers import (
     create_deepseek_provider, create_longcat_provider, create_nvidia_provider,
 )
 from .classifier import TinyClassifier
+from .prompt_versioning import PromptVersionManager, PromptTemplate, PROMPT_VERSION_MANAGER
+from .embedding_scorer import EmbeddingScorer, ModelProfile, get_embedding_scorer
+from .foresight_gate import ForesightGate, ForesightDecision, get_foresight_gate
+from .onto_prompt_builder import OntoPromptBuilder, get_onto_prompt_builder
+from .holistic_election import HolisticElection, ProviderScore, PROVIDER_CAPABILITIES, get_election
+
+from .providers import (
+    create_modelscope_provider, create_bailing_provider,
+    create_stepfun_provider, create_internlm_provider,
+)
 
 __all__ = [
     "TreeLLM", "RouterStats",
@@ -26,4 +36,11 @@ __all__ = [
     "DeepSeekProvider", "LongCatProvider", "NvidiaProvider", "OpenAILikeProvider",
     "create_deepseek_provider", "create_longcat_provider", "create_nvidia_provider",
     "TinyClassifier",
+    "PromptVersionManager", "PromptTemplate", "PROMPT_VERSION_MANAGER",
+    "EmbeddingScorer", "ModelProfile", "get_embedding_scorer",
+    "ForesightGate", "ForesightDecision", "get_foresight_gate",
+    "OntoPromptBuilder", "get_onto_prompt_builder",
+    "HolisticElection", "ProviderScore", "PROVIDER_CAPABILITIES", "get_election",
+    "create_modelscope_provider", "create_bailing_provider",
+    "create_stepfun_provider", "create_internlm_provider",
 ]

@@ -15,6 +15,10 @@ from .cache_optimizer import CacheOptimizer, PrefixCacheTracker
 from .tool_repair import ToolCallRepair, repair_tool_call, normalize_command
 from .thought_harvest import ThoughtHarvester, HarvestResult, scavenge_thinking
 from .conversation_dna import ConversationDNA, SessionGene
+from .hitl import HITLManager, HITLConfig, InterventionMode, HITL_MANAGER, get_hitl_manager
+from .evolution_store import EvolutionStore, EvolutionLesson, OntologyAuditor, EVOLUTION_STORE, get_evolution_store
+from .agent_roles import RoleTriad, AgentRole, RoleAction, TriadSession, ROLE_TRIAD, get_triad
+from .security_context import SecurityContext, Capability, SandboxExecutor, SEC_CTX, get_security_context, get_sandbox
 
 __all__ = [
     "LifeEngine",
@@ -26,4 +30,8 @@ __all__ = [
     "ToolCallRepair", "repair_tool_call", "normalize_command",
     "ThoughtHarvester", "HarvestResult", "scavenge_thinking",
     "ConversationDNA", "SessionGene",
+    "HITLManager", "HITLConfig", "InterventionMode", "HITL_MANAGER", "get_hitl_manager",
+    "EvolutionStore", "EvolutionLesson", "OntologyAuditor", "EVOLUTION_STORE", "get_evolution_store",
+    "RoleTriad", "AgentRole", "RoleAction", "TriadSession", "ROLE_TRIAD", "get_triad",
+    "SecurityContext", "Capability", "SandboxExecutor", "SEC_CTX", "get_security_context", "get_sandbox",
 ]

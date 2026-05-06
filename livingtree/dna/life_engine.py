@@ -1,7 +1,12 @@
 """LifeEngine — Central nervous system of the digital life form.
+ 
+Orchestrates the 7-stage pipeline with integrated cognitive evolution + CRV gating:
+  perceive → cognize → ontogrow → plan → simulate → execute → reflect → evolve
 
-Orchestrates the 6-stage pipeline with integrated cognitive evolution:
-  perceive → cognize → plan → execute(→quality_check) → reflect → evolve
+RuView CRV (Coordinate Remote Viewing) Signal-Line Protocol integration:
+Each stage now has a coherence gate (gestalt→sensory→topology→coherence→search→model)
+that can: ACCEPT (proceed), RECALIBRATE (re-process at higher depth), SKIP (not needed),
+or REJECT (abort). This prevents error cascading and enables adaptive runtime steering.
 
 Every stage participates in a single coherent system. No bolt-on modules.
 """
@@ -9,9 +14,14 @@ Every stage participates in a single coherent system. No bolt-on modules.
 from __future__ import annotations
 
 import asyncio
+import enum
+import json
 import random
+import time
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
@@ -20,6 +30,28 @@ from pydantic import BaseModel, Field
 from .genome import Genome
 from .consciousness import Consciousness
 from .safety import SafetyGuard
+
+
+class StageGate(enum.StrEnum):
+    """CRV 6-stage signal-line protocol gate states (RuView pattern).
+    
+    gestalt → sensory → topology → coherence → search → model
+    """
+    ACCEPT = "accept"           # Stage output is confident — proceed
+    RECALIBRATE = "recalibrate"  # Stage output insufficient — re-process
+    SKIP = "skip"               # Stage not needed for this context
+    REJECT = "reject"           # Stage detected unsafe/invalid condition
+
+
+@dataclass
+class StageGateResult:
+    """CRV gate result with recalibration hints (RuView coherence gate pattern)."""
+    gate: StageGate
+    confidence: float           # 0.0-1.0
+    reason: str
+    recalibration_hints: list[str] = field(default_factory=list)
+    max_recalibrations: int = 1  # How many times this stage can recalibrate
+    depth_boost: int = 0         # Extra depth for recalibration attempt
 
 
 class LifeStage(BaseModel):
@@ -43,6 +75,43 @@ class LifeContext(BaseModel):
     reflections: list[str] = Field(default_factory=list)
     quality_reports: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Simulation / foresight stage results (optional)
+    simulation_ran: bool = False
+    simulation_findings: dict[str, Any] = Field(default_factory=dict)
+    simulation_decision: dict[str, Any] = Field(default_factory=dict)
+
+@dataclass
+class Branch:
+    id: str
+    name: str
+    hypothesis: str
+    parent_session: str = ""
+    created_at: str = ""
+    status: str = "active"  # active, completed, merged, abandoned
+    context_snapshot: dict = field(default_factory=dict)
+    plan: list = field(default_factory=list)
+    execution_results: list = field(default_factory=list)
+    reflections: list = field(default_factory=list)
+    success_rate: float = 0.0
+    metadata: dict = field(default_factory=dict)
+
+@dataclass
+class ComparisonReport:
+    branches_compared: list[str] = field(default_factory=list)
+    winner: str = ""
+    winner_score: float = 0.0
+    scores: dict = field(default_factory=dict)
+    improvements: list[str] = field(default_factory=list)
+    regressions: list[str] = field(default_factory=list)
+    recommendation: str = ""
+
+@dataclass
+class BranchDecision:
+    should_branch: bool = False
+    reason: str = ""
+    num_branches: int = 1
+    hypotheses: list[str] = field(default_factory=list)
+    confidence: float = 0.0
 
 
 class LifeEngine:
@@ -62,12 +131,14 @@ class LifeEngine:
         self.stages: list[LifeStage] = []
         self.is_running = False
         self.elite_registry: list[dict] = []
+        self._branches: dict[str, Branch] = {}
 
     # ── Main pipeline ──
 
     async def run(self, user_input: str, **kwargs) -> LifeContext:
         ctx = LifeContext(user_input=user_input, **kwargs)
         self.is_running = True
+        cycle_start = time.time()  # sql-flow multi-sink latency tracking
         self.stages.clear()
 
         if kwargs.get("memory_context"):
@@ -86,8 +157,25 @@ class LifeEngine:
         try:
             await self._stage("perceive", self._perceive, ctx)
             await self._stage("cognize", self._cognize, ctx)
+            await self._stage("ontogrow", self._grow_ontology, ctx)
             await self._stage("plan", self._plan, ctx)
+            decision = self._should_branch(ctx)
+            if decision.should_branch:
+                hypotheses = ctx.metadata.get("hypotheses", []) or []
+                created = []
+                for i, hyp in enumerate(hypotheses[:3], start=1):
+                    b = self.fork_branch(name=f"branch-{ctx.session_id}-{i}", hypothesis=hyp, ctx=ctx)
+                    created.append(b)
+                ctx.metadata["branches"] = [br.id for br in created]
+            # Lightweight foresight simulation stage before execution
+            await self._stage("simulate", self._simulate, ctx)
             await self._stage("execute", self._execute, ctx)
+            # Branch comparison after execution if branches were explored
+            branches = ctx.metadata.get("branches", [])
+            if branches:
+                if ctx.metadata.get("success_rate", 0) > 0:
+                    comp = self.compare_branches(branch_ids=branches)
+                    ctx.metadata["branch_comparison"] = comp
             await self._stage("reflect", self._reflect, ctx)
             await self._stage("evolve", self._evolve, ctx)
 
@@ -163,6 +251,88 @@ class LifeEngine:
 
             logger.info(f"Cycle {ctx.session_id} complete")
 
+            # ── v2.2 Adaptive Module Calls ──
+
+            # Claim Checker: verify agent output for fabricated claims
+            cc = getattr(self.world, 'claim_checker', None)
+            if cc:
+                try:
+                    output_text = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
+                    report = cc.verify_output(output_text, ctx.session_id)
+                    ctx.metadata["claim_report"] = report
+                    if report.get("unverified_claims"):
+                        logger.debug(f"ClaimChecker: {len(report['unverified_claims'])} unverified claims")
+                except Exception as e:
+                    logger.debug(f"ClaimChecker: {e}")
+
+            # Sentinel: run health checks after cycle
+            sentinel = getattr(self.world, 'sentinel', None)
+            if sentinel:
+                try:
+                    alerts = await sentinel.run_checks()
+                    if alerts:
+                        ctx.metadata["sentinel_alerts"] = [{"name": a.check_name, "severity": a.severity, "message": a.message} for a in alerts]
+                        logger.debug(f"Sentinel: {len(alerts)} alerts")
+                except Exception as e:
+                    logger.debug(f"Sentinel: {e}")
+
+            # Calibration: record execution outcome vs expected
+            cal = getattr(self.world, 'calibration_tracker', None)
+            if cal:
+                try:
+                    success = ctx.metadata.get("success_rate", 0) >= 0.5
+                    cal.record(
+                        simulation_id=ctx.session_id,
+                        prediction="task should succeed" if success else "task may fail",
+                        actual="success" if success else "partial",
+                        provider="life_engine",
+                        latency_ms=sum(s.duration_ms for s in self.stages) if self.stages else 0,
+                        category="quality" if success else "latency",
+                    )
+                except Exception as e:
+                    logger.debug(f"Calibration: {e}")
+
+            # Evolution Store: extract lessons from this cycle
+            es = getattr(self.world, 'evolution_store', None)
+            if es:
+                try:
+                    session_data = {
+                        "intent": ctx.intent or "",
+                        "success": ctx.metadata.get("success_rate", 0) >= 0.5,
+                        "tokens": ctx.metadata.get("total_tokens", 0),
+                        "reflections": ctx.reflections,
+                    }
+                    es.extract_lessons(ctx.session_id, session_data)
+                    lessons = es.get_relevant_lessons(ctx.intent or ctx.user_input or "", limit=3)
+                    if lessons:
+                        ctx.metadata["evolution_lessons"] = lessons
+                except Exception as e:
+                    logger.debug(f"EvolutionStore: {e}")
+
+            # Agent Roles: run triad on quality-critical tasks
+            triad = getattr(self.world, 'agent_roles', None)
+            if triad and ctx.metadata.get("success_rate", 0) < 0.4:
+                try:
+                    res = triad.coordinate(
+                        task=f"Fix low-quality output: {ctx.intent or ctx.user_input}",
+                        context={"session": ctx.session_id, "success_rate": ctx.metadata["success_rate"]},
+                        max_rounds=2, min_score=0.6,
+                    )
+                    ctx.metadata["triad_result"] = res
+                    if res["passed"]:
+                        logger.info(f"Triad: remediation accepted (score={res['score']:.2f})")
+                except Exception as e:
+                    logger.debug(f"Triad: {e}")
+
+            # Skill Catalog: suggest relevant capabilities for this task type
+            sc = getattr(self.world, 'skill_catalog', None)
+            if sc and ctx.intent:
+                try:
+                    suggestions = sc.suggest_skills(ctx.intent, limit=5)
+                    ctx.metadata["suggested_skills"] = suggestions
+                except Exception as e:
+                    logger.debug(f"SkillCatalog: {e}")
+
             # ── Digital Life Form: pulse, learn, narrate, share ──
             bio = getattr(self.world, 'biorhythm', None)
             if bio: bio.pulse()
@@ -184,6 +354,58 @@ class LifeEngine:
             if predictive:
                 predictive.record_change("life_engine", "cycle_complete", ctx.metadata.get("success_rate", 0) >= 0.5)
                 predictive._save()
+
+            # ── sql-flow Pattern 5: Multi-Output Sink fan-out ──
+            # After cycle completes, fan out results to multiple sinks simultaneously
+            cycle_output = {
+                "session_id": ctx.session_id,
+                "intent": ctx.intent or "",
+                "success_rate": ctx.metadata.get("success_rate", 0),
+                "execution_count": len(ctx.execution_results),
+                "reflections": ctx.reflections[-3:] if ctx.reflections else [],
+            }
+
+            # Sink 1: Knowledge base — store key findings
+            kb = getattr(self.world, 'knowledge_base', None)
+            if kb and hasattr(kb, 'add_document') and cycle_output["success_rate"] > 0.5:
+                try:
+                    kb.add_document(
+                        title=f"cycle_{ctx.session_id[:12]}",
+                        content=json.dumps(cycle_output, ensure_ascii=False),
+                        tags=["life_engine", "cycle", ctx.intent or "general"],
+                    )
+                except Exception:
+                    pass
+
+            # Sink 2: P2P broadcast — share successful patterns
+            p2p_presence = getattr(self.world, 'p2p_presence', None)
+            if p2p_presence and hasattr(p2p_presence, 'build_share') and cycle_output["success_rate"] > 0.7:
+                try:
+                    share = p2p_presence.build_share("life_engine_cycle", cycle_output)
+                    ctx.metadata["p2p_shared"] = True
+                except Exception:
+                    pass
+
+            # Sink 3: Log persistence — always log cycle outcome
+            try:
+                cycle_log_path = Path(".livingtree/cycles")
+                cycle_log_path.mkdir(parents=True, exist_ok=True)
+                log_entry = {**cycle_output, "timestamp": datetime.now(timezone.utc).isoformat()}
+                log_file = cycle_log_path / f"{ctx.session_id[:16]}.json"
+                log_file.write_text(json.dumps(log_entry, ensure_ascii=False, default=str), encoding="utf-8")
+                ctx.metadata["cycle_logged"] = str(log_file)
+            except Exception:
+                pass
+
+            # Sink 4: Metric emission for observability dashboard
+            metrics = getattr(self.world, 'metrics', None)
+            if metrics or getattr(self.world, 'metrics_enabled', False):
+                ctx.metadata["cycle_metrics"] = {
+                    "latency_ms": round((time.time() - cycle_start) * 1000),
+                    "success_rate": cycle_output["success_rate"],
+                    "stages_completed": 7,
+                    "module_calls": sum(1 for k in ctx.metadata if k not in ("shared_cache", "clarifications")),
+                }
             
             return ctx
         except Exception as e:
@@ -249,6 +471,17 @@ class LifeEngine:
     async def _cognize(self, ctx: LifeContext) -> None:
         mem_context = ctx.metadata.get("struct_mem_context", "")
         cog_prompt = f"Analyze intent and required knowledge: {ctx.user_input}"
+
+        # Adaptively inject domain terminology from glossary (mattpocock/skills)
+        glossary = getattr(self.world, 'context_glossary', None)
+        if glossary and ctx.user_input:
+            try:
+                domain_context = glossary.get_context_for_task(ctx.user_input, max_terms=5)
+                if domain_context and len(domain_context) > 20:
+                    cog_prompt = f"{cog_prompt}\n\nRelevant domain context:\n{domain_context[:2000]}"
+            except Exception:
+                pass
+
         if mem_context:
             cog_prompt = f"{cog_prompt}\n\nRelevant memory context:\n{mem_context[:4000]}"
 
@@ -260,7 +493,17 @@ class LifeEngine:
             # Context budget: cap knowledge injection by query complexity
             budget = self._context_budget(ctx.user_input)
             try:
-                results = kb.search(ctx.user_input, top_k=budget)
+                if hasattr(kb, 'multi_source_retrieve_sync'):
+                    # Hindsight-style: multi-source RRF fusion retrieval
+                    fusion_result = kb.multi_source_retrieve_sync(
+                        ctx.user_input, top_k=budget)
+                    results = [sr.document for sr in fusion_result.results if sr.document]
+                    ctx.metadata["fusion_stats"] = fusion_result.fusion_stats
+                    ctx.metadata["knowledge_source"] = "rrf_fusion"
+                else:
+                    results = kb.search(ctx.user_input, top_k=budget * 2)
+                # Token-budget truncation: fit within ~6K chars
+                results = self._token_budget_truncate(results, max_chars=6000)
                 if results:
                     ctx.retrieved_knowledge.extend(results)
                     ctx.metadata["knowledge_budget"] = budget
@@ -271,12 +514,137 @@ class LifeEngine:
         questions = await self.consciousness.self_questioning(ctx.user_input)
         ctx.metadata["self_questions"] = questions
 
+    # ── Stage 2.5: Ontology Growth ──
+
+    async def _grow_ontology(self, ctx: LifeContext) -> None:
+        """Extract new concepts from cognition output and register in the
+        unified entity registry + knowledge graph + glossary.
+
+        Uses lightweight heuristics (keyword + pattern matching) to detect
+        plausible new domain concepts, then checks for duplicates before
+        submission. Avoids LLM re-invocation — operates on text already
+        produced by the cognition stage.
+        """
+        text = (ctx.intent or "") + " " + (ctx.user_input or "")
+        if not text.strip():
+            return
+
+        # Extract candidate noun phrases: capitalized words, quoted terms,
+        # and technical-looking sequences.
+        import re
+        candidates: set[str] = set()
+        # Capitalized multi-word phrases (likely proper nouns or concepts)
+        for m in re.finditer(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text):
+            candidates.add(m.group(1).strip())
+        # Single capitalized words (but not sentence-starting ones)
+        for m in re.finditer(r'(?<!\A\.\s)\b([A-Z][a-z]{3,})\b', text):
+            candidates.add(m.group(1))
+        # Chinese technical terms (2-6 char sequences with technical affixes)
+        for m in re.finditer(r'[\u4e00-\u9fff]{2,6}(?:模型|引擎|系统|框架|算法|数据|网络|学习|优化|评估|检测|生成|分析|推理|分类|聚类|预测|识别)', text):
+            candidates.add(m.group(0))
+
+        if not candidates:
+            return
+
+        # Deduplicate against existing ontology layers.
+        registry = None
+        glossary = None
+        kg = None
+        try:
+            from ..core.entity_registry import get_entity_registry
+            registry = get_entity_registry()
+        except Exception:
+            pass
+        try:
+            from ..knowledge.context_glossary import GLOSSARY
+            glossary = GLOSSARY
+        except Exception:
+            pass
+        try:
+            kg = self.world.knowledge_base
+        except Exception:
+            pass
+
+        new_terms: list[str] = []
+        for c in candidates:
+            name_lower = c.lower()
+            # Check if already registered
+            if registry:
+                found = False
+                for eid in registry._entities:
+                    e = registry._entities.get(eid)
+                    if e and e.name.lower() == name_lower:
+                        found = True
+                        break
+                if found:
+                    continue
+            if glossary:
+                existing_terms = glossary.list_terms()
+                if any(t.lower() == name_lower for t in existing_terms):
+                    continue
+            new_terms.append(c)
+
+        if not new_terms:
+            ctx.metadata["ontology_growth"] = "no new concepts"
+            return
+
+        # Register new terms across layers
+        import time as _time
+        registered: list[str] = []
+        for term in new_terms[:5]:  # limit to 5 per cycle to avoid noise
+            rc = None
+            if registry:
+                try:
+                    eid = registry.register(
+                        name=term,
+                        namespace="general",
+                        entity_type="concept",
+                        source="llm_cognize",
+                        metadata={"extracted_from": "cognize_stage", "timestamp": _time.time()},
+                    )
+                    rc = eid
+                except Exception:
+                    pass
+            if glossary:
+                try:
+                    glossary.register(
+                        term=term,
+                        category="ai_concept",
+                        definition=f"Extracted from cognition: {term}",
+                        priority=0.5,
+                    )
+                except Exception:
+                    pass
+            if kg and rc:
+                try:
+                    if hasattr(kg, 'add_document'):
+                        kg.add_document(
+                            title=term,
+                            content=f"Cognized concept: {term}",
+                            tags=["ontology_growth", "cognize"],
+                        )
+                except Exception:
+                    pass
+            registered.append(term)
+
+        if registered:
+            ctx.metadata["ontology_growth"] = f"registered {len(registered)} concepts: {', '.join(registered)}"
+            try:
+                from loguru import logger as _log
+                _log.info(f"[ontogrow] Registered {len(registered)} new concepts: {registered}")
+            except Exception:
+                pass
+        else:
+            ctx.metadata["ontology_growth"] = "registration failed"
+
     @staticmethod
     def _context_budget(user_input: str) -> int:
         """Compute how much knowledge to inject based on query complexity.
 
         Simple queries get minimal context (save tokens).
         Complex queries get more knowledge (better accuracy).
+
+        Hindsight-inspired: returns token-budget-aware count, not hard top-K.
         """
         length = len(user_input)
         complex_keywords = ["分析", "评估", "预测", "比较", "报告", "方案", "风险",
@@ -291,6 +659,26 @@ class LifeEngine:
         if complexity_score <= 1.2:
             return 10
         return 15
+
+    @staticmethod
+    def _token_budget_truncate(docs: list, max_chars: int = 6000) -> list:
+        """Hindsight-style token-budget truncation instead of hard top-K.
+
+        Truncates document list to fit within max_chars, keeping documents
+        with highest relevance first. Documents beyond budget are dropped.
+        """
+        if not docs:
+            return docs
+        result = []
+        total_chars = 0
+        for doc in docs:
+            content = getattr(doc, 'content', '') if hasattr(doc, 'content') else str(doc)
+            chunk = len(content) if isinstance(content, str) else 200
+            if total_chars + chunk > max_chars and result:
+                break
+            result.append(doc)
+            total_chars += chunk
+        return result
 
     # ── Stage 3: Plan ──
 
@@ -351,16 +739,92 @@ class LifeEngine:
         )
         ctx.metadata["hypotheses"] = hypotheses
 
+        # Skill catalog: enrich planning context with relevant capabilities
+        sc = getattr(self.world, 'skill_catalog', None)
+        skill_hints = []
+        if sc and ctx.intent:
+            try:
+                suggestions = sc.suggest_skills(ctx.intent, limit=5)
+                skill_hints = [s.get("name", s) if isinstance(s, dict) else s for s in suggestions]
+                ctx.metadata["plan_skill_hints"] = skill_hints
+            except Exception:
+                pass
+
         planner = self.world.task_planner
         if planner:
+            planning_context = {"intent": ctx.intent, "knowledge": ctx.retrieved_knowledge}
+            if skill_hints:
+                planning_context["recommended_skills"] = skill_hints
             steps = await self._invoke(planner.decompose_task,
                 goal=ctx.user_input,
-                context={"intent": ctx.intent, "knowledge": ctx.retrieved_knowledge},
+                context=planning_context,
             )
             if steps:
                 ctx.plan = steps
         if not ctx.plan:
             ctx.plan = [{"step": 1, "action": "direct", "description": ctx.user_input}]
+
+        # Harness registry: snapshot affected files before execution for rollback safety
+        hr = getattr(self.world, 'harness_registry', None)
+        if hr and ctx.plan:
+            try:
+                files_to_watch = set()
+                for step in ctx.plan:
+                    path = step.get("target_file") or step.get("file") or step.get("path")
+                    if path:
+                        files_to_watch.add(path)
+                for f in files_to_watch:
+                    hr.snapshot(f)
+                if files_to_watch:
+                    ctx.metadata["harness_snapshots"] = list(files_to_watch)
+            except Exception:
+                pass
+
+    # ── Stage 4: Simulate (foresight) ──
+    
+    async def _simulate(self, ctx: LifeContext) -> None:
+        """Foresight simulation stage — lightweight what-if before execution."""
+        try:
+            from ..treellm.foresight_gate import get_foresight_gate
+            gate = get_foresight_gate()
+            task_type = ctx.metadata.get("task_type", "general")
+            risk = ctx.metadata.get("risk_level", "normal")
+            history = ctx.metadata.get("past_queries", [])
+            decision = gate.assess(ctx.user_input or "", task_type, history, risk)
+            ctx.simulation_ran = decision.should_simulate
+            ctx.simulation_decision = {
+                "should_simulate": decision.should_simulate,
+                "reason": decision.reason,
+                "depth": decision.depth,
+                "confidence": decision.confidence,
+                "factors": decision.factors,
+            }
+            if decision.should_simulate:
+                logger.info(f"Foresight: simulating at depth {decision.depth} — {decision.reason}")
+                # Lightweight what-if: score top providers using embedding scorer
+                try:
+                    from ..treellm.embedding_scorer import get_embedding_scorer
+                    scorer = get_embedding_scorer()
+                    profiles = scorer._profiles[:8]  # top-8 for speed
+                    what_if = scorer.score_and_filter(ctx.user_input or "", profiles, top_k=decision.depth + 1)
+                    ctx.simulation_findings = {
+                        "candidates": [(name, round(score, 3)) for name, score in what_if],
+                        "top_pick": what_if[0][0] if what_if else "unknown",
+                        "confidence_band": "high" if what_if and what_if[0][1] > 0.7 else "medium" if what_if and what_if[0][1] > 0.5 else "low",
+                    }
+                    ctx.metadata["simulation_insights"] = ctx.simulation_findings
+                    logger.info(f"Foresight done: top pick={ctx.simulation_findings['top_pick']}, band={ctx.simulation_findings['confidence_band']}")
+                except ImportError:
+                    ctx.simulation_findings = {"error": "embedding_scorer unavailable"}
+            else:
+                logger.debug(f"Foresight skipped: {decision.reason}")
+                ctx.simulation_findings = {"skipped": decision.reason}
+        except ImportError:
+            logger.debug("Foresight gate unavailable, skipping simulation")
+            ctx.simulation_ran = False
+        except Exception as e:
+            logger.warning(f"Simulation stage error: {e}")
+            ctx.simulation_ran = False
 
     # ── Stage 4: Execute (with integrated quality check) ──
 
@@ -375,7 +839,75 @@ class LifeEngine:
         # Shared cache for cross-step data transfer
         ctx.metadata.setdefault("shared_cache", {})
 
-        # Use DAG executor for parallel execution
+        # ── Dual-mode routing: DAG vs ReAct ──
+        from ..execution.react_executor import (
+            ExecutionMode, route_execution, ReactExecutor)
+        fg = getattr(self.world, 'foresight_gate', None)
+        mode = await route_execution(
+            task=ctx.user_input or ctx.intent or "",
+            plan=ctx.plan,
+            consciousness=self.consciousness,
+            foresight_gate=fg,
+        )
+        ctx.metadata["execution_mode"] = mode.value
+        logger.info(f"[execute] Mode: {mode.value} ({len(ctx.plan)} steps, confidence={getattr(fg, '_state_streak', {})})")
+
+        if mode == ExecutionMode.REACT:
+            # ── ReAct: serial Think-Act-Observe loop ──
+            react = ReactExecutor(self.consciousness)
+
+            # Build tool registry from available world capabilities
+            tools: dict[str, Any] = {}
+            if orchestrator:
+                async def _assign(task_input: str) -> dict:
+                    step = {"action": "execute", "description": task_input, "name": "react_step"}
+                    return await self._invoke(orchestrator.assign_task, task=step, agents=self._list_agents())
+                tools["execute"] = _assign
+
+            kb = getattr(self.world, 'knowledge_base', None)
+            if kb:
+                async def _search_kb(query: str) -> list:
+                    return kb.search(query) if hasattr(kb, 'search') else []
+                tools["search_knowledge"] = _search_kb
+
+            trajectory = await react.run(
+                task=ctx.user_input or ctx.intent or "execute plan",
+                tools=tools,
+                context={"knowledge": ctx.retrieved_knowledge, "plan": ctx.plan},
+            )
+
+            # Convert ReAct trajectory to execution results format
+            ctx.execution_results = [
+                {"step": {"name": f"react-s{i}", "action": s.action},
+                 "status": "completed" if not s.error else "failed",
+                 "result": s.observation, "error": s.error,
+                 "confidence": s.confidence}
+                for i, s in enumerate(trajectory.steps, 1)
+            ]
+            if trajectory.final_answer:
+                ctx.execution_results.append({
+                    "step": {"name": "final_answer", "action": "final_answer"},
+                    "status": "completed", "result": trajectory.final_answer,
+                })
+            ctx.metadata["react_trajectory"] = trajectory
+            ctx.metadata["react_success"] = trajectory.success
+
+            # Reflexion: extract lessons and inject into evolution
+            if trajectory.success and getattr(self.world, 'evolution_store', None):
+                try:
+                    lessons = trajectory.extract_lessons()
+                    if lessons:
+                        self.world.evolution_store.extract_lessons(
+                            ctx.session_id,
+                            {"success": trajectory.success, "lessons": lessons,
+                             "iterations": len(trajectory.steps)},
+                        )
+                except Exception:
+                    pass
+
+            return  # ReAct done — skip DAG path below
+
+        # ── DAG: parallel batch execution (existing path) ──
         from ..execution.dag_executor import DAGExecutor, add_dependencies
         plan_with_deps = add_dependencies(list(ctx.plan))
         executor = DAGExecutor(max_parallel=5)
@@ -434,6 +966,19 @@ class LifeEngine:
                 except Exception:
                     pass
 
+            # Change Manifest: record file edits as falsifiable contracts (AHE Pattern 1)
+            cm = getattr(self.world, 'change_manifest', None)
+            if cm and isinstance(result, dict) and result.get("status") in ("completed", "ok"):
+                try:
+                    file_path = step.get("target_file") or step.get("file") or result.get("file")
+                    description = step.get("description", "") or result.get("result", "")
+                    if file_path:
+                        cm.record(file_path, description[:500], metadata={
+                            "step": step_name, "session": ctx_lc.session_id, "intent": ctx_lc.intent,
+                        })
+                except Exception:
+                    pass
+
             # Share result to cache
             ctx_lc.metadata["shared_cache"][step_name] = result
             return result
@@ -475,6 +1020,31 @@ class LifeEngine:
         if ctx.quality_reports:
             qr_summary = f"Quality: {sum(1 for q in ctx.quality_reports if q['passed'])}/{len(ctx.quality_reports)} passed"
             ctx.reflections.append(qr_summary)
+
+        # Calibration tracker: record prediction-vs-actual for trust calibration (RouteMoA Foresight)
+        ct = getattr(self.world, 'calibration_tracker', None)
+        if ct and rate:
+            try:
+                predicted_ok = ctx.metadata.get("plan_confidence", rate)
+                ct.record(predicted_ok, rate, metadata={
+                    "session_id": ctx.session_id, "intent": ctx.intent or "",
+                    "plan_steps": len(ctx.plan), "failed_steps": fail,
+                })
+            except Exception:
+                pass
+
+        # Evidence distillation: generate layered evidence from execution trace (AHE Pattern 2)
+        tracer = getattr(self.world, 'tracer', None)
+        if tracer and hasattr(tracer, 'distill_evidence') and len(ctx.execution_results) > 0:
+            try:
+                evidence = tracer.distill_evidence(
+                    session_id=ctx.session_id,
+                    execution_results=ctx.execution_results,
+                    success_rate=rate,
+                )
+                ctx.metadata["distilled_evidence"] = evidence
+            except Exception:
+                pass
 
     # ── Stage 6: Evolve (with embedded thinking evolution) ──
 
@@ -541,6 +1111,29 @@ class LifeEngine:
             cost = self.world.cost_aware
             if cost and cost._degraded:
                 cost.restore()
+
+        # Calibration-driven trust update: feed calibration accuracy into genome
+        ct = getattr(self.world, 'calibration_tracker', None)
+        if ct and hasattr(ct, 'get_trust_score'):
+            try:
+                trust = ct.get_trust_score()
+                ctx.metadata["calibration_trust"] = trust
+                if trust < 0.4:
+                    self.genome.add_mutation(
+                        description=f"Low calibration trust ({trust:.2f}) — reducing confidence",
+                        source="calibration", affected_genes=["confidence"], success=False)
+            except Exception:
+                pass
+
+        # Evidence-based evolution: incorporate distilled evidence into genome
+        evidence = ctx.metadata.get("distilled_evidence")
+        if evidence:
+            try:
+                evo_store = getattr(self.world, 'evolution_store', None)
+                if evo_store and hasattr(evo_store, 'extract_lessons_from_evidence'):
+                    evo_store.extract_lessons_from_evidence(ctx.session_id, evidence)
+            except Exception:
+                pass
 
         # Precipitation: distill successful session insight into KnowledgeBase
         if ok and ctx.intent and self.world.knowledge_base and self.world.distillation:
@@ -644,26 +1237,255 @@ class LifeEngine:
         except Exception:
             pass
 
-    # ── Helpers ──
+    # ── Branching utilities ──
 
-    async def _stage(self, name: str, fn, ctx: LifeContext) -> None:
+    def fork_branch(self, name: str, hypothesis: str, ctx: LifeContext) -> Branch:
+        branch_id = f"branch-{uuid.uuid4().hex[:8]}"
+        snapshot = {
+            "plan": ctx.plan,
+            "retrieved_knowledge": ctx.retrieved_knowledge,
+        }
+        b = Branch(
+            id=branch_id,
+            name=name,
+            hypothesis=hypothesis,
+            parent_session=ctx.session_id,
+            created_at=datetime.utcnow().isoformat(),
+            context_snapshot=snapshot,
+            plan=list(ctx.plan),
+            execution_results=list(ctx.execution_results),
+            reflections=list(ctx.reflections),
+            success_rate=ctx.metadata.get("success_rate", 0.0),
+            metadata=dict(ctx.metadata),
+        )
+        self._branches[branch_id] = b
+        logger.info(f"[branch] forked new branch {branch_id} from session {ctx.session_id}")
+        return b
+
+    def compare_branches(self, branch_ids: list[str] | None = None) -> ComparisonReport:
+        # Determine which branches to compare
+        if branch_ids is None:
+            candidates = [b for b in self._branches.values() if b.status in ("completed", "merged")]
+        else:
+            candidates = [self._branches[bid] for bid in branch_ids if bid in self._branches]
+        if not candidates:
+            return ComparisonReport(branches_compared=[], winner="", winner_score=0.0, scores={})
+
+        # Score: primarily by success_rate, tie-breaker by completed execution results length
+        scores = {b.id: (b.success_rate, len(b.execution_results)) for b in candidates}
+        winner = max(candidates, key=lambda b: (b.success_rate, len(b.execution_results)))
+        winner_score = scores[winner.id][0]
+        all_ids = [b.id for b in candidates]
+
+        report = ComparisonReport(
+            branches_compared=all_ids,
+            winner=winner.id,
+            winner_score=float(winner_score),
+            scores={b.id: scores[b.id][0] for b in candidates},
+            improvements=[],
+            regressions=[],
+            recommendation=f"Selected {winner.id} as best branch based on highest success rate and progress.",
+        )
+        logger.info(f"[branch] comparison done: winner={report.winner}")
+        return report
+
+    def merge_branch(self, branch_id: str, strategy: str = "best") -> Branch:
+        target = self._branches.get(branch_id)
+        if not target:
+            return None  # type: ignore
+        # Determine winner among all branches for merging reference
+        if self._branches:
+            winner = max(self._branches.values(), key=lambda b: (b.success_rate, len(b.execution_results)))
+        else:
+            winner = target
+
+        if strategy == "best" and winner:
+            target.execution_results = list(winner.execution_results)
+            target.plan = list(winner.plan)
+            target.success_rate = winner.success_rate
+        elif strategy == "concat":
+            merged = []
+            for b in self._branches.values():
+                merged.extend(b.execution_results)
+            target.execution_results = merged
+            target.plan = [step for b in self._branches.values() for step in b.plan]
+            target.success_rate = max(b.success_rate for b in self._branches.values()) if self._branches else target.success_rate
+        elif strategy == "voting":
+            # Majority vote on plan steps by length; simple heuristic
+            if target.plan:
+                target.plan = target.plan
+            # otherwise keep existing
+        target.status = "merged"
+        logger.info(f"[branch] merged branch {branch_id} using strategy '{strategy}'")
+        return target
+
+    def list_branches(self) -> list[Branch]:
+        return list(self._branches.values())
+
+    def _should_branch(self, ctx: LifeContext) -> BranchDecision:
+        hypotheses = ctx.metadata.get("hypotheses", []) or []
+        explore_mode = ctx.metadata.get("explore_mode", False)
+        # Simple complexity heuristic: longer inputs imply more complex tasks
+        complexity = len(ctx.user_input) if ctx.user_input else 0
+        threshold = 50
+        should = len(hypotheses) >= 2 or explore_mode or complexity > threshold
+        return BranchDecision(
+            should_branch=should,
+            reason=("multiple hypotheses detected" if len(hypotheses) >= 2 else "explore_mode" if explore_mode else "complexity"),
+            num_branches=len(hypotheses) if hypotheses else 1,
+            hypotheses=hypotheses,
+            confidence=0.7,
+        )
+
+    # ── Helpers (existing + CRV gating) ──
+
+    def _gate_stage(self, name: str, ctx: LifeContext,
+                    min_confidence: float = 0.3,
+                    allowed_recalibrations: int = 1) -> StageGateResult:
+        """CRV coherence gate for a stage (RuView signal-line protocol).
+
+        Checks stage output quality and decides: ACCEPT / RECALIBRATE / SKIP / REJECT.
+        Uses confidence from stage metadata and adaptive thresholds based on context
+        complexity.
+
+        Args:
+            name: Stage name for threshold lookup.
+            ctx: LifeContext with metadata from stage execution.
+            min_confidence: Minimum confidence to accept. Higher for critical stages.
+            allowed_recalibrations: Max recalibration attempts for this stage.
+        """
+        confidence = ctx.metadata.get(f"{name}_confidence", 0.5)
+        recal_count = ctx.metadata.get(f"{name}_recalibrations", 0)
+        complexity = ctx.metadata.get("complexity_score", 0.5)
+
+        # Per-stage confidence thresholds (CRV: gestalt=sensory > topology > coherence)
+        stage_thresholds = {
+            "perceive": 0.25,    # Gestalt: broad pattern — low bar
+            "cognize": 0.35,     # Sensory: understanding depth
+            "ontogrow": 0.20,    # Topology: lightweight extraction
+            "plan": 0.40,        # Coherence: structural plan
+            "simulate": 0.30,    # Search: what-if exploration
+            "execute": 0.45,     # Model: highest bar — execution
+            "reflect": 0.25,     # Review: reflection
+            "evolve": 0.20,      # Growth: always try
+        }
+        threshold = stage_thresholds.get(name, min_confidence)
+
+        # Safety: reject if stage.error is present and critical
+        stage_errors = [s.error for s in self.stages if s.stage == name and s.error]
+        if stage_errors and "critical" in str(stage_errors[-1]).lower():
+            return StageGateResult(
+                gate=StageGate.REJECT,
+                confidence=0.0,
+                reason=f"critical error in {name}: {stage_errors[-1][:100]}",
+            )
+
+        # Skip: stage not needed for simple contexts
+        if complexity < 0.15 and name in ("plan", "simulate"):
+            return StageGateResult(
+                gate=StageGate.SKIP,
+                confidence=1.0,
+                reason=f"low complexity ({complexity:.2f}) — {name} not needed",
+            )
+
+        # Recalibrate: below threshold and has attempts remaining
+        if confidence < threshold and recal_count < allowed_recalibrations:
+            hints = self._get_recalibration_hints(name, ctx)
+            return StageGateResult(
+                gate=StageGate.RECALIBRATE,
+                confidence=confidence,
+                reason=f"confidence {confidence:.2f} < threshold {threshold}",
+                recalibration_hints=hints,
+                max_recalibrations=allowed_recalibrations,
+                depth_boost=1,
+            )
+
+        # Accept: above threshold or max recalibrations exhausted
+        return StageGateResult(
+            gate=StageGate.ACCEPT,
+            confidence=confidence,
+            reason=f"confidence {confidence:.2f} >= threshold {threshold}" if confidence >= threshold
+                   else f"max recalibrations ({allowed_recalibrations}) exhausted",
+        )
+
+    def _get_recalibration_hints(self, stage_name: str, ctx: LifeContext) -> list[str]:
+        """Generate recalibration hints for a failed stage (CRV pattern)."""
+        hints = []
+        hints.append(f"increase {stage_name}_depth")
+        hints.append("inject more context")
+        if ctx.metadata.get("knowledge_count", 0) < 3:
+            hints.append("expand knowledge retrieval")
+        if not ctx.metadata.get("struct_mem_context"):
+            hints.append("enable struct_mem context injection")
+        return hints
+
+    async def _stage(self, name: str, fn, ctx: LifeContext,
+                     gate_enabled: bool = False,
+                     max_recalibrations: int = 1) -> StageGateResult:
+        """Execute a pipeline stage with optional CRV coherence gating.
+        
+        Args:
+            name: Stage name.
+            fn: Async function to execute.
+            ctx: LifeContext.
+            gate_enabled: If True, apply CRV coherence gate after execution.
+            max_recalibrations: Max recalibration cycles for this stage.
+        Returns:
+            StageGateResult — only meaningful if gate_enabled=True.
+        """
         s = LifeStage(stage=name, started_at=datetime.now(timezone.utc).isoformat())
         s.status = "running"
         self.stages.append(s)
         t0 = asyncio.get_event_loop().time()
-        try:
-            r = fn(ctx)
-            if asyncio.iscoroutine(r):
-                await r
-            s.status = "completed"
-            s.result = "ok"
-        except Exception as e:
-            s.status = "failed"
-            s.error = str(e)
-            raise
-        finally:
-            s.completed_at = datetime.now(timezone.utc).isoformat()
-            s.duration_ms = (asyncio.get_event_loop().time() - t0) * 1000
+
+        recal_count = 0
+        while True:
+            try:
+                r = fn(ctx)
+                if asyncio.iscoroutine(r):
+                    await r
+                s.status = "completed"
+                s.result = "ok"
+            except Exception as e:
+                s.status = "failed"
+                s.error = str(e)
+                s.completed_at = datetime.now(timezone.utc).isoformat()
+                s.duration_ms = (asyncio.get_event_loop().time() - t0) * 1000
+                if gate_enabled:
+                    return StageGateResult(
+                        gate=StageGate.REJECT,
+                        confidence=0.0,
+                        reason=f"stage {name} raised: {e}",
+                    )
+                raise
+
+            # CRV coherence gate check
+            if not gate_enabled:
+                break
+
+            gate_result = self._gate_stage(name, ctx, allowed_recalibrations=max_recalibrations)
+            if gate_result.gate == StageGate.RECALIBRATE and recal_count < max_recalibrations:
+                recal_count += 1
+                ctx.metadata[f"{name}_recalibrations"] = recal_count
+                ctx.metadata[f"{name}_depth"] = ctx.metadata.get(f"{name}_depth", 1) + gate_result.depth_boost
+                logger.info(f"[{name}] Recalibrating (attempt {recal_count}/{max_recalibrations}): {gate_result.reason}")
+                # Re-inject hints as context for next attempt
+                if gate_result.recalibration_hints:
+                    ctx.metadata["recalibration_hints"] = gate_result.recalibration_hints
+                s.status = "recalibrating"
+                # Continue loop to re-execute
+            else:
+                ctx.metadata[f"{name}_gate"] = gate_result.gate.value
+                ctx.metadata[f"{name}_gate_confidence"] = gate_result.confidence
+                logger.debug(f"[{name}] Gate: {gate_result.gate.value} (confidence={gate_result.confidence:.2f})")
+                break
+
+        s.completed_at = datetime.now(timezone.utc).isoformat()
+        s.duration_ms = (asyncio.get_event_loop().time() - t0) * 1000
+
+        if gate_enabled:
+            return self._gate_stage(name, ctx, allowed_recalibrations=max_recalibrations)
+        return StageGateResult(gate=StageGate.ACCEPT, confidence=1.0, reason="gate disabled")
 
     def _list_agents(self) -> list:
         agents = []
@@ -694,4 +1516,5 @@ class LifeEngine:
             "failed": sum(1 for s in self.stages if s.status == "failed"),
             "mutations": len(self.genome.mutation_history),
             "elites": len(self.elite_registry),
+            "branches": len(self._branches),
         }

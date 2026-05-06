@@ -31,6 +31,10 @@ class IntegrationHub:
         self.lsp_manager = None
         self.sub_agent_roles = None
         self.struct_memory = None
+        # RouteMoA: embedding scorer (initialized at boot)
+        self.embedding_scorer = None
+        # RouteMoA: layered routing by default
+        self._use_layered_routing = True
 
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -168,6 +172,29 @@ class IntegrationHub:
 
         self.engine = LifeEngine(self.world)
 
+        # ── RouteMoA: Embedding-based model scorer ──
+        try:
+            from ..treellm.embedding_scorer import get_embedding_scorer
+            self.embedding_scorer = get_embedding_scorer()
+            logger.info(f"RouteMoA embedding scorer initialized ({len(getattr(self.embedding_scorer, '_profiles', []))} profiles)")
+        except Exception as e:
+            self.embedding_scorer = None
+            logger.debug(f"Embedding scorer skipped: {e}")
+
+        # ── RouteMoA: Mixture of Judges + dynamic weights ──
+        try:
+            from ..treellm.holistic_election import get_election
+            election = get_election()
+            # Pre-warm by registering all known providers
+            for name in self.world.consciousness._llm.provider_names:
+                try:
+                    election.get_stats(name)
+                except Exception:
+                    pass
+            logger.info("Holistic election + Mixture of Judges initialized")
+        except Exception as e:
+            logger.debug(f"Election init skipped: {e}")
+
         # ── Auto-wire new modules ──
         from ..dna.cache_optimizer import CacheOptimizer
         self.cache_optimizer = CacheOptimizer(
@@ -292,12 +319,18 @@ class IntegrationHub:
         try:
             from ..config.secrets import get_secret_vault
             from ..treellm.providers import OpenAILikeProvider
+            # RouteMoA: expose embedding scorer import for late binding elsewhere
+            from ..treellm.embedding_scorer import get_embedding_scorer
             vault = get_secret_vault()
             vault_providers = [
                 ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
                 ("siliconflow", "siliconflow_api_key", "siliconflow_base_url", "siliconflow_default_model", "Qwen/Qwen2.5-7B-Instruct"),
                 ("mofang", "mofang_api_key", "mofang_base_url", "mofang_default_model", "Qwen/Qwen2.5-7B-Instruct"),
                 ("nvidia", "nvidia_api_key", "nvidia_base_url", "nvidia_default_model", "deepseek-ai/deepseek-r1"),
+                ("modelscope", "modelscope_api_key", "modelscope_base_url", "modelscope_flash_model", "Qwen/Qwen3-8B"),
+                ("bailing", "bailing_api_key", "bailing_base_url", "bailing_flash_model", "Baichuan4-Turbo"),
+                ("stepfun", "stepfun_api_key", "stepfun_base_url", "stepfun_flash_model", "step-1-flash"),
+                ("internlm", "internlm_api_key", "internlm_base_url", "internlm_flash_model", "internlm2.5-7b-chat"),
             ]
             for name, key_name, url_name, model_name, default_model in vault_providers:
                 key = vault.get(key_name, "")
@@ -311,6 +344,14 @@ class IntegrationHub:
                     logger.info(f"Vault provider: {name} ({model})")
         except Exception as e:
             logger.debug(f"Vault providers: {e}")
+
+        # ── Register provider profiles for embedding scorer ──
+        if getattr(self, 'embedding_scorer', None):
+            try:
+                for name in self.world.consciousness._llm.provider_names:
+                    self.embedding_scorer.update_profile(name, "", True)
+            except Exception:
+                pass
 
         from ..dna.conversation_dna import ConversationDNA
         self.world.conversation_dna = ConversationDNA(world=self.world)
@@ -346,6 +387,116 @@ class IntegrationHub:
 
         from ..dna.life_daemon import LifeDaemon
         self.daemon = LifeDaemon(self.world, interval_minutes=30.0)
+
+        # ──────────────────────────────────────────────
+        #  v2.2 New Modules: hard-wired initialization
+        # ──────────────────────────────────────────────
+
+        # Context Glossary (mattpocock/skills: domain vocabulary)
+        from ..knowledge.context_glossary import GLOSSARY
+        self.world.context_glossary = GLOSSARY
+        logger.debug("ContextGlossary initialized (25 default terms)")
+
+        # Entity Registry (ontology: unified entity identity)
+        from ..core.entity_registry import get_entity_registry
+        self.world.entity_registry = get_entity_registry()
+        logger.debug("EntityRegistry initialized")
+
+        # Project Scaffold (mattpocock/skills: per-project skills)
+        from ..config.project_scaffold import PROJECT_SCAFFOLD
+        self.world.project_scaffold = PROJECT_SCAFFOLD
+        logger.debug("ProjectScaffold initialized")
+
+        # Prompt Version Manager (Langfuse: template versioning)
+        from ..treellm.prompt_versioning import PROMPT_VERSION_MANAGER
+        self.world.prompt_version_manager = PROMPT_VERSION_MANAGER
+        logger.debug("PromptVersionManager initialized (5 default templates)")
+
+        # Skill Catalog (mattpocock/skills: capability bucket routing)
+        from ..capability.skill_buckets import SKILL_CATALOG
+        self.world.skill_catalog = SKILL_CATALOG
+        logger.debug("SkillCatalog initialized (45 modules, 10 buckets)")
+
+        # Batch Executor (Clibor: FIFO/LIFO task queue)
+        from ..execution.batch_executor import get_batch_executor
+        self.world.batch_executor = get_batch_executor()
+        logger.debug("BatchExecutor initialized")
+
+        # React Executor (ReAct: serial Think-Act-Observe loop for exploratory tasks)
+        from ..execution.react_executor import get_react_executor
+        self.world.react_executor = get_react_executor(self.consciousness)
+        logger.debug("ReactExecutor initialized")
+
+        # Foresight Gate (arXiv 2601.03905: simulation decision)
+        from ..treellm.foresight_gate import get_foresight_gate
+        self.world.foresight_gate = get_foresight_gate()
+        logger.debug("ForesightGate initialized")
+
+        # Calibration Tracker (foresight + Agentic Harness: prediction vs actual)
+        from ..observability.calibration import get_calibration_tracker
+        self.world.calibration_tracker = get_calibration_tracker()
+        logger.debug("CalibrationTracker initialized")
+
+        # Claim Checker (AutoResearchClaw: anti-fabrication)
+        from ..observability.claim_checker import CLAIM_CHECKER
+        self.world.claim_checker = CLAIM_CHECKER
+        logger.debug("ClaimChecker initialized")
+
+        # Sentinel (AutoResearchClaw: watchdog monitoring)
+        from ..observability.sentinel import get_sentinel
+        self.world.sentinel = get_sentinel()
+        logger.debug("Sentinel initialized (5 default checks)")
+
+        # Change Manifest (Agentic Harness: falsifiable edit contracts)
+        from ..observability.change_manifest import CHANGE_MANIFEST
+        self.world.change_manifest = CHANGE_MANIFEST
+        logger.debug("ChangeManifest initialized")
+
+        # Harness Registry (Agentic Harness: file-level safety net)
+        from ..observability.harness_registry import HARNESS_REGISTRY
+        self.world.harness_registry = HARNESS_REGISTRY
+        logger.debug("HarnessRegistry initialized")
+
+        # Evolution Store (AutoResearchClaw: cross-run lesson learning)
+        from ..dna.evolution_store import EVOLUTION_STORE
+        self.world.evolution_store = EVOLUTION_STORE
+        logger.debug("EvolutionStore initialized")
+
+        # Agent Roles (Agentic Harness: Evolver/Evaluator/Verifier triad)
+        from ..dna.agent_roles import ROLE_TRIAD
+        self.world.agent_roles = ROLE_TRIAD
+        logger.debug("RoleTriad initialized")
+
+        # HITL Manager (AutoResearchClaw: human-in-the-loop)
+        from ..dna.hitl import HITL_MANAGER
+        self.world.hitl_manager = HITL_MANAGER
+        self.world.hitl = HITL_MANAGER  # Override placeholder
+        logger.debug("HITLManager initialized (6 modes)")
+
+        # Ontology Prompt Builder (ontology: concept chain injection)
+        from ..treellm.onto_prompt_builder import get_onto_prompt_builder
+        self.world.onto_prompt_builder = get_onto_prompt_builder()
+        logger.debug("OntoPromptBuilder initialized")
+
+        # Activity Feed (observability: event stream)
+        from ..observability.activity_feed import get_activity_feed
+        self.world.activity_feed = get_activity_feed()
+        logger.debug("ActivityFeed initialized")
+
+        # Error Replay (observability: error reproduction)
+        from ..observability.error_replay import get_error_replay
+        self.world.error_replay = get_error_replay()
+        logger.debug("ErrorReplay initialized")
+
+        # Trust Scorer (observability: trust scoring)
+        from ..observability.trust_scoring import get_trust_scorer
+        self.world.trust_scorer = get_trust_scorer()
+        logger.debug("TrustScorer initialized")
+
+        # Embedding Scorer ref (already initialized above, just wire)
+        if self.embedding_scorer:
+            self.world.embedding_scorer = self.embedding_scorer
+            logger.debug("EmbeddingScorer wired to world")
 
     async def _init_async(self) -> None:
         """Async initialization — health checks, node register, daemon start."""
@@ -385,6 +536,10 @@ class IntegrationHub:
                     "mofang": ("https://ai.gitee.com/v1", self.config.model.mofang_api_key),
                     "nvidia": ("https://integrate.api.nvidia.com/v1", self.config.model.nvidia_api_key),
                     "spark": ("https://maas-api.cn-huabei-1.xf-yun.com/v2", self.config.model.spark_api_key),
+                    "modelscope": ("https://api-inference.modelscope.cn/v1", self.config.model.modelscope_api_key),
+                    "bailing": ("https://api.baichuan-ai.com/v1", self.config.model.bailing_api_key),
+                    "stepfun": ("https://api.stepfun.com/v1", self.config.model.stepfun_api_key),
+                    "internlm": ("https://api.intern-ai.org.cn/v1", self.config.model.internlm_api_key),
                 }
                 for name, (base_url, api_key) in provider_keys.items():
                     if api_key:

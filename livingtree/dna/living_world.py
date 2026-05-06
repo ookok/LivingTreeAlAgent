@@ -84,6 +84,44 @@ class LivingWorld:
         self.skill_discovery: Any = None
         self.struct_memory: Any = None
 
+        # ── Observability v2.2 (Langfuse-inspired) ──
+        self.claim_checker: Any = None
+        self.sentinel: Any = None
+        self.calibration_tracker: Any = None
+        self.change_manifest: Any = None
+        self.harness_registry: Any = None
+        self.activity_feed: Any = None
+        self.error_replay: Any = None
+        self.trust_scorer: Any = None
+
+        # ── Knowledge v2.2 (Context Glossary + Ontology) ──
+        self.context_glossary: Any = None
+        self.relation_engine: Any = None
+        self.onto_bridge: Any = None
+
+        # ── Execution v2.2 (Clibor-inspired) ──
+        self.batch_executor: Any = None
+        self.react_executor: Any = None
+
+        # ── Core v2.2 (Entity Registry + Project Scaffold) ──
+        self.entity_registry: Any = None
+        self.project_scaffold: Any = None
+
+        # ── TreeLLM v2.2 (Prompt Versioning + Foresight + Routing) ──
+        self.prompt_version_manager: Any = None
+        self.foresight_gate: Any = None
+        self.embedding_scorer: Any = None
+        self.onto_prompt_builder: Any = None
+
+        # ── DNA v2.2 (Agent Roles + Evolution) ──
+        self.agent_roles: Any = None
+        self.evolution_store: Any = None
+        self.hitl_manager: Any = None
+
+        # ── Capability v2.2 (Skill Catalog + Pipeline) ──
+        self.skill_catalog: Any = None
+        self.pipeline_engine: Any = None
+
     def wire(self, **kwargs) -> "LivingWorld":
         """Wire subsystems into the world. Called during Hub boot."""
         for name, component in kwargs.items():

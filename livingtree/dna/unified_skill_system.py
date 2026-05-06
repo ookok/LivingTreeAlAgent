@@ -178,6 +178,10 @@ class UnifiedSkillSystem:
             "longcat": ("LongCat Flash", "通用对话/快速响应"),
             "zhipu": ("智谱 GLM-4-Flash", "中文对话/文本理解"),
             "spark": ("讯飞星火 xDeepSeekV3", "搜索增强/知识问答"),
+            "modelscope": ("ModelScope 魔搭社区", "开源模型推理/Qwen/DeepSeek"),
+            "bailing": ("蚂蚁百灵", "Baichuan4/企业级对话推理"),
+            "stepfun": ("阶跃星辰", "Step-2/深度推理/16K长下文"),
+            "internlm": ("书生 InternLM", "上海AI Lab/中文推理旗舰"),
         }
         for name, (desc, caps) in providers.items():
             self._provider_texts[name] = f"{name}. {desc}. Capabilities: {caps}"

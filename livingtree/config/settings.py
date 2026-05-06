@@ -94,6 +94,54 @@ class ModelConfig(BaseModel):
     nvidia_api_key: str = ""
     nvidia_default_model: str = "deepseek-ai/deepseek-r1"
 
+    modelscope_base_url: str = "https://api-inference.modelscope.cn/v1"
+    modelscope_api_key: str = ""
+    modelscope_flash_model: str = "Qwen/Qwen3-8B"
+    modelscope_flash_temperature: float = 0.3
+    modelscope_flash_max_tokens: int = 4096
+    modelscope_chat_model: str = "Qwen/Qwen2.5-72B-Instruct"
+    modelscope_chat_temperature: float = 0.5
+    modelscope_chat_max_tokens: int = 4096
+    modelscope_pro_model: str = "deepseek-ai/DeepSeek-V3"
+    modelscope_reasoning_model: str = "deepseek-ai/DeepSeek-R1"
+    modelscope_small_model: str = "Qwen/Qwen2.5-7B-Instruct"
+
+    bailing_base_url: str = "https://api.baichuan-ai.com/v1"
+    bailing_api_key: str = ""
+    bailing_flash_model: str = "Baichuan4-Turbo"
+    bailing_flash_temperature: float = 0.3
+    bailing_flash_max_tokens: int = 4096
+    bailing_chat_model: str = "Baichuan4"
+    bailing_chat_temperature: float = 0.5
+    bailing_chat_max_tokens: int = 4096
+    bailing_pro_model: str = "Baichuan4"
+    bailing_reasoning_model: str = "Baichuan4"
+    bailing_small_model: str = "Baichuan4-Air"
+
+    stepfun_base_url: str = "https://api.stepfun.com/v1"
+    stepfun_api_key: str = ""
+    stepfun_flash_model: str = "step-1-flash"
+    stepfun_flash_temperature: float = 0.3
+    stepfun_flash_max_tokens: int = 4096
+    stepfun_chat_model: str = "step-1-8k"
+    stepfun_chat_temperature: float = 0.5
+    stepfun_chat_max_tokens: int = 4096
+    stepfun_pro_model: str = "step-2-16k"
+    stepfun_reasoning_model: str = "step-2-16k"
+    stepfun_small_model: str = "step-1-flash"
+
+    internlm_base_url: str = "https://api.intern-ai.org.cn/v1"
+    internlm_api_key: str = ""
+    internlm_flash_model: str = "internlm2.5-7b-chat"
+    internlm_flash_temperature: float = 0.3
+    internlm_flash_max_tokens: int = 4096
+    internlm_chat_model: str = "internlm2.5-20b-chat"
+    internlm_chat_temperature: float = 0.5
+    internlm_chat_max_tokens: int = 4096
+    internlm_pro_model: str = "internlm3-latest"
+    internlm_reasoning_model: str = "internlm3-latest"
+    internlm_small_model: str = "internlm2.5-7b-chat"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -288,6 +336,26 @@ class LTAIConfig(BaseModel):
             "LT_LOG_LEVEL": ("observability.log_level", str),
             "LT_API_HOST": ("api.host", str),
             "LT_API_PORT": ("api.port", int),
+            "LT_MODELSCOPE_API_KEY": ("model.modelscope_api_key", str),
+            "LT_MODELSCOPE_FLASH_MODEL": ("model.modelscope_flash_model", str),
+            "LT_MODELSCOPE_CHAT_MODEL": ("model.modelscope_chat_model", str),
+            "LT_MODELSCOPE_PRO_MODEL": ("model.modelscope_pro_model", str),
+            "LT_MODELSCOPE_BASE_URL": ("model.modelscope_base_url", str),
+            "LT_BAILING_API_KEY": ("model.bailing_api_key", str),
+            "LT_BAILING_FLASH_MODEL": ("model.bailing_flash_model", str),
+            "LT_BAILING_CHAT_MODEL": ("model.bailing_chat_model", str),
+            "LT_BAILING_PRO_MODEL": ("model.bailing_pro_model", str),
+            "LT_BAILING_BASE_URL": ("model.bailing_base_url", str),
+            "LT_STEPFUN_API_KEY": ("model.stepfun_api_key", str),
+            "LT_STEPFUN_FLASH_MODEL": ("model.stepfun_flash_model", str),
+            "LT_STEPFUN_CHAT_MODEL": ("model.stepfun_chat_model", str),
+            "LT_STEPFUN_PRO_MODEL": ("model.stepfun_pro_model", str),
+            "LT_STEPFUN_BASE_URL": ("model.stepfun_base_url", str),
+            "LT_INTERNLM_API_KEY": ("model.internlm_api_key", str),
+            "LT_INTERNLM_FLASH_MODEL": ("model.internlm_flash_model", str),
+            "LT_INTERNLM_CHAT_MODEL": ("model.internlm_chat_model", str),
+            "LT_INTERNLM_PRO_MODEL": ("model.internlm_pro_model", str),
+            "LT_INTERNLM_BASE_URL": ("model.internlm_base_url", str),
         }
         for env_key, (config_path, converter) in env_map.items():
             value = os.environ.get(env_key)
@@ -374,6 +442,23 @@ def _load_config() -> LTAIConfig:
             config.model.nvidia_base_url = vault.get("nvidia_base_url", "https://integrate.api.nvidia.com/v1")
             config.model.nvidia_default_model = vault.get("nvidia_default_model", "deepseek-ai/deepseek-r1")
             logger.info("Loaded nvidia_api_key from encrypted vault")
+
+        modelscope_key = vault.get("modelscope_api_key", "")
+        if modelscope_key:
+            config.model.modelscope_api_key = modelscope_key
+            logger.info("Loaded modelscope_api_key from encrypted vault")
+        bailing_key = vault.get("bailing_api_key", "")
+        if bailing_key:
+            config.model.bailing_api_key = bailing_key
+            logger.info("Loaded bailing_api_key from encrypted vault")
+        stepfun_key = vault.get("stepfun_api_key", "")
+        if stepfun_key:
+            config.model.stepfun_api_key = stepfun_key
+            logger.info("Loaded stepfun_api_key from encrypted vault")
+        internlm_key = vault.get("internlm_api_key", "")
+        if internlm_key:
+            config.model.internlm_api_key = internlm_key
+            logger.info("Loaded internlm_api_key from encrypted vault")
     except Exception as e:
         logger.debug(f"Secret vault load skipped: {e}")
 

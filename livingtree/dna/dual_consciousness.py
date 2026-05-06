@@ -506,6 +506,10 @@ class DualModelConsciousness(Consciousness):
         reasoning_providers = [
             "siliconflow-reasoning", "mofang-reasoning",
             "siliconflow-pro", "mofang-pro",
+            "modelscope",
+            "bailing",
+            "stepfun",
+            "internlm",
         ]
         # L4 last (user-specified)
         if self._l4_provider:

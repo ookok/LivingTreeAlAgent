@@ -242,3 +242,81 @@ def create_longcat_provider(api_key: str, model: str = "LongCat-Flash-Lite") -> 
 
 def create_nvidia_provider(api_key: str, model: str = "deepseek-ai/deepseek-r1") -> NvidiaProvider:
     return NvidiaProvider(api_key=api_key, default_model=model)
+
+
+def create_modelscope_provider(api_key: str, model: str = "Qwen/Qwen3-8B") -> OpenAILikeProvider:
+    """Create a ModelScope provider — OpenAI-compatible API.
+
+    ModelScope (modelscope.cn) provides free inference endpoints for open-source models
+    including Qwen, DeepSeek, Llama, and more.
+
+    Common models:
+    - Qwen/Qwen3-8B (flash)
+    - Qwen/Qwen2.5-72B-Instruct (chat)
+    - deepseek-ai/DeepSeek-V3 (pro)
+    - deepseek-ai/DeepSeek-R1 (reasoning)
+    - Qwen/Qwen2.5-7B-Instruct (small)
+    """
+    return OpenAILikeProvider(
+        name="modelscope",
+        base_url="https://api-inference.modelscope.cn/v1",
+        api_key=api_key,
+        default_model=model,
+    )
+
+
+def create_bailing_provider(api_key: str, model: str = "Baichuan4-Turbo") -> OpenAILikeProvider:
+    """Create an Ant Group BaiLing (百灵) provider — OpenAI-compatible API.
+
+    Ant Group BaiLing (api.baichuan-ai.com) provides enterprise-grade LLM access
+    including Baichuan4, Baichuan4-Turbo, Baichuan4-Air, and Baichuan3-Turbo.
+
+    Common models:
+    - Baichuan4-Turbo (flash — fast, lightweight)
+    - Baichuan4 (chat/pro — flagship, balanced)
+    - Baichuan4-Air (small — cheapest, simple tasks)
+    """
+    return OpenAILikeProvider(
+        name="bailing",
+        base_url="https://api.baichuan-ai.com/v1",
+        api_key=api_key,
+        default_model=model,
+    )
+
+
+def create_stepfun_provider(api_key: str, model: str = "step-1-flash") -> OpenAILikeProvider:
+    """Create a StepFun (阶跃星辰) provider — OpenAI-compatible API.
+
+    StepFun (stepfun.com) provides Step-1 and Step-2 series models with
+    strong reasoning, long context (16K), and vision capabilities.
+
+    Common models:
+    - step-1-flash (flash — fast, lightweight)
+    - step-1-8k (chat — balanced, 8K context)
+    - step-2-16k (pro — powerful, 16K context)
+    """
+    return OpenAILikeProvider(
+        name="stepfun",
+        base_url="https://api.stepfun.com/v1",
+        api_key=api_key,
+        default_model=model,
+    )
+
+
+def create_internlm_provider(api_key: str, model: str = "internlm2.5-7b-chat") -> OpenAILikeProvider:
+    """Create an InternLM (书生) provider — OpenAI-compatible API.
+
+    Shanghai AI Lab's InternLM (intern-ai.org.cn) offers InternLM2.5/3 models
+    with strong Chinese reasoning, long context, and tool-use capabilities.
+
+    Common models:
+    - internlm2.5-7b-chat (flash — fast, lightweight)
+    - internlm2.5-20b-chat (chat — balanced)
+    - internlm3-latest (pro — flagship, strongest reasoning)
+    """
+    return OpenAILikeProvider(
+        name="internlm",
+        base_url="https://api.intern-ai.org.cn/v1",
+        api_key=api_key,
+        default_model=model,
+    )

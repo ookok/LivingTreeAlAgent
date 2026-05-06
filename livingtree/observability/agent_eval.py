@@ -15,16 +15,18 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import statistics
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
+from pydantic import BaseModel, Field
 
 EVAL_DIR = Path(".livingtree/evals")
 
@@ -77,6 +79,95 @@ class DriftReport:
     alert: bool = False
 
 
+class EvalCase(BaseModel):
+    """A single evaluation case."""
+    id: str
+    name: str
+    task: str
+    input: str
+    expected: str = ""
+    reference: str = ""
+    category: str = "general"
+    difficulty: str = "medium"
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvaluationDataset(BaseModel):
+    """A collection of evaluation cases."""
+    id: str
+    name: str
+    description: str = ""
+    cases: list[EvalCase] = Field(default_factory=list)
+    created_at: float = 0.0
+    version: str = "1.0.0"
+
+
+@dataclass
+class EvalResult:
+    case_id: str
+    score: float
+    level: str
+    feedback: str
+    latency_ms: float
+
+
+@dataclass
+class DatasetResult:
+    dataset_id: str
+    agent: str
+    total_cases: int
+    completed: int
+    failed: int
+    avg_score: float
+    pass_rate: float
+    results: list[EvalResult]
+    duration_ms: float
+    timestamp: float
+
+    def to_dict(self) -> dict:
+        return {
+            "dataset_id": self.dataset_id,
+            "agent": self.agent,
+            "total_cases": self.total_cases,
+            "completed": self.completed,
+            "failed": self.failed,
+            "avg_score": self.avg_score,
+            "pass_rate": self.pass_rate,
+            "results": [asdict(r) for r in self.results],
+            "duration_ms": self.duration_ms,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DatasetResult":
+        d["results"] = [EvalResult(**r) for r in d.get("results", [])]
+        return cls(**d)
+
+
+@dataclass
+class CaseComparison:
+    case_id: str
+    score_before: float
+    score_after: float
+    improved: bool
+
+
+@dataclass
+class ComparisonReport:
+    before_id: str
+    after_id: str
+    avg_score_before: float
+    avg_score_after: float
+    score_delta: float
+    pass_rate_before: float
+    pass_rate_after: float
+    improved_cases: list[CaseComparison]
+    regressed_cases: list[CaseComparison]
+    new_passes: list[str]
+    new_failures: list[str]
+
+
 class AgentEval:
     """Four-layer agent evaluation framework."""
 
@@ -87,6 +178,7 @@ class AgentEval:
         self._components: dict[str, ComponentMetric] = {}
         self._drift_baselines: dict[str, deque[float]] = {}
         self._load()
+        self._seed_quick_start()
 
     # ═══ Layer 1: Output Eval ═══
 
@@ -211,7 +303,138 @@ class AgentEval:
         self._maybe_save()
         return ev
 
-    # ═══ Layer 3: Component Eval ═══
+    # ═══ Dataset Management ═══
+
+    @staticmethod
+    def _datasets_dir() -> Path:
+        d = EVAL_DIR / "datasets"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    @staticmethod
+    def _runs_dir() -> Path:
+        d = EVAL_DIR / "runs"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def load_dataset(self, dataset_path_or_id: str) -> EvaluationDataset:
+        p = Path(dataset_path_or_id)
+        if p.is_file():
+            data = json.loads(p.read_text(encoding="utf-8"))
+        else:
+            candidate = self._datasets_dir() / f"{dataset_path_or_id}.json"
+            if not candidate.exists():
+                raise FileNotFoundError(f"Dataset not found: {dataset_path_or_id}")
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        return EvaluationDataset(**data)
+
+    def save_dataset(self, dataset: EvaluationDataset) -> None:
+        target = self._datasets_dir() / f"{dataset.id}.json"
+        target.write_text(json.dumps(dataset.model_dump(), indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def list_datasets(self) -> list[dict]:
+        ds_dir = self._datasets_dir()
+        items = []
+        for f in sorted(ds_dir.glob("*.json")):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                items.append({"id": d.get("id"), "name": d.get("name"), "cases": len(d.get("cases", [])), "description": d.get("description", "")})
+            except Exception:
+                continue
+        return items
+
+    def delete_dataset(self, dataset_id: str) -> None:
+        target = self._datasets_dir() / f"{dataset_id}.json"
+        if target.exists():
+            target.unlink()
+
+    # ═══ Batch Evaluation ═══
+    async def run_dataset(self, agent: str, dataset: EvaluationDataset,
+                          hub=None, concurrency: int = 3) -> DatasetResult:
+        """Run evaluation against all cases in a dataset."""
+        semaphore = asyncio.Semaphore(concurrency)
+        results: list[EvalResult] = []
+        start_ts = time.time()
+
+        async def eval_one(case: EvalCase) -> EvalResult:
+            t0 = time.time()
+            async with semaphore:
+                raw = await self.eval_output(agent, case.task, case.input, case.expected, case.reference, hub)
+            latency_ms = (time.time() - t0) * 1000
+            if isinstance(raw, OutputEval):
+                return EvalResult(case_id=case.id, score=raw.score, level=raw.level, feedback=raw.feedback, latency_ms=latency_ms)
+            score = raw.score if hasattr(raw, 'score') else 0.5
+            level = raw.level if hasattr(raw, 'level') else "warn"
+            feedback = raw.feedback if hasattr(raw, 'feedback') else ""
+            return EvalResult(case_id=case.id, score=score, level=level, feedback=feedback, latency_ms=latency_ms)
+
+        tasks = [eval_one(c) for c in dataset.cases]
+        for fut in asyncio.as_completed(tasks):
+            try:
+                results.append(await fut)
+            except Exception as e:
+                results.append(EvalResult(case_id="unknown", score=0.0, level="fail", feedback=str(e), latency_ms=0))
+
+        duration_ms = (time.time() - start_ts) * 1000
+        total = len(dataset.cases)
+        avg_score = sum(r.score for r in results) / max(total, 1)
+        pass_rate = sum(1 for r in results if r.score > 0.6) / max(total, 1)
+
+        ds_result = DatasetResult(
+            dataset_id=dataset.id, agent=agent, total_cases=total,
+            completed=len(results), failed=total - len(results),
+            avg_score=round(avg_score, 3), pass_rate=round(pass_rate, 3),
+            results=results, duration_ms=round(duration_ms, 1), timestamp=time.time(),
+        )
+
+        # Persist
+        run_path = self._runs_dir() / f"run_{int(start_ts * 1000)}.json"
+        run_path.write_text(json.dumps(ds_result.to_dict(), indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return ds_result
+
+    # ═══ Run Comparison ═══
+    def compare_runs(self, run_a_id: str, run_b_id: str) -> ComparisonReport:
+        """Compare two evaluation runs."""
+        def _load(run_id: str) -> DatasetResult:
+            runs_dir = self._runs_dir()
+            path = runs_dir / run_id
+            if not path.exists():
+                path = runs_dir / f"{run_id}.json"
+            if not path.exists():
+                raise FileNotFoundError(f"Run not found: {run_id}")
+            d = json.loads(path.read_text(encoding="utf-8"))
+            return DatasetResult.from_dict(d)
+
+        before = _load(run_a_id)
+        after = _load(run_b_id)
+        before_map = {r.case_id: r for r in before.results}
+        after_map = {r.case_id: r for r in after.results}
+        all_ids = sorted(set(list(before_map.keys()) + list(after_map.keys())))
+
+        improved, regressed, new_passes, new_failures = [], [], [], []
+        for cid in all_ids:
+            bb = before_map.get(cid)
+            aa = after_map.get(cid)
+            sb = bb.score if bb else 0.0
+            sa = aa.score if aa else 0.0
+            if bb and aa:
+                if sa > sb:
+                    improved.append(CaseComparison(cid, sb, sa, True))
+                elif sa < sb:
+                    regressed.append(CaseComparison(cid, sb, sa, False))
+            if bb and bb.score <= 0.6 and aa and aa.score > 0.6:
+                new_passes.append(cid)
+            if bb and bb.score > 0.6 and aa and aa.score <= 0.6:
+                new_failures.append(cid)
+
+        return ComparisonReport(
+            before_id=run_a_id, after_id=run_b_id,
+            avg_score_before=before.avg_score, avg_score_after=after.avg_score,
+            score_delta=round(after.avg_score - before.avg_score, 3),
+            pass_rate_before=before.pass_rate, pass_rate_after=after.pass_rate,
+            improved_cases=improved, regressed_cases=regressed,
+            new_passes=new_passes, new_failures=new_failures,
+        )
 
     def eval_component(
         self,
@@ -359,6 +582,31 @@ class AgentEval:
         if len(self._output_evals) % 10 == 0:
             self._save()
 
+
+    def _seed_quick_start(self):
+        """Register built-in quick-start dataset if none exist."""
+        ds_dir = self._datasets_dir()
+        if any(ds_dir.glob("*.json")):
+            return
+        dataset = EvaluationDataset(
+            id="quick-start", name="快速入门评估集", description="5个基础评估用例",
+            version="1.0.0", created_at=time.time(),
+            cases=[
+                EvalCase(id="summary-001", name="文本摘要", task="总结以下文章的核心观点",
+                         input="人工智能正在改变我们的工作方式...", expected="AI改变了工作模式", category="summary", difficulty="easy"),
+                EvalCase(id="reasoning-001", name="逻辑推理", task="如果所有A都是B，某些B是C，那么某些A一定是C吗？",
+                         input="", expected="不一定", category="reasoning", difficulty="medium", tags=["logic"]),
+                EvalCase(id="code-001", name="代码解释", task="解释以下Python代码的作用",
+                         input="def fibonacci(n): return n if n <= 1 else fibonacci(n-1) + fibonacci(n-2)",
+                         expected="递归计算斐波那契数列", category="code", difficulty="easy", tags=["python"]),
+                EvalCase(id="math-001", name="数学计算", task="计算 15% of 240",
+                         input="", expected="36", category="math", difficulty="easy"),
+                EvalCase(id="creative-001", name="创意写作", task="用三句话描述未来城市的景象",
+                         input="", expected="", category="creative", difficulty="hard"),
+            ],
+        )
+        self.save_dataset(dataset)
+        logger.info("Seeded quick-start evaluation dataset")
 
 def get_eval() -> AgentEval:
     global _ev

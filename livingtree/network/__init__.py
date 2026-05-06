@@ -1,5 +1,9 @@
 """Network Layer — P2P node discovery, NAT traversal, reputation, encrypted channels,
-spatial perception, presence detection, biometric signatures."""
+spatial perception, presence detection, biometric signatures, site acceleration."""
+
+from .site_accelerator import SiteAccelerator, get_accelerator
+from .domain_ip_pool import DomainIPPool, DomainIP, DomainEntry
+from .scinet_service import ScinetService, ScinetStatus, get_scinet
 
 # Original network
 from .node import Node, NodeInfo

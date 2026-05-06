@@ -380,10 +380,60 @@ def main():
         from livingtree.main import main as lt_main
         sys.argv = [sys.argv[0], 'test']
         lt_main()
+    elif command == 'scinet':
+        scinet_command()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: client, relay, tracker, app, livingtree, bootstrap, install, uninstall, status, sync-models, check, update, heal, config, model, test")
+        print("Available commands: client, relay, tracker, app, livingtree, bootstrap, install, uninstall, status, sync-models, check, update, heal, config, model, test, scinet")
         sys.exit(1)
+
+
+def scinet_command():
+    """Handle /scinet start|stop|status|test|pac commands."""
+    import asyncio
+    sub = sys.argv[2] if len(sys.argv) > 2 else "status"
+
+    async def _run():
+        from livingtree.network.scinet_service import get_scinet
+        scinet = get_scinet()
+
+        if sub == "start":
+            status = await scinet.start()
+            print(f"Scinet started on port {status.port}")
+            print(f"PAC URL: {status.pac_url}")
+            print(f"Test: curl -x http://127.0.0.1:{status.port} https://github.com")
+        elif sub == "stop":
+            status = await scinet.stop()
+            print(f"Scinet stopped (uptime={status.uptime_seconds:.0f}s, requests={status.total_requests})")
+        elif sub == "status":
+            s = scinet.get_status()
+            print(f"Scinet: {'RUNNING' if s.running else 'STOPPED'}")
+            if s.running:
+                print(f"  Port: {s.port}")
+                print(f"  PAC: {s.pac_url}")
+                print(f"  Uptime: {s.uptime_seconds:.0f}s")
+                print(f"  Requests: {s.total_requests} ({s.success_requests} ok, {s.failed_requests} fail)")
+                print(f"  Bandwidth: {s.bandwidth_bytes / 1024 / 1024:.1f} MB")
+        elif sub == "test":
+            print("Starting scinet for connectivity test...")
+            await scinet.start()
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                test_urls = ["https://github.com", "https://huggingface.co", "https://stackoverflow.com"]
+                for url in test_urls:
+                    try:
+                        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                            print(f"  {url}: OK ({resp.status})")
+                    except Exception as e:
+                        print(f"  {url}: FAIL ({e})")
+        elif sub == "pac":
+            pac = scinet.generate_pac()
+            print(pac)
+        else:
+            print(f"Unknown scinet subcommand: {sub}")
+            print("Usage: python main.py scinet start|stop|status|test|pac")
+
+    asyncio.run(_run())
 
 
 if __name__ == '__main__':

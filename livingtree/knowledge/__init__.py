@@ -1,11 +1,11 @@
 """Knowledge layer exports for LivingTree.
 
-This package exposes the lightweight knowledge layer components:
-- KnowledgeBase: central knowledge management and search
-- VectorStore: pluggable vector backends for semantic search
-- KnowledgeGraph: graph-based relationships between concepts
-- FormatDiscovery: auto-discovery of document formats and templates
-- GapDetector: identify and plan learning gaps
+MultiDocFusion-enhanced (Shin et al., EMNLP 2025):
+  - HierarchicalChunker: DSHP-LLM section-boundary-aware chunking
+  - DocumentTree: hierarchical document structure representation
+  - MultiDocFusionEngine: cross-document synthesis + conflict resolution
+  - DocumentLayoutAnalyzer: vision-based region detection + figure-caption binding
+  - ModernOCR: multi-backend OCR (Paddle/TrOCR/EasyOCR/Tesseract)
 """
 
 from .knowledge_base import KnowledgeBase, Document, RetrievalResult, MergedCandidate, ScoredResult, FusionResult, SchemaInferrer, InferredSchema, InferredField, InferredFieldType, SCHEMA_INFERRER
@@ -19,6 +19,23 @@ from .provenance import ProvenanceTracker, ProvenanceEntry
 from .context_glossary import DomainTerm, ContextGlossary, GLOSSARY
 from .onto_bridge import OntoBridge, ExternalBinding, SchemaOrgMapper, WikidataMapper, IndustryOntology, ONTO_BRIDGE, get_onto_bridge
 from .relation_engine import RelationEngine, RelationRule, RELATION_ENGINE, get_relation_engine
+from .document_tree import DocumentTree, DocSection
+from .hierarchical_chunker import HierarchicalChunker, DocumentChunk, build_document_tree, chunk_document
+from .multidoc_fusion import MultiDocFusionEngine, CrossReference, DocumentConflict, FusionResult as MDFusionResult
+from .layout_analyzer import DocumentLayoutAnalyzer, LayoutRegion, PageLayout, FigureCaption
+from .modern_ocr import ModernOCR, OCRResult, OCRRegion
+from .intelligent_kb import (
+    unified_retrieve, hierarchical_retrieve, format_hierarchical_context,
+    fact_check, detect_hallucination, FactCheckResult, KnowledgeGap,
+    detect_semantic_gaps, fill_knowledge_gap, user_feedback,
+    expand_query,
+    accurate_retrieve, verify_generation, get_hallucination_dashboard,
+)
+from .query_decomposer import QueryDecomposer, DecomposedQuery, SubQuery, DecomposedResult
+from .retrieval_validator import RetrievalValidator, ValidatedHit, ValidationResult
+from .hallucination_guard import HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
+from .content_quality import ContentQuality, QualityScore, ContentLabel
+from .cognitive_delta import CognitiveDelta, DeltaResult, DeltaDecision
 
 __all__ = [
     "KnowledgeBase", "Document", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult",
@@ -34,4 +51,19 @@ __all__ = [
     "DomainTerm", "ContextGlossary", "GLOSSARY",
     "OntoBridge", "ExternalBinding", "SchemaOrgMapper", "WikidataMapper", "IndustryOntology", "ONTO_BRIDGE", "get_onto_bridge",
     "RelationEngine", "RelationRule", "RELATION_ENGINE", "get_relation_engine",
+    "DocumentTree", "DocSection",
+    "HierarchicalChunker", "DocumentChunk", "build_document_tree", "chunk_document",
+    "MultiDocFusionEngine", "CrossReference", "DocumentConflict", "MDFusionResult",
+    "DocumentLayoutAnalyzer", "LayoutRegion", "PageLayout", "FigureCaption",
+    "ModernOCR", "OCRResult", "OCRRegion",
+    "unified_retrieve", "hierarchical_retrieve", "format_hierarchical_context",
+    "fact_check", "detect_hallucination", "FactCheckResult", "KnowledgeGap",
+    "detect_semantic_gaps", "fill_knowledge_gap", "user_feedback",
+    "expand_query",
+    "accurate_retrieve", "verify_generation", "get_hallucination_dashboard",
+    "QueryDecomposer", "DecomposedQuery", "SubQuery", "DecomposedResult",
+    "RetrievalValidator", "ValidatedHit", "ValidationResult",
+    "HallucinationGuard", "HallucinationReport", "SentenceCheck", "HallucinationStats",
+    "ContentQuality", "QualityScore", "ContentLabel",
+    "CognitiveDelta", "DeltaResult", "DeltaDecision",
 ]

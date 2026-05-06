@@ -39,6 +39,10 @@ class DocChunk:
     embedding: list[float] | None = None
     start_char: int = 0
     end_char: int = 0
+    section_path: str = ""      # hierarchical context (MultiDocFusion)
+    section_id: str = ""
+    section_level: int = 0
+    parent_titles: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -72,12 +76,17 @@ class DocumentKB:
                 id TEXT PRIMARY KEY, doc_id TEXT NOT NULL,
                 chunk_index INTEGER, text TEXT,
                 start_char INTEGER, end_char INTEGER,
+                section_path TEXT DEFAULT '',
+                section_id TEXT DEFAULT '',
+                section_level INTEGER DEFAULT 0,
+                parent_titles TEXT DEFAULT '[]',
                 embedding TEXT,
                 FOREIGN KEY(doc_id) REFERENCES documents(id)
             );
             CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
+            CREATE INDEX IF NOT EXISTS idx_chunks_section ON chunks(section_id);
             CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                doc_id, chunk_index, text,
+                doc_id, chunk_index, text, section_path, section_id,
                 tokenize='unicode61',
                 content='chunks', content_rowid='rowid'
             );
@@ -87,12 +96,20 @@ class DocumentKB:
     # ═══ Ingestion ═══
 
     def ingest(self, text: str, title: str = "", source: str = "",
-               chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP) -> str:
-        """Ingest a document of any size. Returns doc_id."""
+               chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP,
+               hierarchical: bool = False) -> str:
+        """Ingest a document of any size. Returns doc_id.
+
+        Args:
+            hierarchical: if True, use MultiDocFusion hierarchical chunking
+                         (section-boundary-aware, preserves document structure).
+        """
+        if hierarchical:
+            return self._hierarchical_ingest(text, title, source, chunk_size, chunk_overlap)
+
         doc_id = hashlib.sha256(f"{title}{source}{time.time()}".encode()).hexdigest()[:16]
         total_chars = len(text)
 
-        # Check dedup
         existing = self._db.execute(
             "SELECT id FROM documents WHERE title=? AND total_chars=? LIMIT 1",
             (title, total_chars)
@@ -106,27 +123,106 @@ class DocumentKB:
             (doc_id, title, source, total_chars, len(chunks), time.time(), "{}")
         )
 
-        # Batch insert chunks in transaction
         chunk_rows = []
         fts_rows = []
         for i, chunk_dict in enumerate(chunks):
             cid = f"{doc_id}-{i}"
             text_safe = chunk_dict["text"].replace("\x00", " ")
-            chunk_rows.append((cid, doc_id, i, text_safe, chunk_dict["start"], chunk_dict["end"], None))
-            fts_rows.append((doc_id, i, text_safe))
+            chunk_rows.append((
+                cid, doc_id, i, text_safe,
+                chunk_dict["start"], chunk_dict["end"],
+                chunk_dict.get("section_path", ""),
+                chunk_dict.get("section_id", ""),
+                chunk_dict.get("section_level", 0),
+                json.dumps(chunk_dict.get("parent_titles", [])),
+                None,
+            ))
+            fts_rows.append((doc_id, i, text_safe, chunk_dict.get("section_path", ""), chunk_dict.get("section_id", "")))
 
         self._db.executemany(
-            "INSERT INTO chunks(id,doc_id,chunk_index,text,start_char,end_char,embedding) VALUES(?,?,?,?,?,?,?)",
+            """INSERT INTO chunks(id,doc_id,chunk_index,text,start_char,end_char,
+               section_path,section_id,section_level,parent_titles,embedding)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             chunk_rows
         )
-        # Sync FTS5
         for row in fts_rows:
             self._db.execute(
-                "INSERT INTO chunks_fts(doc_id,chunk_index,text) VALUES(?,?,?)", row
+                "INSERT INTO chunks_fts(doc_id,chunk_index,text,section_path,section_id) VALUES(?,?,?,?,?)",
+                row
             )
         self._db.commit()
 
         logger.info(f"KB ingested: {title} — {total_chars} chars → {len(chunks)} chunks")
+        return doc_id
+
+    def _hierarchical_ingest(self, text: str, title: str, source: str,
+                              chunk_size: int, chunk_overlap: int) -> str:
+        """Ingest using MultiDocFusion hierarchical chunking."""
+        from .hierarchical_chunker import HierarchicalChunker
+
+        doc_id = hashlib.sha256(f"{title}{source}{time.time()}".encode()).hexdigest()[:16]
+        total_chars = len(text)
+
+        existing = self._db.execute(
+            "SELECT id FROM documents WHERE title=? AND total_chars=? LIMIT 1",
+            (title, total_chars)
+        ).fetchone()
+        if existing:
+            return existing[0]
+
+        chunker = HierarchicalChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        doc_chunks = chunker.chunk(text, title=title, source=source)
+        chunks = [
+            {
+                "text": c.text,
+                "start": c.start_char,
+                "end": c.end_char,
+                "section_path": c.section_path,
+                "section_id": c.section_id,
+                "section_level": c.section_level,
+                "parent_titles": c.parent_titles,
+            }
+            for c in doc_chunks
+        ]
+
+        self._db.execute(
+            "INSERT INTO documents(id,title,source,total_chars,chunk_count,created_at,metadata) VALUES(?,?,?,?,?,?,?)",
+            (doc_id, title, source, total_chars, len(chunks), time.time(), "{}")
+        )
+
+        chunk_rows = []
+        fts_rows = []
+        for i, chunk_dict in enumerate(chunks):
+            cid = f"{doc_id}-{i}"
+            text_safe = chunk_dict["text"].replace("\x00", " ")
+            chunk_rows.append((
+                cid, doc_id, i, text_safe,
+                chunk_dict["start"], chunk_dict["end"],
+                chunk_dict.get("section_path", ""),
+                chunk_dict.get("section_id", ""),
+                chunk_dict.get("section_level", 0),
+                json.dumps(chunk_dict.get("parent_titles", [])),
+                None,
+            ))
+            fts_rows.append((doc_id, i, text_safe, chunk_dict.get("section_path", ""), chunk_dict.get("section_id", "")))
+
+        self._db.executemany(
+            """INSERT INTO chunks(id,doc_id,chunk_index,text,start_char,end_char,
+               section_path,section_id,section_level,parent_titles,embedding)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            chunk_rows
+        )
+        for row in fts_rows:
+            self._db.execute(
+                "INSERT INTO chunks_fts(doc_id,chunk_index,text,section_path,section_id) VALUES(?,?,?,?,?)",
+                row
+            )
+        self._db.commit()
+
+        logger.info(
+            "KB hierarchical ingested: %s — %d chars → %d chunks (structure-aware)",
+            title, total_chars, len(chunks),
+        )
         return doc_id
 
     def _split(self, text: str, chunk_size: int, overlap: int) -> list[dict]:
@@ -244,10 +340,20 @@ class DocumentKB:
                 emb = json.loads(row["embedding"])
             except Exception:
                 pass
+        parent_titles = []
+        try:
+            if row["parent_titles"]:
+                parent_titles = json.loads(row["parent_titles"])
+        except (KeyError, json.JSONDecodeError):
+            pass
         return DocChunk(
             id=row["id"], doc_id=row["doc_id"], chunk_index=row["chunk_index"],
             text=row["text"], embedding=emb,
             start_char=row["start_char"], end_char=row["end_char"],
+            section_path=row["section_path"] if "section_path" in row.keys() else "",
+            section_id=row["section_id"] if "section_id" in row.keys() else "",
+            section_level=row["section_level"] if "section_level" in row.keys() else 0,
+            parent_titles=parent_titles,
         )
 
     def get_stats(self) -> dict:

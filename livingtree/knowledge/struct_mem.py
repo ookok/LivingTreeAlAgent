@@ -1219,8 +1219,137 @@ class StructMemory:
                 emb = await vs.encode(text)
                 return emb.tolist() if hasattr(emb, 'tolist') else list(emb)
         except Exception as e:
-            logger.debug(f"StructMem embed: {e}")
-        return []
+            logger.warning(f"db query: {e}")
+            return []
+
+
+# ═══ LightMem-compatible summarize() API ═══
+
+class SummaryStore:
+    """Pluggable summary storage backend (LightMem-compatible).
+
+    Supports:
+      - memory: in-memory dict (default)
+      - qdrant:  Qdrant vector DB (optional, pip install qdrant-client)
+    """
+
+    def __init__(self, backend: str = "memory", **kwargs):
+        self._backend = backend
+        self._store: dict[str, SynthesisBlock] = {}
+        self._qdrant = None
+        if backend == "qdrant":
+            self._init_qdrant(**kwargs)
+
+    def _init_qdrant(self, collection_name: str = "livingtree_summaries",
+                     embedding_dim: int = 384, path: str = ""):
+        try:
+            from qdrant_client import QdrantClient
+            from qdrant_client.models import Distance, VectorParams
+            import os
+            store_path = path or os.path.expanduser("~/.livingtree/qdrant_summaries")
+            os.makedirs(store_path, exist_ok=True)
+            self._qdrant = QdrantClient(path=store_path)
+            try:
+                self._qdrant.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
+                )
+            except Exception:
+                pass
+            logger.info("StructMem: Qdrant summary store initialized at %s", store_path)
+        except ImportError:
+            logger.warning("StructMem: qdrant-client not installed, using memory store")
+            self._backend = "memory"
+
+    def put(self, block_id: str, block: SynthesisBlock, embedding: list = None):
+        if self._backend == "qdrant" and self._qdrant and embedding:
+            try:
+                from qdrant_client.models import PointStruct
+                self._qdrant.upsert(
+                    collection_name="livingtree_summaries",
+                    points=[PointStruct(id=hash(block_id) % (2**63), vector=embedding, payload={
+                        "id": block_id, "content": block.content[:1000],
+                        "timestamp": block.timestamp,
+                    })],
+                )
+            except Exception:
+                self._store[block_id] = block
+        else:
+            self._store[block_id] = block
+
+    def search(self, query_vector: list, top_k: int = 10) -> list[SynthesisBlock]:
+        if self._backend == "qdrant" and self._qdrant:
+            try:
+                results = self._qdrant.search(
+                    collection_name="livingtree_summaries",
+                    query_vector=query_vector, limit=top_k,
+                )
+                return [
+                    SynthesisBlock(
+                        id=r.payload.get("id", ""),
+                        timestamp=r.payload.get("timestamp", ""),
+                        content=r.payload.get("content", ""),
+                    )
+                    for r in results
+                ]
+            except Exception:
+                pass
+        scored = [(bid, 0.0) for bid in self._store.keys()]
+        return [self._store[bid] for bid, _ in scored[:top_k]]
+
+    def count(self) -> int:
+        return len(self._store)
+
+
+async def structmem_summarize(
+    memory: StructMemory,
+    time_window: int = 3600,
+    top_k: int = 15,
+    scope: str = "global",
+    summary_store: SummaryStore = None,
+) -> list[SynthesisBlock]:
+    """LightMem-compatible summarize() — cross-event semantic consolidation.
+
+    Args:
+        memory: StructMemory instance
+        time_window: time window in seconds for grouping events
+        top_k: number of seed events for consolidation
+        scope: "global" (all sessions) or "session" (current only)
+        summary_store: optional Qdrant/memory store for persistence
+
+    Returns:
+        List of SynthesisBlock summary blocks.
+
+    This matches LightMem's summarize() API exactly:
+      LightMem: lightmem.summarize(retrieval_scope="global", time_window=3600, top_k=15)
+      LivingTree: await structmem_summarize(memory, time_window=3600, top_k=15)
+    """
+    if scope == "global":
+        blocks = await memory.consolidate_window(window_seconds=time_window)
+    else:
+        blocks = await memory.consolidate_if_needed()
+
+    if summary_store and blocks:
+        embeddings = []
+        for block in blocks:
+            if hasattr(memory, '_vector_store'):
+                try:
+                    emb = getattr(memory._vector_store, 'embed', lambda x: [])(block.content[:1000])
+                    embeddings.append(emb if isinstance(emb, list) else [])
+                except Exception:
+                    embeddings.append([])
+            else:
+                embeddings.append([])
+
+        for block, emb in zip(blocks, embeddings):
+            summary_store.put(block.id, block, emb)
+
+    logger.info(
+        "StructMem: summarized %d blocks (window=%ds, scope=%s)",
+        len(blocks), time_window, scope,
+    )
+    return blocks
+
 
     async def _semantic_retrieve(
         self,

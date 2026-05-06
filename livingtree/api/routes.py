@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -442,3 +443,55 @@ def setup_routes(app: FastAPI) -> None:
                 {"id": "longcat-flash-chat", "object": "model"},
             ],
         }
+
+    # ═══ Scinet Service ═══
+
+    @app.get("/api/scinet/status")
+    async def scinet_status(request: Request):
+        from ..network.scinet_service import get_scinet
+        s = get_scinet().get_status()
+        return {
+            "running": s.running,
+            "port": s.port,
+            "pac_url": s.pac_url,
+            "uptime_seconds": s.uptime_seconds,
+            "total_requests": s.total_requests,
+            "success_requests": s.success_requests,
+            "failed_requests": s.failed_requests,
+            "bandwidth_mb": round(s.bandwidth_bytes / 1024 / 1024, 2),
+        }
+
+    @app.post("/api/scinet/start")
+    async def scinet_start(request: Request):
+        from ..network.scinet_service import get_scinet
+        s = await get_scinet().start()
+        return {"status": "started", "port": s.port, "pac_url": s.pac_url}
+
+    @app.post("/api/scinet/stop")
+    async def scinet_stop(request: Request):
+        from ..network.scinet_service import get_scinet
+        s = await get_scinet().stop()
+        return {"status": "stopped", "uptime_seconds": s.uptime_seconds, "total_requests": s.total_requests}
+
+    @app.get("/api/scinet/pac")
+    async def scinet_pac(request: Request):
+        from ..network.scinet_service import get_scinet
+        return Response(
+            content=get_scinet().generate_pac(),
+            media_type="application/x-ns-proxy-autoconfig",
+        )
+
+    @app.get("/api/scinet/test")
+    async def scinet_test(request: Request):
+        from ..network.scinet_service import get_scinet
+        import aiohttp, time
+        results = {}
+        for url in ["https://github.com", "https://huggingface.co", "https://stackoverflow.com"]:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    start = time.time()
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                        results[url] = f"OK ({resp.status}, {(time.time()-start)*1000:.0f}ms)"
+            except Exception as e:
+                results[url] = f"FAIL ({e})"
+        return results

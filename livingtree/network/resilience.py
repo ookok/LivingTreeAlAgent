@@ -92,11 +92,43 @@ def _get_proxy_from_pool() -> str | None:
         from .proxy_fetcher import get_proxy_pool
         pool = get_proxy_pool()
         proxy = pool.get_best()
-        if proxy and proxy.failure_count < 5:
+        if proxy and proxy.success_rate > 0.3:
             return proxy.url
     except Exception:
         pass
+
     return None
+
+
+# ═══ Overseas domain detection ═══
+
+_OVERSEAS_DOMAINS: set[str] | None = None
+
+
+def _is_overseas_domain(domain: str) -> bool:
+    """Check if domain needs acceleration (non-Chinese site)."""
+    cn_suffixes = ('.cn', '.com.cn', '.org.cn', '.edu.cn', '.gov.cn', '.net.cn')
+    if domain.endswith(cn_suffixes):
+        return False
+    local_hosts = ('localhost', '127.0.0.1', '::1', '0.0.0.0')
+    if domain in local_hosts:
+        return False
+    common_overseas = (
+        'github.com', 'githubusercontent.com', 'huggingface.co', 'docker.com',
+        'pypi.org', 'pythonhosted.org', 'npmjs.com', 'google.com', 'googleapis.com',
+        'gstatic.com', 'youtube.com', 'ytimg.com', 'ggpht.com', 'googlevideo.com',
+        'stackoverflow.com', 'stackexchange.com', 'serverfault.com', 'superuser.com',
+        'askubuntu.com', 'reddit.com', 'medium.com', 'dev.to', 'gitlab.com',
+        'arxiv.org', 'wikipedia.org', 'ycombinator.com', 'bitbucket.org',
+        'sourceforge.net', 'rubygems.org', 'crates.io', 'nodejs.org',
+        'maven.org', 'apache.org', 'android.com', 'python.org',
+        'pytorch.org', 'tensorflow.org', 'kubernetes.io', 'flutter.dev',
+        'dart.dev', 'golang.org', 'rust-lang.org', 'kernel.org', 'llvm.org',
+    )
+    if any(domain.endswith(d) or domain == d for d in common_overseas):
+        return True
+    return domain.endswith(('.com', '.org', '.net', '.io', '.dev', '.ai',
+                            '.app', '.co', '.me', '.info', '.us', '.eu'))
 
 
 def _get_proxy_dict() -> dict[str, str] | None:
@@ -169,8 +201,9 @@ async def resilient_fetch(
     max_retries: int = 3,
     use_mirror: bool = True,
     use_proxy: bool = True,
+    use_accelerator: bool = True,
 ) -> tuple[int, bytes, str]:
-    """Fetch a URL with automatic mirror/proxy/retry fallback.
+    """Fetch a URL with automatic accelerator/mirror/proxy/retry fallback.
 
     Returns (status_code, body_bytes, final_url_used).
     """
@@ -178,6 +211,29 @@ async def resilient_fetch(
 
     last_error = ""
     urls_to_try = [url]
+
+    # ── SiteAccelerator: attempt optimal IP routing for overseas domains ──
+    accelerated_url = None
+    if use_accelerator:
+        try:
+            from .site_accelerator import get_accelerator
+            accel = get_accelerator()
+            domain = urlparse(url).hostname or ""
+            if _is_overseas_domain(domain):
+                params = accel.get_optimal_connection_params(url)
+                if params.get("resolved_ip"):
+                    original_domain = params["original_domain"]
+                    accelerated_url = url.replace(
+                        f"://{original_domain}", f"://{params['resolved_ip']}"
+                    )
+                    urls_to_try.insert(0, accelerated_url)
+                    logger.debug(
+                        "Accelerating %s → %s (est. %.0fms)",
+                        original_domain, params["resolved_ip"],
+                        params.get("estimated_latency_ms", 0),
+                    )
+        except Exception as e:
+            logger.debug("SiteAccelerator lookup failed: %s", e)
 
     if use_mirror:
         mirror_url = rewrite_url(url)
@@ -189,25 +245,50 @@ async def resilient_fetch(
     for attempt in range(max_retries + 1):
         for try_url in urls_to_try:
             try:
+                current_headers = dict(headers or {})
+                # If using accelerated IP, set Host header
+                if accelerated_url and try_url == accelerated_url:
+                    original_host = urlparse(url).hostname or ""
+                    current_headers["Host"] = original_host
+
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(timeout),
                     proxy=proxy_dict.get("http://") if proxy_dict else None,
                     follow_redirects=True,
                 ) as client:
                     if method == "GET":
-                        resp = await client.get(try_url, headers=headers or {})
+                        resp = await client.get(try_url, headers=current_headers)
                     elif method == "POST":
-                        resp = await client.post(try_url, content=data, headers=headers or {})
+                        resp = await client.post(try_url, content=data, headers=current_headers)
                     else:
-                        resp = await client.request(method, try_url, content=data, headers=headers or {})
+                        resp = await client.request(method, try_url, content=data, headers=current_headers)
 
                     if resp.status_code < 500:
+                        # Report success to accelerator
+                        if accelerated_url and try_url == accelerated_url:
+                            try:
+                                domain = urlparse(url).hostname or ""
+                                params = accel.get_optimal_connection_params(url)
+                                if params.get("resolved_ip"):
+                                    accel._ip_pool.update_ip(domain, params["resolved_ip"],
+                                                           latency_ms=50, success=True)
+                            except Exception:
+                                pass
                         return resp.status_code, resp.content, try_url
 
                     last_error = f"HTTP {resp.status_code}"
 
             except httpx.ConnectError:
                 last_error = "Connection refused"
+                if accelerated_url and try_url == accelerated_url:
+                    try:
+                        domain = urlparse(url).hostname or ""
+                        params = accel.get_optimal_connection_params(url)
+                        if params.get("resolved_ip"):
+                            accel._ip_pool.update_ip(domain, params["resolved_ip"],
+                                                   latency_ms=999, success=False)
+                    except Exception:
+                        pass
             except httpx.ReadError:
                 last_error = "Read error"
             except asyncio.TimeoutError:
@@ -217,12 +298,7 @@ async def resilient_fetch(
 
             if attempt < max_retries:
                 delay = 2 ** attempt + random.uniform(0, 1)
-                logger.debug(f"Retry {attempt + 1}/{max_retries} for {try_url} in {delay:.1f}s: {last_error}")
                 await asyncio.sleep(delay)
-
-        # Next attempt: try with proxy if not already
-        if use_proxy and proxy_dict:
-            logger.debug(f"Attempt {attempt + 1}: adding proxy for {url}")
 
     return 0, b"", last_error
 

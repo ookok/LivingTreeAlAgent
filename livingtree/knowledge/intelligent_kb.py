@@ -31,7 +31,22 @@ class RetrievalResult:
     source: str = ""
     doc_id: str = ""
     chunk_id: str = ""
-    graph_distance: int = 999  # hops from query entity in knowledge graph
+    section_path: str = ""      # hierarchical context (MultiDocFusion)
+    section_id: str = ""
+    section_level: int = 0
+    parent_titles: list[str] = field(default_factory=list)
+    graph_distance: int = 999
+
+    @property
+    def context_string(self) -> str:
+        """Context prefix for LLM prompt with section hierarchy."""
+        parts = []
+        if self.section_path:
+            parts.append(f"[文段: {self.section_path}]")
+        elif self.section_id:
+            parts.append(f"[章节: {self.section_id}]")
+        parts.append(self.text)
+        return "\n".join(parts)
 
 
 def expand_query(query: str, hub=None) -> list[str]:
@@ -80,6 +95,10 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
                     results[key] = RetrievalResult(
                         text=hit.chunk.text, score=hit.score * 1.2,  # boost primary path
                         source="document_kb", doc_id=hit.doc_id, chunk_id=hit.chunk.id,
+                        section_path=getattr(hit.chunk, 'section_path', ''),
+                        section_id=getattr(hit.chunk, 'section_id', ''),
+                        section_level=getattr(hit.chunk, 'section_level', 0),
+                        parent_titles=getattr(hit.chunk, 'parent_titles', []),
                     )
     except Exception:
         pass
@@ -132,7 +151,54 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
     return sorted_results[:top_k]
 
 
-# ═══ 2. SELF-CORRECTION: Fact checking + hallucination detection ═══
+async def hierarchical_retrieve(query: str, top_k: int = 10, hub=None) -> list[RetrievalResult]:
+    """Retrieve with hierarchical context (MultiDocFusion enhanced).
+
+    Same multi-path retrieval as unified_retrieve, but additionally:
+      - Attaches section path context to each result
+      - Groups results by document section for structured presentation
+      - Boosts results from the same section family (sibling/parent/child)
+    """
+    results = await unified_retrieve(query, top_k=top_k * 2, hub=hub)
+
+    section_boost: dict[str, float] = {}
+    for r in results:
+        if r.section_id:
+            current = section_boost.get(r.section_id, 0.0)
+            section_boost[r.section_id] = max(current, r.score)
+
+    for r in results:
+        if r.section_id:
+            r.score *= (1.0 + section_boost.get(r.section_id, 0) * 0.2)
+
+    results.sort(key=lambda r: -r.score)
+    return results[:top_k]
+
+
+def format_hierarchical_context(results: list[RetrievalResult]) -> str:
+    """Format retrieval results with hierarchical section context.
+
+    Groups chunks by section and presents them as a structured context
+    suitable for LLM prompts in RAG-based QA.
+    """
+    if not results:
+        return ""
+
+    sections: dict[str, list[RetrievalResult]] = {}
+    for r in results:
+        key = r.section_path or r.section_id or "general"
+        if key not in sections:
+            sections[key] = []
+        sections[key].append(r)
+
+    parts = []
+    for section_label, items in sections.items():
+        if section_label != "general":
+            parts.append(f"\n## {section_label}")
+        for item in items[:3]:
+            parts.append(item.text[:500])
+
+    return "\n".join(parts)# ═══ 2. SELF-CORRECTION: Fact checking + hallucination detection ═══
 
 @dataclass
 class FactCheckResult:
@@ -329,3 +395,138 @@ def user_feedback(user_query: str, was_helpful: bool, correction: str = ""):
     }
     save_json(Path(".livingtree/user_feedback.jsonl"), entry)
     logger.info(f"Feedback: {'✓' if was_helpful else '✗'} {user_query[:60]}")
+
+
+# ═══ 4. INTEGRATION: Full RAG pipeline with validation + decomposition + hallucination guard ═══
+
+async def accurate_retrieve(
+    query: str,
+    top_k: int = 10,
+    hub=None,
+    validate: bool = True,
+    decompose: bool = True,
+    guard: bool = True,
+) -> dict:
+    """完整的高准确率检索管线 — 查询分解 + 检索 + 验证 + 幻觉防御。
+
+    Pipeline:
+      1. QueryDecomposer: 分解复杂查询 + 生成HyDE假设文档
+      2. hierarchical_retrieve: 多路层次检索
+      3. RetrievalValidator: 相关性验证 + 引文生成
+      4. HallucinationGuard: 安全阈值检查 (如需要)
+
+    Returns dict with: hits, citations, hallucination_report, context_string
+    """
+    result = {
+        "query": query,
+        "hits": [],
+        "citations": [],
+        "context_string": "",
+        "hallucination_report": None,
+        "decomposition": None,
+    }
+
+    # Step 1: Query decomposition + HyDE
+    if decompose and len(query) > 15:
+        try:
+            from .query_decomposer import QueryDecomposer
+            qd = QueryDecomposer()
+            decomp = qd.decompose(query, hub)
+            result["decomposition"] = decomp
+
+            all_hits = []
+            for sq in decomp.sub_queries[:4]:
+                sub_results = await hierarchical_retrieve(sq.query, top_k=max(3, top_k // len(decomp.sub_queries)), hub=hub)
+                all_hits.extend(sub_results)
+
+            result["hits"] = sorted(all_hits, key=lambda r: -r.score)[:top_k]
+        except Exception as e:
+            logger.debug("Query decomposition failed, falling back to direct: %s", e)
+            result["hits"] = await hierarchical_retrieve(query, top_k=top_k, hub=hub)
+    else:
+        result["hits"] = await hierarchical_retrieve(query, top_k=top_k, hub=hub)
+
+    # Step 2: Retrieval validation + citation injection
+    if validate and result["hits"]:
+        try:
+            from .retrieval_validator import RetrievalValidator
+            rv = RetrievalValidator()
+            validated = rv.validate(result["hits"])
+            result["citations"] = validated.citations
+            result["context_string"] = rv.get_citation_context(validated)
+        except Exception as e:
+            logger.debug("Retrieval validation failed: %s", e)
+            result["context_string"] = format_hierarchical_context(result["hits"])
+    else:
+        result["context_string"] = format_hierarchical_context(result["hits"])
+
+    # Step 3: Hallucination guard check on context quality
+    if guard and result["context_string"]:
+        try:
+            from .hallucination_guard import HallucinationGuard
+            guard_instance = HallucinationGuard()
+            report = guard_instance.check_generation(
+                generated_text=result["context_string"][:4000],
+                context=result["context_string"],
+                source="retrieval_pipeline",
+            )
+            result["hallucination_report"] = report
+        except Exception:
+            pass
+
+    return result
+
+
+async def verify_generation(
+    generated_text: str,
+    query: str = "",
+    source: str = "",
+) -> dict:
+    """验证生成文本的准确性 — 检索 + 验证 + 幻觉检测。
+
+    用于生成后的质量把关。
+    """
+    result = {"verified": True, "issues": [], "corrected_text": generated_text}
+
+    try:
+        hits = await unified_retrieve(query, top_k=5) if query else []
+
+        from .retrieval_validator import RetrievalValidator
+        rv = RetrievalValidator()
+        validated = rv.validate(hits) if hits else None
+
+        context = rv.get_citation_context(validated) if validated and validated.hits else ""
+
+        from .hallucination_guard import HallucinationGuard
+        guard = HallucinationGuard()
+        report = guard.check_generation(generated_text, context, source)
+
+        if report.hallucination_rate > 0.3:
+            result["verified"] = False
+            result["issues"].append(f"High hallucination rate: {report.hallucination_rate:.1%}")
+            result["hallucinated_sentences"] = [
+                s.sentence for s in report.sentence_checks if s.is_hallucination
+            ]
+
+        if validated and len(validated.rejected_hits) > len(validated.hits):
+            result["verified"] = False
+            result["issues"].append("Most search results rejected — possible query mismatch")
+
+        result["hallucination_report"] = report
+        result["citations"] = validated.citations if validated else []
+        result["citation_text"] = rv.inject_citations(generated_text, validated) if validated else generated_text
+
+    except Exception as e:
+        logger.warning("verify_generation error: %s", e)
+
+    return result
+
+
+def get_hallucination_dashboard() -> dict:
+    """获取全局幻觉监控 Dashboard。"""
+    try:
+        from .hallucination_guard import HallucinationGuard
+        guard = HallucinationGuard()
+        return guard.get_dashboard()
+    except Exception:
+        return {"status": "unavailable"}

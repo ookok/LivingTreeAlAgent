@@ -158,6 +158,83 @@ class MultimodalParser:
             await self.describe_images(doc)
         return doc
 
+    async def parse_with_primitives(self, file_path: str | Path) -> tuple[ParsedDocument, list]:
+        """Parse with DeepSeek Visual Primitives for spatial understanding.
+
+        Auto-detects if visual primitives would help (images/tables/scanned docs).
+        Returns (document, visual_regions).
+        """
+        doc = await self.parse(file_path)
+        regions = []
+
+        extractor = get_visual_extractor(self._api_key, self._base_url)
+        if not extractor.should_use_visual_primitive(doc):
+            return doc, regions
+
+        path = Path(file_path)
+        if path.suffix.lower() == ".pdf" and HAS_PYMUPDF:
+            try:
+                import fitz
+                pdf = fitz.open(str(path))
+                for page_num in range(min(len(pdf), 10)):  # Max 10 pages
+                    page = pdf[page_num]
+                    page_regions = await extractor.analyze_pdf_page(page, page_num)
+                    regions.extend(page_regions)
+                pdf.close()
+                logger.info("VisualPrimitives: analyzed %d pages → %d regions",
+                           min(len(pdf), 10), len(regions))
+            except Exception as e:
+                logger.debug("VisualPrimitives PDF: %s", e)
+        elif path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+            try:
+                img_data = path.read_bytes()
+                fmt = path.suffix.lstrip(".")
+                page_regions = await extractor.analyze(img_data, fmt)
+                regions.extend(page_regions)
+            except Exception as e:
+                logger.debug("VisualPrimitives image: %s", e)
+
+        # Enrich document with spatial information
+        if regions:
+            for r in regions:
+                if r.region_type == "table" and r.content:
+                    doc.tables.append(ParsedTable(
+                        index=len(doc.tables),
+                        page=r.page + 1,
+                        rows=[[r.content]],
+                        caption=f"Spatial table ({r.bbox[0]:.0f},{r.bbox[1]:.0f})",
+                    ))
+                elif r.region_type in ("stamp", "signature"):
+                    doc.metadata.setdefault("spatial_features", []).append(
+                        f"{r.region_type} at ({r.bbox[0]:.0f},{r.bbox[1]:.0f})"
+                    )
+
+        return doc, regions
+
+    async def parse_with_layout(self, file_path: str | Path) -> tuple[ParsedDocument, Any]:
+        """Parse with full MultiDocFusion layout analysis.
+
+        Returns (document, PageLayout list) for hierarchical chunking.
+        """
+        doc = await self.parse(file_path)
+        path = Path(file_path)
+
+        layouts = []
+        if path.suffix.lower() == ".pdf" and HAS_PYMUPDF:
+            try:
+                from ..knowledge.layout_analyzer import DocumentLayoutAnalyzer
+                analyzer = DocumentLayoutAnalyzer()
+                pdf = fitz.open(str(path))
+                for page_num in range(len(pdf)):
+                    page = pdf[page_num]
+                    layout = analyzer.extract_from_pymupdf(page, page_num + 1)
+                    layouts.append(layout)
+                pdf.close()
+            except Exception as e:
+                logger.debug("Layout analysis failed: %s", e)
+
+        return doc, layouts
+
     def format_for_llm(self, doc: ParsedDocument, max_chars: int = 8000) -> str:
         parts = [f"# Document: {doc.file_path}", f"Pages: {doc.total_pages}\n"]
 
@@ -321,3 +398,203 @@ class MultimodalParser:
         except Exception:
             pass
         return ""
+
+
+# ═══ Visual Primitives — DeepSeek spatial reasoning integration ═══
+
+@dataclass
+class VisualRegion:
+    """A spatially-anchored document region extracted via visual primitives."""
+    region_type: str       # "table", "text", "stamp", "signature", "chart", "title"
+    bbox: tuple[float, float, float, float]  # (x0, y0, x1, y1) normalized 0-1
+    content: str = ""      # extracted text content
+    confidence: float = 0.8
+    page: int = 0
+
+
+class VisualPrimitiveExtractor:
+    """Use DeepSeek-V4-Flash visual primitives for spatial document understanding.
+
+    Core concept from DeepSeek's "Thinking with Visual Primitives" (2026.4.30):
+      - Model outputs bounding box coordinates alongside content
+      - Points and bounding boxes become minimal thinking units
+      - Links abstract language logic to concrete spatial positions
+
+    Usage:
+        vpe = VisualPrimitiveExtractor(api_key, base_url)
+        regions = await vpe.analyze(image_data)
+        for r in regions:
+            print(f"{r.region_type} at {r.bbox}: {r.content[:100]}")
+    """
+
+    VISUAL_PRIMITIVES_PROMPT = """Analyze this document image with spatial awareness.
+For each distinct region, output JSON with bounding box and content:
+
+{
+  "regions": [
+    {
+      "type": "title|text|table|stamp|signature|chart|header|footer",
+      "bbox": [x0, y0, x1, y1],  // normalized 0.0-1.0, top-left origin
+      "content": "extracted text or description",
+      "confidence": 0.0-1.0
+    }
+  ],
+  "layout": "single_column|two_column|mixed",
+  "has_stamp": false,
+  "has_table": false,
+  "orientation": "portrait|landscape"
+}
+
+Important:
+- Use EXACT bounding box coordinates based on what you see
+- For stamps/seals: mark type="stamp", extract any readable text
+- For tables: mark type="table", extract headers + data
+- For signatures: mark type="signature"
+- Normalize all coordinates to 0.0-1.0 range
+Return ONLY the JSON, no other text."""
+
+    def __init__(self, api_key: str = "", base_url: str = ""):
+        self._api_key = api_key
+        self._base_url = base_url or "https://api.deepseek.com"
+
+    def is_available(self) -> bool:
+        return bool(self._api_key)
+
+    async def analyze(self, image_data: bytes, image_format: str = "png",
+                      page_number: int = 0) -> list[VisualRegion]:
+        """Analyze an image/document page using visual primitives.
+
+        Args:
+            image_data: raw image bytes
+            image_format: "png", "jpeg", "webp"
+            page_number: page index for multi-page documents
+
+        Returns:
+            List of VisualRegion objects with spatial coordinates
+        """
+        if not self._api_key:
+            return []
+
+        import base64
+        b64 = base64.b64encode(image_data).decode()
+
+        payload = {
+            "model": "deepseek-v4-flash",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": self.VISUAL_PRIMITIVES_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:image/{image_format};base64,{b64}"}},
+                ],
+            }],
+            "temperature": 0.0,
+            "max_tokens": 4096,
+        }
+
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self._base_url}/v1/chat/completions",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        text = data["choices"][0]["message"]["content"]
+                        return self._parse_regions(text, page_number)
+        except Exception as e:
+            logger.debug("VisualPrimitive analyze: %s", e)
+
+        return []
+
+    async def analyze_pdf_page(self, fitz_page, page_number: int = 0,
+                              dpi: int = 200) -> list[VisualRegion]:
+        """Analyze a single PDF page via visual primitives.
+
+        Renders the page to an image, then sends to DeepSeek-V4-Flash.
+        """
+        if not self._api_key:
+            return []
+
+        try:
+            pix = fitz_page.get_pixmap(dpi=dpi)
+            regions = await self.analyze(pix.tobytes(), "png", page_number)
+
+            # Map normalized coordinates to page coordinates
+            page_rect = fitz_page.rect
+            for r in regions:
+                r.bbox = (
+                    r.bbox[0] * page_rect.width,
+                    r.bbox[1] * page_rect.height,
+                    r.bbox[2] * page_rect.width,
+                    r.bbox[3] * page_rect.height,
+                )
+            return regions
+        except Exception as e:
+            logger.debug("VisualPrimitive PDF: %s", e)
+            return []
+
+    def _parse_regions(self, text: str, page: int) -> list[VisualRegion]:
+        """Parse LLM response into VisualRegion list."""
+        import json
+        try:
+            if "{" in text:
+                text = text[text.index("{"):text.rindex("}") + 1]
+            data = json.loads(text)
+            regions_data = data.get("regions", [])
+
+            return [
+                VisualRegion(
+                    region_type=r.get("type", "text"),
+                    bbox=tuple(r.get("bbox", [0, 0, 1, 1])),
+                    content=r.get("content", "")[:500],
+                    confidence=r.get("confidence", 0.8),
+                    page=page,
+                )
+                for r in regions_data
+            ]
+        except Exception:
+            return []
+
+    def should_use_visual_primitive(self, doc: ParsedDocument) -> bool:
+        if not doc:
+            return False
+        if doc.images:
+            return True
+        if doc.tables:
+            return True
+        return False
+
+        # Has images that need spatial understanding
+        if doc.images and len(doc.images) > 0:
+            return True
+
+        # Has tables (spatial structure)
+        if doc.tables and len(doc.tables) > 0:
+            return True
+
+        # Scanned document indicator: total_pages > 0 but no clear text
+        if doc.total_pages > 0 and (not doc.text or len(doc.text) < 200):
+            return True
+
+        return False
+
+
+def get_visual_extractor(api_key: str = "", base_url: str = "") -> VisualPrimitiveExtractor:
+    """Auto-configure visual primitive extractor from config."""
+    if not api_key:
+        try:
+            from ..config import get_config
+            config = get_config()
+            api_key = config.deepseek_api_key or ""
+            base_url = config.deepseek_base_url or "https://api.deepseek.com"
+        except Exception:
+            pass
+
+    return VisualPrimitiveExtractor(api_key=api_key, base_url=base_url)
+

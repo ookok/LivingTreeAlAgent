@@ -135,6 +135,34 @@ COMMANDS = {
         "actions": ["peers", "connect", "login", "debate", "branch", "profile", "prefer", "binding", "gateway", "snapshot"],
         "fallback": "告诉我要做什么，比如：'查看在线用户'、'发起辩论'、'切换到对话分支'、'锁定模型'",
     },
+    "network": {
+        "icon": "🌐",
+        "title": "网络加速",
+        "description": "科学上网代理服务 /scinet — 加速 GitHub/HuggingFace/Google/StackOverflow 等海外站点 (学习用途)",
+        "examples": [
+            ("/scinet start", "启动代理服务 (端口7890)"),
+            ("/scinet stop", "停止代理服务"),
+            ("/scinet status", "查看服务状态"),
+            ("/scinet test", "测试海外站点连通性"),
+            ("/scinet pac", "获取PAC自动配置URL"),
+        ],
+        "actions": ["start", "stop", "status", "test", "pac"],
+        "fallback": "使用 /scinet start 启动代理服务, /scinet stop 停止, /scinet status 查看状态",
+    },
+    "seed": {
+        "icon": "🌱",
+        "title": "角色初始化",
+        "description": "一键配置 — 选择你的职业角色，自动设置所有模块",
+        "examples": [
+            ("/seed eia_engineer", "环评工程师 — 自动注册政府公告站"),
+            ("/seed env_engineer", "环保工程师 — 配置设备+监测提醒"),
+            ("/seed equipment_supplier", "设备供应商 — 招标机会追踪"),
+            ("/seed monitoring_company", "监测公司 — 验收+运维机会"),
+            ("/seed consultant", "咨询顾问 — 政策合规追踪"),
+        ],
+        "actions": ["plant", "list", "guide"],
+        "fallback": "使用 /seed <角色名> 一键配置，角色: eia_engineer, env_engineer, equipment_supplier, monitoring_company, consultant",
+    },
 }
 
 COMMAND_LIST = list(COMMANDS.keys())
@@ -212,6 +240,8 @@ def detect_intent(text: str) -> dict[str, Any]:
             "check": ["检查", "状态", "诊断", "质量", "审计", "安全", "来源", "来源追溯", "合规", "费用", "统计", "错误"],
             "docs": ["报告", "生成", "文档", "批量", "项目", "模板", "收集数据", "数据收集"],
             "team": ["节点", "在线", "同事", "辩论", "用户", "偏好", "模型", "锁定", "分支", "邀请", "消息", "通知"],
+            "network": ["scinet", "科学上网", "代理", "加速", "proxy", "vpn", "翻墙", "pac", "网络加速"],
+            "seed": ["seed", "角色", "初始化", "配置", "设置", "setup", "wizard", "向导", "环评", "工程师"],
         }
 
         for kw in keywords.get(cmd_name, []):

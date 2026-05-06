@@ -45,6 +45,8 @@ class LivingTreeTuiApp(ToadApp):
         Binding("ctrl+q", "quit", t("bind.quit")),
         Binding("f1", "show_help", t("bind.help")),
         Binding("ctrl+l", "toggle_lang", "语言/Lang"),
+        Binding("ctrl+g", "push_goal_planner", "目标"),
+        Binding("ctrl+a", "push_dashboard", "仪表盘"),
         Binding("enter", "activate_card", t("bind.enter"), show=False),
     ]
 
@@ -100,6 +102,8 @@ class LivingTreeTuiApp(ToadApp):
             "code": CodeScreen,
             "docs": KnowledgeScreen,
             "tools": ToolsScreen,
+            "goal-planner": lambda: self._make_screen("goal_planner"),
+            "agent-dashboard": lambda: self._make_screen("agent_dashboard"),
             "settings": lambda: ToadSettings(),
         })
         self.install_screen(HelpScreen(), "help")
@@ -190,6 +194,33 @@ class LivingTreeTuiApp(ToadApp):
             self.notify(t("app.booting"), timeout=2, severity="warning")
             return
         self.push_screen("tools")
+
+    def action_push_goal_planner(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("goal-planner")
+
+    def action_push_dashboard(self) -> None:
+        if not self._boot_done:
+            self.notify(t("app.booting"), timeout=2, severity="warning")
+            return
+        self.push_screen("agent-dashboard")
+
+    def _make_screen(self, name: str):
+        if name == "goal_planner":
+            from .screens.goal_planner import GoalPlannerScreen
+            screen = GoalPlannerScreen()
+            if hasattr(self, '_hub'):
+                screen.set_hub(self._hub)
+            return screen
+        elif name == "agent_dashboard":
+            from .screens.agent_dashboard import AgentDashboardScreen
+            screen = AgentDashboardScreen()
+            if hasattr(self, '_hub'):
+                screen.set_hub(self._hub)
+            return screen
+        return None
 
     def action_push_settings(self) -> None:
         if not self._boot_done:

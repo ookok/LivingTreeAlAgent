@@ -23,6 +23,7 @@ from .settings import (
 from .secrets import SecretVault, get_secret_vault
 from .config_security import sanitize_project_config, validate_project_config, is_safe_config_key
 from .config_editor import ConfigSchemaEditor, ConfigField
+from .project_scaffold import ProjectScaffold, ProjectProfile, ProjectSkills, PROJECT_SCAFFOLD
 
 __all__ = [
     "LTAIConfig",
@@ -45,4 +46,8 @@ __all__ = [
     "is_safe_config_key",
     "ConfigSchemaEditor",
     "ConfigField",
+    "ProjectScaffold",
+    "ProjectProfile",
+    "ProjectSkills",
+    "PROJECT_SCAFFOLD",
 ]

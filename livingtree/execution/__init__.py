@@ -16,6 +16,9 @@ from .rlm import RLMRunner, RLMSplitter, RLMTask, RLMResult, RLMAggregate
 from .side_git import SideGit, TurnSnapshot
 from .sub_agent_roles import SubAgentRoles, RoleTask, RoleDefinition, IMPLEMENTER_ROLE, VERIFIER_ROLE
 from .session_manager import SessionManager, SessionState
+from .batch_executor import BatchExecutor, BatchMode, BatchTask, create_batch_executor
+from .continuation import ContinuationEngine, ExecutionSnapshot, LLMContextSnapshot, CONTINUATION_ENGINE, get_continuation_engine
+from .react_executor import ReactExecutor, ReactConfig, ReactTrajectory, ReactStep, ReactAction, ExecutionMode, route_execution, get_react_executor
 
 __all__ = [
     "TaskPlanner", "TaskSpec", "SubTask",
@@ -31,4 +34,8 @@ __all__ = [
     "SideGit", "TurnSnapshot",
     "SubAgentRoles", "RoleTask", "RoleDefinition", "IMPLEMENTER_ROLE", "VERIFIER_ROLE",
     "SessionManager", "SessionState",
+    "BatchExecutor", "BatchMode", "BatchTask", "create_batch_executor",
+    "ContinuationEngine", "ExecutionSnapshot", "LLMContextSnapshot", "CONTINUATION_ENGINE", "get_continuation_engine",
+    "ReactExecutor", "ReactConfig", "ReactTrajectory", "ReactStep", "ReactAction",
+    "ExecutionMode", "route_execution", "get_react_executor",
 ]

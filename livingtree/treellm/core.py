@@ -33,6 +33,7 @@ from typing import Any, AsyncIterator
 
 from .classifier import TinyClassifier
 from .providers import Provider, ProviderResult, create_deepseek_provider, create_longcat_provider
+from .holistic_election import get_election
 
 
 @dataclass
@@ -105,7 +106,7 @@ class TreeLLM:
         self._elected = ""
         return ""
 
-    async def smart_route(self, prompt: str, candidates: list[str] | None = None) -> str:
+    async def smart_route(self, prompt: str, candidates: list[str] | None = None, task_type: str = "general") -> str:
         names = candidates or list(self._providers.keys())
         alive = []
         for name in names:
@@ -142,6 +143,246 @@ class TreeLLM:
         # Step 3: Fallback to best success rate
         best = max(alive, key=lambda n: self._stats.get(n, RouterStats(n)).success_rate)
         return best
+
+    # ── Layered Dynamic Routing (Pattern 3) ──
+    async def route_layered(
+        self, query: str, candidates: list[str] | None = None,
+        max_layers: int = 3, early_stop_threshold: float = 0.85,
+        top_k_per_layer: int = 3, task_type: str = "general",
+    ) -> dict[str, Any]:
+        """Layered routing inspired by RouteMoA (Pattern 3) with Output Aggregation (Pattern 6).
+
+        Returns a dict with provider, result, layer info, scores, and cost accounting.
+        """
+        # Prepare initial candidate list
+        layer1_candidates = list(candidates) if candidates else list(self._providers.keys())
+        if not layer1_candidates:
+            return {
+                "provider": "",
+                "result": None,
+                "layers_used": 0,
+                "candidates_per_layer": {"layer1": [], "layer2": [], "layer3": []},
+                "scores": {
+                    "embedding_score": 0.0,
+                    "election_score": 0.0,
+                    "self_assessment": 0.0,
+                    "final_decision": "fallback",
+                },
+                "cost_saved": "No providers available",
+            }
+
+        # Layer 1: Embedding pre-filter (optional)
+        layer1_candidates_final = list(layer1_candidates)
+        embedding_score = 0.0
+        try:
+            scorer_mod = __import__(".embedding_scorer", globals(), locals(), ["get_embedding_scorer"], 0)
+            get_embedding_scorer = getattr(scorer_mod, "get_embedding_scorer", None)
+            if get_embedding_scorer:
+                scorer = get_embedding_scorer()
+                if scorer is not None and hasattr(scorer, "score_and_filter"):
+                    scored = scorer.score_and_filter(query, layer1_candidates_final)
+                    if isinstance(scored, list) and scored:
+                        # Expect [(cand, score), ...] or [cand, ...]
+                        if scored and isinstance(scored[0], tuple) and len(scored[0]) == 2:
+                            scored_sorted = sorted(scored, key=lambda t: float(t[1]), reverse=True)
+                            layer1_candidates_final = [p for p, s in scored_sorted[: max(1, min(len(scored_sorted), top_k_per_layer * 2))]]
+                            embedding_score = float(scored_sorted[0][1]) if scored_sorted else 0.0
+                        else:
+                            layer1_candidates_final = list(scored[: max(0, min(len(scored), top_k_per_layer * 2))])
+        except Exception:
+            pass
+        layer1_candidates_final = list(dict.fromkeys(layer1_candidates_final))
+
+        # ── Layer 1.5: Foresight integration — lightweight probe (Pattern 4/5) ──
+        foresight_insights: dict[str, Any] = {}
+        if layer1_candidates_final and len(layer1_candidates_final) > 3:
+            try:
+                from .foresight_gate import get_foresight_gate
+                gate = get_foresight_gate()
+                decision = gate.assess(query, task_type, [], "normal")
+                if getattr(decision, "should_simulate", False) and getattr(decision, "depth", 0) >= 2:
+                    # Run lightweight probes on top-2 candidates using embedding scorer
+                    try:
+                        from .embedding_scorer import get_embedding_scorer
+                        scorer = get_embedding_scorer()
+                        probe_results = scorer.score_and_filter(query, getattr(scorer, "_profiles", {}), top_k=2)
+                        foresight_insights = {
+                            "simulated": True,
+                            "top_probes": [(n, round(s, 3)) for n, s in probe_results],
+                            "depth": getattr(decision, "depth", 0),
+                            "reason": getattr(decision, "reason", ""),
+                        }
+                        try:
+                            from loguru import logger as _logger
+                            _logger.debug(f"Layer 1.5 probes: {foresight_insights['top_probes']}")
+                        except Exception:
+                            pass
+                        # Boost layer1_candidates_final with probe-preferred names
+                        probe_names = {n for n, _ in probe_results}
+                        for name in probe_names:
+                            if name not in layer1_candidates_final and len(layer1_candidates_final) < top_k_per_layer * 3:
+                                layer1_candidates_final.append(name)
+                    except ImportError:
+                        pass
+            except ImportError:
+                pass
+        # Layer 2: Election scoring + alive-ping
+        layer2_candidates: list[str] = []
+        election_score = 0.0
+        try:
+            layer2_provider_scores = []
+            election = get_election()
+            try:
+                # Historical call style from elect(): score_providers(names, providers, free_models)
+                scores = election.score_providers(layer1_candidates_final, self._providers, [])
+                if scores:
+                    if isinstance(scores, dict):
+                        layer2_provider_scores = [(k, float(v)) for k, v in scores.items()]
+                    else:
+                        layer2_provider_scores = [(p, float(s)) for p, s in scores]
+            except Exception:
+                layer2_provider_scores = []
+            if layer2_provider_scores:
+                layer2_provider_scores.sort(key=lambda t: t[1], reverse=True)
+                top2 = layer2_provider_scores[: max(1, min(len(layer2_provider_scores), top_k_per_layer))]
+                # Ping each candidate to confirm alive
+                for prov, sc in top2:
+                    alive = True
+                    try:
+                        if hasattr(election, "ping"):
+                            alive = election.ping(prov)
+                    except Exception:
+                        alive = False
+                    if alive:
+                        layer2_candidates.append(prov)
+                layer2_candidates = list(dict.fromkeys(layer2_candidates))
+                if top2:
+                    election_score = float(top2[0][1])
+        except Exception:
+            layer2_candidates = layer1_candidates_final[:top_k_per_layer]
+
+        # Layer 3: Inference + self-assessment
+        final_provider = None
+        final_result = None
+        layers_used = 2 if layer2_candidates else 1
+        self_assessment_score = 0.0
+        if layer2_candidates:
+            for candidate in layer2_candidates[:top_k_per_layer]:
+                try:
+                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)  # query routed to provider
+                    # Normalize to text
+                    text = None
+                    if isinstance(res, ProviderResult):
+                        text = getattr(res, "text", None) or getattr(res, "content", None)
+                    elif isinstance(res, dict):
+                        text = res.get("text") or res.get("content") or res.get("output")
+                    elif isinstance(res, str):
+                        text = res
+                    else:
+                        text = str(res)
+
+                    # Self-assessment
+                    assessment = None
+                    if 'election' in locals():
+                        try:
+                            assessment = election.self_assess(text)
+                        except Exception:
+                            assessment = None
+                    if isinstance(assessment, (int, float)):
+                        sa_score = float(assessment)
+                    elif isinstance(assessment, dict) and 'score' in assessment:
+                        try:
+                            sa_score = float(assessment.get('score', 0.0))
+                        except Exception:
+                            sa_score = 0.0
+                    else:
+                        sa_score = 0.0
+                    self_assessment_score = max(self_assessment_score, sa_score)
+                    if sa_score > early_stop_threshold:
+                        final_provider = candidate
+                        final_result = res
+                        layers_used = 3
+                        break
+                except Exception:
+                    continue
+        # Fallback if nothing stopped early: pick best by election score or first layer2 candidate
+        if final_provider is None:
+            if layer2_candidates:
+                final_provider = layer2_candidates[0]
+                final_result = await self.chat([{"role": "user", "content": query}], provider=final_provider)
+                layers_used = 3
+            elif layer1_candidates_final:
+                final_provider = layer1_candidates_final[0]
+                final_result = await self.chat([], provider=final_provider)
+                layers_used = 1
+
+        return {
+            "provider": final_provider or "",
+            "result": final_result,
+            "layers_used": layers_used,
+            "candidates_per_layer": {
+                "layer1": layer1_candidates_final,
+                "layer2": layer2_candidates,
+                "layer3": [final_provider] if final_provider else [],
+            },
+            "scores": {
+                "embedding_score": embedding_score,
+                "election_score": election_score,
+                "self_assessment": float(self_assessment_score),
+                "final_decision": "early_stop" if final_result and self_assessment_score > early_stop_threshold else "fallback",
+            },
+            "cost_saved": "Used layering providers (embedded scoring + alive ping)",
+            "foresight": foresight_insights,
+        }
+
+    def route_layered_sync(self, query: str, **kwargs) -> dict[str, Any]:
+        """Synchronous wrapper for route_layered."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(self.route_layered(query, **kwargs))
+
+    # ── Output Aggregation (Pattern 6) ──
+    def aggregate_outputs(self, outputs: list[str], scores: list[float] | None = None,
+                          method: str = "best") -> str:
+        if not outputs:
+            return ""
+        if scores is None or len(scores) != len(outputs):
+            scores = [0.0 for _ in outputs]
+
+        if method == "longest":
+            # Return the longest string
+            return max(outputs, key=lambda s: len(s))
+        if method == "consensus" and len(outputs) >= 2:
+            # Find pairwise consensus with Jaccard similarity > 0.5
+            from math import ceil
+            best_candidate = outputs[0]
+            best_score = scores[0]
+            for i in range(len(outputs)):
+                for j in range(i + 1, len(outputs)):
+                    sim = self._jaccard_similarity(outputs[i], outputs[j])
+                    if sim > 0.5 and scores[i] > best_score:
+                        best_candidate = outputs[i]
+                        best_score = scores[i]
+                    if sim > 0.5 and scores[j] > best_score:
+                        best_candidate = outputs[j]
+                        best_score = scores[j]
+            return best_candidate
+        # Default: best by score, or first if scores unavailable
+        if scores:
+            idx = int(max(range(len(scores)), key=lambda i: scores[i]))
+            return outputs[idx]
+        return max(outputs, key=lambda s: len(s))
+
+    @staticmethod
+    def _jaccard_similarity(text_a: str, text_b: str) -> float:
+        """Simple word-level Jaccard similarity."""
+        if not text_a or not text_b:
+            return 0.0
+        set_a = set(text_a.lower().split())
+        set_b = set(text_b.lower().split())
+        if not set_a or not set_b:
+            return 0.0
+        return len(set_a & set_b) / len(set_a | set_b)
 
     # ── Chat ──
 

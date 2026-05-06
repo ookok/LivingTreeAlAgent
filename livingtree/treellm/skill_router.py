@@ -297,6 +297,10 @@ class SkillRouter:
             "xiaomi": ("小米 MiMo V2 Flash 付费模型", "多模态、图像理解"),
             "aliyun": ("阿里云 Qwen-Turbo/Max 付费模型", "企业级分析、长文本"),
             "dmxapi": ("DMXAPI GPT-5-Mini", "通用对话、代码辅助"),
+            "modelscope": ("ModelScope 魔搭社区免费推理", "开源模型推理、Qwen/DeepSeek/Llama"),
+            "bailing": ("蚂蚁百灵 Baichuan4", "企业级LLM、Baichuan4旗舰推理"),
+            "stepfun": ("阶跃星辰 Step-2", "深度推理、16K长上下文、多模态"),
+            "internlm": ("书生 InternLM3", "上海AI Lab、中文推理强、长上下文"),
             "opencode-serve": ("本地 OpenCode Serve", "零延迟、离线可用"),
         }
         for name, (desc, caps) in providers.items():

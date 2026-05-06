@@ -16,6 +16,7 @@ import json
 import math
 import time
 from dataclasses import dataclass, field
+import re
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,8 @@ WEIGHTS = {
     "cache": 0.10,
     "sticky": 0.10,       # Session binding: prefer same model
 }
+
+# NOTE: Pattern 5 dynamic weights will be used via get_dynamic_weights(task_type).
 
 # Provider capability profiles: which tasks each model excels at
 PROVIDER_CAPABILITIES: dict[str, list[str]] = {
@@ -55,7 +58,20 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "nvidia-pro": ["推理", "代码", "综合", "reasoning", "code", "comprehensive"],
     "nvidia-flash": ["对话", "摘要", "翻译", "chat", "summary", "translate"],
     "nvidia-small": ["分类", "简单", "快速", "classify", "simple", "fast"],
+    # Pattern 5: extra multiplier for multimodal capabilities (model scope)
+    "modelscope": ["推理", "代码", "开源", "reasoning", "code", "open source"],
+    "bailing": ["推理", "企业", "对话", "分析", "reasoning", "enterprise", "chat", "analysis"],
+    "stepfun": ["推理", "深度", "长文本", "多模态", "reasoning", "deep", "long-context", "multimodal"],
+    "internlm": ["推理", "中文", "学术", "代码", "reasoning", "chinese", "academic", "code"],
 }
+
+
+@dataclass
+class JudgeResult:
+    name: str
+    self_score: float = 0.0
+    cross_score: float = 0.0
+    combined: float = 0.0
 
 
 @dataclass
@@ -69,6 +85,9 @@ class ProviderScore:
     success_rate: float = 0.0
     capability_match: float = 0.0
     last_used: float = 0.0
+    # Pattern 5: dynamic per-1k-cost and latency tracking
+    cost_yuan_per_1k: float = 0.0
+    avg_latency_ms: float = 0.0
 
 
 @dataclass
@@ -132,6 +151,34 @@ class RouterStats:
         )
         return weighted / sum((i + 1) / len(self.recent_successes) for i in range(len(self.recent_successes)))
 
+    def project_future(self, cost_per_1k: float = 0.0, task_complexity: float = 0.5) -> dict[str, Any]:
+        """World model abstraction: project future state if this provider is chosen.
+        
+        Returns expected: latency, quality, cost_yuan, risk score.
+        Used by foresight gate to preview outcomes before committing.
+        """
+        expected_latency = self.avg_latency_ms * (1.0 + task_complexity * 0.5)
+        expected_quality = self.success_rate * (1.0 - task_complexity * 0.2)
+        expected_cost = cost_per_1k * 4.0  # assume ~4k tokens per call
+
+        risk = 0.0
+        if self.success_rate < 0.5:
+            risk += 0.3
+        if expected_latency > 5000:
+            risk += 0.2
+        if self.failures > self.successes:
+            risk += 0.3
+        
+        return {
+            "provider": self.provider,
+            "expected_latency_ms": round(expected_latency, 1),
+            "expected_quality": round(expected_quality, 3),
+            "estimated_cost_yuan": round(expected_cost, 4),
+            "confidence": min(1.0, self.calls / 20.0),  # more calls = more confident
+            "risk_score": min(1.0, risk),
+            "recommendation": "strong" if expected_quality > 0.8 and risk < 0.3 else "cautious" if expected_quality > 0.5 else "avoid",
+        }
+
 
 class HolisticElection:
     """Multi-dimensional scoring election engine."""
@@ -151,6 +198,7 @@ class HolisticElection:
         providers: dict[str, Any],
         free_models: list[str],
         query: str = "",
+        task_type: str = "general",
     ) -> list[ProviderScore]:
         """Score all candidates holistically. Returns ranked list."""
         results = []
@@ -229,11 +277,27 @@ class HolisticElection:
             except Exception:
                 score.scores["sticky"] = 0.0
 
-            # Weighted total
+            # Apply dynamic weights based on task_type (Pattern 5)
+            weights = get_dynamic_weights(task_type)
+            # ensure all keys exist in scores
+            for k in weights:
+                score.scores.setdefault(k, 0.0)
+            # Weighted total using dynamic weights
             score.total = sum(
-                WEIGHTS[k] * score.scores.get(k, 0)
-                for k in WEIGHTS
+                weights[k] * score.scores.get(k, 0)
+                for k in weights
             )
+            # Pattern 5: expose latency and cost currencies for later analysis
+            try:
+                score.avg_latency_ms = stats.avg_latency_ms
+            except Exception:
+                score.avg_latency_ms = 0.0
+            try:
+                base_cost = 5.0
+                scale = max(0.0, min(1.0, score.scores.get("cost", 0.0)))
+                score.cost_yuan_per_1k = base_cost * (1.0 - scale)
+            except Exception:
+                score.cost_yuan_per_1k = 0.0
             alive_scores.append(score)
 
         alive_scores.sort(key=lambda s: -s.total)
@@ -276,6 +340,19 @@ class HolisticElection:
                 best = name
         return best or ""
 
+    def project_all(self, candidates: list[str], task_complexity: float = 0.5) -> dict[str, dict]:
+        """World model: project future states for all candidates. Returns sorted by recommendation."""
+        projections: dict[str, dict] = {}
+        for name in candidates:
+            stats = self.get_stats(name)
+            # rough cost estimate: try to use a small default, allow override if internal list exists
+            cost = 0.003 if getattr(self, "_free_set", None) and name in self._free_set else 0.02
+            proj = stats.project_future(cost_per_1k=cost, task_complexity=task_complexity)
+            projections[name] = proj
+        # Sort by recommendation priority then by higher expected quality
+        order = {"strong": 0, "cautious": 1, "avoid": 2}
+        return dict(sorted(projections.items(), key=lambda x: (order.get(x[1]["recommendation"], 3), -x[1].get("expected_quality", 0))))
+
     def get_all_stats(self) -> dict:
         return {
             name: {
@@ -307,6 +384,108 @@ class HolisticElection:
         except Exception:
             pass
 
+    # ===== Pattern 2: Mixture of Judges (self and cross assessments) =====
+    def detect_task_type(self, query: str) -> str:
+        """Heuristic mapping from user query to task type.
+        Returns one of: code, reasoning, search, multimodal, chat, general
+        """
+        if not query:
+            return "general"
+        q = query.lower()
+        mapping = {
+            ("代码", "代码片段", "实现", "写"): "code",
+            ("推理", "分析", "reasoning", "分析"): "reasoning",
+            ("搜索", "查找", "find", "search"): "search",
+            ("图像", "图片", "image", "multimodal"): "multimodal",
+            ("什么", "问", "问题", "问答"): "chat",
+        }
+        for keys, t in mapping.items():
+            for k in keys:
+                if k in q:
+                    return t
+        return "general"
+
+    def self_assess(self, output_text: str, confidence_keywords: list[str] | None = None) -> float:
+        """Heuristic self-assessment of an output without invoking LLMs.
+        Returns a float in [0,1]."""
+        if confidence_keywords is None:
+            confidence_keywords = [
+                "confident", "certain", "definitely", "clearly", "sure", "确定", "明确", "肯定"
+            ]
+        hedging = ["maybe", "possibly", "perhaps", "might", "可能", "也许", "大概"]
+        uncertainty = ["I don't know", "I'm not sure", "我不知道", "不确定"]
+
+        score = 0.0
+        if output_text and len(output_text) > 20:
+            score += 0.3
+        low = output_text.lower()
+        if any(k in low for k in confidence_keywords):
+            score += 0.2
+        if any(h in low for h in hedging):
+            score -= 0.1
+        if not any(u in output_text for u in uncertainty):
+            score += 0.1
+        # Clamp
+        if score < 0.0:
+            score = 0.0
+        if score > 1.0:
+            score = 1.0
+        return float(score)
+
+    def cross_assess(self, evaluator_output: str, target_output: str) -> float:
+        """Quick cross-assessment using Jaccard similarity on word sets (lowercased, >2 chars)."""
+        def words(s: str) -> set[str]:
+            if not s:
+                return set()
+            # extract words with length > 2
+            toks = re.findall(r"\b[a-zA-Z0-9一-龟]+\b", s.lower())
+            return {t for t in toks if len(t) > 2}
+
+        s1 = words(evaluator_output or "")
+        s2 = words(target_output or "")
+        if not s1 and not s2:
+            return 0.0
+        inter = len(s1 & s2)
+        union = len(s1 | s2)
+        return inter / max(union, 1)
+
+    def judge_scores(self, candidates: list[str], layer_outputs: dict[str, str]) -> dict[str, float]:
+        """Compute judge scores for each candidate based on self and cross assessments.
+        Returns mapping candidate -> combined score."""
+        scores: dict[str, float] = {}
+        # Top-level evaluator: pick best candidate by self-assessment
+        top_candidate = None
+        top_self = -1.0
+        self_outputs = {c: layer_outputs.get(c, "") for c in candidates}
+        for c, out in self_outputs.items():
+            s = self.self_assess(out)
+            if s > top_self:
+                top_self = s
+                top_candidate = c
+        # Compute cross scores relative to top evaluator if available
+        for cname in candidates:
+            own_out = self_outputs.get(cname, "")
+            self_score = self.self_assess(own_out)
+            cross_scores = []
+            for other in candidates:
+                if other == cname:
+                    continue
+                cross_scores.append(self.cross_assess(self_outputs.get(other, ""), own_out))
+            cross_avg = sum(cross_scores) / max(len(cross_scores), 1) if cross_scores else 0.0
+            combined = (self_score + cross_avg) / 2.0
+            scores[cname] = combined
+        return scores
+
+    def apply_judge_correction(self, provider_scores: list[ProviderScore], judge_scores: dict[str, float]) -> list[ProviderScore]:
+        """Blend provider scores with judge scores (0.7:0.3) and return sorted list."""
+        result: list[ProviderScore] = []
+        for ps in provider_scores:
+            j = judge_scores.get(ps.name, 0.0)
+            blended = ps.total * 0.7 + j * 0.3
+            ps.total = blended
+            result.append(ps)
+        result.sort(key=lambda s: -s.total)
+        return result
 
 # ═══ Global ═══
 
@@ -318,3 +497,65 @@ def get_election() -> HolisticElection:
     if _election is None:
         _election = HolisticElection()
     return _election
+
+
+def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
+    """Return dynamic weights for scoring based on task type (Pattern 5)."""
+    t = (task_type or "general").lower()
+    if t == "code":
+        return {
+            "latency": 0.10,
+            "quality": 0.35,
+            "cost": 0.10,
+            "capability": 0.15,
+            "freshness": 0.05,
+            "rate_limit": 0.05,
+            "cache": 0.10,
+            "sticky": 0.10,
+        }
+    if t == "reasoning":
+        return {
+            "latency": 0.05,
+            "quality": 0.40,
+            "cost": 0.08,
+            "capability": 0.17,
+            "freshness": 0.05,
+            "rate_limit": 0.05,
+            "cache": 0.10,
+            "sticky": 0.10,
+        }
+    if t == "chat":
+        return {
+            "latency": 0.25,
+            "quality": 0.20,
+            "cost": 0.12,
+            "capability": 0.10,
+            "freshness": 0.08,
+            "rate_limit": 0.05,
+            "cache": 0.10,
+            "sticky": 0.10,
+        }
+    if t == "search":
+        return {
+            "latency": 0.15,
+            "quality": 0.18,
+            "cost": 0.10,
+            "capability": 0.20,
+            "freshness": 0.12,
+            "rate_limit": 0.05,
+            "cache": 0.10,
+            "sticky": 0.10,
+        }
+    if t == "multimodal":
+        return {
+            "latency": 0.08,
+            "quality": 0.30,
+            "cost": 0.15,
+            "capability": 0.20,
+            "freshness": 0.05,
+            "rate_limit": 0.05,
+            "cache": 0.07,
+            "sticky": 0.10,
+        }
+    # general/default
+    return WEIGHTS.copy()

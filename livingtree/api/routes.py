@@ -87,7 +87,7 @@ def setup_routes(app: FastAPI) -> None:
         components = {}
         if hub:
             if getattr(hub, '_started', False):
-                status = hub.get_status()
+                status = hub.status() if hasattr(hub, 'status') else {}
                 components = {
                     "life_engine": "ok" if status.get("life_engine") else "missing",
                     "cells": f"{status.get('cells', {}).get('registered', 0)} registered",
@@ -129,7 +129,9 @@ def setup_routes(app: FastAPI) -> None:
         if not hub:
             raise HTTPException(status_code=503, detail="Hub not initialized")
         try:
-            return hub.get_status()
+            if hasattr(hub, 'status'):
+                return hub.status()
+            return hub.get_status() if hasattr(hub, 'get_status') else {"version": "2.1.0", "online": True}
         except Exception as e:
             return {"error": str(e), "version": "2.1.0", "status": "initializing"}
 
@@ -400,7 +402,7 @@ def setup_routes(app: FastAPI) -> None:
                     })
 
                 elif msg_type == "status":
-                    status = hub.get_status()
+                    status = hub.status() if hasattr(hub, 'status') else {}
                     await websocket.send_json({"type": "status", **status})
 
                 elif msg_type == "ping":

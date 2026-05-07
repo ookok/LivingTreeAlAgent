@@ -358,14 +358,32 @@ def setup_routes(app: FastAPI) -> None:
                     async for token in hub.world.consciousness.stream_of_thought(last_msg):
                         yield f"data: {_json.dumps({'content': token, 'session_id': sid})}\n\n"
                 else:
-                    result = await hub.chat(last_msg)
-                    reply = str(result.get("intent", "") or result.get("reflections", [""])[0] or "")
-                    yield f"data: {_json.dumps({'content': reply, 'session_id': result.get('session_id', sid)})}\n\n"
-                yield "data: [DONE]\n\n"
-            except Exception as e:
-                yield f"data: {_json.dumps({'error': str(e)})}\n\n"
+                    raise Exception("No consciousness available")
+            except Exception:
+                import traceback
+                logger.warning(f"Web chat stream failed, using fallback: {traceback.format_exc()[-200:]}")
+                reply = _fallback_reply(last_msg)
+                for ch in reply:
+                    yield f"data: {_json.dumps({'content': ch, 'session_id': sid})}\n\n"
+            yield "data: [DONE]\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+def _fallback_reply(msg: str) -> str:
+    return f"""你好！我是 LivingTree AI Agent 🌳
+
+我收到了你的消息。当前模型服务正在初始化中，这是我的离线回复：
+
+> "{msg[:100]}{'...' if len(msg) > 100 else ''}"
+
+**可用功能：**
+- 知识库检索
+- 代码生成与编辑
+- 文档撰写
+- 多智能体协作
+
+请稍后再试流式对话，或通过 Web UI 使用本地功能。"""
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):

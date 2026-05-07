@@ -13,6 +13,9 @@ task determinism (high certainty → DAG, exploratory → ReAct).
 
 Reflexion (Shinn et al., 2023): After loop ends, reflect on full trajectory
 and inject lessons into EvolutionStore for future improvement.
+
+TACO Integration: Uses TerminalCompressor (TACO-inspired) for intelligent
+terminal output compression instead of naive [observation[:500]] truncation.
 """
 
 from __future__ import annotations
@@ -150,6 +153,26 @@ class ReactExecutor:
         self._consciousness = consciousness
         self.config = ReactConfig()
         self._total_trajectories: list[ReactTrajectory] = []
+        # TACO: terminal output compression middleware
+        self._compressor = None
+        self._evolving_rules = None
+
+    @property
+    def compressor(self):
+        """Lazy-init TerminalCompressor for TACO-style output compression."""
+        if self._compressor is None:
+            from .terminal_compressor import get_terminal_compressor
+            self._compressor = get_terminal_compressor()
+        return self._compressor
+
+    @property
+    def evolving_rules(self):
+        """Lazy-init SelfEvolvingRules for TACO-style rule discovery."""
+        if self._evolving_rules is None:
+            from ..dna.evolution import get_self_evolving_rules
+            self._evolving_rules = get_self_evolving_rules(
+                consciousness=self._consciousness)
+        return self._evolving_rules
 
     async def run(
         self,
@@ -241,8 +264,27 @@ class ReactExecutor:
             # Feed observation into next iteration
             history.append(f"Step {iteration}: {thought}")
             history.append(f"Action: {action}({action_input[:100]})")
-            history.append(f"Observation: {observation[:500]}")
-            current_prompt = OBSERVATION_PROMPT.format(result=observation[:2000])
+
+            # TACO: compress terminal observation intelligently
+            # instead of naive observation[:500]
+            comp = self.compressor.compress(
+                observation, command=str(action),
+                context=task[:100])
+            compressed_obs = comp.compressed
+            history.append(f"Observation: {compressed_obs}")
+            current_prompt = OBSERVATION_PROMPT.format(result=compressed_obs)
+
+            # TACO: feed observation to self-evolving rules for pattern discovery
+            try:
+                self.evolving_rules.observe_output(
+                    raw_output=observation,
+                    compressed_output=compressed_obs,
+                    namespace=self.compressor._detect_namespace(str(action), observation),
+                    command=str(action),
+                    saving_pct=comp.saving_pct,
+                )
+            except Exception:
+                pass  # Rule observation should never crash the loop
 
         # Post-loop: compute trajectory stats
         trajectory.total_iterations = len(trajectory.steps)
@@ -267,8 +309,24 @@ class ReactExecutor:
         if self._consciousness is None:
             return "", ReactAction.FINAL_ANSWER, "No consciousness available"
 
-        # Truncate history to fit context window
-        hist_block = "\n".join(history[-10:]) if history else "(start)"
+        # TACO: compress history instead of raw history[-10:]
+        if history:
+            # Keep most recent entries raw, compress older ones
+            recent = history[-6:] if len(history) > 6 else history
+            older = history[:-6] if len(history) > 6 else []
+
+            hist_lines = list(recent)
+            if older:
+                # Compress older history entries
+                older_text = "\n".join(older)
+                comp = self.compressor.compress(
+                    older_text, command="history_compression",
+                    context=prompt[:200])
+                hist_lines.insert(0, f"[Compressed history: {comp.compressed[:500]}]")
+
+            hist_block = "\n".join(hist_lines)
+        else:
+            hist_block = "(start)"
         full_prompt = f"{prompt}\n\nHistory:\n{hist_block}"
 
         try:

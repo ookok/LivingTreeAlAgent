@@ -363,3 +363,67 @@ def budget_context_for_llm(segments: dict[str, str], query: str,
         return f"{header}\n\n---\n{compressed}"
 
     return result
+
+
+# ── TACO Integration: Terminal-aware context folding ──────────────────
+
+def fold_terminal_output(output: str, command: str = "",
+                         max_chars: int = 2000) -> str:
+    """Fold terminal output using TACO-style compression rules.
+
+    Pipeline: TerminalCompressor (rule-based) → ContextCodex (symbol-based).
+    Use this for terminal outputs before feeding into LLM context.
+
+    Args:
+        output: Raw terminal/shell output
+        command: The command that produced this output
+        max_chars: Target maximum characters
+
+    Returns:
+        Compressed string ready for LLM injection
+    """
+    from .terminal_compressor import get_terminal_compressor
+    from .context_codex import get_context_codex
+
+    compressor = get_terminal_compressor(max_chars=max_chars)
+    result = compressor.compress(output, command=command)
+
+    if result.method == "rule" and result.compressed_chars <= max_chars:
+        # Already well-compressed by TACO rules
+        return result.compressed
+
+    # Post-process with codex for additional compression
+    codex = get_context_codex()
+    compressed, header = codex.compress(
+        result.compressed, layer=3, max_header_chars=400)
+    if len(compressed) < len(result.compressed) * 0.8:
+        return f"{header}\n---\n{compressed}"
+
+    return result.compressed
+
+
+def fold_with_taco(content: str, domain: str = "general",
+                   max_chars: int = 500) -> str:
+    """TACO-enhanced folding: rule-based + codex + SSA budget routing.
+
+    Combines all three compression strategies for maximum context efficiency.
+    """
+    # Step 1: Heuristic fold
+    folded = fold_text_heuristic(content, max_chars)
+
+    # Step 2: Apply self-evolved removal rules
+    from ..dna.output_compressor import _load_evolved_phrases
+    evolved = _load_evolved_phrases()
+    if evolved:
+        for pattern in evolved[:5]:  # Limit to avoid over-processing
+            folded = re.sub(pattern, '', folded, flags=re.IGNORECASE)
+
+    # Step 3: Codex compression
+    from .context_codex import get_context_codex
+    codex = get_context_codex()
+    compressed, header = codex.compress(folded, layer=3, max_header_chars=400)
+
+    if header and len(compressed) < len(folded) * 0.9:
+        return f"{header}\n---\n{compressed}"
+
+    return compressed if len(compressed) < len(folded) else folded

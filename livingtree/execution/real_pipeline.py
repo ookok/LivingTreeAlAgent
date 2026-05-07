@@ -323,6 +323,185 @@ class AgentSpec:
     capabilities: list[str]
 
 
+# ── PipelineOptimizer: Learn optimal tool sequences from history ──
+
+class PipelineOptimizer:
+    """Learn optimal tool combinations from execution history.
+
+    Inspired by ProteinMPNN's role in protein design: given a backbone
+    (tool sequence skeleton), optimize the sequence (which tools follow
+    which) based on historical success rates.
+
+    Tracks pairwise tool transition scores and per-tool statistics.
+    Uses exponential moving average for smooth score updates.
+    """
+
+    def __init__(self):
+        self._tool_pair_scores: dict[tuple[str, str], float] = {}
+        self._tool_stats: dict[str, dict[str, int | float]] = {}
+        self._execution_count = 0
+
+    def record_execution(
+        self, tool_sequence: list[str], success: bool, total_ms: int,
+    ) -> None:
+        """Record an execution result and update pair/individual scores.
+
+        Args:
+            tool_sequence: Ordered list of tools used in this execution.
+            success: Whether the overall task completed successfully.
+            total_ms: Total execution time in milliseconds.
+        """
+        if not tool_sequence:
+            return
+
+        self._execution_count += 1
+        success_val = 1.0 if success else 0.0
+
+        # Update tool pair scores (EMA: 80% old + 20% new)
+        for i in range(len(tool_sequence) - 1):
+            pair = (tool_sequence[i], tool_sequence[i + 1])
+            old = self._tool_pair_scores.get(pair, 0.5)
+            self._tool_pair_scores[pair] = round(0.8 * old + 0.2 * success_val, 3)
+
+        # Update per-tool statistics
+        for tool in tool_sequence:
+            stats = self._tool_stats.setdefault(
+                tool, {"success_count": 0, "fail_count": 0, "total_ms": 0})
+            if success:
+                stats["success_count"] = int(stats["success_count"]) + 1
+            else:
+                stats["fail_count"] = int(stats["fail_count"]) + 1
+            stats["total_ms"] = float(stats["total_ms"]) + total_ms / len(tool_sequence)
+
+    def score_sequence(self, tool_sequence: list[str]) -> tuple[float, list[str]]:
+        """Score a proposed tool sequence. Returns (avg_score, warnings).
+
+        Avg score = mean of pairwise transition scores (default 0.5 for unseen).
+        Warnings highlight risky transitions with low historical success.
+        """
+        if len(tool_sequence) < 2:
+            return 0.5, []
+
+        scores: list[float] = []
+        warnings: list[str] = []
+
+        for i in range(len(tool_sequence) - 1):
+            pair = (tool_sequence[i], tool_sequence[i + 1])
+            score = self._tool_pair_scores.get(pair, 0.5)
+            scores.append(score)
+            if score < 0.3:
+                warnings.append(
+                    f"Low success rate ({score:.2f}): "
+                    f"'{pair[0]}' → '{pair[1]}'")
+
+        avg = sum(scores) / len(scores)
+        return round(avg, 3), warnings
+
+    def recommend_next(
+        self, current_tool: str, available_tools: list[str], top_k: int = 3,
+    ) -> list[tuple[str, float]]:
+        """Recommend the best next tools after a given tool.
+
+        Args:
+            current_tool: The tool just executed.
+            available_tools: Candidate tools to consider.
+            top_k: Number of recommendations to return.
+
+        Returns:
+            Sorted list of (tool_name, score) tuples.
+        """
+        candidates = []
+        for tool in available_tools:
+            if tool == current_tool:
+                continue
+            pair = (current_tool, tool)
+            score = self._tool_pair_scores.get(pair, 0.5)
+            candidates.append((tool, score))
+
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[:top_k]
+
+    def most_reliable_sequence(
+        self, tools: list[str], max_depth: int = 5,
+    ) -> list[str]:
+        """Greedy construction of the most reliable tool sequence.
+
+        Starts with the first available tool, then repeatedly picks the
+        highest-scoring next tool until max_depth is reached.
+
+        Args:
+            tools: Pool of available tools to pick from.
+            max_depth: Maximum sequence length.
+
+        Returns:
+            Greedy optimal tool sequence.
+        """
+        if not tools:
+            return []
+
+        sequence = [tools[0]]
+        remaining = list(tools[1:])
+
+        for _ in range(max_depth - 1):
+            if not remaining:
+                break
+            recs = self.recommend_next(sequence[-1], remaining, top_k=1)
+            if recs:
+                next_tool = recs[0][0]
+                sequence.append(next_tool)
+                remaining.remove(next_tool)
+            else:
+                break
+
+        return sequence
+
+    def stats(self) -> dict[str, Any]:
+        """Aggregate optimizer statistics."""
+        n_pairs = len(self._tool_pair_scores)
+        n_tools = len(self._tool_stats)
+
+        if n_pairs == 0:
+            return {"executions": self._execution_count, "tool_pairs": 0, "tools_tracked": 0}
+
+        best_pair = max(self._tool_pair_scores.items(), key=lambda x: x[1])
+        worst_pair = min(self._tool_pair_scores.items(), key=lambda x: x[1])
+
+        # Per-tool success rates
+        tool_rates = {}
+        for tool, s in self._tool_stats.items():
+            total = int(s.get("success_count", 0)) + int(s.get("fail_count", 0))
+            rate = int(s["success_count"]) / max(total, 1) if total > 0 else 0.0
+            tool_rates[tool] = round(rate, 3)
+
+        return {
+            "executions": self._execution_count,
+            "tool_pairs": n_pairs,
+            "tools_tracked": n_tools,
+            "best_pair": {"from": best_pair[0][0], "to": best_pair[0][1], "score": best_pair[1]},
+            "worst_pair": {"from": worst_pair[0][0], "to": worst_pair[0][1], "score": worst_pair[1]},
+            "tool_success_rates": tool_rates,
+        }
+
+
+# ── Singleton ──
+
+_pipeline_optimizer: PipelineOptimizer | None = None
+
+
+def get_pipeline_optimizer() -> PipelineOptimizer:
+    """Get or create the singleton PipelineOptimizer."""
+    global _pipeline_optimizer
+    if _pipeline_optimizer is None:
+        _pipeline_optimizer = PipelineOptimizer()
+    return _pipeline_optimizer
+
+
+def reset_pipeline_optimizer() -> None:
+    """Test helper."""
+    global _pipeline_optimizer
+    _pipeline_optimizer = None
+
+
 # ═══ Global ═══
 
 _real_orch: RealOrchestrator | None = None

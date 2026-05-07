@@ -12,6 +12,9 @@ Three innovations:
 Compression rate: 85-95% with zero information loss.
 Existing folding: 40-60%. Combined: 90-97%.
 
+TACO Integration: ContextCodex symbols are synced with the GlobalRulePool
+so that self-evolved extraction patterns become codex symbols automatically.
+
 Usage:
     codex = get_context_codex()
     codex.register("§S:GB3095", "GB3095-2012环境空气质量标准", "standard")
@@ -508,3 +511,63 @@ def get_context_codex(seed: bool = True) -> ContextCodex:
         if seed and not _context_codex._table:
             _context_codex.seed_defaults()
     return _context_codex
+
+
+# ── TACO Integration: Pool → Codex symbol sync ───────────────────────
+
+def sync_codex_from_pool(codex: ContextCodex | None = None,
+                          max_new_symbols: int = 20) -> int:
+    """Sync ContextCodex symbol table with GlobalRulePool extraction rules.
+
+    TACO principle: when the rule pool discovers new extraction patterns
+    (e.g. matching "GCC error format"), those patterns become semantic
+    symbols in the codex for faster future compression.
+
+    Args:
+        codex: ContextCodex instance (or None for singleton)
+        max_new_symbols: Maximum new symbols to register
+
+    Returns:
+        Number of new symbols registered
+    """
+    if codex is None:
+        codex = get_context_codex(seed=False)
+
+    added = 0
+    try:
+        from .global_rule_pool import get_global_rule_pool, RuleAction
+        pool = get_global_rule_pool(seed=False)
+
+        for rule in pool._rules.values():
+            if added >= max_new_symbols:
+                break
+            if rule.is_expired or not rule.is_active:
+                continue
+            if rule.action != RuleAction.EXTRACT_PATTERN:
+                continue
+            if not rule.match_pattern or not rule.extract_regex:
+                continue
+            if rule.hit_count < 3:
+                continue  # Only promote well-tested rules
+
+            # Generate codex symbol from the rule
+            label = rule.name.replace("auto-", "").replace("evolved-", "")
+            symbol = f"§T:{label[:8]}"
+            if symbol in codex._table:
+                continue  # Already registered
+
+            codex.register(
+                symbol,
+                f"提取模式: {rule.match_pattern[:60]}",
+                category="tool",
+                layer=3,
+            )
+            added += 1
+            logger.debug(f"Codex synced rule: {rule.name} → {symbol}")
+
+        if added:
+            codex._save()
+    except Exception as e:
+        logger.debug(f"Codex pool sync: {e}")
+
+    return added

@@ -4,6 +4,10 @@ context-mode rules: drop filler, keep technical substance.
 Pattern: [thing] [action] [reason]. [next step].
 ~65-75% output token reduction while preserving full technical accuracy.
 
+TACO Integration: static PHRASES_TO_REMOVE can be supplemented by
+SelfEvolvingRules which discovers new filler patterns from interaction
+history and stores them in the GlobalRulePool.
+
 Usage:
     from livingtree.dna.output_compressor import compress_output, CompressResult
     result = compress_output(long_response)
@@ -14,6 +18,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+from loguru import logger
 
 
 PHRASES_TO_REMOVE = [
@@ -258,3 +264,86 @@ def stats_from_results(results: list[CompressResult]) -> dict[str, Any]:
         "phrases_removed": total_phrases,
         "expanded_count": sum(1 for r in results if r.expanded),
     }
+
+
+# ── TACO Integration: Pool-backed evolving phrase removal ────────────
+
+# Cache of dynamically discovered filler phrases from GlobalRulePool
+_evolved_phrases: list[str] | None = None
+_evolved_phrase_patterns: list[str] | None = None
+_evolved_last_load: float = 0.0
+_EVOLVED_RELOAD_SECONDS = 300  # Reload from pool every 5 minutes
+
+
+def _load_evolved_phrases(force: bool = False) -> list[str]:
+    """Load self-evolved filler removal patterns from GlobalRulePool.
+
+    Combines static PHRASES_TO_REMOVE with dynamically discovered patterns
+    from the TACO rule pool. Cached for 5 minutes between reloads.
+    """
+    global _evolved_phrases, _evolved_phrase_patterns, _evolved_last_load
+    import time as _time
+
+    if not force and _evolved_phrases is not None:
+        if _time.time() - _evolved_last_load < _EVOLVED_RELOAD_SECONDS:
+            return _evolved_phrases
+
+    patterns = []
+    try:
+        from ..execution.global_rule_pool import get_global_rule_pool, RuleAction
+        pool = get_global_rule_pool(seed=False)
+
+        # Load REMOVE-type rules from the "filler" and "output" namespaces
+        for rule in pool._rules.values():
+            if rule.is_expired or not rule.is_active:
+                continue
+            if rule.action == RuleAction.REMOVE and rule.match_pattern:
+                if rule.namespace in ("general", "filler", "output", "text"):
+                    # Validate regex
+                    try:
+                        re.compile(rule.match_pattern)
+                        patterns.append(rule.match_pattern)
+                    except re.error:
+                        pass
+    except Exception:
+        pass
+
+    _evolved_phrase_patterns = patterns
+    _evolved_last_load = _time.time()
+    return patterns
+
+
+def compress_output_with_evolved(text: str, force_full: bool = False) -> CompressResult:
+    """Compress LLM output with static + pool-evolved rules.
+
+    Extends compress_output() by also applying self-evolved removal rules
+    from the GlobalRulePool. Use this when you want the full TACO benefit.
+    """
+    result = compress_output(text, force_full=force_full)
+    if result.expanded:
+        return result
+
+    # Apply self-evolved removal rules on top
+    evolved = _load_evolved_phrases()
+    if evolved:
+        compressed = result.compressed
+        removed_count = 0
+        for pattern in evolved:
+            before = compressed
+            compressed = re.sub(pattern, '', compressed, flags=re.IGNORECASE)
+            if compressed != before:
+                removed_count += 1
+        if removed_count > 0:
+            result.compressed = compressed
+            result.compressed_chars = len(compressed)
+            result.phrases_removed += removed_count
+
+    return result
+
+
+def flush_evolved_phrases_cache():
+    """Force reload of evolved phrases on next compress call."""
+    global _evolved_phrases, _evolved_phrase_patterns, _evolved_last_load
+    _evolved_phrases = None
+    _evolved_phrase_patterns = None
+    _evolved_last_load = 0.0

@@ -139,6 +139,10 @@ class LifeEngine:
         self._branches: dict[str, Branch] = {}
         self._folded_stages: dict[str, FoldResult] = {}
         self._fold_enabled = False
+        # ── Economic Engine (lazy) ──
+        self._economic_orch = None
+        self._plan_validator = None
+        self._fitness = None
 
     # ── Main pipeline ──
 
@@ -158,6 +162,11 @@ class LifeEngine:
         self._folded_stages = {}
         cycle_start = time.time()
         self.stages.clear()
+
+        # Forward unknown kwargs into metadata (tool_market, available_tools, etc.)
+        for k, v in kwargs.items():
+            if k not in ("user_input", "mem_context", "memory_context"):
+                ctx.metadata[k] = v
 
         if kwargs.get("memory_context"):
             ctx.metadata["struct_mem_context"] = kwargs["memory_context"]
@@ -901,6 +910,64 @@ class LifeEngine:
         checkpoint = self.world.checkpoint
         completed = len(ctx.execution_results)
 
+        # ── Economic Gate: 执行前经济审查 ──
+        try:
+            from ..economy.economic_engine import get_economic_orchestrator
+            from ..execution.plan_validator import get_plan_validator, PlanStep
+            eco = get_economic_orchestrator()
+            task_id = getattr(ctx, 'stage_id', None) or f"task_{int(time.time())}"
+            daily_cost = 0.0
+            if cost:
+                try:
+                    s = cost.status()
+                    daily_cost = s.cost_yuan
+                except Exception:
+                    pass
+            decision = eco.evaluate(
+                task_id=task_id,
+                task_desc=ctx.user_input or ctx.intent or "",
+                task_type=self._guess_task_type(ctx),
+                estimated_tokens=ctx.metadata.get("estimated_tokens", 5000),
+                complexity=self._guess_complexity(ctx),
+                user_priority=ctx.metadata.get("user_priority", 0.5),
+                predicted_quality=ctx.metadata.get("predicted_quality", 0.7),
+                daily_spent_yuan=daily_cost,
+            )
+            if not decision.go:
+                logger.warning(f"[execute] Economic gate rejected: {decision.suggestion}")
+                ctx.execution_results.append({
+                    "status": "rejected",
+                    "reason": f"经济审查未通过: {decision.suggestion}",
+                    "economic_decision": decision,
+                })
+                return
+            ctx.metadata["economic_decision"] = decision
+            ctx.metadata["selected_model"] = decision.selected_model
+            logger.info(f"[execute] Economic gate: GO | {decision.selected_model.split('/')[-1]} | ROI={decision.roi.roi_estimate:.1f}x")
+        except Exception as e:
+            logger.debug(f"[execute] Economic gate skipped: {e}")
+
+        # ── Plan Validation: 执行前计划验证 ──
+        try:
+            validator = get_plan_validator(consciousness=self.consciousness)
+            plan_id = getattr(ctx, 'stage_id', None) or f"plan_{int(time.time())}"
+            vsteps = [
+                PlanStep(
+                    step_id=s.get("name", f"s{i}"),
+                    tool=s.get("action", s.get("tool", "")),
+                    description=s.get("description", ""),
+                )
+                for i, s in enumerate(ctx.plan[:20])]
+            validation = await validator.validate(
+                vsteps, domain=self._guess_domain(ctx), plan_id=plan_id)
+            ctx.metadata["plan_validation"] = validation
+            if validation.success_probability < 0.3:
+                logger.warning(f"[execute] Plan validation low: {validation.success_probability:.0%}")
+            else:
+                logger.debug(f"[execute] Plan validation: {validation.success_probability:.0%}")
+        except Exception as e:
+            logger.debug(f"[execute] Plan validation skipped: {e}")
+
         # Shared cache for cross-step data transfer
         ctx.metadata.setdefault("shared_cache", {})
 
@@ -1074,7 +1141,68 @@ class LifeEngine:
         rate = ok / max(total, 1)
         ctx.metadata["success_rate"] = rate
 
+        # ── Fitness Tracking: 记录执行轨迹到适应度景观 ──
+        try:
+            from ..execution.fitness_landscape import get_fitness_landscape
+            fitness = get_fitness_landscape()
+            tools_used = [
+                r.get("action", r.get("tool", ""))
+                for r in ctx.execution_results if r.get("status") in ("completed", "ok")]
+            total_tokens = ctx.metadata.get("estimated_tokens", 0)
+            total_ms = (time.time() - ctx.metadata.get("cycle_start", time.time())) * 1000
+            fitness.record(
+                trajectory_id=getattr(ctx, 'stage_id', None) or f"task_{int(time.time())}",
+                tool_sequence=tools_used[:10],
+                total_tokens=int(total_tokens),
+                total_ms=int(total_ms),
+                success=rate > 0.5,
+                safety_violations=ctx.metadata.get("safety_violations", 0),
+                summary=ctx.user_input or ctx.intent or "",
+            )
+        except Exception:
+            pass
+
         reflection = f"{total} steps: {ok} ok, {fail} failed"
+
+    # ── Economic Helpers ──
+
+    @staticmethod
+    def _guess_task_type(ctx) -> str:
+        ui = (ctx.user_input or ctx.intent or "").lower()
+        if any(k in ui for k in ["环评", "environmental", "报告", "report"]):
+            return "environmental_report"
+        if any(k in ui for k in ["代码", "code", "实现", "implement", "写", "write"]):
+            return "code_generation"
+        if any(k in ui for k in ["修复", "fix", "bug", "错误", "error"]):
+            return "bug_fix"
+        if any(k in ui for k in ["分析", "analyze", "数据", "data"]):
+            return "data_analysis"
+        if any(k in ui for k in ["文档", "doc", "生成", "generate"]):
+            return "document_generation"
+        return "general"
+
+    @staticmethod
+    def _guess_complexity(ctx) -> float:
+        plan_len = len(ctx.plan)
+        ui_len = len(ctx.user_input or ctx.intent or "")
+        if plan_len > 10 or ui_len > 500:
+            return 0.9
+        if plan_len > 5 or ui_len > 200:
+            return 0.7
+        if plan_len > 2:
+            return 0.5
+        return 0.3
+
+    @staticmethod
+    def _guess_domain(ctx) -> str:
+        ui = (ctx.user_input or ctx.intent or "").lower()
+        if any(k in ui for k in ["环评", "environmental", "标准", "排放"]):
+            return "environmental"
+        if any(k in ui for k in ["代码", "code", "编程", "函数"]):
+            return "code"
+        if any(k in ui for k in ["文档", "报告", "doc"]):
+            return "document"
+        return "general"
         if fail:
             errors = [r.get("error", "?") for r in ctx.execution_results if r.get("error")]
             reflection += f". Errors: {errors}"

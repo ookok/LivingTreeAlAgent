@@ -28,6 +28,13 @@ from .meta_strategy import (
 from .model_spec import AgentSpec, SpecPrinciple, get_agent_spec
 from .output_compressor import compress_output, CompressResult, compress_conversation
 from .self_evolving import SelfEvolvingEngine, ProcessMetrics
+from .self_evolving_rules import SelfEvolvingRules, RuleCandidate, EvolutionStats, get_self_evolving_rules
+from .evolution import SelfEvolvingEngine, ProcessMetrics, SelfEvolvingRules, RuleCandidate, EvolutionStats, get_self_evolving_rules
+from .gradual_agent import GradualAgent, GradualResult, EscalationTier, get_gradual_agent
+from .reasoning_chain import ReasoningChain, DecisionNode, ChainSummary, get_reasoning_chain
+from .skill_progression import SkillProgression, SkillMetric, ProgressReport, Milestone, get_skill_progression
+from .autonomous_core import AutonomousCore, DiscoveredWork, ActionPlan, AuditFinding, CycleResult, IntentType, get_autonomous_core
+from .local_intelligence import LocalIntelligence, IntelligenceTier, TierResponse, LocalIQ, get_local_intelligence
 
 __all__ = [
     "LifeEngine",
@@ -50,4 +57,10 @@ __all__ = [
     "AgentSpec", "SpecPrinciple", "get_agent_spec",
     "compress_output", "CompressResult", "compress_conversation",
     "SelfEvolvingEngine", "ProcessMetrics",
+    "GradualAgent", "GradualResult", "EscalationTier", "get_gradual_agent",
+    "ReasoningChain", "DecisionNode", "ChainSummary", "get_reasoning_chain",
+    "SkillProgression", "SkillMetric", "ProgressReport", "Milestone", "get_skill_progression",
+    "AutonomousCore", "DiscoveredWork", "ActionPlan", "AuditFinding", "CycleResult", "IntentType",
+    "get_autonomous_core",
+    "LocalIntelligence", "IntelligenceTier", "TierResponse", "LocalIQ", "get_local_intelligence",
 ]

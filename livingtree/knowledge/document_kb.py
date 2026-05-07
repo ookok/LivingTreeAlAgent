@@ -29,6 +29,15 @@ DB_PATH = Path(".livingtree/document_kb.db")
 CHUNK_SIZE = 1000   # chars per chunk
 CHUNK_OVERLAP = 200  # overlap between chunks
 
+# ── Hardware acceleration (optional) ──
+_HAS_GPU = False
+try:
+    from livingtree.core.hardware_acceleration import get_hardware_accelerator
+    _hw = get_hardware_accelerator()
+    _HAS_GPU = _hw.gpu.can_accelerate_torch
+except Exception:
+    pass
+
 
 @dataclass
 class DocChunk:
@@ -282,13 +291,32 @@ class DocumentKB:
         emb = self._get_embedding(query)
         if not emb:
             return []
-        # Brute-force cosine over cached embeddings
-        scores = []
-        for cid, cached_emb in self._embed_cache.items():
-            if cached_emb:
+
+        cached_items = [(cid, e) for cid, e in self._embed_cache.items() if e]
+        if not cached_items:
+            return []
+
+        # ── GPU batch cosine (if available) ──
+        if _HAS_GPU and len(cached_items) > 50:
+            try:
+                from livingtree.core.jit_accel import cosine_similarity_batch
+                ids = [cid for cid, _ in cached_items]
+                vecs = [e for _, e in cached_items]
+                sims = cosine_similarity_batch(emb, vecs)
+                scores = [(ids[i], sims[i]) for i in range(len(ids)) if sims[i] > 0.3]
+            except Exception:
+                scores = []
+                for cid, cached_emb in cached_items:
+                    sim = self._cosine(emb, cached_emb)
+                    if sim > 0.3:
+                        scores.append((cid, sim))
+        else:
+            scores = []
+            for cid, cached_emb in cached_items:
                 sim = self._cosine(emb, cached_emb)
                 if sim > 0.3:
                     scores.append((cid, sim))
+
         scores.sort(key=lambda x: -x[1])
         results = []
         for cid, score in scores[:limit]:

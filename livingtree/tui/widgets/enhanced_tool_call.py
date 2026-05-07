@@ -348,6 +348,15 @@ SYSTEM_TOOLS: dict[str, dict] = {
         "icon": "📥",
     },
 
+    # ── Visual tools ──
+    "visual_render": {
+        "name": "统一视觉渲染",
+        "category": "visual",
+        "description": "将所有视觉任务输出统一为RGB图像+文本双通道（地图/图表/文档/表格/图片/流程图）",
+        "params": {"data": "数据输入（坐标/图表数据/文件路径/表格等）", "type_hint": "类型提示 plot|map|document|table|image|diagram|auto", "save_path": "图片保存路径（可选）"},
+        "icon": "🎨",
+    },
+
     # ── Meta tools ──
     "snapshot": {
         "name": "状态快照",

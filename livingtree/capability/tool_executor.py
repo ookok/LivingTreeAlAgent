@@ -1,9 +1,9 @@
-"""ToolExecutor — real backend implementations for shell/git/web/db/data/notify tools.
+"""ToolExecutor — real backend implementations for shell/git/web/db/data/notify/visual tools.
 
 Each tool registered here has an actual handler function. Tools are invoked
 by the LLM generating a tool_call, which then triggers this executor.
 
-17 tools total:
+18 tools total:
   web: url_fetch, api_call, web_scrape
   database: db_query, db_schema
   git: git_diff, git_log, git_blame
@@ -11,6 +11,7 @@ by the LLM generating a tool_call, which then triggers this executor.
   notify: send_email, send_notification
   multimedia: pdf_parse, ocr_extract
   data: csv_analyze, json_transform, excel_export
+  visual: visual_render
 """
 from __future__ import annotations
 
@@ -437,6 +438,57 @@ class ToolExecutor:
             # Write raw data
             out_path.write_text(data, encoding="utf-8")
             return ToolResult("excel_export", True, str(out_path), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    # ═══ Helpers ═══
+
+    # ── Visual tools ──
+
+    async def visual_render(self, data: Any, type_hint: str = "auto",
+                            save_path: str = "") -> ToolResult:
+        """Unified visual rendering via UnifiedVisualPort (Vision Banana style).
+
+        Args:
+            data: Input data — dict with type info, file path, or raw data
+            type_hint: plot | map | document | table | image | diagram | auto
+            save_path: Optional save path for generated image
+        """
+        t0 = time.monotonic()
+        try:
+            from .unified_visual_port import get_visual_port
+            port = get_visual_port()
+            output = port.render(data, type_hint)
+
+            response_parts = []
+            if output.has_text():
+                response_parts.append(output.text)
+            if output.has_image():
+                response_parts.append(f"\n[图像: {output.width}x{output.height} PNG, "
+                                      f"{len(output.image_bytes)} bytes]")
+                if save_path:
+                    saved = output.save_image(save_path)
+                    response_parts.append(f"[已保存: {saved}]")
+                else:
+                    data_uri = output.image_data_uri()
+                    response_parts.append(f"[Data URI: {data_uri[:80]}...]")
+
+            result_text = "\n".join(response_parts)
+            return ToolResult(
+                "visual_render", success=True, output=result_text,
+                data={
+                    "text": output.text[:1000],
+                    "has_image": output.has_image(),
+                    "image_format": output.image_format,
+                    "width": output.width,
+                    "height": output.height,
+                    "source_type": output.source_type,
+                    "image_base64": output.image_base64() if output.has_image() else "",
+                },
+                elapsed_ms=(time.monotonic() - t0) * 1000,
+            )
+        except Exception as e:
+            logger.warning(f"visual_render: {e}")
+            return ToolResult("visual_render", False, error=str(e),
+                              elapsed_ms=(time.monotonic() - t0) * 1000)
 
     # ═══ Helpers ═══
 

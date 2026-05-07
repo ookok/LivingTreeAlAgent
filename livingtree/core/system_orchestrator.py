@@ -152,6 +152,11 @@ class SystemOrchestrator:
         # ── Web2API ──
         from ..web2api import Web2APIServer
         self._web2api_server = Web2APIServer()
+        try:
+            await self._web2api_server.start()
+            logger.info("Web2API server started on port 5001")
+        except Exception as e:
+            logger.debug(f"Web2API auto-start skipped: {e}")
 
         logger.info(
             "SystemOrchestrator: ALL subsystems initialized — "

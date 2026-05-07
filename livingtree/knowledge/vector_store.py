@@ -7,6 +7,7 @@ that can be swapped with a local embedding model or an API-based API.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 import math
 import hashlib
@@ -157,4 +158,82 @@ class VectorStore:
         self._vectors = {}
 
 
+# ═══ LanceDB backend — disk-backed, zero-service vector store ═══
+
+
+class LanceDBStore:
+    """LanceDB-backed vector store for large-scale (100M+) vectors.
+
+    Zero services — pip install lancedb, data lives in local files.
+    Automatically falls back to in-memory VectorStore if lancedb unavailable.
+    """
+
+    def __init__(self, db_path: str = "", embedding_backend=None,
+                 collection_name: str = "default"):
+        self._path = db_path or str(Path(".livingtree/lancedb"))
+        self._collection_name = collection_name
+        self.embedding_backend = embedding_backend or LocalEmbeddingBackend()
+        self._db = None
+        self._table = None
+        self._fallback = None
+
+    def _ensure_db(self) -> bool:
+        if self._db is not None:
+            return True
+        try:
+            import lancedb
+            Path(self._path).mkdir(parents=True, exist_ok=True)
+            self._db = lancedb.connect(self._path)
+            try:
+                self._table = self._db.open_table(self._collection_name)
+            except Exception:
+                pass
+            logger.info(f"LanceDB initialized: {self._path}/{self._collection_name}")
+            return True
+        except ImportError:
+            if self._fallback is None:
+                self._fallback = VectorStore(self.embedding_backend, self._collection_name)
+            return False
+
+    def embed(self, text: str) -> list[float]:
+        vecs = self.embedding_backend.embed([text])
+        return vecs[0]
+
+    def add_vectors(self, items: list[tuple[str, list[float]]]):
+        if self._ensure_db() and self._db:
+            import pyarrow as pa
+            ids = [i[0] for i in items]
+            vecs = [i[1] for i in items]
+            data = pa.table({"id": ids, "vector": vecs})
+            if self._table is None:
+                self._table = self._db.create_table(self._collection_name, data)
+            else:
+                self._table.add(data)
+        elif self._fallback:
+            self._fallback.add_vectors(items)
+
+    def search_similar(self, query_vec: list[float], top_k: int = 5) -> list[str]:
+        if self._ensure_db() and self._table:
+            results = self._table.search(query_vec).limit(top_k).to_list()
+            return [r["id"] for r in results if r.get("id")]
+        if self._fallback:
+            return self._fallback.search_similar(query_vec, top_k)
+        return []
+
+    def create_collection(self, name: str):
+        self._collection_name = name
+        self._table = None
+        if self._db:
+            try:
+                self._table = self._db.open_table(name)
+            except Exception:
+                self._table = self._db.create_table(name, pa.table(
+                    {"id": [], "vector": []}))
+        else:
+            self._ensure_db()
+
+    def count(self) -> int:
+        if self._ensure_db() and self._table:
+            return self._table.count_rows()
+        return len(self._fallback._vectors) if self._fallback else 0
 __all__ = ["VectorStore", "EmbeddingBackend"]

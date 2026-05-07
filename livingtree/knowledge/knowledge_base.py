@@ -519,18 +519,22 @@ class KnowledgeBase:
     def search(self, vector_query: str, top_k: int = 5,
                as_of: Optional[datetime] = None,
                domain: Optional[str] = None) -> list[Document]:
-        """Bi-temporal + policy-aware semantic search.
+        """Bi-temporal + policy-aware semantic search with Engram O(1) priority."""
 
-        Args:
-            vector_query: semantic search query
-            top_k: max results
-            as_of: time-point filter (None = current only)
-            domain: optional domain filter
+        try:
+            from .engram_store import get_engram_store
+            engram = get_engram_store(seed=False)
+            hit = engram.lookup(vector_query)
+            if hit:
+                doc = Document(
+                    id=f"engram-{hash(hit) % 10000}", content=hit,
+                    domain=domain or "standard", valid_from=datetime.min,
+                    valid_to=datetime.max, created_at=datetime.now(),
+                )
+                return [doc]
+        except Exception:
+            pass
 
-        Only returns documents:
-        1. Valid at the given `as_of` time (bi-temporal)
-        2. In domains enabled by Genome expressed_genes (policy)
-        """
         query_vec = self.vector_store.embed(vector_query)
         ids = self.vector_store.search_similar(query_vec, top_k * 2)
         results: list[Document] = []

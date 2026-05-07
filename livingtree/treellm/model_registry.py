@@ -30,8 +30,27 @@ class ModelInfo:
     created: int = 0
     context_length: int = 4096
     free: bool = True
-    tier: str = "flash"  # flash, reasoning, pro, small, embedding, chat
+    tier: str = "flash"
     enabled: bool = True
+    pricing: str = "free"
+
+    @property
+    def short_name(self) -> str:
+        return self.id.split("/")[-1] if "/" in self.id else self.id
+
+    @property
+    def pricing_label(self) -> str:
+        if self.pricing == "free":
+            return "🆓"
+        if self.pricing == "token":
+            return "💰"
+        if self.pricing in ("paid", "subscription"):
+            return "💳"
+        return ""
+
+    @property
+    def source_label(self) -> str:
+        return self.provider.upper()
 
 
 @dataclass
@@ -93,14 +112,16 @@ class ModelRegistry:
                     mid = item.get("id", "")
                     if not mid:
                         continue
+                    free_flag = self._guess_free(mid, item)
                     info = ModelInfo(
                         id=mid,
                         provider=provider_name,
                         owned_by=item.get("owned_by", ""),
                         created=item.get("created", 0),
                         context_length=item.get("context_length", 4096),
-                        free=self._guess_free(mid, item),
+                        free=free_flag,
                         tier=self._classify_tier(mid, item),
+                        pricing=self._guess_pricing(mid, item, free_flag),
                     )
                     models.append(info)
 
@@ -126,6 +147,25 @@ class ModelRegistry:
         if pricing:
             return pricing.get("prompt", "1") == "0" or pricing.get("type") == "free"
         return True  # default to free for shared platforms
+
+    def _guess_pricing(self, model_id: str, data: dict, is_free: bool) -> str:
+        """Classify pricing mode: free / token / subscription / paid."""
+        if is_free:
+            return "free"
+        pricing = data.get("pricing", data.get("price", {}))
+        if isinstance(pricing, dict):
+            ptype = pricing.get("type", "")
+            if ptype == "token":
+                return "token"
+            if ptype == "subscription":
+                return "subscription"
+            prompt_price = pricing.get("prompt", "")
+            if prompt_price and prompt_price != "0":
+                return "token"
+        mid_lower = model_id.lower()
+        if any(k in mid_lower for k in ["pro", "max", "premium"]):
+            return "subscription"
+        return "paid"
 
     def _classify_tier(self, model_id: str, data: dict) -> str:
         """Classify model into a usage tier."""

@@ -1,115 +1,46 @@
-"""ModelSelector — browse, filter, and select models from all providers."""
+"""ModelSelector — Toad widget for browsing and enabling LLM models.
+
+Displays all available models across all providers, sorted by model name.
+Groups identical models from different providers together.
+Shows pricing mode (free/token/paid) and source provider badges.
+"""
+
 from __future__ import annotations
 
-from textual import on, work
-from textual.containers import VerticalScroll, Horizontal
-from textual.widgets import Static, Button, Collapsible, RichLog
-from textual.binding import Binding
-from textual.message import Message
+from textual.app import ComposeResult
+from textual.containers import VerticalScroll
+from textual.widgets import Static, Button
 
-
-class ModelSelected(Message):
-    """A model was selected by the user."""
-    def __init__(self, provider: str, model_id: str, tier: str):
-        super().__init__()
-        self.provider = provider
-        self.model_id = model_id
-        self.tier = tier
+from ...treellm.model_registry import ModelRegistry, ModelInfo
 
 
 class ModelSelector(VerticalScroll):
-    """Scrollable panel showing available models grouped by provider+tier."""
-
-    BINDINGS = [
-        Binding("r", "refresh", "刷新模型"),
-    ]
+    """Model browser with sorting, pricing badges, and source labels."""
 
     def __init__(self):
         super().__init__()
-        self._registry = None
-        self._selected: dict[str, str] = {}  # provider:tier → model_id
+        self._registry = ModelRegistry.instance()
 
-    def compose(self):
-        yield Static("🔬 模型管理", classes="panel-title")
-        yield Static("", id="model-status")
-        yield Button("🔄 刷新所有平台模型", id="btn-refresh-all", variant="primary")
+    def compose(self) -> ComposeResult:
         yield Static("", id="model-list-area")
+        yield Button("🔄 刷新模型列表", id="btn-refresh-all", variant="primary")
 
     def on_mount(self):
-        self._load_registry()
-
-    def _load_registry(self):
-        try:
-            from ...treellm.model_registry import get_model_registry
-            self._registry = get_model_registry()
-            self._refresh_display()
-        except Exception as e:
-            self.query_one("#model-status", Static).update(f"[red]{e}[/red]")
-
-    @on(Button.Pressed, "#btn-refresh-all")
-    async def on_refresh_all(self, event: Button.Pressed):
-        event.button.disabled = True
-        event.button.label = "⏳ 刷新中..."
-        self.query_one("#model-status", Static).update("[yellow]正在从各平台拉取模型列表...[/yellow]")
-
-        await self._do_refresh()
-
-        event.button.label = "🔄 刷新所有平台模型"
-        event.button.disabled = False
         self._refresh_display()
 
-    @work(thread=False)
-    async def _do_refresh(self):
-        if not self._registry:
-            return
-        self._registry.register_provider(
-            "siliconflow", "https://api.siliconflow.cn/v1",
-            self._get_key("siliconflow")
-        )
-        self._registry.register_provider(
-            "mofang", "https://ai.gitee.com/v1",
-            self._get_key("mofang")
-        )
-        self._registry.register_provider(
-            "deepseek", "https://api.deepseek.com/v1",
-            self._get_key("deepseek")
-        )
-        await self._registry.refresh_all()
+    def on_button_pressed(self, event):
+        if event.button.id == "btn-refresh-all":
+            self.action_refresh()
 
-        # Also discover opencode models
-        try:
-            from ...integration.opencode_bridge import OpenCodeBridge
-            bridge = OpenCodeBridge()
-            oc_models = bridge.discover_providers()
-            if oc_models:
-                self._registry.register_provider("opencode", "", "")
-                oc_data = self._registry._providers.get("opencode")
-                if oc_data:
-                    from ...treellm.model_registry import ModelInfo
-                    for m in oc_models:
-                        oc_data.models.append(ModelInfo(
-                            id=m.get("model", m.get("name", "")),
-                            provider="opencode",
-                            owned_by=m.get("name", "opencode"),
-                            free=True,
-                            tier=m.get("tier", "flash"),
-                        ))
-        except Exception:
-            pass
-
-        stats = self._registry.get_stats()
-        total = sum(s["models"] for s in stats.values())
-        self.query_one("#model-status", Static).update(
-            f"[green]✓ 已刷新 {len(stats)} 个平台，共 {total} 个模型[/green]"
-        )
-
-    def _get_key(self, provider: str) -> str:
+    def _get_api_key(self, provider: str) -> str:
         try:
             from ...config.secrets import get_secret_vault
             vault = get_secret_vault()
-            return vault.get(f"{provider}_api_key", "")
+            if vault:
+                return vault.get(f"{provider}_api_key", "")
         except Exception:
-            return ""
+            pass
+        return ""
 
     def _refresh_display(self):
         if not self._registry:
@@ -118,38 +49,51 @@ class ModelSelector(VerticalScroll):
         container = self.query_one("#model-list-area", Static)
         lines = []
 
+        all_models: list[ModelInfo] = []
         for name in self._registry.get_all_providers():
             p = self._registry._providers.get(name)
             if not p or not p.models:
                 continue
+            all_models.extend(p.models)
 
-            tiers = {}
-            for m in p.models:
-                if not m.free:
-                    continue
-                tiers.setdefault(m.tier, []).append(m)
+        if not all_models:
+            container.update("[dim]点击刷新按钮拉取模型列表[/dim]")
+            return
 
-            if not tiers:
-                continue
+        name_groups: dict[str, list[ModelInfo]] = {}
+        for m in all_models:
+            key = m.short_name.lower()
+            name_groups.setdefault(key, []).append(m)
 
-            lines.append(f"[bold #58a6ff]{name.upper()}[/bold #58a6ff]  "
-                         f"[dim]{len(p.models)} models, {sum(len(v) for v in tiers.values())} free[/dim]")
+        shown = 0
+        for model_name, group in sorted(name_groups.items()):
+            unique_providers = list(dict.fromkeys(m.provider for m in group))
+            best = group[0]
+            pricing_icon = best.pricing_label
+            tier_icon = {"flash": "⚡", "reasoning": "🧠", "small": "🪶",
+                         "code": "💻", "pro": "🚀", "embedding": "📊",
+                         "chat": "💬"}.get(best.tier, "📦")
 
-            for tier in ["flash", "reasoning", "small", "code", "pro"]:
-                if tier not in tiers:
-                    continue
-                models = tiers[tier][:8]  # show top 8 per tier
-                model_list = "  ".join(
-                    f"[{'bold #3fb950' if m.enabled else 'dim'}]• {m.id.split('/')[-1]}[/{'bold #3fb950' if m.enabled else 'dim'}]"
-                    for m in models
-                )
-                tier_icon = {"flash": "⚡", "reasoning": "🧠", "small": "🪶",
-                             "code": "💻", "pro": "🚀"}.get(tier, "📦")
-                lines.append(f"  {tier_icon} {tier}: {model_list}")
+            sources = " ".join(
+                f"[dim]{p.upper()}[/dim]" for p in unique_providers[:5]
+            )
 
-            lines.append("")
+            enabled = any(m.enabled for m in group)
+            color = "bold #3fb950" if enabled else "dim"
 
-        container.update("\n".join(lines) if lines else "[dim]点击刷新按钮拉取模型列表[/dim]")
+            lines.append(
+                f"[{color}]• {model_name}[/{color}] "
+                f"[dim]{tier_icon}[/dim] {pricing_icon}  {sources}"
+            )
+            shown += 1
+
+        lines.insert(0, f"[bold #58a6ff]MODELS[/bold #58a6ff]  "
+                     f"[dim]{shown} unique from {len(all_models)} entries "
+                     f"({len(self._registry._providers)} providers)[/dim]")
+        lines.append("")
+        lines.append("[dim]🆓=free  💰=token  💳=paid  ⚡=flash  🧠=reasoning  🚀=pro[/dim]")
+
+        container.update("\n".join(lines))
 
     def action_refresh(self):
         self.query_one("#btn-refresh-all", Button).press()

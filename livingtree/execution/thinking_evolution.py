@@ -4,6 +4,10 @@ Inspired by CogAlpha (§3.6): performs genetic-style optimization in natural
 language space, where candidate solutions undergo mutation and crossover
 operations expressed through textual prompts.
 
+DGM-H integration: process-level metrics track token efficiency, strategy
+success rates, and generation quality, feeding back into MetaMemory for
+data-driven strategy selection instead of random choice.
+
 Agents:
 - MutationAgent: slightly modifies a solution to introduce variability
 - CrossoverAgent: combines two solutions to create a novel hybrid
@@ -26,12 +30,15 @@ import asyncio
 import hashlib
 import inspect
 import random
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from loguru import logger
 from pydantic import BaseModel, Field
+
+from ..dna.meta_memory import get_meta_memory
 
 
 @dataclass
@@ -99,6 +106,47 @@ class EvolutionResult:
     diversity_score: float
 
 
+@dataclass
+class ThinkingProcessMetrics:
+    """DGM-H process-level metrics for ThinkingEvolution.
+
+    Tracks the efficiency of the evolutionary search process itself,
+    not just the quality of the final solutions.
+    """
+    tokens_used: int = 0
+    mutations: int = 0
+    crossovers: int = 0
+    recombinations: int = 0
+    generations_run: int = 0
+    candidates_evaluated: int = 0
+    time_spent_ms: int = 0
+    best_fitness_achieved: float = 0.0
+    mutation_directions_used: list[str] = field(default_factory=list)
+
+    @property
+    def tokens_per_candidate(self) -> float:
+        return round(self.tokens_used / max(self.candidates_evaluated, 1), 1)
+
+    @property
+    def fitness_improvement_per_gen(self) -> float:
+        return round(self.best_fitness_achieved / max(self.generations_run, 1), 4)
+
+    def to_dict(self) -> dict:
+        return {
+            "tokens_used": self.tokens_used,
+            "mutations": self.mutations,
+            "crossovers": self.crossovers,
+            "recombinations": self.recombinations,
+            "generations_run": self.generations_run,
+            "candidates_evaluated": self.candidates_evaluated,
+            "time_spent_ms": self.time_spent_ms,
+            "best_fitness_achieved": self.best_fitness_achieved,
+            "tokens_per_candidate": self.tokens_per_candidate,
+            "fitness_improvement_per_gen": self.fitness_improvement_per_gen,
+            "mutation_directions_used": self.mutation_directions_used,
+        }
+
+
 class ThinkingEvolution:
     """LLM-driven genetic optimization engine for cognitive evolution.
 
@@ -121,6 +169,8 @@ class ThinkingEvolution:
         self.elite_pool = ElitePool(max_size=20)
         self._current_generation = 0
         self._population: list[EvolutionCandidate] = []
+        self._process_metrics = ThinkingProcessMetrics()
+        self._memory = get_meta_memory()
 
     # ── Core evolution operations ──
 
@@ -129,23 +179,28 @@ class ThinkingEvolution:
                      temperature: float = 0.8) -> EvolutionCandidate:
         """Apply mutation to a candidate — slightly modify to introduce variability.
 
-        Args:
-            candidate: The candidate to mutate
-            direction: Guidance for the mutation:
-                - "explore_alternatives": seek structurally different solutions
-                - "optimize": improve the existing solution
-                - "diversify": deliberately break from the current pattern
-                - "simplify": reduce complexity while preserving function
-            temperature: Creativity temperature (0.7-1.2 recommended)
+        Direction is now guided by MetaMemory success rates if not explicitly set.
         """
+        if not direction:
+            direction = self._memory.recommend_mutation_direction()
+
+        self._process_metrics.mutations += 1
+        self._process_metrics.mutation_directions_used.append(direction)
+
         if self.consciousness and hasattr(self.consciousness, 'chain_of_thought'):
             try:
+                start = time.time()
                 prompt = self._build_mutation_prompt(candidate, direction)
                 mutated_text = await self.consciousness.chain_of_thought(
                     prompt, steps=3,
                     temperature=temperature,
                     max_tokens=4096,
                 )
+                elapsed_ms = int((time.time() - start) * 1000)
+                tokens = len(prompt.split()) + len(mutated_text.split())
+                self._process_metrics.tokens_used += tokens
+                self._process_metrics.time_spent_ms += elapsed_ms
+
                 new_candidate = EvolutionCandidate(
                     content=mutated_text,
                     source=f"mutation_{direction}",
@@ -153,10 +208,17 @@ class ThinkingEvolution:
                     mutation_count=candidate.mutation_count + 1,
                     generation=candidate.generation + 1,
                 )
+
+                self._memory.record("mutation", direction, "code",
+                                    success=True, tokens_used=tokens,
+                                    time_spent_ms=elapsed_ms,
+                                    context={"temperature": temperature})
                 logger.debug(f"Mutation: {candidate.id[:8]} → {new_candidate.id[:8]} ({direction})")
                 return new_candidate
             except Exception as e:
                 logger.warning(f"LLM mutation failed: {e}")
+                self._memory.record("mutation", direction, "code",
+                                    success=False, notes=str(e)[:100])
 
         # Heuristic mutation fallback
         return self._heuristic_mutate(candidate, direction)
@@ -164,29 +226,37 @@ class ThinkingEvolution:
     async def crossover(self, parent_a: EvolutionCandidate,
                         parent_b: EvolutionCandidate,
                         temperature: float = 0.9) -> EvolutionCandidate:
-        """Crossover two candidates — combine their best traits into a hybrid.
+        """Crossover two candidates — combine their best traits into a hybrid."""
+        self._process_metrics.crossovers += 1
 
-        The LLM is prompted to identify complementary strengths from each
-        parent and synthesize a novel solution that exceeds both.
-        """
         if self.consciousness and hasattr(self.consciousness, 'chain_of_thought'):
             try:
+                start = time.time()
                 prompt = self._build_crossover_prompt(parent_a, parent_b)
                 crossed_text = await self.consciousness.chain_of_thought(
                     prompt, steps=4,
                     temperature=temperature,
                     max_tokens=4096,
                 )
+                elapsed_ms = int((time.time() - start) * 1000)
+                tokens = len(prompt.split()) + len(crossed_text.split())
+                self._process_metrics.tokens_used += tokens
+                self._process_metrics.time_spent_ms += elapsed_ms
                 new_candidate = EvolutionCandidate(
                     content=crossed_text,
                     source="crossover",
                     parent_ids=[parent_a.id, parent_b.id],
                     generation=max(parent_a.generation, parent_b.generation) + 1,
                 )
+                self._memory.record("crossover", "fuse_parents", "code",
+                                    success=True, tokens_used=tokens,
+                                    time_spent_ms=elapsed_ms)
                 logger.debug(f"Crossover: {parent_a.id[:8]} + {parent_b.id[:8]} → {new_candidate.id[:8]}")
                 return new_candidate
             except Exception as e:
                 logger.warning(f"LLM crossover failed: {e}")
+                self._memory.record("crossover", "fuse_parents", "code",
+                                    success=False, notes=str(e)[:100])
 
         return self._heuristic_crossover(parent_a, parent_b)
 
@@ -230,17 +300,6 @@ class ThinkingEvolution:
                                  fitness_fn: Optional[Callable] = None,
                                  quality_check_fn: Optional[Callable] = None,
                                  ) -> EvolutionResult:
-        """Evolve a population through multiple generations.
-
-        Args:
-            initial_candidates: Starting population
-            generations: Number of generations (defaults to self.max_generations)
-            fitness_fn: Async (candidate) -> float
-            quality_check_fn: Async (candidate) -> bool
-
-        Returns:
-            EvolutionResult with final population and metrics
-        """
         gens = generations or self.max_generations
         self._population = list(initial_candidates)
         self._current_generation = 0
@@ -250,8 +309,8 @@ class ThinkingEvolution:
 
         for gen in range(gens):
             self._current_generation = gen
+            self._process_metrics.generations_run += 1
 
-            # Evaluate fitness
             if fitness_fn:
                 for c in self._population:
                     try:
@@ -262,8 +321,8 @@ class ThinkingEvolution:
                     except Exception:
                         c.fitness = 0.0
                 self._population.sort(key=lambda c: c.fitness, reverse=True)
+                self._process_metrics.candidates_evaluated += len(self._population)
 
-            # Quality check
             if quality_check_fn:
                 surviving = []
                 for c in self._population:
@@ -275,30 +334,30 @@ class ThinkingEvolution:
                         surviving.append(c)
                 self._population = surviving
 
-            # Preserve elites
             elites = self._population[:self.elite_size]
             for elite in elites:
                 self.elite_pool.add(elite)
 
-            # Track stats
             if self._population:
-                best_fitness = max(best_fitness, self._population[0].fitness)
+                current_best = self._population[0].fitness
+                best_fitness = max(best_fitness, current_best)
+                if current_best > self._process_metrics.best_fitness_achieved:
+                    self._process_metrics.best_fitness_achieved = current_best
                 total_fitness = sum(c.fitness for c in self._population)
 
-            # Generate new population through evolution
-            new_population = list(elites)  # Elite preservation
+            new_population = list(elites)
 
             while len(new_population) < self.population_size:
                 if random.random() < self.crossover_rate and len(self._population) >= 2:
                     parents = random.sample(self._population, min(2, len(self._population)))
                     child = await self.crossover(parents[0], parents[1]) if len(parents) == 2 else parents[0]
                     if random.random() < self.mutation_rate:
-                        child = await self.mutate(child, direction=random.choice(
-                            ["explore_alternatives", "optimize", "diversify"]))
+                        direction = self._memory.recommend_mutation_direction()
+                        child = await self.mutate(child, direction=direction)
                 else:
                     parent = random.choice(self._population)
-                    child = await self.mutate(parent, direction=random.choice(
-                        ["explore_alternatives", "optimize", "diversify", "simplify"]))
+                    direction = self._memory.recommend_mutation_direction()
+                    child = await self.mutate(parent, direction=direction)
 
                 child.generation = gen + 1
                 new_population.append(child)
@@ -307,7 +366,6 @@ class ThinkingEvolution:
             logger.info(f"Generation {gen + 1}/{gens}: pop={len(self._population)}, "
                         f"best={best_fitness:.4f}, elites={len(elites)}")
 
-        # Compute diversity score
         all_ids = set(c.id for c in self._population)
         diversity = len(all_ids) / max(len(self._population), 1)
 
@@ -325,6 +383,41 @@ class ThinkingEvolution:
         """Get top N elite solutions from the pool."""
         return self.elite_pool.get_top(n)
 
+    @staticmethod
+    def select_best_by_prompt_echo(candidates: list[EvolutionCandidate],
+                                    prompt: str = "",
+                                    system_prompt: str = "") -> tuple[int, EvolutionCandidate]:
+        """PromptEcho: select best candidate by zero-cost prompt-output alignment.
+
+        Ranks candidates by QualityScorer n-gram alignment between each
+        candidate's content and the original prompt. No LLM call needed.
+        Returns (index, best_candidate).
+        """
+        from .quality_scorer import get_quality_scorer
+        scorer = get_quality_scorer()
+        items = [{"output": c.content, "system": system_prompt, "prompt": prompt}
+                 for c in candidates]
+        best_idx, best_result = scorer.select_best(items)
+        return best_idx, candidates[best_idx]
+
+    @staticmethod
+    def rank_by_prompt_echo(candidates: list[EvolutionCandidate],
+                             prompt: str = "",
+                             system_prompt: str = "") -> list[tuple[int, EvolutionCandidate, float]]:
+        """PromptEcho: rank all candidates by quality score.
+
+        Returns list of (index, candidate, score) sorted by score descending.
+        """
+        from .quality_scorer import get_quality_scorer
+        scorer = get_quality_scorer()
+        items = [{"output": c.content, "system": system_prompt, "prompt": prompt}
+                 for c in candidates]
+        results = scorer.evaluate_batch(items)
+        ranked = [(i, candidates[i], results[i].overall_score)
+                  for i in range(len(candidates))]
+        ranked.sort(key=lambda x: x[2], reverse=True)
+        return ranked
+
     def get_population_stats(self) -> dict[str, Any]:
         return {
             "population_size": len(self._population),
@@ -333,6 +426,10 @@ class ThinkingEvolution:
             "avg_fitness": sum(c.fitness for c in self._population) / max(len(self._population), 1),
             "best_fitness": max((c.fitness for c in self._population), default=0),
         }
+
+    def get_process_metrics(self) -> dict[str, Any]:
+        """DGM-H: return process-level efficiency metrics."""
+        return self._process_metrics.to_dict()
 
     # ── Prompt builders ──
 

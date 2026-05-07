@@ -192,5 +192,36 @@ def register_seed_tools(market: ToolMarket) -> None:
     market.register("generate_diagram", "Generate ASCII diagram from description",
                     category="visualization", handler=_generate_diagram,
                     input_schema={"description": "string"})
+    market.register("tabular_reason", "In-context tabular data classification and analysis",
+                    category="data", handler=_tabular_reason,
+                    input_schema={"cod": "number", "bod": "number", "do": "number",
+                                  "nh3n": "number", "task": "string"})
+
+
+def _tabular_reason(inputs: dict) -> dict:
+    """In-context tabular reasoning: classify water/air quality, detect outliers."""
+    from .tabular_reasoner import get_tabular_reasoner
+    reasoner = get_tabular_reasoner()
+    task = inputs.get("task", "classify_water_quality")
+    if task == "classify_water_quality":
+        result = reasoner.classify_water_quality(
+            cod=float(inputs.get("cod", 0)), bod=float(inputs.get("bod", 0)),
+            do=float(inputs.get("do", 0)), nh3n=float(inputs.get("nh3n", 0)))
+    elif task == "classify_air_quality":
+        result = reasoner.classify_air_quality(
+            so2=float(inputs.get("so2", 0)), no2=float(inputs.get("no2", 0)),
+            pm10=float(inputs.get("pm10", 0)), pm25=float(inputs.get("pm25", 0)))
+    elif task == "classify_noise":
+        result = reasoner.classify_noise_level(
+            daytime_db=float(inputs.get("daytime_db", 0)),
+            night_db=float(inputs.get("night_db", 0)))
+    elif task == "detect_outliers":
+        values = inputs.get("values", [])
+        outliers = reasoner.detect_outliers(values)
+        return {"outliers": outliers, "count": sum(1 for o in outliers if o["is_outlier"])}
+    else:
+        return {"error": f"Unknown task: {task}"}
+    return {"prediction": result.prediction, "confidence": result.confidence,
+            "reasoning": result.reasoning}
 
 

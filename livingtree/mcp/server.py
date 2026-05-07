@@ -241,6 +241,77 @@ TOOLS = [
         "description": "Discover P2P network peers",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    # ── LivingTree Unique Tools ──
+    {
+        "name": "lookup_standard",
+        "description": "O(1) lookup of Chinese environmental standards (GB/HJ). Returns exact standard text with numeric limits.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Standard name or keyword, e.g. 'GB3095 PM2.5限值' or '噪声标准'"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "classify_water_quality",
+        "description": "Classify water quality per GB3838-2002 (I-V class). Input COD/BOD/DO/NH3-N values.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cod": {"type": "number", "description": "COD mg/L"},
+                "bod": {"type": "number", "description": "BOD mg/L"},
+                "do": {"type": "number", "description": "Dissolved Oxygen mg/L"},
+                "nh3n": {"type": "number", "description": "NH3-N mg/L"},
+            },
+            "required": ["cod", "bod", "do", "nh3n"],
+        },
+    },
+    {
+        "name": "classify_air_quality",
+        "description": "Classify air quality per GB3095-2012. Input SO2/NO2/PM10/PM2.5 values.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "so2": {"type": "number"}, "no2": {"type": "number"},
+                "pm10": {"type": "number"}, "pm25": {"type": "number"},
+            },
+            "required": ["so2", "no2", "pm10", "pm25"],
+        },
+    },
+    {
+        "name": "classify_noise_level",
+        "description": "Classify noise level per GB3096-2008. Input daytime and nighttime dB.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "daytime_db": {"type": "number"}, "night_db": {"type": "number"},
+            },
+            "required": ["daytime_db", "night_db"],
+        },
+    },
+    {
+        "name": "redact_pii",
+        "description": "Redact personally identifiable information from text. Returns cleaned text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to scan and redact"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "detect_outliers",
+        "description": "Detect statistical outliers in monitoring data using IQR method.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "values": {"type": "array", "items": {"type": "number"}, "description": "Numeric monitoring values"},
+            },
+            "required": ["values"],
+        },
+    },
 ]
 
 
@@ -307,6 +378,13 @@ class MCPServer:
             "get_status": self._get_status,
             "get_metrics": self._get_metrics,
             "discover_peers": self._discover_peers,
+            # LivingTree unique
+            "lookup_standard": self._lookup_standard,
+            "classify_water_quality": self._classify_water,
+            "classify_air_quality": self._classify_air,
+            "classify_noise_level": self._classify_noise,
+            "redact_pii": self._redact_pii,
+            "detect_outliers": self._detect_outliers,
         }
 
         handler = handlers.get(method)
@@ -465,6 +543,64 @@ class MCPServer:
             return {"error": "Hub not available"}
         peers = await self._hub.discover_peers()
         return {"peers": peers}
+
+    # ── LivingTree unique tool handlers ──
+
+    async def _lookup_standard(self, params: dict) -> dict:
+        try:
+            from ..knowledge.engram_store import get_engram_store
+            store = get_engram_store(seed=True)
+            result = store.lookup(params["query"])
+            if result:
+                return {"found": True, "content": result, "source": "engram"}
+            results = store.search(params["query"], top_k=5)
+            return {"found": False, "search_results": results}
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def _classify_water(self, params: dict) -> dict:
+        from ..capability.tabular_reasoner import get_tabular_reasoner
+        r = get_tabular_reasoner()
+        result = r.classify_water_quality(
+            cod=float(params["cod"]), bod=float(params["bod"]),
+            do=float(params["do"]), nh3n=float(params["nh3n"]))
+        return {"grade": result.prediction, "confidence": result.confidence,
+                "reasoning": result.reasoning}
+
+    async def _classify_air(self, params: dict) -> dict:
+        from ..capability.tabular_reasoner import get_tabular_reasoner
+        r = get_tabular_reasoner()
+        result = r.classify_air_quality(
+            so2=float(params["so2"]), no2=float(params["no2"]),
+            pm10=float(params["pm10"]), pm25=float(params["pm25"]))
+        return {"grade": result.prediction, "confidence": result.confidence,
+                "reasoning": result.reasoning}
+
+    async def _classify_noise(self, params: dict) -> dict:
+        from ..capability.tabular_reasoner import get_tabular_reasoner
+        r = get_tabular_reasoner()
+        result = r.classify_noise_level(
+            daytime_db=float(params["daytime_db"]),
+            night_db=float(params["night_db"]))
+        return {"grade": result.prediction, "confidence": result.confidence,
+                "reasoning": result.reasoning}
+
+    async def _redact_pii(self, params: dict) -> dict:
+        from ..knowledge.pii_redactor import get_pii_redactor
+        r = get_pii_redactor()
+        cleaned, findings = r.redact(params["text"])
+        return {"redacted": cleaned, "findings_count": len(findings),
+                "types_found": list(set(f.pii_type for f in findings))}
+
+    async def _detect_outliers(self, params: dict) -> dict:
+        from ..capability.tabular_reasoner import get_tabular_reasoner
+        r = get_tabular_reasoner()
+        values = [float(v) for v in params["values"]]
+        outliers = r.detect_outliers(values)
+        extreme = [o for o in outliers if o["severity"] == "extreme"]
+        mild = [o for o in outliers if o["severity"] == "mild"]
+        return {"total": len(values), "extreme_outliers": len(extreme),
+                "mild_outliers": len(mild), "details": outliers}
 
 
 async def serve_stdio(hub=None) -> None:

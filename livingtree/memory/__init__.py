@@ -20,6 +20,7 @@ from .memory_policy import (
     TokenBudget,
     MemPOOptimizer,
 )
+from .user_model import UserModel, UserProfile, UserCorrection, UserHabit, get_user_model
 
 __all__ = [
     "MemoryItem",
@@ -28,4 +29,5 @@ __all__ = [
     "RetentionPolicy",
     "TokenBudget",
     "MemPOOptimizer",
+    "UserModel", "UserProfile", "UserCorrection", "UserHabit", "get_user_model",
 ]

@@ -5,12 +5,17 @@ flash model children in parallel against the existing LLM client for batched
 analysis, decomposition, or parallel reasoning. Each child gets a slice of
 the query and returns structured results.
 
+FoldAgent integration: Context-Folding collapses each worker's verbose output
+into a concise structured summary, preserving key entities/decisions/actions
+while reducing aggregate context by ~10x.
+
 Usage:
     rlm = RLMRunner(consciousness=dna.flash)
     results = await rlm.fan_out(
         prompt="Compare these 8 files for security issues and suggest fixes",
         n_workers=8,
         splitter=RLMSplitter.BY_ITEM,
+        fold=True,  # FoldAgent: collapse worker results
     )
 """
 
@@ -23,6 +28,8 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Optional
 
 from loguru import logger
+
+from .context_fold import FoldResult, fold_context, fold_text_heuristic
 
 
 class RLMSplitter(Enum):
@@ -50,6 +57,21 @@ class RLMResult:
     error: str = ""
     tokens_used: int = 0
     duration_ms: float = 0.0
+    fold: FoldResult | None = None
+
+    def folded_summary(self, max_chars: int = 300) -> str:
+        """Return folded summary if available, else heuristic-fold the content."""
+        if self.fold:
+            return self.fold.to_context_block()
+        if self.content:
+            return fold_text_heuristic(self.content, max_chars)
+        return f"[Worker {self.task_id} empty]"
+
+    def effective_content(self, folded: bool = False) -> str:
+        """Get content: folded summary if requested and available, else raw."""
+        if folded and self.fold:
+            return self.fold.summary
+        return self.content
 
 @dataclass
 class RLMAggregate:
@@ -60,6 +82,7 @@ class RLMAggregate:
     worker_count: int = 0
     success_count: int = 0
     fail_count: int = 0
+    fold: FoldResult | None = None
 
     def summary(self) -> str:
         return (
@@ -71,6 +94,31 @@ class RLMAggregate:
         if not self.results:
             return None
         return max(self.results, key=lambda r: len(r.content) if r.success else 0)
+
+    def folded_summary(self) -> str:
+        """FoldAgent: return aggregate-level folded summary of all worker results."""
+        if self.fold:
+            return self.fold.to_context_block()
+        parts = []
+        for r in self.results:
+            if r.success:
+                parts.append(r.folded_summary())
+            else:
+                parts.append(f"[Worker {r.task_id}] FAILED: {r.error[:100]}")
+        return "\n---\n".join(parts)
+
+    def compact_context(self) -> str:
+        """Return a context-efficient representation of all results.
+
+        For use as downstream context — dramatically smaller than raw content.
+        """
+        lines = [f"## RLM Results ({self.success_count}/{self.worker_count} ok)\n"]
+        for r in self.results:
+            if r.success:
+                lines.append(f"- Worker {r.task_id}: {r.folded_summary(120)}")
+            else:
+                lines.append(f"- Worker {r.task_id}: FAILED ({r.error[:60]})")
+        return "\n".join(lines)
 
 
 class RLMRunner:
@@ -97,6 +145,8 @@ class RLMRunner:
         splitter: RLMSplitter = RLMSplitter.BY_ASPECT,
         worker_fn: Callable[[RLMTask], Any] | None = None,
         items: list[str] | None = None,
+        fold: bool = False,
+        fold_max_chars: int = 500,
     ) -> RLMAggregate:
         """Launch N parallel flash workers on split sub-tasks.
 
@@ -106,9 +156,11 @@ class RLMRunner:
             splitter: How to split the input
             worker_fn: Custom worker function; uses default if None
             items: Pre-split items for BY_ITEM mode
+            fold: FoldAgent — if True, fold each worker's output into concise summary
+            fold_max_chars: Target max chars for each folded result
 
         Returns:
-            RLMAggregate with all worker results
+            RLMAggregate with all worker results (optionally folded)
         """
         n = min(max(n_workers, 1), self.max_workers)
         tasks = self._split(prompt, n, splitter, items)
@@ -130,7 +182,7 @@ class RLMRunner:
             else:
                 processed.append(r)
 
-        return RLMAggregate(
+        aggregate = RLMAggregate(
             results=processed,
             total_tokens=sum(r.tokens_used for r in processed),
             total_duration_ms=sum(r.duration_ms for r in processed),
@@ -138,6 +190,36 @@ class RLMRunner:
             success_count=sum(1 for r in processed if r.success),
             fail_count=sum(1 for r in processed if not r.success),
         )
+
+        if fold:
+            await self._fold_aggregate(aggregate, prompt, fold_max_chars)
+
+        return aggregate
+
+    async def _fold_aggregate(self, aggregate: RLMAggregate, prompt: str,
+                               max_chars: int = 500):
+        """FoldAgent: fold each worker result, then fold the aggregate."""
+        successes = [r for r in aggregate.results if r.success]
+        if not successes:
+            return
+
+        for r in successes:
+            if r.content and len(r.content) > max_chars:
+                consciousness = getattr(self, '_consciousness', None)
+                r.fold = await fold_context(r.content, consciousness, "general", max_chars)
+
+        combined = aggregate.folded_summary()
+        if len(combined) > max_chars * 2:
+            consciousness = getattr(self, '_consciousness', None)
+            aggregate.fold = await fold_context(combined, consciousness, "general",
+                                                 max_chars * 2)
+
+    async def fold_worker(self, result: RLMResult, domain: str = "general",
+                          max_chars: int = 500) -> FoldResult:
+        """Fold a single worker result after the fact."""
+        consciousness = getattr(self, '_consciousness', None)
+        result.fold = await fold_context(result.content, consciousness, domain, max_chars)
+        return result.fold
 
     def _split(
         self,

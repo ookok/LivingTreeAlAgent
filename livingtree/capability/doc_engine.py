@@ -1,11 +1,14 @@
-"""End-to-end document generation engine.
+"""End-to-end document generation engine with Context-Folding.
 
 No hardcoded templates. Templates are learned from:
 1. TemplateLearner (KB + Distillation)
 2. FormatDiscovery (document analysis)
 3. KnowledgeBase (previously generated)
 
-Uses the TemplateLearner for dynamic template generation.
+FoldAgent integration: when generating multi-section reports, each section's
+content is folded into a compact summary before being passed as context to
+subsequent sections. This keeps the generation context ~10x smaller, enabling
+longer documents (50+ sections) without context explosion.
 """
 
 from __future__ import annotations
@@ -19,6 +22,8 @@ from typing import Any, Callable, Dict, List, Optional
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from ..execution.context_fold import FoldResult, fold_context, fold_text_heuristic
+
 
 class DocSpec(BaseModel):
     name: str
@@ -28,7 +33,7 @@ class DocSpec(BaseModel):
 
 
 class DocEngine:
-    """Document generation with dynamic template learning."""
+    """Document generation with dynamic template learning and Context-Folding."""
 
     def __init__(self, output_dir: str = "./data/output"):
         self._templates: dict[str, DocSpec] = {}
@@ -37,6 +42,7 @@ class DocEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.knowledge_base: Any = None
         self.template_learner: Any = None
+        self._folded_sections: list[FoldResult] = []
 
     def list_templates(self) -> list[str]:
         return list(self._templates.keys())
@@ -46,14 +52,21 @@ class DocEngine:
         return tpl.sections if tpl else []
 
     async def generate_report(self, template_type: str, data: dict[str, Any],
-                               requirements: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Generate report using learned templates.
+                                requirements: dict[str, Any] | None = None,
+                                fold: bool = False,
+                                fold_max_chars: int = 500) -> dict[str, Any]:
+        """Generate report using learned templates with optional Context-Folding.
 
-        Auto-extracts structured entities from raw input text when
-        an ExtractionEngine is available in the world. Extracted entities
-        are added to data before template generation.
+        When fold=True, each section's generated content is folded into a compact
+        summary that's passed to subsequent sections. The final document retains
+        full content; only the per-section generation context is compressed.
+
+        Args:
+            fold: Enable FoldAgent context compression between sections
+            fold_max_chars: Target max chars for folded section summaries
         """
         reqs = requirements or {}
+        self._folded_sections = []
 
         if "raw_text" in data and hasattr(self, '_extraction_engine'):
             try:
@@ -109,17 +122,46 @@ class DocEngine:
         total = len(sections)
 
         for idx, sec in enumerate(sections, start=1):
-            content = await self._generate_section(sec, data, reqs)
+            section_data = dict(data)
+            if fold and self._folded_sections:
+                folded_context = self._build_folded_context()
+                section_data["_folded_previous_sections"] = folded_context
+
+            content = await self._generate_section(sec, section_data, reqs)
             parts.append(f"# {sec}\n\n{content}")
+
+            if fold and len(content) > fold_max_chars:
+                consciousness = getattr(self, '_consciousness', None)
+                folded = await fold_context(content, consciousness,
+                                             template_type, fold_max_chars)
+                self._folded_sections.append(folded)
+
             pct = int((idx / total) * 100)
             self._progress[template_type] = pct
             progress.append({"section": sec, "index": idx, "total": total, "progress_pct": pct})
 
         document = "\n\n".join(parts)
-        return {
+        result = {
             "document": document, "sections": sections, "progress": progress,
             "template_type": template_type, "total_sections": total, "completed": True,
         }
+        if fold:
+            result["folded_sections"] = [
+                {"section": sections[i], "summary": f.summary, "compression": f.compression_ratio}
+                for i, f in enumerate(self._folded_sections) if i < len(sections)
+            ]
+        return result
+
+    def _build_folded_context(self) -> str:
+        """Build compact context from all previously folded sections."""
+        lines = ["[Context-Folding: 前置章节摘要]\n"]
+        for i, f in enumerate(self._folded_sections):
+            lines.append(f"## 章节{i+1}概要: {f.summary[:300]}")
+            if f.key_entities:
+                lines.append(f"关键信息: {', '.join(f.key_entities[:3])}")
+            if f.decisions:
+                lines.append(f"决策: {'; '.join(f.decisions[:2])}")
+        return "\n".join(lines)
 
     async def _get_sections(self, template_type: str, data: dict[str, Any],
                             requirements: dict[str, Any]) -> list[str]:
@@ -165,21 +207,40 @@ class DocEngine:
         )
 
     async def generate_report_streaming(self, template_type: str, data: dict[str, Any],
-                                        requirements: dict[str, Any] | None = None):
+                                         requirements: dict[str, Any] | None = None,
+                                         fold: bool = False,
+                                         fold_max_chars: int = 500):
         """Incremental generation — yields each section as it's completed.
 
+        With fold=True, each yield includes a 'folded_context' key with
+        compressed summaries of all prior sections, enabling downstream
+        consumption with minimal context overhead.
+
         Usage:
-            async for update in engine.generate_report_streaming(...):
+            async for update in engine.generate_report_streaming(fold=True):
                 print(f"[{update['progress_pct']}%] {update['section']}")
         """
         reqs = requirements or {}
+        self._folded_sections = []
         sections = await self._get_sections(template_type, data, reqs)
         total = len(sections)
         parts = []
 
         for idx, sec in enumerate(sections, start=1):
-            content = await self._generate_section(sec, data, reqs)
+            section_data = dict(data)
+            if fold and self._folded_sections:
+                folded_context = self._build_folded_context()
+                section_data["_folded_previous_sections"] = folded_context
+
+            content = await self._generate_section(sec, section_data, reqs)
             parts.append(f"# {sec}\n\n{content}")
+
+            if fold and len(content) > fold_max_chars:
+                consciousness = getattr(self, '_consciousness', None)
+                folded = await fold_context(content, consciousness,
+                                             template_type, fold_max_chars)
+                self._folded_sections.append(folded)
+
             pct = int((idx / total) * 100)
             yield {
                 "type": "section_complete",

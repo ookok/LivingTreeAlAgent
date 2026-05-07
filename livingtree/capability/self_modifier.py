@@ -143,12 +143,16 @@ class SelfModifier:
         if not modifications:
             return ModifyResult(task=task, error="No modifications generated")
 
-        # Phase 4: Backup → apply → verify
-        backups = {}
+        # Phase 4: Apply with atomic modification
+        from ..core.atomic_modification import AtomicModification
+
+        edits = {}
         for mod in modifications[:5]:
             fpath = Path(mod["file"])
-            if fpath.exists():
-                backups[str(fpath)] = fpath.read_bytes()
+            code = mod.get("code", "")
+            code = re.sub(r'^```\w*\n', '', code)
+            code = re.sub(r'\n```$', '', code)
+            edits[str(fpath)] = code
 
         result.diff_summary = "\n".join(
             f"{'  +' if mod['action']=='create' else '  M'} {mod['file']}"
@@ -159,6 +163,32 @@ class SelfModifier:
             result.success = True
             self._save_history(result)
             return result
+
+        with AtomicModification(edits, reason=f"SelfModifier: {task[:80]}") as atom:
+            atom.validate()
+            apply_result = atom.apply()
+            if apply_result.success:
+                atom.commit()
+                result.success = True
+                result.diff_summary = apply_result.summary
+            else:
+                result.error = "; ".join(apply_result.errors)
+                return result
+
+        # Phase 5: Verify imports
+        for mod in modifications[:3]:
+            fpath = Path(mod["file"])
+            if fpath.suffix == ".py":
+                try:
+                    module_name = str(fpath).replace("/", ".").replace("\\", ".").removesuffix(".py")
+                    importlib.import_module(module_name)
+                    result.test_result = f"Import OK: {len(modifications)} files"
+                except Exception as e:
+                    result.test_result = f"Import WARNING: {e}"
+                    break
+
+        self._save_history(result)
+        return result
 
         # Apply modifications
         for mod in modifications[:5]:

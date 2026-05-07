@@ -676,3 +676,100 @@ def get_roles() -> list[str]:
 
 def get_role(name: str) -> RoleTemplate | None:
     return ROLE_TEMPLATES.get(name)
+
+
+# ═══ MSM-style Agent Spec injection ═══
+
+
+def inject_spec(user_input: str, role: str = "",
+                include_spec: bool = True) -> str:
+    """MSM (Model Spec Midtraining): inject Agent behavioral principles
+    into the system context alongside the role template.
+
+    This replaces the shallow "you are an expert" pattern with deep
+    "here are the principles and WHY they matter." The LLM generalizes
+    better in unfamiliar situations because it understands the values
+    behind the rules.
+
+    Args:
+        user_input: The user's message
+        role: Optional role name to apply role template
+        include_spec: If True, inject Agent Spec principles
+
+    Returns:
+        Full system prompt + user input string
+    """
+    parts = []
+
+    if role and role in ROLE_TEMPLATES:
+        template = ROLE_TEMPLATES[role]
+        parts.append(template.role_prompt)
+        parts.append("")
+    elif role:
+        parts.append(f"你是{role}。")
+
+    if include_spec:
+        from .model_spec import get_agent_spec
+        spec = get_agent_spec()
+        parts.append(spec.format_for_injection())
+        parts.append("")
+
+    parts.append(user_input)
+    return "\n".join(parts)
+
+
+def build_system_prompt(role: str = "", include_spec: bool = True) -> str:
+    """Build system prompt with optional role + Agent Spec injection.
+
+    For use as the system message in chat completion APIs.
+    """
+    parts = []
+
+    if role and role in ROLE_TEMPLATES:
+        template = ROLE_TEMPLATES[role]
+        parts.append(template.role_prompt)
+        if template.quality_gates:
+            parts.append(f"质量标准: {', '.join(template.quality_gates)}")
+        parts.append("")
+    elif role:
+        parts.append(f"你是{role}。")
+
+    if include_spec:
+        from .model_spec import get_agent_spec
+        spec = get_agent_spec()
+        parts.append(spec.format_for_injection())
+
+    return "\n".join(parts)
+
+
+def get_spec_enhanced_role(role: str) -> dict[str, Any]:
+    """Get a role template enhanced with MSM-style spec principles.
+
+    Returns a dict with role info + relevant spec principles for that role.
+    Useful for dynamic prompt construction.
+    """
+    from .model_spec import get_agent_spec
+    spec = get_agent_spec()
+
+    role_template = ROLE_TEMPLATES.get(role)
+    role_spec_map = {
+        "环评专家": ["A", "B", "F", "G"],
+        "代码审查": ["A", "C", "E", "F", "G"],
+        "全栈工程师": ["A", "B", "C", "E", "F", "G"],
+        "安全评价师": ["A", "C", "D", "F", "G"],
+        "数据分析师": ["A", "B", "E", "F", "G"],
+        "AI研究员": ["A", "B", "D", "E", "G"],
+    }
+
+    principle_ids = role_spec_map.get(role, ["A", "B", "C", "F", "G"])
+    relevant_principles = [
+        p for p in spec.principles if p.id in principle_ids
+    ]
+
+    return {
+        "role": role,
+        "role_prompt": role_template.role_prompt if role_template else f"你是{role}。",
+        "quality_gates": role_template.quality_gates if role_template else [],
+        "output_format": role_template.output_format if role_template else "",
+        "principles": [p.format_for_prompt() for p in sorted(relevant_principles, key=lambda p: -p.priority)],
+    }

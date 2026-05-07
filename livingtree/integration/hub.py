@@ -345,6 +345,32 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"Vault providers: {e}")
 
+        # Register web2api as a local provider (no API key needed)
+        try:
+            from ..treellm.providers import OpenAILikeProvider
+            self.world.consciousness._llm.add_provider(OpenAILikeProvider(
+                name="web2api", base_url="http://localhost:5001/v1",
+                api_key="web2api-local", default_model="deepseek-chat",
+            ))
+            logger.info("Web2API provider registered for model election")
+        except Exception as e:
+            logger.debug(f"Web2API provider: {e}")
+
+        # Auto-discover opencode providers and register them
+        try:
+            from .opencode_bridge import OpenCodeBridge
+            bridge = OpenCodeBridge()
+            oc_providers = await bridge.discover_for_election()
+            for p in oc_providers:
+                if p.get("api_key") and p.get("base_url"):
+                    self.world.consciousness._llm.add_provider(OpenAILikeProvider(
+                        name=p["name"], base_url=p["base_url"],
+                        api_key=p["api_key"], default_model=p.get("model", ""),
+                    ))
+                    logger.info(f"OpenCode provider: {p['name']} ({p.get('model','')})")
+        except Exception as e:
+            logger.debug(f"OpenCode bridge: {e}")
+
         # ── Register provider profiles for embedding scorer ──
         if getattr(self, 'embedding_scorer', None):
             try:
@@ -540,6 +566,7 @@ class IntegrationHub:
                     "bailing": ("https://api.baichuan-ai.com/v1", self.config.model.bailing_api_key),
                     "stepfun": ("https://api.stepfun.com/v1", self.config.model.stepfun_api_key),
                     "internlm": ("https://api.intern-ai.org.cn/v1", self.config.model.internlm_api_key),
+                    "web2api": ("http://localhost:5001/v1", "web2api-local"),
                 }
                 for name, (base_url, api_key) in provider_keys.items():
                     if api_key:

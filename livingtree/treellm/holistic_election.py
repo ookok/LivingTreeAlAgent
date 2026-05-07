@@ -63,6 +63,7 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "bailing": ["推理", "企业", "对话", "分析", "reasoning", "enterprise", "chat", "analysis"],
     "stepfun": ["推理", "深度", "长文本", "多模态", "reasoning", "deep", "long-context", "multimodal"],
     "internlm": ["推理", "中文", "学术", "代码", "reasoning", "chinese", "academic", "code"],
+    "web2api": ["网页", "免费", "多平台", "web", "free", "multi-platform"],
 }
 
 

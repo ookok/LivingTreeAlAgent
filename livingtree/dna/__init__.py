@@ -19,6 +19,15 @@ from .hitl import HITLManager, HITLConfig, InterventionMode, HITL_MANAGER, get_h
 from .evolution_store import EvolutionStore, EvolutionLesson, OntologyAuditor, EVOLUTION_STORE, get_evolution_store
 from .agent_roles import RoleTriad, AgentRole, RoleAction, TriadSession, ROLE_TRIAD, get_triad
 from .security_context import SecurityContext, Capability, SandboxExecutor, SEC_CTX, get_security_context, get_sandbox
+from .meta_memory import MetaMemory, StrategyRecord, GatingRecord, ToolEvent, get_meta_memory
+from .meta_strategy import (
+    MetaStrategy, MetaStrategyEngine, MetaStrategyVersion,
+    ObservationStrategy, GenerationStrategy, DeploymentStrategy,
+    get_meta_strategy_engine,
+)
+from .model_spec import AgentSpec, SpecPrinciple, get_agent_spec
+from .output_compressor import compress_output, CompressResult, compress_conversation
+from .self_evolving import SelfEvolvingEngine, ProcessMetrics
 
 __all__ = [
     "LifeEngine",
@@ -34,4 +43,11 @@ __all__ = [
     "EvolutionStore", "EvolutionLesson", "OntologyAuditor", "EVOLUTION_STORE", "get_evolution_store",
     "RoleTriad", "AgentRole", "RoleAction", "TriadSession", "ROLE_TRIAD", "get_triad",
     "SecurityContext", "Capability", "SandboxExecutor", "SEC_CTX", "get_security_context", "get_sandbox",
+    "MetaMemory", "StrategyRecord", "GatingRecord", "ToolEvent", "get_meta_memory",
+    "MetaStrategy", "MetaStrategyEngine", "MetaStrategyVersion",
+    "ObservationStrategy", "GenerationStrategy", "DeploymentStrategy",
+    "get_meta_strategy_engine",
+    "AgentSpec", "SpecPrinciple", "get_agent_spec",
+    "compress_output", "CompressResult", "compress_conversation",
+    "SelfEvolvingEngine", "ProcessMetrics",
 ]

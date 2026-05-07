@@ -76,15 +76,44 @@ def expand_query(query: str, hub=None) -> list[str]:
 
 
 async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[RetrievalResult]:
-    """Unified retrieval combining all paths with graph boost.
+    """Unified retrieval with SSA-style content-dependent source routing.
 
     Paths: document_kb (FTS5+embedding RRF) + knowledge_base (cosine) + struct_mem + graph.
+    KnowledgeRouter pre-selects optimal paths before retrieval to avoid unnecessary work.
     """
     results: dict[str, RetrievalResult] = {}
+
+    active_paths = {"doc_kb", "kb", "struct_mem", "graph"}
+    try:
+        from .knowledge_router import get_knowledge_router
+        router = get_knowledge_router()
+        route = router.classify(query)
+        if route.query_type in ("regulation", "formula", "lookup"):
+            active_paths = {"kb"}
+        elif route.query_type == "graph":
+            active_paths = {"graph", "kb"}
+        elif route.query_type in ("semantic",):
+            active_paths = {"doc_kb", "kb"}
+    except Exception:
+        pass
+
     expanded_queries = expand_query(query, hub)
 
-    # Path 1: DocumentKB (hybrid FTS5 + embedding RRF)
+    # Path 0: Engram O(1) lookup — first, fastest, always enabled
     try:
+        from .engram_store import get_engram_store
+        engram = get_engram_store(seed=False)
+        hit = engram.lookup(query)
+        if hit:
+            results[f"engram-{hash(hit) % 10000}"] = RetrievalResult(
+                text=hit, score=1.0, source="engram", doc_id="engram-direct",
+            )
+    except Exception:
+        pass
+
+    # Path 1: DocumentKB (hybrid FTS5 + embedding RRF)
+    if "doc_kb" in active_paths:
+        try:
         from ..knowledge.document_kb import DocumentKB
         kb = DocumentKB()
         for q in expanded_queries[:2]:
@@ -104,7 +133,8 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
         pass
 
     # Path 2: KnowledgeBase (cosine)
-    try:
+    if "kb" in active_paths:
+        try:
         from ..knowledge.knowledge_base import KnowledgeBase
         base = KnowledgeBase()
         docs = base.search(query, top_k=top_k)
@@ -117,7 +147,8 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
         pass
 
     # Path 3: StructMem (semantic memory)
-    try:
+    if "struct_mem" in active_paths:
+        try:
         from ..knowledge.struct_mem import get_struct_mem
         mem = get_struct_mem() if 'get_struct_mem' in dir() else None
         if mem:
@@ -131,8 +162,9 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
     except Exception:
         pass
 
-    # Path 4: Graph boost — boost results connected to query entities
-    try:
+    # Path 4: Graph boost
+    if "graph" in active_paths:
+        try:
         from ..knowledge.knowledge_graph import KnowledgeGraph
         graph = KnowledgeGraph()
         entities = graph.entity_linking(query)

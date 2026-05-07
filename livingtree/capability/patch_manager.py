@@ -89,12 +89,12 @@ class PatchManager:
         )
 
     def apply(self, patch_path: str | Path, target_dir: str | Path = ".") -> PatchResult:
-        """Apply a .patch file. Backs up affected files first.
+        """Apply a .patch file with atomic multi-file modification.
 
-        Args:
-            patch_path: Path to .patch file
-            target_dir: Working directory for applying patch
+        Crash-safe: all-or-nothing via disk-persistent backup.
         """
+        from ..core.atomic_modification import AtomicModification
+
         patch_path = Path(patch_path)
         target_dir = Path(target_dir)
 
@@ -103,44 +103,36 @@ class PatchManager:
 
         result = PatchResult(name=patch_path.stem, path=patch_path)
 
-        # Phase 1: Extract affected files from patch, back them up
         patch_text = patch_path.read_text(encoding="utf-8")
         affected = self._parse_patch_files(patch_text)
         result.files_changed = affected
 
+        edits = {}
         for f in affected:
             fpath = target_dir / f
-            if fpath.exists():
-                backup = PATCH_DIR / f"{patch_path.stem}_{fpath.name}.bak"
-                shutil.copy2(fpath, backup)
-                logger.debug(f"Backed up {fpath} → {backup}")
+            if not fpath.exists():
+                continue
+            hunks = self._extract_hunks_for_file(patch_text, f)
+            if hunks:
+                original = fpath.read_text(encoding="utf-8")
+                new_text = self._apply_hunks(original, hunks)
+                if new_text != original:
+                    edits[str(fpath)] = new_text
+                    result.lines_added += sum(h["added"] for h in hunks)
+                    result.lines_removed += sum(h["removed"] for h in hunks)
 
-        # Phase 2: Apply patch using diff_match_patch or manual
-        try:
-            applied_count = 0
-            for f in affected:
-                fpath = target_dir / f
-                if not fpath.exists():
-                    continue
-                # Simple apply: apply hunks manually
-                hunks = self._extract_hunks_for_file(patch_text, f)
-                if hunks:
-                    original = fpath.read_text(encoding="utf-8")
-                    new_text = self._apply_hunks(original, hunks)
-                    if new_text != original:
-                        fpath.write_text(new_text, encoding="utf-8")
-                        applied_count += 1
-                        result.lines_added += sum(h["added"] for h in hunks)
-                        result.lines_removed += sum(h["removed"] for h in hunks)
+        if not edits:
+            result.error = "No hunks applied"
+            return result
 
-            if applied_count:
+        with AtomicModification(edits, reason=f"Patch: {patch_path.stem}") as atom:
+            atom.validate()
+            apply_result = atom.apply()
+            if apply_result.success:
+                atom.commit()
                 result.applied = True
             else:
-                result.error = "No hunks applied"
-        except Exception as e:
-            logger.warning(f"Patch apply failed: {e}, attempting rollback")
-            self._rollback_last(patch_path, target_dir)
-            result.error = str(e)
+                result.error = "; ".join(apply_result.errors)
 
         return result
 

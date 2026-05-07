@@ -172,6 +172,14 @@ class DocumentKB:
 
         chunker = HierarchicalChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         doc_chunks = chunker.chunk(text, title=title, source=source)
+
+        try:
+            from .ideablock_enricher import get_ideablock_enricher
+            enricher = get_ideablock_enricher()
+            doc_chunks = enricher.enrich_chunks(doc_chunks)
+        except Exception:
+            pass
+
         chunks = [
             {
                 "text": c.text,

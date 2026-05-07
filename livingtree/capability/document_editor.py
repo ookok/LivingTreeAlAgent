@@ -335,46 +335,33 @@ class DocumentEditor:
 
     async def transaction(
         self,
-        edits: list[dict],  # [{path, pattern, replacement}, ...]
+        edits: list[dict],
         dry_run: bool = False,
     ) -> dict:
-        """Edit multiple files atomically. Auto-rollback ALL if any fails.
+        """Edit multiple files atomically with crash-safe persistent backup.
 
-        Args:
-            edits: List of {path, pattern, replacement} dicts
-            dry_run: Preview only
-
-        Returns:
-            {success: bool, results: [EditResult], rollback: bool}
+        Uses AtomicModification for disk-persistent, all-or-nothing writes.
         """
-        backups = {}
-        results = []
-        success = True
+        from ..core.atomic_modification import AtomicModification
 
-        # Phase 1: Backup all files
+        file_edits = {}
         for edit in edits:
-            path = Path(edit["path"])
-            if path.exists():
-                backups[str(path)] = path.read_bytes()
+            path = edit["path"]
+            pattern = edit.get("pattern", "")
+            replacement = edit.get("replacement", "")
+            current = Path(path).read_text(encoding="utf-8") if Path(path).exists() else ""
+            new_content = re.sub(pattern, replacement, current)
+            file_edits[path] = new_content
 
-        # Phase 2: Apply all edits
-        for edit in edits:
-            result = self.replace_pattern(
-                edit["path"], edit.get("pattern", ""),
-                edit.get("replacement", ""), dry_run=dry_run,
-            )
-            results.append(result)
-            if not dry_run and result.replacements == 0:
-                success = False
-                break
-
-        # Phase 3: Rollback on failure
-        if not success and not dry_run:
-            for path_str, backup in backups.items():
-                Path(path_str).write_bytes(backup)
-            return {"success": False, "results": results, "rollback": True}
-
-        return {"success": True, "results": results, "rollback": False}
+        with AtomicModification(file_edits, reason="DocumentEditor.transaction") as atom:
+            atom.validate()
+            result = atom.apply()
+            if result.success:
+                atom.commit()
+                return {"success": True, "results": [
+                    {"path": p, "replacements": 1} for p in file_edits
+                ], "rollback": False}
+            return {"success": False, "results": [], "rollback": True}
 
     # ═══ Large file performance helpers ═══
 

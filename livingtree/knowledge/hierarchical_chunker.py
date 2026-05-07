@@ -14,6 +14,10 @@ Step 2: DFS-based hierarchical chunking
 
 Step 3: Produce DocumentChunk objects with full lineage
 
+LongParser-inspired extensions:
+  - SemanticChunker: embedding-similarity boundary detection
+  - TableAwareSplitter: preserve table structure during chunking
+
 The chunker works standalone (regex headings only) or with LLM hub
 for DSHP-LLM mode (best quality for complex documents).
 """
@@ -397,3 +401,226 @@ def chunk_document(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap, mode=mode,
     )
     return chunker.chunk(text, title, source)
+
+
+# ═══ LongParser-inspired Semantic Chunker ═══
+
+
+class SemanticChunker:
+    """Embedding-similarity boundary detection for semantic chunking.
+
+    LongParser approach: detect where semantic drift occurs (adjacent
+    sentences become dissimilar beyond threshold). Split at those boundaries.
+    Falls back to paragraph-level splitting if no embedding model available.
+
+    Unlike HierarchicalChunker which splits at headings, this splits at
+    semantic topic shifts — useful for flat documents without clear headings.
+    """
+
+    def __init__(self, similarity_threshold: float = 0.5,
+                 min_chunk_chars: int = 200, max_chunk_chars: int = 2000):
+        self.similarity_threshold = similarity_threshold
+        self.min_chunk_chars = min_chunk_chars
+        self.max_chunk_chars = max_chunk_chars
+        self._model = None
+
+    def chunk(self, text: str, title: str = "") -> list[DocumentChunk]:
+        sentences = self._split_sentences(text)
+        if len(sentences) <= 1:
+            return [self._make_chunk(text, title, 0, len(text), "0")]
+
+        boundaries = self._find_boundaries(sentences)
+        return self._build_chunks_from_boundaries(sentences, boundaries, title)
+
+    def _split_sentences(self, text: str) -> list[str]:
+        """Split text into sentence-like segments."""
+        raw = re.split(r'(?<=[。！？.!?\n])\s*', text)
+        return [s.strip() for s in raw if s.strip()]
+
+    def _find_boundaries(self, sentences: list[str]) -> list[int]:
+        """Find split points where semantic drift occurs.
+
+        Without an embedding model, uses lexical overlap as a proxy
+        for semantic similarity (Jaccard coefficient of character 3-grams).
+        """
+        boundaries = []
+        current_len = 0
+
+        for i in range(len(sentences) - 1):
+            current_len += len(sentences[i])
+
+            if current_len >= self.min_chunk_chars:
+                sim = self._lexical_similarity(sentences[i], sentences[i + 1])
+                if sim < self.similarity_threshold:
+                    boundaries.append(i + 1)
+                    current_len = 0
+                elif current_len >= self.max_chunk_chars:
+                    boundaries.append(i + 1)
+                    current_len = 0
+
+        return boundaries
+
+    def _lexical_similarity(self, a: str, b: str) -> float:
+        """Jaccard similarity of character 3-grams as semantic proxy."""
+        if not a or not b:
+            return 0.0
+
+        def ngrams(s: str, n: int = 3) -> set:
+            s = s.lower()
+            return {s[i:i + n] for i in range(len(s) - n + 1)}
+
+        a_set = ngrams(a)
+        b_set = ngrams(b)
+        if not a_set or not b_set:
+            return 0.0
+
+        intersection = len(a_set & b_set)
+        union = len(a_set | b_set)
+        return intersection / union if union > 0 else 0.0
+
+    def _build_chunks_from_boundaries(self, sentences: list[str],
+                                       boundaries: list[int],
+                                       title: str) -> list[DocumentChunk]:
+        chunks = []
+        prev = 0
+
+        for i, b in enumerate(boundaries + [len(sentences)]):
+            chunk_text = " ".join(sentences[prev:b])
+            if chunk_text.strip():
+                chunks.append(self._make_chunk(
+                    chunk_text, title, prev, b,
+                    f"sem-{i}", "SemanticChunk",
+                ))
+            prev = b
+
+        return chunks
+
+    @staticmethod
+    def _make_chunk(text: str, title: str, start: int, end: int,
+                    chunk_id: str, chunk_type: str = "semantic") -> DocumentChunk:
+        return DocumentChunk(
+            chunk_id=chunk_id,
+            text=text,
+            section_path=f"{title}/{chunk_type}",
+            section_id=chunk_id,
+            section_title=title,
+            start_char=start,
+            end_char=end,
+            metadata={"chunk_type": chunk_type, "title": title},
+        )
+
+
+class TableAwareSplitter:
+    """LongParser-inspired: preserve table structure during chunking.
+
+    Detects table boundaries (Markdown tables, pipe-delimited, CSV-like
+    blocks) and keeps them intact — never splits a table across chunks.
+    Critical for EIA reports which contain many data tables.
+    """
+
+    TABLE_START_RE = re.compile(
+        r'^\|[\s\-|]+\|\s*$|'         # Markdown table separator
+        r'^\|.*\|.*\|',                # Markdown table row
+        re.MULTILINE,
+    )
+    TABLE_BLOCK_RE = re.compile(
+        r'(?:^.+?\|.+\|.+\n)+',
+        re.MULTILINE,
+    )
+
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def chunk(self, text: str, title: str = "") -> list[DocumentChunk]:
+        sections = self._split_preserving_tables(text)
+        chunks = []
+
+        for i, section in enumerate(sections):
+            if self._is_table(section):
+                chunks.append(self._make_chunk(
+                    section, title, 0, len(section),
+                    f"table-{i}", "table",
+                ))
+            else:
+                sub_chunks = self._split_by_size(section, title, f"s{i}")
+                chunks.extend(sub_chunks)
+
+        return chunks
+
+    def _split_preserving_tables(self, text: str) -> list[str]:
+        table_regions = []
+        for m in self.TABLE_BLOCK_RE.finditer(text):
+            table_regions.append((m.start(), m.end()))
+
+        if not table_regions:
+            return [text]
+
+        sections = []
+        prev = 0
+        for start, end in table_regions:
+            if start > prev:
+                sections.append(text[prev:start])
+            sections.append(text[start:end])
+            prev = end
+        if prev < len(text):
+            sections.append(text[prev:])
+
+        return sections
+
+    def _is_table(self, text: str) -> bool:
+        lines = text.strip().split("\n")
+        if len(lines) < 2:
+            return False
+
+        pipe_lines = sum(1 for l in lines if l.strip().startswith("|") and "|" in l[1:])
+        if pipe_lines >= 2:
+            return True
+
+        comma_lines = sum(1 for l in lines if l.count(",") >= 2)
+        if comma_lines >= 3:
+            return True
+
+        return False
+
+    def _split_by_size(self, text: str, title: str,
+                       prefix: str) -> list[DocumentChunk]:
+        chunks = []
+        start = 0
+        idx = 0
+
+        while start < len(text):
+            end = min(start + self.chunk_size, len(text))
+            if end < len(text):
+                break_point = text.rfind("\n", start, end)
+                if break_point > start:
+                    end = break_point + 1
+
+            chunk_text = text[start:end]
+            if chunk_text.strip():
+                chunks.append(DocumentChunk(
+                    chunk_id=f"{prefix}-{idx}",
+                    text=chunk_text,
+                    section_path=title,
+                    section_title=title,
+                    start_char=start, end_char=end,
+                    metadata={"chunk_type": "text_split"},
+                ))
+
+            start = end - self.chunk_overlap if end < len(text) else end
+            idx += 1
+
+        return chunks
+
+    @staticmethod
+    def _make_chunk(text: str, title: str, start: int, end: int,
+                    chunk_id: str, chunk_type: str = "table") -> DocumentChunk:
+        return DocumentChunk(
+            chunk_id=chunk_id,
+            text=text,
+            section_path=f"{title}/{chunk_type}",
+            section_id=chunk_id,
+            section_title=title,
+            start_char=start, end_char=end,
+            metadata={"chunk_type": chunk_type, "title": title},
+        )

@@ -3,6 +3,10 @@
 Orchestrates the 7-stage pipeline with integrated cognitive evolution + CRV gating:
   perceive → cognize → ontogrow → plan → simulate → execute → reflect → evolve
 
+FoldAgent integration: after each stage completes, intermediate outputs are
+"folded" into compact structured summaries. This keeps cross-stage context
+~10x smaller, enabling deeper reasoning chains without context explosion.
+
 RuView CRV (Coordinate Remote Viewing) Signal-Line Protocol integration:
 Each stage now has a coherence gate (gestalt→sensory→topology→coherence→search→model)
 that can: ACCEPT (proceed), RECALIBRATE (re-process at higher depth), SKIP (not needed),
@@ -30,6 +34,7 @@ from pydantic import BaseModel, Field
 from .genome import Genome
 from .consciousness import Consciousness
 from .safety import SafetyGuard
+from ..execution.context_fold import FoldResult, fold_context, fold_text_heuristic
 
 
 class StageGate(enum.StrEnum):
@@ -132,17 +137,63 @@ class LifeEngine:
         self.is_running = False
         self.elite_registry: list[dict] = []
         self._branches: dict[str, Branch] = {}
+        self._folded_stages: dict[str, FoldResult] = {}
+        self._fold_enabled = False
 
     # ── Main pipeline ──
 
-    async def run(self, user_input: str, **kwargs) -> LifeContext:
+    async def run(self, user_input: str, fold: bool = False,
+                  fold_max_chars: int = 500, **kwargs) -> LifeContext:
+        """Run the full life cycle pipeline with optional Context-Folding.
+
+        Args:
+            user_input: The user's query/request
+            fold: FoldAgent — if True, fold each stage's output into compact
+                  summaries for the next stage, reducing context ~10x
+            fold_max_chars: Target max chars for folded stage summaries
+        """
         ctx = LifeContext(user_input=user_input, **kwargs)
         self.is_running = True
-        cycle_start = time.time()  # sql-flow multi-sink latency tracking
+        self._fold_enabled = fold
+        self._folded_stages = {}
+        cycle_start = time.time()
         self.stages.clear()
 
         if kwargs.get("memory_context"):
             ctx.metadata["struct_mem_context"] = kwargs["memory_context"]
+
+        # ── Session start: inject all context layers ──
+        try:
+            from ..memory.user_model import get_user_model
+            user_profile = get_user_model().inject_into_prompt()
+            if user_profile:
+                ctx.metadata["user_profile"] = user_profile
+        except Exception:
+            pass
+        try:
+            from .model_spec import get_agent_spec
+            spec_context = get_agent_spec().format_for_injection()
+            if spec_context:
+                ctx.metadata["agent_spec"] = spec_context
+        except Exception:
+            pass
+        try:
+            from ..execution.context_codex import get_context_codex
+            codex = get_context_codex(seed=False)
+            header = codex.build_header(max_chars=500)
+            if header:
+                ctx.metadata["codex_header"] = header
+        except Exception:
+            pass
+        try:
+            from ..knowledge.pii_redactor import has_pii, get_pii_redactor
+            if user_input and has_pii(user_input):
+                cleaned, _ = get_pii_redactor().redact(user_input)
+                ctx.metadata["original_input"] = user_input
+                user_input = cleaned
+            ctx.metadata["pii_checked"] = True
+        except Exception:
+            pass
 
         # Pre-turn side-git snapshot
         turn_id = None
@@ -156,9 +207,17 @@ class LifeEngine:
 
         try:
             await self._stage("perceive", self._perceive, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("perceive", ctx, fold_max_chars)
             await self._stage("cognize", self._cognize, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("cognize", ctx, fold_max_chars)
             await self._stage("ontogrow", self._grow_ontology, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("ontogrow", ctx, fold_max_chars)
             await self._stage("plan", self._plan, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("plan", ctx, fold_max_chars)
             decision = self._should_branch(ctx)
             if decision.should_branch:
                 hypotheses = ctx.metadata.get("hypotheses", []) or []
@@ -167,17 +226,23 @@ class LifeEngine:
                     b = self.fork_branch(name=f"branch-{ctx.session_id}-{i}", hypothesis=hyp, ctx=ctx)
                     created.append(b)
                 ctx.metadata["branches"] = [br.id for br in created]
-            # Lightweight foresight simulation stage before execution
             await self._stage("simulate", self._simulate, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("simulate", ctx, fold_max_chars)
             await self._stage("execute", self._execute, ctx)
-            # Branch comparison after execution if branches were explored
+            if self._fold_enabled:
+                await self._fold_stage("execute", ctx, fold_max_chars)
             branches = ctx.metadata.get("branches", [])
             if branches:
                 if ctx.metadata.get("success_rate", 0) > 0:
                     comp = self.compare_branches(branch_ids=branches)
                     ctx.metadata["branch_comparison"] = comp
             await self._stage("reflect", self._reflect, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("reflect", ctx, fold_max_chars)
             await self._stage("evolve", self._evolve, ctx)
+            if self._fold_enabled:
+                await self._fold_stage("evolve", ctx, fold_max_chars)
 
             # StructMem: auto-bind + consolidate after successful cycle
             struct_mem = getattr(self.world, 'struct_memory', None)
@@ -1139,6 +1204,16 @@ class LifeEngine:
         if ok and ctx.intent and self.world.knowledge_base and self.world.distillation:
             await self._precipitate_knowledge(ctx)
 
+        # Periodic meta-strategy review (every ~10 sessions)
+        if self.genome.generation % 10 == 0 and ok:
+            try:
+                from .meta_strategy import get_meta_strategy_engine
+                engine = get_meta_strategy_engine(self.consciousness)
+                if engine.consciousness:
+                    await engine.review_and_evolve()
+            except Exception:
+                pass
+
     # ── Embedded thinking evolution ──
 
     def _mutate_capabilities(self, cell: Any, fitness: float) -> None:
@@ -1486,6 +1561,122 @@ class LifeEngine:
         if gate_enabled:
             return self._gate_stage(name, ctx, allowed_recalibrations=max_recalibrations)
         return StageGateResult(gate=StageGate.ACCEPT, confidence=1.0, reason="gate disabled")
+
+    async def _fold_stage(self, name: str, ctx: LifeContext, max_chars: int = 500):
+        """FoldAgent: compress a stage's output into a compact summary.
+
+        Extracts the key outputs each stage produced on the LifeContext,
+        folds them into a structured FoldResult, and stores the summary
+        in self._folded_stages for downstream stage consumption.
+        """
+        stage_content = self._extract_stage_content(name, ctx)
+        if not stage_content or len(stage_content) <= max_chars:
+            folded = FoldResult(
+                original_length=len(stage_content) if stage_content else 0,
+                folded_length=len(stage_content) if stage_content else 0,
+                summary=stage_content or f"[{name}] no output",
+            )
+        else:
+            consciousness = getattr(self, 'consciousness', None)
+            folded = await fold_context(stage_content, consciousness, name, max_chars)
+
+        self._folded_stages[name] = folded
+        ctx.metadata[f"{name}_folded"] = folded.summary
+        ctx.metadata[f"{name}_folded_length"] = folded.folded_length
+        ctx.metadata[f"{name}_original_length"] = folded.original_length
+
+    def _extract_stage_content(self, name: str, ctx: LifeContext) -> str:
+        """Extract the key outputs produced by a stage on the LifeContext."""
+        parts = []
+
+        if name == "perceive":
+            if ctx.collected_materials:
+                for m in ctx.collected_materials[:5]:
+                    parts.append(str(m.get("content", m))[:1000])
+            if ctx.retrieved_knowledge:
+                for k in ctx.retrieved_knowledge[:3]:
+                    parts.append(str(k.get("content", k))[:500])
+
+        elif name == "cognize":
+            if ctx.intent:
+                parts.append(f"意图: {ctx.intent[:500]}")
+            cognition = ctx.metadata.get("cognition", "")
+            if cognition:
+                parts.append(f"认知: {cognition[:1000]}")
+
+        elif name == "ontogrow":
+            growth = ctx.metadata.get("ontology_growth", "")
+            if growth:
+                parts.append(f"本体增长: {growth[:1000]}")
+
+        elif name == "plan":
+            if ctx.plan:
+                for step in ctx.plan[:5]:
+                    parts.append(str(step)[:300])
+
+        elif name == "simulate":
+            if ctx.simulation_findings:
+                parts.append(str(ctx.simulation_findings)[:1000])
+            if ctx.simulation_decision:
+                parts.append(str(ctx.simulation_decision)[:500])
+
+        elif name == "execute":
+            if ctx.execution_results:
+                for r in ctx.execution_results[:5]:
+                    parts.append(str(r)[:300])
+
+        elif name == "reflect":
+            if ctx.reflections:
+                for r in ctx.reflections[:3]:
+                    parts.append(r[:500])
+
+        elif name == "evolve":
+            evolution_notes = ctx.metadata.get("evolution_notes", "")
+            if evolution_notes:
+                parts.append(evolution_notes[:1000])
+
+        return "\n".join(parts)
+
+    def get_folded_context(self) -> str:
+        """FoldAgent: build compact context from all folded stages.
+
+        Enhanced with ContextCodex: after building the folded context,
+        applies semantic substitution compression for additional 50-70%
+        reduction. Codex header is included inline so the LLM can
+        decode symbols when needed.
+        """
+        if not self._folded_stages:
+            return ""
+        lines = ["[Context-Folding: 流水线阶段摘要]\n"]
+        for name in ["perceive", "cognize", "ontogrow", "plan", "simulate",
+                      "execute", "reflect", "evolve"]:
+            if name in self._folded_stages:
+                f = self._folded_stages[name]
+                lines.append(f"## {name}: {f.summary[:300]}")
+                if f.key_entities:
+                    lines.append(f"  实体: {', '.join(f.key_entities[:5])}")
+                if f.decisions:
+                    lines.append(f"  决策: {'; '.join(f.decisions[:3])}")
+                if f.action_items:
+                    lines.append(f"  行动: {'; '.join(f.action_items[:3])}")
+
+        raw = "\n".join(lines)
+        try:
+            from ..execution.context_codex import get_context_codex
+            codex = get_context_codex(seed=False)
+            compressed, header = codex.compress(raw, layer=3, max_header_chars=500)
+            if header:
+                return f"{header}\n---\n{compressed}"
+        except Exception:
+            pass
+        return raw
+
+    def folded_stage_status(self) -> dict[str, Any]:
+        """Return folding statistics for monitoring."""
+        return {
+            f"{name}_ratio": f.compression_ratio
+            for name, f in self._folded_stages.items()
+        }
 
     def _list_agents(self) -> list:
         agents = []

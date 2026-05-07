@@ -79,15 +79,15 @@ class UserMenu extends Component {
     };
     LT.qs('[data-action="export"]', E).onclick = () => {
       this._hide();
-      S.sessions.forEach(s => S.export(s.id));
+      LT.store.sessions.forEach(s => LT.store.export(s.id));
       LT.emit('notify', { msg: '全部会话已导出', type: 'success' });
     };
     LT.qs('[data-action="clear"]', E).onclick = () => {
       this._hide();
       if (!confirm('确定清除所有本地数据？此操作不可撤销。')) return;
-      S.sessions = []; S.messages = {}; S.activeId = null; S.save();
+      LT.store.sessions = []; LT.store.messages = {}; LT.store.activeId = null; LT.store.save();
       LT.emit('notify', { msg: '数据已清除', type: 'success' });
     };
   }
 }
-LT.register('user-menu', new UserMenu());
+LT.register('user-menu', UserMenu);

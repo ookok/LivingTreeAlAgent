@@ -47,4 +47,4 @@ class BootOverlay extends Component {
     super.destroy();
   }
 }
-LT.register('boot-overlay', new BootOverlay());
+LT.register('boot-overlay', BootOverlay);

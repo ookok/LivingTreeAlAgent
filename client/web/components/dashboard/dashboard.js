@@ -9,7 +9,7 @@ class Dashboard extends Component {
   }
 
   template() {
-    const st = LT.store.stats();
+    const st = (LT.store && LT.store.stats()) || { sessions: 0, messages: 0, tokens: 0 };
     const sd = this._serverData || {};
     const life = sd.life_engine || {};
     const orch = sd.orchestrator || {};
@@ -59,7 +59,7 @@ class Dashboard extends Component {
   _drawChart() {
     const c = LT.ge('dash-chart'); if (!c) return;
     const ctx = c.getContext('2d'), W = c.width, H = c.height;
-    const st = LT.store.stats();
+    const st = (LT.store && LT.store.stats()) || { tokens: 0 };
     const pts = [st.tokens*.1,st.tokens*.2,st.tokens*.4,st.tokens*.6,st.tokens*.7,st.tokens*.85,st.tokens];
     const max = Math.max(...pts,1); ctx.clearRect(0,0,W,H); ctx.beginPath();
     ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--brand-default').trim();

@@ -170,17 +170,13 @@ const store = {
   },
 
   stats() {
-    let totalMsgs = 0;
-    for (const arr of Object.values(this.messages)) {
-      totalMsgs += Array.isArray(arr) ? arr.length : 0;
+    const msgs = (this.messages && typeof this.messages === 'object') ? this.messages : {};
+    let count = 0, tokens = 0;
+    for (const arr of Object.values(msgs)) {
+      if (Array.isArray(arr)) { count += arr.length; arr.forEach(m => tokens += Math.ceil((m.content || '').length / 3)); }
     }
-    return {
-      totalSessions: this.sessions.length,
-      totalMessages: totalMsgs,
-      activeSession: this.activeId,
-      theme: this.theme,
-      generating: this.generating
-    };
+    const sessions = Array.isArray(this.sessions) ? this.sessions.length : 0;
+    return { sessions, messages: count, tokens };
   },
 
   fork(fromId, atIndex, title) {
@@ -290,4 +286,5 @@ const store = {
 window.LT = window.LT || {};
 window.LT.store = store;
 
-export default store;
+window.LT = window.LT || {};
+window.LT.store = store;

@@ -108,4 +108,4 @@ class DocReader extends Component {
     E.onclick = (e) => { if (e.target === E) this._close(); };
   }
 }
-LT.register('doc-reader', new DocReader());
+LT.register('doc-reader', DocReader);

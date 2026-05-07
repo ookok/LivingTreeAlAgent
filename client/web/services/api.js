@@ -249,5 +249,3 @@ const api = {
 
 window.LT = window.LT || {};
 window.LT.api = api;
-
-export default api;

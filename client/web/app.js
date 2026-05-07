@@ -7,8 +7,11 @@
   'use strict';
 
   /* ── Init Store & API ── */
-  LT.store.init();
-  LT.api.init();
+  if (LT.store && LT.store.init) LT.store.init();
+  if (!LT.store) console.error('LT.store not available');
+  if (!LT.store || !LT.store.stats) {
+    LT.store = LT.store || { sessions: [], activeId: null, messages: {}, stats: () => ({ sessions: 0, messages: 0, tokens: 0 }) };
+  }
 
   /* ── Create all components ── */
   const components = [

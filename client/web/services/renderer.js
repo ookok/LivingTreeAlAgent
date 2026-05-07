@@ -336,4 +336,5 @@ function _fallbackCopy(text, btn) {
 window.LT = window.LT || {};
 window.LT.renderer = renderer;
 
-export default renderer;
+window.LT = window.LT || {};
+window.LT.renderer = renderer;

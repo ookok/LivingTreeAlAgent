@@ -15,4 +15,4 @@ class Notifications extends Component {
 
   template() { return ''; }
 }
-LT.register('notifications', new Notifications());
+LT.register('notifications', Notifications);

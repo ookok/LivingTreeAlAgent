@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .routes import setup_routes
 
@@ -36,9 +36,20 @@ def create_app(hub=None, config=None) -> FastAPI:
             app.mount("/assets", StaticFiles(directory=str(web_root / "assets")), name="assets")
         app.mount("/css", StaticFiles(directory=str(web_root / "css")), name="css")
         app.mount("/js", StaticFiles(directory=str(web_root / "js")), name="js")
+        app.mount("/core", StaticFiles(directory=str(web_root / "core")), name="core")
+        app.mount("/services", StaticFiles(directory=str(web_root / "services")), name="services")
+        app.mount("/components", StaticFiles(directory=str(web_root / "components")), name="components")
 
         @app.get("/")
         async def serve_index():
             return FileResponse(str(web_root / "index.html"))
+
+        @app.get("/favicon.ico")
+        async def serve_favicon():
+            return FileResponse(str(web_root / "assets" / "favicon.ico")) if (web_root / "assets" / "favicon.ico").exists() else Response(status_code=204)
+
+        @app.get("/app.js")
+        async def serve_app_js():
+            return FileResponse(str(web_root / "app.js"))
 
     return app

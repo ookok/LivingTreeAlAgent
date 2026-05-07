@@ -95,4 +95,4 @@ class Settings extends Component {
     this.el.onclick = (e) => { if (e.target === this.el) this._close(); };
   }
 }
-LT.register('settings', new Settings());
+LT.register('settings', Settings);

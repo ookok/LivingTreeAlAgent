@@ -53,8 +53,8 @@ RELAY_PORT = 8888
 RELAY_POOL: list[str] = []  # ["host:port", ...]
 RELAY_POOL_FILE = Path(".livingtree/relay_pool.json")
 
-# ═══ LLM Subscription Pool (shared API keys, sub2api-style) ═══
-SUBSCRIPTION_POOL: dict[str, dict] = {}  # name → {base_url, api_key, models, cost_per_1m}
+# ═══ LLM Subscription Pool (per-user, not shared) ═══
+# Each user has their own subscription pool stored in ACCOUNT_STORE[user]["subscriptions"]
 SUBSCRIPTION_FILE = Path(".livingtree/subscription_pool.json")
 
 # ═══ External network status ═══
@@ -157,18 +157,47 @@ def _save_relay_pool():
     except Exception: pass
 
 def _load_subscriptions():
-    global SUBSCRIPTION_POOL
-    try:
-        if SUBSCRIPTION_FILE.exists():
-            SUBSCRIPTION_POOL = json.loads(SUBSCRIPTION_FILE.read_text())
-    except Exception:
-        pass
+    """Load per-user subscriptions from account store."""
+    _ensure_accounts()
+    for name, data in ACCOUNT_STORE.items():
+        if "subscriptions" not in data:
+            data["subscriptions"] = {}
+    # Legacy migration: if old global pool exists, assign to admin
+    if SUBSCRIPTION_FILE.exists():
+        try:
+            old_pool = json.loads(SUBSCRIPTION_FILE.read_text())
+            if old_pool and "admin" in ACCOUNT_STORE:
+                ACCOUNT_STORE["admin"]["subscriptions"] = old_pool
+            SUBSCRIPTION_FILE.unlink()  # Remove legacy file
+        except Exception:
+            pass
+
+def _save_subscriptions(user: str = ""):
+    """Save per-user subscriptions to account store."""
+    _ensure_accounts()
+    if user and user in ACCOUNT_STORE:
+        _save_accounts()
+
+def _get_user_subscriptions(user: str) -> dict[str, dict]:
+    """Get subscription pool for a specific user."""
+    _ensure_accounts()
+    if user in ACCOUNT_STORE:
+        return ACCOUNT_STORE[user].get("subscriptions", {})
+    return {}
+
+def _get_all_user_subscriptions() -> dict[str, dict]:
+    """Get all users' subscriptions (admin view)."""
+    _ensure_accounts()
+    result = {}
+    for user, data in ACCOUNT_STORE.items():
+        subs = data.get("subscriptions", {})
+        for name, info in subs.items():
+            result[f"{user}/{name}"] = info
+    return result
 
 def _save_subscriptions():
-    try:
-        SUBSCRIPTION_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SUBSCRIPTION_FILE.write_text(json.dumps(SUBSCRIPTION_POOL, indent=2))
-    except Exception: pass
+    """Deprecated: subscriptions are now stored per-user in account store."""
+    _save_accounts()
 
 def _ensure_api_keys():
     if not API_KEY_STORE:
@@ -346,6 +375,10 @@ class P2PRelayServer:
         app.router.add_post("/admin/password", self._admin_change_password)
         app.router.add_post("/admin/subscriptions/add", self._admin_add_subscription)
         app.router.add_get("/admin/subscriptions/remove", self._admin_remove_subscription)
+        # Backup & Export
+        app.router.add_get("/admin/export", self._admin_export_data)
+        app.router.add_post("/admin/import", self._admin_import_data)
+        app.router.add_get("/admin/backup", self._admin_backup_now)
         # API (all require API key except /login and /health)
         app.router.add_get("/health", self._health)
         app.router.add_get("/config/providers", self._config_providers)
@@ -486,14 +519,18 @@ class P2PRelayServer:
             revoke_key = key_val[:12] + key_val[-8:]  # use partial for revoke link
             key_rows += f"<tr><td>{info['name']}</td><td><code data-key='{key_val}' onclick='copyKey(this.dataset.key)' style='cursor:pointer' title='点击复制'>{display} 📋</code></td><td>{created}</td><td><a href='/admin/keys/revoke?key={display}'><button class='small danger'>吊销</button></a></td></tr>"
 
-        # Subscription pool rows
+        # Subscription pool rows (per-user view)
         sub_rows = ""
-        for name, p in SUBSCRIPTION_POOL.items():
-            model = p.get("default_model", "?")[:40]
-            url = p.get("base_url", "")[:50]
-            cost = p.get("cost_per_1m", 0)
-            remove_link = f"/admin/subscriptions/remove?name={name}"
-            sub_rows += f"<tr><td>{name}</td><td>{model}</td><td>{url}</td><td>¥{cost}/M</td><td><a href='{remove_link}'><button class='small danger'>移除</button></a></td></tr>"
+        for user, data in sorted(ACCOUNT_STORE.items()):
+            user_subs = data.get("subscriptions", {})
+            if not user_subs:
+                continue
+            sub_rows += f'<tr><td colspan="7" style="background:#222;color:#0f0;padding:4px 8px">👤 {user}</td></tr>'
+            for name, p in user_subs.items():
+                cost = p.get("cost_per_1m", "?")
+                models = ", ".join(p.get("models", []))[:60] if p.get("models") else p.get("default_model", "")
+                remove_link = f"/admin/subscriptions/remove?user={user}&name={name}"
+                sub_rows += f"<tr><td>{name}</td><td>{models}</td><td>{p.get('base_url','')[:40]}</td><td>¥{cost}/M</td><td><a href='{remove_link}'><button class='small danger'>移除</button></a></td></tr>"
 
         html = ADMIN_HTML
         html = html.replace("SUB_ROWS", sub_rows or "<tr><td colspan=5>暂无订阅 — 添加后可拼车共享</td></tr>")
@@ -539,7 +576,11 @@ class P2PRelayServer:
         password = data.get("password", "")
         if username and password and username not in ACCOUNT_STORE:
             ACCOUNT_STORE[username] = {"password_hash": _hash_password(password), "created": time.time(), "cost_rmb": 0.0, "token_in": 0, "token_out": 0, "last_login": 0, "is_admin": False, "cost_breakdown": {}}
+            # Auto-generate API key for new user
+            api_key = f"lt-{secrets.token_hex(24)}"
+            USER_KEYS[username] = api_key
             _save_accounts()
+            logger.info(f"User created: {username} (API key: {api_key[:8]}...)")
         raise web.HTTPFound("/admin")
 
     async def _admin_reset_password(self, request: web.Request) -> web.Response:
@@ -979,8 +1020,10 @@ class P2PRelayServer:
         if not user:
             return web.json_response({"error": "Unauthorized — Bearer <your_api_key>"}, status=401)
 
-        if not SUBSCRIPTION_POOL:
-            return web.json_response({"error": "No subscription configured. Admin: add via /admin"}, status=503)
+        # Get user's subscription pool
+        user_subs = _get_user_subscriptions(user)
+        if not user_subs:
+            return web.json_response({"error": "No subscription configured for your account. Admin: add via /admin"}, status=503)
 
         try:
             data = await request.json()
@@ -989,8 +1032,13 @@ class P2PRelayServer:
             temperature = data.get("temperature", 0.7)
             max_tokens = data.get("max_tokens", 4096)
 
-            # Pick best backend from pool
-            provider_name, provider = self._pick_best_subscription(model_requested)
+            # Get user's subscription pool
+            user_subs = _get_user_subscriptions(user)
+            if not user_subs:
+                return web.json_response({"error": "No subscription configured for your account"}, status=503)
+
+            # Pick best backend from user's pool
+            provider_name, provider = self._pick_best_subscription(user, model_requested)
             if not provider:
                 return web.json_response({"error": "No available backend"}, status=503)
 
@@ -1047,9 +1095,13 @@ class P2PRelayServer:
             return web.json_response({"error": f"Proxy error: {str(e)[:200]}"}, status=500)
 
     async def _llm_proxy_models(self, request: web.Request) -> web.Response:
-        """List available models from subscription pool."""
+        """List available models from user's subscription pool."""
+        user = self._check_auth(request)
+        if not user:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+        user_subs = _get_user_subscriptions(user)
         models = []
-        for name, p in SUBSCRIPTION_POOL.items():
+        for name, p in user_subs.items():
             models.append({
                 "id": p.get("default_model", name),
                 "object": "model",
@@ -1058,26 +1110,27 @@ class P2PRelayServer:
             })
         return web.json_response({"object": "list", "data": models})
 
-    def _pick_best_subscription(self, model_hint: str = "") -> tuple[str, dict | None]:
-        """Pick the best backend from subscription pool."""
-        if not SUBSCRIPTION_POOL:
+    def _pick_best_subscription(self, user: str, model_hint: str = "") -> tuple[str, dict | None]:
+        """Pick the best backend from user's subscription pool."""
+        user_subs = _get_user_subscriptions(user)
+        if not user_subs:
             return "", None
 
         # Try exact model match first
-        for name, p in SUBSCRIPTION_POOL.items():
+        for name, p in user_subs.items():
             if model_hint and model_hint in p.get("default_model", ""):
                 return name, p
 
-        # Prefer free/cached providers
+        # Pick cheapest
         best = None
         best_cost = float("inf")
-        for name, p in SUBSCRIPTION_POOL.items():
-            cost = p.get("cost_per_1m", 4.0)
+        for name, p in user_subs.items():
+            cost = p.get("cost_per_1m", 99)
             if cost < best_cost:
                 best_cost = cost
                 best = (name, p)
 
-        return best or (list(SUBSCRIPTION_POOL.items())[0] if SUBSCRIPTION_POOL else ("", None))
+        return best or (list(user_subs.items())[0] if user_subs else ("", None))
 
     async def _admin_add_subscription(self, request: web.Request) -> web.Response:
         if not self._check_admin(request): return web.HTTPFound("/admin")
@@ -1086,24 +1139,125 @@ class P2PRelayServer:
         base_url = data.get("base_url", "").strip()
         api_key = data.get("api_key", "").strip()
         model = data.get("model", "").strip()
+        user = data.get("user", "admin").strip()  # Target user for subscription
         cost = float(data.get("cost", "4.0"))
         if name and base_url and api_key:
-            SUBSCRIPTION_POOL[name] = {
-                "base_url": base_url, "api_key": api_key,
-                "default_model": model or "gpt-4o", "cost_per_1m": cost,
-                "added_at": time.time(),
-            }
-            _save_subscriptions()
-            logger.info(f"Subscription added: {name}")
+            _ensure_accounts()
+            if user in ACCOUNT_STORE:
+                ACCOUNT_STORE[user].setdefault("subscriptions", {})
+                ACCOUNT_STORE[user]["subscriptions"][name] = {
+                    "base_url": base_url, "api_key": api_key,
+                    "default_model": model or "gpt-4o", "cost_per_1m": cost,
+                    "added_at": time.time(),
+                }
+                _save_accounts()
+                logger.info(f"Subscription added for {user}: {name}")
         raise web.HTTPFound("/admin")
 
     async def _admin_remove_subscription(self, request: web.Request) -> web.Response:
         if not self._check_admin(request): return web.HTTPFound("/admin")
         name = request.query.get("name", "")
-        if name in SUBSCRIPTION_POOL:
-            del SUBSCRIPTION_POOL[name]
-            _save_subscriptions()
+        user = request.query.get("user", "admin")
+        _ensure_accounts()
+        if user in ACCOUNT_STORE:
+            subs = ACCOUNT_STORE[user].get("subscriptions", {})
+            if name in subs:
+                del subs[name]
+                _save_accounts()
+                logger.info(f"Subscription removed for {user}: {name}")
         raise web.HTTPFound("/admin")
+
+    # ═══ Backup & Export/Import ═══
+
+    BACKUP_DIR = Path(".livingtree/backups")
+
+    async def _admin_export_data(self, request: web.Request) -> web.Response:
+        """Export all accounts and API keys as JSON."""
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        _ensure_accounts()
+        export = {
+            "exported_at": time.time(),
+            "version": "1.0",
+            "accounts": {
+                user: {k: v for k, v in data.items() if k != "session_token"}
+                for user, data in ACCOUNT_STORE.items()
+            },
+            "api_keys": API_KEY_STORE,
+            "user_keys": USER_KEYS,
+            "relay_pool": RELAY_POOL,
+        }
+        return web.json_response(export)
+
+    async def _admin_import_data(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        try:
+            data = await request.json()
+            imported = data.get("accounts", {})
+            keys = data.get("api_keys", {})
+            user_keys = data.get("user_keys", {})
+            pool = data.get("relay_pool", [])
+            count = 0
+            for user, acct in imported.items():
+                if user not in ACCOUNT_STORE:
+                    ACCOUNT_STORE[user] = acct
+                    count += 1
+            for k, v in keys.items():
+                if k not in API_KEY_STORE:
+                    API_KEY_STORE[k] = v
+            for u, k in user_keys.items():
+                if u not in USER_KEYS:
+                    USER_KEYS[u] = k
+            if pool:
+                RELAY_POOL.extend(p for p in pool if p not in RELAY_POOL)
+            _save_accounts()
+            _save_user_keys()
+            _save_relay_pool()
+            logger.info(f"Imported {count} accounts from backup")
+            raise web.HTTPFound("/admin?ok=imported")
+        except Exception as e:
+            raise web.HTTPFound(f"/admin?error=import_failed:{str(e)[:50]}")
+
+    async def _admin_backup_now(self, request: web.Request) -> web.Response:
+        if not self._check_admin(request): return web.HTTPFound("/admin")
+        path = self._do_backup()
+        if path:
+            raise web.HTTPFound(f"/admin?ok=backup:{path.name}")
+        raise web.HTTPFound("/admin?error=backup_failed")
+
+    def _do_backup(self) -> Path | None:
+        try:
+            self.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            _ensure_accounts()
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            backup_file = self.BACKUP_DIR / f"relay_backup_{timestamp}.json"
+            backup = {
+                "backup_at": time.time(), "version": "1.0",
+                "accounts": {
+                    user: {k: v for k, v in data.items() if k != "session_token"}
+                    for user, data in ACCOUNT_STORE.items()
+                },
+                "api_keys": API_KEY_STORE,
+                "user_keys": USER_KEYS,
+                "relay_pool": RELAY_POOL,
+            }
+            backup_file.write_text(json.dumps(backup, indent=2, ensure_ascii=False))
+            all_backups = sorted(self.BACKUP_DIR.glob("relay_backup_*.json"))
+            for old in all_backups[:-30]:
+                old.unlink()
+            logger.info(f"Backup created: {backup_file.name}")
+            return backup_file
+        except Exception as e:
+            logger.error(f"Backup failed: {e}")
+            return None
+
+    async def _start_auto_backup(self):
+        await asyncio.sleep(300)
+        while True:
+            try:
+                self._do_backup()
+            except Exception:
+                pass
+            await asyncio.sleep(86400)
 
     async def _metrics(self, request: web.Request) -> web.Response:
         """Prometheus /metrics endpoint for Grafana integration."""
@@ -1190,6 +1344,8 @@ class P2PRelayServer:
         asyncio.create_task(self._connectivity_check())
         # Relay pool auto-sync
         asyncio.create_task(self._sync_relay_pool())
+        # Daily auto-backup
+        asyncio.create_task(self._start_auto_backup())
 
         self._started_at = time.time()
         runner = web.AppRunner(self._app)

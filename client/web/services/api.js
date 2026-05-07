@@ -141,18 +141,12 @@ const api = {
 
   send(input, onChunk, onDone, onError) {
     const store = window.LT && window.LT.store;
-    if (!store) {
-      console.error('[api] Store not available');
-      if (onError) onError(new Error('Store not available'));
-      return;
+    if (!store || !store.activeId) {
+      if (onError) onError(new Error('No active session'));
+      return Promise.resolve();
     }
 
     const sid = store.activeId;
-    if (!sid) {
-      console.error('[api] No active session');
-      if (onError) onError(new Error('No active session'));
-      return;
-    }
 
     store.addMsg(sid, { role: 'user', content: input });
 
@@ -162,7 +156,7 @@ const api = {
 
     let fullContent = '';
 
-    this.streamChat(
+    return this.streamChat(
       msgs,
       (chunk) => {
         fullContent += chunk;

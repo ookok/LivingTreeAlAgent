@@ -25,14 +25,17 @@ echo   Mode: %MODE%
 echo ===========================================
 echo.
 
-echo [1/7] Checking Python 3.14...
+echo [1/7] Checking Python 3.10+...
 set PYTHON_CMD=
-if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" (
-    set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
+:: Check common install locations
+for %%v in (314 313 312 311 310) do (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe" (
+        set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe
+    )
 )
 if "%PYTHON_CMD%"=="" (
     for /f "tokens=*" %%i in ('where python 2^>nul') do (
-        "%%i" -c "import sys; sys.exit(0 if sys.version_info>=(3,14) else 1)" >nul 2>&1
+        "%%i" -c "import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1
         if !ERRORLEVEL! EQU 0 set PYTHON_CMD=%%i
     )
 )
@@ -46,7 +49,7 @@ if "%PYTHON_CMD%"=="" (
     if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
 )
 if "%PYTHON_CMD%"=="" (
-    echo   ERROR: Python 3.14 required. https://www.python.org/downloads/
+    echo   ERROR: Python 3.10+ required. https://www.python.org/downloads/
     pause
     exit /b 1
 )

@@ -13,3 +13,42 @@ include = ["livingtree*", "client*", "server*", "app*"]
 
 [project.scripts]
 livingtree = "livingtree.main:main"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+exclude = [
+    ".git", ".venv", "__pycache__", "*.pyc",
+    "client/src/*", "node_modules/*",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pyflakes + pycodestyle
+    "I",                 # isort
+    "N",                 # pep8-naming
+    "UP",                # pyupgrade
+    "B",                 # flake8-bugbear
+    "SIM",               # flake8-simplify
+    "C4",                # flake8-comprehensions
+]
+ignore = [
+    "E501",              # line-too-long (handled by formatter)
+    "B008",              # do-not-perform-function-calls-in-argument-defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["livingtree"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.14"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true

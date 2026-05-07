@@ -17,54 +17,21 @@ echo Port: %PORT%
 echo.
 
 set PYTHON_CMD=
-if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
+for %%v in (313 312 311 310) do (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe
+)
 if "%PYTHON_CMD%"=="" (
     for /f "tokens=*" %%i in ('where python 2^>nul') do (
-        "%%i" -c "import sys; sys.exit(0 if sys.version_info>=(3,14) else 1)" >nul 2>&1
+        "%%i" -c "import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1
         if !ERRORLEVEL! EQU 0 set PYTHON_CMD=%%i
     )
 )
 if "%PYTHON_CMD%"=="" (
-    echo Python 3.14 not found. Trying to install...
-
-    set DL_FILE=%TEMP%\python314.exe
-
-    REM Check if installer exists locally
-    if exist "python-3.14.0-amd64.exe" (
-        echo Found local installer...
-        copy /y "python-3.14.0-amd64.exe" "!DL_FILE!" >nul
-    )
-
-    REM Try online download (skip if already have local)
-    if not exist "!DL_FILE!" (
-        set DL_PYTHON=
-        for /f "tokens=*" %%i in ('where python 2^>nul') do set DL_PYTHON=%%i
-        if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where python3 2^>nul') do set DL_PYTHON=%%i
-        if "!DL_PYTHON!"=="" for /f "tokens=*" %%i in ('where py 2^>nul') do set DL_PYTHON=%%i
-
-        if not "!DL_PYTHON!"=="" (
-            echo Downloading with Python...
-            "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
-        )
-        if not exist "!DL_FILE!" certutil -urlcache -split -f "https://npmmirror.com/mirrors/python/3.14.0/python-3.14.0-amd64.exe" "!DL_FILE!" >nul
-        if not exist "!DL_FILE!" (
-            if not "!DL_PYTHON!"=="" "!DL_PYTHON!" -c "import urllib.request,os; urllib.request.urlretrieve('https://www.python.org/ftp/python/3.14.0/python-3.14.0-amd64.exe',os.environ['TEMP']+r'\python314.exe')"
-        )
-    )
-
-    if exist "!DL_FILE!" (
-        "!DL_FILE!" /quiet InstallAllUsers=0 Include_test=0
-        del "!DL_FILE!"
-    )
-    if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python314\python.exe
-)
-if "%PYTHON_CMD%"=="" (
-    echo ERROR: Python 3.14 install failed.
-    echo Manual: https://www.python.org/downloads/
+    echo Python 3.10+ not found
     pause
     exit /b 1
 )
-echo Python 3.14 OK
+echo Python OK
 
 if not exist ".venv" (
     "%PYTHON_CMD%" -m venv .venv

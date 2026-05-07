@@ -341,8 +341,8 @@ class Input extends Component {
         LT.emit('session:switch');
       };
 
-      api.send(text, onC, onD, onE).catch(() => {
-        api.simulate(text, onC, onD);
+      LT.api.send(text, onC, onD, onE).catch(() => {
+        LT.api.simulate(text, onC, onD);
       });
     }, 400);
   }

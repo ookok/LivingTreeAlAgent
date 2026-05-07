@@ -1,7 +1,7 @@
 class DocReader extends Component {
   constructor() {
     super('doc-reader-modal');
-    this._data = null;
+    this._data = {};
     this._editMode = false;
     this.on('doc-reader:open', (data) => this._open(data));
     this.on('doc-reader:close', () => this._close());
@@ -64,7 +64,7 @@ class DocReader extends Component {
   template() {
     const code = this._data.code || '';
     const title = this._data.title || '文档';
-    const rendered = R.md(code);
+    const rendered = LT.renderer.md(code);
     return `
 <div class="modal-panel" style="width:800px;max-width:95vw;height:85vh" onclick="event.stopPropagation()">
   <div class="modal-header">

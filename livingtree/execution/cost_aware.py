@@ -42,15 +42,48 @@ class BudgetStatus:
 PRICE_YUAN_PER_1M_INPUT: dict[str, float] = {
     "deepseek/deepseek-v4-pro": 3.0,
     "deepseek/deepseek-v4-flash": 1.0,
+    # ═══ Qwen (千问) via qwencloud.com — USD→CNY @7.25 ═══
+    "qwen/qwen3.6-plus": 2.90,        # $0.40 → ¥2.90
+    "qwen/qwen3.6-flash": 0.73,       # $0.10 → ¥0.73
+    "qwen/qwen3.6-max-preview": 8.70, # $1.20 → ¥8.70
+    "qwen/qwen3-max": 8.70,           # $1.20 → ¥8.70
+    "qwen/qwen-plus": 2.90,           # $0.40 → ¥2.90
+    "qwen/qwen-flash": 0.36,          # $0.05 → ¥0.36
+    "qwen/qwen3.5-plus": 2.90,        # $0.40 → ¥2.90
+    "qwen/qwen3.5-flash": 0.73,       # $0.10 → ¥0.73
+    "qwen/qwq-plus": 5.80,            # $0.80 → ¥5.80
+    "qwen/qvq-max": 8.70,             # $1.20 → ¥8.70
 }
 PRICE_YUAN_PER_1M_OUTPUT: dict[str, float] = {
     "deepseek/deepseek-v4-pro": 6.0,
     "deepseek/deepseek-v4-flash": 2.0,
+    # ═══ Qwen (千问) — USD→CNY @7.25 ═══
+    "qwen/qwen3.6-plus": 17.40,       # $2.40 → ¥17.40
+    "qwen/qwen3.6-flash": 2.90,       # $0.40 → ¥2.90
+    "qwen/qwen3.6-max-preview": 43.50,# $6.00 → ¥43.50
+    "qwen/qwen3-max": 43.50,          # $6.00 → ¥43.50
+    "qwen/qwen-plus": 8.70,           # $1.20 → ¥8.70
+    "qwen/qwen-flash": 2.90,          # $0.40 → ¥2.90
+    "qwen/qwen3.5-plus": 17.40,       # $2.40 → ¥17.40
+    "qwen/qwen3.5-flash": 2.90,       # $0.40 → ¥2.90
+    "qwen/qwq-plus": 17.40,           # $2.40 → ¥17.40
+    "qwen/qvq-max": 43.50,            # $6.00 → ¥43.50
 }
 
 MODEL_DEGRADATION_CHAIN: dict[str, str] = {
     "deepseek/deepseek-v4-pro": "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-flash": "deepseek/deepseek-v4-flash",
+    # Qwen degradation: max/plus → flash
+    "qwen/qwen3.6-plus": "qwen/qwen3.6-flash",
+    "qwen/qwen3.6-max-preview": "qwen/qwen3.6-flash",
+    "qwen/qwen3-max": "qwen/qwen3.6-flash",
+    "qwen/qwen-plus": "qwen/qwen-flash",
+    "qwen/qwen3.5-plus": "qwen/qwen3.5-flash",
+    "qwen/qwq-plus": "qwen/qwen3.6-flash",
+    "qwen/qvq-max": "qwen/qwen3.6-flash",
+    "qwen/qwen3.6-flash": "qwen/qwen3.6-flash",
+    "qwen/qwen3.5-flash": "qwen/qwen3.5-flash",
+    "qwen/qwen-flash": "qwen/qwen-flash",
 }
 
 
@@ -109,7 +142,15 @@ class CostAware:
         return used <= self.daily_budget * self.degradation_threshold
 
     def degraded_model(self) -> str:
-        return "deepseek/deepseek-v4-flash" if self._degraded else "deepseek/deepseek-v4-pro"
+        """Return the degraded model for current provider."""
+        if self._degraded:
+            # Check which provider we're using
+            return "qwen/qwen3.6-flash"  # Default degraded to cheapest flash
+        return "deepseek/deepseek-v4-pro"
+
+    def degraded_model_for(self, model: str) -> str:
+        """Return the degraded fallback for a given model."""
+        return MODEL_DEGRADATION_CHAIN.get(model, model)
 
     def degrade(self) -> None:
         if not self._degraded:
@@ -140,6 +181,37 @@ class CostAware:
 
     def session_cost(self, session_id: str) -> int:
         return self._session_budget.get(session_id, 0)
+
+    # ── Models.dev auto-sync ──────────────────────────────────────
+
+    def sync_pricing_from_models_dev(self) -> int:
+        """Update PRICE tables from models.dev open database.
+
+        Returns number of models with pricing synced.
+        """
+        try:
+            from ..treellm.models_dev_sync import get_models_dev_sync
+            sync = get_models_dev_sync()
+            pricing = sync.get_pricing_map()
+            chain = sync.get_degradation_map()
+
+            count = 0
+            for model_id, (input_cny, output_cny) in pricing.items():
+                if input_cny > 0:
+                    PRICE_YUAN_PER_1M_INPUT[model_id] = input_cny
+                if output_cny > 0:
+                    PRICE_YUAN_PER_1M_OUTPUT[model_id] = output_cny
+                count += 1
+
+            for expensive, cheap in chain.items():
+                if expensive not in MODEL_DEGRADATION_CHAIN:
+                    MODEL_DEGRADATION_CHAIN[expensive] = cheap
+
+            logger.info(f"CostAware: synced pricing for {count} models from models.dev")
+            return count
+        except Exception as e:
+            logger.debug(f"CostAware models.dev sync: {e}")
+            return 0
 
     def _today_usage(self) -> int:
         return sum(u.tokens for u in self._usage)

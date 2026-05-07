@@ -71,25 +71,37 @@ class HealthResponse(BaseModel):
 def setup_routes(app: FastAPI) -> None:
     """Register all API routes."""
 
+    @app.get("/api/boot/progress")
+    async def boot_progress(request: Request) -> dict[str, Any]:
+        """Get hub initialization progress for the web UI."""
+        hub = request.app.state.hub
+        if hub and getattr(hub, '_started', False):
+            return {"stage": "ready", "pct": 100, "detail": "系统就绪"}
+        bp = getattr(hub, '_boot_progress', None) if hub else None
+        return bp or {"stage": "starting", "pct": 0, "detail": "正在初始化..."}
+
     @app.get("/api/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
         """Health check endpoint."""
         hub = getattr(request.app.state, 'hub', None)
         components = {}
         if hub:
-            status = hub.get_status()
-            components = {
-                "life_engine": "ok" if status.get("life_engine") else "missing",
-                "cells": f"{status.get('cells', {}).get('registered', 0)} registered",
-                "knowledge": "ok" if status.get("knowledge") else "missing",
-                "network": status.get("network", {}).get("status", "unknown"),
-                "orchestrator": f"{status.get('orchestrator', {}).get('total_agents', 0)} agents",
-            }
-        return HealthResponse(
-            status="healthy",
-            version="2.0.0",
-            components=components,
-        )
+            if getattr(hub, '_started', False):
+                status = hub.get_status()
+                components = {
+                    "life_engine": "ok" if status.get("life_engine") else "missing",
+                    "cells": f"{status.get('cells', {}).get('registered', 0)} registered",
+                    "knowledge": "ok" if status.get("knowledge") else "missing",
+                    "network": status.get("network", {}).get("status", "unknown"),
+                    "orchestrator": f"{status.get('orchestrator', {}).get('total_agents', 0)} agents",
+                }
+                return HealthResponse(status="healthy", version="2.1.0", components=components)
+            else:
+                bp = getattr(hub, '_boot_progress', {})
+                return HealthResponse(status="starting", version="2.1.0",
+                    components={"boot": bp.get("detail", "initializing...")})
+        return HealthResponse(status="starting", version="2.1.0",
+            components={"boot": "waiting for hub..."})
 
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(req: ChatRequest, request: Request) -> ChatResponse:
@@ -309,6 +321,43 @@ def setup_routes(app: FastAPI) -> None:
         if not hub:
             raise HTTPException(status_code=503, detail="Hub not initialized")
         return await hub.discover_peers()
+
+    @app.post("/api/web/chat")
+    async def web_chat(request: Request):
+        """SSE streaming endpoint for web frontend. Accepts {messages: [...]}."""
+        hub = request.app.state.hub
+        if not hub:
+            raise HTTPException(status_code=503, detail="Hub not initialized")
+
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        messages = body.get("messages", [])
+        if not messages:
+            raise HTTPException(status_code=400, detail="messages required")
+
+        last_msg = messages[-1].get("content", "") if messages else ""
+
+        from fastapi.responses import StreamingResponse
+        import json as _json, time as _time
+
+        async def generate():
+            sid = f"web_{int(_time.time()*1000)}"
+            try:
+                if hub.world and hub.world.consciousness:
+                    async for token in hub.world.consciousness.stream_of_thought(last_msg):
+                        yield f"data: {_json.dumps({'content': token, 'session_id': sid})}\n\n"
+                else:
+                    result = await hub.chat(last_msg)
+                    reply = str(result.get("intent", "") or result.get("reflections", [""])[0] or "")
+                    yield f"data: {_json.dumps({'content': reply, 'session_id': result.get('session_id', sid)})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {_json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):

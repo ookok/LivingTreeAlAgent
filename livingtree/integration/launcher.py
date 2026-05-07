@@ -115,31 +115,71 @@ async def _run_client(config: Optional[LTAIConfig] = None) -> None:
 
 
 async def _run_server(config: Optional[LTAIConfig] = None) -> None:
-    """Run FastAPI server."""
+    """Run web server — UI available immediately, hub initializes in background."""
     from ..api.server import create_app
     import uvicorn
 
     hub = IntegrationHub(config)
-    await hub.start()
-
     cfg = hub.config
-    app = create_app(hub=hub)
+    app = create_app(hub=hub, config=cfg)
+
+    host = cfg.api.host
+    port = cfg.api.port
+
+    # Start hub in background, server is available immediately
+    app.state.hub_init_task = asyncio.create_task(_init_hub_with_progress(hub))
+
+    print(f"\n{'='*50}")
+    print(f"  🌳 LivingTree AI Agent v2.1")
+    print(f"  Web UI:  http://{host}:{port}")
+    print(f"  API:     http://{host}:{port}/api/health")
+    print(f"  {'='*50}")
+    print(f"  Hub initializing in background...")
+    print(f"  Open browser to see startup progress\n")
 
     config_kwargs = {
-        "app": app,
-        "host": cfg.api.host,
-        "port": cfg.api.port,
+        "app": app, "host": host, "port": port,
         "log_level": cfg.observability.log_level.lower(),
     }
     if cfg.api.workers > 1:
         config_kwargs["workers"] = cfg.api.workers
 
-    logger.info(f"Server starting on http://{cfg.api.host}:{cfg.api.port}")
     server = uvicorn.Server(uvicorn.Config(**config_kwargs))
     try:
         await server.serve()
     finally:
-        await hub.shutdown()
+        if app.state.hub_init_task:
+            app.state.hub_init_task.cancel()
+        try:
+            await hub.shutdown()
+        except Exception:
+            pass
+
+
+async def _init_hub_with_progress(hub):
+    """Initialize hub with progress tracking."""
+    import asyncio as _asyncio
+    loop = _asyncio.get_event_loop()
+
+    hub._boot_progress = {"stage": "starting", "pct": 0, "detail": "创建 Hub..."}
+    await _asyncio.sleep(0.1)
+    hub._boot_progress = {"stage": "loading", "pct": 10, "detail": "加载配置..."}
+    await _asyncio.sleep(0.1)
+
+    def _sync_init():
+        hub._boot_progress = {"stage": "loading", "pct": 20, "detail": "初始化同步组件..."}
+        hub._init_sync()
+
+    hub._boot_progress = {"stage": "loading", "pct": 15, "detail": "创建生活世界..."}
+    await loop.run_in_executor(None, _sync_init)
+
+    hub._boot_progress = {"stage": "loading", "pct": 80, "detail": "启动异步服务..."}
+    await hub._init_async()
+
+    hub._boot_progress = {"stage": "ready", "pct": 100, "detail": "系统就绪"}
+    if hasattr(hub, '_ready_event'):
+        hub._ready_event.set()
+    hub._started = True
 
 
 async def _run_tests(config: Optional[LTAIConfig] = None) -> None:

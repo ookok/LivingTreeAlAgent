@@ -1,0 +1,260 @@
+/* ═══════════════════════════════════════════════
+   LivingTree Web — Sidebar Component Styles
+   ═══════════════════════════════════════════════ */
+
+.sidebar {
+  min-width: var(--sidebar-width);
+  width: var(--sidebar-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-menu);
+  border-right: 1px solid var(--border-l1);
+  flex-shrink: 0;
+  transition: width var(--transition-normal), min-width var(--transition-normal);
+}
+
+.sidebar.collapsed {
+  min-width: 0;
+  width: 0;
+  border: none;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border-l1);
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-default);
+}
+
+.sidebar-collapse-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--icon-default);
+  transition: all var(--transition-fast);
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-default);
+}
+
+/* ── Search ── */
+.sidebar-search {
+  padding: var(--space-8) var(--space-12);
+  flex-shrink: 0;
+}
+
+.sidebar-search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--border-l1);
+  border-radius: var(--radius-6);
+  background: var(--bg-overlay-l1);
+  font-size: var(--font-size-md);
+  color: var(--text-default);
+  transition: border-color var(--transition-fast);
+}
+
+.sidebar-search input:focus {
+  border-color: var(--brand-default);
+}
+
+.sidebar-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ── Actions ── */
+.sidebar-actions {
+  padding: var(--space-4) var(--space-12);
+  flex-shrink: 0;
+}
+
+.btn-new-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  width: 100%;
+  height: 32px;
+  border-radius: var(--radius-6);
+  background: var(--brand-default);
+  color: var(--brand-onbrand);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  transition: background var(--transition-fast);
+}
+
+.btn-new-session:hover {
+  background: var(--brand-hover);
+}
+
+/* ── Session List ── */
+.sidebar-sessions {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-4);
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-6);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.session-item:hover {
+  background: var(--bg-hover);
+}
+
+.session-item.active {
+  background: var(--bg-overlay-l2);
+  color: var(--text-default);
+}
+
+.session-item .sess-icon {
+  color: var(--icon-default);
+  flex-shrink: 0;
+  width: 16px;
+}
+
+.session-item .sess-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item .sess-actions {
+  display: none;
+  gap: var(--space-2);
+}
+
+.session-item:hover .sess-actions {
+  display: flex;
+}
+
+.sess-actions button {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--icon-secondary);
+  transition: all var(--transition-fast);
+}
+
+.sess-actions button:hover {
+  background: var(--bg-overlay-l3);
+  color: var(--text-danger);
+}
+
+/* ── Empty State ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-32);
+  color: var(--text-tertiary);
+  text-align: center;
+  gap: var(--space-8);
+  flex: 1;
+}
+
+.empty-state-icon {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+.empty-state-text {
+  font-size: var(--font-size-md);
+}
+
+/* ── User Info ── */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-10) var(--space-12);
+  border-top: 1px solid var(--border-l1);
+  flex-shrink: 0;
+  height: 52px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  position: relative;
+}
+
+.sidebar-user:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--brand-default);
+  color: var(--brand-onbrand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.sidebar-user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-user-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user-plan {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.sidebar-user-chevron {
+  color: var(--icon-default);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.sidebar-user.open .sidebar-user-chevron {
+  transform: rotate(180deg);
+}

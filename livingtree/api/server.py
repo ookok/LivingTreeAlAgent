@@ -1,57 +1,44 @@
-"""FastAPI server factory for the LivingTree digital life form.
-
-Provides:
-- POST /api/chat — synchronous and streaming chat
-- GET /api/health — health check
-- GET /api/tools — list available tools
-- GET /api/skills — list available skills
-- GET /api/metrics — runtime metrics
-- GET /api/status — life engine status
-- WS /ws — real-time WebSocket updates
-"""
+"""FastAPI server for LivingTree — serves web frontend + full REST API."""
 
 from __future__ import annotations
 
-from typing import Optional
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .routes import setup_routes
 
 
 def create_app(hub=None, config=None) -> FastAPI:
-    """Create and configure the FastAPI application.
-
-    Args:
-        hub: IntegrationHub instance (created if not provided)
-        config: LTAIConfig instance (loaded from config if not provided)
-
-    Returns:
-        Configured FastAPI application
-    """
     app = FastAPI(
-        title="LivingTree AI Agent API",
-        description="Digital Lifeform — REST and WebSocket API for the LivingTree platform",
-        version="2.0.0",
-        docs_url="/docs" if not config or getattr(config.api, 'docs_enabled', True) else None,
-        redoc_url="/redoc" if not config or getattr(config.api, 'docs_enabled', True) else None,
+        title="LivingTree AI Agent",
+        description="Digital Lifeform — Web UI + REST + WebSocket API",
+        version="2.1.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
     )
 
-    # CORS
-    origins = config.api.cors_origins if config and hasattr(config, 'api') else ["*"]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    origins = getattr(getattr(config, 'api', None), 'cors_origins', ["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-    # Store hub reference
     if hub:
         app.state.hub = hub
 
     setup_routes(app)
+
+    # Static files: serve web frontend from client/web/
+    web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"
+    if web_root.exists():
+        if (web_root / "assets").exists():
+            app.mount("/assets", StaticFiles(directory=str(web_root / "assets")), name="assets")
+        app.mount("/css", StaticFiles(directory=str(web_root / "css")), name="css")
+        app.mount("/js", StaticFiles(directory=str(web_root / "js")), name="js")
+
+        @app.get("/")
+        async def serve_index():
+            return FileResponse(str(web_root / "index.html"))
 
     return app

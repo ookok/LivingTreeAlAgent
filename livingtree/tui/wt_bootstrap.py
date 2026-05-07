@@ -27,6 +27,7 @@ EXPECTED_VERSION = "1.25.1171.0"
 WT_EXE_NAME = "WindowsTerminal.exe"
 CURRENT_VERSION = "2.1.0"
 WT_VERSION_FILE = ".wt/version.txt"
+BOOTSTRAP_MARKER = ".livingtree/wt_bootstrapped"
 
 # ═══ Mirror fallback ═══
 
@@ -86,6 +87,9 @@ def _check_wt_update_needed() -> tuple[bool, str]:
         pass
 
     return False, "unknown"
+
+
+def _fetch_with_mirrors(url: str, timeout: int = 30):
     """Fetch URL with GitHub mirror fallback."""
     last_error = b""
     for mirror_base in GITHUB_MIRRORS:
@@ -266,6 +270,43 @@ def download_wt(target_dir: str = ".wt") -> Optional[Path]:
         return None
 
 
+def ensure_bootstrapped(workspace: str = "") -> bool:
+    """Ensure WT bootstrap has completed. Called by debug scripts.
+    
+    Finds or downloads WT, writes a marker file.
+    Does NOT launch WT — the caller is already in a terminal.
+    
+    Returns True if bootstrap is complete (WT available + marker written).
+    """
+    wt = find_wt()
+    if not wt:
+        _log("WT not found — downloading...")
+        wt = download_wt(".wt")
+        if wt:
+            need_update, latest = _check_wt_update_needed()
+            Path(WT_VERSION_FILE).write_text(latest if latest else EXPECTED_VERSION)
+        if not wt:
+            _log("WARNING: could not install Windows Terminal")
+            return False
+
+    marker = Path(workspace or str(Path.cwd())) / BOOTSTRAP_MARKER
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(str(int(time.time())))
+    os.environ["LIVINGTREE_WT_BOOTSTRAPPED"] = "1"
+    _log("WT bootstrap verified")
+    return True
+
+
+def _write_bootstrap_marker(workspace: str) -> None:
+    """Write marker file so --direct can verify bootstrap completed."""
+    try:
+        marker = Path(workspace) / BOOTSTRAP_MARKER
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(str(int(time.time())))
+    except Exception:
+        pass
+
+
 def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI Agent") -> subprocess.Popen:
     ws = workspace or str(Path.cwd())
     # Inside Windows Terminal we need python.exe (not pythonw)
@@ -277,6 +318,8 @@ def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI 
     else:
         python = sys.executable
 
+    _write_bootstrap_marker(ws)
+
     cmd = [
         str(wt_path),
         "--title", title,
@@ -287,9 +330,14 @@ def launch(wt_path: Path, workspace: str = "", title: str = "🌳 LivingTree AI 
     log_dir = os.path.join(ws, "data", "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_file = open(os.path.join(log_dir, "wt_error.log"), "a")
+
+    env = os.environ.copy()
+    env["LIVINGTREE_WT_BOOTSTRAPPED"] = "1"
+
     return subprocess.Popen(
         cmd, cwd=ws,
         stdout=subprocess.DEVNULL, stderr=log_file,
+        env=env,
     )
 
 

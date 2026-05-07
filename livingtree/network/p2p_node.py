@@ -1,9 +1,7 @@
-"""P2PNode — always-on P2P networking component.
+"""P2PNode — standalone P2P networking (relay optional).
 
-Auto-generates unique node ID, discovers peers via relay server,
-broadcasts capabilities, handles /connect command for direct linking.
-
-Runs as a default component on every LivingTree instance.
+Auto-generates unique node ID. Relay connection is optional — 
+the node works fine in local/offline mode without it.
 """
 from __future__ import annotations
 
@@ -23,10 +21,11 @@ from loguru import logger
 
 NODE_ID_FILE = Path(".livingtree/node_id.json")
 RELAY_URL = "http://www.mogoo.com.cn:8888"
-_relay_pool: list[str] = []  # Auto-populated from discovery
+_relay_pool: list[str] = []
 _current_relay_index = 0
 HEARTBEAT_INTERVAL = 30
 WS_RECONNECT_DELAY = 5
+RELAY_ENABLED = True  # Set to False to fully disable relay
 
 
 @dataclass
@@ -107,9 +106,10 @@ class P2PNode:
 
     async def start(self):
         self._running = True
-        self._tasks.append(asyncio.create_task(self._heartbeat_loop()))
-        self._tasks.append(asyncio.create_task(self._ws_listen()))
-        logger.info(f"P2P started: {self.node_id[:16]}")
+        if RELAY_ENABLED:
+            self._tasks.append(asyncio.create_task(self._heartbeat_loop()))
+            self._tasks.append(asyncio.create_task(self._ws_listen()))
+        logger.info(f"P2P started: {self.node_id[:16]}" + (" (relay)" if RELAY_ENABLED else " (local)"))
 
     async def stop(self):
         self._running = False
@@ -249,7 +249,7 @@ class P2PNode:
                 async with aiohttp.ClientSession() as session:
                     async with session.ws_connect(f"{RELAY_URL}/ws/relay") as ws:
                         self._ws = ws
-                        logger.info(f"WS connected to relay")
+                        logger.debug("WS connected to relay")
                         async for msg in ws:
                             if msg.type == aiohttp.WSMsgType.TEXT:
                                 data = json.loads(msg.data)
@@ -259,7 +259,7 @@ class P2PNode:
                                     except Exception:
                                         pass
             except Exception as e:
-                logger.debug(f"WS reconnect in {WS_RECONNECT_DELAY}s: {e}")
+                logger.debug(f"Relay WS reconnect in {WS_RECONNECT_DELAY}s")
                 await asyncio.sleep(WS_RECONNECT_DELAY)
 
     def on_message(self, handler):

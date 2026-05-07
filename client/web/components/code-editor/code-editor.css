@@ -1,0 +1,35 @@
+/* Code Editor Component Styles */
+.ce-container{display:flex;flex-direction:column;height:100%;background:var(--bg-base)}
+.ce-toolbar{display:flex;align-items:center;justify-content:space-between;padding:var(--space-8) var(--space-12);border-bottom:1px solid var(--border-l1);flex-shrink:0;gap:var(--space-8)}
+.ce-title{font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);color:var(--text-default)}
+.ce-toolbar-actions{display:flex;align-items:center;gap:var(--space-4)}
+.ce-lang-select{height:26px;padding:0 var(--space-8);border:1px solid var(--border-l1);border-radius:var(--radius-4);background:var(--bg-overlay-l1);color:var(--text-default);font-size:var(--font-size-sm);font-family:var(--font-sans);cursor:pointer;outline:none}
+.ce-lang-select:focus{border-color:var(--brand-default)}
+.ce-btn{height:26px;padding:0 var(--space-8);border-radius:var(--radius-4);display:flex;align-items:center;justify-content:center;color:var(--icon-default);transition:all var(--transition-fast);gap:var(--space-4);font-size:var(--font-size-sm)}
+.ce-btn:hover{background:var(--bg-hover);color:var(--text-default)}
+.ce-body{flex:1;display:flex;overflow:hidden}
+.ce-file-tree{width:160px;flex-shrink:0;border-right:1px solid var(--border-l1);display:flex;flex-direction:column;background:var(--bg-overlay-l1)}
+.ce-file-tree-header{padding:var(--space-8) var(--space-10);font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px}
+.ce-file-list{flex:1;overflow-y:auto;padding:var(--space-4)}
+.ce-file-item{display:flex;align-items:center;gap:var(--space-6);padding:var(--space-6) var(--space-8);border-radius:var(--radius-4);font-size:var(--font-size-sm);color:var(--text-secondary);cursor:pointer;transition:background var(--transition-fast)}
+.ce-file-item:hover{background:var(--bg-hover)}
+.ce-file-item.active{background:var(--bg-overlay-l2);color:var(--text-default)}
+.ce-file-icon{font-size:12px;flex-shrink:0}
+.ce-file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-file-close{width:16px;height:16px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--icon-default);flex-shrink:0;opacity:0;transition:all var(--transition-fast)}
+.ce-file-item:hover .ce-file-close{opacity:1}
+.ce-file-close:hover{background:var(--status-error);color:#fff}
+.ce-editor-container{flex:1;overflow:hidden}
+.ce-loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-tertiary);font-size:var(--font-size-md)}
+.ce-empty{display:flex;align-items:center;justify-content:center;padding:var(--space-16);color:var(--text-tertiary);font-size:var(--font-size-sm);text-align:center}
+
+/* Code block "open in editor" button */
+.code-header-actions{display:flex;align-items:center;gap:var(--space-4)}
+.code-open-editor{display:inline-flex;align-items:center;gap:var(--space-4);padding:var(--space-2) var(--space-6);border-radius:var(--radius-4);font-size:var(--font-size-xs);color:var(--icon-default);cursor:pointer;transition:all var(--transition-fast)}
+.code-open-editor:hover{background:var(--bg-overlay-l2);color:var(--text-default)}
+
+/* Editor panel (for context panel mode) */
+.editor-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.editor-panel .ce-container{flex:1}
+.editor-panel .ce-toolbar{padding:var(--space-6) var(--space-8)}
+.editor-panel .ce-file-tree{width:120px}

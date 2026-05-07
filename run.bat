@@ -2,11 +2,15 @@
 cd /d "%~dp0"
 set PYTHONPATH=
 
-:: Use system Python — no venv needed for development
 set PYTHON_CMD=
-for %%v in (313 312 311 310) do (
-    if exist "%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe" (
-        set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe
+if exist ".venv\Scripts\python.exe" (
+    set PYTHON_CMD=.venv\Scripts\python.exe
+)
+if "%PYTHON_CMD%"=="" (
+    for %%v in (313 312 311 310) do (
+        if exist "%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe" (
+            set PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%v\python.exe
+        )
     )
 )
 if "%PYTHON_CMD%"=="" (
@@ -18,11 +22,20 @@ if "%PYTHON_CMD%"=="" (
     exit /b 1
 )
 
+"%PYTHON_CMD%" -c "import pydantic" 2>nul
+if errorlevel 1 (
+    echo Installing dependencies...
+    "%PYTHON_CMD%" -m pip install pydantic pyyaml loguru rich textual aiohttp pydantic-settings fastapi uvicorn --quiet 2>nul
+)
+
 if "%1"=="relay" (
     "%PYTHON_CMD%" relay_server.py --port 8888
-) else if "%1"=="direct" (
-    "%PYTHON_CMD%" -m livingtree tui --direct
 ) else (
-    "%PYTHON_CMD%" -m livingtree tui
+    echo.
+    echo   🌳 LivingTree AI Agent v2.1
+    echo   Web UI: http://localhost:8100
+    echo   API Docs: http://localhost:8100/docs
+    echo.
+    "%PYTHON_CMD%" -m livingtree
 )
 pause

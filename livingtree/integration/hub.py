@@ -24,6 +24,7 @@ class IntegrationHub:
         self.obs = setup_observability(self.config)
         self._session = None
         self._started = False
+        self._ready_event = asyncio.Event()
         self._lazy = lazy
         self.world = None
         self.engine = None
@@ -46,6 +47,14 @@ class IntegrationHub:
     def consciousness(self):
         """Delegate to world.consciousness for convenience."""
         return self.world.consciousness if self.world else None
+
+    async def wait_ready(self, timeout: float = 30.0) -> bool:
+        """Wait for hub initialization to complete."""
+        try:
+            await asyncio.wait_for(self._ready_event.wait(), timeout=timeout)
+            return self._ready_event.is_set()
+        except asyncio.TimeoutError:
+            return False
 
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -768,6 +777,7 @@ class IntegrationHub:
 
         self._started = True
         self._phase = 1
+        self._ready_event.set()
         
         if self.world.biorhythm:
             await self.world.biorhythm.start()
@@ -900,18 +910,7 @@ class IntegrationHub:
                 fragment = ra.receive_fragment(data)
                 # Forward memo/chat messages to Conversation UI
                 if fragment.msg_type in ("memo", "message") and fragment.content:
-                    import asyncio
-                    try:
-                        from livingtree.tui.td.widgets.note import Note
-                        # Post to app's active conversation if available
-                        loop = asyncio.get_event_loop()
-                        loop.call_soon_threadsafe(
-                            lambda f=fragment: logger.info(
-                                f"📝 {f.sender_role}: {f.content[:80]}"
-                            )
-                        )
-                    except Exception:
-                        pass
+                    logger.info(f"📝 {fragment.sender_role}: {fragment.content[:80]}")
             elif msg_type == "observe_request":
                 logger.info(f"Observe request from {data.get('from_id','?')}")
         except Exception:

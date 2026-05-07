@@ -65,8 +65,6 @@ class UnifiedFileTool:
     async def _search_filesystem(self, query: str) -> list[FileHit]:
         """Fuzzy search files by name (fast)."""
         try:
-            from ..tui.td.widgets.path_search import PathSearch
-            from ..tui.td._path_fuzzy_search import PathFuzzySearch
             hits = []
             for root, dirs, files in self._walk_limited(self._workspace):
                 for f in files:

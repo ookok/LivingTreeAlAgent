@@ -1,0 +1,184 @@
+/* ═══════════════════════════════════════════════
+   LivingTree Web — Design Tokens
+   Matches Trae Solo design system from crawl analysis
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* Brand */
+  --brand-default: #0fdc78;
+  --brand-hover: #0ab861;
+  --brand-disabled: rgba(15, 220, 120, 0.12);
+  --brand-onbrand: #0c0c0d;
+
+  /* Accents — 9-color system */
+  --accent-blue: #3f85ff;
+  --accent-green: #67c23a;
+  --accent-cyan: #00b8f8;
+  --accent-violet: #9570ff;
+  --accent-amber: #e28a00;
+  --accent-coral: #f65a5a;
+  --accent-lime: #a3d930;
+  --accent-magenta: #d1469e;
+  --accent-teal: #00bcd4;
+  --accent-slate: #8c919c;
+
+  /* Backgrounds — 4-layer overlay system */
+  --bg-base: #1a1b1d;
+  --bg-secondary: #1f2530;
+  --bg-tertiary: rgba(224, 226, 242, 0.05);
+  --bg-menu: #1f2128;
+  --bg-tooltip: #2a2b2d;
+  --bg-overlay-l1: rgba(255, 255, 255, 0.04);
+  --bg-overlay-l2: rgba(255, 255, 255, 0.08);
+  --bg-overlay-l3: rgba(255, 255, 255, 0.12);
+  --bg-overlay-l4: rgba(255, 255, 255, 0.16);
+  --bg-hover: rgba(86, 99, 119, 0.06);
+  --bg-invert: #36393d;
+
+  /* Text — 4-level hierarchy */
+  --text-default: #d1d3db;
+  --text-secondary: #9599a6;
+  --text-tertiary: #7f848e;
+  --text-disabled: #666b75;
+  --text-highlight: #f5f9fe;
+  --text-onbrand: #0c0c0d;
+  --text-danger: #f65a5a;
+  --text-success: #34a853;
+  --text-warning: #faad14;
+  --text-brand: #0ab861;
+
+  /* Icons */
+  --icon-default: #9599a6;
+  --icon-secondary: #8c919c;
+  --icon-tertiary: #d1d3db;
+  --icon-disabled: rgba(204, 204, 204, 0.5);
+  --icon-onbrand: #e0e0e0;
+
+  /* Borders — 3-level system */
+  --border-l1: rgba(255, 255, 255, 0.08);
+  --border-l2: rgba(255, 255, 255, 0.12);
+  --border-l3: rgba(255, 255, 255, 0.16);
+
+  /* Status — semantic colors with surface levels */
+  --status-primary: #387bff;
+  --status-primary-hover: #1a5fd9;
+  --status-primary-surface: rgba(47, 116, 255, 0.12);
+  --status-success: #00b983;
+  --status-success-surface: rgba(63, 185, 80, 0.15);
+  --status-warning: #e28a00;
+  --status-warning-surface: rgba(226, 138, 0, 0.12);
+  --status-error: #e8463a;
+  --status-error-hover: #d63d32;
+  --status-error-surface: rgba(232, 70, 58, 0.12);
+  --status-alert: #f5a623;
+
+  /* Typography */
+  --font-sans: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  --font-size-xs: 10px; --line-height-xs: 14px;
+  --font-size-sm: 11px; --line-height-sm: 16px;
+  --font-size-md: 12px; --line-height-md: 18px;
+  --font-size-base: 13px; --line-height-base: 20px;
+  --font-size-lg: 14px; --line-height-lg: 20px;
+  --font-size-xl: 16px; --line-height-xl: 24px;
+  --font-size-2xl: 18px; --line-height-2xl: 28px;
+  --font-size-3xl: 28px; --line-height-3xl: 36px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-code: 450;
+
+  /* Spacing (4px grid) */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Layout */
+  --sidebar-width: 300px;
+  --header-height: 48px;
+
+  /* Border Radius */
+  --radius-2: 2px;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows — 3-level elevation */
+  --shadow-tooltip: 0 2px 6px rgba(0, 0, 0, 0.2), 0 0.5px 0 0 rgba(255, 255, 255, 0.06);
+  --shadow-panel: 0 3px 10px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.24);
+  --shadow-input: 0 0 0 1px var(--border-l1);
+  --shadow-input-focus: 0 0 0 2px rgba(15, 220, 120, 0.25);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Z-Index */
+  --z-base: 1;
+  --z-above: 10;
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-notification: 400;
+  --z-modal: 500;
+  --z-max: 999;
+}
+
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:var(--font-sans);
+  font-size:var(--font-size-base);
+  line-height:var(--line-height-base);
+  color:var(--text-default);
+  background:var(--bg-base);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-blue);text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font-family:inherit;color:inherit;background:none;border:none;outline:none}
+::selection{background:rgba(15,220,120,0.25)}
+:focus-visible{outline:2px solid var(--brand-default);outline-offset:-2px}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg-overlay-l3);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--bg-overlay-l4)}
+
+/* ════════════════ Light Theme ════════════════ */
+[data-theme=light] {
+  --brand-default: #0ab861; --brand-hover: #089e50; --brand-onbrand: #fff;
+  --accent-blue: #1a5fd9; --accent-violet: #7c3aed; --accent-cyan: #0891b2;
+  --bg-base: #fff; --bg-secondary: #f5f6f8; --bg-tertiary: #edeff2;
+  --bg-menu: #f8f9fa; --bg-tooltip: #fff;
+  --bg-overlay-l1: rgba(86,99,119,.06); --bg-overlay-l2: rgba(86,99,119,.11);
+  --bg-overlay-l3: rgba(86,99,119,.16); --bg-overlay-l4: rgba(86,99,119,.22);
+  --bg-hover: rgba(86,99,119,.08); --bg-invert: #dadde5;
+  --text-default: #1a1a1a; --text-secondary: #5b6066; --text-tertiary: #7f848e;
+  --text-disabled: #b3b7bf; --text-highlight: #0a0a0a;
+  --text-danger: #e8463a; --text-success: #15a87a; --text-warning: #d89614;
+  --icon-default: #5b6066; --icon-secondary: #7f848e; --icon-tertiary: #31353a;
+  --icon-disabled: rgba(0,0,0,.25);
+  --border-l1: #e5e6e8; --border-l2: #c8ccd9; --border-l3: #b8bcc9;
+  --status-primary:#2e74ff; --status-success:#00b983; --status-warning:#e28a00;
+  --status-error:#e8463a; --status-error-surface:rgba(232,70,58,.08);
+  --status-success-surface:rgba(0,185,131,.1);
+  --shadow-tooltip: 0 4px 16px rgba(0,0,0,.12);
+  --shadow-panel: 0 3px 10px rgba(0,0,0,.06);
+  --shadow-modal: 0 8px 32px rgba(0,0,0,.16);
+  --shadow-input-focus: 0 0 0 2px rgba(10,184,97,.2);
+}

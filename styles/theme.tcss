@@ -1,0 +1,25 @@
+/* LivingTree theme */
+
+App {
+    background: #0d1017;
+    color: #cccccc;
+}
+
+Screen {
+    background: #0d1017;
+}
+
+#title-bar {
+    dock: top;
+    height: 1;
+    background: #1a1a2e;
+    color: #00ff88;
+    text-style: bold;
+    content-align: center middle;
+}
+
+StatusBar {
+    dock: bottom;
+    height: 1;
+    background: #1a1a2e;
+}

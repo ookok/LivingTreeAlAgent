@@ -1,10 +1,4 @@
-from .app import LivingTreeTuiApp
-from .screens.chat import ChatScreen
-from .screens.code import CodeScreen
-from .screens.docs import KnowledgeScreen
-from .screens.settings import SettingsScreen
+"""LivingTree TUI package — web UI has replaced terminal TUI."""
+from .wt_bootstrap import ensure_bootstrapped
 
-__all__ = [
-    "LivingTreeTuiApp",
-    "ChatScreen", "CodeScreen", "KnowledgeScreen", "SettingsScreen",
-]
+__all__ = ["ensure_bootstrapped"]

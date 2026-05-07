@@ -170,9 +170,15 @@ class PathSearch(containers.VerticalGroup):
         self.set_reactive(PathSearch.root, root)
         self.root = root
         self.fuzzy_index = FuzzyIndex()
-        self.pool = concurrent.futures.InterpreterPoolExecutor(
-            thread_name_prefix=f"fuzzy-path-search-{root}"
-        )
+        try:
+            self.pool = concurrent.futures.InterpreterPoolExecutor(
+                thread_name_prefix=f"fuzzy-path-search-{root}"
+            )
+        except AttributeError:
+            # Python < 3.14 fallback
+            self.pool = concurrent.futures.ThreadPoolExecutor(
+                thread_name_prefix=f"fuzzy-path-search-{root}"
+            )
         self.search_cache: LRUCache[str, list[tuple[float, Sequence[int], str]]] = (
             LRUCache(1024)
         )

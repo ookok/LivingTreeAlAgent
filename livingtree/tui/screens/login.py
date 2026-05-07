@@ -8,9 +8,11 @@ from textual.widgets import Static, Input, Button
 from textual.containers import Vertical, Center
 from textual.binding import Binding
 
+import asyncio
 import aiohttp
 
 RELAY_URL = "http://www.mogoo.com.cn:8888"
+LOCAL_RELAY = "http://127.0.0.1:8888"
 
 
 class LoginScreen(Screen):
@@ -19,6 +21,7 @@ class LoginScreen(Screen):
     BINDINGS = [
         Binding("enter", "submit", "登录"),
         Binding("escape", "quit", "退出"),
+        Binding("ctrl+s", "skip_login", "跳过"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -30,6 +33,10 @@ class LoginScreen(Screen):
                 yield Input(placeholder="密码", password=True, id="login-pass")
                 yield Static("", id="login-error")
                 yield Button("登录", id="btn-login", variant="primary")
+                yield Static(
+                    "没有账号？发送邮件至 livingtreeai@163.com 申请，并说明用途",
+                    id="login-hint",
+                )
 
     def on_mount(self):
         self.query_one("#login-user", Input).focus()
@@ -53,29 +60,49 @@ class LoginScreen(Screen):
         error_widget = self.query_one("#login-error", Static)
         error_widget.update("[yellow]正在验证...[/yellow]")
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{RELAY_URL}/login",
-                    json={"username": user, "password": pwd},
-                    timeout=10,
-                ) as resp:
-                    data = await resp.json()
-                    if resp.status == 200:
-                        token = data.get("token", "")
-                        self.app._auth_token = token
-                        self.app._auth_user = user
-                        self.app._auth_verified = True
-                        # Set on P2P node
-                        from ..network.p2p_node import get_p2p_node
-                        node = get_p2p_node()
-                        node._auth_token = token
-                        node._username = user
-                        self.app.pop_screen()
-                        self.app.notify(f"✓ 已登录: {user}", timeout=2)
-                    else:
-                        error_widget.update(f"[red]{data.get('error', '登录失败')}[/red]")
-        except aiohttp.ClientConnectorError:
-            error_widget.update("[red]无法连接到中继服务器 (www.mogoo.com.cn:8888)[/red]")
-        except Exception as e:
-            error_widget.update(f"[red]登录失败: {e}[/red]")
+        # Try remote relay first, then local
+        urls = [RELAY_URL, LOCAL_RELAY]
+        for url in urls:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{url}/login",
+                        json={"username": user, "password": pwd},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self._on_login_success(data, user)
+                            return
+                        else:
+                            data = await resp.json()
+                            error_widget.update(f"[red]{data.get('error', '登录失败')}[/red]")
+                            return
+            except asyncio.TimeoutError:
+                continue
+            except (aiohttp.ClientConnectorError, aiohttp.ClientError):
+                continue
+            except Exception:
+                continue
+
+        error_widget.update("[red]无法连接中继服务器 (尝试了远程和本地)[/red]")
+
+    def _on_login_success(self, data: dict, user: str):
+        token = data.get("token", data.get("api_key", ""))
+        self.app._auth_token = token
+        self.app._auth_user = user
+        self.app._auth_verified = True
+        from ..network.p2p_node import get_p2p_node
+        node = get_p2p_node()
+        node._auth_token = token
+        node._username = user
+        self.app.pop_screen()
+        self.app.notify(f"✓ 已登录: {user}", timeout=2)
+
+    def action_skip_login(self):
+        """Skip login for offline/local use."""
+        self.app._auth_verified = True
+        self.app._auth_user = "offline"
+        self.app._auth_token = "offline-mode"
+        self.app.pop_screen()
+        self.app.notify("⚠ 离线模式 (跳过登录)", timeout=2)

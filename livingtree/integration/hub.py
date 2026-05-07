@@ -42,6 +42,11 @@ class IntegrationHub:
         # UnifiedNotifier: adaptive multi-channel dispatcher
         self.unified_notifier = None
 
+    @property
+    def consciousness(self):
+        """Delegate to world.consciousness for convenience."""
+        return self.world.consciousness if self.world else None
+
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
             self._session = aiohttp.ClientSession()
@@ -309,7 +314,7 @@ class IntegrationHub:
         self.world.collective = CollectiveConsciousness(world=self.world)
         logger.debug("CollectiveConsciousness initialized")
 
-            from ..dna.evolution import SelfEvolvingEngine
+        from ..dna.evolution import SelfEvolvingEngine
         self.world.self_evolving = SelfEvolvingEngine(world=self.world)
         logger.debug("SelfEvolvingEngine initialized")
 
@@ -361,21 +366,6 @@ class IntegrationHub:
             logger.info("Web2API provider registered for model election")
         except Exception as e:
             logger.debug(f"Web2API provider: {e}")
-
-        # Auto-discover opencode providers and register them
-        try:
-            from .opencode_bridge import OpenCodeBridge
-            bridge = OpenCodeBridge()
-            oc_providers = await bridge.discover_for_election()
-            for p in oc_providers:
-                if p.get("api_key") and p.get("base_url"):
-                    self.world.consciousness._llm.add_provider(OpenAILikeProvider(
-                        name=p["name"], base_url=p["base_url"],
-                        api_key=p["api_key"], default_model=p.get("model", ""),
-                    ))
-                    logger.info(f"OpenCode provider: {p['name']} ({p.get('model','')})")
-        except Exception as e:
-            logger.debug(f"OpenCode bridge: {e}")
 
         # ── Register provider profiles for embedding scorer ──
         if getattr(self, 'embedding_scorer', None):
@@ -450,8 +440,8 @@ class IntegrationHub:
         logger.debug("SkillCatalog initialized (45 modules, 10 buckets)")
 
         # Batch Executor (Clibor: FIFO/LIFO task queue)
-        from ..execution.batch_executor import get_batch_executor
-        self.world.batch_executor = get_batch_executor()
+        from ..execution.batch_executor import create_batch_executor
+        self.world.batch_executor = create_batch_executor()
         logger.debug("BatchExecutor initialized")
 
         # React Executor (ReAct: serial Think-Act-Observe loop for exploratory tasks)

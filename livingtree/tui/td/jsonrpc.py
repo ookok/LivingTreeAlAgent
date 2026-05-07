@@ -25,6 +25,18 @@ type JSONList = list[JSONType]
 
 log = logging.getLogger("jsonrpc")
 
+_BUILTINS = {"str": str, "int": int, "float": float, "bool": bool,
+             "list": list, "dict": dict, "tuple": tuple, "set": set,
+             "None": None, "True": True, "False": False,
+             "Any": object, "Protocol": object, "protocol": object}
+
+def _safe_eval(annotation: str) -> type:
+    """Safely evaluate a string annotation, falling back to object."""
+    try:
+        return eval(annotation, {"__builtins__": _BUILTINS}, _BUILTINS)
+    except (NameError, SyntaxError):
+        return object
+
 
 def expose(name: str = "", prefix: str = ""):
     """Expose a method."""
@@ -313,7 +325,7 @@ class Server:
             parameters = {
                 name: Parameter(
                     (
-                        eval(parameter.annotation)
+                        _safe_eval(parameter.annotation)
                         if isinstance(parameter.annotation, str)
                         else parameter.annotation
                     ),

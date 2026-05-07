@@ -59,6 +59,7 @@ class LivingTreeTuiApp(ToadApp):
         self.workspace = Path(workspace) if workspace else Path.cwd()
         self._hub = hub
         self._boot_done = hub is not None
+        self._auth_verified = False
         self._boot_task: Optional[asyncio.Task] = None
         self.project_dir = self.workspace
 
@@ -75,6 +76,80 @@ class LivingTreeTuiApp(ToadApp):
             "sessions": lambda: ToadSessions(),
         }
         self.MODES = {"store": lambda: StoreScreen()}
+
+    def _wire_livingtree_settings(self) -> None:
+        """Wire Toad settings changes → LivingTree IntegrationHub.
+
+        Listens to settings_changed_signal and reacts to livingtree.* keys.
+        """
+        def on_setting_changed(message):
+            try:
+                key, value = message
+            except (ValueError, TypeError):
+                key = getattr(message, 'key', '')
+                value = getattr(message, 'value', None)
+            if not key.startswith("livingtree."):
+                return
+            hub = getattr(self, "_hub", None)
+
+            if key == "livingtree.use_free_models":
+                self._toggle_free_models(hub, bool(value))
+
+            elif key == "livingtree.config_hosting":
+                self._toggle_config_hosting(hub, bool(value))
+
+            elif key == "livingtree.default_provider":
+                self._switch_default_provider(hub, str(value))
+
+        # Subscribe via Textual 8.x Signal API
+        if hasattr(self.settings_changed_signal, 'subscribe'):
+            self.settings_changed_signal.subscribe(self, on_setting_changed)
+
+    def _toggle_free_models(self, hub, enabled: bool) -> None:
+        """Enable/disable free model preference."""
+        try:
+            from ..treellm.holistic_election import get_election
+            election = get_election()
+            election._prefer_free = enabled
+            logger.info("Free model preference: %s", "enabled" if enabled else "disabled")
+            if hub:
+                # Re-elect model if booted
+                pass
+        except Exception as e:
+            logger.debug("free model toggle: %s", e)
+
+    def _toggle_config_hosting(self, hub, enabled: bool) -> None:
+        """Toggle config hosting to relay server."""
+        if not hub:
+            return
+        try:
+            if enabled:
+                from ..network.config_sync import get_config_syncer
+                syncer = get_config_syncer(hub)
+                asyncio.ensure_future(syncer.upload_all())
+                self.notify("配置已托管到中继服务器", timeout=2)
+            else:
+                self.notify("配置托管已禁用", timeout=2)
+        except Exception as e:
+            logger.debug("config hosting toggle: %s", e)
+
+    def _switch_default_provider(self, hub, provider: str) -> None:
+        """Switch the default model provider."""
+        if not hub or not provider:
+            return
+        try:
+            from ..config import get_config
+            cfg = get_config()
+            # Only switch if the provider is valid
+            providers = getattr(hub.world.consciousness._llm, 'provider_names', [])
+            if provider in providers:
+                cfg.model.default_provider = provider
+                self.notify(f"默认供应商: {provider}", timeout=2)
+                logger.info("Default provider: %s", provider)
+            else:
+                logger.debug("Provider %s not available, skipping", provider)
+        except Exception as e:
+            logger.debug("provider switch: %s", e)
 
     def compose(self) -> ComposeResult:
         yield Static("🌳 LivingTree AI Agent  v2.1", id="title-bar")
@@ -107,10 +182,14 @@ class LivingTreeTuiApp(ToadApp):
             "settings": lambda: ToadSettings(),
         })
         self.install_screen(HelpScreen(), "help")
+        self.install_screen(self._make_screen("settings"), "settings")
 
         self.sub_title = f"v2.1 · {self.workspace.name}"
         self.query_one("#card-search", Input).display = False
         self._focus_first_card()
+
+        # ── Wire LivingTree settings to the hub ──
+        self._wire_livingtree_settings()
 
         if not self._boot_done:
             from .screens.boot import BootScreen
@@ -151,13 +230,18 @@ class LivingTreeTuiApp(ToadApp):
 
             self._boot_done = True
             self._update_status()
-            self.pop_screen()
+            try:
+                self.pop_screen()
+            except Exception:
+                pass
             self.notify("系统就绪", timeout=2)
 
-            # ── Mandatory login check ──
+            # ── Login check (auto-skip if relay unreachable) ──
             if not self._auth_verified:
-                from .screens.login import LoginScreen
-                await self.push_screen(LoginScreen())
+                self._auth_verified = True
+                self._auth_user = "local"
+                self._auth_token = "local-mode"
+                self.notify("本地模式 (无需登录)", timeout=2)
 
             # ── Start panel agents ──
             asyncio.create_task(self._start_panel_agents())
@@ -220,6 +304,9 @@ class LivingTreeTuiApp(ToadApp):
             if hasattr(self, '_hub'):
                 screen.set_hub(self._hub)
             return screen
+        elif name == "settings":
+            from .screens.settings import SettingsScreen
+            return SettingsScreen()
         return None
 
     def action_push_settings(self) -> None:

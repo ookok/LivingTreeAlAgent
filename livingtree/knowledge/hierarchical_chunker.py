@@ -376,6 +376,114 @@ Return ONLY the JSON tree, no other text:"""
 
         return chunks
 
+    # ── Parent-Child Chunking (RAG 2.0) ───────────────────────────
+
+    def parent_child_chunk(
+        self, text: str, title: str = "",
+    ) -> tuple[list[DocumentChunk], list[DocumentChunk]]:
+        """父子文档切分 — RAG 2.0推荐的分块策略.
+
+        Parent chunks: 大块（保持完整上下文，用于LLM生成）
+        Child chunks:  小块（精确检索，用于向量匹配）
+
+        检索用child → 返回parent给LLM
+        → 精准召回 + 完整上下文，准确率提升15-22%
+
+        Args:
+            text: 文档原文
+            title: 文档标题
+
+        Returns:
+            (parent_chunks, child_chunks) 元组
+        """
+        # Parent: large chunks with full section context
+        parent_size = self.chunk_size * 3  # Parent: 3x larger
+        parent_chunks: list[DocumentChunk] = []
+        child_chunks: list[DocumentChunk] = []
+
+        # 1. 按段落（双换行）分割父块
+        paragraphs = text.split("\n\n")
+        current_parent = ""
+        parent_start = 0
+        parent_chunk_idx = 0
+        child_chunk_idx = 0
+
+        for para in paragraphs:
+            if not para.strip():
+                continue
+
+            # 检查是否需要开始新父块
+            if len(current_parent) + len(para) > parent_size and current_parent:
+                # 保存父块
+                parent_end = parent_start + len(current_parent)
+                parent_chunks.append(DocumentChunk(
+                    chunk_id=f"{title}_parent_{parent_chunk_idx}",
+                    text=current_parent.strip(),
+                    section_path=title,
+                    section_title=title,
+                    chunk_index=parent_chunk_idx,
+                    start_char=parent_start,
+                    end_char=parent_end,
+                    parent_titles=[title],
+                ))
+                parent_chunk_idx += 1
+                child_chunk_idx = 0
+                parent_start = parent_end
+                current_parent = ""
+
+            current_parent += para + "\n\n"
+
+            # 2. 从父块中生成子块
+            words = para.split()
+            child_text = ""
+            for w in words:
+                if len(child_text) + len(w) + 1 > self.chunk_size:
+                    child_end = parent_start + len(current_parent)
+                    child_chunks.append(DocumentChunk(
+                        chunk_id=f"{title}_child_{parent_chunk_idx}_{child_chunk_idx}",
+                        text=child_text.strip(),
+                        section_path=title,
+                        section_title=title,
+                        chunk_index=child_chunk_idx,
+                        start_char=parent_start,
+                        end_char=child_end,
+                        parent_titles=[title],
+                    ))
+                    child_chunk_idx += 1
+                    child_text = w
+                else:
+                    child_text += (" " if child_text else "") + w
+            if child_text.strip():
+                child_chunks.append(DocumentChunk(
+                    chunk_id=f"{title}_child_{parent_chunk_idx}_{child_chunk_idx}",
+                    text=child_text.strip(),
+                    section_path=title,
+                    section_title=title,
+                    chunk_index=child_chunk_idx,
+                    start_char=parent_start,
+                    end_char=parent_start + len(current_parent),
+                    parent_titles=[title],
+                ))
+
+        # 保存最后一个父块
+        if current_parent.strip():
+            parent_end = parent_start + len(current_parent)
+            parent_chunks.append(DocumentChunk(
+                chunk_id=f"{title}_parent_{parent_chunk_idx}",
+                text=current_parent.strip(),
+                section_path=title,
+                section_title=title,
+                chunk_index=parent_chunk_idx,
+                start_char=parent_start,
+                end_char=parent_end,
+                parent_titles=[title],
+            ))
+
+        logger.info(
+            f"Parent-Child chunking: {len(parent_chunks)} parents, "
+            f"{len(child_chunks)} children for '{title}'")
+        return parent_chunks, child_chunks
+
 
 def build_document_tree(
     text: str,

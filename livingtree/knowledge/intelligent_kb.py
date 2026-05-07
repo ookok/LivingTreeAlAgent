@@ -114,70 +114,70 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
     # Path 1: DocumentKB (hybrid FTS5 + embedding RRF)
     if "doc_kb" in active_paths:
         try:
-        from ..knowledge.document_kb import DocumentKB
-        kb = DocumentKB()
-        for q in expanded_queries[:2]:
-            hits = kb.search(q, top_k=top_k)
-            for hit in hits:
-                key = hit.chunk.id
-                if key not in results or hit.score > results[key].score:
-                    results[key] = RetrievalResult(
-                        text=hit.chunk.text, score=hit.score * 1.2,  # boost primary path
-                        source="document_kb", doc_id=hit.doc_id, chunk_id=hit.chunk.id,
-                        section_path=getattr(hit.chunk, 'section_path', ''),
-                        section_id=getattr(hit.chunk, 'section_id', ''),
-                        section_level=getattr(hit.chunk, 'section_level', 0),
-                        parent_titles=getattr(hit.chunk, 'parent_titles', []),
-                    )
-    except Exception:
-        pass
+            from ..knowledge.document_kb import DocumentKB
+            kb = DocumentKB()
+            for q in expanded_queries[:2]:
+                hits = kb.search(q, top_k=top_k)
+                for hit in hits:
+                    key = hit.chunk.id
+                    if key not in results or hit.score > results[key].score:
+                        results[key] = RetrievalResult(
+                            text=hit.chunk.text, score=hit.score * 1.2,
+                            source="document_kb", doc_id=hit.doc_id, chunk_id=hit.chunk.id,
+                            section_path=getattr(hit.chunk, 'section_path', ''),
+                            section_id=getattr(hit.chunk, 'section_id', ''),
+                            section_level=getattr(hit.chunk, 'section_level', 0),
+                            parent_titles=getattr(hit.chunk, 'parent_titles', []),
+                        )
+        except Exception:
+            pass
 
     # Path 2: KnowledgeBase (cosine)
     if "kb" in active_paths:
         try:
-        from ..knowledge.knowledge_base import KnowledgeBase
-        base = KnowledgeBase()
-        docs = base.search(query, top_k=top_k)
-        for doc in docs:
-            key = f"kb-{doc.id}"
-            results.setdefault(key, RetrievalResult(
-                text=doc.content[:500], score=0.5, source="knowledge_base", doc_id=doc.id,
-            ))
-    except Exception:
-        pass
+            from ..knowledge.knowledge_base import KnowledgeBase
+            base = KnowledgeBase()
+            docs = base.search(query, top_k=top_k)
+            for doc in docs:
+                key = f"kb-{doc.id}"
+                results.setdefault(key, RetrievalResult(
+                    text=doc.content[:500], score=0.5, source="knowledge_base", doc_id=doc.id,
+                ))
+        except Exception:
+            pass
 
     # Path 3: StructMem (semantic memory)
     if "struct_mem" in active_paths:
         try:
-        from ..knowledge.struct_mem import get_struct_mem
-        mem = get_struct_mem() if 'get_struct_mem' in dir() else None
-        if mem:
-            entries = await mem.retrieve_for_query(query, top_k=5)
-            for entry in entries[:3]:
-                key = f"mem-{id(entry)}"
-                results.setdefault(key, RetrievalResult(
-                    text=getattr(entry, 'content', str(entry))[:300],
-                    score=0.4, source="struct_mem",
-                ))
-    except Exception:
-        pass
+            from ..knowledge.struct_mem import get_struct_mem
+            mem = get_struct_mem() if 'get_struct_mem' in dir() else None
+            if mem:
+                entries = await mem.retrieve_for_query(query, top_k=5)
+                for entry in entries[:3]:
+                    key = f"mem-{id(entry)}"
+                    results.setdefault(key, RetrievalResult(
+                        text=getattr(entry, 'content', str(entry))[:300],
+                        score=0.4, source="struct_mem",
+                    ))
+        except Exception:
+            pass
 
     # Path 4: Graph boost
     if "graph" in active_paths:
         try:
-        from ..knowledge.knowledge_graph import KnowledgeGraph
-        graph = KnowledgeGraph()
-        entities = graph.entity_linking(query)
-        for entity in entities[:3]:
-            neighbors = graph.query_graph(entity)
+            from ..knowledge.knowledge_graph import KnowledgeGraph
+            graph = KnowledgeGraph()
+            entities = graph.entity_linking(query)
+            for entity in entities[:3]:
+                neighbors = graph.query_graph(entity)
             for neighbor in neighbors[:5]:
                 neighbor_text = neighbor.get("label", "")
                 for key, result in results.items():
                     if neighbor_text and neighbor_text in result.text:
                         result.score *= 1.3
                         result.graph_distance = 1
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     sorted_results = sorted(results.values(), key=lambda r: -r.score)
     return sorted_results[:top_k]

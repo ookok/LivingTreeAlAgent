@@ -34,12 +34,15 @@ from .intelligent_kb import (
 from .query_decomposer import QueryDecomposer, DecomposedQuery, SubQuery, DecomposedResult
 from .retrieval_validator import RetrievalValidator, ValidatedHit, ValidationResult
 from .hallucination_guard import HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
+from .quality_guard import RetrievalValidator, ValidatedHit, ValidationResult, HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
 from .content_quality import ContentQuality, QualityScore, ContentLabel
 from .cognitive_delta import CognitiveDelta, DeltaResult, DeltaDecision
 from .engram_store import EngramStore, EngramEntry, get_engram_store
 from .pii_redactor import PIIRedactor, PIIFinding, RedactionResult, get_pii_redactor, redact_text, has_pii
 from .knowledge_router import KnowledgeRouter, RouteDecision, RouteTarget, get_knowledge_router
 from .ideablock_enricher import IdeaBlockEnricher, IdeaBlockMeta, get_ideablock_enricher
+from .agentic_rag import AgenticRAG, AgenticResult, RetrievalRound, RAGMode, get_agentic_rag
+from .reranker import Reranker, RankedDocument, RerankResult, get_reranker
 
 __all__ = [
     "KnowledgeBase", "Document", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult",
@@ -74,4 +77,7 @@ __all__ = [
     "EngramStore", "EngramEntry", "get_engram_store",
     "PIIRedactor", "PIIFinding", "RedactionResult", "get_pii_redactor", "redact_text", "has_pii",
     "KnowledgeRouter", "RouteDecision", "RouteTarget", "get_knowledge_router",
+    "IdeaBlockEnricher", "IdeaBlockMeta", "get_ideablock_enricher",
+    "AgenticRAG", "AgenticResult", "RetrievalRound", "RAGMode", "get_agentic_rag",
+    "Reranker", "RankedDocument", "RerankResult", "get_reranker",
 ]

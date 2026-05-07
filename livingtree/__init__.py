@@ -41,6 +41,12 @@ __all__ = [
     "RLMRunner", "SideGit", "SubAgentRoles", "SessionManager",
     "LSPManager", "SSEAgentServer", "SkillDiscoveryManager",
     "StructMemory",
+    # Economy
+    "EconomicOrchestrator", "EconomicPolicy", "ROIModel", "ComplianceGate",
+    # RAG 2.0
+    "AgenticRAG", "Reranker",
+    # Execution (new)
+    "PlanValidator", "FitnessLandscape", "DiffusionPlanner", "PipelineOptimizer",
 ]
 
 
@@ -93,6 +99,19 @@ _LAZY = {
     "CodeScreen": ".tui",
     "KnowledgeScreen": ".tui",
     "SettingsScreen": ".tui",
+    # Economy
+    "EconomicOrchestrator": ".economy",
+    "EconomicPolicy": ".economy",
+    "ROIModel": ".economy",
+    "ComplianceGate": ".economy",
+    # RAG 2.0
+    "AgenticRAG": ".knowledge",
+    "Reranker": ".knowledge",
+    # Execution (new modules)
+    "PlanValidator": ".execution",
+    "FitnessLandscape": ".execution",
+    "DiffusionPlanner": ".execution",
+    "PipelineOptimizer": ".execution",
 }
 
 

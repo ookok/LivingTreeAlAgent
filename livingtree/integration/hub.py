@@ -35,6 +35,12 @@ class IntegrationHub:
         self.embedding_scorer = None
         # RouteMoA: layered routing by default
         self._use_layered_routing = True
+        # MessageGateway: multi-platform notifications
+        self.message_gateway = None
+        # Scinet: smart proxy for overseas acceleration
+        self.scinet = None
+        # UnifiedNotifier: adaptive multi-channel dispatcher
+        self.unified_notifier = None
 
     def _lazy_session(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -303,7 +309,7 @@ class IntegrationHub:
         self.world.collective = CollectiveConsciousness(world=self.world)
         logger.debug("CollectiveConsciousness initialized")
 
-        from ..dna.self_evolving import SelfEvolvingEngine
+            from ..dna.evolution import SelfEvolvingEngine
         self.world.self_evolving = SelfEvolvingEngine(world=self.world)
         logger.debug("SelfEvolvingEngine initialized")
 
@@ -524,6 +530,26 @@ class IntegrationHub:
             self.world.embedding_scorer = self.embedding_scorer
             logger.debug("EmbeddingScorer wired to world")
 
+        # ── OvernightTask: 挂机长任务编排器 ──
+        from ..capability.overnight_task import OvernightTask
+        self.world.overnight_task = OvernightTask(self)
+        logger.debug("OvernightTask initialized")
+
+        # ── MessageGateway: 多平台消息通知 ──
+        from .message_gateway import get_gateway
+        self.message_gateway = get_gateway()
+        self.world.message_gateway = self.message_gateway
+        logger.debug("MessageGateway initialized (%s)",
+                     ", ".join(self.message_gateway._get_enabled_platforms()))
+
+        # ── UnifiedNotifier: 自适应多通道通知调度 ──
+        from .unified_notifier import get_unified_notifier
+        self.unified_notifier = get_unified_notifier()
+        self.world.unified_notifier = self.unified_notifier
+        channels = self.unified_notifier.available_channels
+        logger.info("UnifiedNotifier: %d 通道自适应检测 (%s)",
+                    len(channels), ", ".join(channels))
+
     async def _init_async(self) -> None:
         """Async initialization — health checks, node register, daemon start."""
         logger.info(f"  Flash: {self.config.model.flash_model} | Pro: {self.config.model.pro_model}")
@@ -549,36 +575,30 @@ class IntegrationHub:
         # ── Model registry (deferred if lazy) ──
         if not self._lazy:
             try:
-                from ..treellm.model_registry import get_model_registry
-                registry = get_model_registry()
-                self._model_registry = registry
-                provider_keys = {
-                    "deepseek": ("https://api.deepseek.com/v1", self.config.model.deepseek_api_key),
-                    "longcat": ("https://api.longcat.chat/openai/v1", self.config.model.longcat_api_key),
-                    "xiaomi": ("https://api.xiaomimimo.com/v1", self.config.model.xiaomi_api_key),
-                    "aliyun": ("https://dashscope.aliyuncs.com/compatible-mode/v1", self.config.model.aliyun_api_key),
-                    "zhipu": ("https://open.bigmodel.cn/api/paas/v4", self.config.model.zhipu_api_key),
-                    "siliconflow": ("https://api.siliconflow.cn/v1", self.config.model.siliconflow_api_key),
-                    "mofang": ("https://ai.gitee.com/v1", self.config.model.mofang_api_key),
-                    "nvidia": ("https://integrate.api.nvidia.com/v1", self.config.model.nvidia_api_key),
-                    "spark": ("https://maas-api.cn-huabei-1.xf-yun.com/v2", self.config.model.spark_api_key),
-                    "modelscope": ("https://api-inference.modelscope.cn/v1", self.config.model.modelscope_api_key),
-                    "bailing": ("https://api.baichuan-ai.com/v1", self.config.model.bailing_api_key),
-                    "stepfun": ("https://api.stepfun.com/v1", self.config.model.stepfun_api_key),
-                    "internlm": ("https://api.intern-ai.org.cn/v1", self.config.model.internlm_api_key),
-                    "web2api": ("http://localhost:5001/v1", "web2api-local"),
-                }
-                for name, (base_url, api_key) in provider_keys.items():
-                    if api_key:
-                        registry.register_provider(name, base_url, api_key)
-                registry.load_cache()
-                asyncio.create_task(self._refresh_models_async(registry))
-                await registry.start_periodic_refresh(86400)
-                logger.info("Model registry initialized")
+                from ..treellm.bootstrap import setup_model_registry
+                self._model_registry = await setup_model_registry(self.config)
             except Exception as e:
                 logger.debug(f"Model registry skipped: {e}")
         else:
             logger.info("Model registry deferred (lazy boot)")
+
+        # ── Economy Engine: 经济范式初始化 ──
+        try:
+            from ..economy.economic_engine import get_economic_orchestrator
+            eco = get_economic_orchestrator()
+            logger.info(f"Economic engine online — cumulative ROI: {eco.roi.cumulative_roi()}x")
+        except Exception as e:
+            logger.debug(f"Economy init skipped: {e}")
+
+        # ── Models.dev sync: 全量模型数据库同步 ──
+        try:
+            from ..treellm.models_dev_sync import get_models_dev_sync
+            sync = get_models_dev_sync()
+            if sync._models:
+                logger.info(f"Models.dev cache: {len(sync._models)} models")
+                asyncio.create_task(sync.refresh())  # Background refresh
+        except Exception as e:
+            logger.debug(f"Models.dev sync skipped: {e}")
 
         # ── Local LLM scan (deferred if lazy) ──
         if not self._lazy:
@@ -773,6 +793,25 @@ class IntegrationHub:
             if line.strip():
                 logger.info(line)
 
+        # ── Memory Optimizer: background warm-up (adaptive, no config) ──
+        try:
+            from ..core.memory_optimizer import get_memory_optimizer
+            opt = get_memory_optimizer()
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, opt.warm_up)
+            logger.info("MemoryOptimizer warm-up scheduled (adaptive, background)")
+        except Exception as e:
+            logger.debug(f"MemoryOptimizer: {e}")
+
+        # ── Scinet: smart proxy for overseas acceleration ──
+        try:
+            from ..network.scinet_service import get_scinet
+            self.scinet = get_scinet(port=7890)
+            asyncio.create_task(self.scinet.start())
+            logger.info("Scinet proxy started (localhost:7890)")
+        except Exception as e:
+            logger.debug(f"Scinet: {e}")
+
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""
         brain = getattr(self.world, 'network_brain', None)
@@ -786,6 +825,79 @@ class IntegrationHub:
             except Exception:
                 pass
             await asyncio.sleep(1800)  # 30 minutes
+
+    async def _sync_provider_keys_from_relay(self) -> None:
+        """Sync API provider keys and web2api config from relay server.
+
+        Called automatically on boot. Silently falls back to local config
+        when relay is unavailable (offline/network error).
+        """
+        try:
+            from ..network.config_sync import get_config_syncer
+            syncer = get_config_syncer()
+
+            # Check if relay has a backup of our config
+            status = await syncer.check_server_status()
+            if status and status.get("has_backup"):
+                logger.info(
+                    "Relay config backup found (%d API keys, %d accounts, updated %s)",
+                    status.get("api_keys_count", 0),
+                    status.get("accounts_count", 0),
+                    status.get("updated_at", "unknown"),
+                )
+                logger.info("Use /restore-config to restore from relay")
+        except Exception as e:
+            logger.debug("Config sync from relay unavailable: %s", e)
+
+    async def restore_config_from_relay(self) -> dict:
+        """One-click restore: download encrypted config package from relay.
+
+        Called via /restore-config command. Decrypts and imports:
+          - All API keys → SecretVault
+          - All web2api accounts → ProviderRegistry
+
+        Returns:
+            {"success": bool, "keys_restored": int, "accounts_restored": int, "error": str}
+        """
+        try:
+            from ..network.config_sync import get_config_syncer
+            syncer = get_config_syncer()
+            package = await syncer.download_all()
+            if package:
+                return {
+                    "success": True,
+                    "keys_restored": len(package.api_keys),
+                    "accounts_restored": sum(len(v) for v in package.web2api_accounts.values()),
+                    "error": "",
+                }
+            return {
+                "success": False, "keys_restored": 0, "accounts_restored": 0,
+                "error": "No backup found (server offline or no previous upload)",
+            }
+        except Exception as e:
+            return {"success": False, "keys_restored": 0, "accounts_restored": 0, "error": str(e)}
+
+    async def backup_config_to_relay(self) -> dict:
+        """One-click backup: upload encrypted config to relay.
+
+        Called via /backup-config command.
+
+        Returns:
+            {"success": bool, "keys_count": int, "accounts_count": int, "error": str}
+        """
+        try:
+            from ..network.config_sync import get_config_syncer
+            syncer = get_config_syncer()
+            success = await syncer.upload_all()
+            status = syncer.check_server_status()
+            return {
+                "success": success,
+                "keys_count": 0,  # filled by server response
+                "accounts_count": 0,
+                "error": "" if success else "Upload failed — relay unreachable",
+            }
+        except Exception as e:
+            return {"success": False, "keys_count": 0, "accounts_count": 0, "error": str(e)}
 
     @staticmethod
     def _handle_observe_message(data, ra):
@@ -835,10 +947,266 @@ class IntegrationHub:
         self._started = False
         logger.info("🌳 LivingTree offline")
 
+    # ── Overnight Task API ──────────────────────────────────
+
+    async def start_overnight_task(
+        self, goal: str,
+        notify_platforms: list[str] | None = None,
+        notify_interval_minutes: int = 0,
+        notify_email: str = "",
+    ):
+        """启动挂机长任务。
+
+        Args:
+            goal: 自然语言目标
+            notify_platforms: 通知平台 (cli/telegram/smtp/webhook/all)
+            notify_interval_minutes: 进度通知间隔（0=仅完成时通知）
+            notify_email: SMTP 邮件地址
+        """
+        ot = getattr(self.world, "overnight_task", None)
+        if not ot:
+            logger.error("OvernightTask 未初始化")
+            return None
+        logger.info("OvernightTask: 开始挂机 — %s", goal[:60])
+        status = await ot.start(
+            goal,
+            notify_platforms=notify_platforms,
+            notify_interval_minutes=notify_interval_minutes,
+            notify_email=notify_email,
+        )
+        return status
+
+    async def resume_overnight_task(self):
+        """恢复上次中断的挂机任务。"""
+        ot = getattr(self.world, "overnight_task", None)
+        if not ot:
+            return None
+        return await ot.resume()
+
+    def stop_overnight_task(self):
+        """停止当前挂机任务。"""
+        ot = getattr(self.world, "overnight_task", None)
+        if ot:
+            ot.stop()
+
+    def overnight_task_status(self) -> Optional[dict]:
+        """查询挂机任务状态。"""
+        ot = getattr(self.world, "overnight_task", None)
+        if not ot:
+            return None
+        s = ot.status
+        return {
+            "goal": s.goal,
+            "state": s.state,
+            "percent": s.percent,
+            "current_step": s.current_step,
+            "completed_steps": s.completed_steps,
+            "total_steps": s.total_steps,
+            "report_path": s.report_path,
+            "elapsed_seconds": s.elapsed_seconds,
+        }
+
+    # ── Long Task Natural Language Interface ────────────────
+
+    _LONG_TASK_PATTERNS = [
+        "收集", "爬取", "抓取", "搜集", "汇总",
+        "研究报告", "可行性", "可行性研究", "环评报告", "安评报告",
+        "技术报告", "调研报告", "分析报告", "尽职调查",
+        "整理资料", "汇编", "编写报告", "生成报告", "撰写",
+        "挂机", "后台任务", "长任务",
+    ]
+
+    _TASK_CONTROL_PATTERNS = {
+        "cancel": ["取消任务", "取消挂机", "停止任务", "停止挂机", "终止", "cancel", "stop"],
+        "pause": ["暂停任务", "暂停挂机", "pause"],
+        "resume": ["继续任务", "继续挂机", "恢复任务", "恢复挂机", "resume", "continue"],
+        "status": ["任务进度", "挂机进度", "当前进度", "进度", "status", "progress"],
+    }
+
+    def _is_long_running_task(self, message: str) -> bool:
+        """Detect if user message implies a long-running background task."""
+        msg = message.lower().replace(" ", "")
+        for pat in self._LONG_TASK_PATTERNS:
+            if pat in msg:
+                return True
+        return False
+
+    async def _handle_long_task_control(self, message: str) -> Optional[dict]:
+        """Handle natural language control of running overnight tasks."""
+        msg = message.strip().lower()
+
+        # Check for cancel
+        for kw in self._TASK_CONTROL_PATTERNS["cancel"]:
+            if kw in msg:
+                return await self._do_cancel_task()
+
+        # Check for pause
+        for kw in self._TASK_CONTROL_PATTERNS["pause"]:
+            if kw in msg:
+                return await self._do_pause_task()
+
+        # Check for resume
+        for kw in self._TASK_CONTROL_PATTERNS["resume"]:
+            if kw in msg:
+                return await self._do_resume_task()
+
+        # Check for status
+        for kw in self._TASK_CONTROL_PATTERNS["status"]:
+            if kw in msg:
+                return await self._do_task_status()
+
+        return None
+
+    async def _do_cancel_task(self) -> dict:
+        ot = getattr(self.world, "overnight_task", None)
+        if ot and ot.status.state == "running":
+            ot.stop()
+            return {"mode": "task_control", "action": "cancelled",
+                    "message": "⏸ 挂机任务已请求取消，当前步骤完成后停止"}
+        return {"mode": "task_control", "action": "cancelled",
+                "message": "没有正在运行的挂机任务"}
+
+    async def _do_pause_task(self) -> dict:
+        ot = getattr(self.world, "overnight_task", None)
+        if ot and ot.status.state == "running":
+            ot.stop()
+            return {"mode": "task_control", "action": "paused",
+                    "message": "⏸ 挂机任务已暂停，输入「继续任务」恢复"}
+        return {"mode": "task_control", "action": "paused",
+                "message": "没有正在运行的挂机任务"}
+
+    async def _do_resume_task(self) -> dict:
+        ot = getattr(self.world, "overnight_task", None)
+        if ot:
+            status = await ot.resume()
+            if status:
+                return {"mode": "task_control", "action": "resumed",
+                        "message": f"▶ 已恢复挂机任务（{status.completed_steps}/{status.total_steps} 已完成）"}
+        return {"mode": "task_control", "action": "resumed",
+                "message": "没有可恢复的挂机任务，请先启动一个长任务"}
+
+    async def _do_task_status(self) -> dict:
+        status = self.overnight_task_status()
+        if not status:
+            return {"mode": "task_control", "action": "status",
+                    "message": "没有正在运行或暂停的挂机任务"}
+        state_emoji = {"running": "▶", "paused": "⏸", "completed": "✅", "failed": "❌"}
+        emoji = state_emoji.get(status["state"], "❓")
+        return {
+            "mode": "task_control", "action": "status",
+            "message": (
+                f"{emoji} 挂机任务进度 [{status['state']}]\n"
+                f"  目标: {status['goal'][:50]}...\n"
+                f"  进度: {status['completed_steps']}/{status['total_steps']} ({status['percent']:.0f}%)\n"
+                f"  当前: {status['current_step']}\n"
+                f"  耗时: {status['elapsed_seconds']:.0f} 秒"
+            ),
+        }
+
+    async def _start_background_task(self, goal: str, skip_assessment: bool = False) -> dict:
+        """Start overnight task in background, return immediate ack.
+
+        Pre-flight: assesses task clarity before starting.
+        Score >= 7 → start immediately. Score < 7 → return clarifying questions.
+        """
+        ot = getattr(self.world, "overnight_task", None)
+        if not ot:
+            return {"mode": "chat", "content": "OvernightTask 模块未初始化"}
+
+        if ot.status.state == "running":
+            s = ot.status
+            return {"mode": "task_control", "action": "already_running",
+                    "message": f"已有挂机任务在运行中：{s.goal[:40]}... ({s.completed_steps}/{s.total_steps})\n输入「取消任务」停止，或「任务进度」查看状态"}
+
+        # ── Pre-flight: assess task clarity ──
+        if not skip_assessment:
+            clarity_result = await self._assess_task_clarity(goal)
+            if clarity_result and clarity_result.get("clarity_score", 0) < 7:
+                questions = clarity_result.get("clarifying_questions", [])
+                missing = clarity_result.get("missing_info", [])
+                q_list = "\n".join(f"  {i+1}. {q}" for i, q in enumerate(questions[:3]))
+                m_list = ", ".join(missing[:3]) if missing else "具体范围、输出格式、时间约束等"
+                return {
+                    "mode": "clarify",
+                    "action": "need_clarification",
+                    "message": (
+                        f"🤔 任务目标不够明确（清晰度 {clarity_result['clarity_score']}/10）\n\n"
+                        f"缺少信息: {m_list}\n\n"
+                        f"请补充以下信息再启动：\n{q_list}\n\n"
+                        f"或回复\"直接开始\"跳过验证"
+                    ),
+                }
+
+        # Start task in background, return immediately
+        async def _run_in_background():
+            try:
+                await self.start_overnight_task(goal)
+            except Exception as e:
+                logger.error(f"Background task failed: {e}")
+
+        asyncio.create_task(_run_in_background())
+
+        return {
+            "mode": "task_control",
+            "action": "started",
+            "message": (
+                f"🔬 长任务已启动，将在后台全自动执行\n"
+                f"  目标: {goal[:80]}...\n"
+                f"  • 随时输入\"任务进度\"查看状态\n"
+                f"  • 输入\"取消任务\"停止\n"
+                f"  • 输入\"暂停任务\"暂停（可\"继续任务\"恢复）\n"
+                f"  完成后会自动通知你 📬"
+            ),
+        }
+
+    async def _assess_task_clarity(self, goal: str) -> Optional[dict]:
+        """Assess how clear/actionable a task goal is.
+
+        Uses the LLM to score clarity and suggest clarifying questions.
+        Score 1-10: <7 means too vague, needs clarification before starting.
+
+        Returns: dict with clarity_score, missing_info, clarifying_questions
+        """
+        try:
+            awareness = self.world.consciousness
+            prompt = (
+                f"评估以下任务目标的明确度（1-10分）：\n\n"
+                f"目标: {goal}\n\n"
+                f"检查维度：范围是否清晰？输出物是否明确？涉及领域是否已知？约束条件是否定义？\n\n"
+                f"仅返回 JSON（不要其他文字）：\n"
+                f'{{"clarity_score": <1-10>, "missing_info": ["缺失维度1","缺失维度2"], '
+                f'"clarifying_questions": ["具体追问1","具体追问2","具体追问3"]}}'
+            )
+            resp = await awareness.think(prompt, model=awareness._llm.flash_model)
+            text = resp.get("content", "{}") if isinstance(resp, dict) else str(resp)
+
+            # Extract JSON from response
+            import json as _json
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                return _json.loads(text[start:end])
+        except Exception as e:
+            logger.debug("Task clarity assessment skipped: %s", e)
+
+        # Default: assume clear enough (fail-open)
+        return {"clarity_score": 8, "missing_info": [], "clarifying_questions": []}
+
     async def chat(self, message: str, **kwargs) -> dict[str, Any]:
         if not self._started:
             await self.start()
         self.world.metrics.life_cycles.inc()
+
+        # ── Direct-start bypass ──
+        if message.strip().lower() in ("直接开始", "直接开始吧", "跳过", "skip", "确认开始", "开始吧"):
+            return await self._start_background_task("用户确认: " + message, skip_assessment=True)
+        task_result = await self._handle_long_task_control(message)
+        if task_result:
+            return task_result
+
+        # ── Long-task auto-detection ──
+        if self._is_long_running_task(message):
+            return await self._start_background_task(message)
 
         # ── Intent-driven routing (replaces keyword gating) ──
         try:
@@ -869,6 +1237,20 @@ class IntegrationHub:
                 mem_context = self.struct_memory.get_context_block(message, entries, synthesis)
             except Exception:
                 pass
+
+        # ── Dynamic tool discovery (no hardcoded workflows) ──
+        try:
+            tools = self.world.tool_market.search(message)
+            if tools:
+                kwargs["available_tools"] = [
+                    {"name": t.name, "description": t.description,
+                     "category": t.category, "input_schema": t.input_schema}
+                    for t in tools[:20]
+                ]
+                kwargs["tool_market"] = self.world.tool_market
+                logger.debug("Tool dispatch: %d tools for '%s'", len(tools), message[:50])
+        except Exception as e:
+            logger.debug("Tool discovery: %s", e)
 
         ctx = await self._run_engine(message, mem_context, **kwargs)
 

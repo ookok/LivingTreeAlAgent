@@ -5,6 +5,11 @@ from .site_accelerator import SiteAccelerator, get_accelerator
 from .domain_ip_pool import DomainIPPool, DomainIP, DomainEntry
 from .scinet_service import ScinetService, ScinetStatus, get_scinet
 
+# Relay registry & config sync
+from .relay_registry import RelayRegistry, RelayServer, RelayList, get_relay_registry
+from .config_sync import ConfigSyncer, ConfigPackage, get_config_syncer
+from .p2p_node import get_p2p_node
+
 # Original network
 from .node import Node, NodeInfo
 from .discovery import Discovery, PeerInfo
@@ -37,6 +42,10 @@ from .p2p_presence import (
 )
 
 __all__ = [
+    # Relay & config sync (v2.3)
+    "RelayRegistry", "RelayServer", "RelayList", "get_relay_registry",
+    "ConfigSyncer", "ConfigPackage", "get_config_syncer",
+    "get_p2p_node",
     # Original
     "Node", "NodeInfo", "Discovery", "PeerInfo", "NATTraverser",
     "Reputation", "EncryptedChannel", "EncryptedMessage", "DualMode", "SyncQueueItem",

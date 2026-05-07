@@ -155,6 +155,8 @@
             await new Promise(r => setTimeout(r, 500));
             overlay.classList.add('hidden');
             setTimeout(() => overlay.remove(), 500);
+            LT.emit('dashboard:update');
+            LT.emit('ctx:update');
             return;
           }
         } catch (e) {}

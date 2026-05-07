@@ -190,7 +190,7 @@ const api = {
     }
   },
 
-  async simulate(input, onChunk, onDone) {
+  async   simulate(input, onChunk, onDone) {
     const store = window.LT && window.LT.store;
     const sid = store ? store.activeId : null;
 
@@ -214,6 +214,36 @@ const api = {
       }
       if (onDone) onDone(full);
     }
+  },
+
+  /* ── Backend data endpoints ── */
+
+  async health() {
+    try { const r = await fetch('/api/health'); return await r.json() } catch { return null }
+  },
+
+  async status() {
+    try { const r = await fetch('/api/status'); return await r.json() } catch { return null }
+  },
+
+  async tools() {
+    try { const r = await fetch('/api/tools'); return await r.json() } catch { return [] }
+  },
+
+  async skills() {
+    try { const r = await fetch('/api/skills'); return await r.json() } catch { return [] }
+  },
+
+  async bootProgress() {
+    try { const r = await fetch('/api/boot/progress'); return await r.json() } catch { return null }
+  },
+
+  async cells() {
+    try { const r = await fetch('/api/cells'); return await r.json() } catch { return [] }
+  },
+
+  async metrics() {
+    try { const r = await fetch('/api/metrics'); return await r.json() } catch { return null }
   }
 };
 

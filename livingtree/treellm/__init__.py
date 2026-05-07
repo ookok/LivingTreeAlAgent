@@ -24,6 +24,7 @@ from .embedding_scorer import EmbeddingScorer, ModelProfile, get_embedding_score
 from .foresight_gate import ForesightGate, ForesightDecision, get_foresight_gate
 from .onto_prompt_builder import OntoPromptBuilder, get_onto_prompt_builder
 from .holistic_election import HolisticElection, ProviderScore, PROVIDER_CAPABILITIES, get_election
+from .route_learner import RouteLearner, LearnedProfile, RoutingWeight, get_route_learner
 
 from .providers import (
     create_modelscope_provider, create_bailing_provider,
@@ -41,6 +42,7 @@ __all__ = [
     "ForesightGate", "ForesightDecision", "get_foresight_gate",
     "OntoPromptBuilder", "get_onto_prompt_builder",
     "HolisticElection", "ProviderScore", "PROVIDER_CAPABILITIES", "get_election",
+    "RouteLearner", "LearnedProfile", "RoutingWeight", "get_route_learner",
     "create_modelscope_provider", "create_bailing_provider",
     "create_stepfun_provider", "create_internlm_provider",
 ]

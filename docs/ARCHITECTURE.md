@@ -1,125 +1,170 @@
-# 系统架构手册
+# LivingTree 系统架构手册
 
-## 1. 总体架构
+> v2.1 | 2026-05
 
-LivingTree 是一个工业级自主 AI Agent 平台，采用分层架构设计：
+---
 
-```
-┌──────────────────────────────────────────────────────┐
-│                   表示层 (TUI/API)                     │
-│  Toad Textual · Relay Server · WeChat Gateway        │
-├──────────────────────────────────────────────────────┤
-│                   编排层 (Orchestration)               │
-│  RealPipeline · PanelAgent · CronScheduler            │
-├──────────────────────────────────────────────────────┤
-│                   智能层 (Intelligence)                │
-│  DualConsciousness · AutonomousLearner · PromptOpt    │
-├──────────────────────────────────────────────────────┤
-│                   知识层 (Knowledge)                   │
-│  KnowledgeBase · DocumentKB · StructMem · Graph       │
-├──────────────────────────────────────────────────────┤
-│                   路由层 (Routing)                     │
-│  TreeLLM · HolisticElection · SkillRouter             │
-├──────────────────────────────────────────────────────┤
-│                   基础层 (Infrastructure)              │
-│  AsyncDisk · TaskGuard · SystemMonitor · Registry     │
-└──────────────────────────────────────────────────────┘
-```
+## 1. 设计哲学
 
-## 2. 数据流
+LivingTree 是一个**自主数字生命体**，不是传统的 LLM 包装器。
 
-### 2.1 用户对话流程
+核心理念：
+- **边缘智能优先**：能力向前端倾斜，Agent 自身就是模型，大模型仅是最强大脑
+- **细胞 AI 网络**：世界由无数独立智能细胞组成，P2P 协作形成超级 AI
+- **渐进脱离 LLM**：每一次 LLM 调用都是学习机会，知识向下层固化
+- **经济范式驱动**：最小成本 × 最快速度 × 最高质量的三元优化
+
+---
+
+## 2. 系统分层
 
 ```
-用户输入 → NeonAgent.send_prompt()
-  → PromptOptimizer: 提示词增强 + 动态工具选择
-  → TreeLLM: 选举最优免费 provider (5 维评分)
-  → CacheOptimizer: 前缀缓存优化 token
-  → LLM 流式输出 → ToadOrchestrator: 结构化解析
-  → Toad Widgets: AgentResponse/ToolCall/Plan 渲染
-  → SessionSearch: FTS5 索引
-  → SkillSelfLearn: 分析任务模式
-  → CostDashboard: token 成本记录
+┌─────────────────────────────────────────────────────────┐
+│  TUI 界面层  (Toad + Textual)                           │
+│  ChatScreen · CodeScreen · KnowledgeScreen · Settings   │
+├─────────────────────────────────────────────────────────┤
+│  经济门控层  (Economy)                                   │
+│  EconomicPolicy · ROIModel · ComplianceGate             │
+├───────────┬───────────┬───────────┬────────────────────┤
+│  TreeLLM  │ LifeEngine│ Knowledge │ Capability         │
+│  路由引擎 │ 生命循环  │ RAG 2.0   │ 文档智能           │
+├───────────┴───────────┴───────────┴────────────────────┤
+│  执行层  (Execution)                                    │
+│  PlanValidator · FitnessLandscape · DAG/ReAct          │
+├─────────────────────────────────────────────────────────┤
+│  集成层  (Integration)                                  │
+│  Hub · P2P Node · Message Gateway · Self Updater        │
+├─────────────────────────────────────────────────────────┤
+│  存储层  (Infrastructure)                               │
+│  SQLite FTS5 · Vector DB · Knowledge Graph · AsyncDisk  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 批量文档生成流程
+---
+
+## 3. 核心子系统
+
+### 3.1 LifeEngine — 生命循环
+
+7 阶段管道：`perceive → cognize → plan → execute → reflect → evolve`
+
+集成点：
+- 执行前：EconomicOrchestrator 经济审查 + PlanValidator 验证
+- 执行后：FitnessLandscape 轨迹记录 + SkillProgression 技能追踪
+- 决策中：ReasoningChain 溯源记录
+
+### 3.2 TreeLLM — 模型路由
+
+RouteMoA 分层路由架构：
+- Layer 1: Embedding 预筛选
+- Layer 1.5: Foresight Gate 预测
+- Layer 2: HolisticElection 5 维评分
+- Layer 3: Self-Assessment 自评
+
+支持 14+ Provider + models.dev 全量 (50+厂商) 动态同步。
+
+### 3.3 Economic Engine — 经济引擎
+
+| 策略 | 成本 | 速度 | 质量 | 日预算 | 场景 |
+|------|------|------|------|--------|------|
+| ECONOMY | 60% | 15% | 25% | ¥20 | 日常批处理 |
+| BALANCED | 33% | 33% | 34% | ¥50 | 默认 |
+| QUALITY | 15% | 15% | 70% | ¥100 | 环评/法律 |
+| SPEED | 15% | 70% | 15% | ¥30 | 实时交互 |
+
+AdaptiveEconomicScheduler 按时段/紧急度/ROI 自动切换。
+
+### 3.4 Knowledge Layer — RAG 2.0
 
 ```
-/batch data.csv 环评模板
-  → BatchGenerator.enqueue_csv(): 解析参数表
-  → generate_all(): 4 并发 LLM 调用
-  → 进度回调 → 全部完成
-  → export_docx(): 导出 DOCX
+查询 → QueryDecomposer + HyDE
+     → KnowledgeRouter (SSA 感知路由)
+     → 多路并行 (FTS5 + Vector + Graph + Engram)
+     → RRF 混合融合 (k=60)
+     → Reranker 精排
+     → AgenticRAG 迭代反射
+     → HallucinationGuard 校验
 ```
 
-### 2.3 P2P 通信流程
+### 3.5 Document Intelligence — 文档智能
 
-```
-Node A (内网)          Relay Server (公网)        Node B (内网)
-    │  POST /peers/register    │                        │
-    │─────────────────────────►│◄───────────────────────│
-    │  {peer_id, location}     │  {peer_id, location}   │
-    │                          │                        │
-    │  GET /peers/discover     │                        │
-    │◄─────────────────────────│                        │
-    │  {peers, relay_pool}     │                        │
-    │                          │                        │
-    │  WS /ws/relay ──────────►│◄───────────────────────│
-    │  {"to":"B","data":"hi"}  │  forward →             │
-```
+三层文档处理栈：
 
-## 3. 模型选举
+| 层 | 模块 | 能力 |
+|----|------|------|
+| 读取 | DocumentIntelligence | Word/Excel/PPT 原生结构提取 |
+| 理解 | DocumentUnderstanding | 5维语义分析（专家级） |
+| 加速 | IncrementalDoc | 哈希 diff + 缓存复用（94% token节省） |
 
-### 3.1 5 维评分体系
+### 3.6 Intelligence Core — 智能核心
 
-| 维度 | 权重 | 计算方式 |
-|------|------|---------|
-| 质量 | 30% | 最近 20 次调用的加权成功率 |
-| 延迟 | 25% | 归一化响应时间 |
-| 成本 | 20% | 免费=1.0, 付费=0.3 |
-| 能力 | 15% | 查询关键词 vs provider 专长 |
-| 新鲜度 | 10% | 24h 内使用过加分 |
-
-### 3.2 选举流程
-
-```
-1. 构建候选列表: free_models + paid_models + oc-* + local-*
-2. 排除 L4 锁定模型
-3. 序列 ping 所有候选
-4. 对存活候选 5 维评分
-5. 最高分当选
-6. 全灭 → 使用 L4
-```
-
-## 4. 知识检索架构
-
-### 4.1 多路融合检索
-
-```
-用户查询 → expand_query()
-  ├→ DocumentKB: FTS5 全文 + embedding cosine → RRF merge
-  ├→ KnowledgeBase: bi-temporal cosine
-  ├→ StructMem: 层次化记忆检索
-  ├→ KnowledgeGraph: 实体链接 + 图遍历
-  └→ 结果融合排序 → 返回 top_k
-```
-
-### 4.2 情感记忆 (StructMem)
-
-```
-每个对话轮次 → 双视角绑定 (FACT + RELATION)
-  → 缓冲 ≥ 3 条 + 超过 300s → 跨事件合并
-  → 语义检索 → 合成块
-```
-
-## 5. 关键设计决策
-
-| 决策 | 原因 |
+| 模块 | 功能 |
 |------|------|
-| 纯 Python，零本地模型加载 | 启动秒级，不依赖 torch |
-| Toad 全源集成 | 复用成熟 UI 组件 |
-| AsyncDisk 批量写 | 避免热路径磁盘阻塞 |
-| UnifiedRegistry 单例 | 30 全局单例 → 1 个 |
-| Token 前缀缓存 | DeepSeek 90% 节省 |
-| 免费模型优先选举 | 零成本运行 |
-| P2P 默认组件 | 节点自动互联 |
+| AutonomousCore | 主动发现工作 → 分解 → 执行 → 审计 |
+| ReasoningChain | 决策溯源：为什么/替代方案/验证 |
+| SkillProgression | 8维技能成长追踪 |
+| LocalIntelligence | 三层智能（缓存→本地→远程） |
+| GradualAgent | 渐进式 RAG 升级（简单→复杂） |
+
+---
+
+## 4. 数据流
+
+```
+用户请求
+  ├── LocalIntelligence (Tier 1 缓存命中? → 零LLM返回)
+  ├── EconomicOrchestrator (ROI评估 → Go/NoGo)
+  ├── TreeLLM routing (选择最优模型)
+  ├── Knowledge RAG (检索增强)
+  ├── LifeEngine execution (执行管道)
+  └── 反馈到:
+       ├── FitnessLandscape (轨迹记录)
+       ├── SkillProgression (技能更新)
+       └── ReasoningChain (决策验证)
+```
+
+---
+
+## 5. 自主循环
+
+```
+LifeDaemon (每30分钟)
+  ├── Self-check: GapDetector 检测知识缺口
+  ├── Learn: AutonomousLearner 填补缺口
+  ├── Evolve: Cell mutation + SelfEvolving
+  ├── Train: 触发 Mitosis
+  └── Proactive: AutonomousCore.cycle()
+        ├── Discover (技能/项目/知识/优化)
+        ├── Prioritize (紧急度×价值/成本)
+        ├── Execute (自动分解执行)
+        └── Audit (自我审查)
+```
+
+---
+
+## 6. 部署架构
+
+```
+[用户设备]                    [服务器]
+LivingTree Agent  ←──P2P──→  Relay Server
+  ├── LocalIntelligence         ├── Node Registry
+  ├── Local Model (可选)        ├── Message Gateway
+  └── Knowledge Base            └── Health Monitor
+       │
+       ▼ (按需)
+  [DeepSeek API]  [Qwen API]  [50+ models.dev providers]
+```
+
+---
+
+## 7. 技术栈
+
+| 层 | 技术 |
+|----|------|
+| UI | Toad (Textual 8.x) |
+| LLM | LiteLLM → DeepSeek/Qwen/13+ providers |
+| 知识库 | SQLite FTS5 + FAISS Vector + NetworkX Graph |
+| 网络 | aiohttp + WebSocket P2P |
+| 配置 | Pydantic + YAML + Fernet |
+| 本地模型 | vLLM + Qwen3.5 series (可选) |
+| 模型数据 | models.dev sync (50+厂商) |

@@ -943,6 +943,22 @@ class LifeEngine:
                 return
             ctx.metadata["economic_decision"] = decision
             ctx.metadata["selected_model"] = decision.selected_model
+
+            # ── Record decision to ReasoningChain ──
+            try:
+                from .reasoning_chain import get_reasoning_chain
+                rc = get_reasoning_chain()
+                rc.decide(
+                    domain="model_selection",
+                    decision=decision.selected_model,
+                    reasoning=f"Economic policy={decision.policy}, ROI={decision.roi.roi_estimate:.1f}x",
+                    alternatives=["flash_model", "pro_model"],
+                    confidence=decision.roi.roi_estimate / 10,
+                    session_id=ctx.session_id or "",
+                )
+            except Exception:
+                pass
+
             logger.info(f"[execute] Economic gate: GO | {decision.selected_model.split('/')[-1]} | ROI={decision.roi.roi_estimate:.1f}x")
         except Exception as e:
             logger.debug(f"[execute] Economic gate skipped: {e}")
@@ -1158,6 +1174,28 @@ class LifeEngine:
                 success=rate > 0.5,
                 safety_violations=ctx.metadata.get("safety_violations", 0),
                 summary=ctx.user_input or ctx.intent or "",
+            )
+        except Exception:
+            pass
+
+        # ── Skill Progression: 记录技能执行结果 ──
+        try:
+            from .skill_progression import get_skill_progression
+            prog = get_skill_progression()
+            task_type = self._guess_task_type(ctx)
+            skill_map = {
+                "environmental_report": "regulatory_compliance",
+                "code_generation": "code_engineering",
+                "data_analysis": "data_analysis",
+                "document_generation": "document_generation",
+            }
+            skill = skill_map.get(task_type, "reasoning_quality")
+            prog.record_outcome(
+                skill=skill, success=rate > 0.5,
+                confidence=ctx.metadata.get("economic_decision",
+                    type('',(),{'roi':type('',(),{'roi_estimate':0.5})()})()).roi.roi_estimate / 10 or 0.5,
+                session=ctx.session_id or "",
+                mistake_type="execution_failure" if fail > 0 else "",
             )
         except Exception:
             pass

@@ -109,12 +109,31 @@ class LifeDaemon:
         # 4. Train: trigger mitosis if threshold reached
         await self._maybe_train()
 
-        # 5. Dream + Arena + Self-Phage (advanced capabilities)
+        # 5. Proactive Intelligence: discover work, self-audit, improve
+        await self._run_proactive_cycle()
+
+        # 6. Dream + Arena + Self-Phage (advanced capabilities)
         if self._advanced:
             await self._advanced.run_all()
 
-        # 6. Persist genome
+        # 7. Persist genome
         self._save_genome()
+
+    # ── Proactive Intelligence ──
+
+    async def _run_proactive_cycle(self) -> None:
+        """Run AutonomousCore: discover work, self-audit, improve skills."""
+        try:
+            from .autonomous_core import get_autonomous_core
+            consciousness = getattr(self.world, 'consciousness', None)
+            core = get_autonomous_core(world=self.world, consciousness=consciousness)
+            result = await core.cycle()
+            if result.executed or result.audit_findings:
+                logger.info(
+                    f"  Proactive: {len(result.executed)} actions, "
+                    f"{len(result.audit_findings)} audit findings")
+        except Exception as e:
+            logger.debug(f"Proactive cycle: {e}")
 
     # ── Step 1: Self-check ──
 

@@ -128,16 +128,22 @@ def setup_routes(app: FastAPI) -> None:
         hub = request.app.state.hub
         if not hub:
             raise HTTPException(status_code=503, detail="Hub not initialized")
-        return hub.get_status()
+        try:
+            return hub.get_status()
+        except Exception as e:
+            return {"error": str(e), "version": "2.1.0", "status": "initializing"}
 
     @app.get("/api/tools")
     async def list_tools(request: Request) -> list[dict[str, Any]]:
         """List all registered tools."""
         hub = request.app.state.hub
         if not hub:
-            raise HTTPException(status_code=503, detail="Hub not initialized")
-        tools = hub.tool_market.discover_tools()
-        return [t.model_dump() for t in tools]
+            return []
+        try:
+            tools = hub.tool_market.discover_tools()
+            return [t.model_dump() for t in tools]
+        except Exception:
+            return []
 
     @app.get("/api/skills")
     async def list_skills(request: Request) -> list[str]:

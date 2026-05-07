@@ -225,8 +225,10 @@ class HolisticElection:
             )
 
             # Score 1: Latency (normalized: faster = higher score)
-            max_latency = max(max(100, stats.avg_latency_ms), latency)
-            score.scores["latency"] = 1.0 - min(latency / max_latency, 0.95)
+            avg_lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
+            lat = float(latency) if latency else 200
+            max_latency = max(max(100, avg_lat), lat)
+            score.scores["latency"] = 1.0 - min(lat / max_latency, 0.95)
 
             # Score 2: Quality (recent success rate)
             score.scores["quality"] = stats.recent_quality

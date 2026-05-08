@@ -55,14 +55,25 @@ class DeepSeekWebProvider(WebProvider):
         super().__init__(name="deepseek-web", base_url="https://chat.deepseek.com")
 
     async def login(self, account: WebAccount) -> bool:
-        """Login to DeepSeek web and get auth token."""
+        """Login to DeepSeek web. Supports: email+password OR direct token."""
+        # Direct token mode: skip login if token already provided
+        if account.token and not account.password:
+            logger.info("DeepSeekWeb: using direct token for %s", account.email[:20])
+            return True
+
         if not HAS_AIOHTTP:
             logger.error("aiohttp required for DeepSeek web provider")
             return False
 
-        payload = {"email": account.email, "password": account.password}
+        payload = {
+            "email": account.email,
+            "password": account.password,
+            "source": "web",
+            "os": "Windows",
+        }
 
         try:
+            import uuid
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     DEEPSEEK_LOGIN_URL,
@@ -70,8 +81,10 @@ class DeepSeekWebProvider(WebProvider):
                     headers={
                         "User-Agent": DEEPSEEK_USER_AGENT,
                         "Content-Type": "application/json",
+                        "Accept": "*/*",
                         "Origin": "https://chat.deepseek.com",
-                        "Referer": "https://chat.deepseek.com/",
+                        "Referer": "https://chat.deepseek.com/sign_in",
+                        "X-Device-Id": str(uuid.uuid4()),
                     },
                     timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:

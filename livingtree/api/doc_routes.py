@@ -203,6 +203,7 @@ def setup_doc_routes(app: FastAPI) -> None:
                     "toolbarNoTabs": False,
                     "hideRightMenu": False,
                     "plugins": True,
+                    "comments": True,
                 },
             },
             "height": "100%",
@@ -410,6 +411,20 @@ def setup_doc_routes(app: FastAPI) -> None:
         if meta_path.exists():
             meta_path.unlink()
         return {"doc_id": doc_id, "deleted": deleted}
+
+    # ── Get review annotations for a document ──
+    @app.get("/api/doc/review/{doc_id}")
+    async def doc_get_review(doc_id: str) -> dict[str, Any]:
+        meta_path = _doc_meta_path(doc_id)
+        if not meta_path.exists():
+            return {"doc_id": doc_id, "reviewed": False, "annotations": [], "summary": {}}
+        meta = json.loads(meta_path.read_text())
+        return {
+            "doc_id": doc_id,
+            "reviewed": meta.get("reviewed", False),
+            "annotations": meta.get("annotations", []),
+            "summary": meta.get("review_summary", {}),
+        }
 
     # ── Document review / arbitration ──
     @app.post("/api/doc/review/{doc_id}")
@@ -897,10 +912,7 @@ def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
 
     @app.post("/api/doc/review-auto")
     async def doc_review_auto(request: Request):
-        """Upload .docx → AI auto-review (LLM-powered) → return annotated document."""
-        from fastapi import UploadFile, File, Form
-        import tempfile, shutil
-
+        """Upload .docx → AI auto-review → open ORIGINAL doc in OnlyOffice with annotations in side panel."""
         hub = request.app.state.hub
         content_type = request.headers.get("content-type", "")
         if "multipart" in content_type:
@@ -909,33 +921,35 @@ def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
             if not uploaded_file:
                 raise HTTPException(status_code=400, detail="No file uploaded")
 
-            tmp_path = DOC_DIR / f"_review_{int(time.time())}.docx"
-            with open(tmp_path, "wb") as f:
-                f.write(await uploaded_file.read())
+            # Save the ORIGINAL .docx as-is (preserve all formatting)
+            doc_id = hashlib.md5(f"review_{time.time()}".encode()).hexdigest()[:12]
+            doc_path = _doc_path(doc_id)
+            content = await uploaded_file.read()
+            doc_path.write_bytes(content)
 
+            # Parse text for review
+            import tempfile
+            tmp_path = DOC_DIR / f"_tmp_{doc_id}.docx"
+            tmp_path.write_bytes(content)
             paragraphs = _parse_docx_text(str(tmp_path))
+            tmp_path.unlink(missing_ok=True)
+
             if not paragraphs:
-                tmp_path.unlink(missing_ok=True)
                 raise HTTPException(status_code=400, detail="无法解析文档内容")
 
             # AI Review — uses TreeLLM if available, falls back to heuristics
             review = _ai_review_content(paragraphs, hub)
 
-            annotated_html = _generate_annotated_html(paragraphs, review['annotations'])
-
-            doc_id = hashlib.md5(f"review_{time.time()}".encode()).hexdigest()[:12]
-            doc_path = _doc_path(doc_id)
-            _create_docx_from_html(annotated_html, doc_path)
-
+            # Store annotations in meta (NOT embedded in document)
             meta = {
                 'title': uploaded_file.filename or '审阅文档',
                 'format': 'docx',
                 'created_at': time.time(), 'updated_at': time.time(),
+                'size': len(content),
                 'reviewed': True, 'review_summary': review['summary'],
-                'annotations_count': len(review['annotations']),
+                'annotations': review['annotations'],
             }
             _doc_meta_path(doc_id).write_text(json.dumps(meta, ensure_ascii=False))
-            tmp_path.unlink(missing_ok=True)
 
             return {
                 'doc_id': doc_id, 'title': meta['title'],
@@ -946,7 +960,7 @@ def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
 
     @app.post("/api/doc/review-auto/{doc_id}")
     async def doc_review_existing(doc_id: str, request: Request) -> dict:
-        """Auto-review an existing document by doc_id using AI."""
+        """Auto-review an existing document — keeps original, stores annotations in meta."""
         hub = request.app.state.hub
         doc_path = _doc_path(doc_id)
         if not doc_path.exists():
@@ -954,6 +968,7 @@ def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
 
         paragraphs = _parse_docx_text(str(doc_path))
         if not paragraphs:
+            # Try reading as HTML (for previously created docs from markdown)
             html = doc_path.read_text(encoding='utf-8')
             import re as _re
             text = _re.sub(r'<[^>]+>', ' ', html)
@@ -962,15 +977,15 @@ def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
             paragraphs = [{'index': i, 'text': c, 'length': len(c)} for i, c in enumerate(chunks)]
 
         review = _ai_review_content(paragraphs, hub)
-        annotated_html = _generate_annotated_html(paragraphs, review['annotations'])
-        _create_docx_from_html(annotated_html, doc_path)
 
+        # Store review in meta — DON'T modify the original document
         meta_path = _doc_meta_path(doc_id)
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text())
-            meta['reviewed'] = True; meta['review_summary'] = review['summary']
-            meta['updated_at'] = time.time()
-            meta_path.write_text(json.dumps(meta, ensure_ascii=False))
+        meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+        meta['reviewed'] = True
+        meta['review_summary'] = review['summary']
+        meta['annotations'] = review['annotations']
+        meta['updated_at'] = time.time()
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False))
 
         return {'doc_id': doc_id, 'review': review, 'status': 'reviewed'}
 

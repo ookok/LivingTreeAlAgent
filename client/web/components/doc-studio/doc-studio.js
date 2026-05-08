@@ -195,6 +195,21 @@ class DocStudio extends Component {
       this._templateFields = {};
       info.template_fields?.forEach(f => { this._templateFields[f] = ''; });
     }
+
+    // Load review annotations from stored meta
+    this._loadReviewPanel(docId);
+  }
+
+  async _loadReviewPanel(docId) {
+    try {
+      const resp = await fetch(`/api/doc/review/${docId}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.reviewed && data.annotations.length) {
+        this._reviewData = { annotations: data.annotations, summary: data.summary };
+        this._showReviewPanel(this._reviewData);
+      }
+    } catch (e) {}
   }
 
   async _createDoc(content, title) {

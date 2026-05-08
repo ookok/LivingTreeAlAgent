@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 
@@ -25,13 +26,14 @@ def create_app(hub=None, config=None) -> FastAPI:
 
     origins = getattr(getattr(config, 'api', None), 'cors_origins', ["*"])
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+    # GZip compression for static assets (CSS/JS/HTML)
+    app.add_middleware(GZipMiddleware, minimum_size=512)
 
     if hub:
         app.state.hub = hub
 
     setup_routes(app)
     setup_auth_routes(app)
-    setup_openai_proxy(app)
     setup_openai_proxy(app)
 
     # Static files: serve web frontend from client/web/

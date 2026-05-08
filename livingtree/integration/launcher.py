@@ -140,9 +140,22 @@ async def _run_server(config: Optional[LTAIConfig] = None) -> None:
     config_kwargs = {
         "app": app, "host": host, "port": port,
         "log_level": cfg.observability.log_level.lower(),
+        # ── Performance tuning ──
+        "backlog": 2048,                        # Connection queue
+        "limit_concurrency": 1000,              # Max concurrent connections
+        "limit_max_requests": 10000,            # Restart worker after N requests (prevent memory leak)
+        "timeout_keep_alive": 30,               # Keep-alive timeout (seconds)
+        "timeout_graceful_shutdown": 10,        # Graceful shutdown timeout
+        "ws_max_size": 16 * 1024 * 1024,       # 16MB WebSocket max
+        "h11_max_incomplete_event_size": 16384, # HTTP parser buffer
     }
     if cfg.api.workers > 1:
         config_kwargs["workers"] = cfg.api.workers
+    else:
+        # Default to CPU count - 1 (min 1) for better concurrency
+        import os as _os
+        cpu_count = _os.cpu_count() or 4
+        config_kwargs["workers"] = max(1, cpu_count - 1)
 
     server = uvicorn.Server(uvicorn.Config(**config_kwargs))
     try:

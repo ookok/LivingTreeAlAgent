@@ -9,6 +9,9 @@ class Chat extends Component {
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
     this._unsubs.push(LT.on('review:complete', (d) => this._onReviewComplete(d)));
     this._unsubs.push(LT.on('msg:pin', (d) => this._onPinMsg(d)));
+    this._unsubs.push(LT.on('workflow:update', (d) => this._onWorkflowUpdate(d)));
+    this._unsubs.push(LT.on('workflow:section', (d) => this._onWorkflowSection(d)));
+    this._unsubs.push(LT.on('workflow:done', () => this._onWorkflowDone()));
     this.render();
     this._loadInitial();
     this._setupMsgActions();
@@ -96,6 +99,18 @@ class Chat extends Component {
     if (!pinned.length) { c.style.display = 'none'; return; }
     c.style.display = 'block';
     c.innerHTML = pinned.map((m, i) => `<div class="pinned-msg"><span class="pinned-icon">📌</span><span class="pinned-text">${LT.esc((m.content||'').slice(0,60))}</span><button class="pinned-close" onclick="LT.store.togglePin(LT.store.activeId,${i});LT.emit('session:switch')">✕</button></div>`).join('');
+  },
+
+  /* ── Report Workflow ── */
+  _workflowEl: null,
+
+  _renderWorkflow() {
+    this._showMessages();
+    if (this._workflowEl) { this._workflowEl.remove(); this._workflowEl = null; }
+    const html = `<div class="message message-agent"><div class="message-bubble agent-bubble">${ReportWorkflow.renderStepper()}${ReportWorkflow.renderSections()}${ReportWorkflow.renderSummary()}</div></div>`;
+    LT.renderer.append(this._msgsEl, html);
+    this._workflowEl = this._msgsEl.lastElementChild;
+    this._scrollBottom();
   },
 
   _audioCtx: null,

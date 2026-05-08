@@ -75,9 +75,16 @@
 
   /* ── Listen for diagram insert into OnlyOffice ── */
   LT.on('diagram:insert', (data) => {
-    // Forward to doc-studio for insertion into OnlyOffice document
     LT.emit('doc:insert-diagram', data);
   });
+
+  /* ── Report workflow checkpoint check ── */
+  if (typeof ReportWorkflow !== 'undefined') {
+    const checkpoint = ReportWorkflow.resume();
+    if (checkpoint && checkpoint.status !== 'done' && checkpoint.status !== 'idle') {
+      LT.emit('notify', { msg: `检测到未完成的报告 "${checkpoint.title}"，点击继续`, type: 'info' });
+    }
+  }
 
   /* ── Theme toggle ── */
   window.toggleTheme = () => LT.store.toggleTheme();

@@ -312,7 +312,12 @@ class Input extends Component {
 
     LT.emit('msg:typing');
 
-    // Direct API call — no setTimeout mock
+    // Detect report requests and initiate workflow stepper
+    if (text.includes('报告') || text.includes('生成') || text.includes('文档') || text.includes('撰写')) {
+      ReportWorkflow.init(text.slice(0, 40));
+      LT.emit('workflow:update', { step: 'collecting' });
+    }
+
     LT.emit('msg:agent-stream');
     store.addMsg(sid, { role: 'assistant', content: '' });
     let full = '';

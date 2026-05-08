@@ -551,6 +551,44 @@
 .stream-badge-data{background:rgba(226,138,0,.15);color:#e28a00}
 .stream-badge-plan{background:rgba(149,112,255,.15);color:#9570ff}
 
+/* ── Report Workflow Stepper ── */
+.wf-stepper{padding:var(--space-4) 0}
+.wf-stepper-header{display:flex;align-items:center;gap:var(--space-6);margin-bottom:var(--space-6)}
+.wf-stepper-icon{font-size:16px}
+.wf-stepper-title{font-size:var(--font-size-md);font-weight:var(--font-weight-medium);flex:1}
+.wf-stepper-time{font-size:var(--font-size-xs);color:var(--text-tertiary);font-family:var(--font-mono)}
+.wf-stepper-bar{height:6px;background:var(--bg-overlay-l2);border-radius:3px;overflow:hidden;margin-bottom:var(--space-10)}
+.wf-stepper-fill{height:100%;background:linear-gradient(90deg,var(--brand-default),var(--accent-cyan));border-radius:3px;transition:width 0.8s ease;position:relative;min-width:30px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px}
+.wf-stepper-fill-label{font-size:9px;color:#fff;font-weight:var(--font-weight-bold)}
+.wf-stepper-steps{display:flex;justify-content:space-between}
+.wf-step{display:flex;flex-direction:column;align-items:center;gap:var(--space-4);flex:1;opacity:.3;transition:all var(--transition-normal)}
+.wf-step.done{opacity:1}
+.wf-step.current{opacity:1}
+.wf-step-dot{width:24px;height:24px;border-radius:50%;background:var(--bg-overlay-l2);display:flex;align-items:center;justify-content:center;font-size:11px;transition:all var(--transition-normal)}
+.wf-step.done .wf-step-dot{background:var(--brand-default);color:var(--brand-onbrand)}
+.wf-step.current .wf-step-dot{background:var(--brand-default);color:var(--brand-onbrand);animation:statusPulse 1.5s ease-in-out infinite}
+.wf-step-label{font-size:9px;color:var(--text-tertiary);text-align:center;max-width:50px}
+.wf-step.done .wf-step-label,.wf-step.current .wf-step-label{color:var(--text-default)}
+
+/* ── Report Section Cards ── */
+.wf-sections{margin-top:var(--space-10);display:flex;flex-direction:column;gap:var(--space-6)}
+.wf-section-card{border:1px solid var(--border-l1);border-radius:var(--radius-6);overflow:hidden;transition:border-color var(--transition-fast)}
+.wf-section-card:hover{border-color:var(--brand-default)}
+.wf-section-header{display:flex;align-items:center;gap:var(--space-6);padding:var(--space-6) var(--space-10);background:var(--bg-overlay-l1);font-size:var(--font-size-sm)}
+.wf-section-status{font-size:12px}
+.wf-section-title{flex:1;font-weight:var(--font-weight-medium)}
+.wf-section-time{font-size:10px;color:var(--text-tertiary);font-family:var(--font-mono)}
+.wf-section-preview{padding:var(--space-8) var(--space-10);font-size:var(--font-size-sm);color:var(--text-secondary);max-height:120px;overflow:hidden;position:relative;line-height:1.5}
+.wf-section-preview::after{content:'';position:absolute;bottom:0;left:0;right:0;height:30px;background:linear-gradient(transparent,var(--bg-overlay-l1))}
+.wf-section-actions{display:flex;gap:var(--space-4);padding:var(--space-6) var(--space-10);border-top:1px solid var(--border-l1)}
+
+/* ── Report Summary ── */
+.wf-summary{margin-top:var(--space-10);padding:var(--space-10);background:rgba(15,220,120,.06);border:1px solid var(--brand-default);border-radius:var(--radius-8)}
+.wf-summary-header{font-size:var(--font-size-base);font-weight:var(--font-weight-semibold);color:var(--brand-default);margin-bottom:var(--space-8);text-align:center}
+.wf-summary-stats{display:flex;justify-content:center;gap:var(--space-16);margin-bottom:var(--space-8)}
+.wf-summary-stat{text-align:center;font-size:var(--font-size-sm);color:var(--text-secondary)}
+.wf-summary-stat strong{display:block;font-size:var(--font-size-xl);color:var(--text-default)}
+
 /* ── Pinned Messages ── */
 .pinned-msgs{border-bottom:1px solid var(--border-l1);padding:var(--space-4) var(--space-12);display:flex;flex-direction:column;gap:var(--space-2);max-height:120px;overflow-y:auto;flex-shrink:0}
 .pinned-msg{display:flex;align-items:center;gap:var(--space-6);padding:var(--space-4) var(--space-8);background:rgba(15,220,120,.08);border-radius:var(--radius-4);font-size:var(--font-size-sm);transition:background var(--transition-fast)}

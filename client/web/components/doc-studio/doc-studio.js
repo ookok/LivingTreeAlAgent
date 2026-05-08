@@ -1,5 +1,5 @@
 /* LivingTree Web — Document Studio Component
-   OnlyOffice-powered document editor with AI integration */
+   LT-Office powered document editor with AI integration */
 
 class DocStudio extends Component {
   constructor(el, props = {}) {
@@ -22,7 +22,7 @@ class DocStudio extends Component {
     this.on('studio:review', (d) => this._enterReviewMode(d.docId));
     this.on('doc:insert-diagram', (d) => this._insertDiagram(d));
 
-    OnlyOffice.init();
+    LTOffice.init();
     this._loadDocList();
   }
 
@@ -187,9 +187,9 @@ class DocStudio extends Component {
     this._mode = 'editor';
     this.render();
     this._bindToolbar();
-    OnlyOffice.open(docId, 'oo-editor-container');
+    LTOffice.open(docId, 'oo-editor-container');
 
-    const info = await OnlyOffice.getContent(docId);
+    const info = await LTOffice.getContent(docId);
     if (info) {
       document.getElementById('ds-title').textContent = info.title;
       this._templateFields = {};
@@ -213,15 +213,15 @@ class DocStudio extends Component {
   }
 
   async _createDoc(content, title) {
-    const docId = await OnlyOffice.createFromAI(content, title);
+    const docId = await LTOffice.createFromAI(content, title);
     if (docId) {
-      OnlyOffice.toggleSplit();
+      LTOffice.toggleSplit();
       this._openDoc(docId);
     }
   }
 
   async _loadDocList() {
-    this._docs = await OnlyOffice.listDocs();
+    this._docs = await LTOffice.listDocs();
     this._mode = 'list';
     this.render();
     this._bindToolbar();
@@ -244,13 +244,13 @@ class DocStudio extends Component {
   async _aiFillTemplate() {
     // Auto-fill with AI: call backend to suggest values
     if (!this._docId) return;
-    const content = await OnlyOffice.getContent(this._docId);
+    const content = await LTOffice.getContent(this._docId);
     // For now, fill with placeholders
     const fields = {};
     Object.keys(this._templateFields).forEach(k => {
       fields[k] = `[${k} - AI 自动填充]`;
     });
-    await OnlyOffice.fillTemplate(this._docId, fields);
+    await LTOffice.fillTemplate(this._docId, fields);
     this._mode = 'editor';
     this._openDoc(this._docId);
   }
@@ -260,13 +260,13 @@ class DocStudio extends Component {
     document.querySelectorAll('[id^="tf-"]').forEach(el => {
       fields[el.id.replace('tf-', '')] = el.value;
     });
-    await OnlyOffice.fillTemplate(this._docId, fields);
+    await LTOffice.fillTemplate(this._docId, fields);
     this._mode = 'editor';
     this._openDoc(this._docId);
   }
 
   async _submitReview(action) {
-    const result = await OnlyOffice.submitReview(this._docId, action, this._reviewComments);
+    const result = await LTOffice.submitReview(this._docId, action, this._reviewComments);
     if (result) {
       this._reviewResolutions = result.resolutions;
       this._mode = 'review';
@@ -301,10 +301,10 @@ class DocStudio extends Component {
 
         switch (action) {
           case 'list': this._loadDocList(); break;
-          case 'open': this._openDoc(id); OnlyOffice.toggleSplit(); break;
-          case 'delete': OnlyOffice.deleteDoc(id); this._loadDocList(); break;
+          case 'open': this._openDoc(id); LTOffice.toggleSplit(); break;
+          case 'delete': LTOffice.deleteDoc(id); this._loadDocList(); break;
           case 'back': this._docId ? this._openDoc(this._docId) : this._loadDocList(); break;
-          case 'close': OnlyOffice.toggleSplit(); break;
+          case 'close': LTOffice.toggleSplit(); break;
           case 'template': this._enterTemplateMode(this._docId); break;
           case 'review': this._submitReview('review'); break;
           case 'fill': this._aiFillTemplate(); break;
@@ -346,7 +346,7 @@ class DocStudio extends Component {
       this._showReviewPanel(data.review);
       // Emit review summary to chat
       LT.emit('review:complete', { docTitle: data.title, review: data.review });
-      OnlyOffice.toggleSplit();
+      LTOffice.toggleSplit();
       this._openDoc(data.doc_id);
     } catch (err) { LT.emit('notify', { msg: err.message, type: 'error' }); }
   }
@@ -395,7 +395,7 @@ class DocStudio extends Component {
   _insertDiagram(data) {
     // Insert diagram image into OnlyOffice document
     if (data && data.dataUri) {
-      OnlyOffice.insertText(data.html || `<img src="${data.dataUri}">`);
+      LTOffice.insertText(data.html || `<img src="${data.dataUri}">`);
     }
   }
 
@@ -405,7 +405,7 @@ class DocStudio extends Component {
   }
 
   destroy() {
-    OnlyOffice.destroy();
+    LTOffice.destroy();
     super.destroy();
   }
 }

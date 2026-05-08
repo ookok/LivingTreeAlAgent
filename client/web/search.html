@@ -203,7 +203,7 @@ function renderCard(r) {
     case 'document':
       body = `
         <div class="card-meta"><span>${r.format || 'docx'}</span><span>${r.size ? (r.size/1024).toFixed(1) + 'KB' : ''}</span><span>${r.updated_at ? new Date(r.updated_at*1000).toLocaleString('zh-CN') : ''}</span></div>
-        <button class="card-action-btn" onclick="openDoc('${r.doc_id}')">在 OnlyOffice 中打开</button>`;
+        <button class="card-action-btn" onclick="openDoc('${r.doc_id}')">在 LT-Office 中打开</button>`;
       break;
     case 'diagram':
       body = `

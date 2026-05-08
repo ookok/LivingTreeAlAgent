@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════
-   LivingTree Web — OnlyOffice Service
-   Manages OnlyOffice iframe integration
+   LivingTree Web — LT-Office Service
+   Manages document editor iframe integration
    ═══════════════════════════════════ */
 
-const OnlyOffice = {
+const LTOffice = {
   _editor: null,
   _docId: null,
   _iframe: null,
@@ -26,7 +26,7 @@ const OnlyOffice = {
     if (!container) return;
 
     // Show loading
-    container.innerHTML = '<div class="oo-loading"><div class="oo-loading-spinner"></div><span>加载 OnlyOffice 编辑器...</span></div>';
+      container.innerHTML = '<div class="lto-loading"><div class="lto-loading-spinner"></div><span>加载 LT-Office 编辑器...</span></div>';
 
     try {
       const resp = await fetch(`/api/doc/config/${docId}`);
@@ -50,8 +50,8 @@ const OnlyOffice = {
 
       LT.emit('doc:opened', { docId });
     } catch (err) {
-      console.error('[OnlyOffice] Failed to open:', err);
-      container.innerHTML = `<div class="oo-error">编辑器加载失败: ${err.message}</div>`;
+      console.error('[LT-Office] Failed to open:', err);
+      container.innerHTML = `<div class="lto-error">编辑器加载失败: ${err.message}</div>`;
     }
   },
 
@@ -76,7 +76,7 @@ const OnlyOffice = {
       const data = await resp.json();
       return data.doc_id;
     } catch (err) {
-      console.error('[OnlyOffice] Create failed:', err);
+      console.error('[LT-Office] Create failed:', err);
       LT.emit('notify', { msg: '文档创建失败', type: 'error' });
       return null;
     }
@@ -181,9 +181,9 @@ const OnlyOffice = {
   toggleSplit() {
     const app = document.querySelector('.app');
     if (app) app.classList.toggle('split');
-    const oo = document.getElementById('oo-panel');
-    if (oo) oo.classList.toggle('open');
+    const panel = document.getElementById('lto-panel');
+    if (panel) panel.classList.toggle('open');
   },
 };
 
-window.OnlyOffice = OnlyOffice;
+window.LTOffice = LTOffice;

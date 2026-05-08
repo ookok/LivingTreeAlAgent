@@ -164,8 +164,8 @@ class Chat extends Component {
         ${review.annotations.length > 5 ? `<div class="review-summary-more">... 还有 ${review.annotations.length - 5} 条意见，请在文档编辑器中查看</div>` : ''}
       </div>
       <div class="review-summary-action">
-        <button onclick="OnlyOffice.toggleSplit()" class="card-btn card-btn-primary" style="width:100%">
-          在 OnlyOffice 中查看详情
+        <button onclick="LTOffice.toggleSplit()" class="card-btn card-btn-primary" style="width:100%">
+          在 LT-Office 中查看详情
         </button>
       </div>
     </div>

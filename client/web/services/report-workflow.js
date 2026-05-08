@@ -103,7 +103,7 @@ const ReportWorkflow = {
           <div class="wf-section-actions">
             <button class="card-btn" onclick="ReportWorkflow.editSection('${s.id}')">✏️ 编辑</button>
             <button class="card-btn" onclick="ReportWorkflow.regenerateSection('${s.id}')">🔄 重生成</button>
-            <button class="card-btn card-btn-primary" onclick="LT.emit('doc:create',{content:'${LT.renderer.esc(s.content).replace(/'/g, "\\'")}',title:'${s.title}'})">📄 导入OnlyOffice</button>
+            <button class="card-btn card-btn-primary" onclick="LT.emit('doc:create',{content:'${LT.renderer.esc(s.content).replace(/'/g, "\\'")}',title:'${s.title}'})">📄 导入LT-Office</button>
           </div>
         </div>`).join('')}
     </div>`;
@@ -113,7 +113,7 @@ const ReportWorkflow = {
     const s = this._active?.sections.find(s => s.id === id);
     if (!s) return;
     LT.emit('doc:create', { content: s.content, title: s.title });
-    LT.emit('notify', { msg: `已打开"${s.title}"在 OnlyOffice 中编辑`, type: 'success' });
+    LT.emit('notify', { msg: `已打开"${s.title}"在 LT-Office 中编辑`, type: 'success' });
   },
 
   regenerateSection(id) {
@@ -145,7 +145,7 @@ const ReportWorkflow = {
     if (!wf) return;
     const full = `# ${wf.title}\n\n` + wf.sections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n');
     LT.emit('doc:create', { content: full, title: wf.title });
-    LT.emit('notify', { msg: '完整报告已导入 OnlyOffice', type: 'success' });
+    LT.emit('notify', { msg: '完整报告已导入 LT-Office', type: 'success' });
   },
 
   /* ── Checkpoint: save & resume ── */

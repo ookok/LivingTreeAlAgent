@@ -287,7 +287,7 @@ const renderer = {
   <button class="msg-action-btn" data-action="copy-md" title="复制 Markdown">
     <svg width="13" height="13" viewBox="0 0 13 13"><path d="M2 4h9v6H2z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 6.5h5M4 8.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
   </button>
-  <button class="msg-action-btn" data-action="open-in-oo" title="在 OnlyOffice 中编辑">
+  <button class="msg-action-btn" data-action="open-in-oo" title="在 LT-Office 中编辑">
     <svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="2" width="10" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 5.5h5M4 7.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><path d="M8.5 2V1" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
   </button>
   <button class="msg-action-btn" data-action="share" title="分享">

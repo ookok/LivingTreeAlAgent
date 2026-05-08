@@ -118,8 +118,8 @@ const Perf = {
     this._docProcessing = true;
     while (this.docLoadQueue.length) {
       const docId = this.docLoadQueue.shift();
-      // Pre-warm OnlyOffice API
-      if (window.OnlyOffice) OnlyOffice.init();
+      // Pre-warm LT-Office editor API
+      if (window.LTOffice) LTOffice.init();
     }
     this._docProcessing = false;
   },

@@ -571,6 +571,6 @@ def _fallback_reply(msg: str) -> str:
                 results[url] = f"FAIL ({e})"
         return results
 
-    # ── Register doc routes (OnlyOffice integration) ──
+    # ── Register doc routes (LT-Office integration) ──
     from .doc_routes import setup_doc_routes
     setup_doc_routes(app)

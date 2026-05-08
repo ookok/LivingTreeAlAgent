@@ -1,4 +1,4 @@
-"""OnlyOffice document integration routes."""
+"""LT-Office document integration routes."""
 from __future__ import annotations
 
 import hashlib
@@ -1407,7 +1407,7 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
             ]
         return suggestions[:5]
 
-    logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review + AutoFill + Search endpoints)")
+    logger.info("Doc routes registered (LT-Office + Graph + Diagram + Review + AutoFill + Search endpoints)")
 
 
 def _get_field_patterns() -> dict:

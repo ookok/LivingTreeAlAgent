@@ -14,11 +14,13 @@ class DocStudio extends Component {
 
   async init() {
     this.render();
+    this._reviewData = null;
     this.on('doc:open', (d) => this._openDoc(d.docId));
     this.on('doc:create', (d) => this._createDoc(d.content, d.title));
     this.on('studio:list', () => this._loadDocList());
     this.on('studio:template', (d) => this._enterTemplateMode(d.docId));
     this.on('studio:review', (d) => this._enterReviewMode(d.docId));
+    this.on('doc:insert-diagram', (d) => this._insertDiagram(d));
 
     OnlyOffice.init();
     this._loadDocList();
@@ -46,10 +48,15 @@ class DocStudio extends Component {
       <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5 6.5h4M5 8.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
       <span>模板</span>
     </button>
-    <button class="ds-btn" data-action="review" title="审查">
-      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l2.5 5 5.5.8-4 3.9 1 5.3-5-2.6-5 2.6 1-5.3-4-3.9 5.5-.8z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
-      <span>审查</span>
-    </button>
+      <button class="ds-btn" data-action="review" title="审查">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l2.5 5 5.5.8-4 3.9 1 5.3-5-2.6-5 2.6 1-5.3-4-3.9 5.5-.8z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span>审查</span>
+      </button>
+      <label class="ds-btn" data-action="auto-review" title="AI 自动审阅" style="cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l2.5 5 5.5.8-4 3.9 1 5.3-5-2.6-5 2.6 1-5.3-4-3.9 5.5-.8z" fill="currentColor"/></svg>
+        <span>AI审阅</span>
+        <input type="file" accept=".docx" data-action="review-upload" style="display:none">
+      </label>
     <button class="ds-btn" data-action="refresh" title="刷新文档">
       <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7a5 5 0 019-3M12 7a5 5 0 01-9 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12 1v3H9M2 13v-3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
     </button>
@@ -67,6 +74,10 @@ class DocStudio extends Component {
       <textarea id="ds-ai-input" placeholder="输入 AI 指令... (选中文本后可用)" rows="2"></textarea>
       <button class="ds-btn-send" id="ds-ai-send">发送</button>
     </div>
+  </div>
+  <div class="ds-review-panel" id="ds-review-panel" style="display:none">
+    <div class="ds-ai-panel-header">📋 AI 审阅结果 <span class="ds-review-count" id="ds-review-count"></span></div>
+    <div class="ds-review-list" id="ds-review-list"></div>
   </div>
 </div>`;
   }
@@ -251,6 +262,22 @@ class DocStudio extends Component {
 
   _bindToolbar() {
     const E = this.el;
+    // File upload for review
+    const uploadInput = E.querySelector('[data-action="review-upload"]');
+    if (uploadInput) {
+      uploadInput.onchange = (e) => this._handleReviewUpload(e);
+    }
+    // Trigger upload on label click
+    const autoReviewBtn = E.querySelector('[data-action="auto-review"]');
+    if (autoReviewBtn) {
+      autoReviewBtn.addEventListener('click', (e) => {
+        if (this._docId) {
+          // Review existing document
+          this._reviewExisting();
+        }
+      });
+    }
+
     E.querySelectorAll('[data-action]').forEach(btn => {
       btn.onclick = () => {
         const action = btn.dataset.action;
@@ -286,10 +313,77 @@ class DocStudio extends Component {
     }
   }
 
-  render() {
-    if (this.el) {
-      this.el.innerHTML = this.template();
+  /* ── Auto-review ── */
+  async _handleReviewUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.docx')) {
+      LT.emit('notify', { msg: '请上传 .docx 文件', type: 'error' }); return;
     }
+    LT.emit('notify', { msg: 'AI 正在审阅文档...', type: 'info' });
+    const form = new FormData(); form.append('file', file);
+    try {
+      const resp = await fetch('/api/doc/review-auto', { method: 'POST', body: form });
+      if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || '审阅失败'); }
+      const data = await resp.json();
+      this._reviewData = data.review;
+      this._docId = data.doc_id;
+      this._showReviewPanel(data.review);
+      OnlyOffice.toggleSplit();
+      this._openDoc(data.doc_id);
+    } catch (err) { LT.emit('notify', { msg: err.message, type: 'error' }); }
+  }
+
+  async _reviewExisting() {
+    if (!this._docId) return;
+    LT.emit('notify', { msg: 'AI 审阅中...', type: 'info' });
+    try {
+      const resp = await fetch(`/api/doc/review-auto/${this._docId}`, { method: 'POST' });
+      if (!resp.ok) throw new Error('审阅失败');
+      const data = await resp.json();
+      this._reviewData = data.review;
+      this._showReviewPanel(data.review);
+      this._openDoc(this._docId);
+      LT.emit('notify', { msg: `审阅完成: ${data.review.summary.total} 条意见`, type: 'success' });
+    } catch (err) { LT.emit('notify', { msg: err.message, type: 'error' }); }
+  }
+
+  _showReviewPanel(review) {
+    const panel = this.el.querySelector('#ds-review-panel');
+    const list = this.el.querySelector('#ds-review-list');
+    const count = this.el.querySelector('#ds-review-count');
+    if (!panel || !list) return;
+    panel.style.display = 'flex';
+
+    const summary = review.summary;
+    count.textContent = `${summary.total}条 (🔴${summary.by_severity.error||0} 🟡${summary.by_severity.warning||0} 🔵${summary.by_severity.info||0})`;
+
+    list.innerHTML = review.annotations.map((a, i) => `
+      <div class="ds-review-item ds-review-${a.severity}">
+        <div class="ds-review-type">
+          <span class="ds-review-sev ds-sev-${a.severity}">${a.severity.toUpperCase()}</span>
+          ${a.rule ? `<span class="ds-review-rule">${a.rule}</span>` : ''}
+        </div>
+        <div class="ds-review-text">${LT.esc(a.message)}</div>
+        ${a.suggestion ? `<div class="ds-review-sug">💡 ${LT.esc(a.suggestion)}</div>` : ''}
+        ${a.text ? `<div class="ds-review-context">"${LT.esc(a.text.slice(0, 80))}"</div>` : ''}
+      </div>`).join('') + `
+      <div class="ds-review-add">
+        <textarea class="ds-review-input" id="ds-manual-comment" placeholder="添加审阅意见..."></textarea>
+        <button class="ds-btn-send" data-action="add-comment">添加批注</button>
+      </div>`;
+  }
+
+  _insertDiagram(data) {
+    // Insert diagram image into OnlyOffice document
+    if (data && data.dataUri) {
+      OnlyOffice.insertText(data.html || `<img src="${data.dataUri}">`);
+    }
+  }
+
+  render() {
+    if (this.el) { this.el.innerHTML = this.template(); }
+    if (this._reviewData) this._showReviewPanel(this._reviewData);
   }
 
   destroy() {

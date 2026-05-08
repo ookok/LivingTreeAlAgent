@@ -476,6 +476,21 @@
 .oo-loading-spinner{width:32px;height:32px;border:3px solid var(--bg-overlay-l2);border-top-color:var(--brand-default);border-radius:50%;animation:spin 0.8s linear infinite}
 .oo-error{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-danger);font-size:var(--font-size-base)}
 
+/* ── Review Panel ── */
+.ds-review-panel{width:260px;border-left:1px solid var(--border-l1);display:none;flex-direction:column;flex-shrink:0;overflow:hidden}
+.ds-review-list{flex:1;overflow-y:auto;padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-6)}
+.ds-review-count{font-size:var(--font-size-xs);color:var(--text-tertiary);font-weight:var(--font-weight-normal)}
+.ds-review-sev{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:600}
+.ds-sev-error{background:rgba(232,70,58,0.2);color:#e8463a}
+.ds-sev-warning{background:rgba(226,138,0,0.2);color:#e28a00}
+.ds-sev-info{background:rgba(63,133,255,0.2);color:#3f85ff}
+.ds-review-rule{font-size:10px;color:var(--text-tertiary)}
+.ds-review-sug{font-size:var(--font-size-xs);color:var(--brand-default);margin-top:var(--space-2);padding-left:var(--space-4)}
+.ds-review-context{font-size:var(--font-size-xs);color:var(--text-tertiary);font-style:italic;margin-top:var(--space-2);padding:var(--space-4);background:var(--bg-overlay-l1);border-radius:var(--radius-4);word-break:break-all}
+.ds-review-add{padding:var(--space-8);border-top:1px solid var(--border-l1);display:flex;flex-direction:column;gap:var(--space-4)}
+.ds-review-input{width:100%;min-height:48px;padding:var(--space-6);background:var(--bg-overlay-l1);border:1px solid var(--border-l1);border-radius:var(--radius-4);color:var(--text-default);font-size:var(--font-size-sm);resize:vertical;font-family:var(--font-sans);outline:none}
+.ds-review-input:focus{border-color:var(--brand-default)}
+
 /* ════════════════ Graph Studio ════════════════ */
 .gs-overlay{display:none;position:fixed;inset:0;background:var(--bg-base);z-index:var(--z-modal);flex-direction:column}
 .graph-studio{flex:1;display:flex;flex-direction:column;overflow:hidden}

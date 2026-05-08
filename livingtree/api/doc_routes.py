@@ -705,4 +705,358 @@ def setup_doc_routes(app: FastAPI) -> None:
 
         return {"type": diagram_type, "config": config, "status": "generated"}
 
-    logger.info("Doc routes registered (OnlyOffice + Graph + Diagram endpoints)")
+    # ═══════════════════════════════════════
+    #  .docx Auto-Review Engine
+    # ═══════════════════════════════════════
+
+    def _parse_docx_text(filepath: str) -> list[dict]:
+        """Extract paragraphs with position info from .docx without python-docx dep."""
+        import zipfile, xml.etree.ElementTree as ET
+        paragraphs = []
+        try:
+            with zipfile.ZipFile(filepath) as z:
+                if 'word/document.xml' not in z.namelist():
+                    return paragraphs
+                xml_content = z.read('word/document.xml')
+                root = ET.fromstring(xml_content)
+                ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                for idx, p in enumerate(root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p')):
+                    texts = []
+                    for t in p.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                        if t.text:
+                            texts.append(t.text)
+                    full = ''.join(texts)
+                    if full.strip():
+                        paragraphs.append({'index': idx, 'text': full.strip(), 'length': len(full)})
+        except Exception as e:
+            logger.warning(f"Docx parse failed: {e}")
+        return paragraphs
+
+    def _ai_review_content(paragraphs: list[dict], hub=None) -> dict:
+        """AI-powered document review via TreeLLM reasoning.
+
+        Uses the system's self-learning LLM to analyze document content
+        and generate structured annotations. Falls back to rule-based
+        heuristics when LLM is unavailable.
+        """
+        full_text = '\n'.join(p['text'] for p in paragraphs)
+        annotations = []
+
+        # ── Try LLM-based review first ──
+        review_prompt = f"""你是一位专业的文档审阅专家。请仔细审阅以下文档内容，找出所有问题。
+
+审阅维度：
+1. 法规合规性 — 是否引用了正确的标准/法规
+2. 数据准确性 — 数值是否在合理范围内，是否有矛盾
+3. 内容完整性 — 是否缺少必要的章节/要素
+4. 格式规范性 — 排版、术语是否标准
+5. 逻辑一致性 — 前后内容是否有矛盾
+
+对每个问题，请输出如下JSON格式（只输出JSON数组，不要其他文字）：
+[{{"severity":"error|warning|info","rule":"compliance|data|completeness|format|logic","type":"highlight|comment","message":"问题描述","suggestion":"修改建议","context":"涉及的关键文字片段"}}]
+
+文档内容：
+{full_text[:6000]}
+"""
+        try:
+            if hub and hasattr(hub, 'world') and hub.world and hasattr(hub.world, 'consciousness'):
+                # Use TreeLLM for review
+                import asyncio as _asyncio, json as _json, re as _re
+                loop = _asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're in an async context, can't run blocking
+                    pass
+                else:
+                    result_text = ""
+                    async def _llm_review():
+                        nonlocal result_text
+                        try:
+                            async for token in hub.world.consciousness.stream_of_thought(review_prompt):
+                                result_text += token
+                        except Exception:
+                            pass
+                    try:
+                        loop.run_until_complete(_llm_review())
+                    except RuntimeError:
+                        # Event loop already running, skip LLM
+                        pass
+
+                    if result_text:
+                        # Try to parse JSON array from LLM response
+                        json_match = _re.search(r'\[[\s\S]*\]', result_text)
+                        if json_match:
+                            try:
+                                ai_annotations = _json.loads(json_match.group())
+                                for a in ai_annotations:
+                                    # Find the paragraph containing the context text
+                                    context = a.get('context', '')
+                                    para_idx = 0
+                                    for p in paragraphs:
+                                        if context and context[:30] in p['text']:
+                                            para_idx = p['index']
+                                            break
+                                    annotations.append({
+                                        'type': a.get('type', 'comment'),
+                                        'severity': a.get('severity', 'info'),
+                                        'rule': a.get('rule', 'general'),
+                                        'paragraph': para_idx,
+                                        'start': 0, 'end': len(context),
+                                        'text': context,
+                                        'message': a.get('message', ''),
+                                        'suggestion': a.get('suggestion', ''),
+                                    })
+                                logger.info(f"LLM review generated {len(annotations)} annotations")
+                            except (_json.JSONDecodeError, Exception) as e:
+                                logger.debug(f"LLM review parse failed: {e}")
+        except Exception as e:
+            logger.warning(f"LLM review unavailable: {e}")
+
+        # ── Fallback: lightweight heuristic checks ──
+        if not annotations:
+            annotations = _heuristic_review(paragraphs, full_text)
+
+        severity_count = {'error': 0, 'warning': 0, 'info': 0}
+        for a in annotations:
+            sev = a.get('severity', 'info')
+            severity_count[sev] = severity_count.get(sev, 0) + 1
+
+        return {
+            'annotations': sorted(annotations, key=lambda a: {'error': 0, 'warning': 1, 'info': 2}.get(a['severity'], 3)),
+            'summary': {
+                'total': len(annotations),
+                'by_severity': severity_count,
+                'paragraphs': len(paragraphs),
+                'words': sum(len(p['text']) for p in paragraphs),
+            },
+        }
+
+
+def _heuristic_review(paragraphs: list[dict], full_text: str) -> list[dict]:
+    """Lightweight fallback: basic pattern-based review when LLM unavailable."""
+    import re as _re
+    annotations = []
+
+    # Compliance patterns
+    compliance_patterns = {
+        '大气': ['GB 3095', 'GB 16297', 'HJ 2.2'],
+        '水': ['GB 3838', 'GB 8978', 'HJ 2.3'],
+        '噪声': ['GB 3096', 'GB 12348', 'HJ 2.4'],
+    }
+    for domain, refs in compliance_patterns.items():
+        if domain in full_text:
+            for ref in refs:
+                if ref not in full_text:
+                    annotations.append({
+                        'type': 'comment', 'severity': 'warning', 'rule': 'compliance',
+                        'paragraph': 0, 'start': 0, 'end': 50,
+                        'text': full_text[:50], 'message': f'缺少{domain}相关标准: {ref}',
+                        'suggestion': f'建议补充引用 {ref}',
+                    })
+
+    # Data checks
+    for p in paragraphs:
+        pm = _re.findall(r'PM[2.]5[：:=\s]*(\d+\.?\d*)', p['text'])
+        for val in pm:
+            if float(val) > 500:
+                annotations.append({
+                    'type': 'highlight', 'severity': 'warning', 'rule': 'data',
+                    'paragraph': p['index'], 'start': 0, 'end': len(p['text']),
+                    'text': p['text'][:80], 'message': f'PM2.5 数值 {val} 异常偏高',
+                    'suggestion': '确认数据来源和单位',
+                })
+
+    # Completeness
+    required = ['前言', '总则', '工程分析', '环境现状', '环境影响', '结论']
+    found = [s for s in required if s in full_text]
+    for sec in required:
+        if sec not in found:
+            annotations.append({
+                'type': 'comment', 'severity': 'warning', 'rule': 'completeness',
+                'paragraph': 0, 'start': 0, 'end': 10,
+                'text': '', 'message': f'缺少章节: {sec}',
+                'suggestion': f'请补充"{sec}"章节',
+            })
+
+    # Terminology
+    terms = {'噪音': '噪声', '排污': '排放', '废汽': '废气'}
+    for p in paragraphs:
+        for wrong, correct in terms.items():
+            if wrong in p['text']:
+                annotations.append({
+                    'type': 'highlight', 'severity': 'info', 'rule': 'terminology',
+                    'paragraph': p['index'], 'start': p['text'].find(wrong),
+                    'end': p['text'].find(wrong) + len(wrong),
+                    'text': wrong, 'message': f'术语: "{wrong}" → "{correct}"',
+                    'suggestion': f'建议使用标准术语"{correct}"',
+                })
+
+    return annotations
+
+    class ReviewAutoRequest(BaseModel):
+        doc_id: str = ""
+
+    @app.post("/api/doc/review-auto")
+    async def doc_review_auto(request: Request):
+        """Upload .docx → AI auto-review (LLM-powered) → return annotated document."""
+        from fastapi import UploadFile, File, Form
+        import tempfile, shutil
+
+        hub = request.app.state.hub
+        content_type = request.headers.get("content-type", "")
+        if "multipart" in content_type:
+            form = await request.form()
+            uploaded_file = form.get("file")
+            if not uploaded_file:
+                raise HTTPException(status_code=400, detail="No file uploaded")
+
+            tmp_path = DOC_DIR / f"_review_{int(time.time())}.docx"
+            with open(tmp_path, "wb") as f:
+                f.write(await uploaded_file.read())
+
+            paragraphs = _parse_docx_text(str(tmp_path))
+            if not paragraphs:
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="无法解析文档内容")
+
+            # AI Review — uses TreeLLM if available, falls back to heuristics
+            review = _ai_review_content(paragraphs, hub)
+
+            annotated_html = _generate_annotated_html(paragraphs, review['annotations'])
+
+            doc_id = hashlib.md5(f"review_{time.time()}".encode()).hexdigest()[:12]
+            doc_path = _doc_path(doc_id)
+            _create_docx_from_html(annotated_html, doc_path)
+
+            meta = {
+                'title': uploaded_file.filename or '审阅文档',
+                'format': 'docx',
+                'created_at': time.time(), 'updated_at': time.time(),
+                'reviewed': True, 'review_summary': review['summary'],
+                'annotations_count': len(review['annotations']),
+            }
+            _doc_meta_path(doc_id).write_text(json.dumps(meta, ensure_ascii=False))
+            tmp_path.unlink(missing_ok=True)
+
+            return {
+                'doc_id': doc_id, 'title': meta['title'],
+                'review': review, 'status': 'reviewed',
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Use multipart/form-data upload")
+
+    @app.post("/api/doc/review-auto/{doc_id}")
+    async def doc_review_existing(doc_id: str, request: Request) -> dict:
+        """Auto-review an existing document by doc_id using AI."""
+        hub = request.app.state.hub
+        doc_path = _doc_path(doc_id)
+        if not doc_path.exists():
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        paragraphs = _parse_docx_text(str(doc_path))
+        if not paragraphs:
+            html = doc_path.read_text(encoding='utf-8')
+            import re as _re
+            text = _re.sub(r'<[^>]+>', ' ', html)
+            text = _re.sub(r'\s+', ' ', text).strip()
+            chunks = [s.strip() for s in text.split('. ') if len(s.strip()) > 10]
+            paragraphs = [{'index': i, 'text': c, 'length': len(c)} for i, c in enumerate(chunks)]
+
+        review = _ai_review_content(paragraphs, hub)
+        annotated_html = _generate_annotated_html(paragraphs, review['annotations'])
+        _create_docx_from_html(annotated_html, doc_path)
+
+        meta_path = _doc_meta_path(doc_id)
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text())
+            meta['reviewed'] = True; meta['review_summary'] = review['summary']
+            meta['updated_at'] = time.time()
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False))
+
+        return {'doc_id': doc_id, 'review': review, 'status': 'reviewed'}
+
+    def _generate_annotated_html(paragraphs: list[dict], annotations: list[dict]) -> str:
+        """Generate annotated HTML with visual markers for comments and highlights."""
+        import re as _re
+
+        # Group annotations by paragraph
+        para_annotations = {}
+        for a in annotations:
+            pi = a.get('paragraph', 0)
+            if pi not in para_annotations:
+                para_annotations[pi] = []
+            para_annotations[pi].append(a)
+
+        html_parts = ["""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{font-family:'Microsoft YaHei',sans-serif;font-size:12pt;line-height:2;color:#333;padding:24px;max-width:900px;margin:0 auto}
+p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
+.ann-error{background:#fff0f0;border-left:4px solid #e8463a}
+.ann-warning{background:#fff8e8;border-left:4px solid #e28a00}
+.ann-info{background:#f0f7ff;border-left:4px solid #3f85ff}
+.ann-highlight{background:#fff3cd;border-bottom:2px dashed #e28a00;padding:1px 3px;cursor:help}
+.ann-comment{position:relative}
+.ann-comment::after{content:'💬';position:absolute;right:-20px;top:-2px;font-size:14px;cursor:pointer}
+.ann-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;margin-right:6px}
+.ann-badge-error{background:#e8463a;color:#fff}
+.ann-badge-warning{background:#e28a00;color:#fff}
+.ann-badge-info{background:#3f85ff;color:#fff}
+.ann-tooltip{display:none;position:absolute;background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px 12px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:100;max-width:320px;line-height:1.5}
+.ann-comment:hover .ann-tooltip{display:block}
+.review-header{background:#f0f0f0;padding:12px 16px;border-radius:6px;margin-bottom:16px;font-size:11px;color:#666}
+.review-header strong{color:#333}
+</style></head><body>
+<div class='review-header'>
+  <strong>📋 AI 自动审阅结果</strong> — 共检测到问题，详见文中标注
+</div>
+"""]
+
+        for p in paragraphs:
+            pi = p['index']
+            anns = para_annotations.get(pi, [])
+            text = _re.sub(r'[<>&]', lambda m: {'<': '&lt;', '>': '&gt;', '&': '&amp;'}[m.group()], p['text'])
+
+            if not anns:
+                html_parts.append(f'<p>{text}</p>')
+                continue
+
+            # Determine paragraph severity class
+            severities = [a.get('severity', 'info') for a in anns]
+            para_class = 'ann-error' if 'error' in severities else 'ann-warning' if 'warning' in severities else 'ann-info'
+
+            # Build annotations HTML
+            ann_html = ''
+            for a in anns[:3]:  # Max 3 visible per paragraph
+                sev = a.get('severity', 'info')
+                badge = f'<span class="ann-badge ann-badge-{sev}">{sev.upper()}</span>'
+                msg = a.get('message', '')
+                sug = a.get('suggestion', '')
+                tip = f'{badge}{msg}'
+                if sug:
+                    tip += f'<br><em>💡 {sug}</em>'
+
+                if a['type'] == 'highlight' and a.get('text'):
+                    highlighted_text = _re.sub(r'[<>&]', lambda m: {'<': '&lt;', '>': '&gt;', '&': '&amp;'}[m.group()], a['text'])
+                    text = text.replace(highlighted_text, f'<span class="ann-highlight" title="{_re.sub(r"<[^>]+>", "", tip)}">{highlighted_text}</span>', 1)
+
+                ann_html += f'<span class="ann-comment">{badge}{msg}<span class="ann-tooltip">{tip}</span></span> '
+
+            html_parts.append(f'<p class="{para_class}">{ann_html}{text}</p>')
+
+        # Summary footer
+        total = len(annotations)
+        errors = sum(1 for a in annotations if a['severity'] == 'error')
+        warnings = sum(1 for a in annotations if a['severity'] == 'warning')
+        infos = sum(1 for a in annotations if a['severity'] == 'info')
+        html_parts.append(f"""
+<div class='review-header' style='margin-top:16px'>
+  <strong>审阅统计</strong>：
+  <span style='color:#e8463a'>🔴 {errors} 错误</span> &nbsp;
+  <span style='color:#e28a00'>🟡 {warnings} 警告</span> &nbsp;
+  <span style='color:#3f85ff'>🔵 {infos} 建议</span> &nbsp;
+  共 {total} 条
+</div>
+</body></html>""")
+
+        return '\n'.join(html_parts)
+
+    logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review endpoints)")

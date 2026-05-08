@@ -1249,6 +1249,166 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
 
     logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review + AutoFill endpoints)")
 
+    # ═══════════════════════════════════════
+    #  Unified Search — Multi-source fusion
+    #  Crawler + RAG Knowledge + Document Index + Structured Data → Unified Cards
+    # ═══════════════════════════════════════
+
+    class SearchRequest(BaseModel):
+        query: str
+        sources: list[str] = Field(default_factory=lambda: ["web", "knowledge", "docs", "structured"])
+        limit: int = 15
+        page: int = 1
+
+    @app.post("/api/search/unified")
+    async def unified_search(req: SearchRequest, request: Request) -> dict[str, Any]:
+        """
+        Unified search hub. Aggregates from multiple sources, returns unified card JSON.
+        Frontend is source-agnostic — cards have type+data, frontend renders accordingly.
+        """
+        hub = request.app.state.hub
+        query = req.query.strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="query required")
+
+        results = []
+        import asyncio as _async
+
+        # ═══ Source 1: Web Crawler ═══
+        if "web" in req.sources:
+            try:
+                from livingtree.capability.unified_search import search as web_search
+                try:
+                    web_results = await web_search(query, limit=req.limit)
+                except RuntimeError:
+                    loop = _async.get_event_loop()
+                    web_results = await loop.run_in_executor(None, lambda: [])
+                for r in web_results[:req.limit]:
+                    results.append({
+                        "type": "web", "title": r.title if hasattr(r, 'title') else str(r)[:80],
+                        "url": getattr(r, 'url', ''),
+                        "summary": getattr(r, 'summary', '')[:200],
+                        "source": getattr(r, 'source', 'web'),
+                        "favicon": f"https://www.google.com/s2/favicons?domain={getattr(r, 'url', '')}&sz=16",
+                    })
+            except Exception as e:
+                logger.debug(f"Web search unavailable: {e}")
+
+        # ═══ Source 2: RAG Knowledge Base ═══
+        if "knowledge" in req.sources and hub and hasattr(hub, 'knowledge'):
+            try:
+                kb_results = hub.knowledge.search(query, top_k=req.limit)
+                for r in kb_results[:req.limit]:
+                    text = r.get('text', '')[:300]
+                    results.append({
+                        "type": "knowledge", "title": text[:60] + ('...' if len(text) > 60 else ''),
+                        "text": text, "source_type": r.get('source_type', 'knowledge'),
+                        "score": round(r.get('score', 0), 2),
+                        "metadata": r.get('metadata', {}),
+                    })
+            except Exception as e:
+                logger.debug(f"Knowledge search unavailable: {e}")
+
+        # ═══ Source 3: Document Index ═══
+        if "docs" in req.sources:
+            try:
+                doc_dir = DOC_DIR
+                for meta_path in sorted(doc_dir.glob("*.meta.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+                    try:
+                        meta = json.loads(meta_path.read_text())
+                        title = meta.get('title', '')
+                        if query.lower() in title.lower():
+                            doc_id = meta_path.stem.replace(".meta", "")
+                            results.append({
+                                "type": "document", "title": title,
+                                "doc_id": doc_id, "format": meta.get('format', 'docx'),
+                                "size": meta.get('size', 0),
+                                "updated_at": meta.get('updated_at', 0),
+                                "reviewed": meta.get('reviewed', False),
+                            })
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.debug(f"Document search unavailable: {e}")
+
+        # ═══ Source 4: Structured Data (forms, diagrams, maps) ═══
+        if "structured" in req.sources:
+            # Diagrams
+            diagram_types = ['contour', 'process-flow', 'site-plan', 'noise', 'monitoring', 'causal', 'risk']
+            for dt in diagram_types:
+                if query.lower() in dt or any(c in query for c in ['图', '流程', '地图', '噪声']):
+                    results.append({
+                        "type": "diagram", "title": f"{dt} 图表",
+                        "diagram_type": dt,
+                        "description": f"点击生成 {dt} 图表",
+                        "action": "open-diagram",
+                    })
+
+            # Auto-fill profiles
+            profile_dir = doc_dir.parent / "auto_fill_profiles"
+            if profile_dir.exists():
+                for pf in profile_dir.glob("*.json"):
+                    try:
+                        data = json.loads(pf.read_text())
+                        if query.lower() in data.get('name', '').lower():
+                            results.append({
+                                "type": "profile", "title": data.get('name', pf.stem),
+                                "profile_id": pf.stem,
+                                "fields": len(data.get('values', {})),
+                            })
+                    except Exception:
+                        pass
+
+        # Deduplicate by title
+        seen = set()
+        unique = []
+        for r in results:
+            key = r.get('title', '')[:40]
+            if key not in seen:
+                seen.add(key)
+                unique.append(r)
+
+        total = len(unique)
+        start = (req.page - 1) * req.limit
+        end = start + req.limit
+
+        return {
+            "query": query,
+            "total": total,
+            "page": req.page,
+            "results": unique[start:end],
+            "sources_used": req.sources,
+            "source_counts": {
+                "web": sum(1 for r in unique if r['type'] == 'web'),
+                "knowledge": sum(1 for r in unique if r['type'] == 'knowledge'),
+                "document": sum(1 for r in unique if r['type'] == 'document'),
+                "diagram": sum(1 for r in unique if r['type'] == 'diagram'),
+                "profile": sum(1 for r in unique if r['type'] == 'profile'),
+            },
+        }
+
+    @app.get("/api/search/suggest")
+    async def search_suggest(q: str = "", request: Request = None) -> list[str]:
+        """Search suggestions from knowledge base."""
+        if not q or len(q) < 2:
+            return []
+        hub = request.app.state.hub if request else None
+        suggestions = []
+        if hub and hasattr(hub, 'knowledge'):
+            try:
+                results = hub.knowledge.search(q, top_k=5)
+                suggestions = [r.get('text', '')[:60] for r in results if r.get('text')]
+            except Exception:
+                pass
+        if not suggestions:
+            suggestions = [
+                f"{q} 环评标准", f"{q} 工艺流程", f"{q} 环保法规",
+                f"{q} 监测数据", f"{q} 技术方案",
+            ]
+        return suggestions[:5]
+
+    logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review + AutoFill + Search endpoints)")
+
 
 def _get_field_patterns() -> dict:
     """Common field name → (suggested value, confidence) patterns for heuristic fallback."""

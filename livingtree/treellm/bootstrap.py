@@ -50,6 +50,7 @@ async def setup_model_registry(config: Any, lazy: bool = False) -> Any | None:
             "stepfun":     ("https://api.stepfun.com/v1", config.model.stepfun_api_key),
             "internlm":    ("https://api.intern-ai.org.cn/v1", config.model.internlm_api_key),
             "doubao":     ("https://ark.cn-beijing.volces.com/api/v3", config.model.doubao_api_key if hasattr(config.model, 'doubao_api_key') else os.environ.get("DOUBAO_API_KEY", "")),
+            "tabby":      ("http://localhost:5000/v1", "tabby-local"),
         }
 
         registered = 0

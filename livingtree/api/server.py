@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, Response
 
 from .routes import setup_routes
 from .auth import setup_auth_routes
+from .openai_proxy import setup_openai_proxy
 
 
 def create_app(hub=None, config=None) -> FastAPI:
@@ -30,6 +31,7 @@ def create_app(hub=None, config=None) -> FastAPI:
 
     setup_routes(app)
     setup_auth_routes(app)
+    setup_openai_proxy(app)
 
     # Static files: serve web frontend from client/web/
     web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"

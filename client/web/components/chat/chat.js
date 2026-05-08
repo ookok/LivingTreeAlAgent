@@ -348,6 +348,8 @@ class Chat extends Component {
       this._addCards(last, content);
       const blocks = this._detectDocCards(content);
       if (blocks.length) this._renderDocCards(last, blocks);
+      // Code mode: detect diff blocks
+      this._renderDiffBlocks(last, content);
     }
     this._scrollBottom();
   }
@@ -443,6 +445,117 @@ class Chat extends Component {
     const content = msgEl.querySelector('.content');
     if (content) content.appendChild(wrapper);
   }
+
+  /* ── Code Mode Diff Detection ── */
+
+  _renderDiffBlocks(msgEl, fullContent) {
+    // Only in code mode
+    if (!LT.store || !LT.store.codeMode) return;
+
+    // Detect code blocks with diff language marker or inline diff patches
+    const diffBlocks = this._detectDiffPatch(fullContent);
+    if (!diffBlocks.length) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-diff-blocks';
+
+    diffBlocks.forEach(d => {
+      const diffEl = document.createElement('div');
+      diffEl.className = 'diff-container';
+      diffEl.innerHTML = LT.renderer.diffBlock(d.oldCode, d.newCode, d.filePath, d.lang);
+      wrapper.appendChild(diffEl.firstChild);
+    });
+
+    const bubble = msgEl.querySelector('.agent-bubble');
+    if (bubble) bubble.appendChild(wrapper);
+  },
+
+  _detectDiffPatch(content) {
+    const results = [];
+
+    // Pattern 1: ```diff file=path\n...\n``` 
+    const diffRe = /```diff\s*(?:file=([^\s\n]+))?\s*\n([\s\S]*?)```/g;
+    let m;
+    while ((m = diffRe.exec(content)) !== null) {
+      const filePath = m[1] || '';
+      const diffContent = m[2];
+      results.push(...this._parseUnifiedDiff(diffContent, filePath));
+    }
+
+    // Pattern 2: Code blocks with explicit file path markers
+    // ```python file=src/app.py\n...\n``` in modification context
+    // We look for consecutive code blocks where the second one represents a modification
+
+    // Pattern 3: AI-generated code with explicit @@ markers
+    const hunkRe = /@@\s+-(\d+),?\d*\s+\+(\d+),?\d*\s+@@/g;
+    if (!results.length && hunkRe.test(content)) {
+      // Try to extract diff from content
+      results.push(...this._extractInlineDiff(content));
+    }
+
+    return results;
+  },
+
+  _parseUnifiedDiff(diffText, filePath) {
+    const lines = diffText.split('\n');
+    let oldCode = [], newCode = [];
+
+    for (const line of lines) {
+      if (line.startsWith('--- ') || line.startsWith('+++ ')) {
+        if (line.startsWith('--- ') && !filePath) {
+          filePath = line.replace(/^---\s*[ab]\//, '').trim();
+        }
+        continue;
+      }
+      if (line.startsWith('@@')) continue;
+      if (line.startsWith('-')) oldCode.push(line.slice(1));
+      else if (line.startsWith('+')) newCode.push(line.slice(1));
+      else { oldCode.push(line.slice(1) || line); newCode.push(line.slice(1) || line); }
+    }
+
+    if (oldCode.length || newCode.length) {
+      return [{
+        filePath: filePath || 'unknown',
+        oldCode: oldCode.join('\n'),
+        newCode: newCode.join('\n'),
+        lang: this._guessLang(filePath),
+      }];
+    }
+    return [];
+  },
+
+  _extractInlineDiff(content) {
+    // Try to find code blocks that are likely modifications
+    const codeBlocks = [];
+    const blockRe = /```(\w+)?\s*(?:file=([^\s\n]+))?\s*\n([\s\S]*?)```/g;
+    let m, lastBlock = null;
+    while ((m = blockRe.exec(content)) !== null) {
+      const lang = m[1] || '';
+      const filePath = m[2] || '';
+      const code = m[3];
+      if (lastBlock && (filePath === lastBlock.filePath || !filePath)) {
+        // Consecutive blocks may represent old → new
+        codeBlocks.push({
+          filePath: filePath || lastBlock.filePath,
+          oldCode: lastBlock.code,
+          newCode: code,
+          lang: lang || lastBlock.lang,
+        });
+        lastBlock = null;
+      } else {
+        lastBlock = { filePath, code, lang };
+      }
+    }
+    return codeBlocks;
+  },
+
+  _guessLang(path) {
+    const ext = (path || '').split('.').pop()?.toLowerCase();
+    const map = { js:'javascript', ts:'typescript', py:'python', html:'html',
+      css:'css', json:'json', yaml:'yaml', yml:'yaml', md:'markdown',
+      sql:'sql', sh:'bash', rs:'rust', go:'go', java:'java', cpp:'cpp', c:'c' };
+    return map[ext] || '';
+  },
 
   _updateDashboard() {
     const store = LT.store;

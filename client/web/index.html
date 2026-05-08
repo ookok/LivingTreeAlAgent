@@ -6,6 +6,7 @@
 <title>🌳 LivingTree AI Agent</title>
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/code-mode.css">
 <link rel="stylesheet" href="components/code-editor/code-editor.css">
 <!-- Auth check -->
 <script>
@@ -31,6 +32,7 @@
           <button onclick="LTOffice.toggleSplit()" title="分屏文档" id="btn-split"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="8" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
           <button onclick="toggleGraphStudio()" title="可视化控制台"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="10" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 5.5L8 9M11 5l-3 3.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg></button>
           <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>
+          <button onclick="toggleCodeMode()" id="btn-code-mode" title="Code 模式 (仅管理员)" style="display:none"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 3h10v8H2z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4 5l3 3-3 3M8 9h2" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg></button>
           <button onclick="toggleRightPanel()" title="上下文"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="8.5" y1="2.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="1.3"/></svg></button>
         </div>
       </header>
@@ -77,6 +79,13 @@
   <div id="diagram-studio" class="diagram-studio"></div>
 </div>
 
+<!-- Project Selector (code mode) -->
+<div class="modal-overlay" id="project-selector-overlay" style="display:none" onclick="if(event.target===this)LT.emit('project-selector:close')">
+  <div class="modal-panel" style="width:480px;max-height:80vh">
+    <div id="project-selector-body"></div>
+  </div>
+</div>
+
 <!-- Core -->
 <script src="core/framework.js"></script>
 <!-- Services -->
@@ -103,6 +112,7 @@
 <script src="components/notifications/notifications.js"></script>
 <script src="components/user-menu/user-menu.js"></script>
 <script src="components/code-editor/code-editor.js"></script>
+<script src="components/project-selector/project-selector.js"></script>
 <script src="components/doc-studio/doc-studio.js"></script>
 <script src="components/graph-studio/graph-studio.js"></script>
 <script src="components/diagram-studio/diagram-studio.js"></script>

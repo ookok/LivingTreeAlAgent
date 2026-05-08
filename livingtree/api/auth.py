@@ -28,6 +28,11 @@ APP_SECRET = os.environ.get("WEWORK_APP_SECRET", "")
 TOKEN_SECRET = os.environ.get("JWT_SECRET", "livingtree-wework-2026")
 TOKEN_EXPIRE = 86400 * 7  # 7 days
 
+# Admin detection: configurable rules
+WEWORK_ADMIN_USERS = os.environ.get("WEWORK_ADMIN_USERS", "").split(",") if os.environ.get("WEWORK_ADMIN_USERS") else []
+WEWORK_ADMIN_DEPTS = os.environ.get("WEWORK_ADMIN_DEPTS", "1").split(",")  # default: dept_id=1
+WEWORK_SUPERADMIN = os.environ.get("WEWORK_SUPERADMIN", "")  # always-admin user_id
+
 AUTH_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "auth"
 AUTH_DIR.mkdir(parents=True, exist_ok=True)
 USERS_FILE = AUTH_DIR / "users.json"
@@ -98,20 +103,58 @@ def _load_users() -> dict:
 def _save_users(users: dict) -> None:
     USERS_FILE.write_text(json.dumps(users, ensure_ascii=False, indent=2))
 
-def get_or_create_user(user_id: str, name: str = "", avatar: str = "") -> dict:
+def get_or_create_user(user_id: str, name: str = "", avatar: str = "", is_admin: bool | None = None) -> dict:
+    """Create or update user. `is_admin` from WeChat Work overrides fallback logic."""
     users = _load_users()
     if user_id not in users:
+        # Determine role: external decision > fallback (first user)
+        if is_admin is None:
+            is_admin = len(users) == 0
         users[user_id] = {
             "user_id": user_id, "name": name or f"用户{user_id[:6]}",
             "avatar": avatar, "created_at": time.time(),
             "last_login": time.time(),
+            "role": "admin" if is_admin else "member",
         }
     else:
         users[user_id]["last_login"] = time.time()
         if name:
             users[user_id]["name"] = name
+        if avatar:
+            users[user_id]["avatar"] = avatar
+        # If externally marked as admin, upgrade role
+        if is_admin and users[user_id].get("role") != "admin":
+            users[user_id]["role"] = "admin"
+            logger.info(f"User {user_id} role upgraded to admin via WeChat Work")
+        # Ensure role field exists (migration)
+        if "role" not in users[user_id]:
+            users[user_id]["role"] = "admin" if len(users) <= 1 else "member"
     _save_users(users)
     return users[user_id]
+
+
+def is_admin(user_id: str) -> bool:
+    """Check if a user has admin role."""
+    users = _load_users()
+    return users.get(user_id, {}).get("role") == "admin"
+
+
+def get_all_users() -> list[dict]:
+    """Get all users (admin only)."""
+    users = _load_users()
+    return list(users.values())
+
+
+def set_user_role(user_id: str, role: str) -> bool:
+    """Set a user's role (admin only). admin|member."""
+    if role not in ("admin", "member"):
+        return False
+    users = _load_users()
+    if user_id not in users:
+        return False
+    users[user_id]["role"] = role
+    _save_users(users)
+    return True
 
 # ═══ WeChat Work API ═══
 
@@ -164,9 +207,86 @@ async def _code_to_userid_oauth(code: str) -> Optional[dict]:
 
 async def _code_to_userid_qr(code: str) -> Optional[dict]:
     """QR login: qrcode/check → {userid, ...}"""
-    # For self-built app QR login, use the same oauth flow
-    # The QR code generates a code that goes through the same getuserinfo
     return await _code_to_userid_oauth(code)
+
+
+async def _get_user_detail(user_id: str) -> Optional[dict]:
+    """Call user/get to get full user info: name, avatar, department, isleader."""
+    token = await _get_access_token()
+    if not token:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = (
+                f"https://qyapi.weixin.qq.com/cgi-bin/user/get"
+                f"?access_token={token}&userid={user_id}"
+            )
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                data = await resp.json()
+                if data.get("errcode") == 0:
+                    return {
+                        "user_id": data.get("userid", user_id),
+                        "name": data.get("name", ""),
+                        "avatar": data.get("avatar", ""),
+                        "department": data.get("department", []),
+                        "isleader": data.get("isleader", 0),
+                        "position": data.get("position", ""),
+                        "mobile": data.get("mobile", ""),
+                    }
+                logger.warning(f"user/get failed for {user_id}: {data}")
+    except Exception as e:
+        logger.error(f"user/get failed for {user_id}: {e}")
+    return None
+
+
+def _determine_role(user_detail: dict) -> str:
+    """Determine if a user should be admin based on WeChat Work info.
+
+    Rules (first match wins):
+    1. WEWORK_SUPERADMIN env → admin (hardcoded override)
+    2. WEWORK_ADMIN_USERS list → admin
+    3. isleader=1 AND department in WEWORK_ADMIN_DEPTS → admin
+    4. department contains admin dept AND position contains keywords → admin
+    5. First user in system → admin (fallback)
+    6. Everyone else → member
+    """
+    user_id = user_detail.get("user_id", "")
+
+    # Rule 1: superadmin override
+    if WEWORK_SUPERADMIN and user_id == WEWORK_SUPERADMIN:
+        logger.info(f"Admin via SUPERADMIN: {user_id}")
+        return "admin"
+
+    # Rule 2: explicit admin list
+    if user_id in WEWORK_ADMIN_USERS:
+        logger.info(f"Admin via WEWORK_ADMIN_USERS: {user_id}")
+        return "admin"
+
+    # Rule 3: isleader in admin dept
+    is_leader = user_detail.get("isleader", 0)
+    departments = user_detail.get("department", [])
+    if is_leader and departments:
+        for d in departments:
+            if str(d) in WEWORK_ADMIN_DEPTS:
+                logger.info(f"Admin via isleader+dept: {user_id} dept={d}")
+                return "admin"
+
+    # Rule 4: position-based (keywords that indicate management role)
+    position = user_detail.get("position", "")
+    admin_keywords = ["管理", "经理", "主管", "总监", "admin", "负责人", "主任"]
+    if any(kw in position for kw in admin_keywords) and departments:
+        for d in departments:
+            if str(d) in WEWORK_ADMIN_DEPTS:
+                logger.info(f"Admin via position+dept: {user_id} pos={position}")
+                return "admin"
+
+    # Rule 5: fallback - first user
+    users = _load_users()
+    if len(users) == 0:
+        logger.info(f"Admin via first-user fallback: {user_id}")
+        return "admin"
+
+    return "member"
 
 # ═══ Auth Middleware ═══
 
@@ -210,7 +330,18 @@ def setup_auth_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=401, detail="登录失败，无效的授权码")
 
         user_id = identity["user_id"]
-        user = get_or_create_user(user_id)
+
+        # Fetch full WeChat Work user info to determine admin role
+        user_detail = None
+        is_admin = None
+        if CORP_ID and not user_id.startswith("dev_"):
+            user_detail = await _get_user_detail(user_id)
+            if user_detail:
+                is_admin = _determine_role(user_detail) == "admin"
+
+        name = user_detail.get("name", "") if user_detail else ""
+        avatar = user_detail.get("avatar", "") if user_detail else ""
+        user = get_or_create_user(user_id, name=name, avatar=avatar, is_admin=is_admin)
 
         token = create_token(user_id, user.get("name", user_id))
         return LoginResponse(
@@ -220,10 +351,59 @@ def setup_auth_routes(app: FastAPI) -> None:
 
     @app.get("/api/login/me")
     async def get_me(user: dict = Depends(get_current_user)) -> dict:
-        """Get current user info."""
+        """Get current user info including role."""
         users = _load_users()
         u = users.get(user["user_id"], user)
-        return {"user_id": u["user_id"], "name": u.get("name", ""), "avatar": u.get("avatar", "")}
+        return {
+            "user_id": u["user_id"],
+            "name": u.get("name", ""),
+            "avatar": u.get("avatar", ""),
+            "role": u.get("role", "member"),
+        }
+
+    @app.get("/api/user/me")
+    async def user_me(user: dict = Depends(get_current_user)) -> dict:
+        """Get current user info with role (alias)."""
+        users = _load_users()
+        u = users.get(user["user_id"], user)
+        return {
+            "user_id": u["user_id"],
+            "name": u.get("name", ""),
+            "avatar": u.get("avatar", ""),
+            "role": u.get("role", "member"),
+        }
+
+    @app.get("/api/admin/users")
+    async def list_users(user: dict = Depends(get_current_user)) -> list[dict]:
+        """List all users (admin only)."""
+        if not is_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="需要管理员权限")
+        users = _load_users()
+        return [
+            {
+                "user_id": u["user_id"],
+                "name": u.get("name", ""),
+                "avatar": u.get("avatar", ""),
+                "role": u.get("role", "member"),
+                "last_login": u.get("last_login", 0),
+            }
+            for u in users.values()
+        ]
+
+    class SetRoleRequest(BaseModel):
+        user_id: str
+        role: str  # admin | member
+
+    @app.post("/api/admin/set-role")
+    async def set_role(req: SetRoleRequest, user: dict = Depends(get_current_user)) -> dict:
+        """Set a user's role (admin only)."""
+        if not is_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="需要管理员权限")
+        ok = set_user_role(req.user_id, req.role)
+        if not ok:
+            raise HTTPException(status_code=400, detail="用户不存在或角色无效")
+        logger.info(f"User {user['user_id']} set role of {req.user_id} to {req.role}")
+        return {"ok": True}
 
     @app.get("/api/login/config")
     async def login_config() -> dict:

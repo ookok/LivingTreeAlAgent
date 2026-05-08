@@ -444,6 +444,103 @@ const renderer = {
     if (bubble) {
       bubble.removeAttribute('data-stream');
     }
+  },
+
+  /* ── Diff Viewer (Code Mode) ── */
+
+  diffBlock(oldCode, newCode, filePath = '', lang = '') {
+    const oldLines = (oldCode || '').split('\n');
+    const newLines = (newCode || '').split('\n');
+    const diffRows = this._computeLineDiff(oldLines, newLines);
+    const langLabel = lang ? `<span class="code-lang">${this.esc(lang)}</span>` : '';
+    const fileLabel = filePath ? `<span class="diff-file-path">📄 ${this.esc(filePath)}</span>` : '';
+
+    const rowsHtml = diffRows.map(row => {
+      const cls = row.type === 'add' ? 'diff-add' : row.type === 'del' ? 'diff-del' : 'diff-keep';
+      const prefix = row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ';
+      const oldNum = row.oldNum || '';
+      const newNum = row.newNum || '';
+      return `<tr class="${cls}">
+        <td class="diff-old-num">${oldNum}</td>
+        <td class="diff-new-num">${newNum}</td>
+        <td class="diff-sign">${prefix}</td>
+        <td class="diff-code"><pre>${this.esc(row.text)}</pre></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="diff-block" data-path="${this.esc(filePath)}" data-old="${this.esc((oldCode||'').slice(0,500))}" data-new="${this.esc((newCode||'').slice(0,500))}">
+<div class="diff-header"><div class="diff-header-left">${fileLabel}${langLabel}
+<span class="diff-stats"><span class="diff-stat-add">+${diffRows.filter(r=>r.type==='add').length}</span><span class="diff-stat-del">-${diffRows.filter(r=>r.type==='del').length}</span></span></div>
+<div class="diff-header-actions">
+<button class="diff-btn diff-btn-apply" onclick="LT.renderer._applyDiff(this)" title="应用此修改"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>应用</button>
+<button class="diff-btn diff-btn-reject" onclick="this.closest('.diff-block').remove()" title="忽略"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>忽略</button>
+<button class="diff-btn diff-btn-edit" onclick="LT.renderer._editDiff(this)" title="在编辑器中编辑"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>编辑</button>
+</div></div>
+<div class="diff-table-wrapper"><table class="diff-table"><tbody>${rowsHtml}</tbody></table></div></div>`;
+  },
+
+  _computeLineDiff(oldLines, newLines) {
+    const m = oldLines.length, n = newLines.length;
+    const dp = Array.from({length:m+1}, ()=>new Array(n+1).fill(0));
+    for (let i=1;i<=m;i++) for(let j=1;j<=n;j++) {
+      dp[i][j] = oldLines[i-1]===newLines[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+    let i=m, j=n;
+    const result = [];
+    while (i>0||j>0) {
+      if (i>0&&j>0&&oldLines[i-1]===newLines[j-1]) {
+        result.unshift({type:'keep',text:oldLines[i-1],oldNum:i,newNum:j}); i--;j--;
+      } else if (j>0&&(i===0||dp[i][j-1]>=dp[i-1][j])) {
+        result.unshift({type:'add',text:newLines[j-1],oldNum:null,newNum:j}); j--;
+      } else {
+        result.unshift({type:'del',text:oldLines[i-1],oldNum:i,newNum:null}); i--;
+      }
+    }
+    return result;
+  },
+
+  async _applyDiff(btn) {
+    const block = btn.closest('.diff-block');
+    if (!block) return;
+    const path = block.dataset.path || '';
+    const oldContent = block.dataset.old || '';
+    const newContent = block.dataset.new || '';
+    let fullOld = oldContent, fullNew = newContent;
+    if (path && LT.api && LT.api.codeReadFile) {
+      try {
+        const data = await LT.api.codeReadFile(path);
+        if (data && data.content) {
+          fullOld = data.content;
+          if (fullOld.includes(oldContent)) {
+            fullNew = fullOld.replace(oldContent, newContent);
+          } else {
+            fullNew = newContent;
+          }
+        }
+      } catch(e){}
+    }
+    if (path && LT.api && LT.api.codeApplyDiff) {
+      const result = await LT.api.codeApplyDiff(path, fullOld, fullNew);
+      if (result && result.ok) {
+        block.classList.add('diff-applied');
+        btn.innerHTML = '已应用 ✓'; btn.disabled = true; btn.style.opacity = '0.6';
+        LT.emit('notify',{msg:`已应用到: ${path}`,type:'success'});
+        LT.emit('code:refreshTree');
+      } else {
+        LT.emit('notify',{msg:'应用失败，请检查权限',type:'error'});
+      }
+    } else {
+      LT.emit('notify',{msg:'请在 Code 模式下使用此功能',type:'error'});
+    }
+  },
+
+  _editDiff(btn) {
+    const block = btn.closest('.diff-block');
+    if (!block) return;
+    const path = block.dataset.path || '';
+    const newContent = block.dataset.new || '';
+    LT.emit('editor:open-code',{code:newContent,lang:'',path});
+    LT.emit('code-editor:toggle');
   }
 };
 

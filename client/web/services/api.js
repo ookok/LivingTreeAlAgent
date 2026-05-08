@@ -164,7 +164,163 @@ const api = {
 
   async metrics() {
     try { const r = await fetch('/api/metrics'); return await r.json() } catch { return null }
-  }
+  },
+
+  /* ── Code Mode File Operations ── */
+
+  async codeListFiles(dirPath = '', project = '') {
+    try {
+      let url = `${this.base}/../code/files?path=${encodeURIComponent(dirPath)}`;
+      if (project) url += `&project=${encodeURIComponent(project)}`;
+      const r = await fetch(url, { headers: this._authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeListFiles:', e); return null; }
+  },
+
+  async codeReadFile(filePath, project = '') {
+    try {
+      let url = `${this.base}/../code/file?path=${encodeURIComponent(filePath)}`;
+      if (project) url += `&project=${encodeURIComponent(project)}`;
+      const r = await fetch(url, { headers: this._authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeReadFile:', e); return null; }
+  },
+
+  async codeWriteFile(filePath, content, project = '') {
+    try {
+      let url = `${this.base}/../code/file`;
+      if (project) url += `?project=${encodeURIComponent(project)}`;
+      const r = await fetch(url, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ path: filePath, content })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeWriteFile:', e); return null; }
+  },
+
+  async codeDeleteFile(filePath) {
+    try {
+      const r = await fetch(`${this.base}/../code/file?path=${encodeURIComponent(filePath)}`, {
+        method: 'DELETE',
+        headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeDeleteFile:', e); return null; }
+  },
+
+  async codeDiff(filePath, oldContent, newContent) {
+    try {
+      const r = await fetch(`${this.base}/../code/diff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ path: filePath, old_content: oldContent, new_content: newContent })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeDiff:', e); return null; }
+  },
+
+  async codeApplyDiff(filePath, oldContent, newContent) {
+    try {
+      const r = await fetch(`${this.base}/../code/apply-diff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ path: filePath, old_content: oldContent, new_content: newContent })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeApplyDiff:', e); return null; }
+  },
+
+  async codeSearchFiles(query, project = '') {
+    try {
+      let url = `${this.base}/../code/search?q=${encodeURIComponent(query)}`;
+      if (project) url += `&project=${encodeURIComponent(project)}`;
+      const r = await fetch(url, { headers: this._authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeSearchFiles:', e); return null; }
+  },
+
+  /* ── Project Management ── */
+
+  async codeListProjects() {
+    try {
+      const r = await fetch(`${this.base}/../code/projects`, { headers: this._authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeListProjects:', e); return null; }
+  },
+
+  async codeCreateProject(name, githubUrl = '') {
+    try {
+      const r = await fetch(`${this.base}/../code/projects`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ name, github_url: githubUrl })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeCreateProject:', e); return null; }
+  },
+
+  async codeDeleteProject(name) {
+    try {
+      const r = await fetch(`${this.base}/../code/projects/${encodeURIComponent(name)}`, {
+        method: 'DELETE', headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeDeleteProject:', e); return null; }
+  },
+
+  async codeSyncProject(name) {
+    try {
+      const r = await fetch(`${this.base}/../code/projects/${encodeURIComponent(name)}/sync`, {
+        method: 'POST', headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeSyncProject:', e); return null; }
+  },
+
+  /* ── GitHub ── */
+
+  async githubAuth() {
+    try {
+      const r = await fetch(`${this.base}/../code/github/auth`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] githubAuth:', e); return null; }
+  },
+
+  async githubStatus() {
+    try {
+      const r = await fetch(`${this.base}/../code/github/status`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] githubStatus:', e); return null; }
+  },
+
+  async githubRepos() {
+    try {
+      const r = await fetch(`${this.base}/../code/github/repos`, { headers: this._authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] githubRepos:', e); return null; }
+  },
+
+  async githubClone(repoUrl, projectName, branch = 'main') {
+    try {
+      const r = await fetch(`${this.base}/../code/github/clone`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ repo_url: repoUrl, project_name: projectName, branch })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] githubClone:', e); return null; }
+  },
 };
 
 window.LT = window.LT || {};

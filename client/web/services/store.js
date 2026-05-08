@@ -12,7 +12,9 @@ function _save(data) {
     activeId: data.activeId,
     messages: data.messages,
     forks: data.forks,
-    theme: data.theme
+    theme: data.theme,
+    codeMode: data.codeMode,
+    activeFilePath: data.activeFilePath
   };
   if (typeof LT !== 'undefined' && LT.save) {
     LT.save(STORE_KEY, payload);
@@ -41,6 +43,17 @@ const store = {
   theme: 'light',
   generating: false,
 
+  /* ── Code Mode ── */
+  codeMode: false,
+  userRole: null,
+  activeFilePath: null,
+  userId: null,
+  userName: null,
+  selectedProject: '',     // current project name
+  projects: [],            // [{name, path, file_count, github_url, ...}]
+  githubAuthed: false,
+  githubUser: '',
+
   init() {
     let raw = null;
     if (typeof LT !== 'undefined' && LT.load) {
@@ -60,6 +73,12 @@ const store = {
       this.messages = raw.messages && typeof raw.messages === 'object' ? raw.messages : {};
       this.forks = raw.forks && typeof raw.forks === 'object' ? raw.forks : {};
       this.theme = raw.theme || 'light';
+      this.codeMode = raw.codeMode || false;
+      this.activeFilePath = raw.activeFilePath || null;
+    }
+
+    if (this.codeMode) {
+      document.body.classList.add('code-mode');
     }
 
     if (this.theme === 'dark') {
@@ -352,6 +371,139 @@ const store = {
     _applyTheme() {
       if (this.theme === 'dark') document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
+    },
+
+    /* ── Code Mode ── */
+
+    isAdmin() {
+      return this.userRole === 'admin';
+    },
+
+    toggleCodeMode() {
+      if (!this.isAdmin()) {
+        LT.emit('notify', { msg: 'Code 模式仅限企业微信管理员使用', type: 'error' });
+        return false;
+      }
+      this.codeMode = !this.codeMode;
+      _save(this);
+      if (this.codeMode) {
+        document.body.classList.add('code-mode');
+        LT.emit('notify', { msg: 'Code 模式已开启 — 可编辑项目源码', type: 'success' });
+      } else {
+        document.body.classList.remove('code-mode');
+        LT.emit('notify', { msg: 'Code 模式已关闭', type: 'info' });
+      }
+      LT.emit('codemode:changed', this.codeMode);
+      return this.codeMode;
+    },
+
+    enterCodeMode() {
+      if (!this.codeMode) this.toggleCodeMode();
+    },
+
+    exitCodeMode() {
+      if (this.codeMode) this.toggleCodeMode();
+    },
+
+    setActiveFile(path) {
+      this.activeFilePath = path;
+      _debouncedSave(this);
+      LT.emit('code:activeFileChanged', path);
+    },
+
+    async fetchUserRole() {
+      const token = localStorage.getItem('lt_token');
+      if (!token) return;
+      try {
+        const r = await fetch('/api/user/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (r.ok) {
+          const data = await r.json();
+          this.userRole = data.role || 'member';
+          this.userId = data.user_id;
+          this.userName = data.name;
+          _save(this);
+        }
+      } catch (e) {
+        console.warn('[store] Failed to fetch user role:', e);
+      }
+      LT.emit('store:userRoleLoaded');
+    },
+
+    /* ── Project Management ── */
+
+    async loadProjects() {
+      if (!LT.api || !LT.api.codeListProjects) return;
+      const data = await LT.api.codeListProjects();
+      if (data && Array.isArray(data)) {
+        this.projects = data;
+        // Auto-select first project if none selected
+        if (!this.selectedProject && data.length) {
+          this.selectedProject = data[0].name;
+        }
+        _save(this);
+        LT.emit('projects:loaded', this.projects);
+      }
+    },
+
+    selectProject(name) {
+      this.selectedProject = name;
+      _save(this);
+      LT.emit('project:selected', name);
+    },
+
+    async createProject(name, githubUrl = '') {
+      if (!LT.api || !LT.api.codeCreateProject) return null;
+      const result = await LT.api.codeCreateProject(name, githubUrl);
+      if (result) {
+        await this.loadProjects();
+        this.selectedProject = name;
+        _save(this);
+        LT.emit('project:created', result);
+      }
+      return result;
+    },
+
+    async deleteProject(name) {
+      if (!LT.api || !LT.api.codeDeleteProject) return false;
+      const result = await LT.api.codeDeleteProject(name);
+      if (result && result.ok) {
+        if (this.selectedProject === name) this.selectedProject = '';
+        await this.loadProjects();
+        _save(this);
+        LT.emit('project:deleted', name);
+      }
+      return result;
+    },
+
+    async syncProject(name) {
+      if (!LT.api || !LT.api.codeSyncProject) return null;
+      return await LT.api.codeSyncProject(name);
+    },
+
+    async checkGitHubAuth() {
+      if (!LT.api || !LT.api.githubStatus) return;
+      const data = await LT.api.githubStatus();
+      if (data) {
+        this.githubAuthed = data.authenticated;
+        this.githubUser = data.user;
+        _save(this);
+        LT.emit('github:authChanged', data);
+      }
+    },
+
+    async loginGitHub() {
+      if (!LT.api || !LT.api.githubAuth) return;
+      const data = await LT.api.githubAuth();
+      if (data && data.url) {
+        window.open(data.url, 'github-oauth', 'width=600,height=700');
+      } else if (data && data.authenticated) {
+        this.githubAuthed = true;
+        this.githubUser = data.user;
+        _save(this);
+        LT.emit('github:authChanged', data);
+      }
     },
 
     /* ── Generate share URL for card ── */

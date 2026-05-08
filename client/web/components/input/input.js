@@ -301,6 +301,12 @@ class Input extends Component {
       LT.emit('session:switch');
     }
 
+    // Code mode: inject current file context
+    if (store.codeMode && store.activeFilePath) {
+      const ctxPath = store.activeFilePath;
+      text = `[Code 模式 | 当前文件: ${ctxPath}]\n${text}`;
+    }
+
     LT.emit('message:send', text);
 
     LT.emit('msg:user', { content: text });

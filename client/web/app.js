@@ -10,6 +10,8 @@
   if (LT.store && LT.store.init) LT.store.init();
   if (LT.store && LT.store.initAutoTheme) LT.store.initAutoTheme();
   if (LT.store && LT.store.requestNotify) LT.store.requestNotify();
+  // Fetch user role (for code mode admin check)
+  if (LT.store && LT.store.fetchUserRole) LT.store.fetchUserRole();
   if (!LT.store) console.error('LT.store not available');
   if (!LT.store || !LT.store.stats) {
     LT.store = LT.store || { sessions: [], activeId: null, messages: {}, stats: () => ({ sessions: 0, messages: 0, tokens: 0 }) };
@@ -28,6 +30,7 @@
     { name: 'notifications', el: '#notifications' },
     { name: 'user-menu', el: '#user-dropdown' },
     { name: 'code-editor', el: '#editor-panel-body' },
+    { name: 'project-selector', el: '#project-selector-body' },
     { name: 'doc-studio', el: '#doc-studio' },
     { name: 'graph-studio', el: '#graph-studio' },
     { name: 'diagram-studio', el: '#diagram-studio' },
@@ -46,8 +49,48 @@
     document.getElementById('topbar-title').textContent = LT.store.active()?.title || 'LivingTree AI Agent';
   });
 
+  /* ── Code Mode button visibility (show only for admins) ── */
+  LT.on('codemode:changed', (active) => {
+    const btn = document.getElementById('btn-code-mode');
+    if (btn) btn.classList.toggle('active', active);
+  });
+  LT.on('store:userRoleLoaded', () => {
+    const btn = document.getElementById('btn-code-mode');
+    if (btn && LT.store.isAdmin()) {
+      btn.style.display = '';
+    }
+  });
+
   /* ── Sidebar toggle ── */
   window.toggleSidebar = () => document.getElementById('sidebar').classList.toggle('collapsed');
+
+  /* ── Code Mode toggle ── */
+  window.toggleCodeMode = () => {
+    if (!LT.store.fetchUserRole) return;
+    // If role not loaded yet, fetch first then toggle
+    if (LT.store.userRole === null) {
+      LT.store.fetchUserRole().then(() => LT.store.toggleCodeMode());
+      return;
+    }
+    const active = LT.store.toggleCodeMode();
+    if (active) {
+      const overlay = document.getElementById('project-selector-overlay');
+      if (overlay) overlay.style.display = 'flex';
+    }
+  };
+
+  // Project selector open/close
+  LT.on('project-selector:close', () => {
+    const overlay = document.getElementById('project-selector-overlay');
+    if (overlay) overlay.style.display = 'none';
+  });
+
+  // GitHub OAuth callback detection
+  window.addEventListener('message', (e) => {
+    if (e.data === 'github-auth-success') {
+      LT.store.checkGitHubAuth();
+    }
+  });
 
   /* ── Right panel toggle ── */
   window.toggleRightPanel = () => {
@@ -135,6 +178,10 @@
     if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       toggleSidebar();
+    }
+    if (e.key === 'c' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      e.preventDefault();
+      toggleCodeMode();
     }
     if (e.key === '?' && !e.target.closest('input,textarea,[contenteditable]')) {
       e.preventDefault();

@@ -778,7 +778,10 @@ class IntegrationHub:
         self._started = True
         self._phase = 1
         self._ready_event.set()
-        
+
+        # ── Initialize WeWork Bot (reply + KB sync) ──
+        self._init_wework_bot()
+
         if self.world.biorhythm:
             await self.world.biorhythm.start()
         
@@ -1542,6 +1545,23 @@ class IntegrationHub:
             logger.info(f"Model refresh complete: {total} models from {len(stats)} platforms")
         except Exception as e:
             logger.debug(f"Model refresh: {e}")
+
+    def _init_wework_bot(self) -> None:
+        """Initialize the WeChat Work bot, wiring it to the knowledge base."""
+        try:
+            from .wechat_notifier import init_bot
+
+            bot = init_bot(
+                kb=getattr(self.world, 'knowledge_base', None),
+                hub=self,
+            )
+            if bot.enabled:
+                logger.info(
+                    f"WeWork Bot connected: "
+                    f"KB={'ready' if bot.kb else 'pending'}"
+                )
+        except Exception as e:
+            logger.debug(f"WeWork Bot init skipped: {e}")
 
     async def _run_engine(self, message: str, mem_context: str = "", **kwargs) -> Any:
         """Protected engine execution with timeout + circuit breaker."""

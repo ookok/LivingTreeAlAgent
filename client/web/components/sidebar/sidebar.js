@@ -109,7 +109,7 @@ class Sidebar extends Component {
     if (this._bound) return;
     this._bound = true;
 
-    this.el.addEventListener('click', (e) => {
+    this._clickHandler = (e) => {
       const target = e.target.closest('[data-action]');
       if (!target) return;
       const action = target.dataset.action;
@@ -141,14 +141,23 @@ class Sidebar extends Component {
           this._newSession();
           break;
       }
-    });
+    };
 
-    this.el.addEventListener('input', (e) => {
+    this._inputHandler = (e) => {
       const target = e.target.closest('[data-action]');
       if (!target || target.dataset.action !== 'search') return;
       this._searchTerm = target.value;
       this.render();
-    });
+    };
+
+    this.el.addEventListener('click', this._clickHandler);
+    this.el.addEventListener('input', this._inputHandler);
+  }
+
+  destroy() {
+    if (this._clickHandler) this.el.removeEventListener('click', this._clickHandler);
+    if (this._inputHandler) this.el.removeEventListener('input', this._inputHandler);
+    super.destroy();
   }
 
   _switchSession(id) {

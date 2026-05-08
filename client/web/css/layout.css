@@ -399,3 +399,44 @@
 @keyframes skeletonFadeOut{from{opacity:1}to{opacity:0}}
 @keyframes cascadeFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 .fade-in{animation:fadeIn var(--transition-fast) ease}
+
+/* ════════════════ Tablet (≤768px) ════════════════ */
+@media (max-width: 768px) {
+  :root{ --sidebar-width: 260px }
+  .sidebar:not(.collapsed){ min-width: 260px; width: 260px }
+  .dash-cards{ grid-template-columns: repeat(2, 1fr) }
+  .dash-row{ grid-template-columns: 1fr }
+  .context-panel.open{ width: 100%; min-width: 100%; position: absolute; right: 0; z-index: var(--z-overlay) }
+  .user-message .bubble{ max-width: 90% }
+  .agent-message .content{ max-width: 95% }
+  .ce-file-tree{ width: 100px }
+  .ce-file-tree-header{ font-size: 9px }
+  .notif-card{ width: 280px }
+  .modal-panel{ width: 90vw; max-height: 85vh }
+}
+
+/* ════════════════ Mobile (≤480px) ════════════════ */
+@media (max-width: 480px) {
+  :root{ --sidebar-width: 0 }
+  .sidebar{ min-width: 0; width: 0; border: none; overflow: hidden }
+  .sidebar.collapsed{ min-width: 0; width: 0 }
+  .resizer{ display: none }
+  .topbar-left{gap:var(--space-4)}
+  .topbar-title{font-size:var(--font-size-md)}
+  .dash-cards{ grid-template-columns: 1fr }
+  .dash-header h2{ font-size: var(--font-size-xl) }
+  .messages{ padding: 0 var(--space-8) }
+  .user-message .bubble{ max-width: 95%; padding: var(--space-6) var(--space-10) }
+  .agent-message .content{ max-width: 100% }
+  .chat-area{ padding: var(--space-8) }
+  .input-area{ padding: var(--space-4) var(--space-6) var(--space-8) }
+  .input-toolbar{ padding: var(--space-4) var(--space-6) }
+  .input-textarea{ font-size: var(--font-size-md); min-height: 36px }
+  .modal-panel{ width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0 }
+  .doc-editor{ font-size: 12px; padding: 12px; min-height: 250px }
+  .ce-file-tree{ display: none }
+  .ce-lang-select{ max-width: 80px; font-size: 10px }
+  .notif-card{ width: calc(100vw - 32px); right: var(--space-16) }
+  .user-dropdown{ min-width: 180px }
+  .ctx-menu{ min-width: 140px }
+}

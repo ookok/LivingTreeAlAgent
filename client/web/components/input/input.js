@@ -303,8 +303,6 @@ class Input extends Component {
 
     LT.emit('message:send', text);
 
-    const sid = store.activeId;
-    store.addMsg(sid, { role: 'user', content: text });
     LT.emit('msg:user', { content: text });
 
     this._textarea.value = '';

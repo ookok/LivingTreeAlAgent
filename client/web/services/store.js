@@ -285,6 +285,3 @@ const store = {
 
 window.LT = window.LT || {};
 window.LT.store = store;
-
-window.LT = window.LT || {};
-window.LT.store = store;

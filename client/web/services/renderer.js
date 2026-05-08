@@ -335,6 +335,3 @@ function _fallbackCopy(text, btn) {
 
 window.LT = window.LT || {};
 window.LT.renderer = renderer;
-
-window.LT = window.LT || {};
-window.LT.renderer = renderer;

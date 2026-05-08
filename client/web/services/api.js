@@ -184,7 +184,7 @@ const api = {
     }
   },
 
-  async   simulate(input, onChunk, onDone) {
+  async simulate(input, onChunk, onDone) {
     const store = window.LT && window.LT.store;
     const sid = store ? store.activeId : null;
 

@@ -3,12 +3,18 @@ class UserMenu extends Component {
     super('user-dropdown');
     this._visible = false;
     this.on('user-menu:toggle', () => this._toggle());
-    document.addEventListener('click', (e) => {
+    this._docClickHandler = (e) => {
       if (this._visible && !this.el.contains(e.target)) {
         const su = LT.ge('sidebar-user');
         if (su && !su.contains(e.target)) this._hide();
       }
-    });
+    };
+    document.addEventListener('click', this._docClickHandler);
+  }
+
+  destroy() {
+    document.removeEventListener('click', this._docClickHandler);
+    super.destroy();
   }
 
   _toggle() {

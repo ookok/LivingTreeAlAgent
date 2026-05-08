@@ -2,6 +2,10 @@
 
 This module provides a light-weight, dependency-light vector store
 that can be swapped with a local embedding model or an API-based API.
+
+Supports:
+  - Hardware acceleration via HardwareAccelerator (GPU FAISS, CUDA embeddings)
+  - Memory optimization via MemoryOptimizer (large memory caching)
 """
 
 from __future__ import annotations
@@ -9,8 +13,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
-import math
-import hashlib
 
 from loguru import logger
 from pydantic import BaseModel
@@ -23,6 +25,20 @@ except Exception:  # pragma: no cover
     _HAS_SENTENCE_TRANSFORMERS = False
     SentenceTransformer = None  # type: ignore
 
+try:
+    from livingtree.core.hardware_accelerator import get_accelerator
+    _HAS_ACCELERATOR = True
+except Exception:
+    _HAS_ACCELERATOR = False
+    get_accelerator = None
+
+try:
+    from livingtree.core.memory_optimizer import get_memory_optimizer
+    _HAS_MEMORY_OPT = True
+except Exception:
+    _HAS_MEMORY_OPT = False
+    get_memory_optimizer = None
+
 
 class EmbeddingBackend(ABC):
     @abstractmethod
@@ -31,11 +47,20 @@ class EmbeddingBackend(ABC):
 
 
 class LocalEmbeddingBackend(EmbeddingBackend):
-    """Attempt to use a local embedding model; fallback to a deterministic toy encoder."""
+    """Attempt to use a local embedding model; fallback to a deterministic toy encoder.
+
+    Automatically uses GPU via HardwareAccelerator when available.
+    """
 
     def __init__(self) -> None:
         self._model = None
         self._model_loaded = False
+        self._accelerator = None
+        if _HAS_ACCELERATOR:
+            try:
+                self._accelerator = get_accelerator()
+            except Exception:
+                self._accelerator = None
 
     def _ensure_model(self) -> None:
         if self._model_loaded:
@@ -46,6 +71,9 @@ class LocalEmbeddingBackend(EmbeddingBackend):
                 self._model = SentenceTransformer(
                     "all-MiniLM-L6-v2"
                 )
+                # Move to GPU if accelerator says so
+                if self._accelerator:
+                    self._accelerator.patch_sentence_transformer(self._model)
             except Exception as e:
                 logger.warning("Local embedding model load failed: %s", e)
                 self._model = None
@@ -91,18 +119,31 @@ class APIEmbeddingBackend(EmbeddingBackend):
 
 
 class VectorStore:
-    """Simple in-memory vector store with embedding cache."""
+    """Simple in-memory vector store with embedding cache.
+
+    Uses MemoryOptimizer for large memory caching when available.
+    """
 
     def __init__(self, embedding_backend=None, collection_name: str = "default"):
         self.collection = collection_name
         self.embedding_backend = embedding_backend or LocalEmbeddingBackend()
         self._vectors: dict[str, list[float]] = {}
-        # Embedding cache to avoid re-computing
-        try:
-            from ..infrastructure.io_optimizer import _global_embed_cache
-            self._cache = _global_embed_cache
-        except Exception:
-            self._cache = None
+        # Use MemoryOptimizer's embedding cache for large memory utilization
+        self._cache = None
+        if _HAS_MEMORY_OPT:
+            try:
+                opt = get_memory_optimizer()
+                self._cache = opt.get_embed_cache()
+                logger.info("VectorStore: using MemoryOptimizer embed cache (size=%d)", self._cache.max_size)
+            except Exception as e:
+                logger.debug("MemoryOptimizer not available: %s", e)
+        if self._cache is None:
+            # Fallback to simple dict cache
+            try:
+                from ..infrastructure.io_optimizer import _global_embed_cache
+                self._cache = _global_embed_cache
+            except Exception:
+                self._cache = None
         logger.info(f"VectorStore init: {self.collection} / {type(self.embedding_backend).__name__}")
 
     def embed(self, text: str) -> list[float]:
@@ -124,6 +165,20 @@ class VectorStore:
     def search_similar(self, query_vec: list[float], top_k: int = 5) -> list[str]:
         if not self._vectors:
             return []
+        # Use hardware accelerator for cosine similarity if available
+        if _HAS_ACCELERATOR and self._accelerator and self._accelerator.has_gpu:
+            try:
+                ids = list(self._vectors.keys())
+                matrix = [self._vectors[k] for k in ids]
+                # Use accelerator's optimized cosine (CuPy → torch → NumPy)
+                scores = []
+                for i, vec in enumerate(matrix):
+                    sim = self._accelerator.cosine_similarity(vec, query_vec)
+                    scores.append((i, sim))
+                scores.sort(key=lambda x: x[1], reverse=True)
+                return [ids[i] for i, s in scores[:top_k] if s > 0]
+            except Exception as e:
+                logger.debug("Accelerator cosine failed: %s, falling back to NumPy", e)
         try:
             import numpy as np
             ids = list(self._vectors.keys())

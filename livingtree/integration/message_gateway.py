@@ -54,6 +54,11 @@ class MessageGateway:
                 await self._telegram_send(message)
             except Exception as e:
                 logger.debug(f"Telegram send: {e}")
+        elif platform == "smtp" and self._config.get("smtp_host"):
+            try:
+                await self._smtp_send(message)
+            except Exception as e:
+                logger.debug(f"SMTP send: {e}")
         elif platform == "webhook" and self._config.get("webhook_url"):
             try:
                 import aiohttp
@@ -81,6 +86,64 @@ class MessageGateway:
                 "text": message.text[:4000],
                 "parse_mode": "HTML",
             }, timeout=10)
+
+    async def _smtp_send(self, message: GatewayMessage):
+        """Send email via SMTP. Uses smtplib (stdlib, no extra deps)."""
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        host = self._config.get("smtp_host", "")
+        port = int(self._config.get("smtp_port", 587))
+        user = self._config.get("smtp_user", "")
+        password = self._config.get("smtp_password", "")
+        to_email = message.chat_id or self._config.get("smtp_to", "")
+        subject = getattr(message, "subject", "") or "LivingTree Notification"
+
+        if not host or not to_email:
+            return
+
+        msg = MIMEMultipart()
+        msg["From"] = user or "livingtree@localhost"
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(message.text, "plain", "utf-8"))
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self._sync_smtp_send(host, port, user, password, to_email, msg),
+        )
+
+    @staticmethod
+    def _sync_smtp_send(host: str, port: int, user: str, password: str, to_email: str, msg):
+        import smtplib
+        with smtplib.SMTP(host, port, timeout=15) as server:
+            server.starttls()
+            if user and password:
+                server.login(user, password)
+            server.sendmail(user or "livingtree@localhost", to_email, msg.as_string())
+        logger.info(f"SMTP: email sent to {to_email}")
+
+    def configure_smtp(
+        self, host: str, port: int = 587, user: str = "",
+        password: str = "", to_email: str = "",
+    ) -> None:
+        """Quick configure SMTP email notification.
+
+        Example:
+            gateway.configure_smtp(
+                host="smtp.qq.com", port=587,
+                user="your@qq.com", password="auth_code",
+                to_email="recipient@qq.com",
+            )
+        """
+        self.configure("smtp",
+            smtp_host=host, smtp_port=port,
+            smtp_user=user, smtp_password=password,
+            smtp_to=to_email,
+        )
+        logger.info("SMTP configured: %s:%d → %s", host, port, to_email)
 
     # ═══ Receive ═══
 
@@ -118,6 +181,7 @@ class MessageGateway:
         return {
             "enabled_platforms": self._get_enabled_platforms(),
             "telegram_configured": bool(self._config.get("telegram_token")),
+            "smtp_configured": bool(self._config.get("smtp_host")),
             "webhook_configured": bool(self._config.get("webhook_url")),
         }
 

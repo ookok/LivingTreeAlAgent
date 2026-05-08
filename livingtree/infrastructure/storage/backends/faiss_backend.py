@@ -19,7 +19,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional
 
 from loguru import logger
 
@@ -33,7 +33,6 @@ except ImportError:
     _HAS_NUMPY = False
     np = None
 
-
 _SEGMENT_VECTORS = 1000  # Vectors per logical segment
 _FAISS_AVAILABLE = False
 
@@ -42,6 +41,14 @@ try:
     _FAISS_AVAILABLE = True
 except ImportError:
     faiss = None
+
+# Hardware accelerator support
+try:
+    from livingtree.core.hardware_accelerator import get_accelerator
+    _HAS_ACCELERATOR = True
+except ImportError:
+    _HAS_ACCELERATOR = False
+    get_accelerator = None
 
 
 class FAISSStorageBackend(StorageBackend):
@@ -76,9 +83,26 @@ class FAISSStorageBackend(StorageBackend):
         self._access_counts: List[int] = []
         self._last_access: List[float] = []
         self._created_at: List[float] = []
+        self._accelerator = None
+
+        # Try to use hardware accelerator for GPU FAISS
+        if _HAS_ACCELERATOR:
+            try:
+                self._accelerator = get_accelerator()
+            except Exception as e:
+                logger.debug("HardwareAccelerator init failed: %s", e)
 
         if _FAISS_AVAILABLE and faiss is not None:
-            self._index = faiss.IndexFlatL2(dimension)
+            # Use GPU index if accelerator says so
+            if self._accelerator and self._accelerator.has_cuda:
+                try:
+                    self._index = self._accelerator.faiss_gpu_index(dimension)
+                    logger.info("FAISSStorageBackend[%s]: Using GPU FAISS index", self.name)
+                except Exception as e:
+                    logger.warning("FAISS GPU index failed: %s, falling back to CPU", e)
+                    self._index = faiss.IndexFlatL2(dimension)
+            else:
+                self._index = faiss.IndexFlatL2(dimension)
         elif _HAS_NUMPY:
             logger.info("FAISSStorageBackend[%s]: FAISS not available, using list fallback", self.name)
         else:

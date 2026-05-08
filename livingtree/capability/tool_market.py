@@ -176,7 +176,7 @@ def _detect_diagram_type(desc: str) -> str:
 
 
 def register_seed_tools(market: ToolMarket) -> None:
-    """Register fundamental physical models (not learned — laws of nature)."""
+    """Register fundamental physical models and platform capabilities."""
     market.register("gaussian_plume", "Gaussian plume dispersion model (EIA)",
                     category="physics", handler=_gaussian_plume,
                     input_schema={"Q": "number", "u": "number", "x": "number",
@@ -196,6 +196,13 @@ def register_seed_tools(market: ToolMarket) -> None:
                     category="data", handler=_tabular_reason,
                     input_schema={"cod": "number", "bod": "number", "do": "number",
                                   "nh3n": "number", "task": "string"})
+
+    # ── Browser tools: LLM discovers and orchestrates autonomously ──
+    try:
+        from .browser_tools import register_browser_tools
+        register_browser_tools(market)
+    except Exception as e:
+        logger.debug("Browser tools not registered: %s", e)
 
 
 def _tabular_reason(inputs: dict) -> dict:

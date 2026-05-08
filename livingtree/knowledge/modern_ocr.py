@@ -29,6 +29,14 @@ from typing import Any, Optional
 
 from loguru import logger
 
+# Hardware accelerator support
+try:
+    from livingtree.core.hardware_accelerator import get_accelerator
+    _HAS_ACCELERATOR = True
+except ImportError:
+    _HAS_ACCELERATOR = False
+    get_accelerator = None
+
 
 @dataclass
 class OCRRegion:
@@ -62,12 +70,20 @@ class ModernOCR:
 
     Each backend is tried in order; the first that succeeds is used.
     Results are cached by file hash for repeated queries.
+
+    Automatically uses GPU via HardwareAccelerator when available.
     """
 
     def __init__(self, cache_dir: str = ""):
         self._cache_dir = cache_dir or os.path.expanduser("~/.livingtree/ocr_cache")
         self._lock = threading.Lock()
         self._backend_cache: dict[str, Any] = {}
+        self._accelerator = None
+        if _HAS_ACCELERATOR:
+            try:
+                self._accelerator = get_accelerator()
+            except Exception as e:
+                logger.debug("HardwareAccelerator init failed: %s", e)
         self._available_backends = self._detect_backends()
 
     def extract(
@@ -189,13 +205,16 @@ class ModernOCR:
         from paddleocr import PaddleOCR
 
         lang = "ch" if "chi" in language else "en"
+        # Use GPU if accelerator says so
+        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
 
         with self._lock:
-            if "paddleocr" not in self._backend_cache:
-                self._backend_cache["paddleocr"] = PaddleOCR(
-                    use_angle_cls=True, lang=lang, show_log=False,
+            cache_key = f"paddleocr_gpu{use_gpu}_{lang}"
+            if cache_key not in self._backend_cache:
+                self._backend_cache[cache_key] = PaddleOCR(
+                    use_angle_cls=True, lang=lang, show_log=False, use_gpu=use_gpu,
                 )
-            ocr = self._backend_cache["paddleocr"]
+            ocr = self._backend_cache[cache_key]
 
         if is_pdf:
             import fitz
@@ -218,13 +237,15 @@ class ModernOCR:
         try:
             from paddleocr import PaddleOCR
             lang = "ch" if "chi" in language else "en"
+            use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
 
             with self._lock:
-                if "paddleocr" not in self._backend_cache:
-                    self._backend_cache["paddleocr"] = PaddleOCR(
-                        use_angle_cls=True, lang=lang, show_log=False,
+                cache_key = f"paddleocr_regions_gpu{use_gpu}_{lang}"
+                if cache_key not in self._backend_cache:
+                    self._backend_cache[cache_key] = PaddleOCR(
+                        use_angle_cls=True, lang=lang, show_log=False, use_gpu=use_gpu,
                     )
-                ocr = self._backend_cache["paddleocr"]
+                ocr = self._backend_cache[cache_key]
 
             result = ocr.ocr(filepath, cls=True)
             regions = []
@@ -281,11 +302,13 @@ class ModernOCR:
         import easyocr
 
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
+        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
 
         with self._lock:
-            if "easyocr" not in self._backend_cache:
-                self._backend_cache["easyocr"] = easyocr.Reader(langs, gpu=False)
-            reader = self._backend_cache["easyocr"]
+            cache_key = f"easyocr_gpu{use_gpu}_{'-'.join(langs)}"
+            if cache_key not in self._backend_cache:
+                self._backend_cache[cache_key] = easyocr.Reader(langs, gpu=use_gpu)
+            reader = self._backend_cache[cache_key]
 
         if is_pdf:
             import fitz
@@ -306,11 +329,13 @@ class ModernOCR:
         import numpy as np
 
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
+        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
 
         with self._lock:
-            if "easyocr" not in self._backend_cache:
-                self._backend_cache["easyocr"] = easyocr.Reader(langs, gpu=False)
-            reader = self._backend_cache["easyocr"]
+            cache_key = f"easyocr_regions_gpu{use_gpu}_{'-'.join(langs)}"
+            if cache_key not in self._backend_cache:
+                self._backend_cache[cache_key] = easyocr.Reader(langs, gpu=use_gpu)
+            reader = self._backend_cache[cache_key]
 
         result = reader.readtext(filepath)
         regions = []

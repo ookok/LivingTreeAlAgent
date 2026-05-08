@@ -6,6 +6,7 @@ browser-use 浏览器会话池
 
 import asyncio
 import logging
+import os
 from typing import Dict, Optional, List
 from dataclasses import dataclass, field
 
@@ -28,7 +29,8 @@ class BrowserPool:
         self,
         max_sessions: int = 5,
         session_timeout: int = 300,  # 5分钟
-        use_cloud: bool = False
+        use_cloud: bool = False,
+        proxy_url: str = "",
     ):
         """
         初始化浏览器会话池
@@ -37,10 +39,12 @@ class BrowserPool:
             max_sessions: 最大会话数
             session_timeout: 会话超时时间（秒）
             use_cloud: 是否使用云浏览器
+            proxy_url: 代理地址（如 http://127.0.0.1:7890），自动设置 HTTP_PROXY
         """
         self.max_sessions = max_sessions
         self.session_timeout = session_timeout
         self.use_cloud = use_cloud
+        self.proxy_url = proxy_url
         self.sessions: Dict[str, BrowserSession] = {}
         self._lock = asyncio.Lock()
         self._cleanup_task = None
@@ -115,7 +119,27 @@ class BrowserPool:
             BrowserSession: 新创建的浏览器会话
         """
         try:
+            # ── Auto-proxy from scinet ──
+            proxy_env = {}
+            if self.proxy_url:
+                proxy_env["HTTP_PROXY"] = self.proxy_url
+                proxy_env["HTTPS_PROXY"] = self.proxy_url
+                proxy_env["NO_PROXY"] = "localhost,127.0.0.1"
+                old_env = {}
+                for k, v in proxy_env.items():
+                    old_env[k] = os.environ.get(k)
+                    os.environ[k] = v
+                logging.info("BrowserPool: proxy set → %s", self.proxy_url)
+
             browser = Browser(use_cloud=self.use_cloud)
+
+            # Restore original env
+            for k, v in old_env.items():
+                if v is not None:
+                    os.environ[k] = v
+                else:
+                    os.environ.pop(k, None)
+
             session = BrowserSession(
                 browser=browser,
                 last_used=asyncio.get_event_loop().time()

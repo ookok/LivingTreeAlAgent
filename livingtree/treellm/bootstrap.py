@@ -7,6 +7,7 @@ Called once during system boot. All imports are lazy-safe.
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from loguru import logger
@@ -50,6 +51,7 @@ async def setup_model_registry(config: Any, lazy: bool = False) -> Any | None:
             "internlm":    ("https://api.intern-ai.org.cn/v1", config.model.internlm_api_key),
             "web2api":     ("http://localhost:5001/v1", "web2api-local"),
             "opencode2api": ("http://localhost:10000/v1", "opencode2api-local"),
+            "doubao":     ("https://ark.cn-beijing.volces.com/api/v3", config.model.doubao_api_key if hasattr(config.model, 'doubao_api_key') else os.environ.get("DOUBAO_API_KEY", "")),
         }
 
         registered = 0

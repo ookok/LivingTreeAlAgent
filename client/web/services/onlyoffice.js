@@ -9,8 +9,21 @@ const LTOffice = {
   _iframe: null,
   _loaded: false,
   _apiScriptLoaded: false,
+  _available: null,  // null=unknown, true=available, false=unavailable
 
-  /* ── Initialize OnlyOffice API script ── */
+  /* ── Check if LT-Office is available ── */
+  async checkAvailable() {
+    if (this._available !== null) return this._available;
+    try {
+      const resp = await fetch('http://localhost:9000/web-apps/apps/api/documents/api.js', { method: 'HEAD' });
+      this._available = resp.ok;
+    } catch (e) {
+      this._available = false;
+    }
+    return this._available;
+  },
+
+  /* ── Initialize LT-Office API script ── */
   init() {
     if (this._apiScriptLoaded) return;
     const script = document.createElement('script');
@@ -24,6 +37,14 @@ const LTOffice = {
     this._docId = docId;
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    // Check availability
+    const available = await this.checkAvailable();
+    if (!available) {
+      this._showFallbackEditor(container, docId);
+      LT.emit('doc:opened', { docId });
+      return;
+    }
 
     // Show loading
       container.innerHTML = '<div class="lto-loading"><div class="lto-loading-spinner"></div><span>加载 LT-Office 编辑器...</span></div>';
@@ -183,6 +204,40 @@ const LTOffice = {
     if (app) app.classList.toggle('split');
     const panel = document.getElementById('lto-panel');
     if (panel) panel.classList.toggle('open');
+  },
+
+  /* ── Fallback: basic text editor when LT-Office unavailable ── */
+  async _showFallbackEditor(container, docId) {
+    container.innerHTML = `
+<div class="lto-fallback">
+  <div class="lto-fallback-header">
+    <span>LT-Office (离线模式)</span>
+    <span style="font-size:11px;color:var(--text-tertiary)">文档服务器未启动 — 使用基础编辑器</span>
+  </div>
+  <textarea class="lto-fallback-editor" id="lto-fallback-textarea" placeholder="加载中..."></textarea>
+  <div class="lto-fallback-actions">
+    <button class="app-btn app-btn-sm" onclick="LTOffice._saveFallback('${docId}')">保存</button>
+    <span class="lto-fallback-hint">LT-Office 未运行时使用此基础编辑器。安装后可获得完整格式编辑功能。</span>
+  </div>
+</div>`;
+
+    // Load content
+    try {
+      const resp = await fetch(`/api/doc/content/${docId}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        const ta = document.getElementById('lto-fallback-textarea');
+        if (ta) ta.value = data.content || '';
+      }
+    } catch (e) {}
+  },
+
+  _saveFallback(docId) {
+    const ta = document.getElementById('lto-fallback-textarea');
+    if (!ta) return;
+    // Save via API
+    fetch(`/api/doc/download/${docId}`, { method: 'PUT', body: ta.value }).catch(() => {});
+    LT.emit('notify', { msg: '已保存 (基础模式)', type: 'success' });
   },
 };
 

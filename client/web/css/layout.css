@@ -487,6 +487,12 @@
 .lto-loading-spinner{width:32px;height:32px;border:3px solid var(--bg-overlay-l2);border-top-color:var(--brand-default);border-radius:50%;animation:spin 0.8s linear infinite}
 .lto-error{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-danger);font-size:var(--font-size-base)}
 
+.lto-fallback{display:flex;flex-direction:column;height:100%;background:var(--bg-base)}
+.lto-fallback-header{display:flex;align-items:center;justify-content:space-between;padding:var(--space-8) var(--space-12);border-bottom:1px solid var(--border-l1);font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);flex-shrink:0}
+.lto-fallback-editor{flex:1;padding:var(--space-12);background:var(--bg-overlay-l1);color:var(--text-default);font-family:var(--font-mono);font-size:13px;line-height:1.6;border:none;resize:none;outline:none}
+.lto-fallback-actions{display:flex;align-items:center;gap:var(--space-8);padding:var(--space-8) var(--space-12);border-top:1px solid var(--border-l1);flex-shrink:0}
+.lto-fallback-hint{font-size:var(--font-size-xs);color:var(--text-tertiary)}
+
 /* ── Review Panel ── */
 .ds-review-panel{width:260px;border-left:1px solid var(--border-l1);display:none;flex-direction:column;flex-shrink:0;overflow:hidden}
 .ds-review-list{flex:1;overflow-y:auto;padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-6)}

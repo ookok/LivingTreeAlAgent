@@ -24,10 +24,12 @@ class ChatReq(BaseModel):
 def setup_openai_proxy(app: FastAPI):
     @app.get("/v1/models")
     async def list_models(request: Request):
-        """List only opencode provider models."""
+        """List opencode provider models. Graceful fallback if serve unavailable."""
         async with aiohttp.ClientSession() as s:
             try:
-                async with s.get(f"{OPENCODE_URL}/config/providers", timeout=aiohttp.ClientTimeout(total=5)) as r:
+                async with s.get(f"{OPENCODE_URL}/config/providers", timeout=aiohttp.ClientTimeout(total=3)) as r:
+                    if r.status != 200:
+                        raise Exception(f"HTTP {r.status}")
                     data = await r.json()
                     providers = data.get("providers", [])
                     models = []
@@ -35,44 +37,52 @@ def setup_openai_proxy(app: FastAPI):
                         if p.get("id") != "opencode": continue
                         for mid, mdata in p.get("models", {}).items():
                             if not isinstance(mdata, dict): continue
-                        # Free detection: cost.input == 0 && cost.output == 0
-                        cost = mdata.get("cost", {})
-                        is_free = cost.get("input", 1) == 0 and cost.get("output", 1) == 0
+                            cost = mdata.get("cost", {})
+                            is_free = cost.get("input", 1) == 0 and cost.get("output", 1) == 0
                             models.append({
-                                "id": f"opencode/{mid}",
-                                "object": "model",
-                                "owned_by": "opencode",
-                                "name": mdata.get("name", mid),
+                                "id": f"opencode/{mid}", "object": "model",
+                                "owned_by": "opencode", "name": mdata.get("name", mid),
                                 "free": is_free,
                                 "context_length": mdata.get("limit", {}).get("context", 4096),
                             })
                     return {"object": "list", "data": models}
             except Exception as e:
-                logger.warning(f"models fetch: {e}")
-                return {"object": "list", "data": [
-                    {"id": "opencode/minimax-m2.5-free", "object": "model"}, {"id": "opencode/hy3-preview-free", "object": "model"}, {"id": "opencode/nemotron-3-super-free", "object": "model"},
-                ]}
+                logger.warning(f"OpenCode serve unavailable: {e}")
+                return {"object": "list", "data": []}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(req: ChatReq, request: Request):
-        """Forward to OpenCode session API, return OpenAI-format response."""
+        """Forward to OpenCode session API. Fallback: error if serve down."""
         model = req.model.split("/")[-1] if "/" in req.model else req.model
         user_content = "\n".join(m.content for m in req.messages if m.role != "system")
         system_msgs = [m.content for m in req.messages if m.role == "system"]
 
         async with aiohttp.ClientSession() as s:
             # Create session
-            session_body = {"model": {"providerID": "opencode", "modelID": model}}
+            session_body = {"providerID": "opencode", "modelID": model}
             if system_msgs:
                 session_body["system"] = system_msgs[0]
 
-            async with s.post(f"{OPENCODE_URL}/session", json=session_body, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                if r.status != 201 and r.status != 200:
-                    raise HTTPException(status_code=502, detail=f"Session create failed: {r.status}")
-                sid = (await r.json()).get("id") or (await r.json()).get("data", {}).get("id")
+            try:
+                async with s.post(f"{OPENCODE_URL}/session", json=session_body,
+                                  timeout=aiohttp.ClientTimeout(total=5)) as r:
+                    if r.status not in (200, 201):
+                        raise HTTPException(status_code=502,
+                            detail="OpenCode serve unavailable — using fallback models")
+                    sid = (await r.json()).get("id")
+                if not sid:
+                    raise HTTPException(status_code=502, detail="No session ID")
 
-            if not sid:
-                raise HTTPException(status_code=502, detail="No session ID")
+                # Send prompt
+                async with s.post(f"{OPENCODE_URL}/session/{sid}/message",
+                    json={"parts": [{"type": "text", "text": user_content}]},
+                    timeout=aiohttp.ClientTimeout(total=5)) as _:
+                    pass
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=502,
+                    detail=f"OpenCode serve unavailable: {str(e)[:100]}")
 
             # Send prompt → POST /session/{id}/message
             async with s.post(f"{OPENCODE_URL}/session/{sid}/message",

@@ -86,6 +86,15 @@
     }
   }
 
+  /* ── Service availability check ── */
+  (async function checkServices() {
+    // Check LT-Office
+    try {
+      const r = await fetch('http://localhost:9000/web-apps/apps/api/documents/api.js', { method: 'HEAD' });
+      if (!r.ok) document.getElementById('btn-split').style.opacity = '0.4';
+    } catch(e) { document.getElementById('btn-split').style.opacity = '0.4'; }
+  })();
+
   /* ── Theme toggle ── */
   window.toggleTheme = () => LT.store.toggleTheme();
 

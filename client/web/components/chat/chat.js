@@ -271,11 +271,15 @@ class Chat extends Component {
       if (msg) msg.remove();
     }
     LT.renderer.append(this._msgsEl, LT.renderer.agentMsg('', true));
+    // Initialize batched streaming
+    const lastBubble = this._msgsEl.querySelector('.agent-bubble[data-stream]');
+    if (lastBubble) Perf.initStream(lastBubble);
     this._scrollBottom();
   }
 
   _onChunk(content) {
-    LT.renderer.updateStream(this._msgsEl, content);
+    // Batched append via Perf — avoids innerHTML on every char
+    Perf.appendChunk(content);
     this._scrollBottom();
   }
 

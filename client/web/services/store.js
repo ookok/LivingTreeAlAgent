@@ -73,21 +73,55 @@ const store = {
     return this;
   },
 
-  create(title) {
-    const id = _uid();
-    const session = {
-      id,
-      title: title || 'New Chat',
-      createdAt: _now(),
-      updatedAt: _now()
-    };
-    this.sessions.unshift(session);
-    this.activeId = id;
-    this.messages[id] = [];
-    this.forks[id] = null;
-    _save(this);
-    return session;
-  },
+    create(title) {
+      const id = _uid();
+      const session = {
+        id,
+        title: title || 'New Chat',
+        createdAt: _now(),
+        updatedAt: _now()
+      };
+      this.sessions.unshift(session);
+      this.activeId = id;
+      this.messages[id] = [];
+      this.forks[id] = null;
+      _save(this);
+
+      // Auto-trim previous active session
+      if (window.Perf) window.Perf.trimMessages(this);
+
+      return session;
+    },
+
+    addMsg(sid, { role, content }) {
+      if (!this.messages[sid]) {
+        this.messages[sid] = [];
+      }
+      const msg = {
+        role,
+        content,
+        timestamp: _now()
+      };
+      this.messages[sid].push(msg);
+
+      const session = this.sessions.find(s => s.id === sid);
+      if (session) {
+        session.updatedAt = _now();
+        if (!session.title || session.title === 'New Chat') {
+          const preview = (content || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+          if (preview) session.title = preview;
+        }
+      }
+
+      _debouncedSave(this);
+
+      // Auto-archive when exceeding LRU
+      if (window.Perf && this.messages[sid].length > (window.Perf.LRU_SIZE || 50)) {
+        window.Perf.trimMessages(this);
+      }
+
+      return msg;
+    },
 
   remove(id) {
     const idx = this.sessions.findIndex(s => s.id === id);

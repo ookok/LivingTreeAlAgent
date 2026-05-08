@@ -248,4 +248,9 @@
   })();
 
   console.log('🌳 LivingTree Web v2.1 — All components initialized');
+
+  /* ── Register Service Worker for caching ── */
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 })();

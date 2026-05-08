@@ -254,12 +254,74 @@ const renderer = {
   },
 
   userMsg(content) {
-    return `<div class="message message-user"><div class="message-bubble user-bubble">${this.md(content)}</div></div>`;
+    const escRaw = this.esc(content).replace(/`/g, '\\`');
+    return `<div class="message message-user" data-raw="\`${escRaw}\`"><div class="message-bubble user-bubble">${this.md(content)}</div></div>`;
   },
 
   agentMsg(content, stream) {
     const streamAttr = stream ? ' data-stream="true"' : '';
-    return `<div class="message message-agent"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(content)}</div></div>`;
+    const escRaw = this.esc(content).replace(/`/g, '\\`');
+    return `<div class="message message-agent" data-raw="\`${escRaw}\`"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(content)}</div></div>`;
+  },
+
+  /* ── Message action buttons ── */
+  msgActions(role) {
+    if (role !== 'agent' && role !== 'assistant') return '';
+    return `
+<div class="msg-actions">
+  <button class="msg-action-btn" data-action="copy-text" title="复制文本">
+    <svg width="13" height="13" viewBox="0 0 13 13"><rect x="4" y="4" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 4V2.5A1 1 0 008 1H2.5A1 1 0 001.5 2v5.5A1 1 0 002.5 8.5H4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>
+  </button>
+  <button class="msg-action-btn" data-action="copy-md" title="复制 Markdown">
+    <svg width="13" height="13" viewBox="0 0 13 13"><path d="M2 4h9v6H2z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 6.5h5M4 8.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+  </button>
+  <button class="msg-action-btn" data-action="share" title="分享">
+    <svg width="13" height="13" viewBox="0 0 13 13"><circle cx="9.5" cy="3.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="9.5" cy="9.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="3.5" cy="6.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M7.8 4.3L5.2 5.7M7.8 8.7L5.2 7.3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+  </button>
+</div>`;
+  },
+
+  /* ── Copy methods ── */
+  copyMsgText(msgEl) {
+    const bubble = msgEl.querySelector('.agent-bubble,.user-bubble');
+    const text = bubble ? bubble.textContent : '';
+    this._clipCopy(text, '已复制文本');
+  },
+
+  copyMsgMarkdown(msgEl) {
+    const raw = this._getRaw(msgEl);
+    this._clipCopy(raw, '已复制 Markdown');
+  },
+
+  _getRaw(msgEl) {
+    const attr = msgEl.getAttribute('data-raw');
+    if (!attr) return '';
+    // decode backtick-escaped content
+    let raw = attr.replace(/^`|`$/g, '');
+    // unescape HTML entities back
+    const unesc = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
+    raw = raw.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, m => unesc[m] || m);
+    raw = raw.replace(/\\`/g, '`');
+    return raw;
+  },
+
+  _clipCopy(text, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        if (typeof LT !== 'undefined') LT.emit('notify', { msg, type: 'success' });
+      }).catch(() => this._fallbackCopy(text));
+    } else {
+      this._fallbackCopy(text);
+    }
+  },
+
+  _fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); if (typeof LT !== 'undefined') LT.emit('notify', { msg: '已复制', type: 'success' }); }
+    catch (e) { if (typeof LT !== 'undefined') LT.emit('notify', { msg: '复制失败', type: 'error' }); }
+    document.body.removeChild(ta);
   },
 
   typing() {

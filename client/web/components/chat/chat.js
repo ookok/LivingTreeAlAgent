@@ -2,13 +2,33 @@
 class Chat extends Component {
   init() {
     this._unsubs.push(LT.on('session:switch', () => this._loadMessages()));
-    this._unsubs.push(LT.on('msg:user', (d) => this._onUserMsg(d.content)));
+    this._unsubs.push(LT.on('msg:user', (d) => this._onUserMsg(d.content, d.raw)));
     this._unsubs.push(LT.on('msg:typing', () => this._onTyping()));
     this._unsubs.push(LT.on('msg:agent-stream', () => this._onAgentStream()));
     this._unsubs.push(LT.on('msg:chunk', (d) => this._onChunk(d.content)));
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
     this.render();
     this._loadInitial();
+    this._setupMsgActions();
+  }
+
+  _setupMsgActions() {
+    this.el.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !btn.dataset.action) return;
+      const msgEl = btn.closest('.message');
+      if (!msgEl) return;
+
+      const action = btn.dataset.action;
+      if (action === 'copy-text') {
+        LT.renderer.copyMsgText(msgEl);
+      } else if (action === 'copy-md') {
+        LT.renderer.copyMsgMarkdown(msgEl);
+      } else if (action === 'share') {
+        const raw = LT.renderer._getRaw(msgEl);
+        Share.open(raw);
+      }
+    });
   }
 
   template() {
@@ -58,11 +78,13 @@ class Chat extends Component {
     this._msgsEl.innerHTML = '';
     const renderer = LT.renderer;
     msgs.forEach((m) => {
+      const role = m.role === 'assistant' ? 'agent' : m.role;
       renderer.append(this._msgsEl, m.role === 'user' ? renderer.userMsg(m.content) : renderer.agentMsg(m.content, false));
-      if (m.role === 'assistant') {
-        const last = this._msgsEl.querySelector('.agent-message:last-child');
+      if (role === 'agent') {
+        const last = this._msgsEl.querySelector('.message-agent:last-of-type');
         if (last) {
           this._addThinking(last);
+          this._addMsgActions(last);
           const blocks = this._detectDocCards(m.content);
           if (blocks.length) this._renderDocCards(last, blocks);
         }
@@ -98,9 +120,9 @@ class Chat extends Component {
   }
 
   _onAgentStream() {
-    const typing = this._msgsEl.querySelector('.agent-message .typing-indicator');
+    const typing = this._msgsEl.querySelector('.message-agent .typing-indicator');
     if (typing) {
-      const msg = typing.closest('.agent-message');
+      const msg = typing.closest('.message-agent');
       if (msg) msg.remove();
     }
     LT.renderer.append(this._msgsEl, LT.renderer.agentMsg('', true));
@@ -114,13 +136,25 @@ class Chat extends Component {
 
   _onDone(content) {
     LT.renderer.finalize(this._msgsEl);
-    const last = this._msgsEl.querySelector('.agent-message:last-child');
+    // Update data-raw on the final agent message
+    const last = this._msgsEl.querySelector('.message-agent:last-of-type');
     if (last) {
+      last.setAttribute('data-raw', '`' + LT.renderer.esc(content).replace(/`/g, '\\`') + '`');
       this._addThinking(last);
+      this._addMsgActions(last);
       const blocks = this._detectDocCards(content);
       if (blocks.length) this._renderDocCards(last, blocks);
     }
     this._scrollBottom();
+  }
+
+  _addMsgActions(msgEl) {
+    const bubble = msgEl.querySelector('.agent-bubble');
+    if (!bubble) return;
+    const actions = LT.renderer.msgActions('agent');
+    const el = document.createElement('div');
+    el.innerHTML = actions;
+    bubble.appendChild(el.firstChild);
   }
 
   _scrollBottom() {

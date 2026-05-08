@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🌳 LivingTree 地图</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",sans-serif;background:var(--bg-base,#1a1b1d);color:var(--text-default,#d1d3db);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.map-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:44px;border-bottom:1px solid var(--border-l1);flex-shrink:0;gap:10px;background:var(--bg-base)}
+.map-toolbar-left{display:flex;align-items:center;gap:10px}
+.map-toolbar-right{display:flex;align-items:center;gap:6px}
+.map-title{font-size:15px;font-weight:600;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.map-btn{height:30px;padding:0 10px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--icon-default);transition:all .15s;cursor:pointer;border:none;background:transparent}
+.map-btn:hover{background:var(--bg-hover);color:var(--text-default)}
+.map-btn.active{background:var(--brand-default);color:var(--brand-onbrand)}
+.map-container{flex:1;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+.map-search{position:absolute;top:10px;left:10px;z-index:1000;display:flex;gap:6px}
+.map-search input{width:260px;padding:8px 12px;border:1px solid var(--border-l2);border-radius:8px;background:var(--bg-menu);color:var(--text-default);font-size:13px;outline:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.map-search input:focus{border-color:var(--brand-default)}
+.map-search button{padding:8px 14px;background:var(--brand-default);color:var(--brand-onbrand);border:none;border-radius:8px;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.map-search button:hover{background:var(--brand-hover)}
+.map-legend{position:absolute;bottom:10px;right:10px;z-index:1000;background:var(--bg-menu);border-radius:8px;padding:8px 12px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;gap:12px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.monitor-list{position:absolute;top:10px;right:10px;z-index:1000;background:var(--bg-menu);border-radius:8px;padding:10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.3);max-height:300px;overflow-y:auto;min-width:180px;display:none}
+.monitor-list.show{display:block}
+.monitor-item{padding:4px 6px;cursor:pointer;border-radius:4px;display:flex;align-items:center;gap:6px;transition:background .1s}
+.monitor-item:hover{background:var(--bg-hover)}
+.monitor-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.monitor-status.online{background:#0fdc78}
+.monitor-status.offline{background:#f65a5a}
+</style>
+</head>
+<body>
+<div class="map-toolbar">
+  <div class="map-toolbar-left">
+    <span class="map-title">🗺️ 天地图 · 环境监测GIS</span>
+    <button class="map-btn" data-layer="vec" title="矢量地图">🗺️ 矢量</button>
+    <button class="map-btn" data-layer="img" title="卫星影像">🛰️ 卫星</button>
+    <button class="map-btn active" data-layer="vec_img" title="矢量+标注">📍 混合</button>
+  </div>
+  <div class="map-toolbar-right">
+    <button class="map-btn" data-action="locate" title="我的位置">
+      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="2" fill="currentColor"/><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+    <button class="map-btn" data-action="monitors" title="监测站点">📡 站点</button>
+    <button class="map-btn" data-action="measure" title="测距">
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h10M9 4l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+    <button class="map-btn" data-action="screenshot" title="截图插入文档">📸 截图</button>
+  </div>
+</div>
+<div class="map-container">
+  <div class="map-search">
+    <input id="map-search-input" placeholder="搜索地址或坐标..." onkeydown="if(event.key==='Enter')searchPlace()">
+    <button onclick="searchPlace()">搜索</button>
+  </div>
+  <div id="map"></div>
+  <div class="monitor-list" id="monitor-list"></div>
+  <div class="map-legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#e8463a"></span>排放源</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3f85ff"></span>监测点</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#0fdc78"></span>敏感目标</div>
+  </div>
+</div>
+
+<script>
+window._LT_MAP = {
+  map: null,
+  markers: [],
+  monitors: [
+    { name: '空气站 A1', lat: 39.915, lon: 116.404, status: 'online', pm25: 35, pm10: 68 },
+    { name: '空气站 A2', lat: 39.925, lon: 116.414, status: 'online', pm25: 42, pm10: 75 },
+    { name: '水站 W1', lat: 39.905, lon: 116.394, status: 'online', cod: 12, nh3n: 0.8 },
+    { name: '噪声 N1', lat: 39.920, lon: 116.400, status: 'offline', leq: 62 },
+    { name: '噪声 N2', lat: 39.910, lon: 116.410, status: 'online', leq: 58 },
+  ],
+  sources: [
+    { name: '排放源1', lat: 39.918, lon: 116.408, type: 'source' },
+    { name: '排放源2', lat: 39.912, lon: 116.398, type: 'source' },
+  ],
+  receptors: [
+    { name: '居民区A', lat: 39.922, lon: 116.412, type: 'receptor' },
+    { name: '学校B', lat: 39.908, lon: 116.405, type: 'receptor' },
+  ],
+
+  init() {
+    if (typeof T === 'undefined') {
+      // Load Tianditu JS API
+      const script = document.createElement('script');
+      script.src = 'https://api.tianditu.gov.cn/api?v=4.0&tk=2e0225658699ccabf223a2c376c535bb';
+      script.onload = () => this._initMap();
+      script.onerror = () => this._fallbackLeaflet();
+      document.head.appendChild(script);
+    } else {
+      this._initMap();
+    }
+  },
+
+  _initMap() {
+    try {
+      const T = window.T;
+      this.map = new T.Map('map', { center: new T.LngLat(116.404, 39.915), zoom: 14 });
+      // Vector + annotation base layer
+      const baseLayer = new T.TileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?tk=2e0225658699ccabf223a2c376c535bb',
+        { subdomains: ['0','1','2','3','4','5','6','7'] });
+      const annoLayer = new T.TileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?tk=2e0225658699ccabf223a2c376c535bb',
+        { subdomains: ['0','1','2','3','4','5','6','7'] });
+      this.map.addLayer(baseLayer);
+      this.map.addLayer(annoLayer);
+
+      this._addMarkers();
+      this._renderMonitorList();
+    } catch (e) {
+      this._fallbackLeaflet();
+    }
+  },
+
+  _fallbackLeaflet() {
+    // Fallback: display a simple coordinate grid
+    const mapDiv = document.getElementById('map');
+    mapDiv.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px">
+        <div style="font-size:48px">🗺️</div>
+        <div style="font-size:16px;color:var(--text-secondary)">天地图离线模式</div>
+        <div style="font-size:13px;color:var(--text-tertiary);text-align:center;max-width:400px;line-height:1.6">
+          监测点位坐标：<br>
+          ${this.monitors.map(m => `${m.name}: ${m.lat}, ${m.lon}`).join('<br>')}
+        </div>
+      </div>`;
+  },
+
+  _addMarkers() {
+    if (!this.map) return;
+    // Add sources (red)
+    this.sources.forEach(s => {
+      const marker = new T.Marker(new T.LngLat(s.lon, s.lat));
+      marker.addEventListener('click', () => alert(`${s.name}\n排放源坐标: ${s.lat}, ${s.lon}`));
+      this.map.addOverLay(marker);
+    });
+
+    // Add monitors (blue)
+    this.monitors.forEach(m => {
+      const marker = new T.Marker(new T.LngLat(m.lon, m.lat));
+      marker.addEventListener('click', () => {
+        const info = [m.name, `状态: ${m.status}`, m.pm25 ? `PM2.5: ${m.pm25}` : '', m.leq ? `噪声: ${m.leq}dB` : ''].filter(Boolean).join('\n');
+        alert(info);
+      });
+      this.map.addOverLay(marker);
+    });
+
+    // Add receptors (green)
+    this.receptors.forEach(r => {
+      const marker = new T.Marker(new T.LngLat(r.lon, r.lat));
+      marker.addEventListener('click', () => alert(`${r.name}\n敏感目标`));
+      this.map.addOverLay(marker);
+    });
+  },
+
+  _renderMonitorList() {
+    const list = document.getElementById('monitor-list');
+    list.innerHTML = this.monitors.map(m => `
+      <div class="monitor-item" onclick="window._LT_MAP.map.panTo(new T.LngLat(${m.lon},${m.lat}))">
+        <span class="monitor-status ${m.status}"></span>
+        <span>${m.name}</span>
+        <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto">${m.pm25 ? 'PM2.5:'+m.pm25 : m.leq ? m.leq+'dB' : ''}</span>
+      </div>`).join('');
+  },
+
+  searchPlace() {
+    const q = document.getElementById('map-search-input').value.trim();
+    if (!q) return;
+    // Try to parse as coordinates
+    const coord = q.match(/(\d+\.?\d*)\s*[,，]\s*(\d+\.?\d*)/);
+    if (coord) {
+      const lat = parseFloat(coord[1]), lon = parseFloat(coord[2]);
+      if (this.map) this.map.panTo(new T.LngLat(lon, lat));
+      return;
+    }
+    // Geocode via Tianditu API
+    fetch(`https://api.tianditu.gov.cn/geocoder?ds={"keyWord":"${encodeURIComponent(q)}"}&tk=2e0225658699ccabf223a2c376c535bb`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.location) {
+          const loc = data.location;
+          if (this.map) this.map.panTo(new T.LngLat(loc.lon, loc.lat));
+        } else {
+          alert('未找到该地址');
+        }
+      }).catch(() => alert('搜索失败'));
+  },
+};
+
+window.onload = () => window._LT_MAP.init();
+
+// Toolbar
+document.querySelector('.map-toolbar').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const map = window._LT_MAP;
+
+  if (action === 'locate') {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(p => {
+        if (map.map) map.map.panTo(new T.LngLat(p.coords.longitude, p.coords.latitude));
+      });
+    }
+  } else if (action === 'monitors') {
+    document.getElementById('monitor-list').classList.toggle('show');
+  } else if (action === 'measure') {
+    alert('测距模式：点击地图设置起点');
+  } else if (action === 'screenshot') {
+    // Capture map as image for report
+    alert('截图功能：将地图当前视图保存为图片');
+  }
+});
+
+// Layer switching
+document.querySelectorAll('[data-layer]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-layer]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Tianditu layer switching would go here with proper layer URLs
+  });
+});
+</script>
+</body>
+</html>

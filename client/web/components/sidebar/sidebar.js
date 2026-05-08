@@ -162,17 +162,13 @@ class Sidebar extends Component {
           window.open('/search.html', '_blank');
           break;
         case 'nav-map':
-          toggleDiagramStudio();
-          setTimeout(() => {
-            const tabs = document.querySelectorAll('.dgm-tab[data-type="base-map"]');
-            if (tabs.length) tabs[0].click();
-          }, 300);
+          window.open('/map.html', '_blank');
           break;
         case 'nav-diagram':
-          toggleDiagramStudio();
+          window.open('/diagram.html', '_blank');
           break;
         case 'nav-office':
-          OnlyOffice.toggleSplit();
+          window.open('/?office=1', '_blank');
           break;
       }
     };

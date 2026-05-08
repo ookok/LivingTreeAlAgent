@@ -44,7 +44,7 @@ class ContextPanel extends Component {
 
   _toggle() {
     this.el.classList.toggle('open');
-    if (this.el.classList.contains('open') && this._activeTab === 'graph') {
+    if (this.el.classList.contains('open') && this._activeTab === 'knowledge') {
       requestAnimationFrame(() => this._drawGraph());
     }
   }
@@ -53,7 +53,7 @@ class ContextPanel extends Component {
     this._activeTab = tab;
     this.render();
     this._bindEvents();
-    if (tab === 'graph') requestAnimationFrame(() => this._drawGraph());
+    if (tab === 'knowledge') requestAnimationFrame(() => this._drawGraph());
   }
 
   _drawGraph() {
@@ -86,14 +86,14 @@ class ContextPanel extends Component {
     const msgs = active ? store.getMsgs(active.id) : [];
     const toks = msgs.reduce((s, m) => s + Math.ceil((m.content || '').length / 3), 0);
     const pct = Math.min(toks / 10000 * 100, 100);
-    const tabs = ['context', 'tasks', 'tools', 'graph'];
-    const tabLabels = { context: '上下文', tasks: '任务', tools: '工具', graph: '知识' };
+    const tabs = ['context', 'tasks', 'tools', 'knowledge', 'experts'];
+    const tabLabels = { context: '上下文', tasks: '任务', tools: '工具', knowledge: '知识库', experts: '专家' };
     const sd = this._serverData || {};
     const modelName = sd.model || 'LivingTree v2.1';
 
     return `
 <div class="context-panel-header">
-  <span class="context-panel-title">上下文</span>
+  <span class="context-panel-title">控制台</span>
   <button class="context-panel-close" data-action="close">
     <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
   </button>
@@ -101,6 +101,8 @@ class ContextPanel extends Component {
 <div class="context-tabs">
   ${tabs.map(t => `<button class="context-tab${this._activeTab===t?' active':''}" data-action="tab" data-tab="${t}">${tabLabels[t]}</button>`).join('')}
 </div>
+
+<!-- Context Tab -->
 <div class="context-tab-content${this._activeTab==='context'?' active':''}">
   <div class="context-section"><div class="context-section-title">会话信息</div>
     <div class="context-info-grid">
@@ -115,6 +117,8 @@ class ContextPanel extends Component {
     <div class="context-usage-text">${toks.toLocaleString()} / 1M tokens</div>
   </div>
 </div>
+
+<!-- Tasks Tab -->
 <div class="context-tab-content${this._activeTab==='tasks'?' active':''}">
   <div class="task-list">${this._tasks.map(t => `
     <div class="task-item"><div class="task-item-header">
@@ -125,15 +129,74 @@ class ContextPanel extends Component {
     <div class="task-progress-bar"><div class="task-progress-fill" style="width:${t.progress}%"></div></div></div>`).join('')}
   </div>
 </div>
+
+<!-- Tools Tab -->
 <div class="context-tab-content${this._activeTab==='tools'?' active':''}">
   <div class="context-section"><div class="context-section-title">可用工具 (${this._tools.length})</div>
     ${this._tools.map(t => `<div class="tool-item"><span class="tool-icon">${t.icon}</span><span class="tool-name">${LT.esc(t.name)}</span><span class="tool-status ready">就绪</span></div>`).join('')}
   </div>
 </div>
-<div class="context-tab-content${this._activeTab==='graph'?' active':''}">
+
+<!-- Knowledge Tab (includes graph + KB quick access) -->
+<div class="context-tab-content${this._activeTab==='knowledge'?' active':''}">
   <div class="context-section"><div class="context-section-title">知识图谱</div>
-    <div class="graph-container"><canvas id="graph-canvas" width="280" height="280"></canvas></div>
+    <div class="graph-container"><canvas id="graph-canvas" width="280" height="200"></canvas></div>
     <div class="graph-legend" id="graph-legend"></div>
+  </div>
+  <div class="context-section">
+    <div class="context-section-title">快速操作</div>
+    <button class="card-btn card-btn-primary" onclick="window.open('/search.html','_blank')" style="width:100%">
+      🔍 智能搜索
+    </button>
+    <button class="card-btn" onclick="LT.emit('doc:create',{content:'',title:'新文档'})" style="width:100%;margin-top:4px">
+      📄 新建文档
+    </button>
+    <button class="card-btn" onclick="toggleGraphStudio()" style="width:100%;margin-top:4px">
+      📊 可视化分析
+    </button>
+  </div>
+</div>
+
+<!-- Experts Tab -->
+<div class="context-tab-content${this._activeTab==='experts'?' active':''}">
+  <div class="context-section"><div class="context-section-title">专家角色</div>
+    <div class="expert-list">
+      <div class="expert-item">
+        <span class="expert-avatar">📋</span>
+        <div class="expert-info">
+          <div class="expert-name">环评工程师</div>
+          <div class="expert-desc">环境影响评价、标准合规</div>
+        </div>
+      </div>
+      <div class="expert-item">
+        <span class="expert-avatar">🔬</span>
+        <div class="expert-info">
+          <div class="expert-name">数据分析师</div>
+          <div class="expert-desc">监测数据、统计分析</div>
+        </div>
+      </div>
+      <div class="expert-item">
+        <span class="expert-avatar">⚖️</span>
+        <div class="expert-info">
+          <div class="expert-name">法务顾问</div>
+          <div class="expert-desc">法规解读、风险合规</div>
+        </div>
+      </div>
+      <div class="expert-item">
+        <span class="expert-avatar">📝</span>
+        <div class="expert-info">
+          <div class="expert-name">文档专家</div>
+          <div class="expert-desc">报告撰写、格式排版</div>
+        </div>
+      </div>
+      <div class="expert-item">
+        <span class="expert-avatar">🌐</span>
+        <div class="expert-info">
+          <div class="expert-name">网络协调员</div>
+          <div class="expert-desc">P2P协作、数据同步</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>`;
   }

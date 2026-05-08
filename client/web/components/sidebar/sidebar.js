@@ -63,6 +63,24 @@ class Sidebar extends Component {
           </svg>
         </button>
       </div>
+      <div class="sidebar-nav">
+        <button class="sidebar-nav-btn" data-action="nav-search" title="智能搜索">
+          <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M11 11l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span>搜索</span>
+        </button>
+        <button class="sidebar-nav-btn" data-action="nav-map" title="地图标注">
+          <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="5" r="3" fill="currentColor"/><path d="M7 8v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>地图</span>
+        </button>
+        <button class="sidebar-nav-btn" data-action="nav-diagram" title="图表绘制">
+          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="10" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="6.5" y="6" width="3" height="8" rx="0.5" fill="currentColor"/><rect x="11" y="3" width="3" height="11" rx="0.5" fill="currentColor"/></svg>
+          <span>画图</span>
+        </button>
+        <button class="sidebar-nav-btn" data-action="nav-office" title="文档编辑">
+          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+          <span>Office</span>
+        </button>
+      </div>
       <div class="sidebar-search">
         <input type="text" id="session-search" placeholder="搜索会话..." value="${LT.esc(this._searchTerm)}" data-action="search">
       </div>
@@ -139,6 +157,22 @@ class Sidebar extends Component {
           break;
         case 'new-session':
           this._newSession();
+          break;
+        case 'nav-search':
+          window.open('/search.html', '_blank');
+          break;
+        case 'nav-map':
+          toggleDiagramStudio();
+          setTimeout(() => {
+            const tabs = document.querySelectorAll('.dgm-tab[data-type="base-map"]');
+            if (tabs.length) tabs[0].click();
+          }, 300);
+          break;
+        case 'nav-diagram':
+          toggleDiagramStudio();
+          break;
+        case 'nav-office':
+          OnlyOffice.toggleSplit();
           break;
       }
     };

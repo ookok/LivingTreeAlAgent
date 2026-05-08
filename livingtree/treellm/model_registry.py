@@ -182,7 +182,7 @@ class ModelRegistry:
 
         # Pro/large models — Qwen Max/Plus, DeepSeek V3, large LLaMA
         if any(k in mid_lower for k in [
-            "70b", "72b", "405b", "671b",
+            "70b", "72b", "405b", "671b", "35b",
             "pro", "max", "v3", "opus",
             "qwen3.6-plus", "qwen3.5-plus", "qwen-plus",
             "qwen3-max", "qwen3.6-max",

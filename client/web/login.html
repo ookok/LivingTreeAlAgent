@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 — LivingTree AI Agent</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",sans-serif;background:var(--bg-base,#1a1b1d);color:var(--text-default,#d1d3db);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-card{width:380px;max-width:100%;background:var(--bg-overlay-l1);border:1px solid var(--border-l1);border-radius:14px;padding:40px 32px;text-align:center}
+.login-logo{font-size:56px;margin-bottom:12px}
+.login-title{font-size:22px;font-weight:700;color:var(--brand-default,#0fdc78);margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--text-tertiary);margin-bottom:28px}
+.login-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px 20px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+.login-btn-wework{background:#267ef0;color:#fff;margin-bottom:12px}
+.login-btn-wework:hover{background:#1e6dd4}
+.login-btn-qr{background:var(--bg-overlay-l2);color:var(--text-default)}
+.login-btn-qr:hover{background:var(--bg-overlay-l3)}
+.login-divider{display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--text-tertiary);font-size:12px}
+.login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--border-l1)}
+.qr-wrap{display:none;margin-top:16px}
+.qr-wrap.show{display:block}
+.qr-code{width:200px;height:200px;margin:0 auto 12px;background:#fff;padding:8px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.qr-placeholder{font-size:32px;animation:statusPulse 2s ease-in-out infinite}
+.qr-hint{font-size:12px;color:var(--text-tertiary);margin-top:6px}
+.login-error{color:var(--text-danger);font-size:12px;margin-top:12px;display:none}
+.login-error.show{display:block}
+.login-info{font-size:11px;color:var(--text-tertiary);margin-top:24px;line-height:1.6}
+.spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes statusPulse{0%,100%{opacity:1}50%{opacity:.5}}
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo">🌳</div>
+  <div class="login-title">LivingTree AI Agent</div>
+  <div class="login-sub">企业微信统一登录</div>
+
+  <button class="login-btn login-btn-wework" id="btn-wework" onclick="doOAuthLogin()">
+    <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h8M6 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <span>企业微信登录</span>
+  </button>
+
+  <div class="login-divider">或</div>
+
+  <button class="login-btn login-btn-qr" id="btn-qr" onclick="toggleQR()">
+    <svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="13" width="4" height="4" rx="1" fill="currentColor"/></svg>
+    <span>扫码登录</span>
+  </button>
+
+  <div class="qr-wrap" id="qr-wrap">
+    <div class="qr-code" id="qr-code">
+      <div class="spinner" id="qr-spinner" style="display:none"></div>
+      <span class="qr-placeholder" id="qr-placeholder">📱</span>
+      <img id="qr-img" style="display:none;width:184px;height:184px">
+    </div>
+    <div class="qr-hint" id="qr-hint">请使用企业微信扫描二维码</div>
+  </div>
+
+  <div class="login-error" id="login-error"></div>
+
+  <div class="login-info">
+    仅限企业用户登录<br>
+    在企微客户端内自动静默登录
+  </div>
+</div>
+
+<script>
+const isInWeWork = () => {
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('wxwork') || ua.includes('wechatwork');
+};
+
+// Auto OAuth redirect if in WeChat Work browser
+if (isInWeWork()) {
+  doOAuthLogin();
+}
+
+async function doOAuthLogin() {
+  try {
+    const resp = await fetch('/api/login/config');
+    const config = await resp.json();
+
+    if (config.oauth_url) {
+      // Redirect to WeChat Work OAuth
+      window.location.href = config.oauth_url;
+    } else {
+      // Dev mode: use test code
+      showError('未配置企业微信参数（CORP_ID/AGENT_ID），使用开发模式登录');
+      devLogin();
+    }
+  } catch (e) {
+    showError('获取登录配置失败');
+  }
+}
+
+function toggleQR() {
+  const wrap = document.getElementById('qr-wrap');
+  wrap.classList.toggle('show');
+  if (wrap.classList.contains('show')) {
+    loadQRCode();
+  }
+}
+
+async function loadQRCode() {
+  const placeholder = document.getElementById('qr-placeholder');
+  const img = document.getElementById('qr-img');
+  const hint = document.getElementById('qr-hint');
+
+  try {
+    const resp = await fetch('/api/login/config');
+    const config = await resp.json();
+
+    if (config.corp_id) {
+      // Generate QR login URL
+      const qrUrl = `https://login.work.weixin.qq.com/wwlogin/sso/login?login_type=login_admin&appid=${config.corp_id}&agentid=${config.agent_id}&redirect_uri=${encodeURIComponent(config.redirect_uri || window.location.origin + '/login.html')}&state=${Date.now()}`;
+
+      placeholder.style.display = 'none';
+      img.style.display = 'block';
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}&bgcolor=ffffff`;
+      hint.textContent = '请使用企业微信扫描二维码';
+    } else {
+      hint.textContent = '开发模式 — 点击下方直接登录';
+    }
+  } catch (e) {
+    hint.textContent = '二维码加载失败';
+  }
+}
+
+// Handle OAuth callback
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+const state = urlParams.get('state');
+
+if (code) {
+  handleLogin(code, 'oauth');
+} else if (state && state.includes('qr')) {
+  // QR login callback
+  const qrCode = urlParams.get('code');
+  if (qrCode) handleLogin(qrCode, 'qr');
+}
+
+async function handleLogin(authCode, loginType) {
+  const btn = document.getElementById('btn-wework');
+  btn.innerHTML = '<div class="spinner"></div>';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('/api/login/wework', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authCode, login_type: loginType }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || '登录失败');
+    }
+
+    const data = await resp.json();
+    // Store token
+    localStorage.setItem('lt_token', data.token);
+    localStorage.setItem('lt_user', JSON.stringify({ user_id: data.user_id, name: data.name, avatar: data.avatar }));
+
+    // Redirect to main app
+    const redirect = urlParams.get('redirect') || '/';
+    window.location.href = redirect;
+  } catch (e) {
+    showError(e.message);
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h8M6 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span>企业微信登录</span>';
+    btn.disabled = false;
+    // Dev mode fallback
+    devLogin();
+  }
+}
+
+function devLogin() {
+  // Auto-login in dev mode
+  handleLogin('dev_test_code_001', 'oauth');
+}
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+</script>
+</body>
+</html>

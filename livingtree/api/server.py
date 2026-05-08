@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 
 from .routes import setup_routes
+from .auth import setup_auth_routes
 
 
 def create_app(hub=None, config=None) -> FastAPI:
@@ -28,6 +29,7 @@ def create_app(hub=None, config=None) -> FastAPI:
         app.state.hub = hub
 
     setup_routes(app)
+    setup_auth_routes(app)
 
     # Static files: serve web frontend from client/web/
     web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"

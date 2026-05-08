@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="components/code-editor/code-editor.css">
+<!-- Auth check -->
+<script>
+(function(){var t=localStorage.getItem('lt_token');if(!t){var r=encodeURIComponent(location.href);location.href='/login.html?redirect='+r}})();
+</script>
 <!-- AntV X6 Graph -->
 <script src="https://unpkg.com/@antv/x6@2.18.1/dist/x6.min.js"></script>
 <!-- Monaco Editor AMD loader -->

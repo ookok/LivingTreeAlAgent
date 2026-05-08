@@ -64,6 +64,11 @@ async function* _simulateStream(text, delayMin = 15, delayMax = 45) {
 const api = {
   base: '/api/web',
 
+  _authHeaders() {
+    const token = localStorage.getItem('lt_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  },
+
   _abort() {
     if (_abortController) {
       _abortController.abort();
@@ -78,7 +83,7 @@ const api = {
     try {
       const response = await fetch(`${this.base}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
         body: JSON.stringify({ messages }),
         signal: _abortController.signal
       });
@@ -217,15 +222,15 @@ const api = {
   },
 
   async status() {
-    try { const r = await fetch('/api/status'); return await r.json() } catch { return null }
+    try { const r = await fetch('/api/status', { headers: this._authHeaders() }); return await r.json() } catch { return null }
   },
 
   async tools() {
-    try { const r = await fetch('/api/tools'); return await r.json() } catch { return [] }
+    try { const r = await fetch('/api/tools', { headers: this._authHeaders() }); return await r.json() } catch { return [] }
   },
 
   async skills() {
-    try { const r = await fetch('/api/skills'); return await r.json() } catch { return [] }
+    try { const r = await fetch('/api/skills', { headers: this._authHeaders() }); return await r.json() } catch { return [] }
   },
 
   async bootProgress() {

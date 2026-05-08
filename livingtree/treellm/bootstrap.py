@@ -49,6 +49,7 @@ async def setup_model_registry(config: Any, lazy: bool = False) -> Any | None:
             "stepfun":     ("https://api.stepfun.com/v1", config.model.stepfun_api_key),
             "internlm":    ("https://api.intern-ai.org.cn/v1", config.model.internlm_api_key),
             "web2api":     ("http://localhost:5001/v1", "web2api-local"),
+            "opencode2api": ("http://localhost:10000/v1", "opencode2api-local"),
         }
 
         registered = 0

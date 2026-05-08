@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LivingTree — 协助请求</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",sans-serif;background:var(--bg-base,#1a1b1d);color:var(--text-default,#d1d3db);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card-page{max-width:420px;width:100%;background:var(--bg-overlay-l1,rgba(255,255,255,0.04));border:1px solid var(--border-l1,rgba(255,255,255,0.08));border-radius:12px;padding:24px;margin:0 auto}
+.card-page .card{margin:0}
+.card-page-header{text-align:center;margin-bottom:20px}
+.card-page-header h2{font-size:18px;margin-bottom:6px;color:var(--brand-default,#0fdc78)}
+.card-page-header p{font-size:12px;color:var(--text-tertiary,#7f848e)}
+</style>
+<script src="core/framework.js"></script>
+<script src="services/store.js"></script>
+<script src="services/cards.js"></script>
+</head>
+<body>
+<div class="card-page">
+  <div class="card-page-header">
+    <h2>🌳 LivingTree 协助请求</h2>
+    <p>请完成以下任务卡片</p>
+  </div>
+  <div id="card-container"></div>
+</div>
+
+<script>
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const cardId = params.get('id');
+
+  if (!cardId) {
+    document.getElementById('card-container').innerHTML = '<p style="text-align:center;color:var(--text-tertiary)">无效的卡片链接</p>';
+    return;
+  }
+
+  // Try to find card data in local storage (shared from main app)
+  let cardData = null;
+  try {
+    const raw = localStorage.getItem('lt_shared_cards');
+    if (raw) {
+      const shared = JSON.parse(raw);
+      cardData = shared[cardId];
+    }
+  } catch (e) {}
+
+  if (!cardData) {
+    cardData = {
+      id: cardId,
+      type: 'location',
+      title: '位置采集',
+      description: '请获取当前位置信息',
+      config: { requireGPS: true },
+      status: 'pending',
+      response: null,
+    };
+  }
+
+  const container = document.getElementById('card-container');
+  container.innerHTML = Cards.render(cardData);
+  Cards.wireCard(container.querySelector('.card'));
+
+  // Wire up click handlers on card page
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const cardEl = btn.closest('.card');
+    if (cardEl) Cards.handleAction(cardEl, btn.dataset.action);
+  });
+})();
+</script>
+</body>
+</html>

@@ -83,6 +83,16 @@ const renderer = {
   md(text) {
     if (!text) return '';
 
+    // Detect card blocks first
+    let cardResult = '';
+    if (window.Cards) {
+      const cards = Cards.parseFromContent(text);
+      if (cards.length) {
+        // Store cards on the renderer for later attachment
+        this._pendingCards = cards;
+      }
+    }
+
     const lines = text.split('\n');
     const output = [];
     let inCodeBlock = false;
@@ -261,7 +271,9 @@ const renderer = {
   agentMsg(content, stream) {
     const streamAttr = stream ? ' data-stream="true"' : '';
     const escRaw = this.esc(content).replace(/`/g, '\\`');
-    return `<div class="message message-agent" data-raw="\`${escRaw}\`"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(content)}</div></div>`;
+    // Strip card blocks from rendered content (rendered separately)
+    const cleanContent = content.replace(/\[card:\w+\][\s\S]*?\[\/card\]/g, '');
+    return `<div class="message message-agent" data-raw="\`${escRaw}\`"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(cleanContent)}</div></div>`;
   },
 
   /* ── Message action buttons ── */

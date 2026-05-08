@@ -14,6 +14,22 @@ class Chat extends Component {
 
   _setupMsgActions() {
     this.el.addEventListener('click', (e) => {
+      // Card action buttons
+      const cardBtn = e.target.closest('[data-action]');
+      if (cardBtn && cardBtn.closest('.card')) {
+        const cardEl = cardBtn.closest('.card');
+        const action = cardBtn.dataset.action;
+        if (action === 'get-location' || action === 'approve' || action === 'reject' ||
+            action === 'take-photo' || action === 'submit-form' || action === 'submit-checklist' ||
+            action === 'submit-rating' || action === 'complete' || action === 'share-card' ||
+            action === 'start-timer' || action === 'stop-timer' || action === 'clear-sig' ||
+            action === 'submit-sig' || action === 'scan-qr' || action === 'pick-location') {
+          e.preventDefault();
+          Cards.handleAction(cardEl, action);
+          return;
+        }
+      }
+
       const btn = e.target.closest('[data-action]');
       if (!btn || !btn.dataset.action) return;
       const msgEl = btn.closest('.message');
@@ -93,6 +109,20 @@ class Chat extends Component {
         if (last) {
           this._addThinking(last);
           this._addMsgActions(last);
+          // Render cards from stored card data or parse from content
+          if (m.cards && m.cards.length) {
+            const cardsHtml = m.cards.map(c => Cards.render(c)).join('');
+            const wrapper = document.createElement('div');
+            wrapper.className = 'msg-cards';
+            wrapper.innerHTML = cardsHtml;
+            last.appendChild(wrapper);
+            m.cards.forEach((card, i) => {
+              const cardEl = wrapper.querySelectorAll('.card')[i];
+              if (cardEl) Cards.wireCard(cardEl);
+            });
+          } else {
+            this._addCards(last, m.content);
+          }
           const blocks = this._detectDocCards(m.content);
           if (blocks.length) this._renderDocCards(last, blocks);
         }
@@ -144,12 +174,12 @@ class Chat extends Component {
 
   _onDone(content) {
     LT.renderer.finalize(this._msgsEl);
-    // Update data-raw on the final agent message
     const last = this._msgsEl.querySelector('.message-agent:last-of-type');
     if (last) {
       last.setAttribute('data-raw', '`' + LT.renderer.esc(content).replace(/`/g, '\\`') + '`');
       this._addThinking(last);
       this._addMsgActions(last);
+      this._addCards(last, content);
       const blocks = this._detectDocCards(content);
       if (blocks.length) this._renderDocCards(last, blocks);
     }
@@ -163,6 +193,37 @@ class Chat extends Component {
     const el = document.createElement('div');
     el.innerHTML = actions;
     bubble.appendChild(el.firstChild);
+  }
+
+  _addCards(msgEl, content) {
+    if (!window.Cards) return;
+    const cards = Cards.parseFromContent(content);
+    if (!cards.length) return;
+
+    // Store cards on the message element
+    const store = LT.store;
+    if (store && store.activeId) {
+      const msgs = store.messages[store.activeId];
+      if (msgs && msgs.length) {
+        const lastMsg = msgs[msgs.length - 1];
+        if (lastMsg && lastMsg.role === 'agent') {
+          lastMsg.cards = cards;
+          store.save();
+        }
+      }
+    }
+
+    const cardsHtml = cards.map(c => Cards.render(c)).join('');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-cards';
+    wrapper.innerHTML = cardsHtml;
+    msgEl.appendChild(wrapper);
+
+    // Wire up card interactions
+    cards.forEach((card, i) => {
+      const cardEl = wrapper.querySelectorAll('.card')[i];
+      if (cardEl) Cards.wireCard(cardEl);
+    });
   }
 
   _scrollBottom() {

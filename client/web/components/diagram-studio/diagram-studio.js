@@ -106,11 +106,25 @@ ${drawToolbar}
   _bindEvents() {
     // Type tabs
     this.el.querySelectorAll('[data-type]').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         this._type = btn.dataset.type;
         this._drawTool = null;
         X6Diagram.setDrawTool(null);
-        X6Diagram.render(this._type, null);
+
+        // Fetch real data from backend
+        let data = null;
+        try {
+          const resp = await fetch('/api/diagram/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: this._type, context: 'report' }),
+          });
+          if (resp.ok) {
+            const result = await resp.json();
+            data = result.config;
+          }
+        } catch (e) {}
+
+        X6Diagram.render(this._type, data);
         this.render();
         this._bindEvents();
       };

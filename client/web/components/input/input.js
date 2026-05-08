@@ -312,37 +312,15 @@ class Input extends Component {
 
     LT.emit('msg:typing');
 
-    setTimeout(() => {
-      LT.emit('msg:agent-stream');
-      store.addMsg(sid, { role: 'assistant', content: '' });
-      let full = '';
+    // Direct API call — no setTimeout mock
+    LT.emit('msg:agent-stream');
+    store.addMsg(sid, { role: 'assistant', content: '' });
+    let full = '';
+    const onC = (c) => { full += c; store.updateLast(sid, full); LT.emit('msg:chunk', { content: full }); };
+    const onD = () => { store.updateLast(sid, full); LT.emit('msg:done', { content: full }); this._btnSend.classList.remove('loading'); this._btnStop.style.display = 'none'; LT.emit('session:switch'); };
+    const onE = (e) => { store.updateLast(sid, full + `\n\n*[错误: ${e.message || e}]*`); LT.emit('msg:done', { content: full + `\n\n*[错误: ${e.message || e}]*` }); this._btnSend.classList.remove('loading'); this._btnStop.style.display = 'none'; LT.emit('session:switch'); };
 
-      const onC = (c) => {
-        full += c;
-        store.updateLast(sid, full);
-        LT.emit('msg:chunk', { content: full });
-      };
-
-      const onD = () => {
-        store.updateLast(sid, full);
-        LT.emit('msg:done', { content: full });
-        this._btnSend.classList.remove('loading');
-        this._btnStop.style.display = 'none';
-        LT.emit('session:switch');
-      };
-
-      const onE = (e) => {
-        store.updateLast(sid, full + `\n\n*[错误: ${e}]*`);
-        LT.emit('msg:done', { content: full + `\n\n*[错误: ${e}]*` });
-        this._btnSend.classList.remove('loading');
-        this._btnStop.style.display = 'none';
-        LT.emit('session:switch');
-      };
-
-      LT.api.send(text, onC, onD, onE).catch(() => {
-        LT.api.simulate(text, onC, onD);
-      });
-    }, 400);
+    LT.api.send(text, onC, onD, onE);
   }
 
   _stop() {

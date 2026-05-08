@@ -20,9 +20,10 @@ class GraphStudio extends Component {
     this.render();
     this._bindEvents();
     // Delay X6 init to let DOM render
-    setTimeout(() => {
+    setTimeout(async () => {
       X6Graph.init('x6-canvas');
-      X6Graph.switchMode(this._mode, this._data);
+      const data = await X6Graph.fetchData(this._mode) || {};
+      X6Graph.switchMode(this._mode, data);
     }, 200);
   }
 
@@ -91,11 +92,17 @@ class GraphStudio extends Component {
     E.querySelectorAll('[data-mode]').forEach(btn => {
       btn.onclick = async () => {
         this._mode = btn.dataset.mode;
-        const data = await X6Graph.fetchData(this._mode);
-        this._data = data || {};
-        X6Graph.switchMode(this._mode, this._data);
+        // Fetch real data from backend
+        let data = await X6Graph.fetchData(this._mode);
+        if (!data) {
+          // Fetch again with explicit call
+          try {
+            const resp = await fetch(`/api/graph/${this._mode}`);
+            if (resp.ok) data = await resp.json();
+          } catch(e) {}
+        }
+        X6Graph.switchMode(this._mode, data || {});
         this._updateInfo();
-        // Update active tab
         E.querySelectorAll('.gs-tab').forEach(t => t.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('gs-info-mode').textContent = btn.querySelector('span:last-child').textContent;

@@ -26,6 +26,27 @@ class ContextPanel extends Component {
       ];
     }
     this.render();
+
+    // Load experts from backend
+    this._loadExperts();
+  }
+
+  async _loadExperts() {
+    try {
+      const resp = await fetch('/api/status');
+      const data = await resp.json();
+      const el = document.getElementById('expert-list');
+      if (!el) return;
+      const agents = (data?.orchestrator?.total_agents || 0) > 0
+        ? [{ icon: '🤖', name: `${data.orchestrator.total_agents} 智能体就绪`, desc: 'TreeLLM RouteMoA 调度中' }]
+        : [];
+      el.innerHTML = agents.length
+        ? agents.map(a => `<div class="expert-item"><span class="expert-avatar">${a.icon}</span><div class="expert-info"><div class="expert-name">${a.name}</div><div class="expert-desc">${a.desc}</div></div></div>`).join('')
+        : '<div class="app-empty"><div class="app-empty-text">等待系统初始化...</div></div>';
+    } catch(e) {
+      const el = document.getElementById('expert-list');
+      if (el) el.innerHTML = '<div class="app-empty"><div class="app-empty-text">无法连接后端服务</div></div>';
+    }
   }
 
   _buildTaskList(status) {
@@ -160,42 +181,8 @@ class ContextPanel extends Component {
 <!-- Experts Tab -->
 <div class="context-tab-content${this._activeTab==='experts'?' active':''}">
   <div class="context-section"><div class="context-section-title">专家角色</div>
-    <div class="expert-list">
-      <div class="expert-item">
-        <span class="expert-avatar">📋</span>
-        <div class="expert-info">
-          <div class="expert-name">环评工程师</div>
-          <div class="expert-desc">环境影响评价、标准合规</div>
-        </div>
-      </div>
-      <div class="expert-item">
-        <span class="expert-avatar">🔬</span>
-        <div class="expert-info">
-          <div class="expert-name">数据分析师</div>
-          <div class="expert-desc">监测数据、统计分析</div>
-        </div>
-      </div>
-      <div class="expert-item">
-        <span class="expert-avatar">⚖️</span>
-        <div class="expert-info">
-          <div class="expert-name">法务顾问</div>
-          <div class="expert-desc">法规解读、风险合规</div>
-        </div>
-      </div>
-      <div class="expert-item">
-        <span class="expert-avatar">📝</span>
-        <div class="expert-info">
-          <div class="expert-name">文档专家</div>
-          <div class="expert-desc">报告撰写、格式排版</div>
-        </div>
-      </div>
-      <div class="expert-item">
-        <span class="expert-avatar">🌐</span>
-        <div class="expert-info">
-          <div class="expert-name">网络协调员</div>
-          <div class="expert-desc">P2P协作、数据同步</div>
-        </div>
-      </div>
+    <div class="expert-list" id="expert-list">
+      <div class="app-empty"><div class="app-spinner" style="margin:0 auto"></div></div>
     </div>
   </div>
 </div>`;

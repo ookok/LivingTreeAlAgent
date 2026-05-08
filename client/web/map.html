@@ -59,23 +59,30 @@
 window._LT_MAP = {
   map: null,
   markers: [],
-  monitors: [
-    { name: '空气站 A1', lat: 39.915, lon: 116.404, status: 'online', pm25: 35, pm10: 68 },
-    { name: '空气站 A2', lat: 39.925, lon: 116.414, status: 'online', pm25: 42, pm10: 75 },
-    { name: '水站 W1', lat: 39.905, lon: 116.394, status: 'online', cod: 12, nh3n: 0.8 },
-    { name: '噪声 N1', lat: 39.920, lon: 116.400, status: 'offline', leq: 62 },
-    { name: '噪声 N2', lat: 39.910, lon: 116.410, status: 'online', leq: 58 },
-  ],
-  sources: [
-    { name: '排放源1', lat: 39.918, lon: 116.408, type: 'source' },
-    { name: '排放源2', lat: 39.912, lon: 116.398, type: 'source' },
-  ],
-  receptors: [
-    { name: '居民区A', lat: 39.922, lon: 116.412, type: 'receptor' },
-    { name: '学校B', lat: 39.908, lon: 116.405, type: 'receptor' },
-  ],
+  monitors: [],
+  sources: [],
+  receptors: [],
 
-  init() {
+  async init() {
+    // Load real data from backend
+    try {
+      const resp = await fetch('/api/status');
+      if (resp.ok) {
+        const data = await resp.json();
+        // Try to get monitoring data from status
+        if (data.monitors) this.monitors = data.monitors;
+        if (data.sources) this.sources = data.sources;
+      }
+    } catch(e) {}
+
+    // Default coordinates if no backend data
+    if (!this.monitors.length) {
+      this.monitors = [
+        { name: '空气站 A1', lat: 39.915, lon: 116.404, status: 'online' },
+        { name: '水站 W1', lat: 39.905, lon: 116.394, status: 'online' },
+      ];
+    }
+
     if (typeof T === 'undefined') {
       // Load Tianditu JS API
       const script = document.createElement('script');

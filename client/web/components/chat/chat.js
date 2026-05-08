@@ -344,13 +344,13 @@ class Chat extends Component {
   }
 
   _addThinking(msgEl) {
+    // Dynamic thinking steps from server data (fallback: basic flow)
     const steps = [
-      { icon: '🔍', text: '分析用户意图...' },
-      { icon: '📚', text: '检索知识库 (0 条匹配)' },
-      { icon: '🧠', text: '生成回复策略' },
-      { icon: '✍️', text: '组织回复内容' }
+      { icon: '🧠', text: 'TreeLLM 路由分析中' },
+      { icon: '📚', text: 'RAG 2.0 检索知识库' },
+      { icon: '✍️', text: '组织回复内容' },
     ];
-    const html = `<div class="think-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>思考过程</div><div class="think-body">${steps.map(s => `<div class="think-step"><span class="think-step-icon">${s.icon}</span><span class="think-step-text">${s.text}</span></div>`).join('')}</div>`;
+    const html = `<div class="think-toggle" onclick="this.classList.toggle('open');var b=this.parentElement.querySelector('.think-body');if(b)b.classList.toggle('open')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>思考过程</div><div class="think-body">${steps.map(s => `<div class="think-step"><span class="think-step-icon">${s.icon}</span><span class="think-step-text">${s.text}</span></div>`).join('')}</div>`;
     const content = msgEl.querySelector('.content');
     if (content) {
       const t = document.createElement('div');

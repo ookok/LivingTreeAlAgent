@@ -835,6 +835,20 @@ class LifeEngine:
             )
             if steps:
                 ctx.plan = steps
+                # ── AgenticQwen-inspired behavior tree: enrich linear plan with fallback branches ──
+                try:
+                    from livingtree.core.behavior_tree import linear_plan_to_tree
+                    step_descs = [s.get("description", s.get("action", str(s))) for s in steps[:8]]
+                    fallback = "fallback: ask user for clarification or try alternative approach"
+                    ctx.behavior_tree = linear_plan_to_tree(
+                        step_descs,
+                        fallback_hint=fallback,
+                        use_model_for_routing=len(step_descs) > 3,  # Route complex plans
+                    )
+                    ctx.metadata["plan_mode"] = "behavior_tree"
+                    logger.info(f"[plan] Behavior tree built: {len(step_descs)} primary steps + fallback")
+                except Exception as e:
+                    logger.debug(f"[plan] Behavior tree skipped: {e}")
         if not ctx.plan:
             ctx.plan = [{"step": 1, "action": "direct", "description": ctx.user_input}]
 
@@ -1089,6 +1103,23 @@ class LifeEngine:
                 lambda: self._retry_with_pro(step),
                 lambda: self._retry_with_kb(step, ctx_lc),
             ]
+
+            # ── Behavior tree fallback: if tree exists, add fallback branch as last resort ──
+            bt = getattr(ctx_lc, 'behavior_tree', None)
+            if bt:
+                async def _bt_fallback():
+                    from livingtree.core.behavior_tree import TreeContext
+                    bt_ctx = TreeContext(
+                        user_input=ctx_lc.user_input,
+                        metadata={"plan": ctx_lc.plan, "step": step},
+                        history=ctx_lc.metadata.get("clarifications", []),
+                    )
+                    status = await bt.tick(bt_ctx)
+                    if status.value == "success":
+                        return {"status": "completed", "result": bt_ctx.results, "bt_fallback": True}
+                    return {"status": "failed", "error": bt_ctx.errors[-1] if bt_ctx.errors else "all branches failed"}
+                strategies.append(_bt_fallback)
+
             result = None
             last_error = ""
             for strat in strategies:

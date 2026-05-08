@@ -1,4 +1,15 @@
 @echo off
-:: Scinet - LivingTree 智能代理 一键启动
+chcp 65001 >nul
+title Scinet v2.0 — Smart Proxy
 
-start "" "%~dp0.wt\WindowsTerminal.exe" -p "{25CCA02F-B9BA-4784-B7F8-AB5017D22F9E}"
+:: Activate venv if exists
+if exist ".venv\Scripts\python.exe" (
+    set PYTHON=.venv\Scripts\python.exe
+) else (
+    set PYTHON=python
+)
+
+echo Starting Scinet v2.0...
+echo.
+%PYTHON% scinet_launch.py %*
+pause

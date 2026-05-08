@@ -14,8 +14,14 @@ requests>=2.31.0
 # === Google LangExtract: grounded entity extraction ===
 langextract>=1.3.0
 
+# === AI Memory ===
+cognee>=1.0.0
+
 # === 核心 ===
 -e .
+
+# === 可选 ===
+# mineru[core]>=3.0.0  # 文档解析（PDF/Word/PPT→Markdown，安装较慢）
 
 # === 可选 ===
 # -e ./app

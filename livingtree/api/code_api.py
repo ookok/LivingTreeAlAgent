@@ -17,12 +17,42 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Optional
 
+import asyncio as _asyncio
 from fastapi import FastAPI, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
 
 from livingtree.api.auth import get_current_user, is_admin
+from livingtree.api.audit import log_operation
+from livingtree.api.workspace import _get_workspace_project_dir, get_user_role as _get_workspace_role
+
+# Memory + Skill integration (fire-and-forget, non-blocking)
+def _remember_bg(user_id: str, content: str, project: str = "", workspace_id: str = "",
+                 operation: str = "", file_path: str = "", before: str = "", after: str = ""):
+    try:
+        from livingtree.core.session_memory import agent_memory
+        from livingtree.core.skills import record_session
+        loop = _asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(agent_memory.remember(
+                content, user_id=user_id, project=project, workspace_id=workspace_id))
+            if operation:
+                loop.create_task(_async_record(
+                    user_id, content, project, workspace_id, operation, file_path, before, after))
+    except Exception:
+        pass
+
+async def _async_record(user_id, context, project, workspace_id, operation, file_path, before, after):
+    try:
+        from livingtree.core.skills import record_session
+        record_session(user_id, context, project=project, workspace_id=workspace_id,
+                       operation=operation, file_path=file_path,
+                       before_content=before, after_content=after,
+                       tags=[file_path.split('.')[-1] if file_path else 'general'])
+    except Exception:
+        pass
 
 # ═══ Config ═══
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -84,6 +114,7 @@ class ProjectInfo(BaseModel):
     name: str
     path: str
     owner: str = ""
+    workspace_id: str = ""
     created_at: float
     github_url: str = ""
     github_branch: str = "main"
@@ -95,6 +126,7 @@ class ProjectInfo(BaseModel):
 class CreateProjectRequest(BaseModel):
     name: str
     github_url: str = ""
+    workspace_id: str = ""
 
 
 # ═══ User-Scoped Path Helpers ═══
@@ -115,12 +147,41 @@ def _get_user_docs_dir(user_id: str) -> Path:
 
 
 def _get_project_dir(user_id: str, name: str) -> Path:
-    """Get project directory: output/{user_id}/code/{name}/"""
+    """Get project directory: output/{user_id}/code/{name}/ or workspace path."""
+    project = _find_project(user_id, name)
+    if project:
+        ws_id = project.get("workspace_id", "")
+        if ws_id:
+            return _get_workspace_project_dir(ws_id, name)
     return _get_user_code_dir(user_id) / name
 
 
 def _project_exists(user_id: str, name: str) -> bool:
+    """Check if a project exists (checks both personal and workspace paths)."""
     return _get_project_dir(user_id, name).is_dir()
+
+
+def _find_project(user_id: str, name: str) -> Optional[dict]:
+    """Find a project by name that the user has access to."""
+    all_projects = _load_projects()
+    for p in all_projects:
+        if p.get("name") != name:
+            continue
+        if p.get("owner") == user_id:
+            return p
+        ws_id = p.get("workspace_id", "")
+        if ws_id and _get_workspace_role(ws_id, user_id):
+            return p
+    return None
+
+
+def _get_project_path_from_meta(user_id: str, project_meta: dict) -> Path:
+    """Get the filesystem path from project metadata, handling workspace projects."""
+    name = project_meta["name"]
+    ws_id = project_meta.get("workspace_id", "")
+    if ws_id:
+        return _get_workspace_project_dir(ws_id, name)
+    return _get_user_code_dir(user_id) / name
 
 
 # ═══ Project Meta Store ═══
@@ -140,11 +201,19 @@ def _save_projects(projects: list[dict]) -> None:
 
 
 def _load_user_projects(user_id: str, is_admin_user: bool = False) -> list[dict]:
-    """Load projects visible to a user. Admin sees all, user sees own."""
+    """Load projects visible to a user. Admin sees all, user sees own + workspace projects."""
     all_projects = _load_projects()
     if is_admin_user:
         return all_projects
-    return [p for p in all_projects if p.get("owner") == user_id]
+    visible = []
+    for p in all_projects:
+        if p.get("owner") == user_id:
+            visible.append(p)
+            continue
+        ws_id = p.get("workspace_id", "")
+        if ws_id and _get_workspace_role(ws_id, user_id):
+            visible.append(p)
+    return visible
 
 
 def _count_files(dir_path: Path) -> int:
@@ -198,8 +267,11 @@ def _require_admin(user: dict):
 
 
 def _resolve_project_path(user_id: str, project: str, rel_path: str) -> Path:
-    """Resolve path inside user's project dir. Sandboxed."""
-    if project:
+    """Resolve path inside user's project dir. Sandboxed. Supports workspace projects."""
+    project_meta = _find_project(user_id, project) if project else None
+    if project_meta:
+        base = _get_project_path_from_meta(user_id, project_meta)
+    elif project:
         base = _get_project_dir(user_id, project)
     else:
         base = _get_user_code_dir(user_id)
@@ -256,15 +328,16 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """List projects visible to current user. Admin sees all; users see own."""
-        _require_admin(user)
         my_projects = _load_user_projects(user["user_id"], is_admin(user["user_id"]))
         result = []
         for p in my_projects:
             owner = p.get("owner", "")
-            proj_dir = _get_project_dir(owner, p["name"])
+            ws_id = p.get("workspace_id", "")
+            proj_dir = _get_project_path_from_meta(owner, p)
             result.append(ProjectInfo(
                 name=p["name"],
                 owner=owner,
+                workspace_id=ws_id,
                 path=str(proj_dir.relative_to(PROJECT_ROOT)).replace("\\", "/"),
                 created_at=p.get("created_at", 0),
                 github_url=p.get("github_url", ""),
@@ -281,8 +354,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Create a new code project under current user's space."""
-        _require_admin(user)
-
         name = req.name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="项目名不能为空")
@@ -290,7 +361,17 @@ def setup_code_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=400, detail="项目名只能包含字母、数字、下划线、连字符和中文")
 
         user_id = user["user_id"]
-        if _project_exists(user_id, name):
+        ws_id = req.workspace_id.strip()
+
+        # If workspace project, verify user has editor+ access to workspace
+        if ws_id:
+            from livingtree.api.workspace import check_workspace_access
+            check_workspace_access(ws_id, user_id, "editor")
+            proj_dir = _get_workspace_project_dir(ws_id, name)
+        else:
+            proj_dir = _get_project_dir(user_id, name)
+
+        if proj_dir.is_dir():
             raise HTTPException(status_code=400, detail=f"项目 '{name}' 已存在")
 
         proj_dir = _get_project_dir(user_id, name)
@@ -299,6 +380,7 @@ def setup_code_routes(app: FastAPI) -> None:
         project_meta = {
             "name": name,
             "owner": user_id,
+            "workspace_id": ws_id,
             "created_at": time.time(),
             "github_url": req.github_url.strip(),
             "github_branch": "main",
@@ -310,10 +392,14 @@ def setup_code_routes(app: FastAPI) -> None:
         _save_projects(projects)
 
         logger.info(f"Code mode: user {user_id} created project '{name}'")
+        log_operation(user_id, user.get("name", ""), "project.create",
+                      project=name, details=f"创建项目 '{name}'")
+        _remember_bg(user_id, f"创建了项目 '{name}'，用于存放代码和文档", name, ws_id)
 
         return ProjectInfo(
             name=name,
             owner=user_id,
+            workspace_id=ws_id,
             path=str(proj_dir.relative_to(PROJECT_ROOT)).replace("\\", "/"),
             created_at=project_meta["created_at"],
             github_url=project_meta["github_url"],
@@ -327,22 +413,31 @@ def setup_code_routes(app: FastAPI) -> None:
         name: str,
         user: dict = Depends(get_current_user),
     ):
-        """Delete a project and all its files."""
-        _require_admin(user)
-
+        """Delete a project and all its files. Owner or workspace owner only."""
         user_id = user["user_id"]
         projects = _load_projects()
-        proj = next((p for p in projects if p["name"] == name and p["owner"] == user_id), None)
+        proj = _find_project(user_id, name)
         if not proj:
             raise HTTPException(status_code=404, detail="项目不存在")
 
-        proj_dir = _get_project_dir(user_id, name)
+        # Check permission: owner or workspace owner
+        ws_id = proj.get("workspace_id", "")
+        if proj.get("owner") != user_id:
+            if not ws_id:
+                raise HTTPException(status_code=403, detail="无权删除此项目")
+            from livingtree.api.workspace import check_workspace_access
+            check_workspace_access(ws_id, user_id, "owner")
+
+        proj_dir = _get_project_path_from_meta(user_id, proj)
         shutil.rmtree(proj_dir, ignore_errors=True)
 
-        projects = [p for p in projects if not (p["name"] == name and p["owner"] == user_id)]
+        projects = [p for p in projects if not (p["name"] == name and p.get("workspace_id", "") == ws_id and (p["owner"] == user_id or ws_id))]
         _save_projects(projects)
 
         logger.info(f"Code mode: user {user_id} deleted project '{name}'")
+        log_operation(user_id, user.get("name", ""), "project.delete",
+                      project=name, details=f"删除项目 '{name}' 及所有文件")
+        _remember_bg(user_id, f"删除了项目 '{name}' 及其所有文件", name, ws_id)
         return {"ok": True, "name": name}
 
     @app.post("/api/code/projects/{name}/sync")
@@ -351,17 +446,14 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Sync project from linked GitHub repo (git pull)."""
-        _require_admin(user)
-
         user_id = user["user_id"]
-        projects = _load_projects()
-        proj = next((p for p in projects if p["name"] == name and p["owner"] == user_id), None)
+        proj = _find_project(user_id, name)
         if not proj:
             raise HTTPException(status_code=404, detail="项目不存在")
         if not proj.get("github_url"):
             raise HTTPException(status_code=400, detail="项目未关联 GitHub 仓库")
 
-        proj_dir = _get_project_dir(user_id, name)
+        proj_dir = _get_project_path_from_meta(user_id, proj)
         if (proj_dir / ".git").exists():
             # Git pull
             try:
@@ -370,8 +462,15 @@ def setup_code_routes(app: FastAPI) -> None:
                     cwd=str(proj_dir), capture_output=True, text=True, timeout=60,
                 )
                 logger.info(f"Git pull {name}: {result.stdout[:200]}")
-                proj["last_synced"] = time.time()
+                projects = _load_projects()
+                for p in projects:
+                    if p["name"] == name and p["owner"] == proj["owner"]:
+                        p["last_synced"] = time.time()
+                        break
                 _save_projects(projects)
+                log_operation(user_id, user.get("name", ""), "project.sync",
+                              project=name, details=f"Git 同步项目 '{name}'")
+                _remember_bg(user_id, f"Git 同步了项目 '{name}'，拉取了最新代码", name)
                 return {"ok": True, "output": result.stdout}
             except subprocess.TimeoutExpired:
                 raise HTTPException(status_code=504, detail="Git 同步超时")
@@ -387,8 +486,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """List files in user's project."""
-        _require_admin(user)
-
         user_id = user["user_id"]
         if project and not _project_exists(user_id, project):
             raise HTTPException(status_code=404, detail="项目不存在")
@@ -429,8 +526,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Read a file from user's project."""
-        _require_admin(user)
-
         file_path = _resolve_project_path(user["user_id"], project, path)
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="文件不存在")
@@ -463,7 +558,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Write content to a file."""
-        _require_admin(user)
         file_path = _resolve_project_path(user["user_id"], project, req.path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -472,6 +566,11 @@ def setup_code_routes(app: FastAPI) -> None:
             f"Code mode: {user['user_id']} wrote {req.path} "
             f"({len(req.content)} chars)"
         )
+        log_operation(user["user_id"], user.get("name", ""), "file.write",
+                      project=project, file_path=req.path,
+                      details=f"写入文件 {req.path} ({len(req.content)} 字符)")
+        _remember_bg(user["user_id"], f"编辑了文件 '{req.path}'（{len(req.content)} 字符）", project,
+                     operation="file.write", file_path=req.path, after=req.content[:500])
 
         return {"ok": True, "path": req.path, "size": len(req.content)}
 
@@ -482,7 +581,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Delete a file."""
-        _require_admin(user)
         file_path = _resolve_project_path(user["user_id"], project, path)
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
@@ -491,6 +589,9 @@ def setup_code_routes(app: FastAPI) -> None:
 
         file_path.unlink()
         logger.info(f"Code mode: {user['user_id']} deleted {path}")
+        log_operation(user["user_id"], user.get("name", ""), "file.delete",
+                      project=project, file_path=path,
+                      details=f"删除文件 {path}")
 
         return {"ok": True, "path": path}
 
@@ -500,7 +601,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Compute unified diff between old and new content."""
-        _require_admin(user)
         file_path = _resolve_project_path(user["user_id"], req.project, req.path)
         _ = file_path  # used only for validation
 
@@ -527,7 +627,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Apply new content directly to a file (from chat diff cards)."""
-        _require_admin(user)
         file_path = _resolve_project_path(user["user_id"], req.project, req.path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -540,6 +639,12 @@ def setup_code_routes(app: FastAPI) -> None:
 
         file_path.write_text(req.new_content, encoding="utf-8")
         logger.info(f"Code mode: {user['user_id']} applied diff to {req.path}")
+        log_operation(user["user_id"], user.get("name", ""), "file.diff_apply",
+                      project=req.project, file_path=req.path,
+                      details=f"应用差异到 {req.path}")
+        _remember_bg(user["user_id"], f"应用代码差异到文件 '{req.path}'", req.project,
+                     operation="file.diff_apply", file_path=req.path,
+                     before=backup[:500], after=req.new_content[:500])
 
         return {
             "ok": True,
@@ -555,8 +660,6 @@ def setup_code_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Search for files by name."""
-        _require_admin(user)
-
         user_id = user["user_id"]
         base = _get_project_dir(user_id, project) if project else _get_user_code_dir(user_id)
         if path:

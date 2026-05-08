@@ -56,7 +56,7 @@
   });
   LT.on('store:userRoleLoaded', () => {
     const btn = document.getElementById('btn-code-mode');
-    if (btn && LT.store.isAdmin()) {
+    if (btn) {
       btn.style.display = '';
     }
   });

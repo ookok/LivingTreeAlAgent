@@ -255,6 +255,8 @@ class DualModelConsciousness(Consciousness):
             self._free_models.append("nvidia-reasoning")
             self._free_models.append("nvidia-flash")
             self._free_models.append("nvidia-small")
+            self._free_models.append("kiro")
+            self._free_models.append("opencode-free")
         if xiaomi_api_key:
             self._paid_models.append("xiaomi")
         if aliyun_api_key:

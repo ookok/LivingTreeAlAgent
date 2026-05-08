@@ -62,7 +62,11 @@ class Proxy:
 
     @property
     def score(self) -> float:
-        return self.success_rate * 0.5 + max(0, 1 - self.avg_latency / 5) * 0.3 + (1 / (1 + self.failure_count)) * 0.2
+        try:
+            lat = float(self.avg_latency) if self.avg_latency else 0.0
+        except (ValueError, TypeError):
+            lat = 0.0
+        return self.success_rate * 0.5 + max(0, 1 - lat / 5) * 0.3 + (1 / (1 + self.failure_count)) * 0.2
 
 
 class ProxyPool:
@@ -385,10 +389,20 @@ class ProxyPool:
         try:
             data = json.loads(PROXY_CACHE.read_text(encoding="utf-8"))
             for key, d in data.items():
-                self._pool[key] = Proxy(**{
-                    k: d.get(k, "") if k == "host" else d.get(k, 0) if k == "port" else d.get(k, "")
-                    for k in Proxy.__dataclass_fields__
-                })
+                try:
+                    proxy = Proxy(
+                        host=str(d.get("host", "")),
+                        port=int(d.get("port", 0)),
+                        protocol=str(d.get("protocol", "http")),
+                        source=str(d.get("source", "")),
+                        country=str(d.get("country", "")),
+                        success_count=int(d.get("success_count", 0)),
+                        failure_count=int(d.get("failure_count", 0)),
+                        avg_latency=float(d.get("avg_latency", 0)),
+                    )
+                    self._pool[key] = proxy
+                except (ValueError, TypeError):
+                    pass
         except Exception:
             pass
 

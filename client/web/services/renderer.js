@@ -544,6 +544,22 @@ const renderer = {
   }
 };
 
+LT.on('security:findings', (findings) => {
+  if (!findings || !findings.length) return;
+  const chat = LT.get('chat');
+  if (!chat || !chat._msgsEl) return;
+  const severityIcons = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' };
+  let md = `### 🛡️ 安全扫描 — ${findings.length} 条发现\n\n`;
+  findings.slice(0, 10).forEach(f => {
+    md += `- ${severityIcons[f.severity] || '⚪'} **${f.severity.toUpperCase()}** ${f.message}\n`;
+    md += `  📁 \`${f.file}:${f.line}\` — ${f.remediation}\n`;
+  });
+  if (findings.length > 10) md += `\n*...还有 ${findings.length - 10} 条发现*\n`;
+  const html = LT.renderer.agentMsg(md, false);
+  LT.renderer.append(chat._msgsEl, html);
+  chat._scrollBottom();
+});
+
 function _fallbackCopy(text, btn) {
   const ta = document.createElement('textarea');
   ta.value = text;

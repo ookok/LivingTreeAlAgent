@@ -125,7 +125,7 @@ livingtree/
 │   ├── i18n.py              # i18n: zh/en translation (singleton, t("key"))
 │   └── wt_bootstrap.py      # Windows Terminal bootstrapper: downloads WT if missing
 │
-├── network/                 # Network — P2P layer (13 files)
+├── network/                 # Network — P2P layer + Scinet v2.0 intelligent proxy (21 files)
 │   ├── node.py              # Node: P2P node identity
 │   ├── discovery.py         # Discovery: LAN peer discovery
 │   ├── nat_traverse.py      # NATTraverser: NAT traversal
@@ -133,7 +133,17 @@ livingtree/
 │   ├── encrypted_channel.py # EncryptedChannel: AES messaging
 │   ├── offline_mode.py      # DualMode: online/offline switching
 │   ├── p2p_node.py          # P2P node lifecycle
-│   ├── proxy_fetcher.py     # ProxyPool: multi-source proxies
+│   ├── proxy_fetcher.py     # ProxyPool: multi-source proxies (6 sources)
+│   ├── scinet_service.py    # ScinetService: local HTTP proxy (port 7890)
+│   ├── scinet_engine.py     # 🆕 ScinetEngine v2.0: unified intelligent pipeline
+│   ├── scinet_quic.py       # 🆕 QUIC/HTTP3 tunnel + protocol obfuscation
+│   ├── scinet_bandit.py     # 🆕 Contextual Bandit RL proxy selection (LinUCB + Thompson)
+│   ├── scinet_federated.py  # 🆕 Federated proxy quality learning (FedAvg + differential privacy)
+│   ├── scinet_topology.py   # 🆕 GNN-inspired topology optimizer (GAT attention routing)
+│   ├── scinet_cache.py      # 🆕 Semantic cache (L1 memory + L2 SQLite + delta compression)
+│   ├── scinet_webtransport.py # 🆕 WebTransport browser-native tunnel (QUIC)
+│   ├── domain_ip_pool.py    # DomainIPPool: 100+ pre-tested overseas IPs
+│   ├── site_accelerator.py  # SiteAccelerator: FastGithub-style acceleration
 │   └── collective.py        # CollectiveConsciousness: swarm intelligence
 │
 ├── integration/             # Integration — Wiring layer (9 files)

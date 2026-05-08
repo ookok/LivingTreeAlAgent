@@ -104,6 +104,7 @@ class ScinetService:
         self._lock = threading.RLock()
         self._runner: Optional[web.AppRunner] = None
         self._site: Optional[web.TCPSite] = None
+        self._raw_server: Optional[asyncio.AbstractServer] = None
         self._start_time: float = 0.0
         self._running = False
 
@@ -112,28 +113,24 @@ class ScinetService:
         self._proxy_pool: Any = None
         self._accelerator: Any = None
 
+        # Scinet v2.0 Engine (RL + GNN + Federated + QUIC + Cache + WebTransport)
+        self._engine: Any = None
+        self._v2_enabled: bool = False
+
     async def start(self) -> ScinetStatus:
-        """启动 Scinet 代理服务。"""
+        """Start Scinet proxy service using raw TCP server for full proxy support."""
         if self._running:
             logger.info("Scinet: already running on port %d", self.port)
             return self._status
 
-        if not HAS_AIOHTTP:
-            raise RuntimeError("aiohttp required for Scinet service")
-
-        # Init subsystems
+        # Init subsystems (v1.0 IP pool + v2.0 engine)
         await self._init_subsystems()
 
-        app = self._create_app()
-        self._runner = web.AppRunner(app)
-        await self._runner.setup()
-
         try:
-            self._site = web.TCPSite(self._runner, "127.0.0.1", self.port)
-            await self._site.start()
+            self._raw_server = await asyncio.start_server(
+                self._handle_client, "127.0.0.1", self.port,
+            )
         except OSError as e:
-            await self._runner.cleanup()
-            self._runner = None
             logger.error("Scinet: port %d already in use — %s", self.port, e)
             raise RuntimeError(f"Port {self.port} occupied: {e}") from e
 
@@ -155,21 +152,18 @@ class ScinetService:
         if not self._running:
             return self._status
 
-        try:
-            if self._site:
-                await self._site.stop()
-        except Exception as e:
-            logger.warning("Scinet stop site error: %s", e)
-
-        try:
-            if self._runner:
-                await self._runner.cleanup()
-        except Exception as e:
-            logger.warning("Scinet stop runner error: %s", e)
-
-        self._site = None
-        self._runner = None
+        if self._raw_server:
+            self._raw_server.close()
+            await self._raw_server.wait_closed()
+        self._raw_server = None
         self._running = False
+
+        # Stop v2.0 engine
+        if self._engine:
+            try:
+                await self._engine.stop()
+            except Exception as e:
+                logger.debug("Scinet engine stop: %s", e)
 
         with self._lock:
             self._status.running = False
@@ -178,6 +172,363 @@ class ScinetService:
         logger.info("Scinet: stopped (uptime=%.0fs, requests=%d)",
                    self._status.uptime_seconds, self._status.total_requests)
         return self._status
+
+    # ═══ Raw TCP Client Handler (HTTP proxy + CONNECT tunnel + management) ═══
+
+    async def _handle_client(self, reader: asyncio.StreamReader,
+                             writer: asyncio.StreamWriter) -> None:
+        """Process one client connection — parse HTTP, route proxy or management."""
+        try:
+            request_line = await asyncio.wait_for(reader.readline(), timeout=30.0)
+            if not request_line:
+                writer.close()
+                return
+
+            request_text = request_line.decode("utf-8", errors="replace").strip()
+            if not request_text:
+                writer.close()
+                return
+
+            parts = request_text.split(" ")
+            if len(parts) < 3:
+                writer.close()
+                return
+
+            method, target, _ = parts
+
+            # Read headers
+            headers = {}
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=10.0)
+                line_text = line.decode("utf-8", errors="replace").strip()
+                if not line_text:
+                    break
+                if ":" in line_text:
+                    key, value = line_text.split(":", 1)
+                    headers[key.strip()] = value.strip()
+
+            # Route: CONNECT → tunnel, GET /pac etc → management, other → proxy
+            if method == "CONNECT":
+                await self._raw_connect_tunnel(target, reader, writer)
+            elif target.startswith("http://") or target.startswith("https://"):
+                # HTTP proxy: full URL in request line
+                await self._raw_proxy_forward(method, target, headers, reader, writer)
+            else:
+                # Management endpoints (relative path)
+                await self._raw_management(method, target, headers, reader, writer)
+
+        except asyncio.TimeoutError:
+            pass
+        except ConnectionError:
+            pass
+        except Exception as e:
+            logger.debug("Client handler error: %s", e)
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+
+    async def _raw_connect_tunnel(self, target: str, reader: asyncio.StreamReader,
+                                   writer: asyncio.StreamWriter) -> None:
+        """Handle CONNECT method — direct connect with proxy pool fallback."""
+        if ":" in target:
+            host, port_str = target.rsplit(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                host, port = target, 443
+        else:
+            host, port = target, 443
+
+        logger.info("CONNECT tunnel: %s:%d", host, port)
+
+        remote_reader, remote_writer = await self._connect_with_fallback(host, port)
+
+        if remote_reader is None:
+            logger.debug("CONNECT %s:%d failed (direct + proxy)", host, port)
+            writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+            await writer.drain()
+            return
+
+        # Send 200 to client
+        writer.write(b"HTTP/1.1 200 Connection Established\r\n")
+        writer.write(b"Proxy-Agent: LivingTree-Scinet/2.0\r\n\r\n")
+        await writer.drain()
+
+        with self._lock:
+            self._status.total_requests += 1
+
+        # Bidirectional relay
+        try:
+            async def pipe(src_r, dst_w, label):
+                try:
+                    while True:
+                        data = await src_r.read(65536)
+                        if not data:
+                            break
+                        dst_w.write(data)
+                        await dst_w.drain()
+                except Exception:
+                    pass
+
+            await asyncio.gather(
+                pipe(reader, remote_writer, "c2r"),
+                pipe(remote_reader, writer, "r2c"),
+            )
+        except Exception:
+            pass
+        finally:
+            with self._lock:
+                self._status.success_requests += 1
+            if remote_writer:
+                remote_writer.close()
+
+    async def _connect_with_fallback(self, host: str, port: int):
+        """Try direct connect, then proxy pool, then DomainIPPool."""
+        # 1. Direct connection
+        try:
+            r, w = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=10.0,
+            )
+            logger.debug("CONNECT %s:%d → direct", host, port)
+            return r, w
+        except Exception:
+            pass
+
+        # 2. Domain IP Pool (pre-tested optimal IPs)
+        if self._ip_pool:
+            best_ip = self._ip_pool.get_best(host)
+            if best_ip and best_ip.ip != host:
+                try:
+                    r, w = await asyncio.wait_for(
+                        asyncio.open_connection(best_ip.ip, port), timeout=10.0,
+                    )
+                    logger.info("CONNECT %s:%d → optimal IP %s", host, port, best_ip.ip)
+                    return r, w
+                except Exception:
+                    pass
+
+        # 3. Proxy pool (free proxies)
+        if self._proxy_pool:
+            for _ in range(3):
+                proxy = self._proxy_pool.get_random()
+                if not proxy:
+                    break
+                try:
+                    r, w = await self._http_connect_via_proxy(
+                        proxy.host, proxy.port, host, port,
+                    )
+                    if r:
+                        logger.info("CONNECT %s:%d → proxy %s:%d", host, port, proxy.host, proxy.port)
+                        self._proxy_pool.mark_success(proxy)
+                        return r, w
+                    self._proxy_pool.mark_failure(proxy)
+                except Exception:
+                    self._proxy_pool.mark_failure(proxy)
+
+        return None, None
+
+    async def _http_connect_via_proxy(self, proxy_host: str, proxy_port: int,
+                                       target_host: str, target_port: int):
+        """Establish tunnel to target through an upstream HTTP proxy."""
+        try:
+            r, w = await asyncio.wait_for(
+                asyncio.open_connection(proxy_host, proxy_port), timeout=8.0,
+            )
+            # Send CONNECT to upstream proxy
+            w.write(f"CONNECT {target_host}:{target_port} HTTP/1.1\r\n".encode())
+            w.write(f"Host: {target_host}:{target_port}\r\n".encode())
+            w.write(b"Proxy-Connection: Keep-Alive\r\n")
+            w.write(b"User-Agent: LivingTree-Scinet/2.0\r\n\r\n")
+            await w.drain()
+
+            # Read response
+            line = await asyncio.wait_for(r.readline(), timeout=5.0)
+            parts = line.decode().split()
+            if len(parts) >= 2 and parts[1] == "200":
+                # Read remaining headers
+                while True:
+                    l = await asyncio.wait_for(r.readline(), timeout=3.0)
+                    if l.strip() == b"":
+                        break
+                return r, w
+            w.close()
+        except Exception:
+            pass
+        return None, None
+
+    async def _raw_proxy_forward(self, method: str, target_url: str,
+                                  headers: dict, reader: asyncio.StreamReader,
+                                  writer: asyncio.StreamWriter) -> None:
+        """Forward HTTP proxy request to target and relay response."""
+        with self._lock:
+            self._status.total_requests += 1
+
+        # Read body if present
+        body = b""
+        if method in ("POST", "PUT", "PATCH"):
+            content_length = int(headers.get("Content-Length", "0"))
+            if content_length > 0 and content_length < 10 * 1024 * 1024:
+                body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=10.0,
+                )
+
+        # Clean headers
+        clean_headers = dict(headers)
+        for h in ("Host", "Proxy-Connection", "Proxy-Authorization",
+                  "X-Forwarded-For", "X-Real-IP", "Content-Length",
+                  "Transfer-Encoding", "Proxy-Authenticate"):
+            clean_headers.pop(h, None)
+        clean_headers["User-Agent"] = clean_headers.get("User-Agent", "LivingTree-Scinet/2.0")
+        clean_headers["Accept-Encoding"] = clean_headers.get("Accept-Encoding", "identity")
+
+        # Domain category
+        domain_category = "GENERAL"
+        try:
+            from urllib.parse import urlparse
+            hostname = urlparse(target_url).hostname or ""
+            if any(d in hostname for d in ("github", "huggingface", "docker", "pypi")):
+                domain_category = "DEDICATED"
+            elif any(d in hostname for d in ("google", "stackoverflow", "wikipedia", "arxiv")):
+                domain_category = "SEARCH"
+            elif any(d in hostname for d in ("youtube", "googlevideo")):
+                domain_category = "VIDEO"
+        except Exception:
+            pass
+
+        # v2.0 engine pipeline
+        if self._v2_enabled and self._engine:
+            try:
+                status_code, content, resp_headers = await self._engine.proxy_request(
+                    target_url, method=method, headers=clean_headers,
+                    body=body, timeout=30.0,
+                    domain_category=domain_category,
+                )
+                with self._lock:
+                    self._status.success_requests += 1
+                    self._status.bandwidth_bytes += len(content)
+
+                response_line = f"HTTP/1.1 {status_code} OK\r\n".encode()
+                writer.write(response_line)
+                writer.write(b"X-Proxy: LivingTree-Scinet/2.0\r\n")
+                writer.write(b"X-Routing: bandit+topology+quic\r\n")
+                writer.write(f"Content-Length: {len(content)}\r\n".encode())
+                if resp_headers:
+                    content_type = resp_headers.get("Content-Type", "text/html")
+                    writer.write(f"Content-Type: {content_type}\r\n".encode())
+                writer.write(b"Access-Control-Allow-Origin: *\r\n")
+                writer.write(b"Connection: close\r\n\r\n")
+                writer.write(content)
+                await writer.drain()
+                return
+            except Exception as e:
+                logger.debug("v2.0 engine failed, fallback v1.0: %s", e)
+
+        # v1.0 direct forwarding
+        try:
+            connector = aiohttp.TCPConnector(limit=50)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.request(
+                    method, target_url,
+                    headers=clean_headers,
+                    data=body,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                    allow_redirects=True,
+                ) as resp:
+                    content = await resp.read()
+                    with self._lock:
+                        self._status.success_requests += 1
+                        self._status.bandwidth_bytes += len(content)
+
+                    writer.write(f"HTTP/1.1 {resp.status} {resp.reason}\r\n".encode())
+                    writer.write(b"X-Proxy: LivingTree-Scinet/1.0\r\n")
+                    for hdr, val in resp.headers.items():
+                        if hdr.lower() not in ("transfer-encoding", "content-encoding"):
+                            writer.write(f"{hdr}: {val}\r\n".encode())
+                    writer.write(b"Connection: close\r\n\r\n")
+                    writer.write(content)
+                    await writer.drain()
+        except Exception as e:
+            with self._lock:
+                self._status.failed_requests += 1
+            logger.debug("Proxy error: %s → %s", target_url[:80], e)
+            writer.write(b"HTTP/1.1 502 Bad Gateway\r\n")
+            writer.write(f"X-Proxy-Error: {e}\r\n".encode())
+            writer.write(b"Content-Type: text/plain\r\n")
+            writer.write(b"Connection: close\r\n\r\n")
+            writer.write(f"Upstream error: {type(e).__name__}".encode())
+            await writer.drain()
+
+    async def _raw_management(self, method: str, path: str, headers: dict,
+                               reader: asyncio.StreamReader,
+                               writer: asyncio.StreamWriter) -> None:
+        """Handle management endpoints: /pac, /status, /v2/status, /test, /."""
+        if method != "GET":
+            writer.write(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
+            await writer.drain()
+            return
+
+        path_clean = path.split("?")[0] if "?" in path else path
+
+        if path_clean == "/":
+            v2_info = " + v2.0 Engine" if self._v2_enabled else ""
+            body = f"Scinet v1.0{v2_info} — LivingTree Smart Proxy\nPort: {self.port}\nPAC: http://127.0.0.1:{self.port}/pac\nV2 Status: http://127.0.0.1:{self.port}/v2/status"
+        elif path_clean == "/pac":
+            body = self.generate_pac()
+        elif path_clean == "/status":
+            import json as _json
+            st = self.get_status()
+            body = _json.dumps({
+                "running": st.running, "port": st.port,
+                "uptime_seconds": st.uptime_seconds,
+                "total_requests": st.total_requests,
+                "success_rate": st.success_requests / max(st.total_requests, 1),
+                "bandwidth_bytes": st.bandwidth_bytes,
+            })
+        elif path_clean == "/v2/status":
+            import json as _json
+            result = {
+                "version": "2.0", "running": self._running, "port": self.port,
+                "total_requests": self._status.total_requests,
+                "success_requests": self._status.success_requests,
+                "failed_requests": self._status.failed_requests,
+            }
+            if self._engine:
+                try:
+                    result["engine"] = self._engine.get_detailed_status()
+                except Exception:
+                    result["engine"] = {"error": "unavailable"}
+            body = _json.dumps(result, indent=2, default=str)
+        elif path_clean == "/test":
+            import json as _json
+            results = {}
+            test_urls = ["https://github.com", "https://huggingface.co"]
+            for url in test_urls:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        t0 = time.time()
+                        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                            elapsed = (time.time() - t0) * 1000
+                            results[url] = f"OK ({resp.status}, {elapsed:.0f}ms)"
+                except Exception as e:
+                    results[url] = f"FAIL ({e})"
+            body = _json.dumps({"test_results": results})
+        else:
+            writer.write(b"HTTP/1.1 404 Not Found\r\n\r\nNot Found")
+            await writer.drain()
+            return
+
+        body_bytes = body.encode("utf-8")
+        writer.write(b"HTTP/1.1 200 OK\r\n")
+        writer.write(b"Server: LivingTree-Scinet/2.0\r\n")
+        writer.write(f"Content-Length: {len(body_bytes)}\r\n".encode())
+        writer.write(b"Content-Type: application/json\r\n" if path_clean in ("/status", "/v2/status", "/test") else
+                      b"Content-Type: application/x-ns-proxy-autoconfig\r\n" if path_clean == "/pac" else
+                      b"Content-Type: text/plain\r\n")
+        writer.write(b"Connection: close\r\n\r\n")
+        writer.write(body_bytes)
+        await writer.drain()
 
     def get_status(self) -> ScinetStatus:
         with self._lock:
@@ -229,123 +580,6 @@ class ScinetService:
             logger.warning("Scinet: Windows proxy config failed: %s", e)
             return False
 
-    # ═══ HTTP Proxy Server ═══
-
-    def _create_app(self) -> web.Application:
-        app = web.Application()
-        app.router.add_get("/", self._handle_root)
-        app.router.add_get("/pac", self._handle_pac)
-        app.router.add_get("/status", self._handle_status)
-        app.router.add_get("/test", self._handle_test)
-        app.router.add_route("*", "/{path:.*}", self._handle_proxy)
-        return app
-
-    async def _handle_root(self, request: web.Request) -> web.Response:
-        return web.Response(text=f"Scinet v1.0 — LivingTree Smart Proxy\nPort: {self.port}\nStatus: {'running' if self._running else 'stopped'}\nPAC: http://127.0.0.1:{self.port}/pac")
-
-    async def _handle_pac(self, request: web.Request) -> web.Response:
-        return web.Response(text=self.generate_pac(), content_type="application/x-ns-proxy-autoconfig")
-
-    async def _handle_status(self, request: web.Request) -> web.Response:
-        status = self.get_status()
-        return web.json_response({
-            "running": status.running,
-            "port": status.port,
-            "uptime_seconds": status.uptime_seconds,
-            "total_requests": status.total_requests,
-            "success_rate": (
-                status.success_requests / max(status.total_requests, 1)
-            ),
-            "bandwidth_bytes": status.bandwidth_bytes,
-        })
-
-    async def _handle_test(self, request: web.Request) -> web.Response:
-        """Test connectivity through the proxy."""
-        results = {}
-        test_urls = [
-            "https://github.com",
-            "https://huggingface.co",
-            "https://stackoverflow.com",
-            "https://www.google.com",
-        ]
-        for url in test_urls:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    start = time.time()
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                        elapsed = (time.time() - start) * 1000
-                        results[url] = f"OK ({resp.status}, {elapsed:.0f}ms)"
-            except Exception as e:
-                results[url] = f"FAIL ({e})"
-
-        return web.json_response({"test_results": results})
-
-    async def _handle_proxy(self, request: web.Request) -> web.Response:
-        """Core proxy handler — forward requests to target site."""
-        with self._lock:
-            self._status.total_requests += 1
-
-        target_url = str(request.url)
-        if not target_url.startswith("http"):
-            proto = request.headers.get("X-Forwarded-Proto", "https")
-            host = request.headers.get("Host", "")
-            if not host:
-                return web.Response(status=400, text="Missing Host header")
-            target_url = f"{proto}://{host}{request.path_qs}"
-
-        # Validate target URL
-        if not target_url or "://" not in target_url:
-            return web.Response(status=400, text="Invalid target URL")
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                method = request.method
-                headers = dict(request.headers)
-                # Sanitize headers
-                for h in ("Host", "Proxy-Connection", "Proxy-Authorization",
-                         "X-Forwarded-For", "X-Real-IP"):
-                    headers.pop(h, None)
-                headers["User-Agent"] = headers.get("User-Agent", "LivingTree-Scinet/1.0")
-
-                # Limit body size to 10MB
-                body = None
-                if method in ("POST", "PUT", "PATCH"):
-                    body = await asyncio.wait_for(request.read(), timeout=10.0)
-                    if len(body) > 10 * 1024 * 1024:
-                        return web.Response(status=413, text="Body too large")
-
-                async with session.request(
-                    method, target_url,
-                    headers=headers,
-                    data=body,
-                    timeout=aiohttp.ClientTimeout(total=30),
-                    allow_redirects=True,
-                ) as resp:
-                    content = await resp.read()
-                    with self._lock:
-                        self._status.success_requests += 1
-                        self._status.bandwidth_bytes += len(content)
-
-                    return web.Response(
-                        body=content,
-                        status=resp.status,
-                        headers={
-                            "Content-Type": resp.headers.get("Content-Type", "text/html"),
-                            "X-Proxy": "LivingTree-Scinet",
-                            "Access-Control-Allow-Origin": "*",
-                        },
-                    )
-
-        except Exception as e:
-            with self._lock:
-                self._status.failed_requests += 1
-            logger.debug("Scinet proxy error: %s → %s", target_url[:80], e)
-            return web.Response(
-                status=502,
-                text=f"Proxy error: {type(e).__name__}",
-                headers={"X-Proxy-Error": str(e)[:200]},
-            )
-
     async def _init_subsystems(self) -> None:
         try:
             from .domain_ip_pool import DomainIPPool
@@ -357,6 +591,9 @@ class ScinetService:
         try:
             from .proxy_fetcher import get_proxy_pool
             self._proxy_pool = get_proxy_pool()
+            # Start background proxy refresh + health check loop
+            asyncio.create_task(self._proxy_pool.start_background())
+            logger.info("Proxy pool: 6 sources, auto-refresh every 10min")
         except Exception:
             pass
 
@@ -366,6 +603,16 @@ class ScinetService:
             await self._accelerator.initialize()
         except Exception:
             pass
+
+        # Scinet v2.0 Engine — RL Bandit + GNN Topology + Federated + QUIC + Cache
+        try:
+            from .scinet_engine import get_scinet_engine
+            self._engine = get_scinet_engine(port=self.port)
+            await self._engine.start()
+            self._v2_enabled = True
+            logger.info("Scinet v2.0 engine activated (Bandit + Topology + Federated + QUIC + Cache)")
+        except Exception as e:
+            logger.debug("Scinet v2.0 engine deferred: %s", e)
 
 
 # ═══ Singleton ═══

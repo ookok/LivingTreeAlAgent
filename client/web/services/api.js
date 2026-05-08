@@ -256,11 +256,11 @@ const api = {
     } catch (e) { console.warn('[api] codeListProjects:', e); return null; }
   },
 
-  async codeCreateProject(name, githubUrl = '') {
+  async codeCreateProject(name, githubUrl = '', workspaceId = '') {
     try {
       const r = await fetch(`${this.base}/../code/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
-        body: JSON.stringify({ name, github_url: githubUrl })
+        body: JSON.stringify({ name, github_url: githubUrl, workspace_id: workspaceId })
       });
       if (!r.ok) throw new Error(await r.text());
       return await r.json();
@@ -285,6 +285,154 @@ const api = {
       if (!r.ok) throw new Error(await r.text());
       return await r.json();
     } catch (e) { console.warn('[api] codeSyncProject:', e); return null; }
+  },
+
+  async codeScanProject(name) {
+    try {
+      const r = await fetch(`${this.base}/../code/projects/${encodeURIComponent(name)}/scan`, {
+        headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] codeScanProject:', e); return null; }
+  },
+
+  /* ── Audit Log ── */
+
+  async auditLogs(operation, risk, project, limit, offset) {
+    try {
+      const params = new URLSearchParams();
+      if (operation) params.set('operation', operation);
+      if (risk) params.set('risk', risk);
+      if (project) params.set('project', project);
+      if (limit) params.set('limit', String(limit));
+      if (offset) params.set('offset', String(offset));
+      const r = await fetch(`${this.base}/../audit/logs?${params}`, {
+        headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] auditLogs:', e); return null; }
+  },
+
+  async auditMetrics() {
+    try {
+      const r = await fetch(`${this.base}/../audit/metrics`, {
+        headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] auditMetrics:', e); return null; }
+  },
+
+  /* ── Workspace ── */
+
+  async workspaceList() {
+    try {
+      const r = await fetch(`${this.base}/../workspaces`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceList:', e); return []; }
+  },
+
+  async workspaceCreate(name) {
+    try {
+      const r = await fetch(`${this.base}/../workspaces`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ name })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceCreate:', e); return null; }
+  },
+
+  async workspaceDelete(wsId) {
+    try {
+      const r = await fetch(`${this.base}/../workspaces/${encodeURIComponent(wsId)}`, {
+        method: 'DELETE', headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceDelete:', e); return null; }
+  },
+
+  async workspaceInviteMember(wsId, userId, role) {
+    try {
+      const r = await fetch(`${this.base}/../workspaces/${encodeURIComponent(wsId)}/members`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ user_id: userId, role })
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceInviteMember:', e); return null; }
+  },
+
+  async workspaceRemoveMember(wsId, userId) {
+    try {
+      const r = await fetch(`${this.base}/../workspaces/${encodeURIComponent(wsId)}/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE', headers: this._authHeaders()
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceRemoveMember:', e); return null; }
+  },
+
+  async workspaceMembers(wsId) {
+    try {
+      const r = await fetch(`${this.base}/../workspaces/${encodeURIComponent(wsId)}/members`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] workspaceMembers:', e); return []; }
+  },
+
+  /* ── Skills ── */
+
+  async skillList(workspaceId = '', tag = '', search = '') {
+    try {
+      const params = new URLSearchParams();
+      if (workspaceId) params.set('workspace_id', workspaceId);
+      if (tag) params.set('tag', tag);
+      if (search) params.set('search', search);
+      const r = await fetch(`${this.base}/../skills?${params}`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] skillList:', e); return []; }
+  },
+
+  async skillGet(name, workspaceId = '') {
+    try {
+      const params = new URLSearchParams();
+      if (workspaceId) params.set('workspace_id', workspaceId);
+      const r = await fetch(`${this.base}/../skills/${encodeURIComponent(name)}?${params}`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] skillGet:', e); return null; }
+  },
+
+  async skillCreateOrUpdate(name, body, description, tags, workspaceId, sourceProject) {
+    try {
+      const r = await fetch(`${this.base}/../skills`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+        body: JSON.stringify({ name, body, description, tags, workspace_id: workspaceId, source_project: sourceProject })
+      });
+      return await r.json();
+    } catch (e) { console.warn('[api] skillCreateOrUpdate:', e); return null; }
+  },
+
+  async skillDelete(name, workspaceId = '') {
+    try {
+      const params = new URLSearchParams();
+      if (workspaceId) params.set('workspace_id', workspaceId);
+      const r = await fetch(`${this.base}/../skills/${encodeURIComponent(name)}?${params}`, {
+        method: 'DELETE', headers: this._authHeaders()
+      });
+      return await r.json();
+    } catch (e) { console.warn('[api] skillDelete:', e); return null; }
+  },
+
+  async skillSuggestions(workspaceId = '') {
+    try {
+      const params = new URLSearchParams();
+      if (workspaceId) params.set('workspace_id', workspaceId);
+      const r = await fetch(`${this.base}/../skills/suggestions?${params}`, { headers: this._authHeaders() });
+      return await r.json();
+    } catch (e) { console.warn('[api] skillSuggestions:', e); return []; }
   },
 
   /* ── GitHub ── */

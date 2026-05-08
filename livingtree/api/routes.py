@@ -6,8 +6,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -348,6 +348,31 @@ def setup_routes(app: FastAPI) -> None:
 
         last_msg = messages[-1].get("content", "") if messages else ""
 
+        # Compress tool outputs in messages to save tokens (9Router RTK-inspired)
+        try:
+            from livingtree.core.token_compressor import compress
+            total_saved = 0
+            for msg in messages:
+                content = msg.get("content", "")
+                if isinstance(content, str) and len(content) > 500:
+                    result = compress(content)
+                    if result["saved_pct"] > 0:
+                        msg["content"] = result["compressed"]
+                        total_saved += result["saved_pct"]
+            if total_saved > 0:
+                logger.debug(f"Token compressor: saved ~{total_saved / len(messages):.0f}% avg across {len(messages)} msgs")
+        except Exception:
+            pass
+
+        # Inject memory context (non-blocking fire-and-forget)
+        try:
+            from livingtree.core.session_memory import agent_memory
+            context = await agent_memory.get_context_injection(last_msg)
+            if context:
+                last_msg = f"{context}\n\n---\n用户消息:\n{last_msg}"
+        except Exception:
+            pass
+
         from fastapi.responses import StreamingResponse
         import json as _json, time as _time
 
@@ -574,3 +599,251 @@ def _fallback_reply(msg: str) -> str:
     # ── Register doc routes (LT-Office integration) ──
     from .doc_routes import setup_doc_routes
     setup_doc_routes(app)
+
+    # ── Memory management routes ──
+
+    @app.get("/api/memory/status")
+    async def memory_status(request: Request) -> dict[str, Any]:
+        """Get memory engine status."""
+        try:
+            from livingtree.core.session_memory import agent_memory, _cognee_available
+            await agent_memory._ensure_init()
+            entries = agent_memory._load_fallback()
+            return {
+                "cognee_available": _cognee_available,
+                "fallback_entries": len(entries),
+                "status": "ok",
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    @app.post("/api/memory/remember")
+    async def memory_remember(request: Request) -> dict[str, Any]:
+        """Store a memory entry."""
+        try:
+            body = await request.json()
+            from livingtree.core.session_memory import agent_memory
+            ok = await agent_memory.remember(
+                body.get("content", ""),
+                user_id=body.get("user_id", ""),
+                project=body.get("project", ""),
+                workspace_id=body.get("workspace_id", ""),
+            )
+            return {"ok": ok}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/memory/recall")
+    async def memory_recall(request: Request) -> dict[str, Any]:
+        """Recall relevant memories."""
+        try:
+            body = await request.json()
+            from livingtree.core.session_memory import agent_memory
+            results = await agent_memory.recall(
+                body.get("query", ""),
+                user_id=body.get("user_id", ""),
+                project=body.get("project", ""),
+                workspace_id=body.get("workspace_id", ""),
+                limit=body.get("limit", 5),
+            )
+            return {"ok": True, "results": results}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "results": []}
+
+    @app.post("/api/memory/forget")
+    async def memory_forget(request: Request) -> dict[str, Any]:
+        """Forget memories."""
+        try:
+            body = await request.json()
+            from livingtree.core.session_memory import agent_memory
+            ok = await agent_memory.forget(
+                user_id=body.get("user_id", ""),
+                project=body.get("project", ""),
+            )
+            return {"ok": ok}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── Skill management routes ──
+
+    @app.get("/api/skills")
+    async def list_all_skills(
+        request: Request,
+        workspace_id: str = Query(default=""),
+        tag: str = Query(default=""),
+        search: str = Query(default=""),
+    ) -> list[dict]:
+        """List skills for current user or workspace."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import list_skills
+        return list_skills(
+            user_id=user_id if not workspace_id else "",
+            workspace_id=workspace_id,
+            tag=tag,
+            search=search,
+        )
+
+    @app.get("/api/skills/{name}")
+    async def get_single_skill(
+        name: str,
+        request: Request,
+        workspace_id: str = Query(default=""),
+    ) -> dict:
+        """Get a single skill by name."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import get_skill
+        skill = get_skill(name, user_id=user_id if not workspace_id else "", workspace_id=workspace_id)
+        if not skill:
+            raise HTTPException(status_code=404, detail="技能不存在")
+        return skill
+
+    @app.post("/api/skills")
+    async def create_or_update_skill(request: Request) -> dict:
+        """Create or update a skill."""
+        try:
+            body = await request.json()
+            user_id = _get_user_id_from_request(request)
+            from livingtree.core.skills import create_or_update_skill
+            return create_or_update_skill(
+                name=body.get("name", ""),
+                body=body.get("body", ""),
+                user_id=user_id if not body.get("workspace_id") else "",
+                workspace_id=body.get("workspace_id", ""),
+                description=body.get("description", ""),
+                tags=body.get("tags", []),
+                source_project=body.get("source_project", ""),
+                source_user=body.get("source_user", user_id),
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.delete("/api/skills/{name}")
+    async def delete_skill_by_name(
+        name: str,
+        request: Request,
+        workspace_id: str = Query(default=""),
+    ) -> dict:
+        """Delete a skill."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import delete_skill
+        ok = delete_skill(name, user_id=user_id if not workspace_id else "", workspace_id=workspace_id)
+        return {"ok": ok}
+
+    @app.post("/api/skills/{name}/touch")
+    async def touch_skill_usage(
+        name: str,
+        request: Request,
+        workspace_id: str = Query(default=""),
+    ) -> dict:
+        """Increment skill usage count."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import touch_skill
+        ok = touch_skill(name, user_id=user_id if not workspace_id else "", workspace_id=workspace_id)
+        return {"ok": ok}
+
+    @app.get("/api/skills/suggestions")
+    async def skill_suggestions(
+        request: Request,
+        workspace_id: str = Query(default=""),
+    ) -> list[dict]:
+        """Get skill suggestions from recorded sessions."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import suggest_skills_from_sessions
+        return suggest_skills_from_sessions(
+            user_id=user_id if not workspace_id else "",
+            workspace_id=workspace_id,
+        )
+
+    @app.get("/api/skills/dedup")
+    async def skill_deduplication(
+        request: Request,
+        workspace_id: str = Query(default=""),
+    ) -> dict:
+        """Find duplicate skills."""
+        user_id = _get_user_id_from_request(request)
+        from livingtree.core.skills import deduplicate_skills
+        return deduplicate_skills(
+            user_id=user_id if not workspace_id else "",
+            workspace_id=workspace_id,
+        )
+
+
+    @app.get("/api/docs/templates")
+    async def list_doc_templates() -> list[dict]:
+        """List available Kami document templates."""
+        from livingtree.core.doc_renderer import list_templates
+        return list_templates()
+
+    @app.post("/api/docs/render")
+    async def render_document_endpoint(request: Request) -> dict:
+        """Render Markdown content to Kami-styled HTML/PDF."""
+        try:
+            body = await request.json()
+            from livingtree.core.doc_renderer import render_document
+            return render_document(
+                content=body.get("content", ""),
+                template=body.get("template", "long_doc"),
+                title=body.get("title", ""),
+                output_path=body.get("output_path", ""),
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+def _get_user_id_from_request(request: Request) -> str:
+    """Extract user_id from JWT token in request headers."""
+    try:
+        from livingtree.api.auth import verify_token
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            payload = verify_token(token)
+            if payload:
+                return payload.get("user_id", "")
+    except Exception:
+        pass
+    return ""
+
+    # ── Document parsing routes ──
+
+    @app.post("/api/docs/parse")
+    async def parse_uploaded_doc(
+        request: Request,
+        file: UploadFile = File(...),
+        project: str = Form(default=""),
+        workspace_id: str = Form(default=""),
+    ) -> dict:
+        """Upload a document and parse it with MinerU. Results fed into agent memory."""
+        from pathlib import Path
+        import time as _upload_time
+        user_id = _get_user_id_from_request(request)
+        uploads_dir = Path(__file__).resolve().parent.parent.parent / "data" / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = uploads_dir / f"{int(_upload_time.time())}_{file.filename}"
+        try:
+            content = await file.read()
+            tmp_path.write_bytes(content)
+            from livingtree.core.session_memory import ingest_document
+            result = await ingest_document(
+                str(tmp_path), user_id=user_id, project=project, workspace_id=workspace_id)
+            if result.get("ok"):
+                tmp_path.unlink(missing_ok=True)
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/docs/parse-file")
+    async def parse_local_doc(request: Request) -> dict:
+        """Parse a local file path with MinerU."""
+        try:
+            body = await request.json()
+            user_id = _get_user_id_from_request(request)
+            from livingtree.core.session_memory import ingest_document
+            return await ingest_document(
+                body.get("path", ""),
+                user_id=user_id,
+                project=body.get("project", ""),
+                workspace_id=body.get("workspace_id", ""),
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

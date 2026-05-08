@@ -50,9 +50,13 @@ const store = {
   userId: null,
   userName: null,
   selectedProject: '',     // current project name
-  projects: [],            // [{name, path, file_count, github_url, ...}]
+  projects: [],            // [{name, path, file_count, github_url, workspace_id, ...}]
   githubAuthed: false,
   githubUser: '',
+  workspaces: [],          // [{workspace_id, name, owner, role, ...}]
+  selectedWorkspace: '',
+  skills: [],              // [{name, description, tags, version, ...}]
+  skillSuggestions: [],
 
   init() {
     let raw = null;
@@ -380,10 +384,6 @@ const store = {
     },
 
     toggleCodeMode() {
-      if (!this.isAdmin()) {
-        LT.emit('notify', { msg: 'Code 模式仅限企业微信管理员使用', type: 'error' });
-        return false;
-      }
       this.codeMode = !this.codeMode;
       _save(this);
       if (this.codeMode) {
@@ -455,7 +455,8 @@ const store = {
 
     async createProject(name, githubUrl = '') {
       if (!LT.api || !LT.api.codeCreateProject) return null;
-      const result = await LT.api.codeCreateProject(name, githubUrl);
+      const wsId = this.selectedWorkspace || '';
+      const result = await LT.api.codeCreateProject(name, githubUrl, wsId);
       if (result) {
         await this.loadProjects();
         this.selectedProject = name;
@@ -480,6 +481,37 @@ const store = {
     async syncProject(name) {
       if (!LT.api || !LT.api.codeSyncProject) return null;
       return await LT.api.codeSyncProject(name);
+    },
+
+    async scanProject(name) {
+      if (!LT.api || !LT.api.codeScanProject) return null;
+      const result = await LT.api.codeScanProject(name);
+      if (result) {
+        LT.emit('security:scanResult', result);
+      }
+      return result;
+    },
+
+    /* ── Skills ── */
+
+    async loadSkills(workspaceId = '') {
+      if (!LT.api || !LT.api.skillList) return;
+      const wsId = workspaceId || this.selectedWorkspace || '';
+      const data = await LT.api.skillList(wsId);
+      if (Array.isArray(data)) {
+        this.skills = data;
+        LT.emit('skills:loaded', this.skills);
+      }
+    },
+
+    async loadSkillSuggestions(workspaceId = '') {
+      if (!LT.api || !LT.api.skillSuggestions) return;
+      const wsId = workspaceId || this.selectedWorkspace || '';
+      const data = await LT.api.skillSuggestions(wsId);
+      if (Array.isArray(data)) {
+        this.skillSuggestions = data;
+        LT.emit('skills:suggestionsLoaded', this.skillSuggestions);
+      }
     },
 
     async checkGitHubAuth() {

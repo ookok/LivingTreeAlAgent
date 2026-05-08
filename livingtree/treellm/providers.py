@@ -232,6 +232,34 @@ class OpenAILikeProvider(Provider):
                          default_model=default_model)
 
 
+class KiroProvider(Provider):
+    """Kiro AI — free Claude 4.5 + GLM-5 + MiniMax via OAuth.
+
+    Token obtained via AWS Builder ID / Google / GitHub OAuth.
+    """
+    def __init__(self, api_key: str = "", default_model: str = "claude-sonnet-4.5"):
+        super().__init__(
+            name="kiro",
+            base_url="https://api.kiro.ai/v1",
+            api_key=api_key,
+            default_model=default_model,
+        )
+
+
+class OpenCodeFreeProvider(Provider):
+    """OpenCode Free — no-auth passthrough proxy.
+
+    Models auto-fetched from opencode.ai/zen/v1/models.
+    """
+    def __init__(self, api_key: str = "", default_model: str = "claude-sonnet-4.5"):
+        super().__init__(
+            name="opencode-free",
+            base_url="https://opencode.ai/zen/v1",
+            api_key=api_key or "opencode-free",
+            default_model=default_model,
+        )
+
+
 def create_deepseek_provider(api_key: str) -> DeepSeekProvider:
     return DeepSeekProvider(api_key=api_key)
 
@@ -242,6 +270,14 @@ def create_longcat_provider(api_key: str, model: str = "LongCat-Flash-Lite") -> 
 
 def create_nvidia_provider(api_key: str, model: str = "deepseek-ai/deepseek-r1") -> NvidiaProvider:
     return NvidiaProvider(api_key=api_key, default_model=model)
+
+
+def create_kiro_provider(api_key: str = "") -> KiroProvider:
+    return KiroProvider(api_key=api_key)
+
+
+def create_opencode_free_provider(api_key: str = "") -> OpenCodeFreeProvider:
+    return OpenCodeFreeProvider(api_key=api_key)
 
 
 def create_modelscope_provider(api_key: str, model: str = "Qwen/Qwen3-8B") -> OpenAILikeProvider:

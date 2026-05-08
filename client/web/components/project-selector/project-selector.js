@@ -9,7 +9,7 @@ class ProjectSelector extends Component {
     this._unsubs.push(LT.on('project:deleted', () => this.render()));
     this._unsubs.push(LT.on('github:authChanged', () => this.render()));
     this.render();
-    if (LT.store && LT.store.isAdmin()) LT.store.loadProjects();
+    if (LT.store) LT.store.loadProjects();
   }
 
   template() {
@@ -29,6 +29,7 @@ class ProjectSelector extends Component {
           <span class="proj-meta">${p.file_count || 0} 文件${p.github_url ? ' · 🔗 GitHub' : ''}</span>
         </div>
         <div class="proj-actions">
+          <button class="proj-action-btn" onclick="event.stopPropagation();LT.get('project-selector')._scanProject('${LT.esc(p.name)}')" title="安全扫描">🛡️</button>
           ${p.github_url ? `<button class="proj-action-btn" onclick="event.stopPropagation();LT.get('project-selector')._syncProject('${LT.esc(p.name)}')" title="同步">🔄</button>` : ''}
           <button class="proj-action-btn proj-action-del" onclick="event.stopPropagation();LT.get('project-selector')._deleteProject('${LT.esc(p.name)}')" title="删除">🗑️</button>
         </div>
@@ -99,6 +100,8 @@ class ProjectSelector extends Component {
     if (result) {
       this._hideCreateDialog();
       LT.emit('notify', { msg: `项目 "${name}" 已创建`, type: 'success' });
+      // Auto-scan after creation
+      setTimeout(() => this._scanProject(name), 500);
     } else {
       LT.emit('notify', { msg: '创建失败', type: 'error' });
     }
@@ -120,6 +123,24 @@ class ProjectSelector extends Component {
       LT.emit('code:refreshTree');
     } else {
       LT.emit('notify', { msg: '同步失败', type: 'error' });
+    }
+  }
+
+  async _scanProject(name) {
+    LT.emit('notify', { msg: `正在扫描 "${name}" 安全...`, type: 'info' });
+    const result = await LT.store.scanProject(name);
+    if (result) {
+      if (result.passed) {
+        LT.emit('notify', { msg: `扫描通过: ${name}`, type: 'success' });
+      } else {
+        const criticals = result.findings.filter(f => f.severity === 'critical').length;
+        const highs = result.findings.filter(f => f.severity === 'high').length;
+        let warnMsg = `发现 ${result.total} 个安全风险`;
+        if (criticals) warnMsg += ` (致命: ${criticals})`;
+        if (highs) warnMsg += ` (高危: ${highs})`;
+        LT.emit('notify', { msg: warnMsg, type: 'error' });
+        LT.emit('security:findings', result.findings);
+      }
     }
   }
 
@@ -173,6 +194,8 @@ class ProjectSelector extends Component {
       LT.emit('project:created', result);
       LT.emit('notify', { msg: `克隆成功: ${name}`, type: 'success' });
       this.render();
+      // Auto-scan after clone
+      setTimeout(() => this._scanProject(name), 1000);
     } else {
       LT.emit('notify', { msg: '克隆失败', type: 'error' });
     }

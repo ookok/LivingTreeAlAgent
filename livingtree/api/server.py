@@ -16,6 +16,8 @@ from .openai_proxy import setup_openai_proxy
 from .code_api import setup_code_routes
 from .wework_bot import setup_bot_routes
 from .github_auth import setup_github_routes
+from .audit import setup_audit_routes
+from .workspace import setup_workspace_routes
 
 
 def create_app(hub=None, config=None) -> FastAPI:
@@ -41,6 +43,8 @@ def create_app(hub=None, config=None) -> FastAPI:
     setup_code_routes(app)
     setup_bot_routes(app)
     setup_github_routes(app)
+    setup_audit_routes(app)
+    setup_workspace_routes(app)
 
     # Static files: serve web frontend from client/web/
     web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"

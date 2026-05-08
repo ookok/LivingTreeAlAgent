@@ -51,6 +51,8 @@ async def setup_model_registry(config: Any, lazy: bool = False) -> Any | None:
             "internlm":    ("https://api.intern-ai.org.cn/v1", config.model.internlm_api_key),
             "doubao":     ("https://ark.cn-beijing.volces.com/api/v3", config.model.doubao_api_key if hasattr(config.model, 'doubao_api_key') else os.environ.get("DOUBAO_API_KEY", "")),
             "tabby":      ("http://localhost:5000/v1", "tabby-local"),
+            "kiro":       ("https://api.kiro.ai/v1", os.environ.get("KIRO_API_KEY", "")),
+            "opencode-free": ("https://opencode.ai/zen/v1", "opencode-free"),
         }
 
         registered = 0

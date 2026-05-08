@@ -28,6 +28,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from livingtree.api.auth import get_current_user, is_admin
+from livingtree.api.audit import log_operation
 
 # ═══ Config ═══
 
@@ -180,6 +181,8 @@ def setup_github_routes(app: FastAPI) -> None:
                     })
 
                     logger.info(f"GitHub OAuth: user {user_id} authenticated")
+                    log_operation(user_id, "", "auth.github_login",
+                                  details=f"GitHub OAuth 登录成功")
                     return {"ok": True, "message": "GitHub 登录成功，请关闭此页面"}
 
         except HTTPException:
@@ -213,7 +216,6 @@ def setup_github_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """List user's GitHub repositories."""
-        _check_admin(user)
         token = _get_token(user["user_id"])
         if not token:
             raise HTTPException(status_code=401, detail="请先登录 GitHub")
@@ -240,7 +242,6 @@ def setup_github_routes(app: FastAPI) -> None:
         user: dict = Depends(get_current_user),
     ):
         """Clone a GitHub repo as a new project."""
-        _check_admin(user)
         token = _get_token(user["user_id"])
         if not token:
             raise HTTPException(status_code=401, detail="请先登录 GitHub")
@@ -284,6 +285,21 @@ def setup_github_routes(app: FastAPI) -> None:
             _save_projects(projects)
 
             logger.info(f"GitHub clone: {req.repo_url} → project '{req.project_name}' by {user['user_id']}")
+            log_operation(user_id, user.get("name", ""), "repo.clone",
+                          project=req.project_name,
+                          details=f"克隆 GitHub 仓库 {req.repo_url} → {req.project_name}")
+
+            # Background memory
+            try:
+                from livingtree.core.session_memory import agent_memory
+                import asyncio as _asyncio
+                loop = _asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(agent_memory.remember(
+                        f"从 GitHub 克隆了仓库 {req.repo_url} 到项目 '{req.project_name}'",
+                        user_id=user_id, project=req.project_name))
+            except Exception:
+                pass
 
             return {
                 "ok": True,

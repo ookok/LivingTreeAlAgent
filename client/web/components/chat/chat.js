@@ -27,8 +27,16 @@ class Chat extends Component {
       } else if (action === 'share') {
         const raw = LT.renderer._getRaw(msgEl);
         Share.open(raw);
+      } else if (action === 'open-in-oo') {
+        const raw = LT.renderer._getRaw(msgEl);
+        LT.emit('doc:create', { content: raw, title: this._getDocTitle(raw) });
       }
     });
+  }
+
+  _getDocTitle(content) {
+    const firstLine = (content || '').split('\n')[0].replace(/^#+\s*/, '').trim().slice(0, 50);
+    return firstLine || 'AI Generated Document';
   }
 
   template() {

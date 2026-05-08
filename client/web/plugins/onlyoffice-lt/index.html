@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",sans-serif;font-size:13px;color:#333;background:#f8f9fa;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.header{padding:10px 12px;background:#0ab861;color:#fff;font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.chat{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+.msg{padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.6;max-width:90%}
+.msg.user{align-self:flex-end;background:#0ab861;color:#fff}
+.msg.ai{align-self:flex-start;background:#e8f5e9;color:#333}
+.input-wrap{display:flex;padding:8px;gap:6px;border-top:1px solid #e0e0e0;flex-shrink:0}
+.input-wrap textarea{flex:1;min-height:36px;max-height:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;resize:none;outline:none}
+.input-wrap textarea:focus{border-color:#0ab861}
+.btn{padding:6px 12px;border:none;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;flex-shrink:0}
+.btn-send{background:#0ab861;color:#fff}
+.btn-send:hover{background:#089e50}
+.btn-insert{background:#267ef0;color:#fff;font-size:11px;padding:2px 8px;margin-left:auto;border-radius:4px;cursor:pointer}
+.btn-insert:hover{background:#1e6dd4}
+.actions{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;border-top:1px solid #e0e0e0;flex-shrink:0}
+.action-btn{padding:4px 10px;border:1px solid #ddd;border-radius:14px;font-size:11px;cursor:pointer;background:#fff;transition:all .15s}
+.action-btn:hover{border-color:#0ab861;color:#0ab861;background:#e8f5e9}
+.loading{padding:8px;color:#999;font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="header">🌳 LivingTree AI 助手</div>
+<div class="chat" id="chat"></div>
+<div id="loading" class="loading" style="display:none">AI 思考中...</div>
+<div class="input-wrap">
+  <textarea id="input" placeholder="选择文本后提问，或直接输入指令..." rows="1"></textarea>
+  <button class="btn btn-send" id="send">发送</button>
+</div>
+<div class="actions" id="actions">
+  <button class="action-btn" data-action="rewrite">✏️ 改写</button>
+  <button class="action-btn" data-action="summarize">📝 总结</button>
+  <button class="action-btn" data-action="translate">🌐 翻译</button>
+  <button class="action-btn" data-action="expand">📄 扩写</button>
+  <button class="action-btn" data-action="check">🔧 检查</button>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const loading = document.getElementById('loading');
+let selectedText = '';
+
+// Listen for selected text from OnlyOffice
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'onExternalPluginMessage') {
+    const msg = e.data.data;
+    if (msg && msg.type === 'selection') {
+      selectedText = msg.text || '';
+      if (selectedText) {
+        addMsg('system', `已选中 ${selectedText.length} 个字符`);
+      }
+    }
+  }
+}, false);
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'ai');
+  if (role === 'system') { div.className = 'loading'; div.textContent = text; }
+  else { div.innerHTML = text.replace(/\n/g, '<br>'); }
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+
+  if (role === 'ai') {
+    const insertBtn = document.createElement('button');
+    insertBtn.className = 'btn-insert';
+    insertBtn.textContent = '插入文档';
+    insertBtn.onclick = () => insertIntoDoc(text);
+    div.appendChild(insertBtn);
+  }
+}
+
+function insertIntoDoc(text) {
+  try {
+    window.Asc.plugin.executeCommand('paste', text);
+  } catch (e) {
+    console.warn('Insert failed, falling back:', e);
+    navigator.clipboard.writeText(text);
+  }
+}
+
+async function sendAI(text, action) {
+  if (!text) return;
+  loading.style.display = 'block';
+
+  let prompt = text;
+  if (action === 'rewrite') prompt = `请改写以下内容，保持原意但改进表达：\n\n${text}`;
+  else if (action === 'summarize') prompt = `请总结以下内容：\n\n${text}`;
+  else if (action === 'translate') prompt = `请将以下内容翻译为英文：\n\n${text}`;
+  else if (action === 'expand') prompt = `请扩写以下内容，补充更多细节：\n\n${text}`;
+  else if (action === 'check') prompt = `请检查以下内容的问题并给出修改建议：\n\n${text}`;
+
+  if (selectedText) {
+    prompt = `引用内容：\n${selectedText}\n\n指令：${prompt}`;
+  }
+
+  addMsg('user', text);
+
+  try {
+    const resp = await fetch('http://localhost:8100/api/web/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', full = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const d = JSON.parse(line.slice(6));
+            full += d.content || '';
+          } catch (e) {}
+        }
+      }
+    }
+    loading.style.display = 'none';
+    addMsg('ai', full);
+  } catch (e) {
+    loading.style.display = 'none';
+    addMsg('ai', `[离线回复] 收到你的请求: "${text.slice(0, 50)}..."`);
+  }
+}
+
+document.getElementById('send').onclick = () => {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendAI(text);
+};
+
+input.onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('send').click();
+  }
+};
+
+document.getElementById('actions').onclick = (e) => {
+  const btn = e.target.closest('.action-btn');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const text = selectedText || input.value.trim() || '请处理当前文档';
+  sendAI(text, action);
+};
+</script>
+</body>
+</html>

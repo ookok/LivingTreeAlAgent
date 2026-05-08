@@ -26,6 +26,7 @@
     { name: 'notifications', el: '#notifications' },
     { name: 'user-menu', el: '#user-dropdown' },
     { name: 'code-editor', el: '#editor-panel-body' },
+    { name: 'doc-studio', el: '#doc-studio' },
   ];
 
   components.forEach(({ name, el }) => {

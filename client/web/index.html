@@ -14,21 +14,26 @@
 <div class="app">
   <aside class="sidebar" id="sidebar"></aside>
   <div class="resizer" id="resizer"></div>
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="topbar-toggle" onclick="toggleSidebar()"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11" width="9" height="1.5" rx="0.75" fill="currentColor"/></svg></button>
-        <span class="topbar-title" id="topbar-title">LivingTree AI Agent</span>
-      </div>
-      <div class="topbar-right">
-        <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>
-        <button onclick="toggleRightPanel()" title="上下文"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="8.5" y1="2.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="1.3"/></svg></button>
-      </div>
-    </header>
-    <div id="chat-area" class="chat-area"></div>
-    <div class="input-area"></div>
-  </main>
-  <aside class="context-panel" id="context-panel"></aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="topbar-toggle" onclick="toggleSidebar()"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11" width="9" height="1.5" rx="0.75" fill="currentColor"/></svg></button>
+          <span class="topbar-title" id="topbar-title">LivingTree AI Agent</span>
+        </div>
+        <div class="topbar-right">
+          <button onclick="OnlyOffice.toggleSplit()" title="分屏文档" id="btn-split"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="8" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+          <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>
+          <button onclick="toggleRightPanel()" title="上下文"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="8.5" y1="2.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="1.3"/></svg></button>
+        </div>
+      </header>
+      <div id="chat-area" class="chat-area"></div>
+      <div class="input-area"></div>
+    </main>
+    <!-- OnlyOffice Split Panel -->
+    <div class="oo-panel" id="oo-panel">
+      <div id="doc-studio" class="doc-studio"></div>
+    </div>
+    <aside class="context-panel" id="context-panel"></aside>
 </div>
 
 <!-- Shell slots for non-main components -->
@@ -61,6 +66,7 @@
 <script src="services/api.js"></script>
 <script src="services/renderer.js"></script>
 <script src="services/share.js"></script>
+<script src="services/onlyoffice.js"></script>
 <!-- Components -->
 <script src="components/boot-overlay/boot-overlay.js"></script>
 <script src="components/sidebar/sidebar.js"></script>
@@ -73,6 +79,7 @@
 <script src="components/notifications/notifications.js"></script>
 <script src="components/user-menu/user-menu.js"></script>
 <script src="components/code-editor/code-editor.js"></script>
+<script src="components/doc-studio/doc-studio.js"></script>
 <!-- Bootstrap -->
 <script src="app.js"></script>
 </body>

@@ -570,3 +570,7 @@ def _fallback_reply(msg: str) -> str:
             except Exception as e:
                 results[url] = f"FAIL ({e})"
         return results
+
+    # ── Register doc routes (OnlyOffice integration) ──
+    from .doc_routes import setup_doc_routes
+    setup_doc_routes(app)

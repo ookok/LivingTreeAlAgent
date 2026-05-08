@@ -5,16 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>🌳 LivingTree 地图</title>
 <link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/app.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Microsoft YaHei",sans-serif;background:var(--bg-base,#1a1b1d);color:var(--text-default,#d1d3db);height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.map-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:44px;border-bottom:1px solid var(--border-l1);flex-shrink:0;gap:10px;background:var(--bg-base)}
-.map-toolbar-left{display:flex;align-items:center;gap:10px}
-.map-toolbar-right{display:flex;align-items:center;gap:6px}
-.map-title{font-size:15px;font-weight:600;white-space:nowrap;display:flex;align-items:center;gap:6px}
-.map-btn{height:30px;padding:0 10px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--icon-default);transition:all .15s;cursor:pointer;border:none;background:transparent}
-.map-btn:hover{background:var(--bg-hover);color:var(--text-default)}
-.map-btn.active{background:var(--brand-default);color:var(--brand-onbrand)}
 .map-container{flex:1;position:relative;overflow:hidden}
 #map{width:100%;height:100%}
 .map-search{position:absolute;top:10px;left:10px;z-index:1000;display:flex;gap:6px}
@@ -35,22 +28,17 @@ body{font-family:"Microsoft YaHei",sans-serif;background:var(--bg-base,#1a1b1d);
 </style>
 </head>
 <body>
-<div class="map-toolbar">
-  <div class="map-toolbar-left">
-    <span class="map-title">🗺️ 天地图 · 环境监测GIS</span>
-    <button class="map-btn" data-layer="vec" title="矢量地图">🗺️ 矢量</button>
-    <button class="map-btn" data-layer="img" title="卫星影像">🛰️ 卫星</button>
-    <button class="map-btn active" data-layer="vec_img" title="矢量+标注">📍 混合</button>
+<div class="page-toolbar">
+  <div class="page-toolbar-left">
+    <span class="page-title">🗺️ 天地图 · 环境监测GIS</span>
+    <button class="app-btn app-btn-sm" data-layer="vec">🗺️ 矢量</button>
+    <button class="app-btn app-btn-sm" data-layer="img">🛰️ 卫星</button>
+    <button class="app-btn app-btn-sm app-btn-primary" data-layer="vec_img">📍 混合</button>
   </div>
-  <div class="map-toolbar-right">
-    <button class="map-btn" data-action="locate" title="我的位置">
-      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="2" fill="currentColor"/><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-    </button>
-    <button class="map-btn" data-action="monitors" title="监测站点">📡 站点</button>
-    <button class="map-btn" data-action="measure" title="测距">
-      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h10M9 4l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-    </button>
-    <button class="map-btn" data-action="screenshot" title="截图插入文档">📸 截图</button>
+  <div class="page-toolbar-right">
+    <button class="app-btn app-btn-sm" data-action="locate">📍 定位</button>
+    <button class="app-btn app-btn-sm" data-action="monitors">📡 站点</button>
+    <button class="app-btn app-btn-sm" data-action="screenshot">📸 截图</button>
   </div>
 </div>
 <div class="map-container">
@@ -197,7 +185,7 @@ window._LT_MAP = {
 window.onload = () => window._LT_MAP.init();
 
 // Toolbar
-document.querySelector('.map-toolbar').addEventListener('click', e => {
+document.querySelector('.page-toolbar').addEventListener('click', e => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const action = btn.dataset.action;

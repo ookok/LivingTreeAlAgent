@@ -1075,3 +1075,206 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
         return '\n'.join(html_parts)
 
     logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review endpoints)")
+
+    # ═══════════════════════════════════════
+    #  Page Agent Auto-Fill API
+    #  PageAgent.js (Alibaba) → LivingTree AI+RAG → Form fill
+    # ═══════════════════════════════════════
+
+    @app.post("/api/auto-fill/match")
+    async def auto_fill_match(request: Request) -> dict[str, Any]:
+        """
+        Page Agent sends extracted form fields, LivingTree AI+RAG returns fill values.
+
+        Input: { fields: [{name, label, type, placeholder, options}], context: {url, title} }
+        Output: { values: {field_name: value}, confidence: {field_name: 0-1} }
+        """
+        hub = request.app.state.hub
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        fields = body.get("fields", [])
+        context = body.get("context", {})
+        if not fields:
+            raise HTTPException(status_code=400, detail="fields required")
+
+        values = {}
+        confidence = {}
+
+        # ── RAG Knowledge Base ──
+        kb_texts = []
+        if hub and hasattr(hub, 'knowledge'):
+            try:
+                # Search knowledge base for relevant context
+                search_q = f"{context.get('title', '')} {' '.join(f.get('label', '') for f in fields)}"
+                kb_results = hub.knowledge.search(search_q, top_k=5)
+                kb_texts = [r.get('text', '')[:500] for r in kb_results if r.get('text')]
+            except Exception:
+                pass
+
+        # ── Build RAG context ──
+        rag_context = "\n".join(kb_texts) if kb_texts else ""
+        page_title = context.get("title", "")
+        page_url = context.get("url", "")
+
+        # ── LLM-based value matching ──
+        try:
+            if hub and hasattr(hub, 'world') and hub.world and hasattr(hub.world, 'consciousness'):
+                field_descriptions = "\n".join(
+                    f"- {f.get('label', f.get('name', '?'))} (name={f.get('name', '')}, type={f.get('type', 'text')})"
+                    for f in fields[:20]
+                )
+                prompt = f"""你是一个智能表单填充助手。根据知识库和上下文，为每个表单字段提供最合适的值。
+
+页面: {page_title} ({page_url})
+
+知识库参考:
+{rag_context[:2000] or '无可用知识库'}
+
+表单字段:
+{field_descriptions}
+
+请为每个字段返回最合适的填充值。JSON格式:
+{{"field_name": "填充值"}}
+
+只返回JSON对象，不要其他文字。如果某个字段不确定，填null。"""
+
+                import asyncio as _asyncio, json as _json, re as _re
+                result_text = ""
+                loop = _asyncio.get_event_loop()
+                if not loop.is_running():
+                    async def _llm_fill():
+                        nonlocal result_text
+                        try:
+                            async for token in hub.world.consciousness.stream_of_thought(prompt):
+                                result_text += token
+                        except Exception:
+                            pass
+                    try:
+                        loop.run_until_complete(_llm_fill())
+                    except RuntimeError:
+                        pass
+
+                    if result_text:
+                        json_match = _re.search(r'\{[\s\S]*\}', result_text)
+                        if json_match:
+                            try:
+                                llm_values = _json.loads(json_match.group())
+                                for k, v in llm_values.items():
+                                    if v and v != "null":
+                                        values[k] = str(v)
+                                        confidence[k] = 0.85
+                                logger.info(f"LLM auto-fill: {len(values)} fields matched")
+                            except (_json.JSONDecodeError, Exception) as e:
+                                logger.debug(f"LLM fill parse failed: {e}")
+        except Exception as e:
+            logger.warning(f"LLM auto-fill unavailable: {e}")
+
+        # ── Heuristic matching for common fields (fallback) ──
+        if not values:
+            patterns = _get_field_patterns()
+            for field in fields:
+                name = field.get("name", "").lower()
+                label = field.get("label", "").lower()
+                placeholder = field.get("placeholder", "").lower()
+                search_text = f"{label} {name} {placeholder}"
+
+                for pattern_key, (value, conf) in patterns.items():
+                    if pattern_key in search_text:
+                        values[field.get("name", pattern_key)] = value
+                        confidence[field.get("name", pattern_key)] = conf
+                        break
+
+        # ── Try knowledge base direct match ──
+        for field in fields:
+            fname = field.get("name", "")
+            if fname and fname not in values and kb_texts:
+                label_lower = field.get("label", "").lower()
+                import re as _re
+                for text in kb_texts:
+                    if label_lower and label_lower[:4] in text.lower():
+                        # Extract likely value after the label
+                        match = _re.search(re.escape(label_lower[:4]) + r'[：:=\s]*([^\n。，,]{1,30})', text, _re.IGNORECASE)
+                        if match:
+                            values[fname] = match.group(1).strip()
+                            confidence[fname] = 0.6
+                            break
+
+        return {
+            "values": values,
+            "confidence": confidence,
+            "matched": len(values),
+            "total": len(fields),
+            "rag_available": bool(kb_texts),
+        }
+
+    # ── Auto-fill profile CRUD ──
+    @app.get("/api/auto-fill/profiles")
+    async def auto_fill_profiles(request: Request) -> list[dict]:
+        """List saved auto-fill profiles."""
+        profile_dir = DOC_DIR.parent / "auto_fill_profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        profiles = []
+        for f in sorted(profile_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(f.read_text())
+                data["id"] = f.stem
+                profiles.append(data)
+            except Exception:
+                pass
+        return profiles
+
+    @app.post("/api/auto-fill/profiles")
+    async def auto_fill_save_profile(request: Request) -> dict:
+        """Save an auto-fill profile."""
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        name = body.get("name", "default")
+        profile_id = hashlib.md5(name.encode()).hexdigest()[:8]
+        profile_dir = DOC_DIR.parent / "auto_fill_profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+
+        profile_data = {
+            "name": name,
+            "values": body.get("values", {}),
+            "updated_at": time.time(),
+        }
+        (profile_dir / f"{profile_id}.json").write_text(json.dumps(profile_data, ensure_ascii=False))
+        return {"id": profile_id, "status": "saved"}
+
+    logger.info("Doc routes registered (OnlyOffice + Graph + Diagram + Review + AutoFill endpoints)")
+
+
+def _get_field_patterns() -> dict:
+    """Common field name → (suggested value, confidence) patterns for heuristic fallback."""
+    now = time.strftime("%Y-%m-%d")
+    return {
+        "company": ("XX环保科技有限公司", 0.7),
+        "企业名称": ("XX环保科技有限公司", 0.7),
+        "单位名称": ("XX环保科技有限公司", 0.7),
+        "name": ("张三", 0.5),
+        "姓名": ("张三", 0.5),
+        "联系人": ("张三", 0.5),
+        "phone": ("13800138000", 0.5),
+        "电话": ("13800138000", 0.5),
+        "手机": ("13800138000", 0.5),
+        "email": ("contact@example.com", 0.5),
+        "邮箱": ("contact@example.com", 0.5),
+        "address": ("XX省XX市XX区XX路XX号", 0.6),
+        "地址": ("XX省XX市XX区XX路XX号", 0.6),
+        "date": (now, 0.8),
+        "日期": (now, 0.8),
+        "填报日期": (now, 0.9),
+        "report_date": (now, 0.8),
+        "project": ("XX项目", 0.4),
+        "项目名称": ("XX项目", 0.4),
+        "industry": ("环保", 0.5),
+        "行业": ("环保", 0.5),
+        "统一社会信用代码": ("91110000XXXXXXXXXX", 0.3),
+        "法人": ("李四", 0.4),
+    }

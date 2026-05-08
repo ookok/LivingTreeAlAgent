@@ -35,12 +35,9 @@ def setup_openai_proxy(app: FastAPI):
                         if p.get("id") != "opencode": continue
                         for mid, mdata in p.get("models", {}).items():
                             if not isinstance(mdata, dict): continue
-                            # Free detection: cost is 0 AND (id or family contains 'free')
-                            cost = mdata.get("cost", {})
-                            is_free = (
-                                cost.get("input", 1) == 0 and cost.get("output", 1) == 0
-                                and ("free" in mid.lower() or "free" in str(mdata.get("family", "")).lower())
-                            )
+                        # Free detection: cost.input == 0 && cost.output == 0
+                        cost = mdata.get("cost", {})
+                        is_free = cost.get("input", 1) == 0 and cost.get("output", 1) == 0
                             models.append({
                                 "id": f"opencode/{mid}",
                                 "object": "model",

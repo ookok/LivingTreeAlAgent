@@ -582,10 +582,164 @@ const X6Diagram = {
     g.centerContent();
   },
 
+  /* ═══════════════════════════════════════
+     8. BASE MAP ANNOTATION
+     底图标注 — 图片背景 + 可拖拽标注元素
+     场景: 防护距离图 / 风向玫瑰 / 平面标注 / 监测点位
+     ═══════════════════════════════════════ */
+  _drawTool: null,    // pin | circle | rect | text
+  _baseImgUrl: null,
+
+  setBaseImage(url) {
+    this._baseImgUrl = url;
+    if (!this._graph) return;
+    this._graph.drawBackground({
+      image: url, size: 'auto auto', position: 'center',
+    }, { padding: 20 });
+  },
+
+  setDrawTool(tool) { this._drawTool = tool; },
+
+  _onBaseMapClick(e) {
+    if (!this._drawTool || !this._graph) return;
+    const g = this._graph;
+    const p = g.clientToLocal(e.clientX, e.clientY);
+    const x = p.x, y = p.y;
+
+    switch (this._drawTool) {
+      case 'pin':
+        this.addPin(x, y, '', '#e8463a');
+        break;
+      case 'circle':
+        this.addCircle(x, y, 60, '');
+        break;
+      case 'rect':
+        this.addRect(x - 40, y - 20, 80, 40, '', 'rgba(63,133,255,0.15)', '#3f85ff');
+        break;
+      case 'text':
+        this.addText(x, y, '双击编辑', '#333');
+        break;
+    }
+  },
+
+  addPin(x, y, label, color) {
+    const g = this._graph;
+    const id = this._uid();
+    // Pin body
+    g.addNode({
+      id, shape: 'circle', x: x - 8, y: y - 20, width: 16, height: 16,
+      attrs: {
+        body: { fill: color || '#e8463a', stroke: '#fff', strokeWidth: 2 },
+        label: { text: label, fill: '#333', fontSize: 10, fontFamily: 'sans-serif', refY: 14, refX: label ? -label.length * 2 : 0 },
+      },
+      draggable: true,
+    });
+    // Pin needle
+    g.addEdge({
+      source: { x: x, y: y - 4 },
+      target: { x: x, y: y + 12 },
+      attrs: { line: { stroke: color || '#e8463a', strokeWidth: 2, targetMarker: { name: 'block', width: 4, height: 4 } } },
+    });
+  },
+
+  addCircle(x, y, r, label) {
+    if (!this._graph) return;
+    this._graph.addNode({
+      shape: 'circle', x: x - r, y: y - r, width: r * 2, height: r * 2,
+      attrs: {
+        body: { fill: 'transparent', stroke: '#e28a00', strokeWidth: 2, strokeDasharray: '6 3' },
+        label: { text: label, fill: '#e28a00', fontSize: 11, fontWeight: 'bold', fontFamily: 'sans-serif', refY: -r - 6 },
+      },
+      draggable: true,
+    });
+  },
+
+  addRect(x, y, w, h, label, fill, stroke) {
+    if (!this._graph) return;
+    this._graph.addNode({
+      shape: 'rect', x, y, width: w, height: h,
+      attrs: {
+        body: { fill: fill || 'rgba(63,133,255,0.12)', stroke: stroke || '#3f85ff', strokeWidth: 1.5, rx: 4, ry: 4 },
+        label: { text: label, fill: stroke || '#3f85ff', fontSize: 10, fontFamily: 'sans-serif' },
+      },
+      draggable: true,
+    });
+  },
+
+  addText(x, y, text, color) {
+    if (!this._graph) return;
+    this._graph.addNode({
+      shape: 'rect', x: x - (text.length * 5), y: y - 8, width: text.length * 10, height: 20,
+      attrs: {
+        body: { fill: 'transparent', stroke: 'none' },
+        label: { text, fill: color || '#333', fontSize: 11, fontFamily: 'sans-serif' },
+      },
+      draggable: true,
+    });
+  },
+
+  renderBaseMap(data) {
+    const g = this._graph;
+    g.clearCells();
+
+    // Set background image if provided
+    if (data?.image) {
+      this.setBaseImage(data.image);
+    } else if (this._baseImgUrl) {
+      this.setBaseImage(this._baseImgUrl);
+    }
+
+    // Click handler for placing elements
+    const container = g.container;
+    if (container && !container._bmClickBound) {
+      container._bmClickBound = true;
+      container.addEventListener('click', (e) => {
+        if (this._drawTool) this._onBaseMapClick(e);
+      });
+    }
+
+    // Render existing annotations from data
+    const annotations = data?.annotations || [];
+    annotations.forEach(a => {
+      switch (a.type) {
+        case 'pin': this.addPin(a.x, a.y, a.label || '', a.color); break;
+        case 'circle': this.addCircle(a.x, a.y, a.r, a.label || ''); break;
+        case 'rect': this.addRect(a.x, a.y, a.w, a.h, a.label || '', a.fill, a.stroke); break;
+        case 'text': this.addText(a.x, a.y, a.text || '', a.color); break;
+      }
+    });
+
+    // Sample annotations for demo scenarios
+    if (!annotations.length) {
+      const scenario = data?.scenario || 'distance';
+      if (scenario === 'distance') {
+        // 卫生防护距离图: concentric circles
+        [50, 100, 200, 300].forEach(r => this.addCircle(400, 280, r, `防护距离 ${r}m`));
+        this.addPin(400, 280, '污染源', '#e8463a');
+        this.addText(550, 180, '居民区A', '#f65a5a');
+        this.addText(300, 100, '学校B', '#f65a5a');
+      } else if (scenario === 'windrose') {
+        // 风向玫瑰图 + 距离圈
+        [80, 160, 240].forEach(r => this.addCircle(400, 260, r, `距离 ${r * 5}m`));
+        this.addPin(400, 260, '排放源', '#e8463a');
+      } else if (scenario === 'monitor') {
+        // 噪声监测点位图
+        this.addPin(200, 150, 'N1 昼62/夜54', '#3f85ff');
+        this.addPin(500, 100, 'N2 昼58/夜51', '#3f85ff');
+        this.addPin(350, 350, 'N3 昼65/夜57', '#e28a00');
+        this.addPin(600, 320, 'N4 昼55/夜48', '#3f85ff');
+        this.addRect(100, 50, 600, 400, '监测区域', 'rgba(15,220,120,0.06)', '#0fdc78');
+      }
+    }
+
+    g.centerContent();
+  },
+
   /* ── Render by type ── */
   render(type, data) {
     if (!this._graph) return;
     this._type = type; this._data = data;
+    this._drawTool = null; // Reset draw tool on mode switch
     this._graph.clearCells();
     switch (type) {
       case 'contour': this.renderContourMap(data); break;
@@ -595,6 +749,7 @@ const X6Diagram = {
       case 'monitoring': this.renderMonitoringNet(data); break;
       case 'causal': this.renderCausalChain(data); break;
       case 'risk': this.renderRiskMatrix(data); break;
+      case 'base-map': this.renderBaseMap(data); break;
     }
   },
 

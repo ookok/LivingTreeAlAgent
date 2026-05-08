@@ -675,6 +675,18 @@ def setup_doc_routes(app: FastAPI) -> None:
                     {"id": "r4", "label": "噪声扰民", "prob": 4, "cons": 1, "color": "#3f85ff"},
                 ],
             },
+            "base-map": {
+                "scenario": "distance",  # distance | windrose | monitor
+                "annotations": [
+                    {"type": "pin", "x": 400, "y": 280, "label": "排放源", "color": "#e8463a"},
+                    {"type": "circle", "x": 400, "y": 280, "r": 100, "label": "100m防护距离"},
+                    {"type": "circle", "x": 400, "y": 280, "r": 200, "label": "200m防护距离"},
+                    {"type": "circle", "x": 400, "y": 280, "r": 300, "label": "300m防护距离"},
+                    {"type": "text", "x": 550, "y": 180, "text": "居民区A", "color": "#f65a5a"},
+                    {"type": "text", "x": 300, "y": 100, "text": "学校B", "color": "#f65a5a"},
+                    {"type": "rect", "x": 120, "y": 60, "w": 560, "h": 440, "label": "评价范围", "fill": "rgba(15,220,120,0.04)", "stroke": "#0fdc78"},
+                ],
+            },
         }
 
         config = configs.get(diagram_type, configs["contour"])

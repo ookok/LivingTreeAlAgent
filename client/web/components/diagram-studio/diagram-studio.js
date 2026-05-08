@@ -6,6 +6,7 @@ class DiagramStudio extends Component {
     super(el, props);
     this._type = 'contour';
     this._types = [
+      { id: 'base-map', name: '底图标注', icon: '📍' },
       { id: 'contour', name: '扩散等值线', icon: '🗺️' },
       { id: 'process-flow', name: '工艺流程', icon: '⚙️' },
       { id: 'site-plan', name: '平面布置', icon: '🏗️' },
@@ -14,6 +15,7 @@ class DiagramStudio extends Component {
       { id: 'causal', name: '因果链', icon: '🔗' },
       { id: 'risk', name: '风险矩阵', icon: '⚠️' },
     ];
+    this._drawTool = null;
   }
 
   init() {
@@ -29,6 +31,41 @@ class DiagramStudio extends Component {
     const tabs = this._types.map(t =>
       `<button class="dgm-tab${t.id === this._type ? ' active' : ''}" data-type="${t.id}">
         <span>${t.icon}</span><span>${t.name}</span></button>`).join('');
+
+    const drawToolbar = this._type === 'base-map' ? `
+<div class="dgm-drawbar" id="dgm-drawbar">
+  <span class="dgm-drawbar-label">标注工具:</span>
+  <button class="dgm-draw-btn${this._drawTool === 'pin' ? ' active' : ''}" data-draw="pin" title="标记点">
+    <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="5" r="3" fill="currentColor"/><path d="M7 8v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <button class="dgm-draw-btn${this._drawTool === 'circle' ? ' active' : ''}" data-draw="circle" title="距离圈">
+    <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
+  </button>
+  <button class="dgm-draw-btn${this._drawTool === 'rect' ? ' active' : ''}" data-draw="rect" title="矩形区域">
+    <svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+  </button>
+  <button class="dgm-draw-btn${this._drawTool === 'text' ? ' active' : ''}" data-draw="text" title="文字标注">
+    <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4h8M5 2l2 10M9 2l2 10" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>
+  </button>
+  <span class="dgm-drawbar-sep"></span>
+  <button class="dgm-draw-btn" data-draw="clear" title="清除绘制模式">✕</button>
+  <span style="font-size:11px;color:var(--text-tertiary);margin-left:4px">${this._drawTool ? '点击画布放置' : '选择工具后点击画布'}</span>
+</div>` : '';
+
+    const imgUpload = this._type === 'base-map' ? `
+<div class="dgm-img-upload" id="dgm-img-upload" onclick="document.getElementById('dgm-img-input').click()">
+  <svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3 14l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+  <span>上传底图 (或拖拽图片到此处)</span>
+  <input type="file" id="dgm-img-input" accept="image/*" style="display:none">
+</div>` : '';
+
+    const scenarios = this._type === 'base-map' ? `
+<div class="dgm-scenarios">
+  <span class="dgm-drawbar-label">快速场景:</span>
+  <button class="dgm-scenario-btn" data-scenario="distance">防护距离图</button>
+  <button class="dgm-scenario-btn" data-scenario="windrose">风向玫瑰+距离圈</button>
+  <button class="dgm-scenario-btn" data-scenario="monitor">监测点位图</button>
+</div>` : '';
 
     return `
 <div class="dgm-header">
@@ -50,8 +87,10 @@ class DiagramStudio extends Component {
     <button class="dgm-btn dgm-btn-close" data-action="close" title="关闭">✕</button>
   </div>
 </div>
+${drawToolbar}
 <div class="dgm-body">
-  <div class="dgm-canvas-wrap">
+  <div class="dgm-canvas-wrap" id="dgm-canvas-wrap">
+    ${imgUpload}
     <div class="dgm-canvas" id="diagram-canvas"></div>
   </div>
   <div class="dgm-sidebar" id="dgm-sidebar">
@@ -59,6 +98,7 @@ class DiagramStudio extends Component {
     <div class="dgm-params" id="dgm-params">
       <p class="dgm-hint">选择图表类型后，AI 将根据上下文自动填充参数</p>
     </div>
+    ${scenarios}
   </div>
 </div>`;
   }
@@ -68,12 +108,73 @@ class DiagramStudio extends Component {
     this.el.querySelectorAll('[data-type]').forEach(btn => {
       btn.onclick = () => {
         this._type = btn.dataset.type;
+        this._drawTool = null;
+        X6Diagram.setDrawTool(null);
         X6Diagram.render(this._type, null);
-        this.el.querySelectorAll('.dgm-tab').forEach(t => t.classList.remove('active'));
-        btn.classList.add('active');
-        this._updateParams();
+        this.render();
+        this._bindEvents();
       };
     });
+
+    // Drawing tools (base-map)
+    this.el.querySelectorAll('[data-draw]').forEach(btn => {
+      btn.onclick = () => {
+        const tool = btn.dataset.draw;
+        if (tool === 'clear') {
+          this._drawTool = null;
+          X6Diagram.setDrawTool(null);
+        } else {
+          this._drawTool = tool;
+          X6Diagram.setDrawTool(tool);
+        }
+        this.render();
+        this._bindEvents();
+      };
+    });
+
+    // Scenario buttons
+    this.el.querySelectorAll('[data-scenario]').forEach(btn => {
+      btn.onclick = () => {
+        X6Diagram.renderBaseMap({ scenario: btn.dataset.scenario });
+        LT.emit('notify', { msg: '场景已加载', type: 'info' });
+      };
+    });
+
+    // Image upload
+    const imgInput = this.el.querySelector('#dgm-img-input');
+    if (imgInput) {
+      imgInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            X6Diagram.setBaseImage(ev.target.result);
+            this.render();
+            this._bindEvents();
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+    }
+
+    // Drag-drop image onto canvas
+    const canvasWrap = this.el.querySelector('#dgm-canvas-wrap');
+    if (canvasWrap) {
+      canvasWrap.addEventListener('dragover', e => e.preventDefault());
+      canvasWrap.addEventListener('drop', e => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            X6Diagram.setBaseImage(ev.target.result);
+            this.render();
+            this._bindEvents();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
 
     // Actions
     this.el.querySelectorAll('[data-action]').forEach(btn => {
@@ -96,6 +197,7 @@ class DiagramStudio extends Component {
     const params = document.getElementById('dgm-params');
     if (!params) return;
     const configs = {
+      'base-map': '上传底图 → 选择标注工具(标记点/距离圈/矩形/文字) → 点击画布放置 → 拖拽调整位置',
       'contour': '扩散源坐标 | 风向角度 | 风速 m/s | 浓度等值线级别',
       'process-flow': '拖拽设备节点 | 双击编辑标签 | 右键添加连接',
       'site-plan': '建筑坐标 | 排放源 | 监测点 | 敏感目标',

@@ -520,6 +520,45 @@
 .review-summary-more{font-size:var(--font-size-sm);color:var(--text-tertiary);text-align:center;padding:var(--space-4)}
 .review-summary-action{margin-top:var(--space-8)}
 
+/* ── Pinned Messages ── */
+.pinned-msgs{border-bottom:1px solid var(--border-l1);padding:var(--space-4) var(--space-12);display:flex;flex-direction:column;gap:var(--space-2);max-height:120px;overflow-y:auto;flex-shrink:0}
+.pinned-msg{display:flex;align-items:center;gap:var(--space-6);padding:var(--space-4) var(--space-8);background:rgba(15,220,120,.08);border-radius:var(--radius-4);font-size:var(--font-size-sm);transition:background var(--transition-fast)}
+.pinned-msg:hover{background:rgba(15,220,120,.12)}
+.pinned-icon{flex-shrink:0;font-size:12px}
+.pinned-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)}
+.pinned-close{width:18px;height:18px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--icon-default);flex-shrink:0;transition:all var(--transition-fast)}
+.pinned-close:hover{background:var(--status-error);color:#fff}
+
+/* ── Replay Overlay ── */
+.replay-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;animation:fadeIn var(--transition-fast) ease}
+.replay-panel{width:380px;max-width:90vw;background:var(--bg-menu);border:1px solid var(--border-l2);border-radius:var(--radius-12);padding:var(--space-16);box-shadow:var(--shadow-modal)}
+.replay-header{display:flex;justify-content:space-between;align-items:center;font-weight:var(--font-weight-semibold);margin-bottom:var(--space-12)}
+.replay-close{color:var(--icon-default);cursor:pointer;font-size:16px}
+.replay-close:hover{color:var(--text-danger)}
+.replay-timeline{display:flex;flex-direction:column;gap:var(--space-4);max-height:320px;overflow-y:auto}
+.replay-step{display:flex;align-items:center;gap:var(--space-8);padding:var(--space-6);border-radius:var(--radius-4);transition:all var(--transition-slow)}
+.replay-step.active{background:var(--bg-overlay-l2);color:var(--brand-default)}
+.replay-step-icon{font-size:16px;flex-shrink:0}
+.replay-step-text{font-size:var(--font-size-md);flex:1}
+.replay-step-bar{flex:1;height:3px;background:var(--bg-overlay-l2);border-radius:2px;overflow:hidden;min-width:60px}
+.replay-step-fill{height:100%;background:var(--brand-default);border-radius:2px;width:0}
+@keyframes replayBar{0%{width:0}100%{width:100%}}
+
+/* ── Shortcuts Overlay ── */
+.shortcuts-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:var(--z-modal);align-items:center;justify-content:center}
+.shortcuts-panel{width:440px;max-width:90vw;background:var(--bg-menu);border:1px solid var(--border-l2);border-radius:var(--radius-12);padding:var(--space-20);box-shadow:var(--shadow-modal)}
+.shortcuts-header{display:flex;justify-content:space-between;align-items:center;font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold);margin-bottom:var(--space-12)}
+.shortcuts-header button{cursor:pointer;color:var(--icon-default);font-size:16px}
+.shortcuts-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)}
+.shortcuts-row{display:flex;align-items:center;gap:var(--space-8);padding:var(--space-6);border-radius:var(--radius-4);font-size:var(--font-size-sm);transition:background var(--transition-fast)}
+.shortcuts-row:hover{background:var(--bg-hover)}
+.shortcuts-row kbd{padding:2px 8px;border-radius:4px;background:var(--bg-overlay-l2);font-family:var(--font-mono);font-size:11px;color:var(--brand-default);min-width:60px;text-align:center;border:1px solid var(--border-l1)}
+.shortcuts-footer{font-size:var(--font-size-xs);color:var(--text-tertiary);text-align:center;margin-top:var(--space-12);padding-top:var(--space-8);border-top:1px solid var(--border-l1)}
+
+/* ── Theme Toggle Button ── */
+.theme-toggle-btn{width:28px;height:28px;border-radius:var(--radius-4);display:flex;align-items:center;justify-content:center;color:var(--icon-default);cursor:pointer;transition:all var(--transition-fast)}
+.theme-toggle-btn:hover{background:var(--bg-hover);color:var(--text-default)}
+
 /* ════════════════ Graph Studio ════════════════ */
 .gs-overlay{display:none;position:fixed;inset:0;background:var(--bg-base);z-index:var(--z-modal);flex-direction:column}
 .graph-studio{flex:1;display:flex;flex-direction:column;overflow:hidden}

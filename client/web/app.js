@@ -8,6 +8,8 @@
 
   /* ── Init Store & API ── */
   if (LT.store && LT.store.init) LT.store.init();
+  if (LT.store && LT.store.initAutoTheme) LT.store.initAutoTheme();
+  if (LT.store && LT.store.requestNotify) LT.store.requestNotify();
   if (!LT.store) console.error('LT.store not available');
   if (!LT.store || !LT.store.stats) {
     LT.store = LT.store || { sessions: [], activeId: null, messages: {}, stats: () => ({ sessions: 0, messages: 0, tokens: 0 }) };
@@ -118,7 +120,43 @@
       e.preventDefault();
       toggleSidebar();
     }
+    if (e.key === '?' && !e.target.closest('input,textarea,[contenteditable]')) {
+      e.preventDefault();
+      toggleShortcuts();
+    }
+    if (e.key === 'Escape') {
+      const sc = document.getElementById('shortcuts-overlay');
+      if (sc && sc.style.display === 'flex') sc.style.display = 'none';
+    }
   });
+
+  /* ── Shortcuts panel ── */
+  window.toggleShortcuts = () => {
+    let sc = document.getElementById('shortcuts-overlay');
+    if (!sc) {
+      sc = document.createElement('div');
+      sc.id = 'shortcuts-overlay';
+      sc.className = 'shortcuts-overlay';
+      sc.onclick = e => { if (e.target === sc) sc.style.display = 'none'; };
+      const shortcuts = [
+        ['Ctrl+K','聚焦输入框'],['Ctrl+B','切换侧栏'],['?','显示快捷键'],
+        ['Ctrl+滚轮','缩放图表'],['Shift+拖拽','平移画布'],['右键消息','上下文菜单'],
+        ['/','命令菜单'],['Enter','发送消息'],['Shift+Enter','换行'],
+        ['Ctrl+N','新建会话'],['Ctrl+S','保存文档'],['Esc','关闭面板'],
+      ];
+      sc.innerHTML = `<div class="shortcuts-panel">
+        <div class="shortcuts-header"><span>⌨️ 快捷键</span><button onclick="this.closest('.shortcuts-overlay').style.display='none'">✕</button></div>
+        <div class="shortcuts-grid">${shortcuts.map(s => `<div class="shortcuts-row"><kbd>${s[0]}</kbd><span>${s[1]}</span></div>`).join('')}</div>
+        <div class="shortcuts-footer">提示: 右键消息可置顶 / 分叉 / 复制</div>
+      </div>`;
+      document.body.appendChild(sc);
+    }
+    sc.style.display = sc.style.display === 'flex' ? 'none' : 'flex';
+  };
+
+  /* ── Notifications for task completion ── */
+  LT.on('review:complete', () => { if (LT.store) LT.store.notify('LivingTree', '文档审阅完成'); });
+  LT.on('msg:done', () => { if (LT.store) LT.store.notify('LivingTree', 'AI 回复已完成'); });
 
   /* ── Context menu (right click on messages) ── */
   let ctxTarget = null, ctxIndex = -1;
@@ -131,6 +169,15 @@
     ctxIndex = all.indexOf(msg);
     const menu = document.getElementById('ctx-menu');
     if (menu) {
+      menu.innerHTML = `
+        <div class="ctx-menu-item" onclick="copyMessageText()">📋 复制文本</div>
+        <div class="ctx-menu-item" onclick="pinMessageHere()">📌 ${LT.store.pinned[LT.store.activeId]?.has(ctxIndex) ? '取消置顶' : '置顶消息'}</div>
+        <div class="ctx-menu-divider"></div>
+        <div class="ctx-menu-item" onclick="forkFromHere()">🔀 从此处分叉</div>
+        <div class="ctx-menu-item" onclick="replayConversation()">🔄 回放对话</div>
+        <div class="ctx-menu-divider"></div>
+        <div class="ctx-menu-item danger" onclick="deleteMessageHere()">🗑️ 删除后续</div>
+      `;
       menu.style.display = 'block';
       menu.style.left = e.clientX + 'px';
       menu.style.top = e.clientY + 'px';
@@ -160,6 +207,16 @@
     if (ctxIndex < 0 || !LT.store.activeId) return;
     LT.store.removeMsgFrom(LT.store.activeId, ctxIndex);
     LT.emit('session:switch', LT.store.activeId);
+  };
+
+  window.pinMessageHere = () => {
+    if (ctxIndex < 0 || !LT.store.activeId) return;
+    LT.emit('msg:pin', { index: ctxIndex });
+  };
+
+  window.replayConversation = () => {
+    const chat = LT.get('chat');
+    if (chat) chat.startReplay();
   };
 
   /* ── Start polling boot progress ── */

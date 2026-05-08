@@ -8,9 +8,11 @@ class Chat extends Component {
     this._unsubs.push(LT.on('msg:chunk', (d) => this._onChunk(d.content)));
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
     this._unsubs.push(LT.on('review:complete', (d) => this._onReviewComplete(d)));
+    this._unsubs.push(LT.on('msg:pin', (d) => this._onPinMsg(d)));
     this.render();
     this._loadInitial();
     this._setupMsgActions();
+    this._renderPinned();
   }
 
   _setupMsgActions() {
@@ -55,6 +57,55 @@ class Chat extends Component {
     const firstLine = (content || '').split('\n')[0].replace(/^#+\s*/, '').trim().slice(0, 50);
     return firstLine || 'AI Generated Document';
   }
+
+  /* ── Replay mode ── */
+  startReplay() {
+    if (this._replaying) return;
+    this._replaying = true;
+    const steps = [
+      { icon: '👁️', label: 'SENSE — 接收输入', dur: 300 },
+      { icon: '🧠', label: 'THINK — TreeLLM 路由分析', dur: 800 },
+      { icon: '📚', label: 'RAG 2.0 — 检索知识库', dur: 600 },
+      { icon: '📋', label: 'PLAN — 制定执行计划', dur: 500 },
+      { icon: '⚡', label: 'EXEC — 执行中', dur: 1200 },
+      { icon: '🔍', label: 'REFLECT — 反思评估', dur: 400 },
+      { icon: '✨', label: 'OUTPUT — 输出结果', dur: 300 },
+    ];
+    const overlay = document.createElement('div');
+    overlay.className = 'replay-overlay';
+    overlay.innerHTML = `<div class="replay-panel"><div class="replay-header"><span>🔄 对话回放</span><button class="replay-close" onclick="this.closest('.replay-overlay').remove();LT.get('chat')._replaying=false">✕</button></div><div class="replay-timeline" id="replay-timeline"></div></div>`;
+    document.body.appendChild(overlay);
+    const tl = overlay.querySelector('#replay-timeline');
+    let i = 0;
+    const show = () => {
+      if (i >= steps.length || !this._replaying) { this._replaying = false; setTimeout(() => overlay.remove(), 800); return; }
+      const s = steps[i];
+      const el = document.createElement('div');
+      el.className = 'replay-step active';
+      el.innerHTML = `<span class="replay-step-icon">${s.icon}</span><span>${s.label}</span><div class="replay-step-bar"><div class="replay-step-fill" style="animation: replayBar ${s.dur}ms linear"></div></div>`;
+      tl.appendChild(el); tl.scrollTop = tl.scrollHeight;
+      setTimeout(show, s.dur); i++;
+    }; show();
+  },
+
+  _renderPinned() {
+    const store = LT.store;
+    const c = this.el.querySelector('#pinned-msgs');
+    if (!c || !store) return;
+    const pinned = store.getPinned(store.activeId);
+    if (!pinned.length) { c.style.display = 'none'; return; }
+    c.style.display = 'block';
+    c.innerHTML = pinned.map((m, i) => `<div class="pinned-msg"><span class="pinned-icon">📌</span><span class="pinned-text">${LT.esc((m.content||'').slice(0,60))}</span><button class="pinned-close" onclick="LT.store.togglePin(LT.store.activeId,${i});LT.emit('session:switch')">✕</button></div>`).join('');
+  },
+
+  _audioCtx: null,
+  _playClick() {
+    if (!this._audioCtx) this._audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = this._audioCtx.createOscillator(), g = this._audioCtx.createGain();
+    o.connect(g); g.connect(this._audioCtx.destination);
+    o.frequency.value = 800; g.gain.value = 0.05;
+    o.start(); o.stop(this._audioCtx.currentTime + 0.05);
+  },
 
   _onReviewComplete(data) {
     this._showMessages();
@@ -112,6 +163,7 @@ class Chat extends Component {
 
   template() {
     return `
+      <div class="pinned-msgs" id="pinned-msgs" style="display:none"></div>
       <div class="messages"></div>
       <div class="welcome">
         <div class="dashboard">

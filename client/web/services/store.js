@@ -247,41 +247,103 @@ const store = {
     return results;
   },
 
-  export(sid) {
-    const msgs = this.messages[sid];
-    const session = this.sessions.find(s => s.id === sid);
+    export(sid) {
+      const msgs = this.messages[sid];
+      const session = this.sessions.find(s => s.id === sid);
 
-    if (!msgs || !session) return null;
+      if (!msgs || !session) return null;
 
-    const lines = [];
-    lines.push(`# ${session.title}`);
-    lines.push(`> Exported: ${new Date().toISOString()}`);
-    lines.push('');
-
-    for (const msg of msgs) {
-      lines.push(`## ${msg.role === 'user' ? 'You' : 'Assistant'}`);
+      const lines = [];
+      lines.push(`# ${session.title}`);
+      lines.push(`> Exported: ${new Date().toISOString()}`);
       lines.push('');
-      lines.push(msg.content);
-      lines.push('');
-    }
 
-    const text = lines.join('\n');
-
-    return {
-      text,
-      filename: `livingtree-${session.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '_').slice(0, 40)}.md`,
-      download() {
-        const blob = new Blob([text], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = this.filename;
-        a.click();
-        URL.revokeObjectURL(url);
+      for (const msg of msgs) {
+        lines.push(`## ${msg.role === 'user' ? 'You' : 'Assistant'}`);
+        lines.push('');
+        lines.push(msg.content);
+        lines.push('');
       }
-    };
-  }
-};
+
+      const text = lines.join('\n');
+
+      return {
+        text,
+        filename: `livingtree-${session.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '_').slice(0, 40)}.md`,
+        download() {
+          const blob = new Blob([text], { type: 'text/markdown' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = this.filename;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      };
+    },
+
+    /* ── Pinned messages ── */
+    pinned: {},
+    togglePin(sid, msgIdx) {
+      if (!this.pinned[sid]) this.pinned[sid] = new Set();
+      if (this.pinned[sid].has(msgIdx)) this.pinned[sid].delete(msgIdx);
+      else this.pinned[sid].add(msgIdx);
+      _save(this);
+    },
+    getPinned(sid) {
+      const pins = this.pinned[sid];
+      const msgs = this.messages[sid];
+      if (!pins || !msgs) return [];
+      return [...pins].map(i => msgs[i]).filter(Boolean);
+    },
+
+    /* ── Auto theme ── */
+    initAutoTheme() {
+      const saved = localStorage.getItem('lt_theme');
+      if (saved) { this.theme = saved; this._applyTheme(); return; }
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        this.theme = 'dark';
+      } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+        this.theme = 'light';
+      }
+      // Listen for system changes
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        if (!localStorage.getItem('lt_theme')) {
+          this.theme = e.matches ? 'dark' : 'light';
+          this._applyTheme();
+        }
+      });
+      this._applyTheme();
+    },
+    _applyTheme() {
+      if (this.theme === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+    },
+
+    /* ── Generate share URL for card ── */
+    shareCard(cardId, cardData) {
+      const key = 'lt_shared_cards';
+      let data = {};
+      try { data = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e) {}
+      data[cardId] = cardData;
+      localStorage.setItem(key, JSON.stringify(data));
+      return `${window.location.origin}/card.html?id=${cardId}`;
+    },
+
+    /* ── Notifications ── */
+    notifyEnabled: false,
+    requestNotify() {
+      if (!('Notification' in window)) return;
+      Notification.requestPermission().then(p => {
+        this.notifyEnabled = p === 'granted';
+      });
+    },
+    notify(title, body) {
+      if (this.notifyEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' });
+      }
+    },
+  };
 
 window.LT = window.LT || {};
 window.LT.store = store;

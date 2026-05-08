@@ -27,6 +27,7 @@
           <span class="topbar-title" id="topbar-title">LivingTree AI Agent</span>
         </div>
         <div class="topbar-right">
+          <button class="theme-toggle-btn" onclick="LT.store.toggleTheme()" title="切换主题">🌓</button>
           <button onclick="OnlyOffice.toggleSplit()" title="分屏文档" id="btn-split"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="8" y="2" width="5" height="10" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
           <button onclick="toggleGraphStudio()" title="可视化控制台"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="10" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 5.5L8 9M11 5l-3 3.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg></button>
           <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>

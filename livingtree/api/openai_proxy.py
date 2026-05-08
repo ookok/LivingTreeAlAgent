@@ -74,8 +74,8 @@ def setup_openai_proxy(app: FastAPI):
             if not sid:
                 raise HTTPException(status_code=502, detail="No session ID")
 
-            # Send prompt
-            async with s.post(f"{OPENCODE_URL}/session/{sid}/prompt",
+            # Send prompt → POST /session/{id}/message
+            async with s.post(f"{OPENCODE_URL}/session/{sid}/message",
                 json={"parts": [{"type": "text", "text": user_content}]},
                 timeout=aiohttp.ClientTimeout(total=10)) as _:
                 pass
@@ -93,14 +93,13 @@ def setup_openai_proxy(app: FastAPI):
                 }
 
 async def _poll(s, sid, req, max_wait=120):
-    """Poll session messages until assistant responds."""
+    """Poll GET /session/{id}/message until assistant responds."""
     deadline = time.time() + max_wait
-    last_content = ""
     while time.time() < deadline:
         try:
-            async with s.get(f"{OPENCODE_URL}/session/{sid}/messages", timeout=aiohttp.ClientTimeout(total=10)) as r:
+            async with s.get(f"{OPENCODE_URL}/session/{sid}/message", timeout=aiohttp.ClientTimeout(total=10)) as r:
                 msgs = await r.json()
-                msgs = msgs if isinstance(msgs, list) else msgs.get("data", msgs.get("messages", []))
+                msgs = msgs if isinstance(msgs, list) else msgs.get("data", msgs.get("message", msgs.get("messages", [])))
                 for msg in reversed(msgs if isinstance(msgs, list) else []):
                     if msg.get("info", {}).get("role") != "assistant": continue
                     parts = msg.get("parts", [])
@@ -119,9 +118,9 @@ async def _stream(s, sid, model, req, max_wait=120):
     last_len = 0
     while time.time() < deadline:
         try:
-            async with s.get(f"{OPENCODE_URL}/session/{sid}/messages", timeout=aiohttp.ClientTimeout(total=10)) as r:
+            async with s.get(f"{OPENCODE_URL}/session/{sid}/message", timeout=aiohttp.ClientTimeout(total=10)) as r:
                 msgs = await r.json()
-                msgs = msgs if isinstance(msgs, list) else msgs.get("data", msgs.get("messages", []))
+                msgs = msgs if isinstance(msgs, list) else msgs.get("data", msgs.get("message", msgs.get("messages", [])))
                 for msg in reversed(msgs if isinstance(msgs, list) else []):
                     if msg.get("info", {}).get("role") != "assistant": continue
                     parts = msg.get("parts", [])

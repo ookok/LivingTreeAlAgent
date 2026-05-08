@@ -270,15 +270,55 @@ class Chat extends Component {
       const msg = typing.closest('.message-agent');
       if (msg) msg.remove();
     }
-    LT.renderer.append(this._msgsEl, LT.renderer.agentMsg('', true));
-    // Initialize batched streaming
+
+    // Multi-lane: create agent message with thinking lane + response lane
+    const html = `
+<div class="message message-agent">
+  <div class="message-bubble agent-bubble" data-stream="true">
+    ${LT.renderer.streamLane('thinking', '分析中...')}
+    ${LT.renderer.streamLane('response', '', false)}
+    ${LT.renderer.confidenceBar(0)}
+  </div>
+</div>`;
+    LT.renderer.append(this._msgsEl, html);
+
+    // Init batched streaming on response lane body
     const lastBubble = this._msgsEl.querySelector('.agent-bubble[data-stream]');
-    if (lastBubble) Perf.initStream(lastBubble);
+    if (lastBubble) {
+      const responseBody = lastBubble.querySelector('.stream-response .stream-lane-body');
+      if (responseBody) Perf.initStream(responseBody);
+    }
     this._scrollBottom();
   }
 
   _onChunk(content) {
-    // Batched append via Perf — avoids innerHTML on every char
+    // Update thinking lane with progress
+    const agentMsg = this._msgsEl.querySelector('.agent-bubble[data-stream]');
+    if (agentMsg) {
+      const thinkingBody = agentMsg.querySelector('.stream-thinking .stream-lane-body');
+      const len = (content || '').length;
+      if (thinkingBody && len < 200) {
+        const progress = Math.min(Math.round(len / 2), 95);
+        thinkingBody.textContent = `分析中... ${progress}%`;
+      } else if (thinkingBody && thinkingBody.textContent !== '分析完成') {
+        thinkingBody.textContent = '分析完成';
+        thinkingBody.style.color = 'var(--status-success)';
+        // Collapse thinking lane
+        setTimeout(() => {
+          const lane = agentMsg.querySelector('.stream-thinking');
+          if (lane) lane.classList.add('collapsed');
+        }, 1500);
+      }
+
+      // Update confidence bar
+      const confBar = agentMsg.querySelector('.confidence-fill');
+      if (confBar) {
+        const conf = Math.min(len / 1000, 0.95);
+        confBar.style.width = Math.round(conf * 100) + '%';
+      }
+    }
+
+    // Batched append via Perf
     Perf.appendChunk(content);
     this._scrollBottom();
   }

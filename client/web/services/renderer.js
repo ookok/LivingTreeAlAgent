@@ -296,7 +296,64 @@ const renderer = {
 </div>`;
   },
 
-  /* ── Copy methods ── */
+  /* ── Streaming lane header ── */
+  streamLane(type, content, collapsed) {
+    const lanes = {
+      thinking: { icon: '🧠', label: '思考过程', color: '#9570ff', cls: 'stream-thinking' },
+      planning: { icon: '📋', label: '执行计划', color: '#e28a00', cls: 'stream-planning' },
+      tool:     { icon: '🔧', label: '工具调用', color: '#3f85ff', cls: 'stream-tool' },
+      rag:      { icon: '📚', label: '知识检索', color: '#0fdc78', cls: 'stream-rag' },
+      response: { icon: '💬', label: '回复', color: '#d1d3db', cls: 'stream-response' },
+    };
+    const cfg = lanes[type] || lanes.response;
+    const collapsedAttr = collapsed ? ' collapsed' : '';
+    return `
+<div class="stream-lane ${cfg.cls}${collapsedAttr}">
+  <div class="stream-lane-header" onclick="this.parentElement.classList.toggle('collapsed')">
+    <span class="stream-lane-icon">${cfg.icon}</span>
+    <span class="stream-lane-label" style="color:${cfg.color}">${cfg.label}</span>
+    <span class="stream-lane-toggle">▼</span>
+  </div>
+  <div class="stream-lane-body">${content || ''}</div>
+</div>`;
+  },
+
+  /* ── Confidence indicator ── */
+  confidenceBar(level) {
+    const pct = Math.round(level * 100);
+    const color = pct >= 80 ? '#0fdc78' : pct >= 50 ? '#e28a00' : '#f65a5a';
+    return `<div class="confidence-bar" title="置信度 ${pct}%"><div class="confidence-fill" style="width:${pct}%;background:${color}"></div><span class="confidence-text">${pct}%</span></div>`;
+  },
+
+  /* ── Inline citation ── */
+  citation(ref, source) {
+    return `<span class="inline-citation" data-source="${LT.esc(source || '')}" title="${LT.esc(source || '')}">[${ref}]</span>`;
+  },
+
+  /* ── Detect stream block type for progressive rendering ── */
+  detectBlockType(content) {
+    if (!content) return 'text';
+    const lines = content.split('\n');
+    const lastLine = lines[lines.length - 1] || '';
+    if (lastLine.startsWith('```') && lines.filter(l => l.startsWith('```')).length % 2 === 1) return 'code_start';
+    if (lastLine.startsWith('```') && lines.filter(l => l.startsWith('```')).length % 2 === 0) return 'code_end';
+    if (/^\|[-:| ]+\|$/.test(lastLine)) return 'table_header';
+    if (lines.length >= 2 && lines[lines.length - 2] && /^\|[-:| ]+\|$/.test(lines[lines.length - 2]) && /^\|.+\|$/.test(lastLine)) return 'table_row';
+    if (lastLine.startsWith('[card:')) return 'card_start';
+    if (lastLine.startsWith('[/card]')) return 'card_end';
+    if (lastLine.match(/^#{1,3}\s/)) return 'heading';
+    return 'text';
+  },
+
+  /* ── Streaming badge ── */
+  streamBadge(type) {
+    const badges = {
+      code: '<span class="stream-badge stream-badge-code">&lt;/&gt;</span>',
+      data: '<span class="stream-badge stream-badge-data">📊</span>',
+      plan: '<span class="stream-badge stream-badge-plan">📋</span>',
+    };
+    return badges[type] || '';
+  },
   copyMsgText(msgEl) {
     const bubble = msgEl.querySelector('.agent-bubble,.user-bubble');
     const text = bubble ? bubble.textContent : '';

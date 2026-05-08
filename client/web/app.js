@@ -28,6 +28,7 @@
     { name: 'code-editor', el: '#editor-panel-body' },
     { name: 'doc-studio', el: '#doc-studio' },
     { name: 'graph-studio', el: '#graph-studio' },
+    { name: 'diagram-studio', el: '#diagram-studio' },
   ];
 
   components.forEach(({ name, el }) => {
@@ -63,6 +64,18 @@
     const panel = document.getElementById('graph-studio-panel');
     if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
   };
+
+  /* ── Diagram studio toggle (for report generation) ── */
+  window.toggleDiagramStudio = () => {
+    const panel = document.getElementById('diagram-studio-panel');
+    if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+  };
+
+  /* ── Listen for diagram insert into OnlyOffice ── */
+  LT.on('diagram:insert', (data) => {
+    // Forward to doc-studio for insertion into OnlyOffice document
+    LT.emit('doc:insert-diagram', data);
+  });
 
   /* ── Theme toggle ── */
   window.toggleTheme = () => LT.store.toggleTheme();

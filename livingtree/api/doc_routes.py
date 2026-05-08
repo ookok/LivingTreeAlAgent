@@ -450,4 +450,126 @@ def setup_doc_routes(app: FastAPI) -> None:
             "ai_decision": "approved" if len(resolutions) <= 2 else "needs_review",
         }
 
-    logger.info("Doc routes registered (OnlyOffice integration)")
+    # ── Graph data endpoints (AntV X6 visualizations) ──
+
+    @app.get("/api/graph/pipeline")
+    async def graph_pipeline(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        tools = []
+        models_list = []
+        if hub:
+            try:
+                if hasattr(hub, 'tool_market'):
+                    tools_data = hub.tool_market.discover_tools()
+                    tools = [t.name if hasattr(t, 'name') else str(t) for t in tools_data[:8]]
+            except Exception: pass
+            try:
+                if hasattr(hub, 'tree_llm') and hasattr(hub.tree_llm, 'registry'):
+                    models_list = hub.tree_llm.registry.list_models()[:8] if hasattr(hub.tree_llm.registry, 'list_models') else []
+            except Exception: pass
+        return {
+            "models": models_list or ["DeepSeek V4", "LongCat", "Qwen", "SiliconFlow", "Zhipu", "Spark"],
+            "tools": tools or ["RAG 2.0", "Gaussian Plume", "Noise Model", "Code Graph", "Doc Engine"],
+        }
+
+    @app.get("/api/graph/knowledge")
+    async def graph_knowledge(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        entities = []
+        edges_list = []
+        if hub and hasattr(hub, 'knowledge'):
+            try:
+                kb = hub.knowledge
+                if hasattr(kb, 'get_graph'):
+                    graph = kb.get_graph()
+                    entities = graph.get("entities", [])
+                    edges_list = graph.get("edges", [])
+            except Exception: pass
+        if not entities:
+            entities = [
+                {"name": "环评报告", "category": "doc", "size": 24},
+                {"name": "大气污染", "category": "concept", "size": 18},
+                {"name": "PM2.5", "category": "metric", "size": 14},
+                {"name": "水环境", "category": "concept", "size": 16},
+                {"name": "噪声衰减", "category": "method", "size": 14},
+            ]
+            edges_list = [[0, 1], [0, 3], [1, 2], [3, 4]]
+        return {"entities": entities, "edges": edges_list}
+
+    @app.get("/api/graph/lifecycle")
+    async def graph_lifecycle(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        gen = 0; active = 1
+        if hub:
+            try:
+                status = hub.status() if hasattr(hub, 'status') else {}
+                gen = status.get("life_engine", {}).get("generation", 0)
+                active = status.get("life_engine", {}).get("stage_index", 1)
+            except Exception: pass
+        return {"gen": gen, "active_stage": active}
+
+    @app.get("/api/graph/economic")
+    async def graph_economic(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        policy = {"name": "BALANCED", "cost": 0.33, "speed": 0.33, "quality": 0.34}
+        models_list = []
+        selected = 0
+        if hub:
+            try:
+                if hasattr(hub, 'economic_engine'):
+                    policy = hub.economic_engine.current_policy() if hasattr(hub.economic_engine, 'current_policy') else policy
+            except Exception: pass
+            try:
+                if hasattr(hub, 'tree_llm') and hasattr(hub.tree_llm, 'registry'):
+                    models_list = hub.tree_llm.registry.list_models()[:8] if hasattr(hub.tree_llm.registry, 'list_models') else []
+            except Exception: pass
+        return {"policy": policy, "models": models_list, "selected": selected}
+
+    @app.get("/api/graph/ruletree")
+    async def graph_ruletree(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        tree = {}
+        if hub:
+            try:
+                if hasattr(hub, 'dna') and hasattr(hub.dna, 'rule_tree'):
+                    tree = hub.dna.rule_tree()
+            except Exception: pass
+        if not tree:
+            tree = {
+                "name": "check_safety", "success": 0.85,
+                "children": [
+                    {"name": "v1: basic_check", "success": 0.78},
+                    {"name": "v2: enhanced", "success": 0.92,
+                     "children": [
+                         {"name": "v2.1: +context", "success": 0.95},
+                         {"name": "v2.2: +citations", "success": 0.88},
+                     ]},
+                    {"name": "v3: strict", "success": 0.45},
+                ],
+            }
+        return {"tree": tree}
+
+    @app.get("/api/graph/tasks")
+    async def graph_tasks(request: Request) -> dict[str, Any]:
+        hub = request.app.state.hub
+        tasks = []
+        deps = []
+        if hub:
+            try:
+                if hasattr(hub, 'orchestrator') and hasattr(hub.orchestrator, 'task_graph'):
+                    tg = hub.orchestrator.task_graph()
+                    tasks = tg.get("tasks", [])
+                    deps = tg.get("deps", [])
+            except Exception: pass
+        if not tasks:
+            tasks = [
+                {"id": "t1", "name": "数据收集", "status": "done", "layer": 0},
+                {"id": "t2", "name": "模型计算", "status": "done", "layer": 0},
+                {"id": "t3", "name": "法规检索", "status": "running", "layer": 0},
+                {"id": "t4", "name": "结果分析", "status": "pending", "layer": 1},
+                {"id": "t5", "name": "报告生成", "status": "pending", "layer": 2},
+            ]
+            deps = [["t1","t4"],["t2","t4"],["t3","t4"],["t4","t5"]]
+        return {"tasks": tasks, "deps": deps}
+
+    logger.info("Doc routes registered (OnlyOffice + Graph endpoints)")

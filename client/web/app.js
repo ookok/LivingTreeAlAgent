@@ -27,6 +27,7 @@
     { name: 'user-menu', el: '#user-dropdown' },
     { name: 'code-editor', el: '#editor-panel-body' },
     { name: 'doc-studio', el: '#doc-studio' },
+    { name: 'graph-studio', el: '#graph-studio' },
   ];
 
   components.forEach(({ name, el }) => {
@@ -56,6 +57,12 @@
     const panel = document.getElementById('editor-panel');
     if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
   });
+
+  /* ── Graph studio toggle ── */
+  window.toggleGraphStudio = () => {
+    const panel = document.getElementById('graph-studio-panel');
+    if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+  };
 
   /* ── Theme toggle ── */
   window.toggleTheme = () => LT.store.toggleTheme();

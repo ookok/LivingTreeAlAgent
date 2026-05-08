@@ -344,6 +344,8 @@ class DocStudio extends Component {
       this._reviewData = data.review;
       this._docId = data.doc_id;
       this._showReviewPanel(data.review);
+      // Emit review summary to chat
+      LT.emit('review:complete', { docTitle: data.title, review: data.review });
       OnlyOffice.toggleSplit();
       this._openDoc(data.doc_id);
     } catch (err) { LT.emit('notify', { msg: err.message, type: 'error' }); }
@@ -359,6 +361,7 @@ class DocStudio extends Component {
       this._reviewData = data.review;
       this._showReviewPanel(data.review);
       this._openDoc(this._docId);
+      LT.emit('review:complete', { docTitle: data.doc_id, review: data.review });
       LT.emit('notify', { msg: `审阅完成: ${data.review.summary.total} 条意见`, type: 'success' });
     } catch (err) { LT.emit('notify', { msg: err.message, type: 'error' }); }
   }

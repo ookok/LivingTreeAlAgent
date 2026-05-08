@@ -491,6 +491,24 @@
 .ds-review-input{width:100%;min-height:48px;padding:var(--space-6);background:var(--bg-overlay-l1);border:1px solid var(--border-l1);border-radius:var(--radius-4);color:var(--text-default);font-size:var(--font-size-sm);resize:vertical;font-family:var(--font-sans);outline:none}
 .ds-review-input:focus{border-color:var(--brand-default)}
 
+/* ── Review Summary in Chat ── */
+.review-summary{max-width:420px}
+.review-summary-header{display:flex;align-items:center;gap:var(--space-8);margin-bottom:var(--space-12)}
+.review-summary-icon{font-size:20px}
+.review-summary-title{font-size:var(--font-size-base);font-weight:var(--font-weight-semibold)}
+.review-summary-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-8);margin-bottom:var(--space-12)}
+.review-stat{text-align:center;padding:var(--space-8);background:var(--bg-overlay-l1);border-radius:var(--radius-6)}
+.review-stat-value{font-size:var(--font-size-2xl);font-weight:var(--font-weight-bold)}
+.review-stat-label{font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:var(--space-2)}
+.review-summary-list{display:flex;flex-direction:column;gap:var(--space-6);margin-bottom:var(--space-12)}
+.review-summary-item{font-size:var(--font-size-md);line-height:1.5;padding:var(--space-6) var(--space-8);border-radius:var(--radius-4);background:var(--bg-overlay-l1)}
+.re-sev-error{border-left:3px solid #e8463a}
+.re-sev-warning{border-left:3px solid #e28a00}
+.re-sev-info{border-left:3px solid #3f85ff}
+.re-sug{font-size:var(--font-size-sm);color:var(--brand-default);margin-top:var(--space-2);padding-left:var(--space-4)}
+.review-summary-more{font-size:var(--font-size-sm);color:var(--text-tertiary);text-align:center;padding:var(--space-4)}
+.review-summary-action{margin-top:var(--space-8)}
+
 /* ════════════════ Graph Studio ════════════════ */
 .gs-overlay{display:none;position:fixed;inset:0;background:var(--bg-base);z-index:var(--z-modal);flex-direction:column}
 .graph-studio{flex:1;display:flex;flex-direction:column;overflow:hidden}

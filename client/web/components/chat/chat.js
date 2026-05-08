@@ -7,6 +7,7 @@ class Chat extends Component {
     this._unsubs.push(LT.on('msg:agent-stream', () => this._onAgentStream()));
     this._unsubs.push(LT.on('msg:chunk', (d) => this._onChunk(d.content)));
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
+    this._unsubs.push(LT.on('review:complete', (d) => this._onReviewComplete(d)));
     this.render();
     this._loadInitial();
     this._setupMsgActions();
@@ -53,6 +54,60 @@ class Chat extends Component {
   _getDocTitle(content) {
     const firstLine = (content || '').split('\n')[0].replace(/^#+\s*/, '').trim().slice(0, 50);
     return firstLine || 'AI Generated Document';
+  }
+
+  _onReviewComplete(data) {
+    this._showMessages();
+    const review = data.review;
+    const sum = review.summary;
+    const topIssues = (review.annotations || []).slice(0, 5);
+    const sevBadge = (s) => s === 'error' ? '🔴' : s === 'warning' ? '🟡' : '🔵';
+
+    const html = `
+<div class="message message-agent">
+  <div class="message-bubble agent-bubble">
+    <div class="review-summary">
+      <div class="review-summary-header">
+        <span class="review-summary-icon">📋</span>
+        <span class="review-summary-title">AI 文档审阅 — ${LT.esc(data.docTitle || '文档')}</span>
+      </div>
+      <div class="review-summary-stats">
+        <div class="review-stat">
+          <div class="review-stat-value" style="color:#e8463a">${sum.by_severity.error || 0}</div>
+          <div class="review-stat-label">错误</div>
+        </div>
+        <div class="review-stat">
+          <div class="review-stat-value" style="color:#e28a00">${sum.by_severity.warning || 0}</div>
+          <div class="review-stat-label">警告</div>
+        </div>
+        <div class="review-stat">
+          <div class="review-stat-value" style="color:#3f85ff">${sum.by_severity.info || 0}</div>
+          <div class="review-stat-label">建议</div>
+        </div>
+        <div class="review-stat">
+          <div class="review-stat-value">${sum.total}</div>
+          <div class="review-stat-label">合计</div>
+        </div>
+      </div>
+      <div class="review-summary-list">
+        ${topIssues.map(a => `
+          <div class="review-summary-item re-sev-${a.severity}">
+            ${sevBadge(a.severity)} <strong>${LT.esc(a.message)}</strong>
+            ${a.suggestion ? `<div class="re-sug">💡 ${LT.esc(a.suggestion)}</div>` : ''}
+          </div>`).join('')}
+        ${review.annotations.length > 5 ? `<div class="review-summary-more">... 还有 ${review.annotations.length - 5} 条意见，请在文档编辑器中查看</div>` : ''}
+      </div>
+      <div class="review-summary-action">
+        <button onclick="OnlyOffice.toggleSplit()" class="card-btn card-btn-primary" style="width:100%">
+          在 OnlyOffice 中查看详情
+        </button>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+    LT.renderer.append(this._msgsEl, html);
+    this._scrollBottom();
   }
 
   template() {

@@ -11,7 +11,6 @@ from fastapi.responses import FileResponse, Response
 
 from .routes import setup_routes
 from .auth import setup_auth_routes
-from .openai_proxy import setup_openai_proxy
 
 
 def create_app(hub=None, config=None) -> FastAPI:

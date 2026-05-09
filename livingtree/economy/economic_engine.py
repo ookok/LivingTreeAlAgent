@@ -780,6 +780,19 @@ class EconomicOrchestrator:
         Returns:
             EconomicDecision 含所有评估维度.
         """
+        # 0. 简单任务穿透：complexity < 0.2 的简单查询直接放行，避免"ROI低"误杀
+        if complexity < 0.2 and estimated_tokens < 1000:
+            return EconomicDecision(
+                task_id=task_id, task_desc=task_desc,
+                go=True, policy="economy_bypass",
+                selected_model="deepseek/deepseek-v4-flash",
+                trilemma=TrilemmaVector(cost_score=1.0, speed_score=1.0, quality_score=0.6),
+                roi=ROIResult(approved=True, roi_estimate=9.0),
+                compliance=ComplianceResult(passed=True),
+                estimated_tokens=estimated_tokens,
+                suggestion="简单任务 — 经济审查自动放行",
+            )
+
         # 1. 选择策略
         policy = self.select_policy(task_type, user_priority)
 

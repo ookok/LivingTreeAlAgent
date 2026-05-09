@@ -135,7 +135,7 @@ async def tree_sse(request: Request):
                 affect = consc._current_affect.value if consc else "?"
                 cycle = xs._cycle_count if xs else 0
                 yield f"data: 状态:{h.get('status','?')} 评分:{h.get('score',0):.0%} 💭{affect} 🌱#{cycle}\n\n"
-            await asyncio.sleep(15)
+            await asyncio.sleep(5)  # Live heartbeat every 5s
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 

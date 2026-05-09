@@ -1,29 +1,58 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="grid2">
-  <div class="card">
-    <h2>🏥 系统健康</h2>
-    <div hx-get="/tree/health" hx-trigger="every 30s" hx-swap="innerHTML">
-      <div class="panel">等待数据...</div>
+<div x-data="{ tab: 'health', health: {}, log: [] }"
+     x-init="setInterval(async () => {
+       try { const r = await fetch('/tree/health/json'); health = await r.json() } catch(e) {}
+     }, 5000)">
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button @click="tab='health'" :class="{ active: tab === 'health' }" class="tab-btn">🏥 健康</button>
+    <button @click="tab='growth'" :class="{ active: tab === 'growth' }" class="tab-btn">🌱 生长</button>
+    <button @click="tab='modules'" :class="{ active: tab === 'modules' }" class="tab-btn">🔧 模块</button>
+  </div>
+
+  <div x-show="tab === 'health'" x-transition>
+    <div class="card">
+      <h2>系统健康</h2>
+      <div class="metric"><span>评分</span>
+        <span :class="health.score > 0.7 ? 'good' : 'warn'"
+              x-text="health.score ? (health.score * 100).toFixed(0) + '%' : '—'"></span></div>
+      <div class="metric"><span>状态</span><span x-text="health.status || '—'"></span></div>
+      <div class="metric"><span>神经连接</span>
+        <span x-text="health.synapses ? health.synapses + '条' : '—'"></span></div>
+      <div class="metric"><span>成熟/活跃/静默</span>
+        <span x-text="health.synapses_mature + '/' + health.synapses_active + '/' + health.synapses_silent"></span></div>
+      <div class="metric"><span>自主周期</span><span x-text="health.cycles || '—'"></span></div>
+      <div class="metric"><span>当前感受</span><span x-text="health.affect || '—'"></span></div>
+      <div class="metric"><span>意识深度</span><span x-text="health.consciousness_gap || '—'"></span></div>
+      <div x-show="health.degraded && health.degraded.length" style="margin-top:8px">
+        <div class="metric" style="color:#e8a030"><span>⚠ 退化模块</span>
+          <span x-text="health.degraded?.join(', ')"></span></div>
+      </div>
     </div>
   </div>
-  <div class="card">
-    <h2>🌱 生长日志</h2>
-    <div hx-get="/tree/health" hx-trigger="every 60s" hx-swap="innerHTML">
-      <div class="panel">等待第一次心跳...</div>
+
+  <div x-show="tab === 'growth'" x-transition>
+    <div class="card">
+      <h2>生长日志</h2>
+      <div hx-get="/tree/health" hx-trigger="every 30s" hx-swap="innerHTML">
+        <div class="panel" style="color:var(--dim)">最近5次自主生长周期...</div>
+      </div>
     </div>
-    <div class="log-entry" style="margin-top:12px">
-      <span class="cycle">#0</span>
-      <span class="reflection">小树正准备开始她的第一次自主生长...</span>
+  </div>
+
+  <div x-show="tab === 'modules'" x-transition>
+    <div class="card">
+      <h2>模块状态</h2>
+      {% for name in ["synaptic_plasticity","hypergraph_store","free_pool","consciousness","pipeline_orchestrator","xiaoshu","health","autonomic_loop"] %}
+      <div class="metric"><span>{{ name }}</span><span class="status-dot green"></span></div>
+      {% endfor %}
     </div>
   </div>
 </div>
-<div class="card" style="margin-top:16px">
-  <h2>🔧 模块状态</h2>
-  <div id="module-status">
-    {% for name in ["synaptic_plasticity","hypergraph_store","free_pool","consciousness","pipeline_orchestrator","xiaoshu","health","autonomic_loop"] %}
-    <div class="metric"><span>{{ name }}</span><span class="status-dot green"></span></div>
-    {% endfor %}
-  </div>
-</div>
+
+<style>
+.tab-btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+.tab-btn.active{background:var(--accent);color:var(--bg)}
+.good{color:#6c8}.warn{color:#e8a030}
+</style>
 {% endblock %}

@@ -123,6 +123,36 @@ async def tree_health(request: Request):
     )
 
 
+@htmx_router.get("/health/json")
+async def tree_health_json(request: Request):
+    """JSON health endpoint for Alpine.js data binding."""
+    from fastapi.responses import JSONResponse
+    life = getattr(request.app.state, "life", None)
+    if not life:
+        return JSONResponse({"status": "starting", "score": 0})
+
+    health = life.health()
+    sp = life.modules.get("synaptic_plasticity")
+    xs = life.modules.get("xiaoshu")
+    consc = life.modules.get("consciousness")
+    gs = life.modules.get("godelian_self")
+
+    syn_stats = sp.stats() if sp else {}
+    return JSONResponse({
+        "status": health.get("status", "?"),
+        "score": round(health.get("score", 0), 3),
+        "synapses": syn_stats.get("total_synapses", 0),
+        "synapses_mature": syn_stats.get("by_state", {}).get("mature", 0),
+        "synapses_active": syn_stats.get("by_state", {}).get("active", 0),
+        "synapses_silent": syn_stats.get("by_state", {}).get("silent", 0),
+        "cycles": xs._cycle_count if xs else 0,
+        "affect": consc._current_affect.value if consc else "?",
+        "consciousness_gap": round(gs.compute_consciousness_gap(), 3) if gs else 0,
+        "degraded": health.get("degraded_modules", []),
+        "action_items": health.get("action_items", []),
+    })
+
+
 @htmx_router.get("/sse")
 async def tree_sse(request: Request):
     async def stream():

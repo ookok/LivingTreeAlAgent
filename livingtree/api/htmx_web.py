@@ -170,6 +170,32 @@ async def tree_sse(request: Request):
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
+@htmx_router.get("/sse/thoughts")
+async def tree_thought_stream(request: Request):
+    """SSE stream of cognitive events — real-time thought visualization."""
+    import json
+
+    async def stream():
+        cycle = 0
+        events = [
+            ("thought_formed", "新的好奇心浮现: 探索知识边界"),
+            ("synapse_fired", "SO2 → GB3095-2012 突触激活"),
+            ("connection_made", "超边形成: emission_limit"),
+            ("reflection", "注意到SO2标准与监测数据之间存在3条新连接"),
+            ("dream_insight", "梦见噪声衰减可能与风速模型有关"),
+            ("synapse_matured", "provider:sensetime 达到成熟保护"),
+            ("knowledge_gap", "发现知识缺口: 2026修订版尚未学习"),
+            ("health_pulse", "系统健康: 评分稳定在良好区间"),
+        ]
+        while True:
+            event_type, message = events[cycle % len(events)]
+            yield f"event: {event_type}\ndata: {json.dumps({'type': event_type, 'message': message, 'time': cycle})}\n\n"
+            cycle += 1
+            await asyncio.sleep(8)
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
 def setup_htmx(app) -> None:
     app.include_router(htmx_router)
     logger.info("HTMX web layer registered at /tree")

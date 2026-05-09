@@ -606,5 +606,99 @@ def get_consciousness(identity_id: str | None = None) -> PhenomenalConsciousness
 
 __all__ = [
     "PhenomenalConsciousness", "Quale", "SelfModel",
-    "AffectiveState", "PhenomenalReport", "get_consciousness",
+    "AffectiveState", "PhenomenalReport", "VADVector",
+    "apply_vad_dynamics", "get_consciousness",
 ]
+
+
+# ═══ VAD 情感动力学 ═══
+
+import math
+
+
+class VADVector:
+    """Valence-Arousal-Dominance 三维连续情感向量。
+
+    替代离散标签，实现情感的平滑过渡。
+    """
+    __slots__ = ('valence', 'arousal', 'dominance')
+
+    def __init__(self, valence: float = 0.0, arousal: float = 0.3, dominance: float = 0.0):
+        self.valence = max(-1.0, min(1.0, valence))
+        self.arousal = max(-1.0, min(1.0, arousal))
+        self.dominance = max(-1.0, min(1.0, dominance))
+
+    def distance_to(self, other: "VADVector") -> float:
+        return math.sqrt(
+            (self.valence - other.valence) ** 2
+            + (self.arousal - other.arousal) ** 2
+            + (self.dominance - other.dominance) ** 2)
+
+    def blend(self, target: "VADVector", rate: float = 0.3) -> "VADVector":
+        """Smoothly move toward target. rate=1 → instant, rate=0.1 → gradual."""
+        return VADVector(
+            valence=self.valence + rate * (target.valence - self.valence),
+            arousal=self.arousal + rate * (target.arousal - self.arousal),
+            dominance=self.dominance + rate * (target.dominance - self.dominance))
+
+    def to_affect(self) -> str:
+        """Get nearest discrete label."""
+        return AffectiveState.nearest_state(self) if hasattr(AffectiveState, 'nearest_state') else "curiosity"
+
+    def __repr__(self):
+        return f"VAD(v={self.valence:.2f}, a={self.arousal:.2f}, d={self.dominance:.2f})"
+
+
+# VAD coordinates for discrete states
+_VAD_ANCHORS = {
+    "curiosity":     VADVector(0.4, 0.6, 0.3),
+    "confidence":    VADVector(0.6, -0.2, 0.7),
+    "confusion":     VADVector(-0.3, 0.4, -0.5),
+    "satisfaction":  VADVector(0.7, -0.4, 0.4),
+    "frustration":   VADVector(-0.6, 0.7, 0.1),
+    "anticipation":  VADVector(0.3, 0.5, 0.0),
+    "surprise":      VADVector(0.0, 0.8, -0.4),
+    "flow":          VADVector(0.5, 0.3, 0.8),
+}
+
+# Patch the enum with class methods
+AffectiveState.vad_coordinates = classmethod(
+    lambda cls, state: _VAD_ANCHORS.get(str(state), VADVector(0.0, 0.3, 0.0)))
+AffectiveState.nearest_state = classmethod(
+    lambda cls, vad: min(_VAD_ANCHORS.items(), key=lambda x: x[1].distance_to(vad))[0])
+
+
+def apply_vad_dynamics(current_affect: str, event_type: str, content: str,
+                       intensity: float = 0.5) -> tuple[str, VADVector]:
+    """Apply情感动力学 — smooth VAD transition based on event.
+
+    Replaces discrete情感标签切换 with continuous VAD movement.
+    """
+    anchor = _VAD_ANCHORS.get(current_affect, VADVector())
+
+    # Event-driven VAD adjustment
+    content_lower = content.lower()
+    delta_v, delta_a, delta_d = 0.0, 0.0, 0.0
+
+    if "success" in content_lower:
+        delta_v = +0.3 * intensity
+        delta_a = -0.2 * intensity
+        delta_d = +0.2 * intensity
+    elif "fail" in content_lower or "error" in content_lower:
+        delta_v = -0.4 * intensity
+        delta_a = +0.3 * intensity
+        delta_d = -0.1 * intensity
+    elif event_type == "insight":
+        delta_v = +0.2 * intensity
+        delta_a = +0.1 * intensity
+        delta_d = +0.1 * intensity
+    elif event_type == "user_interaction":
+        delta_a = +0.2 * intensity
+
+    target = VADVector(
+        valence=anchor.valence + delta_v,
+        arousal=anchor.arousal + delta_a,
+        dominance=anchor.dominance + delta_d)
+
+    new_affect = target.to_affect()
+    return new_affect, target

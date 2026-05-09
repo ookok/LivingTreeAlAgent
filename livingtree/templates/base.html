@@ -80,6 +80,11 @@ footer{background:var(--panel);border-top:1px solid var(--border);padding:8px 24
     <div sse-swap="xiaoshu" hx-swap="innerHTML" style="font-size:12px;color:var(--dim)">
       等待第一次心跳...
     </div>
+    <h3 style="margin-top:16px">思维流</h3>
+    <div sse-connect="/tree/sse/thoughts" x-data="{thoughts:[]}"
+         @thought_formed.window="thoughts.unshift({icon:'💡',text:'新的想法...'}); thoughts=thoughts.slice(0,5)">
+      <div x-show="thoughts.length===0" style="font-size:11px;color:var(--dim)">等待思维流...</div>
+    </div>
   </aside>
   <div class="content">
     {% block content %}{% endblock %}

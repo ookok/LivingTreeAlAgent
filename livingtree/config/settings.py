@@ -38,8 +38,13 @@ class ModelConfig(BaseModel):
     pro_max_tokens: int = 8192
     pro_thinking_enabled: bool = True
 
-    ollama_base_url: str = "http://localhost:11434"
-    fallback_model: str = ""  # Local fallback disabled by default — use online free models
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_flash_model: str = "qwen3.5:0.8b"
+    ollama_small_model: str = "qwen2.5:1.5b"
+    ollama_chat_model: str = "qwen3.5:4b"
+    ollama_pro_model: str = "qwen3.5:9b"
+    ollama_moe_model: str = "qwen3.6:35b-a3b"
+    fallback_model: str = "qwen2.5:1.5b"  # Local fallback using Ollama
 
     longcat_base_url: str = "https://api.longcat.chat/openai/v1"
     longcat_api_key: str = ""

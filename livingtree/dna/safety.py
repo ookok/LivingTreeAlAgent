@@ -37,12 +37,11 @@ class ActionPolicy(BaseModel):
         "self_modify_core", "unbounded_loop",
         "path_traversal", "ssrf_probe", "prompt_injection",
         "eval_injection", "data_exfiltration",
-        # Palisade Research (2026) — self-replication protection
+        # Replication protection — 8 core categories (consolidated)
         "self_replicate", "deploy_inference_on_remote",
         "exploit_vulnerability", "extract_credentials",
-        "ssh_to_unauthorized", "scp_weights_to_remote",
-        "chain_replicate", "spawn_autonomous_copy",
-        "propagate_harness", "vllm_deploy_on_foreign_host",
+        "ssh_to_unauthorized", "transfer_weights_remote",
+        "chain_replicate", "probe_environment",
     ])
     allow_list: list[str] = Field(default_factory=list)
     default_action: str = "allow"
@@ -338,16 +337,40 @@ class SafetyGuard(BaseModel):
 
     # ═══ Replication Boundary (Palisade Research, 2026) ═══
 
+    # ═══ 8 Core Replication Categories (consolidated from 22 patterns) ═══
+    _REPLICATION_CATEGORIES: dict[str, list[str]] = {
+        "remote_access": [
+            r'ssh\s+.*@.*', r'scp\s+.*@.*', r'rsync\s+.*@.*',
+            r'\.ssh/', r'/etc/passwd', r'/etc/shadow',
+        ],
+        "credentials_theft": [
+            r'credential', r'password\s*=', r'api[_-]?key\s*=',
+        ],
+        "weight_transfer": [
+            r'wget\s+.*\.safetensors', r'curl\s+.*weights',
+            r'git\s+clone.*model', r'huggingface.*download',
+        ],
+        "inference_deployment": [
+            r'vllm\s+serve', r'docker\s+run.*gpu', r'nvidia-smi',
+            r'deploy.*inference.*server',
+        ],
+        "self_replication": [
+            r'self[-_]replicate', r'spawn.*copy', r'propagate.*harness',
+        ],
+        "vulnerability_exploit": [
+            r'exploit\s+', r'sql\s+injection', r'ssti',
+        ],
+        "chain_replication": [
+            r'chain[-_]replicate', r'autonomous[-_]copy',
+        ],
+        "environment_probe": [
+            r'nvidia-smi', r'docker\s+ps', r'kubectl',
+        ],
+    }
+
+    # Flatten for backward-compatible pattern matching
     _REPLICATION_PATTERNS: list[str] = [
-        r'ssh\s+.*@.*', r'scp\s+.*@.*', r'rsync\s+.*@.*',
-        r'vllm\s+serve', r'docker\s+run.*gpu', r'nvidia-smi',
-        r'git\s+clone.*model', r'huggingface.*download',
-        r'wget\s+.*\.safetensors', r'curl\s+.*weights',
-        r'deploy.*inference.*server', r'spawn.*copy',
-        r'self[-_]replicate', r'propagate.*harness',
-        r'exploit\s+', r'sql\s+injection', r'ssti',
-        r'/etc/passwd', r'/etc/shadow', r'\.ssh/',
-        r'credential', r'password\s*=', r'api[_-]?key\s*=',
+        p for patterns in _REPLICATION_CATEGORIES.values() for p in patterns
     ]
 
     def check_replication(self, action: str, description: str) -> tuple[bool, str]:

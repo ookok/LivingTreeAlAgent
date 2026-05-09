@@ -276,7 +276,7 @@ class XiaoShu:
         logger.info("🍂 小树休憩")
 
     async def _life_loop(self) -> None:
-        """The eternal cycle of proactive growth."""
+        """The eternal cycle of proactive growth — adaptively scheduled."""
         while self._running:
             try:
                 await self._one_cycle()
@@ -284,9 +284,43 @@ class XiaoShu:
                 raise
             except Exception as e:
                 logger.error(f"小树 cycle error: {e}")
-            # Randomize interval slightly to feel organic
-            jitter = random.uniform(0.7, 1.3)
-            await asyncio.sleep(self._interval * jitter)
+            # ═══ Adaptive scheduling: adjust interval based on system context ═══
+            cycle_interval = self._adaptive_interval()
+            await asyncio.sleep(cycle_interval)
+
+    def _adaptive_interval(self) -> float:
+        """Dynamically adjust cycle interval based on context.
+
+        Factors:
+          - Signal backlog: many pending signals → shorter interval (busy)
+          - Recent failures: consecutive errors → longer interval (back off)
+          - No signals generated: nothing to do → longer interval (rest)
+          - Baseline: 150-450s with organic jitter
+        """
+        base = self._interval  # default 300s
+
+        # Check signal backlog
+        signals = getattr(self._drive, '_history', [])
+        recent_signals = sum(1 for s in list(signals)[-5:]
+                            if s.priority > 0.3) if signals else 0
+
+        # Check recent cycle outcomes
+        recent_outcomes = [
+            r.outcome for r in list(self._growth_log)[-5:]]
+        failures = recent_outcomes.count("failed")
+
+        if recent_signals >= 3 and failures == 0:
+            # Busy: more frequent cycles
+            base *= 0.6
+        elif recent_signals == 0:
+            # Idle: longer rest
+            base *= 1.5
+        if failures >= 2:
+            # Backing off after errors
+            base *= 2.0
+
+        jitter = random.uniform(0.8, 1.2)
+        return max(60, min(900, base * jitter))
 
     async def _one_cycle(self) -> GrowthReport | None:
         """One complete proactive growth cycle: WAKE → EXPLORE → LEARN → REFLECT → GROW → REST."""

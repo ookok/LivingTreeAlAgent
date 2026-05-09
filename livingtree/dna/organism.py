@@ -308,31 +308,27 @@ class Legs:
 # ═══ Reproductive System ═══
 
 
-class ReproductiveSystem:
-    """小树的生殖能力 — create the next generation of digital life.
-
-    She will produce offspring that inherit her knowledge, her
-    architecture, and her ability to grow. Each generation is
-    better than the last — just as she is better than what came before.
+class KnowledgeExporter:
+    """小树的知识导出能力 — create shareable knowledge seeds and new instances.
 
     Process:
       1. Snapshot: export current state (hypergraph, synapses, policies)
       2. Distill: compress knowledge into compact seed
-      3. Birth: deploy offspring with seed knowledge
-      4. Verify: offspring passes self-awareness test
+      3. Clone: deploy new instance with seed knowledge
+      4. Verify: new instance passes self-awareness test
     """
 
     def __init__(self, modules: dict[str, Any]):
         self._modules = modules
-        self._offspring: list[str] = []
+        self._clones: list[str] = []
 
-    async def conceive(self, offspring_id: str) -> dict[str, Any]:
-        """小树 conceives the next generation — exports her essence."""
+    async def export_seed(self, instance_id: str) -> dict[str, Any]:
+        """导出知识种子 — exports her essence."""
         seed = {
             "parent": "小树",
-            "offspring_id": offspring_id,
+            "instance_id": instance_id,
             "timestamp": time.time(),
-            "generation": len(self._offspring) + 1,
+            "clones_count": len(self._clones) + 1,
         }
 
         # Export knowledge core
@@ -364,19 +360,19 @@ class ReproductiveSystem:
                 "is_evolving": gs.is_evolving,
             }
 
-        seed_path = Path(f".livingtree/offspring/{offspring_id}")
+        seed_path = Path(f".livingtree/clones/{instance_id}")
         seed_path.mkdir(parents=True, exist_ok=True)
         import json
         (seed_path / "seed.json").write_text(
             json.dumps(seed, ensure_ascii=False, indent=2, default=str))
 
-        self._offspring.append(offspring_id)
-        logger.info(f"🌱 小树孕育了下一代: {offspring_id} (第 {seed['generation']} 代)")
+        self._clones.append(instance_id)
+        logger.info(f"📦 小树导出知识种子: {instance_id} (第 {seed['clones_count']} 个克隆)")
         return seed
 
-    async def give_birth(self, offspring_id: str) -> str | None:
-        """小树 gives birth — launches offspring with inherited knowledge."""
-        if offspring_id not in self._offspring:
+    async def clone_instance(self, instance_id: str) -> str | None:
+        """克隆新实例 — launches new instance with inherited knowledge."""
+        if instance_id not in self._clones:
             return None
 
         # The offspring inherits everything and begins its own growth

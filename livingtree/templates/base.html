@@ -7,6 +7,7 @@
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<script src="/js/localfs.js"></script>
 <style>
 :root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--accent:#6c8;--warn:#e8a030;--err:#e05050;--dim:#667}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -81,9 +82,14 @@ footer{background:var(--panel);border-top:1px solid var(--border);padding:8px 24
       等待第一次心跳...
     </div>
     <h3 style="margin-top:16px">思维流</h3>
-    <div sse-connect="/tree/sse/thoughts" x-data="{thoughts:[]}"
-         @thought_formed.window="thoughts.unshift({icon:'💡',text:'新的想法...'}); thoughts=thoughts.slice(0,5)">
-      <div x-show="thoughts.length===0" style="font-size:11px;color:var(--dim)">等待思维流...</div>
+    <div sse-connect="/tree/sse/thoughts" style="font-size:11px;color:var(--dim)">
+      等待思维流...
+    </div>
+
+    <h3 style="margin-top:16px">本地挂载</h3>
+    <button onclick="xiaoshu.mountFolder()" style="width:100%;font-size:12px;padding:6px;margin-bottom:8px">📂 挂载文件夹</button>
+    <div id="local-mounts">
+      <div style="font-size:12px;color:var(--dim);padding:8px">📂 未挂载 — 点击上方按钮或拖拽文件夹</div>
     </div>
   </aside>
   <div class="content">

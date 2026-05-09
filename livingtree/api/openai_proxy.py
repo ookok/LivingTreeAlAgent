@@ -138,9 +138,9 @@ async def _stream(s, sid, model, req, max_wait=120):
                     if len(content) > last_len:
                         new = content[last_len:]
                         last_len = len(content)
-                        yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': f'opencode/{model}', 'choices': [{'index': 0, 'delta': {'content': new}, 'finish_reason': None}])}\n\n"
+                        yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': 'opencode/' + model, 'choices': [{'index': 0, 'delta': {'content': new}, 'finish_reason': None}]})}\n\n"
                         if msg.get("info", {}).get("finish"):
-                            yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': f'opencode/{model}', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
+                            yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': 'opencode/' + model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
                             yield "data: [DONE]\n\n"
                             return
         except: pass

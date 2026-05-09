@@ -1,0 +1,45 @@
+ollama:
+  base_url: "http://localhost:11434/v1"
+  api_key: ""
+  models:
+    flash:
+      name: "qwen3.5:0.8b"
+      description: "轻量模型，适合快速响应"
+      context_length: 4096
+      max_tokens: 2048
+      temperature: 0.3
+    
+    small:
+      name: "qwen2.5:1.5b"
+      description: "小型模型，平衡速度与质量"
+      context_length: 4096
+      max_tokens: 2048
+      temperature: 0.5
+    
+    chat:
+      name: "qwen3.5:4b"
+      description: "中型模型，适合日常对话"
+      context_length: 8192
+      max_tokens: 4096
+      temperature: 0.7
+    
+    pro:
+      name: "qwen3.5:9b"
+      description: "大型模型，适合复杂任务"
+      context_length: 16384
+      max_tokens: 8192
+      temperature: 0.7
+      thinking_enabled: true
+    
+    moe:
+      name: "qwen3.6:35b-a3b"
+      description: "专家混合模型，最强推理能力"
+      context_length: 16384
+      max_tokens: 8192
+      temperature: 0.7
+      thinking_enabled: true
+
+  settings:
+    keep_alive: "30m"
+    max_loaded_models: 3
+    gpu_memory_threshold: 0.85

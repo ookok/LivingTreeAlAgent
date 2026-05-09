@@ -320,3 +320,24 @@ def create_internlm_provider(api_key: str, model: str = "internlm2.5-7b-chat") -
         api_key=api_key,
         default_model=model,
     )
+
+
+def create_ollama_provider(base_url: str = "http://localhost:11434/v1", default_model: str = "qwen3.5:4b") -> OpenAILikeProvider:
+    """Create an Ollama provider — OpenAI-compatible API.
+
+    Ollama (ollama.com) is a local LLM server that manages GGUF models.
+    It provides an OpenAI-compatible API at /v1 endpoint.
+
+    Common models:
+    - qwen3.5:0.8b (flash — fastest, lightweight)
+    - qwen2.5:1.5b (small — balanced speed/quality)
+    - qwen3.5:4b (chat — daily usage)
+    - qwen3.5:9b (pro — complex tasks)
+    - qwen3.6:35b-a3b (moe — strongest reasoning)
+    """
+    return OpenAILikeProvider(
+        name="ollama",
+        base_url=base_url,
+        api_key="",
+        default_model=default_model,
+    )

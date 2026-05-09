@@ -98,6 +98,9 @@ class MultiDocFusionEngine:
         refs = self.cross_reference(trees)
         result.references = refs
 
+        # OKH-RAG: Temporal/precedence ordering across documents
+        temporal_hints = self._infer_temporal_order(trees, refs)
+
         conflicts = self.detect_conflicts(trees, refs, hub)
         result.conflicts = conflicts
 
@@ -112,6 +115,7 @@ class MultiDocFusionEngine:
             "cross_references": len(refs),
             "conflicts": len(conflicts),
             "complementary_sections": len(complementary),
+            "temporal_order": temporal_hints,
         }
 
         return result
@@ -362,3 +366,48 @@ Return a concise resolution in 2-3 sentences."""
             return 0.0
         intersection = ngrams_a & ngrams_b
         return len(intersection) / max(len(ngrams_a), len(ngrams_b))
+
+    @staticmethod
+    def _infer_temporal_order(
+        trees: list["DocumentTree"],
+        refs: list["CrossReference"],
+    ) -> dict[str, Any]:
+        """OKH-RAG: Infer temporal/precedence ordering across documents.
+
+        Uses PrecedenceModel to score the natural ordering of document sections.
+        Returns ordering hints for downstream synthesis.
+        """
+        if len(trees) < 2:
+            return {"ordered": False, "reason": "single document"}
+
+        try:
+            from .precedence_model import get_precedence_model
+            model = get_precedence_model()
+
+            # Collect section types from titles
+            all_types = []
+            for tree in trees:
+                for section in tree.root.iter_sections():
+                    if section.title:
+                        all_types.append(section.title[:50])
+
+            if len(all_types) < 2:
+                return {"ordered": False, "reason": "insufficient sections"}
+
+            # Deduplicate unique types
+            unique_types = list(dict.fromkeys(all_types))
+            result = model.order_facts(unique_types[:10])
+
+            return {
+                "ordered": True,
+                "optimal_sequence": result.ordered_types[:5],
+                "coherence_score": result.total_score,
+                "per_transition": [
+                    {"from": f, "to": t, "prob": round(p, 3)}
+                    for f, t, p in result.per_transition_scores
+                ],
+            }
+        except ImportError:
+            return {"ordered": False, "reason": "precedence_model unavailable"}
+        except Exception:
+            return {"ordered": False, "reason": "inference error"}

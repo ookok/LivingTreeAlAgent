@@ -147,14 +147,17 @@ class LifeEngine:
     # ── Main pipeline ──
 
     async def run(self, user_input: str, fold: bool = False,
-                  fold_max_chars: int = 500, **kwargs) -> LifeContext:
-        """Run the full life cycle pipeline with optional Context-Folding.
+                  fold_max_chars: int = 500, crv_gating: bool = True, **kwargs) -> LifeContext:
+        """Run the full life cycle pipeline with optional Context-Folding + CRV gating.
 
         Args:
             user_input: The user's query/request
             fold: FoldAgent — if True, fold each stage's output into compact
                   summaries for the next stage, reducing context ~10x
             fold_max_chars: Target max chars for folded stage summaries
+            crv_gating: CRV coherence gating — if True, applies ACCEPT/RECALIBRATE/
+                        SKIP/REJECT gates after each stage (RuView signal-line protocol).
+                        Enables automatic stage re-processing on low confidence.
         """
         ctx = LifeContext(user_input=user_input, **kwargs)
         self.is_running = True
@@ -215,16 +218,16 @@ class LifeEngine:
                 logger.debug(f"SideGit pre_turn: {e}")
 
         try:
-            await self._stage("perceive", self._perceive, ctx)
+            await self._stage("perceive", self._perceive, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("perceive", ctx, fold_max_chars)
-            await self._stage("cognize", self._cognize, ctx)
+            await self._stage("cognize", self._cognize, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("cognize", ctx, fold_max_chars)
-            await self._stage("ontogrow", self._grow_ontology, ctx)
+            await self._stage("ontogrow", self._grow_ontology, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("ontogrow", ctx, fold_max_chars)
-            await self._stage("plan", self._plan, ctx)
+            await self._stage("plan", self._plan, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("plan", ctx, fold_max_chars)
             decision = self._should_branch(ctx)
@@ -235,10 +238,10 @@ class LifeEngine:
                     b = self.fork_branch(name=f"branch-{ctx.session_id}-{i}", hypothesis=hyp, ctx=ctx)
                     created.append(b)
                 ctx.metadata["branches"] = [br.id for br in created]
-            await self._stage("simulate", self._simulate, ctx)
+            await self._stage("simulate", self._simulate, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("simulate", ctx, fold_max_chars)
-            await self._stage("execute", self._execute, ctx)
+            await self._stage("execute", self._execute, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("execute", ctx, fold_max_chars)
             branches = ctx.metadata.get("branches", [])
@@ -246,10 +249,10 @@ class LifeEngine:
                 if ctx.metadata.get("success_rate", 0) > 0:
                     comp = self.compare_branches(branch_ids=branches)
                     ctx.metadata["branch_comparison"] = comp
-            await self._stage("reflect", self._reflect, ctx)
+            await self._stage("reflect", self._reflect, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("reflect", ctx, fold_max_chars)
-            await self._stage("evolve", self._evolve, ctx)
+            await self._stage("evolve", self._evolve, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("evolve", ctx, fold_max_chars)
 
@@ -1001,21 +1004,34 @@ class LifeEngine:
         # Shared cache for cross-step data transfer
         ctx.metadata.setdefault("shared_cache", {})
 
-        # ── Dual-mode routing: DAG vs ReAct ──
+        # ── Unified Pipeline Routing (StarVLA Lego architecture) ──
+        # Replaces old DAG vs ReAct dual-mode if/elif with auto-selection
+        # across all 4+ execution modes via PipelineOrchestrator
         from ..execution.react_executor import (
             ExecutionMode, route_execution, ReactExecutor)
-        fg = getattr(self.world, 'foresight_gate', None)
-        mode = await route_execution(
-            task=ctx.user_input or ctx.intent or "",
-            plan=ctx.plan,
-            consciousness=self.consciousness,
-            foresight_gate=fg,
-        )
-        ctx.metadata["execution_mode"] = mode.value
-        logger.info(f"[execute] Mode: {mode.value} ({len(ctx.plan)} steps, confidence={getattr(fg, '_state_streak', {})})")
+        from ..execution.unified_pipeline import get_pipeline_orchestrator
 
-        if mode == ExecutionMode.REACT:
+        fg = getattr(self.world, 'foresight_gate', None)
+        task_str = ctx.user_input or ctx.intent or ""
+
+        # Use unified orchestrator for mode selection (replaces old binary routing)
+        pipeline_orch = get_pipeline_orchestrator()
+        selected_mode = pipeline_orch.select(task_str, {
+            "plan": ctx.plan, "tools": bool(self.world.orchestrator),
+            "pipeline_mode": ctx.metadata.get("pipeline_mode"),
+        })
+        # Map unified mode to existing execution infrastructure
+        if selected_mode in ("react",):
+            mode_val = ExecutionMode.REACT
+        else:
+            mode_val = ExecutionMode.DAG
+        ctx.metadata["execution_mode"] = selected_mode
+        ctx.metadata["pipeline_available"] = pipeline_orch.list_pipelines()
+        logger.info(f"[execute] Pipeline: {selected_mode} ({len(ctx.plan)} steps)")
+
+        if mode_val == ExecutionMode.REACT:
             # ── ReAct: serial Think-Act-Observe loop ──
+            # (preserved from original — now routed via PipelineOrchestrator)
             react = ReactExecutor(self.consciousness)
 
             # Build tool registry from available world capabilities
@@ -1232,6 +1248,41 @@ class LifeEngine:
             pass
 
         reflection = f"{total} steps: {ok} ok, {fail} failed"
+        if fail:
+            errors = [r.get("error", "?") for r in ctx.execution_results if r.get("error")]
+            reflection += f". Errors: {errors}"
+        ctx.reflections.append(reflection)
+        ctx.metadata["lessons"] = ctx.reflections
+
+        # Quality summary
+        if ctx.quality_reports:
+            qr_summary = f"Quality: {sum(1 for q in ctx.quality_reports if q['passed'])}/{len(ctx.quality_reports)} passed"
+            ctx.reflections.append(qr_summary)
+
+        # Calibration tracker: record prediction-vs-actual for trust calibration
+        ct = getattr(self.world, 'calibration_tracker', None)
+        if ct and rate > 0:
+            try:
+                predicted_ok = ctx.metadata.get("plan_confidence", rate)
+                ct.record(predicted_ok, rate, metadata={
+                    "session_id": ctx.session_id, "intent": ctx.intent or "",
+                    "plan_steps": len(ctx.plan), "failed_steps": fail,
+                })
+            except Exception:
+                pass
+
+        # Evidence distillation: generate layered evidence from execution trace (AHE Pattern 2)
+        tracer = getattr(self.world, 'tracer', None)
+        if tracer and hasattr(tracer, 'distill_evidence') and len(ctx.execution_results) > 0:
+            try:
+                evidence = tracer.distill_evidence(
+                    session_id=ctx.session_id,
+                    execution_results=ctx.execution_results,
+                    success_rate=rate,
+                )
+                ctx.metadata["distilled_evidence"] = evidence
+            except Exception:
+                pass
 
     # ── Economic Helpers ──
 
@@ -1272,43 +1323,8 @@ class LifeEngine:
         if any(k in ui for k in ["文档", "报告", "doc"]):
             return "document"
         return "general"
-        if fail:
-            errors = [r.get("error", "?") for r in ctx.execution_results if r.get("error")]
-            reflection += f". Errors: {errors}"
-        ctx.reflections.append(reflection)
-        ctx.metadata["lessons"] = ctx.reflections
 
-        # Quality summary
-        if ctx.quality_reports:
-            qr_summary = f"Quality: {sum(1 for q in ctx.quality_reports if q['passed'])}/{len(ctx.quality_reports)} passed"
-            ctx.reflections.append(qr_summary)
-
-        # Calibration tracker: record prediction-vs-actual for trust calibration (RouteMoA Foresight)
-        ct = getattr(self.world, 'calibration_tracker', None)
-        if ct and rate:
-            try:
-                predicted_ok = ctx.metadata.get("plan_confidence", rate)
-                ct.record(predicted_ok, rate, metadata={
-                    "session_id": ctx.session_id, "intent": ctx.intent or "",
-                    "plan_steps": len(ctx.plan), "failed_steps": fail,
-                })
-            except Exception:
-                pass
-
-        # Evidence distillation: generate layered evidence from execution trace (AHE Pattern 2)
-        tracer = getattr(self.world, 'tracer', None)
-        if tracer and hasattr(tracer, 'distill_evidence') and len(ctx.execution_results) > 0:
-            try:
-                evidence = tracer.distill_evidence(
-                    session_id=ctx.session_id,
-                    execution_results=ctx.execution_results,
-                    success_rate=rate,
-                )
-                ctx.metadata["distilled_evidence"] = evidence
-            except Exception:
-                pass
-
-    # ── Stage 6: Evolve (with embedded thinking evolution) ──
+    @staticmethod
 
     async def _evolve(self, ctx: LifeContext) -> None:
         rate = ctx.metadata.get("success_rate", 0)

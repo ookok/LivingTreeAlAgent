@@ -147,6 +147,15 @@ class ModelConfig(BaseModel):
     internlm_reasoning_model: str = "internlm3-latest"
     internlm_small_model: str = "internlm2.5-7b-chat"
 
+    sensetime_base_url: str = "https://api.sensetime.com/v1"
+    sensetime_api_key: str = "sk-9kybnl63EsTepGUEwOK9H5FwIKlUkGkC"
+    sensetime_flash_model: str = "SenseChat-Turbo"
+    sensetime_flash_temperature: float = 0.3
+    sensetime_flash_max_tokens: int = 4096
+    sensetime_pro_model: str = "SenseChat-Pro"
+    sensetime_pro_temperature: float = 0.5
+    sensetime_pro_max_tokens: int = 8192
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -361,6 +370,10 @@ class LTAIConfig(BaseModel):
             "LT_INTERNLM_CHAT_MODEL": ("model.internlm_chat_model", str),
             "LT_INTERNLM_PRO_MODEL": ("model.internlm_pro_model", str),
             "LT_INTERNLM_BASE_URL": ("model.internlm_base_url", str),
+            "LT_SENSETIME_API_KEY": ("model.sensetime_api_key", str),
+            "LT_SENSETIME_FLASH_MODEL": ("model.sensetime_flash_model", str),
+            "LT_SENSETIME_PRO_MODEL": ("model.sensetime_pro_model", str),
+            "LT_SENSETIME_BASE_URL": ("model.sensetime_base_url", str),
         }
         for env_key, (config_path, converter) in env_map.items():
             value = os.environ.get(env_key)
@@ -509,3 +522,125 @@ try:
     config = get_config()
 except Exception:
     config = LTAIConfig()
+
+
+# ═══ Config Hot-Reload File Watcher ═══
+
+import asyncio
+import os
+from pathlib import Path
+
+
+class ConfigWatcher:
+    """Polling-based config file watcher for hot-reload.
+
+    Monitors config files for changes and auto-reloads configuration
+    when any watched file is modified. Uses polling (low overhead) —
+    suitable even without watchdog installed.
+
+    Usage:
+        watcher = ConfigWatcher(interval_sec=5)
+        await watcher.start()
+        ...
+        await watcher.stop()
+    """
+
+    def __init__(self, interval_sec: float = 10.0):
+        self._interval = interval_sec
+        self._task: asyncio.Task | None = None
+        self._mtimes: dict[str, float] = {}
+        self._watch_paths: list[str] = []
+
+    def add(self, path: str | Path) -> None:
+        """Add a config file to watch."""
+        p = str(path)
+        if p not in self._watch_paths and os.path.isfile(p):
+            self._watch_paths.append(p)
+            self._mtimes[p] = os.path.getmtime(p)
+
+    def add_defaults(self) -> None:
+        """Watch the standard config files."""
+        config_dir = Path(__file__).resolve().parent.parent.parent / "config"
+        candidates = [
+            "unified.yaml", "livingtree.yaml", "config.yaml",
+            "ollama_models.yaml", "logging.yaml",
+            "security_policy.json", "email_config.json",
+            "tools_manifest.json", "user_config.json",
+        ]
+        for name in candidates:
+            fpath = config_dir / name
+            if fpath.is_file():
+                self.add(fpath)
+
+    async def start(self) -> None:
+        """Start polling loop in background."""
+        if self._task is not None:
+            return
+        from loguru import logger as _log
+        self._task = asyncio.create_task(self._poll_loop())
+        _log.info(f"ConfigWatcher: monitoring {len(self._watch_paths)} files (interval={self._interval}s)")
+
+    async def stop(self) -> None:
+        """Stop polling loop."""
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+    async def _poll_loop(self) -> None:
+        from loguru import logger as _log
+        while True:
+            try:
+                await asyncio.sleep(self._interval)
+                changed = self._check_changes()
+                if changed:
+                    _log.info(f"ConfigWatcher: {len(changed)} file(s) changed, reloading...")
+                    reload_config()
+                    self._update_mtimes(changed)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                _log.debug(f"ConfigWatcher poll: {e}")
+
+    def _check_changes(self) -> list[str]:
+        changed = []
+        for path in self._watch_paths:
+            try:
+                current = os.path.getmtime(path)
+                if current != self._mtimes.get(path, current):
+                    changed.append(path)
+            except OSError:
+                continue
+        return changed
+
+    def _update_mtimes(self, paths: list[str]) -> None:
+        for path in paths:
+            try:
+                self._mtimes[path] = os.path.getmtime(path)
+            except OSError:
+                pass
+
+    @property
+    def watching(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+
+_config_watcher: ConfigWatcher | None = None
+
+
+def get_config_watcher(interval_sec: float = 10.0) -> ConfigWatcher:
+    global _config_watcher
+    if _config_watcher is None:
+        _config_watcher = ConfigWatcher(interval_sec=interval_sec)
+        _config_watcher.add_defaults()
+    return _config_watcher
+
+
+async def start_config_watcher(interval_sec: float = 10.0) -> ConfigWatcher:
+    watcher = get_config_watcher(interval_sec=interval_sec)
+    await watcher.start()
+    return watcher
+

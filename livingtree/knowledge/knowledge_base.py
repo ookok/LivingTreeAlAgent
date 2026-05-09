@@ -824,6 +824,19 @@ class KnowledgeBase:
         # Re-sort after recency boost
         scored.sort(key=lambda s: s.final_score, reverse=True)
 
+        # OKH-RAG: Order-aware reranking (sequence coherence)
+        try:
+            from .order_aware_reranker import get_order_aware_reranker
+            reranker = get_order_aware_reranker()
+            oa_result = reranker.rerank(
+                scored, query, blend_weight=0.25, min_order_confidence=0.3,
+            )
+            if oa_result.order_confidence >= 0.3:
+                scored = oa_result.reranked_docs
+                reranker.learn_from_retrieved(scored, query)
+        except Exception:
+            pass
+
         return FusionResult(
             query=query,
             results=scored[:top_k],
@@ -835,6 +848,7 @@ class KnowledgeBase:
                 "merged_count": len(merged),
                 "final_count": len(scored),
                 "budget_chars": budget_chars,
+                "order_aware": True,
             },
         )
 

@@ -250,6 +250,24 @@ class PlanValidator:
                 f"Dependency chain depth {max_depth} — long chains increase "
                 f"probability of mid-chain failure.")
 
+        # 8. OKH-RAG: Precedence-based order validation
+        if len(steps) >= 3:
+            step_types = [self._infer_step_type(s) for s in steps]
+            try:
+                from ..knowledge.precedence_model import get_precedence_model
+                model = get_precedence_model()
+                score = model.score_ordering(step_types)
+                if score < 0.3:
+                    # Infer optimal ordering for comparison
+                    optimal = model.order_facts(step_types)
+                    if optimal.ordered_types != step_types:
+                        issues.append(
+                            f"Plan step order may be suboptimal (coherence={score:.2f}). "
+                            f"Suggested order: {' → '.join(optimal.ordered_types[:5])}",
+                        )
+            except ImportError:
+                pass
+
         return issues
 
     def _detect_cycle(self, steps: list[PlanStep]) -> list[str]:
@@ -319,6 +337,33 @@ class PlanValidator:
     def _looks_like_valid_tool(tool_name: str) -> bool:
         """Heuristic: does this look like a real tool name?"""
         return bool(re.match(r'^[a-z_][a-z0-9_]*$', tool_name, re.IGNORECASE))
+
+    @staticmethod
+    def _infer_step_type(step: "PlanStep") -> str:
+        """Infer the fact/action type of a plan step for precedence validation.
+
+        Maps tool names and descriptions to type labels used by PrecedenceModel.
+        """
+        tool = (step.tool or "").lower()
+        desc = (step.description or "").lower()
+        combined = tool + " " + desc
+
+        mapping = [
+            (["read", "search", "find", "检索", "查询", "查找"], "retrieve"),
+            (["analyze", "analysis", "分析", "evaluate", "评估", "检测"], "analysis"),
+            (["generate", "create", "write", "生成", "创建", "编写", "output"], "generate"),
+            (["edit", "modify", "update", "修改", "更新", "修正"], "modify"),
+            (["test", "validate", "verify", "测试", "验证", "校验", "check"], "validate"),
+            (["review", "审查", "审核", "review"], "review"),
+            (["deploy", "publish", "部署", "发布", "submit"], "deploy"),
+            (["fetch", "download", "download", "下载"], "retrieve"),
+            (["plan", "设计", "规划", "design", "架构"], "plan"),
+            (["summarize", "摘要", "总结", "summary"], "summarize"),
+        ]
+        for keywords, step_type in mapping:
+            if any(kw in combined for kw in keywords):
+                return step_type
+        return "general"
 
     # ── Semantic Checks ───────────────────────────────────────────
 

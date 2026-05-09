@@ -96,6 +96,46 @@ class AgenticResult:
 
 # ── Agentic RAG Engine ─────────────────────────────────────────────
 
+class RAGCircuitBreaker:
+    """Per-session circuit breaker for AgenticRAG iterations.
+
+    Prevents runaway loops: if confidence fails to improve over
+    consecutive rounds, breaks the circuit and returns best-so-far.
+    """
+    def __init__(self, stale_threshold: int = 3, min_improvement: float = 0.05):
+        self.stale_threshold = stale_threshold
+        self.min_improvement = min_improvement
+        self._consecutive_stale = 0
+        self._best_confidence = 0.0
+        self._total_failures = 0
+        self._open = False
+
+    def record(self, confidence: float) -> bool:
+        """Record a round's confidence. Returns True if circuit should break."""
+        if self._open:
+            return True
+        if confidence > self._best_confidence + self.min_improvement:
+            self._best_confidence = confidence
+            self._consecutive_stale = 0
+        else:
+            self._consecutive_stale += 1
+        if self._consecutive_stale >= self.stale_threshold:
+            self._open = True
+        return self._open
+
+    def record_failure(self) -> bool:
+        self._total_failures += 1
+        if self._total_failures >= self.stale_threshold * 2:
+            self._open = True
+        return self._open
+
+    def reset(self):
+        self._consecutive_stale = 0
+        self._best_confidence = 0.0
+        self._total_failures = 0
+        self._open = False
+
+
 class AgenticRAG:
     """自主迭代检索引擎 — 实现 RAG 2.0 的 Agentic 范式.
 
@@ -106,12 +146,22 @@ class AgenticRAG:
       - 复杂多步骤 → PLANNING（先规划）
       - 高风险领域 → REFLECTIVE（自评估）
 
-    默认混合策略: CONDITIONAL + TOOL_ROUTING + ITERATIVE（最实用）
+    默认自适应策略: 简单查询走 SHORT_PATH（FTS5+LLM直答），
+    复杂查询走 ITERATIVE，极端任务走 PLANNING。
     """
 
     MAX_ROUNDS = 5
     MIN_IMPROVEMENT = 0.1  # 最少置信度提升
     COST_PER_ROUND_TOKENS = 3000  # 预估每轮token消耗
+    CB_STALE_THRESHOLD = 3
+
+    # Short-path: queries matching these patterns skip the full RAG pipeline
+    SHORT_PATH_PATTERNS: list[str] = [
+        r"^(你好|hi|hello|谢谢|bye|再见)",
+        r"^[?？]?[^?？]{1,15}[?？]?$",        # Very short queries
+        r"^(是|否|对|错|yes|no|true|false)[?？]?$",
+        r"^(现在几|今天星期|今天是|日期|时间)",
+    ]
 
     def __init__(self, consciousness: Any = None):
         """初始化.
@@ -122,6 +172,10 @@ class AgenticRAG:
         self._consciousness = consciousness
         self._total_queries = 0
         self._total_tokens = 0
+        self._cb = RAGCircuitBreaker(
+            stale_threshold=self.CB_STALE_THRESHOLD,
+            min_improvement=self.MIN_IMPROVEMENT,
+        )
 
     async def search(
         self,
@@ -136,7 +190,7 @@ class AgenticRAG:
 
         Args:
             query: 用户查询
-            mode: RAG模式
+            mode: RAG模式（默认 iterative，auto 走自适应短路径）
             max_rounds: 最大检索轮数
             max_tokens: Token预算上限
             domain: 领域上下文
@@ -147,6 +201,15 @@ class AgenticRAG:
         """
         self._total_queries += 1
         start_time = time.time()
+        self._cb.reset()
+
+        # 0. Adaptive short-path: auto-detect simple queries and route directly
+        if mode == RAGMode.ITERATIVE and self._is_short_path(query):
+            result = await self._short_path_rag(query, domain, max_tokens)
+            result.total_ms = (time.time() - start_time) * 1000
+            self._total_tokens += result.total_tokens
+            logger.info(result.summary())
+            return result
 
         # 1. 选择模式（如 auto）
         if mode == RAGMode.CONDITIONAL:
@@ -192,6 +255,14 @@ class AgenticRAG:
             if total_tokens >= max_tokens:
                 logger.warning(f"AgenticRAG: token budget exceeded at round {r}")
                 break
+
+            # Circuit breaker: break if confidence stagnates
+            if r > 0 and rounds:
+                last_conf = rounds[-1].confidence
+                stale = self._cb.record(last_conf)
+                if stale:
+                    logger.warning(f"AgenticRAG: circuit breaker tripped at round {r} (stale confidence)")
+                    break
 
             # 工具路由：动态选择检索源
             sources = await self._select_sources(current_query, domain, rounds)
@@ -475,10 +546,14 @@ class AgenticRAG:
                 prompt, max_tokens=800, temperature=0.3)
             data = self._parse_llm_json(raw)
             if data:
+                base_confidence = float(data.get("confidence", 0.5))
+                # OKH-RAG: blend in structural correctness
+                structural = self._structural_score(query, docs)
+                confidence = base_confidence * 0.7 + structural * 0.3
                 return (
                     data.get("answer", docs[0][:300]),
-                    float(data.get("confidence", 0.5)),
-                    data.get("reasoning", ""),
+                    round(confidence, 3),
+                    data.get("reasoning", "") + (" +structural" if structural > base_confidence else ""),
                 )
         except Exception as e:
             logger.debug(f"AgenticRAG generate: {e}")
@@ -533,6 +608,28 @@ class AgenticRAG:
             return raw.strip()
         except Exception:
             return "基本充分"
+
+    # ── OKH-RAG Structural Scoring ────────────────────────────────
+
+    @staticmethod
+    def _structural_score(query: str, docs: list[str]) -> float:
+        """Calculate structural correctness score based on document ordering.
+
+        Uses the OrderAwareReranker to check if retrieved documents follow
+        a coherent reasoning sequence. High score = docs are well-ordered.
+        """
+        if len(docs) < 2:
+            return 0.5
+        try:
+            from .order_aware_reranker import get_order_aware_reranker
+            reranker = get_order_aware_reranker()
+            doc_types = [reranker.infer_doc_type(d[:200]) for d in docs]
+            from .precedence_model import get_precedence_model
+            model = get_precedence_model()
+            return model.score_ordering(doc_types)
+        except Exception:
+            pass
+        return 0.5
 
     # ── JSON Helpers ──────────────────────────────────────────────
 

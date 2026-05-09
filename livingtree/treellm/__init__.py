@@ -29,6 +29,7 @@ from .route_learner import RouteLearner, LearnedProfile, RoutingWeight, get_rout
 from .providers import (
     create_modelscope_provider, create_bailing_provider,
     create_stepfun_provider, create_internlm_provider,
+    create_sensetime_provider,
 )
 
 __all__ = [
@@ -45,4 +46,5 @@ __all__ = [
     "RouteLearner", "LearnedProfile", "RoutingWeight", "get_route_learner",
     "create_modelscope_provider", "create_bailing_provider",
     "create_stepfun_provider", "create_internlm_provider",
+    "create_sensetime_provider",
 ]

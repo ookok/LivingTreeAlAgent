@@ -258,21 +258,6 @@ class EconomicPolicy:
             return "qwen/qwen3.6-flash"
         return "deepseek/deepseek-v4-flash"
 
-        # Speed-heavy → fastest flash
-        if self.speed_weight > 0.5:
-            if preferred_provider == "deepseek":
-                return "deepseek/deepseek-v4-flash"
-            return "qwen/qwen3.6-flash"
-
-        # Default: complexity-based routing
-        if task_complexity > 0.6:
-            if preferred_provider == "qwen":
-                return "qwen/qwen3.6-plus"
-            return "deepseek/deepseek-v4-pro"
-        if preferred_provider == "qwen":
-            return "qwen/qwen3.6-flash"
-        return "deepseek/deepseek-v4-flash"
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "cost_weight": self.cost_weight,
@@ -339,6 +324,9 @@ class ROIModel:
     MODEL_PRICE_INPUT: dict[str, float] = {
         "deepseek/deepseek-v4-pro": 3.0,
         "deepseek/deepseek-v4-flash": 1.0,
+        # ═══ SenseTime (商汤) — 限时免费 ═══
+        "sensetime/SenseChat-Turbo": 0.0,
+        "sensetime/SenseChat-Pro": 0.0,
         # ═══ Qwen (千问) — USD→CNY @7.25 ═══
         "qwen/qwen3.6-plus": 2.90,
         "qwen/qwen3.6-flash": 0.73,
@@ -354,6 +342,9 @@ class ROIModel:
     MODEL_PRICE_OUTPUT: dict[str, float] = {
         "deepseek/deepseek-v4-pro": 6.0,
         "deepseek/deepseek-v4-flash": 2.0,
+        # ═══ SenseTime (商汤) — 限时免费 ═══
+        "sensetime/SenseChat-Turbo": 0.0,
+        "sensetime/SenseChat-Pro": 0.0,
         # ═══ Qwen (千问) — USD→CNY @7.25 ═══
         "qwen/qwen3.6-plus": 17.40,
         "qwen/qwen3.6-flash": 2.90,

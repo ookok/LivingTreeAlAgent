@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生命之树 · LivingTree</title>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+<style>
+:root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--accent:#6c8;--warn:#e8a030;--err:#e05050;--dim:#667}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.6 system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px;color:var(--accent)}
+header nav a{color:var(--accent);text-decoration:none;margin-left:20px;font-size:13px}
+header nav a:hover{text-decoration:underline}
+main{flex:1;display:flex;overflow:hidden}
+.sidebar{width:260px;background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.sidebar h3{color:var(--accent);font-size:13px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:block;color:var(--text);text-decoration:none;padding:6px 8px;border-radius:4px;font-size:13px}
+.sidebar a:hover{background:var(--border)}
+.content{flex:1;padding:24px;overflow-y:auto}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+.card h2{color:var(--accent);font-size:15px;margin-bottom:12px}
+input,textarea,button{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:6px;font-size:14px;width:100%}
+button{background:var(--accent);color:var(--bg);border:none;cursor:pointer;font-weight:600;width:auto;padding:10px 24px}
+button:hover{opacity:.85}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.metric{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.metric span:last-child{color:var(--accent)}
+.log-entry{font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--dim)}
+.log-entry .cycle{color:var(--accent)}
+.log-entry .reflection{color:var(--text)}
+.msg{margin-bottom:12px}
+.msg .who{font-size:12px;color:var(--accent);margin-bottom:2px}
+.msg .text{font-size:14px}
+#chat-log{max-height:60vh;overflow-y:auto;margin-bottom:16px}
+.htmx-indicator{opacity:0;transition:opacity .3s}
+.htmx-request .htmx-indicator{opacity:1}
+.htmx-request.chat-btn{opacity:.5}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.status-dot.green{background:var(--accent)}
+.status-dot.yellow{background:var(--warn)}
+.status-dot.red{background:var(--err)}
+footer{background:var(--panel);border-top:1px solid var(--border);padding:8px 24px;font-size:11px;color:var(--dim);text-align:center}
+</style>
+</head>
+<body hx-ext="sse">
+<header>
+  <h1>🌳 生命之树 · 小树</h1>
+  <nav>
+    <a href="/tree/">仪表盘</a>
+    <a href="/tree/chat">对话</a>
+    <a href="/tree/knowledge">知识</a>
+    <a href="/tree/dashboard">系统</a>
+  </nav>
+  <div sse-swap="xiaoshu" hx-swap="textContent" style="font-size:12px;color:var(--accent)">🌱 等待连接...</div>
+</header>
+<main>
+  <aside class="sidebar">
+    <h3>小树的状态</h3>
+    <div hx-get="/tree/health" hx-trigger="every 30s" hx-swap="innerHTML">
+      <div class="panel">加载中...</div>
+    </div>
+    <h3 style="margin-top:16px">实时心跳</h3>
+    <div sse-swap="xiaoshu" hx-swap="innerHTML" style="font-size:12px;color:var(--dim)">
+      等待第一次心跳...
+    </div>
+  </aside>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+<footer>
+  生命之树 · LivingTree v3.0 | 小树 — 主动学习，主动生长，不等待
+</footer>
+<!-- SSE heartbeat -->
+<div sse-connect="/tree/sse">
+  <div sse-swap="xiaoshu" hx-swap="none"></div>
+</div>
+</body>
+</html>

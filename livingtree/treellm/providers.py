@@ -377,3 +377,22 @@ def create_ollama_provider(base_url: str = "http://localhost:11434/v1", default_
         api_key="",
         default_model=default_model,
     )
+
+
+def create_sensetime_provider(api_key: str, model: str = "SenseChat-Turbo") -> OpenAILikeProvider:
+    """Create a SenseTime (商汤) provider — OpenAI-compatible API.
+
+    SenseTime (sensetime.com) offers SenseChat series with strong
+    Chinese language understanding and multimodal capabilities.
+    Limited-time free access available.
+
+    Common models:
+    - SenseChat-Turbo (fast, general purpose)
+    - SenseChat-Pro (advanced reasoning)
+    """
+    return OpenAILikeProvider(
+        name="sensetime",
+        base_url="https://api.sensetime.com/v1",
+        api_key=api_key,
+        default_model=model,
+    )

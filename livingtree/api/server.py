@@ -46,6 +46,10 @@ def create_app(hub=None, config=None) -> FastAPI:
     setup_audit_routes(app)
     setup_workspace_routes(app)
 
+    # ═══ HTMX Web Layer (Jinja2 templates + hypermedia) ═══
+    from .htmx_web import setup_htmx
+    setup_htmx(app)
+
     # Static files: serve web frontend from client/web/
     web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"
     if web_root.exists():

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>🧠 知识超图</h2>
+  <p style="color:var(--dim)">知识超图通过沉默突触和成熟的神经连接，存储小树学到的所有知识。</p>
+  <div class="metric"><span>实体数量</span><span>—</span></div>
+  <div class="metric"><span>超边数量</span><span>—</span></div>
+  <div class="metric"><span>关系类型</span><span>—</span></div>
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>🔍 搜索知识</h2>
+  <form hx-post="/tree/chat/msg" hx-target="#kb-result" hx-swap="innerHTML">
+    <input name="message" placeholder="搜索知识库..." />
+    <button type="submit" style="margin-top:8px">搜索</button>
+  </form>
+  <div id="kb-result" style="margin-top:12px"></div>
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>📊 知识统计</h2>
+  <div hx-get="/tree/health" hx-trigger="load, every 60s" hx-swap="innerHTML">
+    <div class="panel">加载中...</div>
+  </div>
+</div>
+{% endblock %}

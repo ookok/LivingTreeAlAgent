@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid2">
+  <div class="card">
+    <h2>🏥 系统健康</h2>
+    <div hx-get="/tree/health" hx-trigger="every 30s" hx-swap="innerHTML">
+      <div class="panel">等待数据...</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🌱 生长日志</h2>
+    <div hx-get="/tree/health" hx-trigger="every 60s" hx-swap="innerHTML">
+      <div class="panel">等待第一次心跳...</div>
+    </div>
+    <div class="log-entry" style="margin-top:12px">
+      <span class="cycle">#0</span>
+      <span class="reflection">小树正准备开始她的第一次自主生长...</span>
+    </div>
+  </div>
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>🔧 模块状态</h2>
+  <div id="module-status">
+    {% for name in ["synaptic_plasticity","hypergraph_store","free_pool","consciousness","pipeline_orchestrator","xiaoshu","health","autonomic_loop"] %}
+    <div class="metric"><span>{{ name }}</span><span class="status-dot green"></span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

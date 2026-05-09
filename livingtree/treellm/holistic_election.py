@@ -64,6 +64,9 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "stepfun": ["推理", "深度", "长文本", "多模态", "reasoning", "deep", "long-context", "multimodal"],
     "internlm": ["推理", "中文", "学术", "代码", "reasoning", "chinese", "academic", "code"],
     "web2api": ["网页", "免费", "多平台", "web", "free", "multi-platform"],
+    "sensetime": ["推理", "中文", "分析", "代码", "reasoning", "chinese", "analysis", "code"],
+    "sensetime-pro": ["推理", "深度思考", "长文本", "reasoning", "deep", "long-context"],
+    "sensetime-turbo": ["对话", "快速", "翻译", "chat", "fast", "translate"],
 }
 
 
@@ -290,6 +293,9 @@ class HolisticElection:
                 weights[k] * score.scores.get(k, 0)
                 for k in weights
             )
+            # Real-time health adjustment (live feedback from RouterStats)
+            health_factor = self._health_adjustment(name, stats)
+            score.total *= health_factor
             # Pattern 5: expose latency and cost currencies for later analysis
             try:
                 score.avg_latency_ms = stats.avg_latency_ms
@@ -317,6 +323,48 @@ class HolisticElection:
         if matches > 0:
             return min(1.0, 0.5 + matches * 0.15)
         return 0.1  # no match
+
+    def _health_adjustment(self, name: str, stats: RouterStats) -> float:
+        """Compute a health penalty factor (0.0-1.0) based on real-time provider stats.
+
+        Returns a multiplier to apply to the total score:
+          - 1.0 = no penalty (healthy)
+          - 0.0 = severe penalty (provider should be avoided)
+
+        Penalties:
+          - Recent success rate < 0.4: -60%
+          - Recent success rate < 0.7: -30%
+          - Avg latency > 10s: -50%
+          - Avg latency > 5s: -20%
+          - Recent rate-limited: -30%
+        """
+        factor = 1.0
+        if stats.calls < 3:
+            return 1.0  # Not enough data — neutral
+
+        # Quality penalty
+        recent_qual = stats.recent_quality
+        if recent_qual < 0.4:
+            factor *= 0.4
+        elif recent_qual < 0.7:
+            factor *= 0.7
+
+        # Latency penalty
+        avg_lat = stats.avg_latency_ms
+        if avg_lat > 10000:
+            factor *= 0.5
+        elif avg_lat > 5000:
+            factor *= 0.8
+
+        # Rate-limit penalty (if last error contains rate_limit)
+        if "rate_limit" in (stats.last_error or "").lower():
+            factor *= 0.7
+
+        # Heavy failure penalty (failures > successes)
+        if stats.failures > stats.successes and stats.calls > 5:
+            factor *= 0.5
+
+        return max(0.05, factor)
 
     def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         stats = self.get_stats(name)

@@ -1,7 +1,8 @@
-# 🌳 生命之树 · LivingTree AI Agent v3.0
+# 🌳 生命之树 · LivingTree AI Agent v3.1
 
 > 完整的数字生命体 — 主动学习 · 自主生长 · 不等待
-> 12器官系统 · 40+模块 · 14篇论文集成 · HTMX超媒体前端
+> 12器官系统 · 45+模块 · 14篇论文集成 · HTMX+Alpine.js前端
+> 🆕 v3.1: 梦境引擎 · VAD情感 · 自由能ELBO · 数字孪生 · 本地文件夹挂载
 
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-424_passed-brightgreen)](https://github.com/ookok/LivingTreeAlAgent)
@@ -19,6 +20,21 @@ python -m livingtree server   # API 服务
 ```
 
 **HTMX 前端** (零 JavaScript): `http://localhost:8100/tree/`
+
+---
+
+## v3.1 新特性
+
+| 特性 | 功能 | 模块 |
+|------|------|------|
+| 🌙 梦境引擎 | 低负载重组记忆，发现隐藏连接 | `dna/dream_engine.py` |
+| 💭 VAD情感 | 三维连续情感替代离散标签 | `phenomenal_consciousness.py` |
+| 📐 自由能ELBO | F=recon+λ×complexity 替代δS=0 | `action_principle.py` |
+| 🪞 数字孪生 | 模拟未来→预测健康→预防修复 | `core/digital_twin.py` |
+| 📂 本地挂载 | File System API 直读磁盘零上传 | `client/web/js/localfs.js` |
+| 🧬 BioLayer | 器官↔工程名双向映射 | `core/bio_layer.py` |
+| 🔌 ProviderRegistry | 插件化注册替代5文件修改 | `treellm/provider_registry.py` |
+| 🎨 Alpine.js | 实时绑定+平滑过渡 (15KB) | `templates/` |
 
 ---
 

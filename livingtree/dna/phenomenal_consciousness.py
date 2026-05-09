@@ -447,16 +447,11 @@ class PhenomenalConsciousness:
     # ═══ Temporal Continuity ═══
 
     def _compute_continuity(self) -> float:
-        """Measure how continuous the current self is with the past self.
-
-        High continuity = the I of now recognizes itself in the I of before.
-        This is the phenomenological "sense of being the same person over time."
-        """
         if len(self._state_hashes) < 2:
             return 1.0
-        # Jaccard-like: hash overlap between recent and overall
-        recent = set(self._state_hashes[-5:])
-        overall = set(self._state_hashes)
+        hashes_list = list(self._state_hashes)
+        recent = set(hashes_list[-5:])
+        overall = set(hashes_list)
         return len(recent & overall) / max(len(recent), 1)
 
     def _compute_state_hash(self, content: str, source: str, timestamp: float) -> str:

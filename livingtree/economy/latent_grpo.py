@@ -283,8 +283,9 @@ class LatentGRPO:
             group_std = 0.01  # Avoid division by zero
 
         advantages: dict[str, float] = {}
-        for action in group:
-            outcome = actual_outcomes.get(action, scores[action])
+        for action, _ in group:
+            action_key = str(action)
+            outcome = actual_outcomes.get(action_key, scores.get(action, 0.5))
             normalized_score = (scores[action] - group_mean) / group_std
             normalized_outcome = (outcome - group_mean) / group_std
             advantages[action] = 0.6 * normalized_score + 0.4 * normalized_outcome
@@ -308,7 +309,8 @@ class LatentGRPO:
 
         # Phase 5: Update encoder via top-action
         best_action = max(advantages, key=advantages.get)
-        best_features = dict(group)[best_action] if hasattr(dict(group), '__getitem__') else {}
+        group_dict = {action: features for action, features in group}
+        best_features = group_dict.get(best_action, {})
         if best_features:
             order = self._feature_order
             target_z = [self._z_star[j] + 0.1 * advantages[best_action]
@@ -322,7 +324,7 @@ class LatentGRPO:
 
         policy_update = {
             action: round(advantages[action], 4)
-            for action in group if abs(advantages[action]) > self._lr
+            for action, _ in group if abs(advantages.get(action, 0)) > self._lr
         }
 
         convergence = max(0.0, 1.0 - abs(group_std) / 2)

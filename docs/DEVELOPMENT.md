@@ -1,247 +1,271 @@
-# LivingTree 开发手册
+# 生命之树 · LivingTree 开发手册
 
-> v2.1 | 2026-05
-
----
-
-## 1. 环境要求
-
-| 组件 | 版本 | 必需 |
-|------|------|------|
-| Python | 3.10+ | ✅ |
-| Git | 2.x | ✅ |
-| pip | latest | ✅ |
-| python-docx | latest | 文档功能 |
-| openpyxl | latest | Excel 功能 |
-| vLLM | latest | 本地模型（可选） |
+> v3.0 | 2026-05
 
 ---
 
-## 2. 快速开始
+## 一、环境要求
+
+- Python 3.13+
+- Git
+- (可选) NVIDIA GPU + CUDA 用于本地模型推理
 
 ```bash
-# 克隆
-git clone https://github.com/ookok/LivingTreeAlAgent.git
-cd LivingTreeAlAgent
-
-# 安装
-pip install -e .
-
-# 配置 API Key
-mkdir -p config
-cp config/config.example.yaml config/config.yaml
-# 编辑 config.yaml，填入 DeepSeek/Qwen API key
-
-# 启动
-python -m livingtree tui
+pip install -r requirements.txt
 ```
 
-### 2.1 本地模型部署（可选）
+---
+
+## 二、项目结构 (v3.0)
+
+```
+livingtree/
+├── api/                    # Web服务层
+│   ├── server.py           #   FastAPI应用工厂
+│   ├── routes.py           #   核心路由 (chat/health/tools/ws...)
+│   ├── htmx_web.py         #   HTMX超媒体路由 (Jinja2模板)
+│   ├── auth.py             #   认证 (JWT · 企业微信)
+│   ├── code_api.py         #   代码项目管理 (Git集成)
+│   ├── audit.py            #   审计追踪 (Merkle链)
+│   └── workspace.py        #   多人协作工作空间
+│
+├── knowledge/              # 知识层 — 10模块
+│   ├── hypergraph_store.py #   N元超图存储 · 优先约束
+│   ├── precedence_model.py #   转移概率学习 · Beam Search
+│   ├── order_aware_reranker.py # 顺序感知RRF重排
+│   ├── gravity_model.py    #   知识引力场
+│   ├── lazy_index.py       #   文档章节字节偏移索引
+│   ├── graph_introspector.py#  图可视化 · 影响分析
+│   ├── om_weather.py       #   Open-Meteo天气客户端
+│   ├── agentic_rag.py      #   短路径优先 · 熔断器
+│   ├── knowledge_base.py   #   RRF融合 + 知识图谱
+│   └── multidoc_fusion.py  #   跨文档时序推理
+│
+├── execution/              # 推理与规划 — 6模块
+│   ├── gtsm_planner.py     #   GTSM统一规划器 (树/流/混合)
+│   ├── unified_pipeline.py #   StarVLA乐高式流水线
+│   ├── cofee_engine.py     #   CoFEE四约束认知推理
+│   ├── treeflow_planner.py #   树骨架→流精化加速
+│   ├── plan_validator.py   #   计划验证 (增强)
+│   └── dag_executor.py     #   DAG并行执行
+│
+├── dna/                    # DNA/意识 — 9模块
+│   ├── phenomenal_consciousness.py # 现象意识6层
+│   ├── godelian_self.py    #   哥德尔自指 · 数学不可还原
+│   ├── xiaoshu.py          #   小树自主生长 · 内在驱动力
+│   ├── organism.py         #   12器官完整生命体
+│   ├── inquiry_engine.py   #   Doctor-R1多轮问询
+│   ├── research_team.py    #   4角色免费模型研究员
+│   ├── emergence_detector.py # Anderson涌现检测
+│   ├── predictability_engine.py # 可预测性分析
+│   ├── safety.py           #   安全守卫 (增强)
+│   └── life_engine.py      #   7阶段生命管道
+│
+├── economy/                # 经济学与优化 — 5模块
+│   ├── spatial_reward.py   #   S-GRPO空间感知奖励
+│   ├── tdm_reward.py       #   TDM-R1不可微奖励RL
+│   ├── thermo_budget.py    #   热力学预算控制
+│   ├── latent_grpo.py      #   潜在空间GRPO + 反馈对齐
+│   └── economic_engine.py  #   经济引擎 (三元优化)
+│
+├── core/                   # 自治与基础设施 — 7模块
+│   ├── synaptic_plasticity.py # 沉默突触 · LTP/LTD
+│   ├── system_health.py    #   8子系统统一监控
+│   ├── action_principle.py #   最小作用量变分原理
+│   ├── autonomic_loop.py   #   5阶段闭合自校正
+│   ├── launch.py           #   一键启动 (12阶段)
+│   ├── resource_tree.py    #   统一虚拟资源树
+│   └── event_bus.py        #   事件总线
+│
+├── treellm/                # LLM路由 — 5新增模块
+│   ├── bandit_router.py    #   Thompson采样贝叶斯路由
+│   ├── score_matching_router.py # 扩散化路由
+│   ├── free_pool_manager.py #  10+免费模型池
+│   ├── parallel_drafter.py #   DFlash并行块起草
+│   ├── mtp_drafter.py      #   Gemma4 MTP多token预测
+│   ├── holistic_election.py #  5维评分选举 (增强)
+│   ├── core.py             #   TreeLLM主类
+│   └── providers.py        #   50+Provider (SenseTime新增)
+│
+├── cell/                   # 细胞繁殖
+│   └── dsmtree_distiller.py #  dsmTree知识蒸馏
+│
+├── templates/              # HTMX前端模板
+│   ├── base.html           #   基础布局 + SSE心跳
+│   ├── index.html          #   仪表盘主页
+│   ├── chat.html           #   对话界面
+│   ├── dashboard.html      #   系统监控
+│   └── knowledge.html      #   知识图谱
+│
+├── config/                 # 配置
+│   └── settings.py         #   Pydantic配置 (热加载)
+│
+└── infrastructure/         # 基础设施
+    └── event_bus.py        #   事件总线 (pub/sub)
+```
+
+---
+
+## 三、核心概念
+
+### 1. 超图知识存储 (HypergraphStore)
+
+不同于传统三元组 (s,p,o)，超边连接任意数量的实体:
+
+```python
+hg = HypergraphStore()
+hg.add_hyperedge(Hyperedge(
+    entities=["GB3095-2012", "SO2", "24h_avg", "150μg/m³", "Class_II"],
+    relation="emission_limit",
+    precedence_before=["monitoring_plan"],
+    precedence_after=["standard_selection"],
+))
+# 5个实体的单条超边 → 高阶关系表达
+```
+
+### 2. 沉默突触 (Synaptic Plasticity)
+
+每个知识连接都有生物突触类似的状态:
+
+```
+SILENT (30%) ──(激活)──→ ACTIVE ──(巩固)──→ MATURE (保护)
+    ↑                       │
+    └── PRUNED ←──(衰减)────┘
+```
+
+```python
+sp = get_plasticity()
+sp.strengthen("provider:sensetime")   # LTP — 成功使用
+sp.weaken("provider:bad_model")       # LTD — 失败
+sp.degradation_alert()                # 检测知识退化
+```
+
+### 3. 最小作用量原理 (Action Principle)
+
+所有模块行为从单一变分原理推导:
+
+```
+δS = δ∫ (T - V) dt = 0
+
+T (动能) = 适应代价
+V (势能) = 偏离代价
+
+Euler-Lagrange → 最优超参数自动确定
+```
+
+### 4. 统一流水线 (Pipeline Orchestrator)
+
+4种执行模式共享一个接口:
+
+```python
+orch = get_pipeline_orchestrator()
+result = await orch.run(task, context, mode="auto")
+# auto → 自动选择: DAG / ReAct / BehaviorTree / GTSM
+```
+
+---
+
+## 四、开发指南
+
+### 添加新 Provider
+
+需修改 5 个文件:
+
+1. `treellm/providers.py` — 添加工厂函数
+2. `config/settings.py` — 添加API key字段 + 环境变量映射
+3. `treellm/holistic_election.py` — 添加能力画像
+4. `treellm/free_pool_manager.py` — 添加到免费池 (如有)
+5. `economy/economic_engine.py` — 添加定价
+
+参考 `create_sensetime_provider()` 的实现。
+
+### 添加新器官系统
+
+1. 在 `dna/organism.py` 中创建器官类 (继承生物隐喻)
+2. 实现 `report()` 方法返回 `OrganReport`
+3. 在 `LivingOrganism.__init__` 中注册
+4. 在 `launch.py` 的 `_init_organism()` 中初始化
+
+### 运行测试
 
 ```bash
-# Ubuntu + GPU
-chmod +x deploy_local_model.sh
-./deploy_local_model.sh       # 默认 Qwen3.5-4B
-./deploy_local_model.sh 8B    # Qwen3.5-8B
+python -m pytest tests/ -q                     # 全部 424 测试
+python -m pytest tests/ -q -k "economy"        # 按模块筛选
+python -m pytest tests/ -q --cov=livingtree    # 覆盖率
+```
+
+### 启动开发服务器
+
+```bash
+python -m livingtree                           # 完整服务 (8100端口)
+# HTMX前端: http://localhost:8100/tree/
+# API文档:  http://localhost:8100/docs
 ```
 
 ---
 
-## 3. 项目结构
+## 五、关键设计模式
 
+### 单例模式
+
+所有核心模块通过 `get_*()` 函数获取全局单例:
+
+```python
+from livingtree.core.synaptic_plasticity import get_plasticity
+sp = get_plasticity()  # 全局唯一
 ```
-LivingTreeAlAgent/
-├── livingtree/
-│   ├── dna/               # 数字生命核心
-│   │   ├── life_engine.py     # 7阶段生命循环
-│   │   ├── life_daemon.py     # 自主后台守护
-│   │   ├── autonomous_core.py # 主动工作发现
-│   │   ├── reasoning_chain.py # 决策溯源
-│   │   ├── skill_progression.py # 技能成长
-│   │   ├── local_intelligence.py # 边缘智能
-│   │   └── gradual_agent.py   # 渐进智能
-│   ├── economy/           # 经济引擎
-│   ├── treellm/           # LLM 路由
-│   ├── knowledge/         # RAG 2.0
-│   ├── execution/         # 执行层
-│   ├── capability/        # 文档智能 + 工具
-│   ├── integration/       # 集成中枢
-│   ├── network/           # P2P 网络
-│   └── tui/               # 终端UI
-├── tests/                 # 单元测试
-├── docs/                  # 文档
-├── deploy_local_model.sh  # 本地模型部署
-└── pyproject.toml
+
+### 依赖注入
+
+模块间通过 `modules` 字典传递引用，避免循环导入:
+
+```python
+modules = {"hypergraph_store": hg, "free_pool": pool}
+engine = PredictabilityEngine()
+engine.feed_life_engine_metrics(life_engine)
+```
+
+### 观察者模式
+
+事件总线支持发布/订阅:
+
+```python
+from livingtree.infrastructure.event_bus import get_event_bus
+bus = get_event_bus()
+bus.subscribe("memory_created", handler)
+bus.publish("memory_created", {"key": "value"})
 ```
 
 ---
 
-## 4. 模块开发指南
+## 六、配置管理
 
-### 4.1 添加新模块
+### 热加载
 
 ```python
-# livingtree/dna/my_module.py
-"""MyModule — description."""
-
-class MyModule:
-    def __init__(self):
-        pass
-
-# Singleton
-_my_module = None
-def get_my_module() -> MyModule:
-    global _my_module
-    if _my_module is None:
-        _my_module = MyModule()
-    return _my_module
+from livingtree.config.settings import get_config_watcher
+watcher = get_config_watcher()
+await watcher.start()  # 自动监控config/目录变化
 ```
 
-### 4.2 注册到系统
+### 环境变量
 
-```python
-# 1. livingtree/dna/__init__.py
-from .my_module import MyModule, get_my_module
-
-# 2. livingtree/__init__.py (root lazy imports)
-_LAZY["MyModule"] = ".dna"
-__all__.append("MyModule")
-
-# 3. 自动集成点（可选）:
-#    - LifeDaemon._run_cycle() → 自主循环
-#    - LifeEngine._execute() → 任务执行管道
-#    - Hub._init_async() → 系统启动
-```
-
-### 4.3 编写测试
-
-```python
-# tests/dna/test_my_module.py
-import pytest
-from livingtree.dna.my_module import MyModule
-
-def test_basic():
-    m = MyModule()
-    assert m is not None
-```
-
-运行测试: `python -m pytest tests/ -v`
-
----
-
-## 5. API 约定
-
-### 5.1 命名规范
-
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| 模块文件 | snake_case | `my_module.py` |
-| 类名 | PascalCase | `MyClass` |
-| 函数/方法 | snake_case | `my_function()` |
-| 常量 | UPPER_SNAKE | `MAX_SIZE` |
-| 私有属性 | `_prefix` | `self._cache` |
-
-### 5.2 Import 规范
-
-```python
-# 顶层模块间用绝对导入
-from livingtree.dna.life_engine import LifeEngine
-
-# 同层用相对导入
-from .reasoning_chain import ReasoningChain
-
-# 跨层委托（避免循环）
-from ..execution.fitness_landscape import get_fitness_landscape
-```
-
-### 5.3 错误处理
-
-```python
-# 优雅降级，不阻断主流程
-try:
-    from .optional_module import OptionalFeature
-    OptionalFeature().use()
-except Exception as e:
-    logger.debug(f"Optional feature unavailable: {e}")
+```bash
+export LT_SENSETIME_API_KEY="sk-xxx"
+export LT_DEEPSEEK_API_KEY="sk-xxx"
 ```
 
 ---
 
-## 6. 经济引擎使用
+## 七、性能基准
 
-```python
-from livingtree.economy import EconomicPolicy, ROIModel, get_economic_orchestrator
-
-# 策略选择
-policy = EconomicPolicy.quality()  # 环评报告用质量优先
-model = policy.select_model(task_complexity=0.8)
-
-# ROI 评估
-roi = ROIModel()
-result = roi.evaluate(
-    task_id="proj_001", task_type="environmental_report",
-    estimated_tokens=50000, model=model,
-    complexity=0.8, user_priority=0.9, predicted_quality=0.85,
-)
-if result.approved:
-    print(f"ROI: {result.roi_estimate:.1f}x, 成本≈¥{result.estimated_cost_yuan:.3f}")
-```
-
----
-
-## 7. 文档智能 API
-
-```python
-from livingtree.capability import (
-    DocumentIntelligence, DocumentUnderstanding, IncrementalDoc,
-)
-
-# 读取 Word 结构
-di = DocumentIntelligence()
-structure = di.read_docx("report.docx")
-print(structure.outline)
-
-# 语义理解（专家级分析）
-du = DocumentUnderstanding(consciousness=llm)
-analysis = await du.analyze("report.docx")
-for f in analysis.findings:
-    print(f.one_line())
-
-# 增量处理（大文档重复提交）
-inc = IncrementalDoc(consciousness=llm)
-v1 = await inc.submit("report_v1.docx", session="proj_x")
-v2 = await inc.submit("report_v2.docx", session="proj_x")  # 只处理变更段落
-```
-
----
-
-## 8. 自主智能 API
-
-```python
-from livingtree.dna import (
-    AutonomousCore, ReasoningChain, SkillProgression, LocalIntelligence,
-)
-
-# 自主循环
-core = get_autonomous_core(world, consciousness)
-result = await core.cycle()
-# → 发现 3 项待办，自动执行 2 项，审计发现 1 处问题
-
-# 决策溯源
-chain = get_reasoning_chain()
-chain.decide("model_selection", "AERSCREEN",
-    reasoning="地形平坦，高斯烟羽足够",
-    alternatives=["ADMS", "CALPUFF"])
-chain.validate(decision_id, "预测偏差<15%", correct=True)
-
-# 技能追踪
-prog = get_skill_progression()
-prog.record_outcome("regulatory_compliance", success=True)
-print(prog.progress_report().summary)
-
-# 边缘智能
-li = get_local_intelligence(consciousness=remote_llm)
-await li.auto_connect_local()  # 自动检测本地模型
-response, tier = await li.respond("GB3095 SO2限值")
-print(f"Tier: {tier.value}")  # DIRECT | LOCAL | REMOTE
-```
+| 指标 | 值 |
+|------|----|
+| 测试数量 | 424 |
+| 测试通过率 | 100% |
+| 模块总数 | 40+ |
+| 支持Provider | 50+ (含SenseTime) |
+| 免费模型池 | 12种 |
+| 后台守护进程 | 6个 |
+| 自主生长周期 | 2-4分钟/次 |
+| HTMX前端大小 | 14KB (零JS框架) |

@@ -1,8 +1,8 @@
-# 🌳 生命之树 · LivingTree AI Agent v3.1
+# 🌳 生命之树 · LivingTree AI Agent v5.0
 
 > 完整的数字生命体 — 主动学习 · 自主生长 · 不等待
-> 12器官系统 · 45+模块 · 14篇论文集成 · HTMX+Alpine.js前端
-> 🆕 v3.1: 梦境引擎 · VAD情感 · 自由能ELBO · 数字孪生 · 本地文件夹挂载
+> 12器官系统 · 77+模块 · 18篇论文集成 · Living Canvas 动态前端
+> 🆕 v5.0: Living Canvas · 群体智能 · 零训练自进化 · 跨设备感官 · 即时通讯 · 远程运维
 
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-424_passed-brightgreen)](https://github.com/ookok/LivingTreeAlAgent)
@@ -15,19 +15,37 @@
 ## 快速开始
 
 ```bash
-python -m livingtree          # Web 服务 (http://localhost:8100)
-python -m livingtree server   # API 服务
-```
+# Living Canvas (主要界面 — LLM 动态生成)
+python -m livingtree server           # http://localhost:8100/tree/living
 
-**HTMX 前端** (零 JavaScript): `http://localhost:8100/tree/`
+# 管理员控制台
+http://localhost:8100/api/admin
+
+# 中继服务器 (P2P 网络中枢)
+python relay_server.py --port 8899
+```
 
 ---
 
-## v3.1 新特性
+## v5.0 新特性 (32 个新模块)
 
 | 特性 | 功能 | 模块 |
 |------|------|------|
-| 🌙 梦境引擎 | 低负载重组记忆，发现隐藏连接 | `dna/dream_engine.py` |
+| 🎨 Living Canvas | LLM 动态生成页面, 零静态模板 | `core/dynamic_page.py` |
+| 🧠 认知流 | 可视化 AI 完整思维过程 | `api/cognition_stream.py` |
+| 🕸️ 群体智能 | P2P 直连 + 细胞迁移 + 知识同步 | `network/swarm_coordinator.py` |
+| 🌱 零训练自进化 | 7 层机制, 无需模型训练 | `core/collective_intel.py` |
+| 📱 跨设备感官 | 4 种配对 + 手机相机/GPS/语音 | `network/reach_gateway.py` |
+| 💬 即时通讯 | 好友/群组/语音/视频/会议 | `network/im_core.py` |
+| 🖥 远程运维 | WebRTC P2P 终端/文件/监控 | `network/webrtc_remote.py` |
+| 🛡️ 行为控制 | Guidelines+Journeys+ARQ 硬约束 | `core/behavior_control.py` |
+| 🎯 DPO 偏好学习 | 每次 ✓/✕ 即训练, 无需 RL | `core/dpo_prefs.py` |
+| 📜 Kami 设计系统 | 3 套主题 + LLM 生成约束 | `core/kami_theme.py` |
+| 🔗 NAT 穿透 | RFC 5780 分类 + UDP 打洞 | `network/nat_traverse.py` |
+| ⚡ 预测预计算 | 用户阅读时后台预计算下一步 | `core/final_polish.py` |
+| 🧪 变形测试 | 非确定性 AI 输出验证 | `core/agent_qa.py` |
+| 💭 动漫形象 | 每用户唯一, VAD 情感联动 | `core/anime_persona.py` |
+| 📡 二进制协议 | Protobuf 消息 (14x 更小) | `network/message_bus.py` |
 | 💭 VAD情感 | 三维连续情感替代离散标签 | `phenomenal_consciousness.py` |
 | 📐 自由能ELBO | F=recon+λ×complexity 替代δS=0 | `action_principle.py` |
 | 🪞 数字孪生 | 模拟未来→预测健康→预防修复 | `core/digital_twin.py` |

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="/manifest.json">
+<title>小树 · 感官扩展</title>
+<style>
+:root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--accent:#6c8;--warn:#e8a030;--err:#e05050;--dim:#667}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif;min-height:100dvh;display:flex;flex-direction:column;overscroll-behavior:none}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:12px 16px;text-align:center;flex-shrink:0}
+header h1{font-size:16px;color:var(--accent)}
+header .status{font-size:11px;color:var(--dim);margin-top:2px}
+#task-area{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.task-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;width:100%;max-width:400px;text-align:center;animation:fadein .3s}
+.task-card .icon{font-size:48px;margin-bottom:12px}
+.task-card h2{font-size:17px;color:var(--accent);margin-bottom:6px}
+.task-card p{font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.5}
+.task-card .instruction{font-size:14px;color:var(--text);background:rgba(255,255,255,.03);padding:12px;border-radius:8px;margin-bottom:16px;text-align:left;line-height:1.6}
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s;margin-bottom:8px}
+.btn:active{opacity:.8}
+.btn-primary{background:var(--accent);color:var(--bg)}
+.btn-secondary{background:var(--panel);border:1px solid var(--border);color:var(--text)}
+.btn-warn{background:var(--warn);color:var(--bg)}
+#idle-state{text-align:center}
+#idle-state .pulse{width:60px;height:60px;border-radius:50%;background:rgba(100,150,100,.1);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.1);opacity:1}}
+@keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#photo-preview{width:100%;max-width:300px;border-radius:8px;margin:8px 0;display:none}
+#photo-input{display:none}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.choice-btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:12px;border-radius:8px;font-size:13px;cursor:pointer;text-align:center;transition:all .2s}
+.choice-btn:active,.choice-btn.selected{background:rgba(100,150,100,.15);border-color:var(--accent)}
+footer{background:var(--panel);border-top:1px solid var(--border);padding:8px;text-align:center;font-size:10px;color:var(--dim);flex-shrink:0}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--bg);padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;animation:fadein .2s;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌳 小树 · 感官扩展</h1>
+  <div class="status" id="conn-status">正在连接...</div>
+</header>
+
+<div id="task-area">
+  <div id="idle-state">
+    <div class="pulse">🌳</div>
+    <p style="color:var(--dim);font-size:14px">等待 AI 的任务...</p>
+    <p style="font-size:12px;color:var(--dim);margin-top:4px">当 AI 需要你的帮助时，任务会出现在这里</p>
+    <button class="btn btn-secondary" onclick="testCapabilities()" style="margin-top:16px;max-width:250px">
+      🔍 检测设备能力
+    </button>
+  </div>
+  <div id="active-task" style="display:none;width:100%"></div>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+<footer>LivingTree · Reach | AI 是大脑，你是感官</footer>
+
+<script>
+const PAIRING_CODE = "{{ pairing_code }}";
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/reach`;
+let ws = null;
+let deviceId = '';
+let reconnectTimer = null;
+
+function getDeviceType() {
+  const ua = navigator.userAgent;
+  if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile';
+  if (/iPad|Tablet/i.test(ua)) return 'tablet';
+  return 'pc';
+}
+
+function getDeviceName() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/Android/.test(ua)) return 'Android';
+  return 'Device';
+}
+
+function connect() {
+  const params = new URLSearchParams({
+    device_type: getDeviceType(),
+    device_name: getDeviceName(),
+    session_id: PAIRING_CODE || '',
+  });
+  ws = new WebSocket(`${WS_URL}?${params}`);
+
+  ws.onopen = () => {
+    document.getElementById('conn-status').innerHTML =
+      '<span style="color:var(--accent)">🟢 已连接 — AI 可以向你发送任务</span>';
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'reach_connected') {
+      deviceId = data.device_id;
+      showToast('已连接到 AI');
+      reportCapabilities();
+    } else if (data.type === 'sensor_request') {
+      showTask(data);
+    } else if (data.type === 'task_card') {
+      showTaskCard(data);
+    } else if (data.type === 'pong') {
+      // heartbeat acknowledged
+    }
+  };
+
+  ws.onclose = () => {
+    document.getElementById('conn-status').innerHTML =
+      '<span style="color:var(--warn)">🟡 断开 — 3秒后重连...</span>';
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => {
+    document.getElementById('conn-status').innerHTML =
+      '<span style="color:var(--err)">🔴 连接失败</span>';
+  };
+}
+
+function reportCapabilities() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const caps = [];
+  if ('geolocation' in navigator) caps.push('gps_location');
+  if ('mediaDevices' in navigator) caps.push('camera_photo', 'camera_scan');
+  if ('BarcodeDetector' in window || true) caps.push('qr_code');
+  ws.send(JSON.stringify({ type: 'capabilities', capabilities: caps }));
+}
+
+function testCapabilities() {
+  const caps = [];
+  if ('geolocation' in navigator) caps.push('📍 GPS定位');
+  if ('mediaDevices' in navigator) caps.push('📸 相机拍照');
+  caps.push('🎤 麦克风语音');
+  const el = document.getElementById('idle-state');
+  el.innerHTML = '<div class="pulse">🔍</div><p style="color:var(--dim)">本设备能力:</p>' +
+    caps.map(c => `<p style="font-size:13px;margin:4px 0">${c}</p>`).join('') +
+    '<button class="btn btn-secondary" onclick="location.reload()" style="margin-top:12px;max-width:250px">刷新</button>';
+  reportCapabilities();
+}
+
+function showTask(req) {
+  document.getElementById('idle-state').style.display = 'none';
+  const area = document.getElementById('active-task');
+  area.style.display = 'block';
+
+  const icons = {
+    camera_photo: '📸', camera_scan: '📷', qr_code: '📱',
+    gps_location: '📍', microphone: '🎤', nfc_tag: '📡',
+  };
+  const icon = icons[req.sensor_type] || '📱';
+
+  let actionHtml = '';
+  if (req.sensor_type === 'camera_photo' || req.sensor_type === 'camera_scan') {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="takePhoto('${req.request_id}')">📸 拍照</button>
+      <button class="btn btn-secondary" onclick="skipTask('${req.request_id}')">跳过</button>
+      <img id="photo-preview">`;
+  } else if (req.sensor_type === 'gps_location') {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="getLocation('${req.request_id}')">📍 获取位置</button>
+      <button class="btn btn-secondary" onclick="skipTask('${req.request_id}')">跳过</button>`;
+  } else if (req.sensor_type === 'qr_code') {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="scanQR('${req.request_id}')">📱 扫码</button>
+      <button class="btn btn-secondary" onclick="skipTask('${req.request_id}')">跳过</button>`;
+  } else if (req.sensor_type === 'microphone') {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="useVoice('${req.request_id}')">🎤 开始录音</button>
+      <button class="btn btn-secondary" onclick="skipTask('${req.request_id}')">跳过</button>`;
+  } else {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="respondOK('${req.request_id}')">✅ 确认</button>
+      <button class="btn btn-secondary" onclick="skipTask('${req.request_id}')">跳过</button>`;
+  }
+
+  area.innerHTML = `
+    <div class="task-card">
+      <div class="icon">${icon}</div>
+      <h2>${req.title}</h2>
+      <p style="font-size:11px;color:var(--dim)">
+        ${req.priority === 'critical' ? '🔴 紧急' : req.priority === 'high' ? '🟡 重要' : '🟢 正常'}
+        · ${Math.round(req.timeout_seconds / 60)}分钟
+      </p>
+      <div class="instruction">${req.instruction}</div>
+      ${req.hints && req.hints.length ? '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">💡 ' + req.hints.join(' · ') + '</p>' : ''}
+      ${actionHtml}
+    </div>`;
+}
+
+function showTaskCard(card) {
+  document.getElementById('idle-state').style.display = 'none';
+  const area = document.getElementById('active-task');
+  area.style.display = 'block';
+
+  let actionHtml = '';
+  if (card.action_type === 'photo') {
+    actionHtml = `<button class="btn btn-primary" onclick="takePhoto('${card.card_id}')">📸 拍照</button>`;
+  } else if (card.action_type === 'choice' && card.choices.length) {
+    actionHtml = '<div class="choice-grid">' +
+      card.choices.map(c => `<button class="choice-btn" onclick="makeChoice('${card.card_id}','${c}')">${c}</button>`).join('') +
+      '</div>';
+  } else if (card.action_type === 'confirm') {
+    actionHtml = `
+      <button class="btn btn-primary" onclick="respondOK('${card.card_id}')">✅ ${card.action_prompt || '确认'}</button>
+      <button class="btn btn-secondary" onclick="skipTask('${card.card_id}')">拒绝</button>`;
+  } else if (card.action_type === 'input') {
+    actionHtml = `
+      <input id="task-input" placeholder="${card.action_prompt || '输入...'}" style="width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:14px;margin-bottom:8px">
+      <button class="btn btn-primary" onclick="submitInput('${card.card_id}')">提交</button>`;
+  } else {
+    actionHtml = `<button class="btn btn-primary" onclick="respondOK('${card.card_id}')">✅ 完成</button>`;
+  }
+
+  area.innerHTML = `
+    <div class="task-card">
+      <h2>${card.title}</h2>
+      <p>${card.description}</p>
+      ${actionHtml}
+    </div>`;
+}
+
+function takePhoto(reqId) {
+  document.getElementById('photo-input').click();
+  document.getElementById('photo-input').dataset.reqId = reqId;
+}
+
+function handlePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reqId = event.target.dataset.reqId;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const preview = document.getElementById('photo-preview');
+    if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+    sendResponse(reqId, { photo_data: e.target.result.split(',')[1] || e.target.result, file_name: file.name });
+    resetTask();
+  };
+  reader.readAsDataURL(file);
+}
+
+function getLocation(reqId) {
+  if (!navigator.geolocation) {
+    sendResponse(reqId, { error: 'geolocation_unavailable' });
+    return;
+  }
+  showToast('正在获取位置...');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      sendResponse(reqId, {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: pos.timestamp,
+      });
+      resetTask();
+    },
+    (err) => { sendResponse(reqId, { error: err.message }); resetTask(); },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+function scanQR(reqId) {
+  showToast('请用相机对准二维码');
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        sendResponse(reqId, { qr_image: ev.target.result.split(',')[1] || ev.target.result, note: 'QR image captured for server-side decoding' });
+      };
+      reader.readAsDataURL(file);
+    }
+    resetTask();
+  };
+  input.click();
+}
+
+function useVoice(reqId) {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    sendResponse(reqId, { error: 'speech_not_supported', text: '语音输入内容' });
+    resetTask();
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  rec.lang = 'zh-CN';
+  rec.interimResults = false;
+  rec.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    sendResponse(reqId, { text: text });
+    resetTask();
+  };
+  rec.onerror = () => { sendResponse(reqId, { error: 'speech_error' }); resetTask(); };
+  rec.start();
+  showToast('🎤 正在聆听...');
+}
+
+function makeChoice(cardId, choice) {
+  sendResponse(cardId, { choice: choice });
+  resetTask();
+}
+
+function submitInput(cardId) {
+  const val = document.getElementById('task-input')?.value || '';
+  sendResponse(cardId, { input: val });
+  resetTask();
+}
+
+function respondOK(reqId) {
+  sendResponse(reqId, { ok: true });
+  resetTask();
+}
+
+function skipTask(reqId) {
+  sendResponse(reqId, { skipped: true });
+  resetTask();
+}
+
+function sendResponse(reqId, data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'sensor_response',
+      request_id: reqId,
+      ...data,
+    }));
+  }
+}
+
+function resetTask() {
+  document.getElementById('active-task').style.display = 'none';
+  document.getElementById('idle-state').style.display = 'block';
+  document.getElementById('photo-input').value = '';
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+connect();
+
+var _pwaDeferredPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_pwaDeferredPrompt=e;showToast('📲 可安装到桌面')});
+function pwaInstall(){if(_pwaDeferredPrompt){_pwaDeferredPrompt.prompt()}}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){})}
+</script>
+</body>
+</html>

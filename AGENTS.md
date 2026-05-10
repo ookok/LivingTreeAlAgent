@@ -1,320 +1,286 @@
-# LivingTree AI Agent v2.1 — AGENTS.md
+# LivingTree AI Agent v5.0 — AGENTS.md
 
-> 2026-05-06 | Python 3.14+ | Textual (Toad) | ~200 files in livingtree/
+> 2026-05-10 | Python 3.14+ | FastAPI + HTMX + WebRTC | ~280 files
 
 ## OVERVIEW
 
-Digital life form AI platform. **UI is Toad (Textual-based TUI)** — PyQt6 + Vue 3 are deprecated and unused. All active code lives in `livingtree/`.
+Digital life form AI platform. Primary interface: **Living Canvas** — LLM-generated dynamic web UI.
+TUI (Textual/Toad) retained for CLI-first workflows. All active code in `livingtree/`.
 
-Core: LifeEngine 6-stage cycle (perceive → cognize → plan → execute → reflect → evolve) with 10+ LLM providers, P2P network, self-evolving cells, knowledge base (FTS5 + vector + graph), and industrial document generation.
+Core: 12-organ biological architecture + 7-layer self-evolution without model training.
+32 new modules added in v5.0 across 4 layers: Core, Network, Management, UI.
 
-## ARCHITECTURE
+## QUICK START
+
+```bash
+# Primary: Living Canvas web UI
+python -m livingtree server           # http://localhost:8100 → /tree/living
+
+# CLI/TUI
+python -m livingtree tui              # Textual TUI
+python -m livingtree client           # CLI chat
+
+# Relay Server
+python relay_server.py --port 8899    # P2P relay + front-end proxy
+
+# Admin Console
+http://localhost:8100/api/admin       # Full admin panel
+```
+
+## ARCHITECTURE OVERVIEW
 
 ```
-livingtree/
-├── main.py                  # CLI entry: tui | client | server | test | check | quick
-├── __init__.py              # Lazy imports — __getattr__ pattern for deferred loading
-├── __main__.py              # python -m livingtree
-│
-├── dna/                     # DNA — Life blueprint (32 files)
-│   ├── life_engine.py       # LifeEngine: perceive → cognize → plan → execute → reflect → evolve
-│   ├── living_world.py      # LivingWorld: single system-wide context container
-│   ├── consciousness.py     # Consciousness: intent recognition, LLM abstraction
-│   ├── dual_consciousness.py # DualModelConsciousness: flash + pro model routing
-│   ├── genome.py            # Genome: digital genetics, evolution tracking
-│   ├── safety.py            # SafetyGuard: sandbox, audit chain, kill switch, SSRF guard
-│   ├── cache_optimizer.py   # Prefix cache tracker for LLM token reuse
-│   ├── tool_repair.py       # ToolCallRepair: auto-fix broken tool calls
-│   ├── thought_harvest.py   # ThoughtHarvester: extract thinking blocks
-│   ├── conversation_dna.py  # ConversationDNA: session pattern tracking
-│   ├── tui_orchestrator.py  # LLM → TUI routing
-│   ├── unified_skill_system.py  # Skill self-learning
-│   ├── life_daemon.py       # Background life cycle daemon
-│   ├── self_evolving.py     # SelfEvolvingEngine
-│   ├── multi_agent_debate.py # MultiAgentDebate
-│   ├── predictive_world.py  # PredictiveWorldModel
-│   ├── biorhythm.py         # Biorhythm cycles
-│   ├── adaptive_ui.py       # Adaptive UI behavior
-│   └── anticipatory.py      # Anticipatory actions
-│
-├── cell/                    # Cell — Trainable AI cells (9 files)
-│   ├── cell_ai.py           # CellAI: trainable LLM unit
-│   ├── trainer.py           # CellTrainer: LoRA training
-│   ├── registry.py          # CellRegistry: discovery + registration
-│   ├── mitosis.py           # Mitosis: cell splitting/specialization
-│   ├── phage.py             # Phage: absorb external codebases
-│   ├── regen.py             # Regen: recovery from checkpoints
-│   ├── distillation.py      # Distillation: knowledge extraction
-│   └── swift_trainer.py     # SwiftDrillTrainer: fast training pipeline
-│
-├── knowledge/               # Knowledge — KB layer (14 files)
-│   ├── knowledge_base.py    # KnowledgeBase: central KB
-│   ├── vector_store.py      # VectorStore: pluggable embedding backends
-│   ├── knowledge_graph.py   # KnowledgeGraph: entity relationships
-│   ├── document_kb.py       # DocumentKB: chunked doc storage
-│   ├── intelligent_kb.py    # IntelligentKB: search + fact-check
-│   ├── struct_mem.py        # StructMemory: hierarchical memory
-│   ├── session_search.py    # FTS5 session search
-│   ├── auto_knowledge_miner.py  # Auto knowledge mining
-│   ├── learning_engine.py   # TemplateLearner, SkillDiscoverer, RoleGenerator
-│   ├── provenance.py        # ProvenanceTracker: data lineage
-│   └── dedup.py             # Deduplication
-│
-├── capability/              # Capability — Skills & engines (16+ files)
-│   ├── skill_factory.py     # SkillFactory: skill creation
-│   ├── tool_market.py       # ToolMarket: tool registry + marketplace
-│   ├── doc_engine.py        # DocEngine: industrial report generation (EIA, emergency plans)
-│   ├── code_engine.py       # CodeEngine: code generation with annotations
-│   ├── code_graph.py        # CodeGraph: AST-based code relationship graph
-│   ├── ast_parser.py        # ASTParser: multi-language parsing
-│   ├── extraction_engine.py # ExtractionEngine: LangExtract grounded entity extraction
-│   ├── pipeline_engine.py   # PipelineEngine: workflow orchestration
-│   ├── multimodal_parser.py # MultimodalParser: image/table/document parsing
-│   ├── skill_discovery.py   # SkillDiscoveryManager: auto-discover skills
-│   ├── self_discovery.py    # SelfDiscovery: tool pattern discovery
-│   ├── memory_pipeline.py   # MemoryPipeline: structured memory processing
-│   ├── web_reach.py         # WebReach: smart web scraping
-│   └── ddg_search.py        # DuckDuckGo search
-│
-├── execution/               # Execution — Task orchestration (19 files)
-│   ├── task_planner.py      # TaskPlanner: task decomposition
-│   ├── orchestrator.py      # Orchestrator: multi-agent coordination
-│   ├── real_pipeline.py     # Real orchestrator: intent-driven pipeline
-│   ├── self_healer.py       # SelfHealer: health checks + recovery
-│   ├── panel_agent.py       # Panel agents: per-panel self-healing
-│   ├── quality_checker.py   # MultiAgentQualityChecker
-│   ├── side_git.py          # SideGit: turn-based snapshot + restore
-│   ├── session_manager.py   # SessionManager: cross-session resume
-│   ├── sub_agent_roles.py   # SubAgentRoles: implementer/verifier pattern
-│   ├── rlm.py               # RLMRunner: fan-out parallel LLM tasks
-│   ├── dag_executor.py      # DAGExecutor: dependency-aware execution
-│   ├── hitl.py              # HumanInTheLoop: approval workflow
-│   ├── checkpoint.py        # TaskCheckpoint: state persistence
-│   ├── cost_aware.py        # CostAware: token budget management
-│   ├── cron_scheduler.py    # CronScheduler: periodic jobs
-│   ├── auto_skill_resolver.py  # Auto skill completion
-│   ├── task_guard.py        # TaskGuard: timeout + circuit breaker
-│   └── thinking_evolution.py  # ThinkingEvolution: elite pool evolution
-│
-├── treellm/                 # TreeLLM — LLM routing (11 files)
-│   ├── core.py              # TreeLLM: multi-provider routing engine
-│   ├── providers.py         # OpenAILikeProvider + provider adapters
-│   ├── holistic_election.py # 5-dimension model election (cost/speed/quality/...)
-│   ├── structured_enforcer.py  # JSON Schema validation
-│   ├── skill_router.py      # Full-text skill routing
-│   ├── model_registry.py    # ModelRegistry: auto-discover + cache
-│   ├── cache_director.py    # CacheDirector: prompt cache management
-│   ├── classifier.py        # Request classifier
-│   ├── local_scanner.py     # Local model scanner
-│   └── session_binding.py   # Session-model binding
-│
-├── tui/                     # TUI — Toad/Textual interface (15+ dirs)
-│   ├── app.py               # LivingTreeTuiApp: extends ToadApp, 5 panels
-│   ├── td/                  # Toad source (54 files) — embedded Textual framework
-│   ├── screens/             # Screen implementations:
-│   │   ├── boot.py          # BootScreen: progressive initialization
-│   │   ├── neon_chat.py     # NeonChatScreen: main chat panel
-│   │   ├── code.py          # CodeScreen: code editor
-│   │   ├── docs.py          # KnowledgeScreen: KB panel
-│   │   ├── tools.py         # ToolsScreen: toolbox
-│   │   ├── settings.py      # Settings screen
-│   │   ├── login.py         # LoginScreen: mandatory auth
-│   │   └── help.py          # HelpScreen
-│   ├── widgets/             # UI components: Card, StatusBar, etc.
-│   ├── styles/theme.tcss    # CSS theme
-│   ├── i18n.py              # i18n: zh/en translation (singleton, t("key"))
-│   └── wt_bootstrap.py      # Windows Terminal bootstrapper: downloads WT if missing
-│
-├── network/                 # Network — P2P layer + Scinet v2.0 intelligent proxy (21 files)
-│   ├── node.py              # Node: P2P node identity
-│   ├── discovery.py         # Discovery: LAN peer discovery
-│   ├── nat_traverse.py      # NATTraverser: NAT traversal
-│   ├── reputation.py        # Reputation: trust scoring
-│   ├── encrypted_channel.py # EncryptedChannel: AES messaging
-│   ├── offline_mode.py      # DualMode: online/offline switching
-│   ├── p2p_node.py          # P2P node lifecycle
-│   ├── proxy_fetcher.py     # ProxyPool: multi-source proxies (6 sources)
-│   ├── scinet_service.py    # ScinetService: local HTTP proxy (port 7890)
-│   ├── scinet_engine.py     # 🆕 ScinetEngine v2.0: unified intelligent pipeline
-│   ├── scinet_quic.py       # 🆕 QUIC/HTTP3 tunnel + protocol obfuscation
-│   ├── scinet_bandit.py     # 🆕 Contextual Bandit RL proxy selection (LinUCB + Thompson)
-│   ├── scinet_federated.py  # 🆕 Federated proxy quality learning (FedAvg + differential privacy)
-│   ├── scinet_topology.py   # 🆕 GNN-inspired topology optimizer (GAT attention routing)
-│   ├── scinet_cache.py      # 🆕 Semantic cache (L1 memory + L2 SQLite + delta compression)
-│   ├── scinet_webtransport.py # 🆕 WebTransport browser-native tunnel (QUIC)
-│   ├── domain_ip_pool.py    # DomainIPPool: 100+ pre-tested overseas IPs
-│   ├── site_accelerator.py  # SiteAccelerator: FastGithub-style acceleration
-│   └── collective.py        # CollectiveConsciousness: swarm intelligence
-│
-├── integration/             # Integration — Wiring layer (9 files)
-│   ├── hub.py               # IntegrationHub: progressive boot, DI, lifecycle
-│   ├── launcher.py          # Launch modes: CLIENT | SERVER | TEST | QUICK | CHECK
-│   ├── self_updater.py      # Auto-update with mirror fallback
-│   ├── pkg_manager.py       # Package manager: pip/conda/uv detection
-│   ├── sse_server.py        # SSE agent server
-│   ├── opencode_bridge.py   # OpenCode integration
-│   ├── opencode_serve.py    # OpenCode serve launcher
-│   └── message_gateway.py   # Multi-platform message gateway
-│
-├── config/                  # Config — Settings (6 files)
-│   ├── settings.py          # LTAIConfig: Pydantic, YAML + env + vault
-│   ├── secrets.py           # SecretVault: Fernet-encrypted API key storage
-│   ├── system_config.py     # System constants
-│   └── config_editor.py     # Config editor utility
-│
-├── core/                    # Core — Primitives (4 files)
-│   ├── unified_registry.py  # UnifiedRegistry: tools/roles/KB single source
-│   ├── async_disk.py        # AsyncDisk: batched async file I/O
-│   ├── task_guard.py        # TaskGuard: timeout + circuit breaker
-│   └── file_resolver.py     # File path resolution
-│
-├── api/                     # API — FastAPI server (3 files)
-│   └── server.py            # FastAPI app, WebSocket support
-│
-├── mcp/                     # MCP — Model Context Protocol (2 files)
-│   └── server.py            # MCP server implementation
-│
-├── lsp/                     # LSP — Language Server Protocol (2 files)
-│   └── lsp_manager.py       # LSPManager: code diagnostics
-│
-└── observability/           # Observability (11 files)
-    ├── setup.py             # setup_observability: logger + metrics + tracer
-    ├── error_interceptor.py # Global error capture
-    ├── system_monitor.py    # System resource monitoring
-    ├── activity_feed.py     # Unified event stream
-    ├── agent_eval.py        # 4-layer agent evaluation
-    ├── trust_scoring.py     # Per-agent trust scoring
-    └── error_replay.py      # Error recording + self-healing
+┌─────────────────────────────────────────────────────────────┐
+│                    Living Canvas (HTMX + WebRTC + PWA)      │
+│  17 Business Panels · Dynamic Page Engine · Kami Theme      │
+├─────────────────────────────────────────────────────────────┤
+│                      Core Layer (18 modules)                │
+│  dynamic_page · kami_theme · shell_env · interactive_tools  │
+│  cognition_stream · perf_accel · adaptive_folder            │
+│  anime_persona · living_presence · model_spec               │
+│  creative_viz · final_polish · behavior_control             │
+│  dpo_prefs · collective_intel · agent_qa                    │
+│  resilience_brain · capability_scanner · universal_scanner  │
+├─────────────────────────────────────────────────────────────┤
+│                     Network Layer (8 modules)               │
+│  nat_traverse · reach_gateway · swarm_coordinator           │
+│  im_core · webrtc_remote · universal_pairing                │
+│  message_bus (protobuf) · discovery (LAN UDP)               │
+├─────────────────────────────────────────────────────────────┤
+│                    Management Layer (4 modules)              │
+│  admin_manager · autonomous_growth · admin_manager          │
+├─────────────────────────────────────────────────────────────┤
+│                Existing 45+ Modules (unchanged)             │
+│  dna/ · knowledge/ · execution/ · treellm/ · capability/    │
+│  economy/ · cell/ · network/ · tui/ · observability/        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## COMPLETE MODULE INDEX
+
+### Core Layer (new in v5.0)
+
+| Module | Lines | Purpose | Adaptive Trigger |
+|--------|-------|---------|-----------------|
+| `dynamic_page.py` | ~250 | LLM generates complete HTML pages, no static templates | Page load / user input |
+| `kami_theme.py` | ~260 | Kami design tokens: 3 themes, CSS gen, LLM constraints | Theme switch / UI gen |
+| `shell_env.py` | ~330 | Env probe + safe shell exec + LocalFS bridge | Startup / mount / exec |
+| `interactive_tools.py` | ~350 | AI-suggested interactive tools (map/draw/calc/code/table) | AI analyzes task context |
+| `cognition_stream.py` | ~160 | SSE stream: intent→tools→memory→skills→execution | User submits question |
+| `perf_accel.py` | ~300 | Stream render throttle + chunked file I/O + response cache | Auto: SSE→throttle, >100KB→chunk |
+| `adaptive_folder.py` | ~150 | Context folding at natural boundaries (Neuroscience-based) | Context exceeds 4000 chars |
+| `anime_persona.py` | ~340 | Unique SVG avatar per user + knowledge forest + page guide | Page load / conversations |
+| `living_presence.py` | ~270 | Breathing rhythm + weather + particles + memory echoes | Page load / input / SSE |
+| `model_spec.py` | ~170 | Constitution injected before every LLM call | Every LLM call |
+| `creative_viz.py` | ~320 | Timeline + dream + swarm map + emotion + digital twin | User opens creative panel |
+| `final_polish.py` | ~310 | Predictive precompute + session continuity + cost ladder + dedup | Auto: post-response / return / budget |
+| `behavior_control.py` | ~350 | Guidelines (condition→action) + Journeys + ARQ verification | Every LLM output |
+| `dpo_prefs.py` | ~280 | DPO preference learning (no RL needed) | Every ✓/✕/edit |
+| `collective_intel.py` | ~320 | Memory HOT/WARM/COLD + crystallization + blueprints | Auto: conversations → memories → skills |
+| `agent_qa.py` | ~300 | Metamorphic testing + golden traces + HITL bridge | On-demand / auto-regression |
+| `resilience_brain.py` | ~230 | Network monitor + circuit breaker + predictive offline cache | 15s health probe |
+| `capability_scanner.py` | ~220 | Auto-discover 18 external services, LLM capability analysis | 60s port scan |
+| `universal_scanner.py` | ~280 | LLM-guided service discovery (OpenAI/MCP/DB/HTTP) | User describes service |
+| `admin_manager.py` | ~200 | PBKDF2 password + JWT + Fernet credential vault | First run / admin login |
+
+### Network Layer (new in v5.0)
+
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `nat_traverse.py` | ~340 | RFC 5780 NAT classification + UDP hole-punching + relay pool |
+| `reach_gateway.py` | ~400 | Cross-device WebSocket hub: AI pushes sensor tasks to mobile |
+| `swarm_coordinator.py` | ~350 | Direct P2P: cell migration + knowledge sync + task distribution |
+| `im_core.py` | ~400 | IM: friends/groups/voice/video/file/meeting via WebSocket |
+| `webrtc_remote.py` | ~220 | Remote ops: terminal/files/monitor via WebRTC DataChannel |
+| `universal_pairing.py` | ~320 | 4-way pairing: 8-digit code / QR / LAN auto / ultrasonic |
+| `message_bus.py` | ~270 | Protobuf binary protocol (14x smaller, 10x faster than JSON) |
+| `discovery.py` | ~200 | Real LAN UDP broadcast discovery (replaced stub) |
+
+### Key Modified Files
+
+| File | Changes |
+|------|---------|
+| `htmx_web.py` | 2000→3100 lines. 50+ new endpoints for all panels |
+| `routes.py` | 990→1700 lines. IM WS, RTC signal, admin API, push, HITL, collective |
+| `hub.py` | +50 lines. Auto-start resilience, scanner, growth, discovery, swarm |
+| `dual_consciousness.py` | +5 lines. Constitution injection before every LLM call |
+| `doc_engine.py` | +80 lines. LLM section generation + Kami render + config templates |
+| `overnight_task.py` | 62→260 lines. Real execution engine with step tracking |
+| `server.py` | +15 lines. PWA manifest/sw serving, admin page |
+| `relay_server.py` | Default port 8888→8899, host configurable, front-end proxy |
+| `p2p_node.py` | Default relay URL → port 8899, env-configurable |
+
+### New Templates
+
+| Template | Purpose |
+|----------|---------|
+| `living.html` | Living Canvas — the main unified interface |
+| `reach_mobile.html` | Mobile PWA — AI sensory extension |
+| `admin.html` | Admin console — login + config + services + credentials |
+
+### New Config/Static Files
+
+| File | Purpose |
+|------|---------|
+| `client/web/manifest.json` | PWA manifest with protocol_handlers + share_target |
+| `client/web/sw.js` | Service worker: offline cache + push + badge |
+| `client/web/assets/icon.svg` | PWA icon |
+| `deploy/docker/Dockerfile.relay` | Relay server Docker image |
+| `.livingtree/model_spec.md` | AI Constitution (5 core values) |
+
+## BUSINESS PANELS (17 total)
+
+```
+User-visible (always shown):
+  📄 行业报告  🔬 挂机任务  📱 感官扩展  💻 Shell
+  💬 IM       🖥 远控      🔗 配对      🎨 创意
+
+Admin-only (⚙ login required):
+  💰 费用节省  🧮 ROI计算   🕸️ 群体智能  🛡️ 韧性
+  🌟 北极星    🧪 QA       🧠 CI        🛡️ 行为
+  🎯 DPO
+```
+
+## ADAPTIVE ROUTING (self-triggered, no manual calls)
+
+```
+Page load → dynamic_page + kami_theme + living_presence + anime_persona
+User types → debounceEcho (memory echoes) → cognition_stream (visible thinking)
+LLM call  → model_spec (constitution prepend)
+LLM reply → behavior_control (ARQ verify) → perf_accel (cache)
+          → adaptive_folder (fold if >4000 chars)
+          → final_polish (predict next, save checkpoint)
+          → collective_intel (store memory, auto-classify)
+          → anime_persona (plant tree in forest)
+User ✓/✕  → dpo_prefs (update preference scores)
+3 validations → collective_intel (crystallize memory → skill)
+Network down → resilience_brain (degrade tier, pre-cache)
+Service up   → capability_scanner (discover + analyze + register)
+Device near  → universal_pairing (pair) → reach_gateway (sensor tasks)
+Node found   → nat_traverse (hole-punch) → swarm_coordinator (direct P2P)
+```
+
+## KEY API ENDPOINTS
+
+```
+# Living Canvas
+GET  /tree/living              Living Canvas main page
+GET  /tree/dynamic?message=    LLM-generated dynamic page
+GET  /tree/theme/{dark|light|kami}  Dynamic theme CSS
+
+# Cognition & Tools
+GET  /tree/sse/cognition?message=   SSE cognition stream
+GET  /tree/tools/suggest?context=   AI tool suggestions
+POST /tree/tools/result             Tool result → AI feedback
+
+# Shell & Environment
+GET  /tree/shell/env           Environment toolchain probe
+POST /tree/shell/exec          Safe shell execution
+POST /tree/shell/mount         Mount local folder
+
+# IM & Communication
+WSS  /ws/im                    IM WebSocket (DM/group/call/meeting)
+WSS  /ws/rtc-signal            WebRTC signaling + remote ops
+GET  /tree/im/panel            IM panel
+
+# P2P & Swarm
+GET  /tree/swarm/panel         Swarm intelligence panel
+POST /api/swarm/cell/receive   Receive cell (binary protobuf)
+POST /api/swarm/task/distribute Distribute task to peers
+GET  /tree/p2p/status          NAT type + relay health
+
+# Push & PWA
+GET  /api/push/vapid-key       VAPID public key
+POST /api/push/subscribe       Store push subscription
+POST /api/push/send            Send push notification
+
+# Admin
+GET  /api/admin                Admin console
+POST /api/admin/login          Admin login (JWT)
+POST /api/admin/config/chat    Conversational config (LLM-powered)
+POST /api/admin/services/discover  Discover external service
+
+# Collective Intelligence
+POST /api/collective/publish   Publish agent blueprint
+POST /api/collective/import/{id} Import blueprint
+
+# HITL
+POST /api/hitl/approve         Approve HITL request
+POST /api/hitl/reject          Reject HITL request
+
+# Pairing
+GET  /tree/pair/all-methods    All 4 pairing methods
+GET  /api/pairing/audio        Ultrasonic pairing signal
+POST /api/pairing/code         Verify 8-digit code
+
+# Creative Visualizations
+GET  /tree/creative/timeline   Memory timeline
+GET  /tree/creative/dream      Dream canvas
+GET  /tree/creative/emotion    Emotion gauge
+GET  /tree/creative/twin       Digital twin mirror
+
+# Presence
+GET  /tree/persona             Unique anime avatar
+GET  /tree/persona/forest      Personal knowledge forest
+GET  /tree/presence/living-layer Breathing + weather + particles
 ```
 
 ## RUN COMMANDS
 
 ```bash
-# TUI (primary interface — Textual in Windows Terminal)
-python -m livingtree tui              # normal boot (with WT bootstrap)
-python -m livingtree tui --direct     # skip WT bootstrap, run directly
-python -m livingtree tui /path/to/workspace  # with workspace path
+# Living Canvas (primary)
+python -m livingtree server              # http://localhost:8100 → /tree/living
 
-# CLI modes
-python -m livingtree client           # interactive CLI chat
-python -m livingtree server           # FastAPI on http://localhost:8100
-python -m livingtree quick "message"  # single interaction
-python -m livingtree check            # environment check
-python -m livingtree test             # integration tests
+# TUI (Textual, legacy)
+python -m livingtree tui
+python -m livingtree tui --direct
 
-# Update
-python -m livingtree update           # check + apply updates
-python -m livingtree _update_cli --check  # check only
-python -m livingtree _update_cli --mirror --no-deps  # mirror, skip deps
+# CLI
+python -m livingtree client
+python -m livingtree quick "message"
 
-# Via root main.py (legacy compatibility)
-python main.py livingtree tui         # same as python -m livingtree tui
+# Relay Server
+python relay_server.py --port 8899
+python relay_server.py --port 8899 --host 0.0.0.0
+docker run -p 8899:8899 livingtree-relay
+
+# Build relay EXE
+.venv\Scripts\python.exe build_relay_exe.py
+
+# Admin
+http://localhost:8100/api/admin
+
+# Tests
+pytest
 ```
 
-## CONFIG
+## SELF-EVOLUTION WITHOUT MODEL TRAINING
 
-**LTAIConfig** (`livingtree/config/settings.py`) — Pydantic model, loaded from:
-1. Defaults (hardcoded)
-2. YAML: `config/ltaiconfig.yaml` or `config/config.yaml` or `~/.livingtree/config.yaml`
-3. Env vars: `LT_*` prefix (e.g., `LT_DEEPSEEK_API_KEY`, `LT_FLASH_MODEL`)
-4. **Secret Vault** (`livingtree/config/secrets.py`) — Fernet-encrypted, stores API keys
+The architecture proves that industry expertise and continuous improvement
+do NOT require model fine-tuning. Seven mechanisms achieve this:
 
-```python
-from livingtree.config import LTAIConfig, get_config, reload_config, config
-
-# Direct access (Pydantic)
-key = config.model.deepseek_api_key
-flash = config.model.flash_model   # default: "deepseek/deepseek-v4-flash"
-pro = config.model.pro_model       # default: "deepseek/deepseek-v4-pro"
-
-# Reload
-cfg = get_config(reload=True)
-```
-
-**Env overrides:**
-| Variable | Maps to |
-|----------|---------|
-| `LT_DEEPSEEK_API_KEY` | `model.deepseek_api_key` |
-| `LT_FLASH_MODEL` | `model.flash_model` |
-| `LT_PRO_MODEL` | `model.pro_model` |
-| `LT_NODE_NAME` | `network.node_name` |
-| `LT_LAN_PORT` | `network.lan_port` |
-| `LT_API_HOST` / `LT_API_PORT` | `api.host` / `api.port` |
-
-## INTEGRATIONHUB BOOT SEQUENCE
-
-`IntegrationHub(lazy=True)` → instant UI, heavy init deferred:
-
-1. `__init__`: config + observability only
-2. `_init_sync` (thread executor): LivingWorld, all components, wire everything
-3. `_init_async`: health checks, node register, P2P, cron, model registry, daemon
-
-**Progressive boot** in TUI: UI shows immediately, IntegrationHub created in background thread, heavy sync work runs in executor, async init follows.
-
-```python
-hub = IntegrationHub(lazy=True)  # fast
-await hub.start()                 # full init
-result = await hub.chat("帮我生成报告")  # main interaction
-await hub.shutdown()
-```
-
-## LLM PROVIDERS (10+ supported)
-
-Configured via `config/model/` — each provider has `base_url`, `api_key`, `flash_model`, `pro_model`:
-
-| Provider | Default flash | Default pro |
-|----------|--------------|-------------|
-| DeepSeek | deepseek-v4-flash | deepseek-v4-pro |
-| LongCat | LongCat-Flash-Lite | - |
-| Xiaomi | mimo-v2-flash | mimo-v2.5 |
-| Aliyun | qwen-turbo | qwen-max |
-| Zhipu | glm-4-flash | glm-4-plus |
-| SiliconFlow | Qwen2.5-7B | DeepSeek-V3 |
-| MoFang (Gitee) | Qwen2.5-7B | DeepSeek-V3 |
-| DMXAPI | gpt-5-mini | - |
-| Spark (讯飞) | xdeepseekv3 | - |
-| NVIDIA | deepseek-r1 | - |
-
-**HolisticElection** selects model per-request based on 5 dimensions: cost, speed, quality, availability, and task complexity.
+1. **Memory Tiering** (HOT/WARM/COLD) — frequency-driven with time decay
+2. **Memory → Skill Crystallization** — validated 3x → auto-registered skill
+3. **DPO Preference Learning** — every ✓/✕ updates scores, no RL needed
+4. **Model Spec / Constitution** — values injected before every call
+5. **Cell Mitosis + Blueprints** — successful patterns replicate
+6. **Swarm Knowledge Sync** — one node learns, all benefit
+7. **Adaptive Context Folding** — compress at boundaries, save tokens
 
 ## CONVENTIONS
 
 - **All new code** goes in `livingtree/` — never in `client/`
-- **Imports**: `from livingtree.dna import LifeEngine`, `from livingtree.config import get_config`
-- **Windows**: use `;` not `&&` for command chaining
-- **i18n**: use `t("key")` from `livingtree/tui/i18n.py` — default lang is zh
-- **Tests**: `pytest` from project root, tests in `tests/`
-- **Logging**: loguru, level configured via `config.observability.log_level`
+- **Imports**: `from livingtree.core import ...`
+- **WebSocket**: `/ws`, `/ws/im`, `/ws/rtc-signal`, `/ws/reach`
+- **Protobuf**: All P2P messages use binary (message_bus.py)
+- **Self-triggering**: New features auto-activate, no manual calls needed
+- **Kami design**: All UI follows Kami token system
+- **Admin panels**: Hidden by default, ⚙ button to unlock
 
 ## ANTI-PATTERNS
 
-- ❌ Don't reference `client/src/business/` or PyQt6 — they're deprecated
-- ❌ Don't reference `client/src/frontend/` or Vue 3 — they're deprecated
-- ❌ Don't import from `livingtree/infrastructure/config.py` — config is in `livingtree/config/settings.py`
-- ❌ Don't use `from client.src.business.global_model_router` — use `livingtree/treellm/`
-- ❌ Don't suppress errors with `as any` or `try/except: pass` in core logic
-- ❌ Don't modify `.gitignore` patterns for `*.db` / `*.json` — they're intentional (data dir)
-
-## TEST
-
-```bash
-pytest                              # all tests
-pytest -v                           # verbose
-pytest tests/test_parser.py         # single file
-pytest -m unit                      # unit tests only
-pytest -m livingtree                # livingtree core tests
-```
-
-Markers: `unit`, `integration`, `slow`, `ui`, `livingtree`, `provider`
-
-## KEY FILES TO READ FOR CONTEXT
-
-| Need | Read |
-|------|------|
-| System entry | `livingtree/main.py` |
-| Boot + wiring | `livingtree/integration/hub.py` |
-| Life cycle | `livingtree/dna/life_engine.py` |
-| LLM routing | `livingtree/treellm/core.py` |
-| Config system | `livingtree/config/settings.py` |
-| TUI app | `livingtree/tui/app.py` |
-| i18n | `livingtree/tui/i18n.py` |
+- ❌ Don't hardcode tools or templates — use AI-driven discovery
+- ❌ Don't train models for behavior — use Constitution + Guidelines
+- ❌ Don't use JSON for P2P — use protobuf (message_bus.py)
+- ❌ Don't add static pages — use dynamic_page.py (LLM generates)
+- ❌ Don't expose admin panels to end users — ⚙ gate required

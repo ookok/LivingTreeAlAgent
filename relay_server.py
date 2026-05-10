@@ -1,15 +1,17 @@
-"""P2PRelayServer — account auth + admin panel + P2P signaling + cost tracking.
+"""P2PRelayServer — account auth + admin panel + P2P signaling + cost tracking + front-end proxy.
 
-Relay address: www.mogoo.com.cn:8888 (hardcoded)
+Relay address: configurable via --host and --port (default: 0.0.0.0:8899)
 
 Core functions:
   1. Client login: account/password required, no self-registration
   2. Admin panel: /admin → account CRUD, password reset, per-node cost dashboard
   3. P2P signaling: peer registration, discovery, WebSocket relay
   4. Token cost tracking: per-account, RMB-converted
+  5. Front-end proxy: serve LivingTree web UI, proxy LLM requests
 
 Deployment:
   Standalone exe: python build_relay_exe.py → dist/relay_server.exe
+  Docker: docker build -f deploy/docker/Dockerfile.relay -t relay .
   Win2008: deploy_win2008.bat <target> → bundles exe + CRT DLLs
 """
 from __future__ import annotations
@@ -42,15 +44,15 @@ PROJECT_ROOT = Path(__file__).parent
 
 # ═══ Data stores ═══
 PEER_STORE: dict[str, dict] = {}
-ACCOUNT_STORE: dict[str, dict] = {}  # username → {password_hash, created, cost_rmb, token_in, token_out, last_login}
+ACCOUNT_STORE: dict[str, dict] = {}
 SESSION_STORE: dict[str, str] = {}
 API_KEY_STORE: dict[str, dict] = {}
 
-RELAY_HOST = "www.mogoo.com.cn"
-RELAY_PORT = 8888
+RELAY_HOST = os.environ.get("LT_RELAY_HOST", "") or "0.0.0.0"
+RELAY_PORT = int(os.environ.get("LT_RELAY_PORT", "8899"))
 
 # ═══ Load balance pool (P2P only) ═══
-RELAY_POOL: list[str] = []  # ["host:port", ...]
+RELAY_POOL: list[str] = []
 RELAY_POOL_FILE = Path(".livingtree/relay_pool.json")
 
 # ═══ LLM Subscription Pool (per-user, not shared) ═══
@@ -341,7 +343,7 @@ ERR_MSG</form></body></html>"""
 class P2PRelayServer:
     """Relay server with account auth + admin panel + cost tracking."""
 
-    def __init__(self, port: int = 8888, host: str = "0.0.0.0"):
+    def __init__(self, port: int = 8899, host: str = "0.0.0.0"):
         self.port = port; self.host = host
         self._app = web.Application()
         self._started_at = time.time()
@@ -358,6 +360,8 @@ class P2PRelayServer:
     def _setup_routes(self):
         app = self._app
         # Client auth
+        app.router.add_get("/", self._index_page)
+        # Auth
         app.router.add_post("/login", self._login)
         # Admin
         app.router.add_get("/admin", self._admin_page)
@@ -401,6 +405,8 @@ class P2PRelayServer:
         # WeChat
         app.router.add_get("/wechat", self._wechat_verify)
         app.router.add_post("/wechat", self._wechat_message)
+        # Front-end proxy (serve web UI — catch-all, must be after API routes)
+        app.router.add_get("/{path:.*}", self._serve_web)
 
     # ═══ Auth ═══
 
@@ -673,6 +679,30 @@ class P2PRelayServer:
         return resp
 
     # ═══ API ═══
+
+    async def _serve_web(self, request: web.Request) -> web.Response:
+        """Front-end proxy: serve LivingTree web UI from relay."""
+        web_root = PROJECT_ROOT / "client" / "web"
+        path = request.path.lstrip("/") or "index.html"
+        file_path = web_root / path
+        if file_path.exists() and file_path.is_file():
+            ct = "text/html"
+            if path.endswith(".js"): ct = "application/javascript"
+            elif path.endswith(".css"): ct = "text/css"
+            elif path.endswith(".svg"): ct = "image/svg+xml"
+            elif path.endswith(".json"): ct = "application/json"
+            return web.Response(body=file_path.read_bytes(), content_type=ct)
+        if web_root.exists():
+            return web.Response(body=(web_root / "index.html").read_bytes(), content_type="text/html")
+        return web.Response(text="LivingTree Relay — front-end not bundled. Use API endpoints.", status=404)
+
+    async def _index_page(self, request: web.Request) -> web.Response:
+        """Serve root page — redirect to Living Canvas or serve index."""
+        web_root = PROJECT_ROOT / "client" / "web"
+        index = web_root / "index.html"
+        if index.exists():
+            return web.Response(body=index.read_bytes(), content_type="text/html")
+        return web.HTTPFound("/admin")
 
     async def _health(self, request: web.Request) -> web.Response:
         return web.json_response({
@@ -1369,7 +1399,7 @@ class P2PRelayServer:
         for ws in self._ws_clients.values(): await ws.close()
 
 
-async def run_server(port: int = 8888, host: str = "0.0.0.0"):
+async def run_server(port: int = 8899, host: str = "0.0.0.0"):
     server = P2PRelayServer(port=port, host=host)
     await server.start()
     try: await asyncio.Event().wait()
@@ -1379,8 +1409,8 @@ async def run_server(port: int = 8888, host: str = "0.0.0.0"):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="LivingTree P2P Relay Server")
-    parser.add_argument("--port", "-p", type=int, default=8888)
-    parser.add_argument("--host", "-H", default="0.0.0.0")
+    parser.add_argument("--port", "-p", type=int, default=8899)
+    parser.add_argument("--host", "-H", type=str, default="0.0.0.0")
     args = parser.parse_args()
 
     # ═══ Win2008 compatibility header ═══

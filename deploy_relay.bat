@@ -8,8 +8,8 @@ netsh interface ip add dns "Ethernet" 114.114.114.114 index=2 >nul 2>&1
 ipconfig /flushdns >nul 2>&1
 
 set PORT=%1
-if "%PORT%"=="" set /p PORT="Port (8888): "
-if "%PORT%"=="" set PORT=8888
+if "%PORT%"=="" set /p PORT="Port (8899): "
+if "%PORT%"=="" set PORT=8899
 
 echo.
 echo === LivingTree Relay Server ===

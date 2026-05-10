@@ -1,10 +1,13 @@
 """Build relay_server.py into standalone relay_server.exe (no Python needed).
-
+ 
 Usage: .venv\Scripts\python.exe build_relay_exe.py
-Output: dist/relay_server.exe (~25MB single-file)
-
+Output: dist/relay_server.exe (~30MB single-file, includes web UI)
+ 
 Runs on Windows Server 2008 through Win11.
 Win2008 requires VC++ 2015+ Redistributable installed separately.
+
+Default port: 8899 (configurable via --port or LT_RELAY_PORT env).
+Front-end proxy: relay can serve the LivingTree web UI directly.
 """
 from __future__ import annotations
 
@@ -51,6 +54,7 @@ def main():
             f"--distpath={DIST}",
             f"--workpath={BUILD}",
             "--add-data", f"config{os.sep}secrets.enc{os.pathsep}config",
+            "--add-data", f"client{os.sep}web{os.pathsep}client{os.sep}web",
             "--hidden-import", "aiohttp",
             "--hidden-import", "loguru",
             "--hidden-import", "livingtree.config.secrets",

@@ -1,32 +1,197 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card" x-data="{ sending: false, message: '' }">
+<div class="card" x-data="{ sending: false, message: '', mode: 'stream', chatLog: [] }">
   <h2>💬 与小树对话</h2>
-  <div id="chat-log">
+
+  <!-- Mode selector -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button @click="mode='stream'" :class="{ active: mode === 'stream' }"
+            style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+      ⚡ 流式 Markdown</button>
+    <button @click="mode='chat'" :class="{ active: mode === 'chat' }"
+            style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+      💬 快速对话</button>
+    <button @click="mode='ui'" :class="{ active: mode === 'ui' }"
+            style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+      🎨 生成式UI</button>
+    <button @click="mode='form'" :class="{ active: mode === 'form' }"
+            style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+      📋 动态表单</button>
+  </div>
+
+  <!-- Chat log area -->
+  <div id="chat-log" style="max-height:50vh;overflow-y:auto;margin-bottom:12px"
+       x-ref="chatLog">
     <div class="msg assistant">
       <div class="who">小树 🌳</div>
-      <div class="text">你好，我是生命之树。你可以叫我小树。我能帮你做什么？</div>
+      <div class="text">你好，我是生命之树。选一种模式开始对话：<br>
+      ⚡ <b>流式Markdown</b> — 实时渲染富文本回复<br>
+      💬 <b>快速对话</b> — 即时HTML片段回复<br>
+      🎨 <b>生成式UI</b> — LLM创建交互面板<br>
+      📋 <b>动态表单</b> — 智能表单生成</div>
     </div>
   </div>
-  <form hx-post="/tree/chat/msg" hx-target="#chat-log" hx-swap="beforeend"
-        @submit="sending = true" 
-        hx-on::after-request="message = ''; sending = false">
-    <textarea name="message" rows="3" placeholder="告诉小树你想做什么..." 
-              x-model="message"
-              @keydown.ctrl.enter="$el.form.requestSubmit()"></textarea>
-    <div style="display:flex;align-items:center;margin-top:8px;gap:8px">
-      <button type="submit" :disabled="sending || !message.trim()"
-              :class="sending ? 'sending' : ''">
-        <span x-show="!sending">发送</span>
-        <span x-show="sending">小树思考中...</span>
-      </button>
-      <span style="font-size:11px;color:var(--dim)" x-text="message.length + '/4000'"></span>
+
+  <!-- SSE streaming indicator (for markdown mode) -->
+  <div id="stream-result" style="display:none"></div>
+
+  <!-- Quick chat form (mode=chat) -->
+  <div x-show="mode === 'chat'">
+    <form hx-post="/tree/chat/msg" hx-target="#chat-log" hx-swap="beforeend"
+          @submit="sending = true"
+          hx-on::after-request="message = ''; sending = false">
+      <textarea name="message" rows="3" placeholder="告诉小树你想做什么..."
+                x-model="message"
+                @keydown.ctrl.enter="$el.form.requestSubmit()"></textarea>
+      <div style="display:flex;align-items:center;margin-top:8px;gap:8px">
+        <button type="submit" :disabled="sending || !message.trim()"
+                :class="sending ? 'sending' : ''">
+          <span x-show="!sending">发送</span>
+          <span x-show="sending">小树思考中...</span>
+        </button>
+        <span style="font-size:11px;color:var(--dim)" x-text="message.length + '/4000'"></span>
+      </div>
+    </form>
+  </div>
+
+  <!-- SSE Markdown stream (mode=stream) -->
+  <div x-show="mode === 'stream'" id="stream-input-area">
+    <div style="display:flex;gap:8px">
+      <textarea x-model="message" rows="3" placeholder="输入问题，实时流式渲染Markdown..."
+                @keydown.ctrl.enter="startStream()"
+                style="flex:1"></textarea>
     </div>
-  </form>
+    <div style="display:flex;align-items:center;margin-top:8px;gap:8px">
+      <button @click="startStream()" :disabled="sending || !message.trim()"
+              :class="sending ? 'sending' : ''">
+        <span x-show="!sending">⚡ 流式发送</span>
+        <span x-show="sending">流式生成中...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Generative UI mode -->
+  <div x-show="mode === 'ui'" id="ui-input-area">
+    <div style="display:flex;gap:8px">
+      <textarea x-model="message" rows="2" placeholder="描述你想要的UI组件，如: 创建一个实时系统监控面板..."
+                style="flex:1"></textarea>
+      <button @click="generateUI()" :disabled="!message.trim()"
+              style="font-size:12px;padding:8px 12px;align-self:flex-end">🎨 生成</button>
+    </div>
+    <div id="ui-result" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Dynamic form mode -->
+  <div x-show="mode === 'form'" id="form-input-area">
+    <div style="display:flex;gap:8px">
+      <textarea x-model="message" rows="2" placeholder="描述任务目标，如: 申请环境评估报告..."
+                style="flex:1"></textarea>
+      <button @click="generateForm()" :disabled="!message.trim()"
+              style="font-size:12px;padding:8px 12px;align-self:flex-end">📋 生成表单</button>
+    </div>
+    <div id="form-result" style="margin-top:12px"></div>
+  </div>
+
+  <!-- CoT panel -->
+  <div id="cot-panel" style="margin-top:16px;display:none">
+    <div class="card">
+      <h2>🧠 思维链推理树</h2>
+      <div id="cot-tree" sse-connect="/tree/sse/cot">
+        <div style="color:var(--dim);font-size:12px">点击问题下的"思考过程"按钮启动...</div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<script>
+function startStream() {
+  if (!this.message || !this.message.trim()) return;
+  this.sending = true;
+  const msg = this.message;
+  const log = document.getElementById('chat-log');
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerHTML = '<div class="who">你</div><div class="text">' + msg + '</div>';
+  log.appendChild(userDiv);
+
+  const asstDiv = document.createElement('div');
+  asstDiv.className = 'msg assistant stream-result';
+  asstDiv.innerHTML = '<div class="who">小树 🌳 · 流式</div><div class="text stream-content" style="line-height:1.55"></div>';
+  log.appendChild(asstDiv);
+  log.scrollTop = log.scrollHeight;
+
+  const contentEl = asstDiv.querySelector('.stream-content');
+  const evtSource = new EventSource('/tree/sse/chat?msg=' + encodeURIComponent(msg));
+  evtSource.onmessage = function(e) {
+    if (e.data === '[DONE]') {
+      evtSource.close();
+      this.sending = false;
+      this.message = '';
+      return;
+    }
+    try {
+      const data = JSON.parse(e.data);
+      if (data.html) {
+        contentEl.innerHTML = data.html;
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch(err) {}
+  }.bind(this);
+  evtSource.onerror = function() {
+    evtSource.close();
+    this.sending = false;
+  }.bind(this);
+}
+
+function generateUI() {
+  if (!this.message || !this.message.trim()) return;
+  const result = document.getElementById('ui-result');
+  result.innerHTML = '<div style="color:var(--accent);font-size:12px">🎨 生成中...</div>';
+
+  const evtSource = new EventSource('/tree/sse/ui?prompt=' + encodeURIComponent(this.message));
+  evtSource.addEventListener('ui-card', function(e) {
+    const data = JSON.parse(e.data);
+    result.innerHTML = data.html;
+    evtSource.close();
+    this.message = '';
+  }.bind(this));
+  evtSource.addEventListener('ui-error', function(e) {
+    result.innerHTML = '<div style="color:var(--err)">生成失败</div>';
+    evtSource.close();
+  });
+}
+
+function generateForm() {
+  if (!this.message || !this.message.trim()) return;
+  const result = document.getElementById('form-result');
+  result.innerHTML = '<div style="color:var(--accent);font-size:12px">📋 分析任务中...</div>';
+
+  fetch('/tree/form/generate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({goal: this.message}),
+  })
+  .then(r => r.text())
+  .then(html => { result.innerHTML = html; this.message = ''; })
+  .catch(e => { result.innerHTML = '<div style="color:var(--err)">生成失败: ' + e + '</div>'; });
+}
+</script>
 
 <style>
 button.sending { opacity: 0.5; cursor: wait; }
 .good { color: #6c8; } .warn { color: #e8a030; }
+button.active { background: var(--accent) !important; color: var(--bg) !important; }
+.msg.user .who { color: #6af; }
+.msg.user .text { color: #aac; }
+.stream-content h1, .stream-content h2, .stream-content h3 { color: var(--accent); margin: 0.6em 0 0.3em; }
+.stream-content p { margin: 0.4em 0; line-height: 1.55; }
+.stream-content code { background: rgba(100,150,100,0.1); padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em; }
+.stream-content pre { background: rgba(100,150,100,0.06); padding: 0.8em; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+.stream-content blockquote { border-left: 2px solid var(--accent); padding: 0.3em 0.8em; margin: 0.5em 0; color: var(--dim); }
+.stream-content table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.stream-content td, .stream-content th { padding: 0.3em 0.6em; border-bottom: 1px solid var(--border); }
+.stream-content ul, .stream-content ol { padding-left: 1.5em; margin: 0.4em 0; }
+.stream-content hr { border: 0; border-top: 1px solid var(--border); margin: 0.8em 0; }
+.cot-node:hover { border-left-color: #6af !important; }
 </style>
 {% endblock %}

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.ico">
+<title>生命之树 · Living Canvas</title>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<script src="/js/localfs.js"></script>
+<link id="theme-css" rel="stylesheet" href="/tree/theme/dark">
+<style>
+body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+/* Layout overrides — tokens come from theme CSS */
+</style>
+:root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--accent:#6c8;--warn:#e8a030;--err:#e05050;--dim:#667}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:13px/1.5 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+header h1{font-size:15px;color:var(--accent)}
+header .lc-status{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:8px}
+header .lc-pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:lc-pulse 2s infinite}
+@keyframes lc-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+header sse-swap="xiaoshu" hx-swap="textContent"
+       style="font-size:10px;color:var(--accent);max-width:300px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></header>
+
+/* ── Input Bar ── */
+.lc-input-bar{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:8px;flex-shrink:0}
+.lc-input-bar input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;outline:none}
+.lc-input-bar input:focus{border-color:var(--accent)}
+.lc-input-bar button{background:var(--accent);color:var(--bg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;white-space:nowrap}
+.lc-input-bar button:hover{opacity:.85}
+.lc-input-bar .lc-mode-hint{font-size:10px;color:var(--dim);align-self:center;white-space:nowrap}
+
+/* ── Mode selector pills ── */
+.lc-mode-row{background:var(--bg);padding:4px 16px;display:flex;gap:4px;flex-shrink:0;border-bottom:1px solid var(--border);overflow-x:auto}
+.lc-mode-pill{font-size:10px;padding:3px 10px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--dim);cursor:pointer;white-space:nowrap;transition:all .2s}
+.lc-mode-pill:hover{color:var(--text);border-color:var(--accent)}
+.lc-mode-pill.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+
+/* ── Living Canvas Grid ── */
+.lc-canvas{flex:1;overflow-y:auto;padding:8px;display:grid;gap:8px;grid-template-columns:1fr;grid-auto-rows:minmax(120px,auto)}
+.lc-canvas.cols-2{grid-template-columns:1fr 1fr}
+.lc-canvas.cols-3{grid-template-columns:1fr 1fr 1fr}
+
+/* ── Region (card) ── */
+.lc-region{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color .3s,opacity .3s;min-height:120px}
+.lc-region:hover{border-color:rgba(100,150,100,.3)}
+.lc-region.lc-chat{border-left:2px solid var(--accent)}
+.lc-region.lc-think{border-left:2px solid #6af}
+.lc-region.lc-plan{border-left:2px solid #fa6}
+.lc-region.lc-execute{border-left:2px solid #f6a}
+.lc-region.lc-health{border-left:2px solid var(--accent)}
+.lc-region.lc-knowledge{border-left:2px solid #6af}
+.lc-region.lc-insight{border-left:2px solid #ff6}
+.lc-region.lc-metrics{border-left:2px solid #6cf}
+.lc-region.lc-tools{border-left:2px solid #fa6}
+.lc-region.lc-memory{border-left:2px solid #c6f}
+.lc-region-inner{display:flex;flex-direction:column;height:100%}
+.lc-region-header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--accent);flex-shrink:0}
+.lc-region-body{flex:1;padding:8px 10px;overflow-y:auto;font-size:12px}
+.lc-region-actions{display:flex;gap:2px}
+.lc-btn-icon{background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;line-height:1}
+.lc-btn-icon:hover{color:var(--text);background:var(--border)}
+.lc-loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:12px;gap:6px}
+.lc-loading::before{content:"";width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:lc-spin .6s linear infinite}
+@keyframes lc-spin{to{transform:rotate(360deg)}}
+
+/* ── Chat messages inside region ── */
+.lc-region .msg{margin-bottom:8px}
+.lc-region .msg .who{font-size:11px;color:var(--accent);margin-bottom:1px}
+.lc-region .msg .text{font-size:12px;line-height:1.5;word-break:break-word}
+.lc-region .msg .msg-meta{font-size:9px;color:var(--dim)}
+
+/* ── Knowledge tags ── */
+.lc-kg-tag{font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(100,150,180,.1);color:var(--accent);cursor:pointer;transition:all .2s}
+.lc-kg-tag:hover{background:rgba(100,150,180,.2)}
+
+/* ── Tool buttons ── */
+.lc-tool-btn{font-size:10px;padding:4px 8px;border-radius:4px;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .2s}
+.lc-tool-btn:hover{color:var(--text);border-color:var(--accent)}
+
+/* ── Footer ── */
+footer{background:var(--panel);border-top:1px solid var(--border);padding:4px 16px;font-size:10px;color:var(--dim);text-align:center;flex-shrink:0}
+
+/* ── Transitions ── */
+.lc-region.htmx-swapping{opacity:0}
+.lc-region.htmx-added{opacity:0;animation:lc-fadein .3s forwards}
+@keyframes lc-fadein{to{opacity:1}}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ── Alpine active state for pills ── */
+.lc-mode-pill[data-active]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+
+/* ── SSE indicator ── */
+.htmx-indicator{opacity:0;transition:opacity .2s}
+.htmx-request .htmx-indicator{opacity:1}
+
+/* ── Streaming content ── */
+.stream-content h1,.stream-content h2,.stream-content h3{color:var(--accent);margin:.5em 0 .2em;font-size:1.1em}
+.stream-content p{margin:.3em 0;line-height:1.5}
+.stream-content code{background:rgba(100,150,100,.1);padding:.1em .3em;border-radius:3px;font-size:.9em}
+.stream-content pre{background:rgba(100,150,100,.06);padding:.6em;border-radius:4px;overflow-x:auto;font-size:.8em}
+.stream-content blockquote{border-left:2px solid var(--accent);padding:.2em .6em;margin:.3em 0;color:var(--dim)}
+.stream-content ul,.stream-content ol{padding-left:1.5em;margin:.3em 0}
+.stream-content table{width:100%;border-collapse:collapse;font-size:.8em}
+.stream-content td,.stream-content th{padding:.2em .5em;border-bottom:1px solid var(--border)}
+</style>
+</head>
+<body hx-ext="sse">
+
+<!-- Header -->
+<header>
+  <h1>🌳 生命之树 · 小树</h1>
+  <div class="lc-status">
+    <span class="lc-pulse" id="lc-pulse"></span>
+    <span sse-swap="xiaoshu" hx-swap="textContent">🌱 等待连接...</span>
+    <select onchange="switchTheme(this.value)" style="background:var(--panel);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;font-size:10px;margin-left:8px">
+      <option value="dark">🌙 暗色</option>
+      <option value="light">☀ 亮色</option>
+      <option value="kami">📜 Kami</option>
+    </select>
+    <button id="pwa-install-btn" onclick="pwaInstall()" style="display:none;background:var(--accent);color:var(--bg);border:none;padding:3px 10px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:8px">📲 安装应用</button>
+    <button id="fullscreen-btn" onclick="toggleFullscreen()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px">⛶</button>
+    <button id="notify-btn" onclick="requestNotification()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px">🔔</button>
+    <button id="admin-toggle-btn" onclick="toggleAdmin()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px" title="管理面板">⚙</button>
+  </div>
+</header>
+
+<!-- Living Presence Layer (breathing + weather + particles) -->
+<div id="living-layer" hx-get="/tree/presence/living-layer" hx-trigger="load" hx-swap="innerHTML"></div>
+
+<!-- Anime Persona (floating character) -->
+<div id="xiaoshu-persona" hx-get="/tree/persona" hx-trigger="load" hx-swap="innerHTML"
+     style="position:fixed;bottom:16px;right:16px;z-index:100;pointer-events:none">
+  <div style="font-size:40px;opacity:0.3">🌱</div>
+</div>
+
+<!-- Mode selector pills -->
+<div class="lc-mode-row" id="lc-mode-row"
+     hx-get="/tree/living/mode-pills" hx-trigger="load" hx-swap="innerHTML">
+  <span class="lc-mode-pill active">专注</span>
+  <span class="lc-mode-pill">分屏</span>
+  <span class="lc-mode-pill">三栏</span>
+  <span class="lc-mode-pill">仪表盘</span>
+  <span class="lc-mode-pill">探索</span>
+  <span class="lc-mode-pill">工作区</span>
+  <span class="lc-mode-pill" onclick="startCognition()" id="pill-cognition" style="border-color:#6af">🧠 认知流</span>
+</div>
+
+<!-- Input bar -->
+<div class="lc-input-bar" x-data="{ msg: '', sending: false, currentMode: 'split', isAdmin: false }"
+     x-init="fetch('/api/admin/status').then(r=>r.json()).then(d=>{isAdmin=d.initialized}).catch(()=>{})">
+  <input type="text" x-model="msg" placeholder="告诉小树你想做什么..."
+         @input="debounceEcho(msg)"
+         @keydown.enter="if(!sending && msg.trim()){
+           sending=true;
+           const encoded = encodeURIComponent(msg.trim());
+           document.getElementById('lc-canvas').innerHTML = '<div class=lc-loading>小树正在理解你的需求并生成页面...</div>';
+           fetch('/tree/dynamic?message=' + encoded).then(r => r.text()).then(html => {
+             document.getElementById('lc-canvas').innerHTML = html;
+             htmx.process(document.getElementById('lc-canvas'));
+           });
+           fetch('/tree/chat/msg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg.trim()})})
+             .then(r=>r.text()).then(html=>{
+               const log = document.getElementById('lc-chat-log');
+               if(log){const d=document.createElement('div');d.innerHTML=html;log.appendChild(d.firstElementChild);log.scrollTop=log.scrollHeight}
+               sending=false;msg='';
+             }).catch(()=>{sending=false});
+         }">
+  <button @click="if(!sending && msg.trim()){
+    sending=true;
+    const encoded = encodeURIComponent(msg.trim());
+    document.getElementById('lc-canvas').innerHTML = '<div class=lc-loading>小树正在生成页面...</div>';
+    fetch('/tree/dynamic?message=' + encoded).then(r => r.text()).then(html => {
+      document.getElementById('lc-canvas').innerHTML = html;htmx.process(document.getElementById('lc-canvas'));
+    });
+    fetch('/tree/chat/msg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg.trim()})})
+      .then(r=>r.text()).then(html=>{
+        const log=document.getElementById('lc-chat-log');
+        if(log){const d=document.createElement('div');d.innerHTML=html;log.appendChild(d.firstElementChild);log.scrollTop=log.scrollHeight}
+        sending=false;msg='';
+      }).catch(()=>{sending=false});
+  }">发送</button>
+  <span class="lc-mode-hint">Enter发送 · 布局自动适配</span>
+</div>
+
+<!-- Living Canvas -->
+<div class="lc-canvas cols-2" id="lc-canvas"
+     hx-get="/tree/dynamic" hx-trigger="load" hx-swap="innerHTML">
+  <div class="lc-loading" style="grid-column:1/-1;min-height:300px">🌳 小树正在生成页面...</div>
+</div>
+
+<!-- Cognition Stream Visualization -->
+<div id="cognition-panel" style="display:none;padding:8px">
+  <div style="text-align:center;margin-bottom:12px">
+    <div style="font-size:18px;color:var(--accent)">🧠 认知流 — 看 AI 如何思考</div>
+    <div style="font-size:11px;color:var(--dim)">意图 → 工具 → 记忆 → 技能 → 规划 → 协作 → 执行 → 反思</div>
+  </div>
+  <div id="cog-phases" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">
+  </div>
+  <div id="cog-stream-content" style="margin-top:12px"></div>
+  <button onclick="stopCognition()" style="display:block;margin:12px auto;font-size:12px;padding:6px 16px">返回画布</button>
+</div>
+
+<!-- Business Panels Toggle -->
+<div class="lc-mode-row" style="justify-content:center;gap:8px">
+  <span class="lc-mode-pill" onclick="toggleBizPanel('report')" id="biz-pill-report">📄 行业报告</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('task')" id="biz-pill-task">🔬 挂机任务</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('cost')" id="biz-pill-cost" data-admin="1">💰 费用节省</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('roi')" id="biz-pill-roi" data-admin="1">🧮 ROI计算</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('reach')" id="biz-pill-reach">📱 感官扩展</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('swarm')" id="biz-pill-swarm" data-admin="1">🕸️ 群体智能</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('resilience')" id="biz-pill-resilience" data-admin="1">🛡️ 韧性</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('growth')" id="biz-pill-growth" data-admin="1">🌟 北极星</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('shell')" id="biz-pill-shell">💻 Shell</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('im')" id="biz-pill-im">💬 IM</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('remote')" id="biz-pill-remote">🖥 远控</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('pairing')" id="biz-pill-pairing">🔗 配对</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('creative')" id="biz-pill-creative">🎨 创意</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('qa')" id="biz-pill-qa" data-admin="1">🧪 QA</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('collective')" id="biz-pill-collective" data-admin="1">🧠 CI</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('control')" id="biz-pill-control" data-admin="1">🛡️ 行为</span>
+  <span class="lc-mode-pill" onclick="toggleBizPanel('dpo')" id="biz-pill-dpo" data-admin="1">🎯 DPO</span>
+</div>
+
+<!-- Business Panels Container -->
+<div id="lc-biz-panels" style="padding:0 8px 8px" x-data="{ activeBiz: '' }">
+  <div id="biz-panel-report" style="display:none" 
+       hx-get="/tree/business/report/generate" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-task" style="display:none"
+       hx-get="/tree/business/task/status" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-cost" style="display:none"
+       hx-get="/tree/business/cost/savings" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-roi" style="display:none"
+       hx-get="/tree/business/roi" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-reach" style="display:none"
+       hx-get="/tree/reach/demo" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-swarm" style="display:none"
+       hx-get="/tree/swarm/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-resilience" style="display:none"
+       hx-get="/tree/resilience/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-growth" style="display:none"
+       hx-get="/tree/growth/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-shell" style="display:none"
+       hx-get="/tree/shell/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-im" style="display:none"
+       hx-get="/tree/im/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-remote" style="display:none"
+       hx-get="/tree/remote/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-pairing" style="display:none"
+       hx-get="/tree/pair/all-methods" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-creative" style="display:none">
+    <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+      <button onclick="loadCreative('timeline')" class="lc-mode-pill active" id="crea-tab-timeline">⏳ 记忆</button>
+      <button onclick="loadCreative('dream')" class="lc-mode-pill" id="crea-tab-dream">🌙 梦境</button>
+      <button onclick="loadCreative('swarm')" class="lc-mode-pill" id="crea-tab-swarm">🗺️ 群体</button>
+      <button onclick="loadCreative('emotion')" class="lc-mode-pill" id="crea-tab-emotion">💭 情绪</button>
+      <button onclick="loadCreative('twin')" class="lc-mode-pill" id="crea-tab-twin">🪞 孪生</button>
+      <button onclick="loadCreative('garden')" class="lc-mode-pill" id="crea-tab-garden">🌿 花园</button>
+    </div>
+    <div id="creative-content" hx-get="/tree/creative/timeline" hx-trigger="revealed" hx-swap="innerHTML"></div>
+  </div>
+  <div id="biz-panel-qa" style="display:none"
+       hx-get="/tree/qa/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-collective" style="display:none"
+       hx-get="/tree/collective/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-control" style="display:none"
+       hx-get="/tree/control/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+  <div id="biz-panel-dpo" style="display:none"
+       hx-get="/tree/dpo/panel" hx-trigger="revealed" hx-swap="innerHTML">
+  </div>
+</div>
+</div>
+
+<!-- Footer -->
+<footer>
+  生命之树 · LivingTree v5.0 | Living Canvas — 按需展现 · LLM驱动布局 · 零静态模块
+</footer>
+
+<!-- SSE heartbeat -->
+<div sse-connect="/tree/sse" style="display:none">
+  <div sse-swap="xiaoshu" hx-swap="none"></div>
+</div>
+
+<!-- SSE thought stream → header status -->
+<div sse-connect="/tree/sse/thoughts" style="display:none">
+  <div sse-swap="message" hx-swap="none"
+       hx-on::after-settle="document.querySelector('header .lc-status span:last-child').textContent = event.detail.xhr.responseText"></div>
+</div>
+
+<script>
+function switchMode(mode) {
+  document.querySelectorAll('.lc-mode-pill').forEach(p => p.classList.remove('active'));
+  const pills = document.querySelectorAll('.lc-mode-pill');
+  const modeMap = {0:'focus',1:'split',2:'triple',3:'dashboard',4:'explore',5:'workspace'};
+  const modeNames = ['专注','分屏','三栏','仪表盘','探索','工作区'];
+  const idx = modeNames.indexOf(mode) >= 0 ? modeNames.indexOf(mode) : 1;
+  if (pills[idx]) pills[idx].classList.add('active');
+
+  const canvas = document.getElementById('lc-canvas');
+  const cols = {focus:1,split:2,triple:3,dashboard:3,explore:2,workspace:3};
+  canvas.className = 'lc-canvas cols-' + (cols[mode] || 2);
+
+  canvas.innerHTML = '<div class="lc-loading" style="grid-column:1/-1;min-height:200px">切换布局...</div>';
+  fetch('/tree/living/switch-mode', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode: mode, context: ''}),
+  }).then(r => r.text()).then(html => {
+    canvas.innerHTML = html;
+    htmx.process(canvas);
+  });
+}
+
+var _activeBizPanel = '';
+function toggleBizPanel(panel) {
+  var panels = ['report','task','cost','roi','reach','swarm','resilience','growth','shell','im','remote','pairing','creative','qa','collective','control','dpo'];
+  var wasActive = _activeBizPanel === panel;
+
+  panels.forEach(function(p) {
+    var el = document.getElementById('biz-panel-' + p);
+    var pill = document.getElementById('biz-pill-' + p);
+    if (el) el.style.display = 'none';
+    if (pill) pill.classList.remove('active');
+  });
+
+  if (!wasActive) {
+    var el = document.getElementById('biz-panel-' + panel);
+    var pill = document.getElementById('biz-pill-' + panel);
+    if (el) {
+      el.style.display = 'block';
+      htmx.trigger(el, 'revealed');
+      if (panel === 'report' && !el.innerHTML.includes('form')) {
+        el.innerHTML = '<div class="card">' +
+          '<h2>📄 一键生成行业报告</h2>' +
+          '<p style="color:var(--dim);font-size:11px;margin-bottom:8px">选择报告类型，输入项目数据，自动生成专业报告</p>' +
+          '<form onsubmit="event.preventDefault();generateReport(this)">' +
+          '<select name="template_type" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">' +
+          '<option value="环评报告">🌍 环评报告 (EIA)</option>' +
+          '<option value="应急预案">🚨 应急预案</option>' +
+          '<option value="验收报告">✅ 验收报告</option>' +
+          '<option value="可行性研究">📊 可行性研究</option>' +
+          '</select>' +
+          '<input name="project_name" placeholder="项目名称" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">' +
+          '<textarea name="raw_text" rows="4" placeholder="输入项目关键数据和背景信息..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:12px;resize:vertical"></textarea>' +
+          '<button type="submit" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">📄 生成报告</button>' +
+          '</form></div>';
+      }
+      if (panel === 'task' && !el.innerHTML.includes('form')) {
+        el.innerHTML = '<div class="card">' +
+          '<h2>🔬 挂机长任务</h2>' +
+          '<p style="color:var(--dim);font-size:11px;margin-bottom:8px">输入任务目标，小树通宵为你工作，早上看结果</p>' +
+          '<form onsubmit="event.preventDefault();startTask(this)">' +
+          '<textarea name="goal" rows="3" placeholder="例如: 收集2024年AI行业融资数据并汇总成报告..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:12px;resize:vertical"></textarea>' +
+          '<button type="submit" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">🔬 启动挂机任务</button>' +
+          '</form></div>';
+      }
+    }
+    if (pill) pill.classList.add('active');
+    _activeBizPanel = panel;
+  } else {
+    _activeBizPanel = '';
+  }
+}
+
+function generateReport(form) {
+  var fd = new FormData(form);
+  var panel = document.getElementById('biz-panel-report');
+  panel.innerHTML = '<div class="card"><div class="lc-loading">小树正在生成报告...</div></div>';
+  fetch('/tree/business/report/generate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(Object.fromEntries(fd)),
+  }).then(r => r.text()).then(html => { panel.innerHTML = html; });
+}
+
+function startTask(form) {
+  var fd = new FormData(form);
+  var panel = document.getElementById('biz-panel-task');
+  panel.innerHTML = '<div class="card"><div class="lc-loading">小树正在规划任务...</div></div>';
+  fetch('/tree/business/task/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(Object.fromEntries(fd)),
+  }).then(r => r.text()).then(html => { panel.innerHTML = html; });
+}
+
+function distributeSwarmTask(form) {
+  var fd = new FormData(form);
+  var result = document.getElementById('swarm-result');
+  result.innerHTML = '<div style="color:var(--accent);font-size:12px">⚡ 正在向群体节点分发任务...</div>';
+  fetch('/api/swarm/status').then(r => r.json()).then(st => {
+    var endpoints = (st.peers || []).map(function(p) { return p.endpoint; });
+    if (!endpoints.length) { result.innerHTML = '<div style="color:var(--warn)">无可用节点</div>'; return; }
+    fetch('/api/swarm/task/distribute', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({goal: fd.get('goal'), peers: endpoints}),
+    }).then(r => r.json()).then(data => {
+      result.innerHTML = '<div style="font-size:11px;color:var(--accent)">' +
+        '✅ 分发完成: ' + data.completed + '/' + data.total_subtasks + ' 个子任务</div>';
+    });
+  });
+}
+
+// ── Cognition Stream ──
+var _cogEventSource = null;
+var _cogPhases = {};
+
+function startCognition() {
+  var msg = document.querySelector('.lc-input-bar input').value.trim();
+  if (!msg) { msg = prompt('输入你想做的事，观察 AI 的完整思考过程:'); }
+  if (!msg) return;
+
+  document.getElementById('lc-canvas').style.display = 'none';
+  var panel = document.getElementById('cognition-panel');
+  panel.style.display = 'block';
+  document.getElementById('cog-phases').innerHTML = '';
+  document.getElementById('cog-stream-content').innerHTML = '';
+  document.getElementById('pill-cognition').classList.add('active');
+  _cogPhases = {};
+
+  _cogEventSource = new EventSource('/tree/sse/cognition?message=' + encodeURIComponent(msg));
+
+  _cogEventSource.addEventListener('phase', function(e) {
+    var d = JSON.parse(e.data);
+    var phaseId = d.phase;
+    if (!_cogPhases[phaseId]) {
+      _cogPhases[phaseId] = d;
+      renderPhaseCard(phaseId, d);
+    } else {
+      _cogPhases[phaseId] = d;
+      updatePhaseCard(phaseId, d);
+    }
+  });
+
+  _cogEventSource.addEventListener('cog-complete', function(e) {
+    var d = JSON.parse(e.data);
+    document.getElementById('cog-stream-content').innerHTML =
+      '<div class="card" style="text-align:center;border:1px solid var(--accent)">' +
+      '<h2>✅ 认知流完成</h2>' +
+      '<p style="font-size:11px;color:var(--dim)">意图: ' + (d.intent || 'general') +
+      ' · 成功率: ' + ((d.success_rate || 0) * 100).toFixed(0) + '%</p>' +
+      '<p style="font-size:10px;color:var(--dim)">' + (d.session_id || '') + '</p></div>';
+    closeCogSource();
+  });
+
+  _cogEventSource.addEventListener('cog-error', function(e) {
+    document.getElementById('cog-stream-content').innerHTML =
+      '<div class="card" style="color:var(--err)"><p>认知流出错</p></div>';
+    closeCogSource();
+  });
+
+  _cogEventSource.onerror = function() { closeCogSource(); };
+}
+
+function closeCogSource() {
+  if (_cogEventSource) { _cogEventSource.close(); _cogEventSource = null; }
+}
+
+function stopCognition() {
+  closeCogSource();
+  document.getElementById('cognition-panel').style.display = 'none';
+  document.getElementById('lc-canvas').style.display = '';
+  document.getElementById('pill-cognition').classList.remove('active');
+}
+
+var _phaseIcons = {
+  intent: '🧠', tools: '🔧', memory: '🧩', skills: '🎯',
+  planning: '📋', agents: '👥', execution: '⚡', reflection: '🪞', quality: '✅'
+};
+
+function renderPhaseCard(phaseId, d) {
+  var icon = d.icon || _phaseIcons[phaseId] || '🔄';
+  var statusColor = d.status === 'done' ? 'var(--accent)' : 'var(--warn)';
+  var statusIcon = d.status === 'done' ? '✅' : d.status === 'running' ? '🔄' : '⏳';
+
+  var detailHtml = '';
+  if (phaseId === 'intent' && d.intent) {
+    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px">' +
+      d.intent + (d.domain ? ' · ' + d.domain : '') +
+      (d.confidence ? ' · ' + (d.confidence*100).toFixed(0) + '%' : '') + '</div>';
+  } else if (phaseId === 'tools' && d.tools) {
+    detailHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">' +
+      (d.tools || []).map(function(t) {
+        return '<span style="font-size:10px;padding:2px 6px;background:rgba(100,150,180,.1);border-radius:8px;color:var(--accent)">' + t.name + '</span>';
+      }).join('') + '</div>';
+  } else if (phaseId === 'memory' && d.entries > 0) {
+    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px">召回 ' + d.entries + ' 条记忆</div>';
+  } else if (phaseId === 'skills' && d.skills) {
+    detailHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">' +
+      (d.skills || []).slice(0,6).map(function(s) {
+        return '<span style="font-size:10px;padding:2px 6px;background:rgba(150,150,100,.1);border-radius:8px;color:#fa6">' + s + '</span>';
+      }).join('') + '</div>';
+  } else if (phaseId === 'planning' && d.steps) {
+    detailHtml = '<div style="margin-top:4px;font-size:10px;line-height:1.5">' +
+      (d.steps || []).map(function(s, i) {
+        return '<div style="padding:2px 0">' + s.num + '. ' + s.name + '</div>';
+      }).join('') + '</div>';
+  } else if (phaseId === 'agents' && d.roles_active) {
+    detailHtml = '<div style="font-size:10px;color:var(--accent);margin-top:4px">' + d.roles_active + ' 个专家角色协作中</div>';
+  } else if (phaseId === 'execution' && d.result) {
+    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px;max-height:80px;overflow-y:auto">' + (d.result || '').substring(0, 200) + '</div>';
+  } else if (phaseId === 'reflection' && d.reflections) {
+    detailHtml = '<div style="margin-top:4px;font-size:10px;line-height:1.4;color:var(--dim)">' +
+      (d.reflections || []).map(function(r) { return '<div style="margin:2px 0">💭 ' + r.substring(0, 120) + '</div>'; }).join('') + '</div>';
+  }
+
+  var card = document.createElement('div');
+  card.id = 'cog-card-' + phaseId;
+  card.className = 'card';
+  card.style.cssText = 'border-left:3px solid ' + statusColor + ';animation:lc-fadein .3s;min-width:250px';
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+    '<span style="font-size:20px">' + icon + '</span>' +
+    '<span style="font-size:13px;font-weight:600;color:var(--text)">' + (d.label || phaseId) + '</span>' +
+    '<span style="margin-left:auto;font-size:11px">' + statusIcon + '</span>' +
+    '</div>' + detailHtml;
+
+  document.getElementById('cog-phases').appendChild(card);
+}
+
+function updatePhaseCard(phaseId, d) {
+  var card = document.getElementById('cog-card-' + phaseId);
+  if (!card) return;
+  var statusColor = d.status === 'done' ? 'var(--accent)' : 'var(--warn)';
+  var statusIcon = d.status === 'done' ? '✅' : d.status === 'running' ? '🔄' : '⏳';
+  card.style.borderLeftColor = statusColor;
+  var statusSpan = card.querySelector('span:last-child');
+  if (statusSpan && statusSpan.textContent !== statusIcon) statusSpan.textContent = statusIcon;
+}
+
+document.querySelectorAll('.lc-mode-pill').forEach((pill, i) => {
+  const modes = ['focus','split','triple','dashboard','explore','workspace'];
+  pill.addEventListener('click', () => switchMode(modes[i]));
+});
+
+function switchTheme(name) {
+  document.getElementById('theme-css').href = '/tree/theme/' + name;
+  localStorage.setItem('lt-theme', name);
+}
+(function() {
+  var saved = localStorage.getItem('lt-theme') || 'dark';
+  document.getElementById('theme-css').href = '/tree/theme/' + saved;
+  var sel = document.querySelector('header select');
+  if (sel) sel.value = saved;
+})();
+
+function execShell() {
+  var cmd = document.getElementById('shell-cmd').value.trim();
+  if (!cmd) return;
+  var out = document.getElementById('shell-output');
+  out.innerHTML = '<div style="color:var(--accent);font-size:12px">▶ ' + cmd.substring(0, 60) + '...</div>';
+  fetch('/tree/shell/exec', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({command: cmd, mount: localStorage.getItem('lt-mount') || ''}),
+  }).then(r => r.text()).then(html => { out.innerHTML = html; });
+}
+
+function quickExec(cmd) {
+  document.getElementById('shell-cmd').value = cmd;
+  execShell();
+}
+
+function mountFolder() {
+  var path = document.getElementById('shell-mount-path').value.trim();
+  if (!path) return;
+  var name = path.replace(/\\/g, '/').split('/').pop();
+  fetch('/tree/shell/mount', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path: path, name: name}),
+  }).then(r => r.text()).then(html => {
+    document.getElementById('mount-result').innerHTML = html;
+    localStorage.setItem('lt-mount', name);
+  });
+}
+
+/* ═══ Interactive Tool Canvas ═══ */
+var _drawStates={};
+function initDrawCanvas(id){var c=document.getElementById(id);if(!c)return;var ctx=c.getContext('2d');_drawStates[id]={ctx:ctx,drawing:false,color:'#000',width:2};c.onmousedown=function(e){_drawStates[id].drawing=true;_draw(e,id)};c.onmouseup=c.onmouseleave=function(){_drawStates[id].drawing=false;_drawStates[id].ctx.beginPath()};c.onmousemove=function(e){_draw(e,id)};c.ontouchstart=function(e){e.preventDefault();_drawStates[id].drawing=true;_drawTouch(e,id)};c.ontouchmove=function(e){e.preventDefault();_drawTouch(e,id)};c.ontouchend=function(){_drawStates[id].drawing=false}}
+function _draw(e,id){var s=_drawStates[id];if(!s||!s.drawing)return;var r=s.ctx.canvas.getBoundingClientRect();s.ctx.lineWidth=s.width;s.ctx.lineCap='round';s.ctx.strokeStyle=s.color;s.ctx.lineTo(e.clientX-r.left,e.clientY-r.top);s.ctx.stroke();s.ctx.beginPath();s.ctx.moveTo(e.clientX-r.left,e.clientY-r.top)}
+function _drawTouch(e,id){var s=_drawStates[id];if(!s||!s.drawing)return;var r=s.ctx.canvas.getBoundingClientRect();var t=e.touches[0];s.ctx.lineWidth=s.width;s.ctx.lineCap='round';s.ctx.strokeStyle=s.color;s.ctx.lineTo(t.clientX-r.left,t.clientY-r.top);s.ctx.stroke();s.ctx.beginPath();s.ctx.moveTo(t.clientX-r.left,t.clientY-r.top)}
+function setDrawColor(id,c){if(_drawStates[id])_drawStates[id].color=c}
+function setDrawWidth(id,w){if(_drawStates[id])_drawStates[id].width=w}
+function clearCanvas(id){var c=document.getElementById(id);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height)}
+function runCalc(id){var e=document.getElementById('calc-expr-'+id).value,r=document.getElementById('calc-result-'+id),h=document.getElementById('calc-history-'+id);try{var s=e.replace(/sqrt\(/g,'Math.sqrt(').replace(/\^/g,'**');var v=eval(s);r.textContent=e+' = '+v;h.textContent+=e+' = '+v+'\n'}catch(err){r.textContent='错误: '+err.message}}
+function insertCalc(id,op){var e=document.getElementById('calc-expr-'+id);e.value+=op;e.focus()}
+function runCode(id){var c=document.getElementById('code-editor-'+id).value,l=document.getElementById('code-lang-'+id).value,o=document.getElementById('code-output-'+id);o.style.display='block';o.textContent='运行中...';fetch('/tree/shell/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:l==='python'?'python -c '+JSON.stringify(c):l==='bash'?c:'node -e '+JSON.stringify(c)})}).then(r=>r.text()).then(h=>{var t=document.createElement('div');t.innerHTML=h;var p=t.querySelector('pre');o.textContent=p?p.textContent:'完成'})}
+function collectFormData(id){var d={};var c=document.getElementById(id);if(c){c.querySelectorAll('input,select,textarea').forEach(function(e){if(e.name)d[e.name]=e.value})}return d}
+function collectTableData(id){var r=[];var c=document.getElementById('tool-'+id);if(c){c.querySelectorAll('tr').forEach(function(t){var cells=[];t.querySelectorAll('input').forEach(function(i){cells.push(i.value)});if(cells.length)r.push(cells)})}submitToolResult(id,'table',{rows:r})}
+function submitToolResult(id,type,data){var c=document.getElementById('tool-'+id);fetch('/tree/tools/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offer_id:id,tool_type:type,result:data})}).then(r=>r.text()).then(h=>{var l=document.getElementById('lc-chat-log')||document.getElementById('chat-log');if(l){var d=document.createElement('div');d.innerHTML=h;l.appendChild(d.firstElementChild);l.scrollTop=l.scrollHeight}if(c){c.style.opacity='0.5';setTimeout(function(){if(c)c.remove()},2000)}})}
+
+/* ═══ Performance: Stream Render ═══ */
+var _streamRender={buffer:'',lastUpdate:0,throttleMs:100,targetEl:null,
+  init:function(id,ms){this.targetEl=document.getElementById(id);this.throttleMs=ms||100;this.buffer='';this.lastUpdate=0},
+  update:function(html,force){this.buffer=html;var n=Date.now();if(!force&&n-this.lastUpdate<this.throttleMs)return;if(this.targetEl){this.targetEl.innerHTML=this.buffer;this.targetEl.scrollTop=this.targetEl.scrollHeight}this.lastUpdate=n},
+  flush:function(){this.update(this.buffer,true)}
+};
+
+/* ═══ IM ═══ */
+var _imWs=null,_imUid='',_imName='';
+function imConnect(){_imUid=document.getElementById('im-user-id').value.trim();_imName=document.getElementById('im-user-name').value.trim()||_imUid;if(!_imUid)return;_imWs=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+location.host+'/ws/im?user_id='+encodeURIComponent(_imUid)+'&name='+encodeURIComponent(_imName));_imWs.onopen=function(){document.getElementById('im-status').innerHTML='<span style=color:var(--accent)>● 已连接 ('+_imUid+')</span>'};_imWs.onmessage=function(e){_imOnMsg(JSON.parse(e.data))};_imWs.onclose=function(){document.getElementById('im-status').innerHTML='<span style=color:var(--err)>● 断开</span>'}}
+function _imOnMsg(d){var l=document.getElementById('im-chat-log');if(!l)return;var t=d.type||'';if(t==='dm'||t==='group_msg'){l.innerHTML+='<div style=padding:2px_0><b style=color:var(--accent)>'+d.sender_name+'</b>: '+d.content+'</div>';l.scrollTop=l.scrollHeight}else if(t==='presence'){l.innerHTML+='<div style=font-size:10px;color:var(--dim)>'+d.sender_id+' '+d.content+'</div>';l.scrollTop=l.scrollHeight}else if(t==='history'){(d.messages||[]).forEach(function(m){l.innerHTML+='<div style=padding:2px_0><b style=color:var(--accent)>'+m.sender_name+'</b>: '+m.content+'</div>'});l.scrollTop=l.scrollHeight}else if(t==='contacts'){var c=d.contacts||[];var el=document.getElementById('im-contacts-list');el.innerHTML=c.map(function(x){return'<div style=padding:3px_0;display:flex;justify-content:space-between><span>'+x.name+' <span style=color:'+(x.status==='online'?'var(--accent)':'var(--dim)')+'>●</span></span><span style=font-size:10px;color:var(--dim)>'+x.user_id+'</span></div>'}).join('')}else if(t==='groups'){var gs=d.groups||[];document.getElementById('im-groups-list').innerHTML=gs.map(function(g){return'<div style=padding:3px_0;cursor:pointer;color:var(--accent)" onclick=document.getElementById("im-chat-group").value="'+g.group_id+'">📁 '+g.name+' ('+g.members.length+'人)</div>'}).join('')}else if(t==='nearby'){var ns=d.users||[];document.getElementById('im-nearby-list').innerHTML=ns.map(function(u){return'<div style=padding:3px_0;display:flex;justify-content:space-between><span>'+u.name+' ●</span><button onclick=document.getElementById("im-add-id").value="'+u.user_id+'";document.getElementById("im-add-name").value="'+u.name+'" style=font-size:9px;padding:1px_6px>+好友</button></div>'}).join('')||'<div style=color:var(--dim)>没有附近的人</div>'}else if(t==='meeting_created'){var m=d.meeting;document.getElementById('im-meeting-result').innerHTML='<div style=color:var(--accent)>✅ 会议创建: '+m.topic+'</div><div style=font-size:10px;color:var(--dim)>ID: '+m.meeting_id+' · '+m.participants.length+' 参与者</div>'+(m.agenda||[]).map(function(a,i){return'<div style=font-size:10px;padding:1px_0>'+(i+1)+'. '+a+'</div>'}).join('')}}
+function imSendMsg(){if(!_imWs)return;var to=document.getElementById('im-chat-to').value.trim();var gid=document.getElementById('im-chat-group').value.trim();var content=document.getElementById('im-chat-msg').value.trim();if(!content)return;_imWs.send(JSON.stringify(to?{type:'dm',to:to,content:content,sender_name:_imName}:{type:'group_msg',group_id:gid,content:content}));document.getElementById('im-chat-msg').value='';var l=document.getElementById('im-chat-log');l.innerHTML+='<div style=padding:2px_0><b>我</b>: '+content+'</div>';l.scrollTop=l.scrollHeight}
+function imAddContact(){var id=document.getElementById('im-add-id').value.trim();var name=document.getElementById('im-add-name').value.trim();if(!id||!_imWs)return;_imWs.send(JSON.stringify({type:'add_contact',contact_id:id,contact_name:name}));document.getElementById('im-contacts-list').innerHTML+='<div style=color:var(--accent)>✅ 已添加 '+name+'</div>'}
+function imCreateGroup(){var name=document.getElementById('im-group-name').value.trim();if(!name||!_imWs)return;_imWs.send(JSON.stringify({type:'create_group',name:name,members:[]}))}
+function imRefreshNearby(){if(_imWs)_imWs.send(JSON.stringify({type:'nearby'}))}
+function imCreateMeeting(){var topic=document.getElementById('im-mtg-topic').value.trim();var agents=document.getElementById('im-mtg-agents').value.trim();if(!topic||!_imWs)return;var ps=agents?agents.split(',').map(function(n,i){return{id:'ai_'+i,name:n.trim(),role:n.trim(),persona:'你是'+n.trim()+',参与会议讨论'}}):[{id:'ai_0',name:'分析师',role:'Analyst',persona:'分析核心事实和逻辑'},{id:'ai_1',name:'批判者',role:'Critic',persona:'识别弱点和风险'},{id:'ai_2',name:'综合者',role:'Synthesizer',persona:'综合多元观点'}];_imWs.send(JSON.stringify({type:'create_meeting',topic:topic,ai_participants:ps}))}
+function imSwitchTab(t){['chat','contacts','groups','nearby','meetings'].forEach(function(x){var e=document.getElementById('im-tab-'+x+'-content');var b=document.getElementById('im-tab-'+x);if(e)e.style.display=x===t?'block':'none';if(b)b.classList.toggle('active',x===t)});if(t==='contacts'&&_imWs)_imWs.send(JSON.stringify({type:'get_contacts'}));if(t==='groups'&&_imWs)_imWs.send(JSON.stringify({type:'get_groups'}));if(t==='nearby'&&_imWs)_imWs.send(JSON.stringify({type:'nearby'}))}
+function startAudioPairing(){var c=new(window.AudioContext||window.webkitAudioContext)();fetch('/api/pairing/audio').then(r=>r.json()).then(function(d){var o=c.createOscillator(),g=c.createGain();g.gain.value=0.3;o.connect(g);g.connect(c.destination);var t=c.currentTime;d.frequencies.forEach(function(f,i){o.frequency.setValueAtTime(f.freq,t+i*0.08)});o.start(t);o.stop(t+d.frequencies.length*0.08+0.1);document.getElementById('audio-pair-status').innerHTML='<span style=color:var(--accent)>🔊 超声波发射中...</span>'})}
+function pairLanDevice(id){fetch('/api/pairing/lan/'+id,{method:'POST'}).then(r=>r.json()).then(function(d){alert(d.ok?'已配对':'失败')})}
+
+/* ═══ PWA + Native Capabilities ═══ */
+var _pwaDeferredPrompt=null,_wakeLock=null,_badgeCount=0;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_pwaDeferredPrompt=e;document.getElementById('pwa-install-btn').style.display='inline-block'});
+function pwaInstall(){if(_pwaDeferredPrompt){_pwaDeferredPrompt.prompt();_pwaDeferredPrompt.userChoice.then(r=>{if(r.outcome==='accepted')document.getElementById('pwa-install-btn').style.display='none';_pwaDeferredPrompt=null})}}
+
+// Fullscreen
+function toggleFullscreen(){if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(()=>{});document.getElementById('fullscreen-btn').textContent='⛶'}else{document.exitFullscreen();document.getElementById('fullscreen-btn').textContent='⛶'}}
+document.addEventListener('fullscreenchange',()=>{document.getElementById('fullscreen-btn').textContent=document.fullscreenElement?'⛶':'⛶'});
+
+// Wake Lock (prevent screen sleep during shell/task execution)
+async function acquireWakeLock(){try{_wakeLock=await navigator.wakeLock.request('screen');document.getElementById('fullscreen-btn').textContent='⛶'}catch(e){}}
+function releaseWakeLock(){if(_wakeLock){_wakeLock.release().catch(()=>{});_wakeLock=null}}
+
+// Push Notifications
+async function requestNotification(){
+  if(!('Notification' in window))return;
+  var perm=await Notification.requestPermission();
+  if(perm!=='granted')return;
+  document.getElementById('notify-btn').textContent='🔔';
+  var reg=await navigator.serviceWorker.ready;
+  var vapidResp=await fetch('/api/push/vapid-key');
+  var vapid=await vapidResp.json();
+  var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(vapid.public_key)});
+  await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint,keys:{p256dh:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),auth:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))},user_id:localStorage.getItem('lt-user')||''})});
+}
+function notify(title,body,url){if(Notification.permission==='granted'){new Notification(title,{body:body,icon:'/assets/icon.svg',badge:'/assets/icon.svg',vibrate:[200,100,200],data:{url:url||'/tree/living'}})}}
+function urlB64ToUint8Array(b){var pad='='.repeat((4-b.length%4)%4);var raw=atob((b+pad).replace(/-/g,'+').replace(/_/g,'/'));return new Uint8Array([...raw].map(c=>c.charCodeAt(0)))}
+
+// Badge
+function setBadge(n){_badgeCount=n;if('setAppBadge' in navigator)navigator.setAppBadge(n).catch(()=>{});else if(navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'SET_BADGE',count:n})}
+function clearBadge(){_badgeCount=0;if('clearAppBadge' in navigator)navigator.clearAppBadge().catch(()=>{});else if(navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'CLEAR_BADGE'})}
+
+// Vibration
+function vibrate(ms){if('vibrate' in navigator)navigator.vibrate(ms||200)}
+
+// Screen Capture
+async function startScreenCapture(){try{var stream=await navigator.mediaDevices.getDisplayMedia({video:true});return stream}catch(e){return null}}
+function stopScreenCapture(stream){if(stream)stream.getTracks().forEach(t=>t.stop())}
+
+// Protocol Handler registration
+if('registerProtocolHandler' in navigator){try{navigator.registerProtocolHandler('web+lt','/tree/living?protocol=%s','小树')}catch(e){}}
+
+// Initialize notifications on load
+if('Notification' in window && Notification.permission==='granted'){document.getElementById('notify-btn').textContent='🔔'}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){})}
+
+var _isAdmin=false,_adminToken='';
+function toggleAdmin(){
+  if(_isAdmin){_isAdmin=false;updateAdminPills();document.getElementById('admin-toggle-btn').textContent='⚙';_adminToken='';return}
+  var p=prompt('管理员密码:');
+  if(!p)return;
+  fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})})
+  .then(r=>r.json()).then(d=>{
+    if(d.token){_isAdmin=true;_adminToken=d.token;updateAdminPills();document.getElementById('admin-toggle-btn').textContent='⚙'}
+    else{alert('密码错误')}
+  })
+}
+function updateAdminPills(){
+  document.querySelectorAll('[data-admin="1"]').forEach(function(el){el.style.display=_isAdmin?'':'none'})
+}
+// Hide admin pills by default
+updateAdminPills();
+
+function loadCreative(tab) {
+  ['timeline','dream','swarm','emotion','twin','garden'].forEach(function(t) {
+    var b = document.getElementById('crea-tab-'+t);
+    if (b) b.classList.toggle('active', t === tab);
+  });
+  var el = document.getElementById('creative-content');
+  el.innerHTML = '<div class="lc-loading" style="min-height:200px">加载中...</div>';
+  var url = tab === 'garden' ? '/tree/creative/garden' : '/tree/creative/' + tab;
+  fetch(url).then(r => r.text()).then(html => { el.innerHTML = html; });
+}
+</script>
+
+</body>
+</html>

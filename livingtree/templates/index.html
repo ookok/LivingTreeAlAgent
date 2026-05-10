@@ -14,12 +14,65 @@
       <button type="submit" style="margin-top:8px">发送</button>
     </form>
     <div id="quick-result" style="margin-top:12px"></div>
+    <!-- SSE streaming alternative -->
+    <div style="margin-top:8px;font-size:11px;color:var(--dim)">
+      试试 <span style="color:var(--accent);cursor:pointer"
+            onclick="quickStream()">⚡ 流式渲染</span>
+    </div>
+    <div id="quick-stream-result" style="margin-top:8px"></div>
   </div>
 </div>
+
+<!-- P2: Living self-healing dashboard -->
 <div class="card" style="margin-top:16px">
-  <h2>📋 最近系统事件</h2>
-  <div hx-get="/tree/health" hx-trigger="load, every 30s" hx-swap="innerHTML">
-    <div class="panel">加载中...</div>
+  <h2>🏥 系统健康 · 自愈诊断</h2>
+  <div id="health-panel" hx-get="/tree/health" hx-trigger="load, every 30s" hx-swap="innerHTML">
+    <div class="panel" style="color:var(--dim)">加载健康数据...</div>
   </div>
 </div>
+
+<!-- P4: Generative UI section -->
+<div id="gen-ui-section" style="margin-top:16px">
+  <div class="card">
+    <h2>🎨 生成式UI面板</h2>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button hx-get="/tree/sse/ui?prompt=创建实时系统监控面板" 
+              hx-target="#gen-ui-result" hx-swap="innerHTML"
+              hx-indicator="#gen-ui-loading"
+              style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+        📊 系统监控</button>
+      <button hx-get="/tree/sse/ui?prompt=创建知识图谱浏览面板"
+              hx-target="#gen-ui-result" hx-swap="innerHTML"
+              hx-indicator="#gen-ui-loading"
+              style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+        🧠 知识图谱</button>
+      <button hx-get="/tree/sse/ui?prompt=创建模型性能对比面板"
+              hx-target="#gen-ui-result" hx-swap="innerHTML"
+              hx-indicator="#gen-ui-loading"
+              style="font-size:12px;padding:6px 12px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">
+        🔬 模型对比</button>
+    </div>
+    <div id="gen-ui-loading" class="htmx-indicator" style="color:var(--accent);font-size:12px">小树正在生成UI...</div>
+    <div id="gen-ui-result"></div>
+  </div>
+</div>
+
+<script>
+function quickStream() {
+  const textarea = document.querySelector('#quick-result').previousElementSibling.querySelector('textarea');
+  const msg = textarea.value.trim();
+  if (!msg) return;
+  const result = document.getElementById('quick-stream-result');
+  result.innerHTML = '<div style="color:var(--accent);font-size:12px">⚡ 流式生成中...</div>';
+  const evtSource = new EventSource('/tree/sse/chat?msg=' + encodeURIComponent(msg));
+  evtSource.onmessage = function(e) {
+    if (e.data === '[DONE]') { evtSource.close(); return; }
+    try {
+      const data = JSON.parse(e.data);
+      if (data.html) result.innerHTML = data.html;
+    } catch(err) {}
+  };
+  evtSource.onerror = function() { evtSource.close(); };
+}
+</script>
 {% endblock %}

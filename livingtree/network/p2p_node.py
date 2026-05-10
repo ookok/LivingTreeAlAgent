@@ -20,7 +20,7 @@ import aiohttp
 from loguru import logger
 
 NODE_ID_FILE = Path(".livingtree/node_id.json")
-RELAY_URL = "http://www.mogoo.com.cn:8888"
+RELAY_URL = os.environ.get("LT_RELAY_URL", "http://www.mogoo.com.cn:8899")
 _relay_pool: list[str] = []
 _current_relay_index = 0
 HEARTBEAT_INTERVAL = 30

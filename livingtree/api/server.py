@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, RedirectResponse
 
 from .routes import setup_routes
 from .auth import setup_auth_routes
@@ -36,6 +36,7 @@ def create_app(hub=None, config=None) -> FastAPI:
 
     if hub:
         app.state.hub = hub
+        app.state.life = hub.world if hasattr(hub, "world") else hub
 
     setup_routes(app)
     setup_auth_routes(app)
@@ -52,6 +53,21 @@ def create_app(hub=None, config=None) -> FastAPI:
 
     # Static files: serve web frontend from client/web/
     web_root = Path(__file__).resolve().parent.parent.parent / "client" / "web"
+
+    # PWA manifest + SW (always served)
+    @app.get("/manifest.json")
+    async def serve_manifest():
+        mf = web_root / "manifest.json"
+        from fastapi.responses import Response
+        return Response(content=mf.read_bytes() if mf.exists() else b"{}", media_type="application/manifest+json")
+
+    @app.get("/sw.js")
+    async def serve_sw():
+        sw = web_root / "sw.js"
+        from fastapi.responses import Response
+        return Response(content=sw.read_bytes() if sw.exists() else b"", media_type="application/javascript",
+                       headers={"Service-Worker-Allowed": "/"})
+
     if web_root.exists():
         if (web_root / "assets").exists():
             app.mount("/assets", StaticFiles(directory=str(web_root / "assets")), name="assets")

@@ -1,0 +1,23 @@
+# LivingTree Relay Server Dockerfile
+# Build: docker build -f deploy/docker/Dockerfile.relay -t livingtree-relay .
+# Run:   docker run -p 8899:8899 -v $(pwd)/.livingtree:/app/.livingtree livingtree-relay
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt aiohttp loguru && pip install --no-cache-dir cryptography
+
+COPY relay_server.py .
+COPY livingtree/ livingtree/
+COPY config/ config/
+COPY client/web/ client/web/
+
+RUN mkdir -p .livingtree /app/data
+
+EXPOSE 8899
+
+ENV LT_RELAY_HOST=0.0.0.0
+ENV LT_RELAY_PORT=8899
+
+CMD ["python", "relay_server.py", "--host", "0.0.0.0", "--port", "8899"]

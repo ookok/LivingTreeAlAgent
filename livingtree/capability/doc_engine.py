@@ -195,16 +195,96 @@ class DocEngine:
             except Exception:
                 pass
 
+        # From DocEngineConfig (loaded via auto-load at init)
+        config_templates = getattr(self, "_config_templates", {})
+        sections = config_templates.get(template_type)
+        if sections:
+            return sections
+
+        # Fuzzy match template_type against known templates
+        fuzzy_map = {
+            "环评": "eia_template", "eia": "eia_template", "环境": "eia_template",
+            "应急": "emergency_plan_template", "预案": "emergency_plan_template",
+            "验收": "acceptance_template", "accept": "acceptance_template",
+            "可行": "feasibility_template", "feasibility": "feasibility_template",
+            "分析": "feasibility_template",
+        }
+        for key, tpl_name in fuzzy_map.items():
+            if key in template_type.lower():
+                sections = config_templates.get(tpl_name)
+                if sections:
+                    return sections
+
         return ["项目概述", "背景分析", "核心内容", "实施方案", "结论与建议"]
 
     async def _generate_section(self, section: str, data: dict[str, Any],
                                 requirements: dict[str, Any]) -> str:
+        """Generate a single section using LLM when consciousness is available."""
         title = data.get("title", data.get("project_name", "项目"))
+        consciousness = getattr(self, "_consciousness", None)
+        template_type = data.get("template_type", data.get("_template_type", ""))
+
+        if consciousness:
+            try:
+                folded = data.get("_folded_previous_sections", "")
+                context_bits = []
+                if data.get("raw_text"):
+                    context_bits.append(f"原始资料:\n{data['raw_text'][:2000]}")
+                if data.get("extracted_entities"):
+                    entities = data["extracted_entities"][:10]
+                    context_bits.append("关键信息: " + "; ".join(
+                        f'{e.get("text", e.get("class",""))}' for e in entities))
+                if data.get("parsed_text"):
+                    context_bits.append(f"解析内容: {data['parsed_text'][:1500]}")
+                if data.get("raw_documents"):
+                    docs = data["raw_documents"]
+                    if isinstance(docs, list):
+                        context_bits.append(f"相关文档数: {len(docs)}")
+                if folded:
+                    context_bits.append(folded)
+
+                context_str = "\n\n".join(context_bits) if context_bits else "暂无额外上下文"
+
+                prompt = (
+                    f"你正在撰写一份{template_type or '专业'}报告。请撰写章节: {section}。\n\n"
+                    f"项目名称: {title}\n"
+                    f"上下文资料:\n{context_str}\n\n"
+                    f"要求: 专业、详实、有数据支撑。使用Markdown格式。"
+                    f"输出该章节的完整内容(300-800字)。"
+                )
+                resp = await consciousness.chain_of_thought(prompt, steps=1)
+                content = resp if isinstance(resp, str) else str(resp)
+                if content and len(content) > 20:
+                    return content
+            except Exception as e:
+                logger.debug(f"LLM section generation failed, using heuristics: {e}")
+
         return (
-            f"本章节为「{section}」，针对项目「{title}」进行详细阐述。\n\n"
+            f"## {section}\n\n"
+            f"本章节针对项目「{title}」进行详细阐述。\n\n"
             f"主要内容应包括：相关背景和数据、分析方法与过程、结果与结论。\n\n"
             f"---\n*由 LivingTree DocEngine 自动生成。*"
         )
+
+    def _load_config_templates(self):
+        """Load industrial templates from DocEngineConfig."""
+        try:
+            from ..config.settings import DocEngineConfig
+            cfg = DocEngineConfig()
+            self._config_templates = {
+                "eia_template": cfg.eia_template,
+                "emergency_plan_template": cfg.emergency_plan_template,
+                "acceptance_template": cfg.acceptance_template,
+                "feasibility_template": cfg.feasibility_template,
+                "环评报告": cfg.eia_template,
+                "应急预案": cfg.emergency_plan_template,
+                "验收报告": cfg.acceptance_template,
+                "可行性研究": cfg.feasibility_template,
+            }
+            logger.debug(f"DocEngine: loaded {len(self._config_templates)} template sets")
+        except Exception as e:
+            self._config_templates = {}
+            logger.debug(f"DocEngine: config templates not loaded: {e}")
 
     async def generate_report_streaming(self, template_type: str, data: dict[str, Any],
                                          requirements: dict[str, Any] | None = None,
@@ -257,10 +337,30 @@ class DocEngine:
         }
 
     async def auto_format(self, text: str) -> str:
+        """Format with Kami design system when available."""
+        try:
+            from ..core.doc_renderer import render_document
+            result = render_document(content=text, template="long_doc", title="")
+            if result.get("ok"):
+                return result.get("html", text)
+        except Exception:
+            pass
         return text.strip()
 
     async def export_to(self, text: str, fmt: str = "markdown") -> str:
-        path = self.output_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if fmt in ("pdf", "html"):
+            try:
+                from ..core.doc_renderer import render_document
+                result = render_document(content=text, template="long_doc", title="")
+                if result.get("ok"):
+                    out_path = result.get("pdf_path") or result.get("html_path", "")
+                    if out_path:
+                        return out_path
+            except Exception as e:
+                logger.debug(f"Kami export failed: {e}")
+
+        path = self.output_dir / f"report_{ts}.md"
         path.write_text(text, encoding="utf-8")
         return str(path)
 

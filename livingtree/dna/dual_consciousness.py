@@ -432,12 +432,15 @@ class DualModelConsciousness(Consciousness):
 
     async def stream_of_thought(self, prompt: str, **kwargs) -> AsyncIterator[str]:
         """Stream thinking tokens. Priority: elected free model → any free reasoning model → any alive."""
+        from ..core.model_spec import get_spec
+        constitution = get_spec().get_system_context()
+        system_msg = f"{constitution}\n\n快速分析用户意图。流式输出思考过程。"
         elected = await self._elect()
         if elected:
             try:
                 async for t in self._llm.stream(
                     messages=[
-                        {"role": "system", "content": "快速分析用户意图。流式输出思考过程。"},
+                        {"role": "system", "content": system_msg},
                         {"role": "user", "content": prompt},
                     ],
                     provider=elected,

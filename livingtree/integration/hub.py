@@ -323,6 +323,13 @@ class IntegrationHub:
         self.world.collective = CollectiveConsciousness(world=self.world)
         logger.debug("CollectiveConsciousness initialized")
 
+        # ── SwarmCoordinator: Direct P2P collaboration ──
+        from ..network.swarm_coordinator import get_swarm
+        self.swarm = get_swarm()
+        self.swarm._hub = self
+        self.world.swarm = self.swarm
+        logger.debug("SwarmCoordinator initialized")
+
         from ..dna.evolution import SelfEvolvingEngine
         self.world.self_evolving = SelfEvolvingEngine(world=self.world)
         logger.debug("SelfEvolvingEngine initialized")
@@ -784,7 +791,60 @@ class IntegrationHub:
 
         if self.world.biorhythm:
             await self.world.biorhythm.start()
-        
+
+        # ── Start Discovery (LAN broadcast) ──
+        if self.world.discovery:
+            discovery = self.world.discovery
+            if self.world.node:
+                discovery.set_node_info(
+                    self.world.node.info.id,
+                    self.world.node.info.name,
+                )
+            await discovery.start()
+            logger.info("Discovery: LAN broadcast active")
+
+        # ── NAT detection ──
+        if self.world.nat_traverser:
+            nat_type = await self.world.nat_traverser.detect_nat_type()
+            ep = await self.world.nat_traverser.get_public_endpoint()
+            logger.info(f"NAT: {nat_type.value} — public {ep[0]}:{ep[1]}")
+            asyncio.create_task(self.world.nat_traverser.health_check_loop())
+
+        # ── Start ResilienceBrain ──
+        from ..core.resilience_brain import get_resilience
+        self.resilience = get_resilience()
+        self.resilience._hub = self
+        await self.resilience.start()
+        logger.info("ResilienceBrain: predictive fault tolerance active")
+
+        # ── Start CapabilityScanner ──
+        from ..core.capability_scanner import get_capability_scanner
+        self.cap_scanner = get_capability_scanner()
+        self.cap_scanner._hub = self
+        await self.cap_scanner.start()
+        logger.info("CapabilityScanner: external service discovery active")
+
+        # ── Start AutonomousGrowth ──
+        from ..core.autonomous_growth import get_growth
+        self.growth = get_growth()
+        self.growth._hub = self
+        logger.info("AutonomousGrowth: self-sufficiency tracking active")
+
+        # ── Environment probe ──
+        from ..core.shell_env import probe_summary
+        env_summary = probe_summary()
+        logger.info(f"Environment toolchain:\n{env_summary}")
+
+        # ── Warm up response cache ──
+        from ..core.perf_accel import get_response_cache
+        cache = get_response_cache()
+        logger.info(f"Response cache ready: {cache.stats()['max_entries']} entries max, TTL {cache._default_ttl}s")
+
+        # ── Start SwarmCoordinator ──
+        if self.swarm:
+            await self.swarm.start()
+            logger.info("Swarm: direct P2P collaboration active")
+
         await self.daemon.start()
         logger.info("🌳 LivingTree online — autonomous cycles active")
 
@@ -923,6 +983,22 @@ class IntegrationHub:
         if not self._started:
             return
         logger.info("Shutting down...")
+
+        # ── Stop ResilienceBrain ──
+        if getattr(self, "resilience", None):
+            await self.resilience.stop()
+
+        # ── Stop CapabilityScanner ──
+        if getattr(self, "cap_scanner", None):
+            await self.cap_scanner.stop()
+
+        # ── Stop Swarm ──
+        if getattr(self, "swarm", None):
+            await self.swarm.stop()
+
+        # ── Stop Discovery ──
+        if self.world.discovery:
+            await self.world.discovery.stop()
 
         # ── Save session continuity ──
         try:

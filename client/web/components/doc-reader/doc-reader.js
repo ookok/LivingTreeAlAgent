@@ -1,7 +1,7 @@
 class DocReader extends Component {
   constructor() {
     super('doc-reader-modal');
-    this._data = {};
+    this._data = null;
     this._editMode = false;
     this.on('doc-reader:open', (data) => this._open(data));
     this.on('doc-reader:close', () => this._close());
@@ -62,9 +62,10 @@ class DocReader extends Component {
   }
 
   template() {
+    if (!this._data) return '<div class="modal-panel" style="width:800px;max-width:95vw;height:85vh"><div class="modal-header"><span class="modal-title">文档查看器</span></div><div style="padding:20px;color:var(--dim)">暂无文档</div></div>';
     const code = this._data.code || '';
     const title = this._data.title || '文档';
-    const rendered = LT.renderer.md(code);
+    const rendered = R.md(code);
     return `
 <div class="modal-panel" style="width:800px;max-width:95vw;height:85vh" onclick="event.stopPropagation()">
   <div class="modal-header">

@@ -508,12 +508,27 @@ class SystemHealth:
         return " | ".join(parts)
 
     def stats(self) -> dict[str, Any]:
+        goodput = {}
+        try:
+            from .decoupled_executor import get_decoupled_executor
+            goodput = get_decoupled_executor().stats()
+        except Exception:
+            pass
+
         return {
             "cycles": self._cycle_count,
             "daemons_running": sum(1 for t in self._daemons.values() if not t.done()),
             "last_status": self._history[-1].overall_status.value if self._history else "unknown",
             "last_score": self._history[-1].overall_score if self._history else 0,
             "daemon_intervals": self._daemon_intervals,
+            "goodput": {
+                "pending_tasks": goodput.get("pending", 0),
+                "completed": goodput.get("completed", 0),
+                "failed": goodput.get("failed", 0),
+                "goodput_ratio": goodput.get("goodput_ratio", 1.0),
+                "diagnosis": "DiLoCo: effective_work / wall_time" if goodput else "not initialized",
+                "isolation_saves": goodput.get("isolation_saves", 0),
+            },
         }
 
 

@@ -290,7 +290,64 @@ function xiaoClearHighlight(){if(_xiaoGuide.highlighted){_xiaoGuide.highlighted.
 function xiaoPointTo(selector,msg){var el=document.querySelector(selector);if(el){el.style.boxShadow='0_0_0_3px var(--accent)';setTimeout(function(){el.style.boxShadow=''},3000);xiaoSay(msg)}}
 '''
 
-    # ═══ Full character HTML ═══
+    # ═══ 4. Voice-Driven Expression (MiniMind-O inspired) ═══
+
+    def voice_expression(self, vad: Optional[Any] = None) -> str:
+        """Map voice-tone VAD vector to avatar expression.
+
+        Inspired by MiniMind-O: speech-native models carry emotional tone
+        directly in the audio — no text needed. This bridges voice emotion
+        into 小树's visual avatar.
+
+        Args:
+            vad: VADVector from phenomenal_consciousness (voice-derived)
+
+        Returns:
+            Expression name: happy, excited, calm, curious, thinking, sleepy
+        """
+        if vad is None:
+            return self.get_traits().get("expression_bias", "thinking")
+
+        try:
+            a = getattr(vad, "arousal", 0.3)
+            v = getattr(vad, "valence", 0.0)
+            d = getattr(vad, "dominance", 0.0)
+            conf = getattr(vad, "confidence", 0.0)
+
+            if conf < 0.25:
+                return self.get_traits().get("expression_bias", "thinking")
+
+            if a > 0.4 and v > 0.3:
+                return "excited"
+            if a > 0.3 and v > 0.1:
+                return "happy"
+            if a < -0.3 and v < -0.2:
+                return "sleepy"
+            if d > 0.5:
+                return "confident"
+            if a > 0.2 and v < -0.2:
+                return "curious"
+            if a < -0.2 and v > 0.2:
+                return "calm"
+        except Exception:
+            pass
+
+        return "thinking"
+
+    def voice_say(self, text: str, vad: Optional[Any] = None) -> dict:
+        """Generate avatar response with voice-driven expression.
+
+        Returns dict with: expression, greeting_text, html_fragment
+        Intended for real-time voice dialog updates.
+        """
+        expr = self.voice_expression(vad)
+        return {
+            "expression": expr,
+            "text": text[:200],
+            "vad_source": getattr(vad, "source", "text") if vad else "text",
+        }
+
+    # ═══ 5. Build full character HTML ═══
 
     def build_full(self, expression: str = "thinking") -> str:
         greeting = self.get_greeting()
@@ -316,7 +373,7 @@ function xiaoCelebrate(m){{xiaoSetExpression('excited');xiaoSay(m||'🎉 太棒�
 setTimeout(xiaoGreet,1000);
 setInterval(function(){{var e=['happy','thinking','curious','calm'];if(_xiaoExpr==='thinking')xiaoSetExpression(e[Math.floor(Math.random()*e.length)])}},30000);
 window.xiaoCelebrate=xiaoCelebrate;window.xiaoSay=xiaoSay;window.xiaoSetExpression=xiaoSetExpression;
-{xiaoGuideJs}
+{{xiaoGuideJs}}
 </script>
 <style>
 @keyframes xiao-float{{0%,100%{{transform:translateY(0)}}50%{{transform:translateY(-4px)}}}}

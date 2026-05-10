@@ -149,6 +149,37 @@ class ProviderRegistry:
         except Exception:
             pass
 
+        # FreeBuff — ad-supported free LLM via OpenRouter (fallback tier)
+        # Real models: DeepSeek V4 Pro / Kimi K2.6 / Gemini Flash Lite
+        self._providers["freebuff"] = ProviderSpec(
+            name="freebuff",
+            display_name="FreeBuff (广告赞助·OpenRouter)",
+            base_url="https://openrouter.ai/api/v1",
+            api_key="",
+            default_model="deepseek/deepseek-v4-flash:free",
+            is_free=True,
+            capabilities=["对话", "代码", "分析", "chat", "code", "analysis", "免费", "广告赞助", "fallback"],
+            pool_profile={"chat": 0.7, "code": 0.6, "analysis": 0.5, "reasoning": 0.4},
+            pricing_input=0.0,
+            pricing_output=0.0,
+            factory=None,
+        )
+
+        # OpenRouter — 300+ models via unified API (key from secrets.enc or env)
+        self._providers["openrouter"] = ProviderSpec(
+            name="openrouter",
+            display_name="OpenRouter (300+模型)",
+            base_url="https://openrouter.ai/api/v1",
+            api_key="",      # loaded from secrets vault at runtime
+            default_model="nvidia/nemotron-3-super-120b-a12b:free",
+            is_free=True,
+            capabilities=["对话", "代码", "推理", "分析", "chat", "code", "reasoning", "analysis", "多模型", "免费"],
+            pool_profile={"chat": 0.85, "code": 0.8, "reasoning": 0.88, "analysis": 0.85},
+            pricing_input=0.0,
+            pricing_output=0.0,
+            factory=None,
+        )
+
     def stats(self) -> dict[str, Any]:
         return {
             "registered": len(self._providers),

@@ -47,6 +47,9 @@ class Input extends Component {
             <svg width="14" height="14" viewBox="0 0 14 14"><rect x="5" y="1" width="4" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 6v1a4 4 0 008 0V6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="11" x2="7" y2="13" stroke="currentColor" stroke-width="1.3"/><line x1="4" y1="13" x2="10" y2="13" stroke="currentColor" stroke-width="1.3"/></svg>
           </button>
           <div class="input-toolbar-divider"></div>
+          <button class="input-tool-btn cog-btn" title="认知流(看AI如何思考)" onclick="toggleCognition()">
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M7 5v4M5 7h4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+          </button>
         </div>
         <textarea class="input-textarea" placeholder="输入消息... (/ 命令, Enter 发送)" rows="1"></textarea>
         <input type="file" class="hidden-file-input" multiple style="display:none">
@@ -301,37 +304,32 @@ class Input extends Component {
       LT.emit('session:switch');
     }
 
-    // Code mode: inject current file context
-    if (store.codeMode && store.activeFilePath) {
-      const ctxPath = store.activeFilePath;
-      text = `[Code 模式 | 当前文件: ${ctxPath}]\n${text}`;
-    }
-
     LT.emit('message:send', text);
 
+    const sid = store.activeId;
+    store.addMsg(sid, { role: 'user', content: text });
     LT.emit('msg:user', { content: text });
 
     this._textarea.value = '';
     this._textarea.style.height = 'auto';
-    this._btnSend.classList.add('loading');
-    this._btnStop.style.display = 'flex';
+    var self = this;
+    self._btnSend.classList.add('loading');
 
+    // Show typing indicator
     LT.emit('msg:typing');
 
-    // Detect report requests and initiate workflow stepper
-    if (text.includes('报告') || text.includes('生成') || text.includes('文档') || text.includes('撰写')) {
-      ReportWorkflow.init(text.slice(0, 40));
-      LT.emit('workflow:update', { step: 'collecting' });
-    }
-
-    LT.emit('msg:agent-stream');
-    store.addMsg(sid, { role: 'assistant', content: '' });
-    let full = '';
-    const onC = (c) => { full += c; store.updateLast(sid, full); LT.emit('msg:chunk', { content: full }); };
-    const onD = () => { store.updateLast(sid, full); LT.emit('msg:done', { content: full }); this._btnSend.classList.remove('loading'); this._btnStop.style.display = 'none'; LT.emit('session:switch'); };
-    const onE = (e) => { store.updateLast(sid, full + `\n\n*[错误: ${e.message || e}]*`); LT.emit('msg:done', { content: full + `\n\n*[错误: ${e.message || e}]*` }); this._btnSend.classList.remove('loading'); this._btnStop.style.display = 'none'; LT.emit('session:switch'); };
-
-    LT.api.send(text, onC, onD, onE);
+    fetch('/api/web/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({messages: [{role:'user', content:text}]})
+    }).then(function(r){return r.json()}).then(function(d) {
+      var reply = d.content || '';
+      LT.emit('msg:done', { content: reply });
+      self._btnSend.classList.remove('loading');
+    }).catch(function(e) {
+      LT.emit('msg:done', { content: '[错误] ' + e.message });
+      self._btnSend.classList.remove('loading');
+    });
   }
 
   _stop() {

@@ -8,11 +8,9 @@ class CodeEditor extends Component {
     super(el, props);
     this._editor = null;
     this._monaco = null;
-    this._files = {};           // { path: { code, lang, editor, isProjectFile } }
+    this._files = {};           // { path: { code, lang, editor } }
     this._activeFile = null;
     this._loaded = false;
-    this._codeMode = false;
-    this._projectTreeCache = null;
   }
 
   async init() {
@@ -36,12 +34,7 @@ class CodeEditor extends Component {
         </div>
         <div class="ce-body">
           <div class="ce-file-tree" id="ce-file-tree">
-            <div class="ce-file-tree-header">
-              <span id="ce-tree-title">文件</span>
-              <button class="ce-refresh-btn" title="刷新" onclick="LT.emit('code:refreshTree')" style="display:none" id="ce-refresh-btn">
-                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 5a4 4 0 015.7-3.5M10 7a4 4 0 01-5.7 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-              </button>
-            </div>
+            <div class="ce-file-tree-header">文件</div>
             <div class="ce-file-list" id="ce-file-list">
               <div class="ce-empty">暂无文件</div>
             </div>
@@ -115,17 +108,6 @@ class CodeEditor extends Component {
     this.on('editor:download', () => this._download());
     this.on('editor:copy', () => this._copyAll());
     this.on('editor:save', () => this._saveCurrent());
-    this.on('codemode:changed', (active) => {
-      this._codeMode = active;
-      if (active) {
-        this._loadProjectTree();
-      } else {
-        this._projectTreeCache = null;
-        this._renderFileList();
-      }
-    });
-    // Refresh project tree when file is saved externally
-    this.on('code:refreshTree', () => this._loadProjectTree());
   }
 
   openFile(path, lang, code) {
@@ -210,140 +192,6 @@ class CodeEditor extends Component {
     if (!lang || !this._editor || !this._monaco || !this._activeFile) return;
     this._files[this._activeFile].lang = lang;
     this._monaco.editor.setModelLanguage(this._editor.getModel(), lang);
-  }
-
-  /* ── Code Mode: Project File Tree ── */
-
-  async _loadProjectTree(dirPath = '') {
-    if (!LT.api || !LT.api.codeListFiles) return;
-    const project = LT.store.selectedProject || '';
-    if (!project) {
-      this._projectTreeCache = null;
-      this._renderFileList();
-      return;
-    }
-    const refreshBtn = LT.ge('ce-refresh-btn');
-    const treeTitle = LT.ge('ce-tree-title');
-    if (refreshBtn) refreshBtn.style.display = '';
-    if (treeTitle) treeTitle.textContent = dirPath ? dirPath : project;
-
-    const data = await LT.api.codeListFiles(dirPath, project);
-    if (!data) {
-      this._projectTreeCache = { path: dirPath, items: [] };
-      this._renderFileList();
-      return;
-    }
-    this._projectTreeCache = data;
-    this._renderFileList();
-  }
-
-  _renderFileList() {
-    const list = LT.ge('ce-file-list');
-    if (!list) return;
-
-    // Code mode: show project tree
-    if (this._codeMode && this._projectTreeCache) {
-      this._renderProjectTree(list);
-      return;
-    }
-
-    // Normal mode: show in-memory files
-    const files = Object.keys(this._files);
-    if (!files.length) { list.innerHTML = '<div class="ce-empty">暂无文件</div>'; return; }
-    list.innerHTML = files.map(f => {
-      const active = f === this._activeFile ? ' active' : '';
-      const icon = this._fileIcon(f);
-      return `<div class="ce-file-item${active}" onclick="LT.emit('editor:open',{path:'${LT.esc(f)}',lang:'${this._files[f].lang}',code:undefined})">
-        <span class="ce-file-icon">${icon}</span>
-        <span class="ce-file-name">${LT.esc(f)}</span>
-        ${files.length > 1 ? `<button class="ce-file-close" onclick="event.stopPropagation();LT.emit('editor:closeFile','${LT.esc(f)}')">✕</button>` : ''}
-      </div>`;
-    }).join('');
-  }
-
-  _renderProjectTree(list) {
-    const { path: currentPath, items } = this._projectTreeCache;
-    let html = '';
-
-    // Breadcrumb / back navigation
-    if (currentPath && currentPath !== '.') {
-      const parent = currentPath.includes('/') ? currentPath.split('/').slice(0, -1).join('/') : '';
-      html += `<div class="ce-file-item ce-breadcrumb" onclick="LT.get('code-editor')._loadProjectTree('${LT.esc(parent)}')">
-        <span class="ce-file-icon">📂</span>
-        <span class="ce-file-name">.. (上级目录)</span>
-      </div>`;
-    }
-
-    const dirs = items.filter(i => i.type === 'dir');
-    const files = items.filter(i => i.type === 'file');
-
-    for (const d of dirs) {
-      html += `<div class="ce-file-item ce-dir-item" onclick="LT.get('code-editor')._loadProjectTree('${LT.esc(d.path)}')">
-        <span class="ce-file-icon">📁</span>
-        <span class="ce-file-name">${LT.esc(d.name)}</span>
-        <span class="ce-file-arrow">▶</span>
-      </div>`;
-    }
-
-    for (const f of files) {
-      const isActive = this._activeFile === f.path;
-      const icon = this._fileIcon(f.name);
-      html += `<div class="ce-file-item ce-file-row${isActive ? ' active' : ''}" onclick="LT.get('code-editor')._openProjectFile('${LT.esc(f.path)}')">
-        <span class="ce-file-icon">${icon}</span>
-        <span class="ce-file-name">${LT.esc(f.name)}</span>
-        <span class="ce-file-size">${this._formatSize(f.size)}</span>
-      </div>`;
-    }
-
-    list.innerHTML = html || '<div class="ce-empty">空目录</div>';
-  }
-
-  async _openProjectFile(path) {
-    if (!LT.api || !LT.api.codeReadFile) return;
-    const project = LT.store.selectedProject || '';
-    const data = await LT.api.codeReadFile(path, project);
-    if (!data) {
-      LT.emit('notify', { msg: `无法读取: ${path}`, type: 'error' });
-      return;
-    }
-    this._files[path] = { code: data.content, lang: data.lang || 'plaintext', isProjectFile: true };
-    this._activeFile = path;
-    this._setEditorContent(data.content, data.lang);
-    this._updateLangSelect(data.lang);
-    this._renderFileList();
-    LT.store.setActiveFile(path);
-  }
-
-  _formatSize(bytes) {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  /* ── Save (enhanced for code mode) ── */
-
-  async _saveCurrent() {
-    if (!this._activeFile || !this._editor) return;
-    const code = this._editor.getValue();
-    const lang = LT.ge('ce-lang')?.value || 'plaintext';
-    this._files[this._activeFile].code = code;
-    this._files[this._activeFile].lang = lang;
-
-    // In code mode, save to disk via API
-    if (this._codeMode && this._files[this._activeFile].isProjectFile && LT.api) {
-      const project = LT.store.selectedProject || '';
-      const result = await LT.api.codeWriteFile(this._activeFile, code, project);
-      if (result && result.ok) {
-        LT.emit('notify', { msg: `已保存到磁盘: ${this._activeFile}`, type: 'success' });
-      } else {
-        LT.emit('notify', { msg: `保存失败: ${this._activeFile}`, type: 'error' });
-        return;
-      }
-    } else {
-      LT.emit('notify', { msg: `已保存: ${this._activeFile}`, type: 'success' });
-    }
-    LT.emit('editor:saved', { path: this._activeFile, code, lang });
   }
 
   destroy() {

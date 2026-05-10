@@ -1,0 +1,49 @@
+# Gray-Release Merge Configuration
+# Controls which consolidated modules are active and at what traffic percentage.
+# Hot-reload via: config_watcher or POST /api/merge/reload
+
+merges:
+  execution_pipeline:
+    enabled: false
+    flow_pct: 0.0       # 0.0=disabled, 0.1=10%alpha, 0.5=50%beta, 1.0=100%ga
+    description: "life_engine + gtsm_planner → ExecutionPipeline"
+    fallback_mode: true   # auto-fallback to original life_engine on failure
+
+  network_mesh:
+    enabled: false
+    flow_pct: 0.0
+    description: "nat_traverse + reach_gateway + swarm_coordinator + discovery → NetworkMesh"
+    fallback_mode: true
+
+  policy_guard:
+    enabled: true
+    flow_pct: 1.0
+    description: "behavior_control + resilience_brain + safetyguard + model_spec → PolicyGuard"
+    fallback_mode: false
+
+  skill_hub:
+    enabled: true
+    flow_pct: 1.0
+    description: "skill_hub + enhanced_skill_hub → SkillHub (merged)"
+    fallback_mode: false
+
+  tts_unified:
+    enabled: true
+    flow_pct: 1.0
+    description: "_tts_edge() extracted from voice_call → moss_tts_engine.synthesize_edge_tts"
+    fallback_mode: false
+
+# Monitoring thresholds
+thresholds:
+  pipeline_latency_ms: 2000       # alert if > 2s
+  tool_chain_success_rate: 0.95   # alert if < 95%
+  context_fold_ratio: 0.6         # alert if < 0.6
+
+# CI/CD independent iteration
+ci:
+  treellm:
+    tests: ["test_router.py", "test_l4_election.py"]
+    deploy_independent: true
+  execution:
+    tests: ["test_pipeline.py", "test_sandbox.py"]
+    chaos_enabled: true

@@ -83,16 +83,6 @@ const renderer = {
   md(text) {
     if (!text) return '';
 
-    // Detect card blocks first
-    let cardResult = '';
-    if (window.Cards) {
-      const cards = Cards.parseFromContent(text);
-      if (cards.length) {
-        // Store cards on the renderer for later attachment
-        this._pendingCards = cards;
-      }
-    }
-
     const lines = text.split('\n');
     const output = [];
     let inCodeBlock = false;
@@ -264,136 +254,12 @@ const renderer = {
   },
 
   userMsg(content) {
-    const escRaw = this.esc(content).replace(/`/g, '\\`');
-    return `<div class="message message-user" data-raw="\`${escRaw}\`"><div class="message-bubble user-bubble">${this.md(content)}</div></div>`;
+    return `<div class="message message-user"><div class="message-bubble user-bubble">${this.md(content)}</div></div>`;
   },
 
   agentMsg(content, stream) {
     const streamAttr = stream ? ' data-stream="true"' : '';
-    const escRaw = this.esc(content).replace(/`/g, '\\`');
-    // Strip card blocks from rendered content (rendered separately)
-    const cleanContent = content.replace(/\[card:\w+\][\s\S]*?\[\/card\]/g, '');
-    return `<div class="message message-agent" data-raw="\`${escRaw}\`"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(cleanContent)}</div></div>`;
-  },
-
-  /* ── Message action buttons ── */
-  msgActions(role) {
-    if (role !== 'agent' && role !== 'assistant') return '';
-    return `
-<div class="msg-actions">
-  <button class="msg-action-btn" data-action="copy-text" title="复制文本">
-    <svg width="13" height="13" viewBox="0 0 13 13"><rect x="4" y="4" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 4V2.5A1 1 0 008 1H2.5A1 1 0 001.5 2v5.5A1 1 0 002.5 8.5H4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>
-  </button>
-  <button class="msg-action-btn" data-action="copy-md" title="复制 Markdown">
-    <svg width="13" height="13" viewBox="0 0 13 13"><path d="M2 4h9v6H2z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 6.5h5M4 8.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
-  </button>
-  <button class="msg-action-btn" data-action="open-in-oo" title="在 LT-Office 中编辑">
-    <svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="2" width="10" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 5.5h5M4 7.5h3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><path d="M8.5 2V1" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
-  </button>
-  <button class="msg-action-btn" data-action="share" title="分享">
-    <svg width="13" height="13" viewBox="0 0 13 13"><circle cx="9.5" cy="3.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="9.5" cy="9.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="3.5" cy="6.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M7.8 4.3L5.2 5.7M7.8 8.7L5.2 7.3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
-  </button>
-</div>`;
-  },
-
-  /* ── Streaming lane header ── */
-  streamLane(type, content, collapsed) {
-    const lanes = {
-      thinking: { icon: '🧠', label: '思考过程', color: '#9570ff', cls: 'stream-thinking' },
-      planning: { icon: '📋', label: '执行计划', color: '#e28a00', cls: 'stream-planning' },
-      tool:     { icon: '🔧', label: '工具调用', color: '#3f85ff', cls: 'stream-tool' },
-      rag:      { icon: '📚', label: '知识检索', color: '#0fdc78', cls: 'stream-rag' },
-      response: { icon: '💬', label: '回复', color: '#d1d3db', cls: 'stream-response' },
-    };
-    const cfg = lanes[type] || lanes.response;
-    const collapsedAttr = collapsed ? ' collapsed' : '';
-    return `
-<div class="stream-lane ${cfg.cls}${collapsedAttr}">
-  <div class="stream-lane-header" onclick="this.parentElement.classList.toggle('collapsed')">
-    <span class="stream-lane-icon">${cfg.icon}</span>
-    <span class="stream-lane-label" style="color:${cfg.color}">${cfg.label}</span>
-    <span class="stream-lane-toggle">▼</span>
-  </div>
-  <div class="stream-lane-body">${content || ''}</div>
-</div>`;
-  },
-
-  /* ── Confidence indicator ── */
-  confidenceBar(level) {
-    const pct = Math.round(level * 100);
-    const color = pct >= 80 ? '#0fdc78' : pct >= 50 ? '#e28a00' : '#f65a5a';
-    return `<div class="confidence-bar" title="置信度 ${pct}%"><div class="confidence-fill" style="width:${pct}%;background:${color}"></div><span class="confidence-text">${pct}%</span></div>`;
-  },
-
-  /* ── Inline citation ── */
-  citation(ref, source) {
-    return `<span class="inline-citation" data-source="${LT.esc(source || '')}" title="${LT.esc(source || '')}">[${ref}]</span>`;
-  },
-
-  /* ── Detect stream block type for progressive rendering ── */
-  detectBlockType(content) {
-    if (!content) return 'text';
-    const lines = content.split('\n');
-    const lastLine = lines[lines.length - 1] || '';
-    if (lastLine.startsWith('```') && lines.filter(l => l.startsWith('```')).length % 2 === 1) return 'code_start';
-    if (lastLine.startsWith('```') && lines.filter(l => l.startsWith('```')).length % 2 === 0) return 'code_end';
-    if (/^\|[-:| ]+\|$/.test(lastLine)) return 'table_header';
-    if (lines.length >= 2 && lines[lines.length - 2] && /^\|[-:| ]+\|$/.test(lines[lines.length - 2]) && /^\|.+\|$/.test(lastLine)) return 'table_row';
-    if (lastLine.startsWith('[card:')) return 'card_start';
-    if (lastLine.startsWith('[/card]')) return 'card_end';
-    if (lastLine.match(/^#{1,3}\s/)) return 'heading';
-    return 'text';
-  },
-
-  /* ── Streaming badge ── */
-  streamBadge(type) {
-    const badges = {
-      code: '<span class="stream-badge stream-badge-code">&lt;/&gt;</span>',
-      data: '<span class="stream-badge stream-badge-data">📊</span>',
-      plan: '<span class="stream-badge stream-badge-plan">📋</span>',
-    };
-    return badges[type] || '';
-  },
-  copyMsgText(msgEl) {
-    const bubble = msgEl.querySelector('.agent-bubble,.user-bubble');
-    const text = bubble ? bubble.textContent : '';
-    this._clipCopy(text, '已复制文本');
-  },
-
-  copyMsgMarkdown(msgEl) {
-    const raw = this._getRaw(msgEl);
-    this._clipCopy(raw, '已复制 Markdown');
-  },
-
-  _getRaw(msgEl) {
-    const attr = msgEl.getAttribute('data-raw');
-    if (!attr) return '';
-    // decode backtick-escaped content
-    let raw = attr.replace(/^`|`$/g, '');
-    // unescape HTML entities back
-    const unesc = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
-    raw = raw.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, m => unesc[m] || m);
-    raw = raw.replace(/\\`/g, '`');
-    return raw;
-  },
-
-  _clipCopy(text, msg) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        if (typeof LT !== 'undefined') LT.emit('notify', { msg, type: 'success' });
-      }).catch(() => this._fallbackCopy(text));
-    } else {
-      this._fallbackCopy(text);
-    }
-  },
-
-  _fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); if (typeof LT !== 'undefined') LT.emit('notify', { msg: '已复制', type: 'success' }); }
-    catch (e) { if (typeof LT !== 'undefined') LT.emit('notify', { msg: '复制失败', type: 'error' }); }
-    document.body.removeChild(ta);
+    return `<div class="message message-agent"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(content)}</div></div>`;
   },
 
   typing() {
@@ -444,121 +310,8 @@ const renderer = {
     if (bubble) {
       bubble.removeAttribute('data-stream');
     }
-  },
-
-  /* ── Diff Viewer (Code Mode) ── */
-
-  diffBlock(oldCode, newCode, filePath = '', lang = '') {
-    const oldLines = (oldCode || '').split('\n');
-    const newLines = (newCode || '').split('\n');
-    const diffRows = this._computeLineDiff(oldLines, newLines);
-    const langLabel = lang ? `<span class="code-lang">${this.esc(lang)}</span>` : '';
-    const fileLabel = filePath ? `<span class="diff-file-path">📄 ${this.esc(filePath)}</span>` : '';
-
-    const rowsHtml = diffRows.map(row => {
-      const cls = row.type === 'add' ? 'diff-add' : row.type === 'del' ? 'diff-del' : 'diff-keep';
-      const prefix = row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ';
-      const oldNum = row.oldNum || '';
-      const newNum = row.newNum || '';
-      return `<tr class="${cls}">
-        <td class="diff-old-num">${oldNum}</td>
-        <td class="diff-new-num">${newNum}</td>
-        <td class="diff-sign">${prefix}</td>
-        <td class="diff-code"><pre>${this.esc(row.text)}</pre></td>
-      </tr>`;
-    }).join('');
-
-    return `<div class="diff-block" data-path="${this.esc(filePath)}" data-old="${this.esc((oldCode||'').slice(0,500))}" data-new="${this.esc((newCode||'').slice(0,500))}">
-<div class="diff-header"><div class="diff-header-left">${fileLabel}${langLabel}
-<span class="diff-stats"><span class="diff-stat-add">+${diffRows.filter(r=>r.type==='add').length}</span><span class="diff-stat-del">-${diffRows.filter(r=>r.type==='del').length}</span></span></div>
-<div class="diff-header-actions">
-<button class="diff-btn diff-btn-apply" onclick="LT.renderer._applyDiff(this)" title="应用此修改"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>应用</button>
-<button class="diff-btn diff-btn-reject" onclick="this.closest('.diff-block').remove()" title="忽略"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>忽略</button>
-<button class="diff-btn diff-btn-edit" onclick="LT.renderer._editDiff(this)" title="在编辑器中编辑"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>编辑</button>
-</div></div>
-<div class="diff-table-wrapper"><table class="diff-table"><tbody>${rowsHtml}</tbody></table></div></div>`;
-  },
-
-  _computeLineDiff(oldLines, newLines) {
-    const m = oldLines.length, n = newLines.length;
-    const dp = Array.from({length:m+1}, ()=>new Array(n+1).fill(0));
-    for (let i=1;i<=m;i++) for(let j=1;j<=n;j++) {
-      dp[i][j] = oldLines[i-1]===newLines[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
-    }
-    let i=m, j=n;
-    const result = [];
-    while (i>0||j>0) {
-      if (i>0&&j>0&&oldLines[i-1]===newLines[j-1]) {
-        result.unshift({type:'keep',text:oldLines[i-1],oldNum:i,newNum:j}); i--;j--;
-      } else if (j>0&&(i===0||dp[i][j-1]>=dp[i-1][j])) {
-        result.unshift({type:'add',text:newLines[j-1],oldNum:null,newNum:j}); j--;
-      } else {
-        result.unshift({type:'del',text:oldLines[i-1],oldNum:i,newNum:null}); i--;
-      }
-    }
-    return result;
-  },
-
-  async _applyDiff(btn) {
-    const block = btn.closest('.diff-block');
-    if (!block) return;
-    const path = block.dataset.path || '';
-    const oldContent = block.dataset.old || '';
-    const newContent = block.dataset.new || '';
-    let fullOld = oldContent, fullNew = newContent;
-    if (path && LT.api && LT.api.codeReadFile) {
-      try {
-        const data = await LT.api.codeReadFile(path);
-        if (data && data.content) {
-          fullOld = data.content;
-          if (fullOld.includes(oldContent)) {
-            fullNew = fullOld.replace(oldContent, newContent);
-          } else {
-            fullNew = newContent;
-          }
-        }
-      } catch(e){}
-    }
-    if (path && LT.api && LT.api.codeApplyDiff) {
-      const result = await LT.api.codeApplyDiff(path, fullOld, fullNew);
-      if (result && result.ok) {
-        block.classList.add('diff-applied');
-        btn.innerHTML = '已应用 ✓'; btn.disabled = true; btn.style.opacity = '0.6';
-        LT.emit('notify',{msg:`已应用到: ${path}`,type:'success'});
-        LT.emit('code:refreshTree');
-      } else {
-        LT.emit('notify',{msg:'应用失败，请检查权限',type:'error'});
-      }
-    } else {
-      LT.emit('notify',{msg:'请在 Code 模式下使用此功能',type:'error'});
-    }
-  },
-
-  _editDiff(btn) {
-    const block = btn.closest('.diff-block');
-    if (!block) return;
-    const path = block.dataset.path || '';
-    const newContent = block.dataset.new || '';
-    LT.emit('editor:open-code',{code:newContent,lang:'',path});
-    LT.emit('code-editor:toggle');
   }
 };
-
-LT.on('security:findings', (findings) => {
-  if (!findings || !findings.length) return;
-  const chat = LT.get('chat');
-  if (!chat || !chat._msgsEl) return;
-  const severityIcons = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' };
-  let md = `### 🛡️ 安全扫描 — ${findings.length} 条发现\n\n`;
-  findings.slice(0, 10).forEach(f => {
-    md += `- ${severityIcons[f.severity] || '⚪'} **${f.severity.toUpperCase()}** ${f.message}\n`;
-    md += `  📁 \`${f.file}:${f.line}\` — ${f.remediation}\n`;
-  });
-  if (findings.length > 10) md += `\n*...还有 ${findings.length - 10} 条发现*\n`;
-  const html = LT.renderer.agentMsg(md, false);
-  LT.renderer.append(chat._msgsEl, html);
-  chat._scrollBottom();
-});
 
 function _fallbackCopy(text, btn) {
   const ta = document.createElement('textarea');
@@ -582,3 +335,5 @@ function _fallbackCopy(text, btn) {
 
 window.LT = window.LT || {};
 window.LT.renderer = renderer;
+
+// export default renderer;

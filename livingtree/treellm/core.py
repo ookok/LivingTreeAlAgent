@@ -47,6 +47,9 @@ class RouterStats:
     total_latency_ms: float = 0.0
     last_latency_ms: float = 0.0
     last_error: str = ""
+    recent_successes: list = field(default_factory=list)
+    recent_latencies: list = field(default_factory=list)
+    rate_limits: int = 0
 
     @property
     def success_rate(self) -> float:
@@ -98,7 +101,7 @@ class TreeLLM:
             logger.info(
                 f"Elected {best.name}: "
                 f"score={best.total:.2f} "
-                f"latency={best.latency_ms:.0f}ms "
+                f"latency={float(best.latency_ms or 0):.0f}ms "
                 f"quality={best.scores.get('quality',0):.1%} "
                 f"match={best.capability_match:.1%}"
             )
@@ -317,6 +320,48 @@ class TreeLLM:
                 final_result = await self.chat([], provider=final_provider)
                 layers_used = 1
 
+        # ── Layer 4: Smart fallback with local LLM guarantee ──
+        l4_provider = None
+        l4_result = None
+        original_provider = final_provider
+        original_result = final_result
+
+        if final_provider is None or final_result is None:
+            remaining = [p for p in list(self._providers.keys())
+                         if p not in (layer2_candidates or []) and p not in (final_provider or "")]
+            remaining = remaining[:top_k_per_layer]
+
+            for candidate in remaining:
+                try:
+                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)
+                    if res and (getattr(res, "text", None) or getattr(res, "content", None)):
+                        l4_provider = candidate
+                        l4_result = res
+                        layers_used = 4
+                        break
+                except Exception:
+                    continue
+
+        if l4_provider is None and (final_provider is None or final_result is None):
+            local_candidates = [
+                n for n in self._providers.keys()
+                if any(k in n.lower() for k in ("local", "offline", "ollama", "opencode", "serve", "llama"))
+            ]
+            for candidate in local_candidates:
+                try:
+                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)
+                    if res and (getattr(res, "text", None) or getattr(res, "content", None)):
+                        l4_provider = candidate
+                        l4_result = res
+                        layers_used = 4
+                        break
+                except Exception:
+                    continue
+
+        if l4_provider and l4_result:
+            final_provider = l4_provider
+            final_result = l4_result
+
         return {
             "provider": final_provider or "",
             "result": final_result,
@@ -324,7 +369,8 @@ class TreeLLM:
             "candidates_per_layer": {
                 "layer1": layer1_candidates_final,
                 "layer2": layer2_candidates,
-                "layer3": [final_provider] if final_provider else [],
+                "layer3": [original_provider] if original_provider else [],
+                "layer4": [l4_provider] if l4_provider else [],
             },
             "scores": {
                 "embedding_score": embedding_score,
@@ -525,7 +571,8 @@ class TreeLLM:
         # ── P2P cost report to relay ──
         try:
             from ..network.p2p_node import get_p2p_node
-            get_p2p_node().report_cost(name, tokens, tokens)
+            import asyncio as _asyncio
+            _asyncio.create_task(get_p2p_node().report_cost(name, tokens, tokens))
         except Exception: pass
 
     def _record_failure(self, name: str, error: str, rate_limited: bool = False) -> None:

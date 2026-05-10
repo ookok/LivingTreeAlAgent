@@ -306,6 +306,65 @@ class SwarmCoordinator:
             ],
         }
 
+    # ═══ Fragment Sync (Decoupled DiLoCo inspired) ═══
+
+    async def sync_fragments(
+        self, peer_endpoint: str, fragments: list[dict], sync_ratio: float = 0.15,
+    ) -> dict:
+        """Partial knowledge fragment sync — only exchange changed fragments.
+
+        Inspired by Decoupled DiLoCo's lightweight synchronizer:
+        instead of full replication, only `sync_ratio` of the most-changed
+        fragments are exchanged, dramatically reducing bandwidth at scale.
+
+        Args:
+            peer_endpoint: target peer URL
+            fragments: list of {key, value, score, updated_at}
+            sync_ratio: fraction of fragments to sync (0.15 = top 15%)
+        """
+        if not fragments:
+            return {"ok": False, "synced": 0, "fragments": []}
+
+        sorted_frags = sorted(fragments, key=lambda f: f.get("score", 0), reverse=True)
+        top_n = max(1, int(len(sorted_frags) * sync_ratio))
+        to_sync = sorted_frags[:top_n]
+
+        try:
+            result = await self._send_request("POST", f"{peer_endpoint}/api/swarm/fragments", {
+                "fragments": to_sync,
+                "sync_ratio": sync_ratio,
+                "total_fragments": len(fragments),
+                "protocol": "partial-fragment-sync",
+            })
+            self._goodput.fragment_syncs += 1
+            return {"ok": True, "synced": len(to_sync), "skipped": len(fragments) - len(to_sync),
+                    "fragments": to_sync}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "synced": 0, "fragments": []}
+
+    async def receive_fragments(self, fragments: list[dict]) -> int:
+        """Receive and merge partial fragments from a peer.
+
+        Only the most-changed fragments are received — the rest are
+        assumed unchanged, following DiLoCo's partial synchronization.
+        """
+        merged = 0
+        for frag in fragments:
+            key = frag.get("key", "")
+            if key and hasattr(self, "_knowledge_cache"):
+                existing = self._knowledge_cache.get(key)
+                if not existing or frag.get("score", 0) > existing.get("score", 0):
+                    self._knowledge_cache[key] = frag
+                    merged += 1
+        return merged
+
+    @property
+    def goodput(self) -> dict:
+        return {
+            "fragment_syncs": getattr(self, "_goodput", type('', (), {'fragment_syncs': 0})()).fragment_syncs,
+            "note": "DiLoCo-inspired: partial sync reduces bandwidth by ~85%",
+        }
+
 
 _swarm_instance: Optional[SwarmCoordinator] = None
 
@@ -315,3 +374,124 @@ def get_swarm() -> SwarmCoordinator:
     if _swarm_instance is None:
         _swarm_instance = SwarmCoordinator()
     return _swarm_instance
+
+
+# ═══ Network Quality Adaptation ═══
+
+import time as _time_mod
+from collections import deque
+
+
+@dataclass
+class NetworkQuality:
+    packet_loss_pct: float = 0.0
+    avg_latency_ms: float = 0.0
+    jitter_ms: float = 0.0
+    bandwidth_kbps: float = 0.0
+    quality_level: str = "unknown"       # excellent/good/fair/poor/dead
+    degraded: bool = False
+    degrade_reason: str = ""
+
+
+class NetworkQualityMonitor:
+    """Connection quality adaptive — auto-switch degradation strategy.
+
+    Monitors packet loss, latency, jitter and bandwidth per peer.
+    When quality drops, automatically switches to lighter protocols:
+      excellent → Protobuf binary + WebRTC direct
+      good      → Protobuf + relay
+      fair      → JSON + relay (fallback from Protobuf on loss)
+      poor      → JSON + relay + halved sync frequency
+      dead      → offline cache + queue, restore when back
+    """
+
+    def __init__(self, window_size: int = 10):
+        self._window = window_size
+        self._latencies: deque[float] = deque(maxlen=window_size)
+        self._losses: deque[bool] = deque(maxlen=window_size)
+        self._qualities: dict[str, NetworkQuality] = {}
+        self._last_probe: dict[str, float] = {}
+
+    def record(self, peer_id: str, latency_ms: float, success: bool):
+        self._latencies.append(latency_ms)
+        self._losses.append(not success)
+
+        loss_pct = sum(1 for l in self._losses if l) / max(1, len(self._losses))
+        avg_lat = sum(self._latencies) / max(1, len(self._latencies))
+        jitter = self._calc_jitter()
+
+        if loss_pct < 0.02 and avg_lat < 100:
+            level = "excellent"
+        elif loss_pct < 0.05 and avg_lat < 300:
+            level = "good"
+        elif loss_pct < 0.15 and avg_lat < 800:
+            level = "fair"
+        elif loss_pct < 0.5:
+            level = "poor"
+        else:
+            level = "dead"
+
+        self._qualities[peer_id] = NetworkQuality(
+            packet_loss_pct=round(loss_pct, 3), avg_latency_ms=round(avg_lat, 1),
+            jitter_ms=round(jitter, 1), quality_level=level,
+            degraded=level in ("fair", "poor", "dead"),
+            degrade_reason=f"loss={loss_pct:.1%}, lat={avg_lat:.0f}ms" if level != "excellent" else "",
+        )
+        self._last_probe[peer_id] = _time_mod.time()
+
+    def _calc_jitter(self) -> float:
+        if len(self._latencies) < 2:
+            return 0.0
+        diffs = [abs(self._latencies[i] - self._latencies[i - 1])
+                 for i in range(1, len(self._latencies))]
+        return sum(diffs) / len(diffs) if diffs else 0.0
+
+    def quality(self, peer_id: str) -> NetworkQuality:
+        return self._qualities.get(peer_id, NetworkQuality())
+
+    def should_degrade(self, peer_id: str) -> bool:
+        return self.quality(peer_id).degraded
+
+    def auto_strategy(self, peer_id: str) -> dict:
+        """Generate auto-switch strategy based on current quality."""
+        q = self.quality(peer_id)
+        strategy = {
+            "protocol": "protobuf",
+            "transport": "webrtc_direct",
+            "sync_interval_s": 60,
+            "sync_fragment_ratio": 0.15,
+            "queue_offline": False,
+        }
+
+        if q.quality_level == "excellent":
+            pass    # keep defaults
+        elif q.quality_level == "good":
+            strategy["transport"] = "relay"
+        elif q.quality_level == "fair":
+            strategy.update(protocol="json", transport="relay",
+                           sync_interval_s=120, sync_fragment_ratio=0.08)
+        elif q.quality_level == "poor":
+            strategy.update(protocol="json", transport="relay",
+                           sync_interval_s=300, sync_fragment_ratio=0.03)
+        elif q.quality_level == "dead":
+            strategy.update(protocol="json", transport="offline",
+                           sync_interval_s=600, sync_fragment_ratio=0.0,
+                           queue_offline=True)
+        return {"peer": peer_id, "quality": q.quality_level, "strategy": strategy}
+
+    def stats(self) -> dict:
+        return {
+            "peers_tracked": len(self._qualities),
+            "degraded_peers": sum(1 for q in self._qualities.values() if q.degraded),
+            "qualities": {k: v.quality_level for k, v in self._qualities.items()},
+        }
+
+
+_netmon: Optional[NetworkQualityMonitor] = None
+
+
+def get_netmon() -> NetworkQualityMonitor:
+    global _netmon
+    if _netmon is None:
+        _netmon = NetworkQualityMonitor()
+    return _netmon

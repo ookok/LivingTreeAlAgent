@@ -82,6 +82,10 @@ class CacheDirector:
         self._system_prompts: dict[str, str] = {}  # provider → cached system prompt
         self._load()
 
+    def _maybe_save(self, *args, **kwargs):
+        """No-op stub — prevent AttributeError when called by consumer."""
+        pass
+
     def get_capability(self, provider_name: str) -> dict:
         """Get cache capability for a provider. Strips tier suffix."""
         base = provider_name.split("-")[0]

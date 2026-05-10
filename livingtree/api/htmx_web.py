@@ -36,15 +36,29 @@ import html as _html
 import json as _json
 import re
 import time as _time
+import uuid
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse as _HTMLResponse
 from loguru import logger
+from jinja2 import Environment, FileSystemLoader
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+_jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+
+def _render_template(template_name: str, **kwargs) -> _HTMLResponse:
+    """Render Jinja2 template directly — bypasses Starlette wrapper bug."""
+    try:
+        tpl = _jinja_env.get_template(template_name)
+        html = tpl.render(**kwargs)
+        return _HTMLResponse(html)
+    except Exception:
+        return _HTMLResponse(f"<p>Template error: {template_name}</p>", status_code=500)
+
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 htmx_router = APIRouter(prefix="/tree", tags=["htmx"])
@@ -61,27 +75,59 @@ def _get_hub(request: Request):
 @htmx_router.get("", response_class=HTMLResponse)
 @htmx_router.get("/", response_class=HTMLResponse)
 async def tree_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
+    return _render_template("index.html", request=request)
 
 @htmx_router.get("/chat", response_class=HTMLResponse)
 async def tree_chat(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request})
-
+    return _render_template("chat.html", request=request)
 
 @htmx_router.get("/dashboard", response_class=HTMLResponse)
 async def tree_dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
-
+    return _render_template("dashboard.html", request=request)
 
 @htmx_router.get("/knowledge", response_class=HTMLResponse)
 async def tree_knowledge(request: Request):
-    return templates.TemplateResponse("knowledge.html", {"request": request})
+    return _render_template("knowledge.html", request=request)
 
 
 # ═══════════════════════════════════════════════════════════════
 #  P0: Real LLM Chat — wired through hub
 # ═══════════════════════════════════════════════════════════════
+
+async def _inject_video_results(user_msg: str) -> str:
+    """Check if the user message contains video search intent, inject results."""
+    video_keywords = ("视频", "b站", "bilibili", "youtube", "搜视频", "找视频", "播放",
+                      "影视", "纪录片", "教程视频", "看视频")
+    msg_lower = user_msg.lower()
+
+    has_intent = any(kw in msg_lower for kw in video_keywords)
+    has_output = any(kw in msg_lower for kw in ("搜索", "找", "查", "看看", "打开", "播放"))
+
+    if not (has_intent and has_output):
+        return ""
+
+    keyword = user_msg
+    for strip in ("搜索", "搜一下", "帮我搜", "帮我找", "找一个", "看看", "播放", "视频", "关于", "的"):
+        keyword = keyword.replace(strip, "")
+    keyword = keyword.strip().lstrip("·.、，。").strip() or user_msg
+
+    try:
+        from ..core.video_search import get_video_search
+        engine = get_video_search()
+        results = await engine.search(keyword, limit=4)
+        if not results:
+            return ""
+
+        cards = "".join(engine.build_card_html(v) for v in results)
+        return (
+            '<div style="margin-top:8px;font-size:11px;color:var(--dim)">'
+            f'📺 找到 {len(results)} 个相关视频:</div>'
+            f'{cards}'
+        )
+    except Exception:
+        import traceback
+        logger.debug(f"Video inject: {traceback.format_exc()}")
+        return ""
 
 @htmx_router.post("/chat/msg", response_class=HTMLResponse)
 async def tree_chat_message(request: Request):
@@ -145,6 +191,7 @@ async def tree_chat_message(request: Request):
             f'<div class="text">{_html.escape(content[:2000])}</div>'
             f'<div class="msg-meta">{session_id}</div>'
             '</div>'
+            + await _inject_video_results(msg)
         )
     except Exception as e:
         logger.warning(f"Chat error: {e}")
@@ -184,30 +231,31 @@ async def tree_chat_stream(request: Request):
         msg = form.get("message", "")
 
     if not msg.strip():
-        return HTMLResponse('<div class="msg assistant"><div class="who">小树 🌳</div><div class="text">请说点什么吧~</div></div>')
+        yield f"data: {_json.dumps({'html': '<div class=\"msg assistant\"><div class=\"who\">小树 🌳</div><div class=\"text\">请说点什么吧~</div></div>', 'partial': False, 'session_id': ''})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
 
     hub = _get_hub(request)
     if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<div class="msg assistant"><div class="who">小树 🌳</div><div class="text">系统仍在启动中，请稍候...</div></div>')
+        yield f"data: {_json.dumps({'html': '<div class=\"msg assistant\"><div class=\"who\">小树 🌳</div><div class=\"text\">系统仍在启动中，请稍候...</div></div>', 'partial': False, 'session_id': ''})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
 
     # Check response cache first
     from ..core.perf_accel import get_response_cache
     cache = get_response_cache()
     cached = cache.get(msg)
     if cached:
-        return HTMLResponse(
-            '<div class="msg assistant">'
-            f'<div class="who">小树 🌳 · 缓存命中 ⚡</div>'
-            f'<div class="text">{_html.escape(cached[:2000])}</div>'
-            '</div>'
-        )
+        yield f"data: {_json.dumps({'html': '<div class=\"msg assistant\"><div class=\"who\">小树 🌳 · 缓存命中 ⚡</div><div class=\"text\">' + _html.escape(cached[:2000]) + '</div></div>', 'partial': False, 'session_id': ''})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
 
+    acc = ""
+    sid = str(uuid.uuid4())[:12]
     try:
         if hub.world and hub.world.consciousness:
             async for token in hub.world.consciousness.stream_of_thought(msg):
                 acc += token
-                if len(acc) < 50 or token in ("\n", ".", "。", "!", "?", ":", "：") or len(acc) % 20 < 2:
-                    pass
                 yield f"data: {_json.dumps({'html': _md_to_html_fragment(acc), 'partial': True, 'session_id': sid})}\n\n"
             final_html = _md_to_html_fragment(acc)
             yield f"data: {_json.dumps({'html': final_html, 'partial': False, 'session_id': sid})}\n\n"
@@ -216,8 +264,6 @@ async def tree_chat_stream(request: Request):
     except Exception as e:
         yield f"data: {_json.dumps({'html': f'<p>流中断: {_html.escape(str(e)[:100])}</p>', 'partial': False, 'session_id': sid})}\n\n"
     yield "data: [DONE]\n\n"
-
-    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 @htmx_router.get("/sse/chat")
@@ -567,25 +613,25 @@ async def tree_sse_ui(request: Request, prompt: str = Query(default="")):
             "7. API 端点使用 /tree/ 前缀\n"
         )
 
-    try:
-        if hub and hub.world and hub.world.consciousness:
-            consc = hub.world.consciousness
-            from ..core.kami_theme import generate_llm_ui_prompt
-            kami_constraints = generate_llm_ui_prompt("kami")
-            acc = ""
-            async for token in consc.stream_of_thought(
-                f"{kami_constraints}\n\n用户需求: {prompt}"
-            ):
-                acc += token
-                if len(acc) % 40 < 2:
-                    yield f"event: ui-chunk\ndata: {_json.dumps({'html': acc[-200:], 'partial': True, 'session_id': sid})}\n\n"
+        try:
+            if hub and hub.world and hub.world.consciousness:
+                consc = hub.world.consciousness
+                from ..core.kami_theme import generate_llm_ui_prompt
+                kami_constraints = generate_llm_ui_prompt("kami")
+                acc = ""
+                async for token in consc.stream_of_thought(
+                    f"{kami_constraints}\n\n用户需求: {prompt}"
+                ):
+                    acc += token
+                    if len(acc) % 40 < 2:
+                        yield f"event: ui-chunk\ndata: {_json.dumps({'html': acc[-200:], 'partial': True, 'session_id': sid})}\n\n"
 
-            clean_html = _extract_html_from_response(acc)
-            yield f"event: ui-card\ndata: {_json.dumps({'html': clean_html, 'partial': False, 'session_id': sid})}\n\n"
-        else:
-            yield f"event: ui-card\ndata: {_json.dumps({'html': '<div class=\"card\"><h2>系统概览</h2><p>离线模式 - 请等待系统就绪</p></div>', 'partial': False, 'session_id': sid})}\n\n"
-    except Exception as e:
-        yield f"event: ui-error\ndata: {_json.dumps({'error': str(e)[:200], 'session_id': sid})}\n\n"
+                clean_html = _extract_html_from_response(acc)
+                yield f"event: ui-card\ndata: {_json.dumps({'html': clean_html, 'partial': False, 'session_id': sid})}\n\n"
+            else:
+                yield f"event: ui-card\ndata: {_json.dumps({'html': '<div class=\"card\"><h2>系统概览</h2><p>离线模式 - 请等待系统就绪</p></div>', 'partial': False, 'session_id': sid})}\n\n"
+        except Exception as e:
+            yield f"event: ui-error\ndata: {_json.dumps({'error': str(e)[:200], 'session_id': sid})}\n\n"
         yield f"event: ui-done\ndata: {_json.dumps({'session_id': sid})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -935,7 +981,7 @@ def _regions_for_mode(mode: str, message: str = "") -> list[dict]:
 @htmx_router.get("/living/", response_class=HTMLResponse)
 async def tree_living(request: Request):
     """Living Canvas — the unified dynamic surface."""
-    return templates.TemplateResponse("living.html", {"request": request})
+    return _render_template("living.html", request=request)
 
 
 @htmx_router.get("/living/layout")
@@ -1802,10 +1848,7 @@ async def tree_reach_pair(request: Request, code: str):
     hub = _get_hub(request)
     if hub:
         reach.set_hub(hub)
-    return templates.TemplateResponse("reach_mobile.html", {
-        "request": request,
-        "pairing_code": code,
-    })
+    return _render_html("reach_mobile.html", request)
 
 
 @htmx_router.get("/reach/qr")
@@ -2007,10 +2050,12 @@ async def tree_sse_cognition(request: Request, message: str = Query(default=""))
 
 @htmx_router.get("/swarm/panel")
 async def tree_swarm_panel(request: Request):
-    """Swarm intelligence panel — shows connected peers, allows cell sharing,
-    knowledge sync, and task distribution."""
-    from ..network.swarm_coordinator import get_swarm
-    swarm = get_swarm()
+    """Swarm intelligence panel — shows connected peers."""
+    try:
+        from ..network.swarm_coordinator import get_swarm
+        swarm = get_swarm()
+    except Exception:
+        return HTMLResponse('<div class="card"><h2>🕸️ 群体智能</h2><p style="color:var(--dim)">网络层未就绪 (protobuf required: pip install protobuf)</p></div>')
     hub = _get_hub(request)
     if hub:
         swarm._hub = hub
@@ -2432,12 +2477,17 @@ async def tree_im_panel(request: Request):
 
 @htmx_router.get("/persona")
 async def tree_persona(request: Request):
-    """Anime character persona for the sidebar."""
-    from ..core.anime_persona import get_persona
-    p = get_persona()
-    p._hub = _get_hub(request)
-    p.record_visit()
-    return HTMLResponse(p.build_character_html())
+    """Anime character persona — fast static SVG fallback."""
+    return HTMLResponse('''<div id="xiaoshu-avatar" style="position:relative;width:120px;height:160px;margin:0 auto">
+<svg viewBox="0 0 120 160"><ellipse cx="60" cy="42" rx="42" ry="38" fill="#4a3728"/>
+<ellipse cx="60" cy="62" rx="30" ry="32" fill="#fce4d6"/>
+<ellipse cx="47" cy="60" rx="8" ry="9" fill="#fff"/>
+<ellipse cx="73" cy="60" rx="8" ry="9" fill="#fff"/>
+<circle cx="49" cy="60" r="5" fill="#1B365D"/>
+<circle cx="75" cy="60" r="5" fill="#1B365D"/>
+<path d="M48,102 Q55,107 62,102" stroke="#c4786e" stroke-width="1.5" fill="none"/>
+<text x="60" y="52" text-anchor="middle" font-size="24">🌳</text>
+</svg><div style="text-align:center;font-size:10px;color:var(--accent);margin-top:4px">小树 · LivingTree</div></div>''')
 
 
 @htmx_router.get("/presence/living-layer")
@@ -2461,23 +2511,66 @@ async def tree_persona(request: Request):
 
 @htmx_router.get("/chrome/panel")
 async def tree_chrome_panel(request: Request):
-    """Chrome DevTools MCP — frontend diagnostics + automated testing."""
-    from ..core.chrome_mcp import get_chrome_bridge
-    bridge = get_chrome_bridge()
+    """Chrome DevTools — dual-mode: npx MCP (preferred) or Python CDP (fallback)."""
+    from ..core.chrome_dual import get_chrome_dual
+    bridge = get_chrome_dual()
     st = bridge.status()
+
+    available = st["available"]
+    mode = st["mode"]
+    mode_label = st["mode_label"]
+    npx_ok = st["npx_available"]
+    instructions = st.get("instructions", {})
+    detail = st.get("detail", "")
+
+    if available:
+        status_color = "rgba(100,150,100,.08)"
+        status_text = f'🟢 Chrome 已连接 — {mode_label}'
+        detail_html = f'<span style="font-size:10px;color:var(--dim);margin-left:8px">{detail}</span>'
+    elif mode == "none":
+        status_color = "rgba(200,120,100,.06)"
+        status_text = "🔴 Chrome 不可用"
+        detail_html = ""
+    else:
+        status_color = "rgba(180,150,100,.08)"
+        status_text = f'🟡 待启动 — {mode_label}'
+        detail_html = f'<span style="font-size:10px;color:var(--dim);margin-left:8px">{detail}</span>'
+
+    mode_badge = (
+        f'<span style="font-size:9px;padding:2px 6px;border-radius:3px;'
+        f'background:{"rgba(100,180,100,.15)" if mode == "npx_mcp" else "rgba(180,180,100,.15)" if mode == "python_cdp" else "rgba(180,100,100,.15)"};'
+        f'margin-left:6px">{mode_label}</span>'
+    )
+
+    npx_status = "✅ npx 可用" if npx_ok else "❌ npx 不可用"
+    node_path = st.get("node_path", "")
+
+    setup_html = ""
+    if mode == "none":
+        setup_html = (
+            '<div style="margin-top:8px;padding:8px;border-radius:6px;background:rgba(200,120,100,.08);font-size:10px">'
+            f'<b>⚙ 设置指引</b><br>'
+            f'{instructions.get("setup", "")}<br><br>'
+            f'<b>方案一 (推荐):</b> {instructions.get("npx_setup", "")}<br>'
+            f'<b>方案二:</b> {instructions.get("cdp_setup", "")}<br>'
+            '</div>'
+        )
 
     return HTMLResponse(
         '<div class="card">'
-        '<h2>🔬 Chrome DevTools · 前端诊断</h2>'
+        '<h2>🔬 Chrome DevTools · 双模式架构' + mode_badge + '</h2>'
         '<p style="font-size:10px;color:var(--dim);margin:4px 0">'
-        '通过 CDP 协议控制 Chrome, 实现自动化测试、截图、性能分析</p>'
+        'npm MCP (优先) → Python CDP (回退) → 面板指引</p>'
 
         f'<div style="margin:8px 0;padding:8px;border-radius:6px;'
-        f'background:{"rgba(100,150,100,.08)" if st["available"] else "rgba(200,100,100,.06)"}">'
-        f'<span style="font-size:12px">{"🟢 Chrome 已连接" if st["available"] else "🔴 Chrome 未连接"}</span>'
-        f'<span style="font-size:10px;color:var(--dim);margin-left:8px">端口: {st["port"]}</span></div>'
+        f'background:{status_color}">'
+        f'<span style="font-size:12px">{status_text}</span>{detail_html}'
+        f'<span style="font-size:9px;color:var(--dim);margin-left:8px">{npx_status}</span>'
+        f'<span style="font-size:9px;color:var(--dim);margin-left:4px">node={node_path}</span></div>'
 
         '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0">'
+        '<button onclick="chromeControl(\'start\')" style="font-size:10px;padding:6px 12px">▶ 启动</button>'
+        '<button onclick="chromeControl(\'stop\')" style="font-size:10px;padding:6px 12px">⏹ 停止</button>'
         '<button onclick="chromeAction(\'screenshot\')" style="font-size:10px;padding:6px 12px">📸 截图</button>'
         '<button onclick="chromeAction(\'navigate\',\'http://localhost:8100/tree/living\')" style="font-size:10px;padding:6px 12px">🏠 打开Canvas</button>'
         '<button onclick="chromeAction(\'eval\',\'document.title\')" style="font-size:10px;padding:6px 12px">📋 页面标题</button>'
@@ -2492,18 +2585,23 @@ async def tree_chrome_panel(request: Request):
         '<button onclick="chromeCustom()" style="font-size:10px;padding:4px 10px">执行</button></div>'
 
         '<div id="chrome-result" style="margin-top:8px;font-size:11px;max-height:300px;overflow-y:auto;background:rgba(0,0,0,.05);padding:8px;border-radius:4px;min-height:40px;color:var(--dim)">点击按钮执行操作...</div>'
-
-        '<div style="margin-top:8px;font-size:9px;color:var(--dim)">'
-        '需要 Chrome 以远程调试模式运行: chrome --remote-debugging-port=9222<br>'
-        'MCP 工具: chrome_screenshot, chrome_eval, chrome_navigate, chrome_click, chrome_audit, chrome_dom</div>'
+        + setup_html
+        + '<div style="margin-top:8px;font-size:9px;color:var(--dim)">'
+        '双模式架构: npx 可用 → npm MCP (Puppeteer自动连接) · npx 不可用 → Python CDP (chrome --remote-debugging-port=9222)<br>'
+        '工具: screenshot · eval · navigate · click · audit · dom · start · stop</div>'
         '</div>'
         + '<script>'
-        'function chromeAction(action,arg){var d={action:action};if(arg)d[action==="navigate"?"url":action==="eval"?"expression":"selector"]=arg;'
+        'function chromeAction(action,arg){var d={};if(arg)d[action==="navigate"?"url":action==="eval"?"expression":"selector"]=arg;'
         'document.getElementById("chrome-result").textContent="执行中...";'
         'fetch("/api/chrome/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)})'
         '.then(r=>r.json()).then(function(r){var el=document.getElementById("chrome-result");'
         'if(r.data){el.innerHTML="<img src=\'data:image/png;base64,"+r.data+"\' style=\'max-width:100%;border:1px solid var(--border)\'>"}'
         'else{el.textContent=JSON.stringify(r,null,2)}}).catch(function(e){document.getElementById("chrome-result").textContent="Error: "+e})}'
+        'function chromeControl(action){'
+        'document.getElementById("chrome-result").textContent=action==="start"?"启动中...":"停止中...";'
+        'fetch("/api/chrome/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({headless:true})})'
+        '.then(r=>r.json()).then(function(r){document.getElementById("chrome-result").textContent=JSON.stringify(r,null,2)})'
+        '.catch(function(e){document.getElementById("chrome-result").textContent="Error: "+e})}'
         'function chromeCustom(){var url=document.getElementById("chrome-url").value;'
         'var sel=document.getElementById("chrome-selector").value;'
         'var js=document.getElementById("chrome-js").value;'
@@ -2721,7 +2819,7 @@ async def tree_qa_panel(request: Request):
 
         f'<div style="margin-top:8px;font-size:10px;color:var(--dim)">'
         f'已实现模式: ✅ ReAct · ✅ 提示版本化 · ✅ 4层评估 · ✅ 校准 · ✅ 错误重放 · ✅ 漂移检测<br>'
-        f'本次补全: ✅ 变形测试 · ✅ 黄金轨迹 · ✅ HITL通道 · 数据: {QA_DIR}</div>'
+        f'本次补全: ✅ 变形测试 · ✅ 黄金轨迹 · ✅ HITL通道 · 数据: .livingtree/qa</div>'
         '</div>'
         + '<script>function hitlAction(id,action){fetch("/api/hitl/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})}).then(r=>r.json()).then(d=>{location.reload()})}</script>'
     )
@@ -2753,29 +2851,12 @@ async def tree_creative_garden(request: Request):
         + p.build_garden() + '</div>')
 
 
-@htmx_router.get("/dynamic")
-async def tree_dynamic_page(request: Request, message: str = Query(default="")):
-    """LLM-generated dynamic page — no static templates. Cached 3-tier."""
-    from ..core.dynamic_page import get_page_engine
-    engine = get_page_engine()
-    engine._hub = _get_hub(request)
-    html = await engine.generate_page(message or "显示系统概览")
-    cache_stats = engine._cache.stats()
-
-    return HTMLResponse(
-        '<div style="font-size:10px;color:var(--dim);margin-bottom:4px;text-align:right">'
-        f'🤖 LLM生成 · {len(html):,} 字符 · '
-        f'缓存命中率: {cache_stats["hit_rate"]} · '
-        f'<button onclick="location.reload()" style="font-size:10px;padding:2px 8px">🔄 重新生成</button>'
-        '</div>'
-        + html
-    )
-
-
 @htmx_router.get("/creative/timeline")
 async def tree_creative_timeline(request: Request):
     from ..core.creative_viz import get_creative
     cv = get_creative()
+    if cv is None:
+        return HTMLResponse('<div class="card"><h2>⏳ AI 记忆时间线</h2><p style="color:var(--dim)">系统未就绪</p></div>')
     cv._hub = _get_hub(request)
     return HTMLResponse(
         '<div class="card"><h2>⏳ AI 记忆时间线</h2>'
@@ -2786,7 +2867,8 @@ async def tree_creative_timeline(request: Request):
 async def tree_creative_dream(request: Request):
     from ..core.creative_viz import get_creative
     cv = get_creative()
-    cv._hub = _get_hub(request)
+    if cv is not None:
+        cv._hub = _get_hub(request)
     return HTMLResponse(
         '<div class="card"><h2>🌙 梦境引擎</h2>'
         '<p style="font-size:11px;color:var(--dim);margin:4px 0">空闲时小树在重组知识、发现隐藏连接</p>'
@@ -2796,7 +2878,8 @@ async def tree_creative_dream(request: Request):
 async def tree_creative_swarm(request: Request):
     from ..core.creative_viz import get_creative
     cv = get_creative()
-    cv._hub = _get_hub(request)
+    if cv is not None:
+        cv._hub = _get_hub(request)
     return HTMLResponse(
         '<div class="card"><h2>🗺️ 群体地图</h2>'
         '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">所有连接节点的地理位置和能力分布</p>'
@@ -2806,17 +2889,210 @@ async def tree_creative_swarm(request: Request):
 async def tree_creative_emotion(request: Request):
     from ..core.creative_viz import get_creative
     cv = get_creative()
-    cv._hub = _get_hub(request)
+    if cv is not None:
+        cv._hub = _get_hub(request)
     return HTMLResponse(
-        '<div class="card"><h2>💭 AI 情绪仪表</h2>'
-        '<p style="font-size:11px;color:var(--dim);margin-bottom:4px">VAD三维情感模型 — 实时反映小树的内心状态</p>'
+        '<div class="card"><h2>💭 情绪仪表</h2>'
+        '<p style="font-size:11px;color:var(--dim);margin:4px 0">VAD 三维情感向量实时追踪</p>'
         + cv.build_emotion_gauge() + '</div>')
+
+@htmx_router.get("/creative/weather")
+async def tree_creative_weather(request: Request):
+    from ..core.creative_viz import build_knowledge_weather_map
+    from ..dna.emergence_detector import get_phase_detector
+    phase_data = get_phase_detector().stats()
+    return HTMLResponse(build_knowledge_weather_map(phase_data))
+
+# ═══ Admin Model Dashboard ═══
+
+@htmx_router.get("/admin/models")
+async def tree_admin_models(request: Request):
+    """Authoritative model election dashboard — LLMFit-style evaluation matrix."""
+    from ..core.model_dashboard import get_model_dashboard
+    dashboard = get_model_dashboard()
+    task_type = request.query_params.get("task", "general")
+    cards = dashboard.build_cards(task_type=task_type)
+    return HTMLResponse(dashboard.render_html(cards, task_hint=task_type))
+
+# ═══ QGIS-inspired Panels ═══
+
+@htmx_router.get("/admin/plugins")
+async def tree_admin_plugins(request: Request):
+    from ..core.skill_hub import get_skill_hub
+    return HTMLResponse(get_skill_hub().render_html())
+
+@htmx_router.get("/admin/toolbox")
+async def tree_admin_toolbox(request: Request):
+    from ..core.processing_framework import get_processing
+    return HTMLResponse(get_processing().render_toolbox_html())
+
+@htmx_router.get("/admin/organs")
+async def tree_admin_organs(request: Request):
+    from ..core.organ_dashboard import get_organ_dashboard
+    return HTMLResponse(get_organ_dashboard().render_html())
+
+# ═══ OpenMetadata-inspired Panels ═══
+
+@htmx_router.get("/admin/lineage")
+async def tree_admin_lineage(request: Request):
+    from ..knowledge.knowledge_lineage import get_lineage
+    return HTMLResponse(get_lineage().render_html())
+
+@htmx_router.get("/admin/classifier")
+async def tree_admin_classifier(request: Request):
+    from ..core.auto_classifier import get_classifier
+    sample = request.query_params.get("sample", "")
+    return HTMLResponse(get_classifier().render_html(sample))
+
+@htmx_router.get("/admin/quality")
+async def tree_admin_quality(request: Request):
+    from ..knowledge.quality_guard import QUALITY_TEMPLATES
+    rows = "".join(
+        f'<tr><td style="padding:4px 8px;font-size:11px"><b>{t.name}</b></td>'
+        f'<td style="padding:4px 8px;font-size:10px;color:var(--dim)">{t.description}</td>'
+        f'<td style="padding:4px 8px;font-size:10px">{t.severity}</td>'
+        f'<td style="padding:4px 8px;font-size:9px;color:var(--dim)">{t.domain}</td></tr>'
+        for t in QUALITY_TEMPLATES
+    )
+    return HTMLResponse(f'''<div class="card">
+<h2>✅ 质量测试库 <span style="font-size:10px;color:var(--dim)">— OpenMetadata DQ Test Library</span></h2>
+<div style="font-size:9px;color:var(--dim);margin:4px 0">{len(QUALITY_TEMPLATES)}个参数化测试模板</div>
+<table style="width:100%;border-collapse:collapse;font-size:11px">
+<thead><tr style="border-bottom:2px solid var(--border);font-size:10px;color:var(--dim)">
+  <th>测试</th><th>描述</th><th>级别</th><th>领域</th></tr></thead>
+<tbody>{rows}</tbody></table>
+<div style="font-size:9px;color:var(--dim);margin-top:8px">error=阻断 warning=提示 info=信息 · 支持参数化SQL式条件</div></div>''')
+
+# ═══ AI Awareness Dashboard ═══
+
+@htmx_router.get("/admin/awareness")
+async def tree_admin_awareness(request: Request):
+    from ..core.awareness_engine import get_awareness
+    return HTMLResponse(get_awareness().render_html())
+
+@htmx_router.get("/admin/vitals")
+async def tree_admin_vitals(request: Request):
+    from ..core.vitals import get_vitals
+    v = get_vitals().measure()
+    return HTMLResponse(f'''<div class="card">
+<h2>💓 生命体征 <span style="font-size:10px;color:var(--dim)">— Living Pot 硬件遥测</span></h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
+  <div style="text-align:center;padding:8px;background:var(--panel);border-radius:6px">
+    <div style="font-size:24px">{'🔥' if v['cpu']['percent'] > 70 else '⚡' if v['cpu']['percent'] > 30 else '💤'}</div>
+    <div style="font-size:18px;font-weight:700">{v['cpu']['percent']:.0f}%</div>
+    <div style="font-size:10px;color:var(--dim)">CPU · {v['cpu']['level']}</div></div>
+  <div style="text-align:center;padding:8px;background:var(--panel);border-radius:6px">
+    <div style="font-size:24px">{'🧠' if v['memory']['percent'] > 70 else '💧'}</div>
+    <div style="font-size:18px;font-weight:700">{v['memory']['percent']:.0f}%</div>
+    <div style="font-size:10px;color:var(--dim)">RAM · {v['memory']['level']}</div></div>
+  <div style="text-align:center;padding:8px;background:var(--panel);border-radius:6px">
+    <div style="width:24px;height:24px;border-radius:50%;background:{v['led']['color_hex']};margin:0 auto"></div>
+    <div style="font-size:11px;margin-top:4px">LED {v['led']['color_hex']}</div>
+    <div style="font-size:9px;color:var(--dim)">亮度{v['led']['brightness']:.0%} · {v['led']['pulse_rate']}</div></div>
+  <div style="text-align:center;padding:8px;background:var(--panel);border-radius:6px">
+    <div style="font-size:24px">{v['leaf_display']['state']}</div>
+    <div style="font-size:10px">{v['leaf_display']['message']}</div></div>
+</div></div>''')
+
+@htmx_router.get("/admin/city")
+async def tree_admin_city(request: Request):
+    from ..core.city_mcp import get_city_mcp
+    return HTMLResponse(get_city_mcp().render_html())
+
+@htmx_router.get("/admin/green")
+async def tree_admin_green(request: Request):
+    from ..core.green_scheduler import get_green_scheduler
+    return HTMLResponse(get_green_scheduler().render_html())
+
+@htmx_router.get("/admin/shield")
+async def tree_admin_shield(request: Request):
+    from ..core.prompt_shield import get_shield
+    return HTMLResponse(get_shield().render_html())
+
+@htmx_router.get("/admin/telemetry")
+async def tree_admin_telemetry(request: Request):
+    from ..core.telemetry import get_telemetry
+    return HTMLResponse(get_telemetry().render_html())
+
+@htmx_router.get("/reach/mobile")
+async def tree_reach_mobile(request: Request):
+    return _render_template("reach_mobile.html", request=request)
+
+# ═══ Unified Admin Console ═══
+
+@htmx_router.get("/admin")
+async def tree_admin_console(request: Request):
+    """Unified admin console — aggregates all 7+ admin panels in one view."""
+    return HTMLResponse('''<div style="padding:8px">
+<h2 style="margin-bottom:8px">⚙ 管理员控制台 <span style="font-size:10px;color:var(--dim);font-weight:400">— 统一管理面板</span></h2>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-bottom:12px">
+  <button onclick="loadAdminPanel('models')" class="admin-nav-btn active" id="admin-nav-models">📊 模型选举</button>
+  <button onclick="loadAdminPanel('plugins')" class="admin-nav-btn" id="admin-nav-plugins">🧩 插件生态</button>
+  <button onclick="loadAdminPanel('toolbox')" class="admin-nav-btn" id="admin-nav-toolbox">🔧 处理工具箱</button>
+  <button onclick="loadAdminPanel('organs')" class="admin-nav-btn" id="admin-nav-organs">🫀 器官层面板</button>
+  <button onclick="loadAdminPanel('lineage')" class="admin-nav-btn" id="admin-nav-lineage">🔗 知识血缘</button>
+  <button onclick="loadAdminPanel('classifier')" class="admin-nav-btn" id="admin-nav-classifier">🏷 自动分类</button>
+  <button onclick="loadAdminPanel('quality')" class="admin-nav-btn" id="admin-nav-quality">✅ 质量测试</button>
+  <button onclick="loadAdminPanel('awareness')" class="admin-nav-btn" id="admin-nav-awareness">🧘 意识</button>
+  <button onclick="loadAdminPanel('vitals')" class="admin-nav-btn" id="admin-nav-vitals">💓 体征</button>
+  <button onclick="loadAdminPanel('city')" class="admin-nav-btn" id="admin-nav-city">🏯 城市</button>
+  <button onclick="loadAdminPanel('green')" class="admin-nav-btn" id="admin-nav-green">🌿 绿色</button>
+  <button onclick="loadAdminPanel('shield')" class="admin-nav-btn" id="admin-nav-shield">🛡️ 防护</button>
+  <button onclick="loadAdminPanel('telemetry')" class="admin-nav-btn" id="admin-nav-telemetry">📊 遥测</button>
+  <button onclick="loadAdminPanel('pipeline')" class="admin-nav-btn" id="admin-nav-pipeline">⚙ 管道</button>
+</div>
+
+<div id="admin-panel-content" style="min-height:400px">
+  <div class="lc-loading" style="min-height:200px">加载模型选举仪表盘...</div>
+</div>
+
+<style>
+.admin-nav-btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .2s}
+.admin-nav-btn:hover{border-color:var(--accent)}
+.admin-nav-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+</style>
+
+<script>
+var adminPanelMap = {
+  models: "/tree/admin/models",
+  plugins: "/tree/admin/plugins",
+  toolbox: "/tree/admin/toolbox",
+  organs: "/tree/admin/organs",
+  lineage: "/tree/admin/lineage",
+  classifier: "/tree/admin/classifier",
+  quality: "/tree/admin/quality",
+  awareness: "/tree/admin/awareness",
+  vitals: "/tree/admin/vitals",
+  city: "/tree/admin/city",
+  green: "/tree/admin/green",
+  shield: "/tree/admin/shield",
+  telemetry: "/tree/admin/telemetry",
+  pipeline: "/tree/admin/pipeline"
+};
+
+function loadAdminPanel(name) {
+  document.querySelectorAll(".admin-nav-btn").forEach(function(b) { b.classList.remove("active"); });
+  var btn = document.getElementById("admin-nav-" + name);
+  if (btn) btn.classList.add("active");
+  var el = document.getElementById("admin-panel-content");
+  el.innerHTML = '<div class="lc-loading" style="min-height:200px">加载中...</div>';
+  fetch(adminPanelMap[name]).then(function(r) { return r.text(); }).then(function(html) {
+    el.innerHTML = html;
+  });
+}
+
+// Load models panel by default
+setTimeout(function() { loadAdminPanel("models"); }, 200);
+</script>
+</div>''')
 
 @htmx_router.get("/creative/twin")
 async def tree_creative_twin(request: Request):
     from ..core.creative_viz import get_creative
     cv = get_creative()
-    cv._hub = _get_hub(request)
+    if cv is not None:
+        cv._hub = _get_hub(request)
     return HTMLResponse(
         '<div class="card"><h2>🪞 数字孪生镜像</h2>'
         '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">这是小树对你的认知。纠正它，帮助它更好地理解你。</p>'

@@ -34,11 +34,12 @@ class ThinkingCapability(Enum):
 
 class MultimodalCapability(Enum):
     """多模态能力级别"""
-    TEXT_ONLY = "text_only"     # 仅文本
-    VISION = "vision"           # 支持图片
-    AUDIO = "audio"            # 支持音频
-    VIDEO = "video"            # 支持视频
-    FULL = "full"              # 全部支持
+    TEXT_ONLY = "text_only"       # 仅文本
+    VISION = "vision"             # 支持图片
+    AUDIO = "audio"               # 支持音频 (STT/TTS 专用模型)
+    VIDEO = "video"               # 支持视频
+    SPEECH = "speech"             # 语音原生 (端到端语音理解, 非 STT+TTS 分离)
+    FULL = "full"                 # 全模态 (text+vision+audio+speech)
 
 @dataclass
 class ModelCapabilities:
@@ -75,19 +76,31 @@ class ModelCapabilities:
         """是否支持音频输入"""
         return self.multimodal in (
             MultimodalCapability.AUDIO,
+            MultimodalCapability.SPEECH,
             MultimodalCapability.FULL
         )
-    
+
+    def supports_speech(self) -> bool:
+        """是否原生语音 (端到端 speech→speech, 无需 STT/TTS)"""
+        return self.multimodal in (
+            MultimodalCapability.SPEECH,
+            MultimodalCapability.FULL
+        )
+
     def supports_video(self) -> bool:
         """是否支持视频输入"""
         return self.multimodal in (
             MultimodalCapability.VIDEO,
             MultimodalCapability.FULL
         )
-    
+
     def supports_multimodal(self) -> bool:
         """是否支持任何多模态"""
         return self.multimodal != MultimodalCapability.TEXT_ONLY
+
+    def is_speech_native(self) -> bool:
+        """是否为语音原生模型 (端到端语音, 无需 STT+TTS)"""
+        return self.supports_speech()
     
     def get_capability_summary(self) -> str:
         """获取能力摘要"""
@@ -98,6 +111,8 @@ class ModelCapabilities:
             caps.append("[IMG] image")
         if self.supports_audio():
             caps.append("[AUD] audio")
+        if self.supports_speech():
+            caps.append("[SPCH] speech-native")
         if self.supports_video():
             caps.append("[VID] video")
         if not caps:
@@ -135,12 +150,18 @@ MULTIMODAL_MODELS = {
     "qwen-vl": MultimodalCapability.VISION,
     "qwen2.5-omni": MultimodalCapability.FULL,
     "qwq": MultimodalCapability.VISION,
-    
-    # 支持音频的模型
+
+    # 语音原生模型 (端到端 speech, 无需 STT+TTS)
+    "minimind-o": MultimodalCapability.SPEECH,
+    "minimind-o-": MultimodalCapability.SPEECH,       # MiniMind-O 系列
+    "ministral-": MultimodalCapability.SPEECH,         # MiniMax Speech
+
+    # 支持音频的模型 (STT/TTS 分离)
     "whisper": MultimodalCapability.AUDIO,
     "sensevoice": MultimodalCapability.AUDIO,
     "cosyvoice": MultimodalCapability.AUDIO,
-    
+    "parakeet": MultimodalCapability.AUDIO,
+
     # 全能模型
     "gpt-4o": MultimodalCapability.FULL,
     "gpt-4-turbo": MultimodalCapability.FULL,

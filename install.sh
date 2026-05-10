@@ -1,134 +1,158 @@
-#!/bin/bash
-# LivingTree — One-Command Auto-Deploy (Linux/macOS)
-# Usage: curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
-#        bash install.sh --port 8100 --relay
+#!/usr/bin/env bash
+# One-click installer — LivingTree AI Agent (Linux / macOS)
+# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.sh)
 
 set -e
 
-GITHUB_REPO="https://github.com/ookok/LivingTreeAlAgent.git"
-GITEE_REPO="https://gitee.com/ookok/LivingTreeAlAgent.git"
-GITHUB_ZIP="https://github.com/ookok/LivingTreeAlAgent/archive/refs/heads/main.zip"
-GITEE_ZIP="https://gitee.com/ookok/LivingTreeAlAgent/repository/archive/main.zip"
-INSTALL_DIR="${HOME}/livingtree"
-PYTHON_CMD=""
-PORT="8100"
-MODE="all"  # all | client | relay
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
 
-# Parse args
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --port) PORT="$2"; shift 2 ;;
-        --dir) INSTALL_DIR="$2"; shift 2 ;;
-        --client) MODE="client"; shift ;;
-        --relay) MODE="relay"; shift ;;
-        *) echo "Unknown: $1"; exit 1 ;;
-    esac
+INSTALL_DIR="$HOME/livingtree"
+VENV_DIR="$INSTALL_DIR/.venv"
+REPO_URL="https://github.com/ookok/LivingTreeAlAgent.git"
+REPO_GITEE="https://gitee.com/ookok/LivingTreeAlAgent.git"
+PORT=8100
+
+echo -e "${GREEN}"
+cat << "EOF"
+╔══════════════════════════════════════════════╗
+║   🌳 生命之树 · LivingTree AI Agent          ║
+║       One-Click Linux/macOS Installer        ║
+╚══════════════════════════════════════════════╝
+EOF
+echo -e "${NC}"
+
+# ── Check Python ──
+
+PYTHON=""
+for cmd in python3 python; do
+    if command -v $cmd &> /dev/null; then
+        PYTHON=$(command -v $cmd)
+        break
+    fi
 done
 
-echo "🌳 LivingTree Auto-Deploy"
-echo "   Mode: $MODE | Port: $PORT | Dir: $INSTALL_DIR"
-
-# Step 1: Find/Install Python 3.14
-echo "[1/7] Python 3.14..."
-if command -v python3.14 &>/dev/null; then
-    PYTHON_CMD="python3.14"
-elif python3 -c "import sys; sys.exit(0 if sys.version_info>= (3,14) else 1)" 2>/dev/null; then
-    PYTHON_CMD="python3"
-else
-    echo "   Installing Python 3.14..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        curl -fsSL https://www.python.org/ftp/python/3.14.0/python-3.14.0-macos11.pkg -o /tmp/python314.pkg
-        sudo installer -pkg /tmp/python314.pkg -target /
-        PYTHON_CMD="python3.14"
+if [ -z "$PYTHON" ]; then
+    echo -e "${RED}❌ Python not found. Installing...${NC}"
+    if command -v apt &> /dev/null; then
+        sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
+    elif command -v brew &> /dev/null; then
+        brew install python3 git
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y python3 python3-pip git
     else
-        sudo apt-get update -qq && sudo apt-get install -y -qq python3.14 python3.14-venv 2>/dev/null || true
-        if ! command -v python3.14 &>/dev/null; then
-            echo "   Please install Python 3.14 manually: https://www.python.org/downloads/"
-            exit 1
-        fi
-        PYTHON_CMD="python3.14"
-    fi
-fi
-echo "   $($PYTHON_CMD --version)"
-
-# Step 2: Clone project (GitHub → Gitee → zip download → relay mirror)
-echo "[2/7] Downloading..."
-if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/pyproject.toml" ]; then
-    echo "   Directory exists — updating..."
-    cd "$INSTALL_DIR"
-    git pull --ff-only origin main 2>/dev/null || {
-        echo "   Git pull failed, re-downloading via zip..."
-        rm -rf "$INSTALL_DIR"
-        _download_zip
-    }
-else
-    if command -v git &>/dev/null; then
-        git clone --depth 1 "$GITHUB_REPO" "$INSTALL_DIR" 2>/dev/null || \
-        git clone --depth 1 "$GITEE_REPO" "$INSTALL_DIR" 2>/dev/null || \
-        _download_zip
-    else
-        _download_zip
-    fi
-    cd "$INSTALL_DIR" 2>/dev/null || { echo "ERROR: Download failed."; exit 1; }
-fi
-
-_download_zip() {
-    echo "   Trying direct zip download (no git needed)..."
-    rm -rf "$INSTALL_DIR" 2>/dev/null
-    mkdir -p "$INSTALL_DIR"
-    local tmpzip="/tmp/livingtree.zip"
-    curl -fsSL "$GITHUB_ZIP" -o "$tmpzip" 2>/dev/null || \
-    curl -fsSL "$GITEE_ZIP" -o "$tmpzip" 2>/dev/null || \
-    curl -fsSL "http://www.mogoo.com.cn:8888/health" -o /dev/null 2>/dev/null && {
-        echo "   GitHub/Gitee unreachable. Use relay mirror download:"
-        echo "   Contact admin for offline installer package."
+        echo -e "${RED}Please install Python 3.10+ and git manually${NC}"
         exit 1
-    }
-    unzip -qo "$tmpzip" -d "$INSTALL_DIR" 2>/dev/null
-    mv "$INSTALL_DIR"/LivingTreeAlAgent-main/* "$INSTALL_DIR"/ 2>/dev/null
-    mv "$INSTALL_DIR"/LivingTreeAlAgent-main/.* "$INSTALL_DIR"/ 2>/dev/null
-    rm -rf "$INSTALL_DIR"/LivingTreeAlAgent-main "$tmpzip" 2>/dev/null
-    echo "   Downloaded via zip."
-}
-
-# Step 3: Create venv
-echo "[3/7] Virtual environment..."
-if [ ! -d ".venv" ]; then
-    $PYTHON_CMD -m venv .venv
+    fi
+    PYTHON=$(command -v python3 || command -v python)
 fi
-source .venv/bin/activate
 
-# Step 4: Install deps
-echo "[4/7] Dependencies..."
-pip install -e . --quiet 2>/dev/null || true
-pip install aiohttp pyyaml pydantic loguru rich textual --quiet 2>/dev/null || true
+PYVER=$($PYTHON --version 2>&1)
+echo -e "${GREEN}✅ $PYVER${NC}"
 
-# Step 5: Verify
-echo "[5/7] Verifying..."
-.venv/bin/python -c "from livingtree.tui.app import LivingTreeTuiApp; print('   OK')" 2>/dev/null || echo "   WARNING: Import check failed"
+# ── Clone / Update ──
 
-# Step 6: Create launcher
-echo "[6/7] Creating launcher..."
-cat > "$INSTALL_DIR/livingtree.sh" << LAUNCHER
-#!/bin/bash
+if [ -d "$INSTALL_DIR/.git" ]; then
+    echo -e "${CYAN}📥 Updating repository...${NC}"
+    cd "$INSTALL_DIR"
+    git pull origin main 2>/dev/null || true
+else
+    echo -e "${CYAN}📥 Cloning repository...${NC}"
+    rm -rf "$INSTALL_DIR"
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || \
+    git clone --depth 1 "$REPO_GITEE" "$INSTALL_DIR"
+fi
+
 cd "$INSTALL_DIR"
-source .venv/bin/activate
-if [ "\$1" = "relay" ]; then
-    python relay_server.py --port "${PORT}" "\$@"
-else
-    python -m livingtree tui "\$@"
-fi
-LAUNCHER
-chmod +x "$INSTALL_DIR/livingtree.sh"
-ln -sf "$INSTALL_DIR/livingtree.sh" /usr/local/bin/livingtree 2>/dev/null || true
 
-# Step 7: Start
-echo "[7/7] Starting..."
-echo ""
-if [ "$MODE" = "relay" ]; then
-    echo "Starting relay server on port $PORT..."
-    python relay_server.py --port "$PORT"
+# ── Setup venv ──
+
+if [ ! -f "$VENV_DIR/bin/python" ]; then
+    echo -e "${CYAN}📦 Creating virtual environment...${NC}"
+    $PYTHON -m venv "$VENV_DIR"
+fi
+
+PIP="$VENV_DIR/bin/pip"
+PY="$VENV_DIR/bin/python"
+
+echo -e "${CYAN}📦 Installing dependencies...${NC}"
+$PIP install --upgrade pip -q
+$PIP install -r requirements.txt -q
+
+# ── Optional tools ──
+
+echo -e "${CYAN}📦 Installing optional tools...${NC}"
+$PIP install edge-tts -q 2>/dev/null || true
+$PIP install numpy -q 2>/dev/null || true
+
+# ── Check GPU ──
+
+if command -v nvidia-smi &> /dev/null; then
+    echo -e "${GREEN}✅ GPU detected (NVIDIA)${NC}"
+fi
+
+# ── Check Node.js ──
+
+if command -v node &> /dev/null; then
+    echo -e "${GREEN}✅ Node.js detected (npm MCP mode available)${NC}"
 else
-    echo "Launch with: livingtree"
-    echo "   or: cd $INSTALL_DIR && python -m livingtree tui"
+    echo -e "${YELLOW}💡 Install Node.js for Chrome automation${NC}"
+fi
+
+# ── Create CLI symlink ──
+
+CLI_LINK="/usr/local/bin/livingtree"
+if [ -w "/usr/local/bin" ] || [ "$(id -u)" = "0" ]; then
+    cat > "$CLI_LINK" << CLISCRIPT
+#!/usr/bin/env bash
+cd "$INSTALL_DIR"
+exec "$PY" -m livingtree "\$@"
+CLISCRIPT
+    chmod +x "$CLI_LINK" 2>/dev/null || sudo chmod +x "$CLI_LINK" 2>/dev/null || true
+    echo -e "${GREEN}✅ CLI installed: livingtree${NC}"
+fi
+
+# ── Done ──
+
+echo -e "${GREEN}"
+cat << EOF
+
+✅ Installation complete!
+
+Start LivingTree:
+  cd $INSTALL_DIR
+  $PY -m livingtree
+
+Or: livingtree start    (if CLI symlink created)
+
+Web UI: http://localhost:$PORT/tree/living
+
+CLI Management (CowAgent style):
+  livingtree start              # background daemon
+  livingtree stop               # stop service
+  livingtree restart            # restart service
+  livingtree status             # service status
+  livingtree logs 50            # last 50 log lines
+  livingtree skill hub          # browse skills
+  livingtree skill install X    # install skill
+
+EOF
+echo -e "${NC}"
+
+# ── Auto-start ──
+
+read -p "Auto-start LivingTree now? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "${CYAN}🚀 Starting LivingTree...${NC}"
+    nohup $PY -m livingtree start &>/dev/null &
+    sleep 2
+    if command -v xdg-open &> /dev/null; then
+        xdg-open "http://localhost:$PORT/tree/living" &
+    elif command -v open &> /dev/null; then
+        open "http://localhost:$PORT/tree/living" &
+    fi
 fi

@@ -512,3 +512,111 @@ __all__ = [
     "feed_life_engine_metrics", "feed_economic_metrics",
     "feed_provider_metrics", "get_predictability",
 ]
+
+
+# ═══ Linguistic Horizon (Portsmouth paper inspired) ═══
+
+@dataclass
+class HorizonEstimate:
+    """Time-decay confidence for language/knowledge predictions.
+
+    Maps the Portsmouth paper's concept of "linguistic forecast horizon":
+    - Like weather: 3-day forecast is reliable, 14-day is not
+    - Each generation of learners introduces new variables → entropy grows
+    - Exponential decay: confidence(t) = confidence_0 * e^(-t / horizon)
+    """
+    concept: str
+    confidence_now: float                     # current prediction confidence (0-1)
+    horizon_steps: int                        # steps before confidence drops to 0.37
+    decay_rate: float                         # lambda in e^(-lambda * t)
+    generation_noise: float                   # entropy introduced per "generation" of change
+    forecast: list[float] = field(default_factory=list)  # confidence at t=1,2,3,5,10,20
+
+    def confidence_at(self, steps: int) -> float:
+        """Confidence at given steps into the future."""
+        import math
+        return max(0.0, self.confidence_now * math.exp(-self.decay_rate * steps))
+
+    def reliable_steps(self, threshold: float = 0.6) -> int:
+        """How many steps ahead can we predict with >threshold confidence?"""
+        import math
+        if self.decay_rate <= 0:
+            return self.horizon_steps
+        return int(math.log(threshold / self.confidence_now) / -self.decay_rate)
+
+
+class LinguisticHorizonEngine:
+    """Time-decay confidence calculator for knowledge diffusion predictions.
+
+    Portsmouth paper insight: linguistic predictions degrade exponentially
+    with forecast horizon, analogous to weather forecasting. Each
+    "generation" of knowledge propagation introduces entropy.
+    """
+
+    def __init__(self, noise_per_generation: float = 0.15):
+        self._noise = noise_per_generation
+        self._estimates: dict[str, HorizonEstimate] = {}
+
+    def estimate(self, concept: str, confidence: float, horizon: int = 10) -> HorizonEstimate:
+        """Calculate confidence decay curve for a concept.
+
+        Args:
+            concept: Knowledge concept name
+            confidence: Current prediction confidence (0-1)
+            horizon: Baseline horizon (steps to e^-1 decay)
+        """
+        import math
+        decay = 1.0 / max(1, horizon) if horizon > 0 else 0.1
+        gen_noise = self._noise * (1.0 - confidence)
+        effective_decay = decay + gen_noise
+
+        forecast = []
+        for t in [1, 2, 3, 5, 10, 20]:
+            c = confidence * math.exp(-effective_decay * t)
+            forecast.append(round(c, 4))
+
+        est = HorizonEstimate(
+            concept=concept,
+            confidence_now=confidence,
+            horizon_steps=horizon,
+            decay_rate=round(effective_decay, 4),
+            generation_noise=round(gen_noise, 4),
+            forecast=forecast,
+        )
+        self._estimates[concept] = est
+        return est
+
+    def compare_concepts(self, *concepts: str) -> list[dict]:
+        """Compare forecast horizons across multiple concepts."""
+        result = []
+        for c in concepts:
+            est = self._estimates.get(c)
+            if est:
+                result.append({
+                    "concept": c,
+                    "confidence": est.confidence_now,
+                    "reliable_steps": est.reliable_steps(),
+                    "decay_rate": est.decay_rate,
+                    "forecast_3steps": est.forecast[2] if len(est.forecast) > 2 else 0,
+                    "forecast_10steps": est.forecast[4] if len(est.forecast) > 4 else 0,
+                    "noise": est.generation_noise,
+                })
+        result.sort(key=lambda x: -x["reliable_steps"])
+        return result
+
+    def stats(self) -> dict:
+        return {
+            "concepts_tracked": len(self._estimates),
+            "noise_per_generation": self._noise,
+            "comparisons": self.compare_concepts(*list(self._estimates.keys())[:6]),
+        }
+
+
+_horizon_engine: LinguisticHorizonEngine | None = None
+
+
+def get_horizon_engine() -> LinguisticHorizonEngine:
+    global _horizon_engine
+    if _horizon_engine is None:
+        _horizon_engine = LinguisticHorizonEngine()
+    return _horizon_engine

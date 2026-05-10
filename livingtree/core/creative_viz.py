@@ -300,4 +300,81 @@ def get_creative() -> CreativeVisualizer:
     global _creative_instance
     if _creative_instance is None:
         _creative_instance = CreativeVisualizer()
+
+
+# ═══ Knowledge Weather Map (Portsmouth paper inspired) ═══
+
+def build_knowledge_weather_map(phase_data: dict = None) -> str:
+    """Render knowledge domains as a meteorological pressure map.
+
+    Maps the Portsmouth paper's statistical field theory to a visual:
+    each knowledge domain is a "pressure system" — high pressure = concepts
+    rapidly diffusing (above critical), low pressure = isolated concepts
+    resisting change.  Analogous to magnetic domain visualization.
+
+    phase_data: output from KnowledgePhaseDetector.stats()
+    """
+    concepts = (phase_data or {}).get("top_concepts", [])
+
+    if not concepts:
+        concepts = [
+            {"name": "AI模型", "mass": 120, "threshold": 80, "survival": 0.3, "domain": "ai"},
+            {"name": "语音交互", "mass": 95, "threshold": 100, "survival": 0.5, "domain": "voice"},
+            {"name": "环评标准", "mass": 60, "threshold": 55, "survival": 0.9, "domain": "env"},
+            {"name": "前端架构", "mass": 45, "threshold": 90, "survival": 0.2, "domain": "web"},
+            {"name": "群体智能", "mass": 78, "threshold": 70, "survival": 0.6, "domain": "swarm"},
+            {"name": "安全合规", "mass": 30, "threshold": 100, "survival": 0.1, "domain": "security"},
+        ]
+
+    max_mass = max((c["mass"] for c in concepts), default=100)
+
+    rows = []
+    for c in concepts:
+        ratio = c["mass"] / max(c["threshold"], 1)
+        pct = min(100, int(ratio * 100))
+
+        if ratio >= 1.3:
+            color = "#f44"
+            label = "高压区·快速扩散"
+            icon = "🔴"
+        elif ratio >= 0.9:
+            color = "#fa4"
+            label = "临界区·接近相变"
+            icon = "🟡"
+        elif c["survival"] > 0.6:
+            color = "#6af"
+            label = "隔离区·方言存续"
+            icon = "🔵"
+        else:
+            color = "#999"
+            label = "低压区·衰退中"
+            icon = "⚪"
+
+        bar_width = min(100, int(c["mass"] / max_mass * 100))
+
+        rows.append(
+            f'<div style="margin:4px 0;padding:4px 8px;border-radius:4px;'
+            f'background:rgba(255,255,255,.02)">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center">'
+            f'<span style="font-size:11px">{icon} <b>{c["name"]}</b>'
+            f'<span style="font-size:9px;color:var(--dim);margin-left:6px">{c.get("domain","")}</span></span>'
+            f'<span style="font-size:10px;color:{color}">{label}</span></div>'
+            f'<div style="display:flex;align-items:center;gap:6px;margin-top:2px">'
+            f'<div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">'
+            f'<div style="height:100%;width:{bar_width}%;background:{color};border-radius:3px;transition:width 1.5s"></div></div>'
+            f'<span style="font-size:9px;color:var(--dim);white-space:nowrap">'
+            f'{c["mass"]}/{c["threshold"]} · 存活率{c["survival"]*100:.0f}%</span></div></div>'
+        )
+
+    return (
+        '<div style="padding:8px">'
+        '<div style="text-align:center;margin-bottom:8px">'
+        '<div style="font-size:20px">🗺️ 知识气象图</div>'
+        '<div style="font-size:10px;color:var(--dim)">Knowledge Weather Map — 统计场论驱动</div>'
+        '<div style="font-size:9px;color:var(--dim);margin-top:2px">'
+        '🔴高压扩散 &nbsp;🟡临界相变 &nbsp;🔵方言存续 &nbsp;⚪低压衰退</div></div>'
+        + "".join(rows) +
+        '<div style="font-size:9px;color:var(--dim);text-align:center;margin-top:8px">'
+        '基于 Portsmouth 语言相变理论 — 知识域如磁畴, 临界点触发全图重排</div></div>'
+    )
     return _creative_instance

@@ -7,6 +7,7 @@
   'use strict';
 
   /* ── Init Store & API ── */
+  window.S = LT.store;   // global store reference (used by all component files)
   if (LT.store && LT.store.init) LT.store.init();
   if (LT.store && LT.store.initAutoTheme) LT.store.initAutoTheme();
   if (LT.store && LT.store.requestNotify) LT.store.requestNotify();
@@ -29,14 +30,12 @@
     { name: 'doc-reader', el: '#doc-reader-modal' },
     { name: 'notifications', el: '#notifications' },
     { name: 'user-menu', el: '#user-dropdown' },
-    { name: 'code-editor', el: '#editor-panel-body' },
-    { name: 'project-selector', el: '#project-selector-body' },
-    { name: 'doc-studio', el: '#doc-studio' },
-    { name: 'graph-studio', el: '#graph-studio' },
-    { name: 'diagram-studio', el: '#diagram-studio' },
+    { name: 'code-editor', el: '#editor-panel-body', skip: true },
+    { name: 'models', el: '#models-modal' },
   ];
 
-  components.forEach(({ name, el }) => {
+  components.forEach(({ name, el, skip }) => {
+    if (skip) return;
     const Cls = LT.get(name);
     if (!Cls) { console.warn(`Component "${name}" not registered`); return; }
     const root = typeof el === 'string' ? document.querySelector(el) : el;
@@ -44,7 +43,89 @@
     new Cls(root).init();
   });
 
-  /* ── Top-level event wiring ── */
+  /* ── Periodic shield status + presence + scheduler color update ── */
+  setInterval(async function() {
+    try { var r=await fetch('/api/shield/status');var d=await r.json();var el=document.getElementById('shield-indicator'); if(el) el.textContent = d.hitl_pending>0 ? '⚠️' : '🛡️'; } catch(e) {}
+  }, 30000);
+
+  setInterval(async function() {
+    try { var r=await fetch('/api/status/vitals');var d=await r.json();var el=document.getElementById('presence-text'); if(el) el.textContent = (d.leaf_display||{}).message || '🌿'; } catch(e) {}
+    try { var r=await fetch('/api/scheduler/status');var d=await r.json();var dm=document.documentElement;var colors={growth:'#0fdc78',active:'#67c23a',torpor:'#e28a00',hibernation:'#f65a5a'};var c=colors[d.mode]||'#0fdc78';dm.style.setProperty('--brand-default',c); } catch(e) {}
+  }, 8000);
+
+  /* ── Open Admin link ── */
+  window.openAdmin = function() { window.open('/tree/admin','_blank'); };
+
+  /* ── Local folder picker (File System Access API) ── */
+  var _dirHandle = null;
+  window.pickFolder = async function() {
+    try {
+      _dirHandle = await window.showDirectoryPicker();
+      document.getElementById('folder-path').textContent = _dirHandle.name;
+      window.LT = window.LT || {};
+      window.LT.dirHandle = _dirHandle;
+      console.log('[localfs] Mounted:', _dirHandle.name);
+    } catch(e) {
+      if (e.name !== 'AbortError') console.warn('[localfs]', e);
+    }
+  };
+
+  var _panelClearedAt = 0;
+  window.clearPanel = function() {
+    var el = document.getElementById('chat-area');
+    if (el) { var msgs = el.querySelector('.messages'); if (msgs) msgs.innerHTML = ''; }
+    if (window.S && window.S.activeId && window.S.messages) {
+      var sid = window.S.activeId;
+      _panelClearedAt = (window.S.messages[sid] || []).length;
+    }
+  };
+  window.LT = window.LT || {};
+  window.LT.getDirHandle = function() { return _dirHandle; };
+
+  /* ── Cognition toggle ── */
+  window.toggleCognition = function() {
+    var p = document.getElementById('cognition-panel');
+    if (!p) return;
+    p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    if (p.style.display === 'block') {
+      p.innerHTML = '<span style="color:var(--text-secondary)">🧠 认知流已开启 — 发送消息可见AI思考过程</span>';
+      p.scrollIntoView({behavior:'smooth'});
+    }
+  };
+
+  /* ── Creative panel ── */
+  var _creativeTabs = ['timeline','dream','swarm','emotion','twin'];
+  var _creativeIdx = 0;
+  window.openCreative = function() {
+    var existing = document.getElementById('creative-modal');
+    if (existing) { existing.style.display = existing.style.display==='none'?'flex':'none'; return; }
+    var el = document.createElement('div');
+    el.id = 'creative-modal';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column';
+    el.onclick = function(e) { if (e.target===el) el.style.display='none'; };
+    var inner = '<div style="background:var(--bg-secondary);border-radius:12px;width:700px;max-width:95vw;max-height:80vh;overflow:hidden;display:flex;flex-direction:column">' +
+      '<div style="display:flex;gap:4px;padding:12px;border-bottom:1px solid var(--border-secondary)">' +
+      _creativeTabs.map(function(t,i){ return '<button onclick="_switchCreative('+i+')" style="padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border-secondary);background:none;color:var(--text-secondary)" id="crea-tab-'+i+'">'+{timeline:'⏳记忆',dream:'🌙梦境',swarm:'🗺️群体',emotion:'💭情绪',twin:'🪞孪生'}[t]+'</button>'; }).join('') +
+      '<button style="margin-left:auto;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:none;background:none;color:var(--text-secondary)" onclick="document.getElementById(\'creative-modal\').remove()">✕</button></div>' +
+      '<div id="creative-content" style="padding:16px;overflow-y:auto;flex:1;font-size:12px;color:var(--text-secondary)">加载中...</div></div>';
+    el.innerHTML = inner;
+    document.body.appendChild(el);
+    _switchCreative(0);
+  };
+  window._switchCreative = function(idx) {
+    _creativeIdx = idx;
+    _creativeTabs.forEach(function(_,i) {
+      var b = document.getElementById('crea-tab-'+i);
+      if (b) b.style.background = i===idx ? 'var(--brand-default)' : 'none';
+      if (b) b.style.color = i===idx ? 'var(--bg-base)' : 'var(--text-secondary)';
+    });
+    var el = document.getElementById('creative-content');
+    if (el) {
+      el.innerHTML = '<div style="text-align:center;padding:20px">加载中...</div>';
+      fetch('/tree/creative/'+_creativeTabs[idx]).then(function(r){return r.text()}).then(function(h){ el.innerHTML = h; });
+    }
+  };
+  LT.on('creative:open', function() { openCreative(); });
   LT.on('session:switch', id => {
     document.getElementById('topbar-title').textContent = LT.store.active()?.title || 'LivingTree AI Agent';
   });
@@ -131,11 +212,10 @@
 
   /* ── Service availability check ── */
   (async function checkServices() {
-    // Check LT-Office
     try {
       const r = await fetch('http://localhost:9000/web-apps/apps/api/documents/api.js', { method: 'HEAD' });
-      if (!r.ok) document.getElementById('btn-split').style.opacity = '0.4';
-    } catch(e) { document.getElementById('btn-split').style.opacity = '0.4'; }
+      if (!r.ok) { var el = document.getElementById('btn-split'); if (el) el.style.opacity = '0.4'; }
+    } catch(e) { var el = document.getElementById('btn-split'); if (el) el.style.opacity = '0.4'; }
   })();
 
   /* ── Theme toggle ── */
@@ -218,8 +298,8 @@
   };
 
   /* ── Notifications for task completion ── */
-  LT.on('review:complete', () => { if (LT.store) LT.store.notify('LivingTree', '文档审阅完成'); });
-  LT.on('msg:done', () => { if (LT.store) LT.store.notify('LivingTree', 'AI 回复已完成'); });
+  LT.on('review:complete', () => { if (LT.store && LT.store.notify) LT.store.notify('LivingTree', '文档审阅完成'); });
+  LT.on('msg:done', () => { if (LT.store && LT.store.notify) LT.store.notify('LivingTree', 'AI 回复已完成'); });
 
   /* ── Context menu (right click on messages) ── */
   let ctxTarget = null, ctxIndex = -1;

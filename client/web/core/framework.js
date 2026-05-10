@@ -20,7 +20,7 @@ const LT = {
   },
   qs(sel, root) { return (root || document).querySelector(sel) },
   qsa(sel, root) { return [...(root || document).querySelectorAll(sel)] },
-  ge(id) { return document.getElementById(id) },
+  ge(id) { return document.getElementById(id.replace(/^#/,'')) },
   esc(s) { const m = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }; return String(s).replace(/[&<>"']/g, c => m[c]) },
 
   /* ── Storage ── */

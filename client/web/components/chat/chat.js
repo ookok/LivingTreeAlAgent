@@ -1,184 +1,15 @@
 /* LivingTree Web — Chat Component */
 class Chat extends Component {
   init() {
-    this._unsubs.push(LT.on('session:switch', () => this._loadMessages()));
-    this._unsubs.push(LT.on('msg:user', (d) => this._onUserMsg(d.content, d.raw)));
+    this._unsubs.push(LT.on('msg:user', (d) => this._onUserMsg(d.content)));
     this._unsubs.push(LT.on('msg:typing', () => this._onTyping()));
-    this._unsubs.push(LT.on('msg:agent-stream', () => this._onAgentStream()));
-    this._unsubs.push(LT.on('msg:chunk', (d) => this._onChunk(d.content)));
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
-    this._unsubs.push(LT.on('review:complete', (d) => this._onReviewComplete(d)));
-    this._unsubs.push(LT.on('msg:pin', (d) => this._onPinMsg(d)));
-    this._unsubs.push(LT.on('workflow:update', (d) => this._onWorkflowUpdate(d)));
-    this._unsubs.push(LT.on('workflow:section', (d) => this._onWorkflowSection(d)));
-    this._unsubs.push(LT.on('workflow:done', () => this._onWorkflowDone()));
     this.render();
     this._loadInitial();
-    this._setupMsgActions();
-    this._renderPinned();
-  }
-
-  _setupMsgActions() {
-    this.el.addEventListener('click', (e) => {
-      // Card action buttons
-      const cardBtn = e.target.closest('[data-action]');
-      if (cardBtn && cardBtn.closest('.card')) {
-        const cardEl = cardBtn.closest('.card');
-        const action = cardBtn.dataset.action;
-        if (action === 'get-location' || action === 'approve' || action === 'reject' ||
-            action === 'take-photo' || action === 'submit-form' || action === 'submit-checklist' ||
-            action === 'submit-rating' || action === 'complete' || action === 'share-card' ||
-            action === 'start-timer' || action === 'stop-timer' || action === 'clear-sig' ||
-            action === 'submit-sig' || action === 'scan-qr' || action === 'pick-location') {
-          e.preventDefault();
-          Cards.handleAction(cardEl, action);
-          return;
-        }
-      }
-
-      const btn = e.target.closest('[data-action]');
-      if (!btn || !btn.dataset.action) return;
-      const msgEl = btn.closest('.message');
-      if (!msgEl) return;
-
-      const action = btn.dataset.action;
-      if (action === 'copy-text') {
-        LT.renderer.copyMsgText(msgEl);
-      } else if (action === 'copy-md') {
-        LT.renderer.copyMsgMarkdown(msgEl);
-      } else if (action === 'share') {
-        const raw = LT.renderer._getRaw(msgEl);
-        Share.open(raw);
-      } else if (action === 'open-in-oo') {
-        const raw = LT.renderer._getRaw(msgEl);
-        LT.emit('doc:create', { content: raw, title: this._getDocTitle(raw) });
-      }
-    });
-  }
-
-  _getDocTitle(content) {
-    const firstLine = (content || '').split('\n')[0].replace(/^#+\s*/, '').trim().slice(0, 50);
-    return firstLine || 'AI Generated Document';
-  }
-
-  /* ── Replay mode ── */
-  startReplay() {
-    if (this._replaying) return;
-    this._replaying = true;
-    const steps = [
-      { icon: '👁️', label: 'SENSE — 接收输入', dur: 300 },
-      { icon: '🧠', label: 'THINK — TreeLLM 路由分析', dur: 800 },
-      { icon: '📚', label: 'RAG 2.0 — 检索知识库', dur: 600 },
-      { icon: '📋', label: 'PLAN — 制定执行计划', dur: 500 },
-      { icon: '⚡', label: 'EXEC — 执行中', dur: 1200 },
-      { icon: '🔍', label: 'REFLECT — 反思评估', dur: 400 },
-      { icon: '✨', label: 'OUTPUT — 输出结果', dur: 300 },
-    ];
-    const overlay = document.createElement('div');
-    overlay.className = 'replay-overlay';
-    overlay.innerHTML = `<div class="replay-panel"><div class="replay-header"><span>🔄 对话回放</span><button class="replay-close" onclick="this.closest('.replay-overlay').remove();LT.get('chat')._replaying=false">✕</button></div><div class="replay-timeline" id="replay-timeline"></div></div>`;
-    document.body.appendChild(overlay);
-    const tl = overlay.querySelector('#replay-timeline');
-    let i = 0;
-    const show = () => {
-      if (i >= steps.length || !this._replaying) { this._replaying = false; setTimeout(() => overlay.remove(), 800); return; }
-      const s = steps[i];
-      const el = document.createElement('div');
-      el.className = 'replay-step active';
-      el.innerHTML = `<span class="replay-step-icon">${s.icon}</span><span>${s.label}</span><div class="replay-step-bar"><div class="replay-step-fill" style="animation: replayBar ${s.dur}ms linear"></div></div>`;
-      tl.appendChild(el); tl.scrollTop = tl.scrollHeight;
-      setTimeout(show, s.dur); i++;
-    }; show();
-  },
-
-  _renderPinned() {
-    const store = LT.store;
-    const c = this.el.querySelector('#pinned-msgs');
-    if (!c || !store) return;
-    const pinned = store.getPinned(store.activeId);
-    if (!pinned.length) { c.style.display = 'none'; return; }
-    c.style.display = 'block';
-    c.innerHTML = pinned.map((m, i) => `<div class="pinned-msg"><span class="pinned-icon">📌</span><span class="pinned-text">${LT.esc((m.content||'').slice(0,60))}</span><button class="pinned-close" onclick="LT.store.togglePin(LT.store.activeId,${i});LT.emit('session:switch')">✕</button></div>`).join('');
-  },
-
-  /* ── Report Workflow ── */
-  _workflowEl: null,
-
-  _renderWorkflow() {
-    this._showMessages();
-    if (this._workflowEl) { this._workflowEl.remove(); this._workflowEl = null; }
-    const html = `<div class="message message-agent"><div class="message-bubble agent-bubble">${ReportWorkflow.renderStepper()}${ReportWorkflow.renderSections()}${ReportWorkflow.renderSummary()}</div></div>`;
-    LT.renderer.append(this._msgsEl, html);
-    this._workflowEl = this._msgsEl.lastElementChild;
-    this._scrollBottom();
-  },
-
-  _audioCtx: null,
-  _playClick() {
-    if (!this._audioCtx) this._audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const o = this._audioCtx.createOscillator(), g = this._audioCtx.createGain();
-    o.connect(g); g.connect(this._audioCtx.destination);
-    o.frequency.value = 800; g.gain.value = 0.05;
-    o.start(); o.stop(this._audioCtx.currentTime + 0.05);
-  },
-
-  _onReviewComplete(data) {
-    this._showMessages();
-    const review = data.review;
-    const sum = review.summary;
-    const topIssues = (review.annotations || []).slice(0, 5);
-    const sevBadge = (s) => s === 'error' ? '🔴' : s === 'warning' ? '🟡' : '🔵';
-
-    const html = `
-<div class="message message-agent">
-  <div class="message-bubble agent-bubble">
-    <div class="review-summary">
-      <div class="review-summary-header">
-        <span class="review-summary-icon">📋</span>
-        <span class="review-summary-title">AI 文档审阅 — ${LT.esc(data.docTitle || '文档')}</span>
-      </div>
-      <div class="review-summary-stats">
-        <div class="review-stat">
-          <div class="review-stat-value" style="color:#e8463a">${sum.by_severity.error || 0}</div>
-          <div class="review-stat-label">错误</div>
-        </div>
-        <div class="review-stat">
-          <div class="review-stat-value" style="color:#e28a00">${sum.by_severity.warning || 0}</div>
-          <div class="review-stat-label">警告</div>
-        </div>
-        <div class="review-stat">
-          <div class="review-stat-value" style="color:#3f85ff">${sum.by_severity.info || 0}</div>
-          <div class="review-stat-label">建议</div>
-        </div>
-        <div class="review-stat">
-          <div class="review-stat-value">${sum.total}</div>
-          <div class="review-stat-label">合计</div>
-        </div>
-      </div>
-      <div class="review-summary-list">
-        ${topIssues.map(a => `
-          <div class="review-summary-item re-sev-${a.severity}">
-            ${sevBadge(a.severity)} <strong>${LT.esc(a.message)}</strong>
-            ${a.suggestion ? `<div class="re-sug">💡 ${LT.esc(a.suggestion)}</div>` : ''}
-          </div>`).join('')}
-        ${review.annotations.length > 5 ? `<div class="review-summary-more">... 还有 ${review.annotations.length - 5} 条意见，请在文档编辑器中查看</div>` : ''}
-      </div>
-      <div class="review-summary-action">
-        <button onclick="LTOffice.toggleSplit()" class="card-btn card-btn-primary" style="width:100%">
-          在 LT-Office 中查看详情
-        </button>
-      </div>
-    </div>
-  </div>
-</div>`;
-
-    LT.renderer.append(this._msgsEl, html);
-    this._scrollBottom();
   }
 
   template() {
     return `
-      <div class="pinned-msgs" id="pinned-msgs" style="display:none"></div>
       <div class="messages"></div>
       <div class="welcome">
         <div class="dashboard">
@@ -218,37 +49,18 @@ class Chat extends Component {
 
   _loadMessages() {
     const store = LT.store;
-    const msgs = store.getMsgs(store.activeId);
+    var msgs = store.getMsgs(store.activeId);
     if (!msgs || !msgs.length) { this._showWelcome(); return; }
     this._showMessages();
     this._msgsEl.innerHTML = '';
     const renderer = LT.renderer;
+    // Deduplicate: only show each message once (by content hash)
+    var seen = {};
     msgs.forEach((m) => {
-      const role = m.role === 'assistant' ? 'agent' : m.role;
+      var key = m.role + '|' + (m.content||'').substring(0,40);
+      if (seen[key]) return;
+      seen[key] = true;
       renderer.append(this._msgsEl, m.role === 'user' ? renderer.userMsg(m.content) : renderer.agentMsg(m.content, false));
-      if (role === 'agent') {
-        const last = this._msgsEl.querySelector('.message-agent:last-of-type');
-        if (last) {
-          this._addThinking(last);
-          this._addMsgActions(last);
-          // Render cards from stored card data or parse from content
-          if (m.cards && m.cards.length) {
-            const cardsHtml = m.cards.map(c => Cards.render(c)).join('');
-            const wrapper = document.createElement('div');
-            wrapper.className = 'msg-cards';
-            wrapper.innerHTML = cardsHtml;
-            last.appendChild(wrapper);
-            m.cards.forEach((card, i) => {
-              const cardEl = wrapper.querySelectorAll('.card')[i];
-              if (cardEl) Cards.wireCard(cardEl);
-            });
-          } else {
-            this._addCards(last, m.content);
-          }
-          const blocks = this._detectDocCards(m.content);
-          if (blocks.length) this._renderDocCards(last, blocks);
-        }
-      }
     });
     this._scrollBottom();
   }
@@ -269,6 +81,40 @@ class Chat extends Component {
     this._showMessages();
     LT.renderer.append(this._msgsEl, LT.renderer.userMsg(content));
     this._scrollBottom();
+    this._checkTriggers(content);
+  }
+
+  _checkTriggers(msg) {
+    var m = msg.toLowerCase();
+    if (m.indexOf('搜视频')>=0 || m.indexOf('找视频')>=0 || m.indexOf('b站')>=0 || m.indexOf('bilibili')>=0 || m.indexOf('视频')>=0 && m.indexOf('搜索')>=0) {
+      var kw = msg.replace(/搜视频|找视频|搜索|帮我|一下|视频|b站/g,'').trim() || msg;
+      this._fetchVideo(kw);
+    }
+    if (m.indexOf('南京')>=0 && (m.indexOf('交通')>=0||m.indexOf('天气')>=0||m.indexOf('博物')>=0||m.indexOf('夫子庙')>=0||m.indexOf('营业')>=0)) {
+      var tool = m.indexOf('交通')>=0 ? 'nanjing_traffic' : m.indexOf('博物')>=0||m.indexOf('夫子庙')>=0 ? 'nanjing_museum' : m.indexOf('营业')>=0 ? 'nanjing_business' : 'nanjing_weather';
+      this._fetchCity(tool, msg);
+    }
+  }
+
+  async _fetchVideo(kw) {
+    try {
+      var r = await fetch('/api/video/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:kw,limit:3})});
+      var d = await r.json();
+      if (d.ok && d.cards_html) {
+        LT.renderer.append(this._msgsEl, '<div class="msg assistant"><div class="who">📺 视频</div><div class="text">'+d.cards_html+'</div></div>');
+        this._scrollBottom();
+      }
+    } catch(e) {}
+  }
+
+  async _fetchCity(tool, msg) {
+    try {
+      var r = await fetch('/api/city/call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:tool,params:{}})});
+      var d = await r.json();
+      var text = JSON.stringify(d, null, 2).substring(0, 500);
+      LT.renderer.append(this._msgsEl, '<div class="msg assistant"><div class="who">🏯 金陵</div><div class="text"><pre>'+text+'</pre></div></div>');
+      this._scrollBottom();
+    } catch(e) {}
   }
 
   _onTyping() {
@@ -280,118 +126,47 @@ class Chat extends Component {
   }
 
   _onAgentStream() {
-    const typing = this._msgsEl.querySelector('.message-agent .typing-indicator');
+    const typing = this._msgsEl.querySelector('.agent-message .typing-indicator');
     if (typing) {
-      const msg = typing.closest('.message-agent');
+      const msg = typing.closest('.agent-message');
       if (msg) msg.remove();
     }
-
-    // Multi-lane: create agent message with thinking lane + response lane
-    const html = `
-<div class="message message-agent">
-  <div class="message-bubble agent-bubble" data-stream="true">
-    ${LT.renderer.streamLane('thinking', '分析中...')}
-    ${LT.renderer.streamLane('response', '', false)}
-    ${LT.renderer.confidenceBar(0)}
-  </div>
-</div>`;
-    LT.renderer.append(this._msgsEl, html);
-
-    // Init batched streaming on response lane body
-    const lastBubble = this._msgsEl.querySelector('.agent-bubble[data-stream]');
-    if (lastBubble) {
-      const responseBody = lastBubble.querySelector('.stream-response .stream-lane-body');
-      if (responseBody) Perf.initStream(responseBody);
-    }
+    LT.renderer.append(this._msgsEl, LT.renderer.agentMsg('', true));
     this._scrollBottom();
   }
 
   _onChunk(content) {
-    // Update thinking lane with progress
-    const agentMsg = this._msgsEl.querySelector('.agent-bubble[data-stream]');
-    if (agentMsg) {
-      const thinkingBody = agentMsg.querySelector('.stream-thinking .stream-lane-body');
-      const len = (content || '').length;
-      if (thinkingBody && len < 200) {
-        const progress = Math.min(Math.round(len / 2), 95);
-        thinkingBody.textContent = `分析中... ${progress}%`;
-      } else if (thinkingBody && thinkingBody.textContent !== '分析完成') {
-        thinkingBody.textContent = '分析完成';
-        thinkingBody.style.color = 'var(--status-success)';
-        // Collapse thinking lane
-        setTimeout(() => {
-          const lane = agentMsg.querySelector('.stream-thinking');
-          if (lane) lane.classList.add('collapsed');
-        }, 1500);
-      }
-
-      // Update confidence bar
-      const confBar = agentMsg.querySelector('.confidence-fill');
-      if (confBar) {
-        const conf = Math.min(len / 1000, 0.95);
-        confBar.style.width = Math.round(conf * 100) + '%';
-      }
-    }
-
-    // Batched append via Perf
-    Perf.appendChunk(content);
+    LT.renderer.updateStream(this._msgsEl, content);
     this._scrollBottom();
   }
 
   _onDone(content) {
-    LT.renderer.finalize(this._msgsEl);
-    const last = this._msgsEl.querySelector('.message-agent:last-of-type');
-    if (last) {
-      last.setAttribute('data-raw', '`' + LT.renderer.esc(content).replace(/`/g, '\\`') + '`');
-      this._addThinking(last);
-      this._addMsgActions(last);
-      this._addCards(last, content);
-      const blocks = this._detectDocCards(content);
-      if (blocks.length) this._renderDocCards(last, blocks);
-      // Code mode: detect diff blocks
-      this._renderDiffBlocks(last, content);
+    this._showMessages();
+    // Remove typing indicator
+    var typing = this._msgsEl.querySelector('.typing-indicator');
+    if (typing) { var p = typing.closest('.message-agent'); if (p) p.remove(); else typing.remove(); }
+    // Create empty agent bubble, then typewriter fill it
+    var renderer = LT.renderer;
+    renderer.append(this._msgsEl, renderer.agentMsg('', false));
+    var bubble = this._msgsEl.querySelector('.agent-message:last-child .agent-bubble');
+    if (bubble) {
+      this._typewrite(bubble, content || '', 0);
     }
+    // Store in store
+    var store = LT.store;
+    var sid = store.activeId;
+    store.addMsg(sid, { role: 'assistant', content: content });
     this._scrollBottom();
   }
 
-  _addMsgActions(msgEl) {
-    const bubble = msgEl.querySelector('.agent-bubble');
-    if (!bubble) return;
-    const actions = LT.renderer.msgActions('agent');
-    const el = document.createElement('div');
-    el.innerHTML = actions;
-    bubble.appendChild(el.firstChild);
-  }
-
-  _addCards(msgEl, content) {
-    if (!window.Cards) return;
-    const cards = Cards.parseFromContent(content);
-    if (!cards.length) return;
-
-    // Store cards on the message element
-    const store = LT.store;
-    if (store && store.activeId) {
-      const msgs = store.messages[store.activeId];
-      if (msgs && msgs.length) {
-        const lastMsg = msgs[msgs.length - 1];
-        if (lastMsg && lastMsg.role === 'agent') {
-          lastMsg.cards = cards;
-          store.save();
-        }
-      }
-    }
-
-    const cardsHtml = cards.map(c => Cards.render(c)).join('');
-    const wrapper = document.createElement('div');
-    wrapper.className = 'msg-cards';
-    wrapper.innerHTML = cardsHtml;
-    msgEl.appendChild(wrapper);
-
-    // Wire up card interactions
-    cards.forEach((card, i) => {
-      const cardEl = wrapper.querySelectorAll('.card')[i];
-      if (cardEl) Cards.wireCard(cardEl);
-    });
+  _typewrite(el, text, i) {
+    if (i >= text.length) return;
+    var chunk = text.substring(0, i + 1);
+    el.innerHTML = LT.renderer.md(chunk);
+    this._scrollBottom();
+    var delay = 8 + Math.random() * 15;
+    var self = this;
+    setTimeout(function() { self._typewrite(el, text, i + 1); }, delay);
   }
 
   _scrollBottom() {
@@ -401,13 +176,13 @@ class Chat extends Component {
   }
 
   _addThinking(msgEl) {
-    // Dynamic thinking steps from server data (fallback: basic flow)
     const steps = [
-      { icon: '🧠', text: 'TreeLLM 路由分析中' },
-      { icon: '📚', text: 'RAG 2.0 检索知识库' },
-      { icon: '✍️', text: '组织回复内容' },
+      { icon: '🔍', text: '分析用户意图...' },
+      { icon: '📚', text: '检索知识库 (0 条匹配)' },
+      { icon: '🧠', text: '生成回复策略' },
+      { icon: '✍️', text: '组织回复内容' }
     ];
-    const html = `<div class="think-toggle" onclick="this.classList.toggle('open');var b=this.parentElement.querySelector('.think-body');if(b)b.classList.toggle('open')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>思考过程</div><div class="think-body">${steps.map(s => `<div class="think-step"><span class="think-step-icon">${s.icon}</span><span class="think-step-text">${s.text}</span></div>`).join('')}</div>`;
+    const html = `<div class="think-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>思考过程</div><div class="think-body">${steps.map(s => `<div class="think-step"><span class="think-step-icon">${s.icon}</span><span class="think-step-text">${s.text}</span></div>`).join('')}</div>`;
     const content = msgEl.querySelector('.content');
     if (content) {
       const t = document.createElement('div');
@@ -446,126 +221,15 @@ class Chat extends Component {
     if (content) content.appendChild(wrapper);
   }
 
-  /* ── Code Mode Diff Detection ── */
-
-  _renderDiffBlocks(msgEl, fullContent) {
-    // Only in code mode
-    if (!LT.store || !LT.store.codeMode) return;
-
-    // Detect code blocks with diff language marker or inline diff patches
-    const diffBlocks = this._detectDiffPatch(fullContent);
-    if (!diffBlocks.length) return;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'msg-diff-blocks';
-
-    diffBlocks.forEach(d => {
-      const diffEl = document.createElement('div');
-      diffEl.className = 'diff-container';
-      diffEl.innerHTML = LT.renderer.diffBlock(d.oldCode, d.newCode, d.filePath, d.lang);
-      wrapper.appendChild(diffEl.firstChild);
-    });
-
-    const bubble = msgEl.querySelector('.agent-bubble');
-    if (bubble) bubble.appendChild(wrapper);
-  },
-
-  _detectDiffPatch(content) {
-    const results = [];
-
-    // Pattern 1: ```diff file=path\n...\n``` 
-    const diffRe = /```diff\s*(?:file=([^\s\n]+))?\s*\n([\s\S]*?)```/g;
-    let m;
-    while ((m = diffRe.exec(content)) !== null) {
-      const filePath = m[1] || '';
-      const diffContent = m[2];
-      results.push(...this._parseUnifiedDiff(diffContent, filePath));
-    }
-
-    // Pattern 2: Code blocks with explicit file path markers
-    // ```python file=src/app.py\n...\n``` in modification context
-    // We look for consecutive code blocks where the second one represents a modification
-
-    // Pattern 3: AI-generated code with explicit @@ markers
-    const hunkRe = /@@\s+-(\d+),?\d*\s+\+(\d+),?\d*\s+@@/g;
-    if (!results.length && hunkRe.test(content)) {
-      // Try to extract diff from content
-      results.push(...this._extractInlineDiff(content));
-    }
-
-    return results;
-  },
-
-  _parseUnifiedDiff(diffText, filePath) {
-    const lines = diffText.split('\n');
-    let oldCode = [], newCode = [];
-
-    for (const line of lines) {
-      if (line.startsWith('--- ') || line.startsWith('+++ ')) {
-        if (line.startsWith('--- ') && !filePath) {
-          filePath = line.replace(/^---\s*[ab]\//, '').trim();
-        }
-        continue;
-      }
-      if (line.startsWith('@@')) continue;
-      if (line.startsWith('-')) oldCode.push(line.slice(1));
-      else if (line.startsWith('+')) newCode.push(line.slice(1));
-      else { oldCode.push(line.slice(1) || line); newCode.push(line.slice(1) || line); }
-    }
-
-    if (oldCode.length || newCode.length) {
-      return [{
-        filePath: filePath || 'unknown',
-        oldCode: oldCode.join('\n'),
-        newCode: newCode.join('\n'),
-        lang: this._guessLang(filePath),
-      }];
-    }
-    return [];
-  },
-
-  _extractInlineDiff(content) {
-    // Try to find code blocks that are likely modifications
-    const codeBlocks = [];
-    const blockRe = /```(\w+)?\s*(?:file=([^\s\n]+))?\s*\n([\s\S]*?)```/g;
-    let m, lastBlock = null;
-    while ((m = blockRe.exec(content)) !== null) {
-      const lang = m[1] || '';
-      const filePath = m[2] || '';
-      const code = m[3];
-      if (lastBlock && (filePath === lastBlock.filePath || !filePath)) {
-        // Consecutive blocks may represent old → new
-        codeBlocks.push({
-          filePath: filePath || lastBlock.filePath,
-          oldCode: lastBlock.code,
-          newCode: code,
-          lang: lang || lastBlock.lang,
-        });
-        lastBlock = null;
-      } else {
-        lastBlock = { filePath, code, lang };
-      }
-    }
-    return codeBlocks;
-  },
-
-  _guessLang(path) {
-    const ext = (path || '').split('.').pop()?.toLowerCase();
-    const map = { js:'javascript', ts:'typescript', py:'python', html:'html',
-      css:'css', json:'json', yaml:'yaml', yml:'yaml', md:'markdown',
-      sql:'sql', sh:'bash', rs:'rust', go:'go', java:'java', cpp:'cpp', c:'c' };
-    return map[ext] || '';
-  },
-
   _updateDashboard() {
     const store = LT.store;
     const st = store.stats();
     const sessionsEl = this._welcomeEl.querySelector('.dash-val-sessions');
     const messagesEl = this._welcomeEl.querySelector('.dash-val-messages');
     const tokensEl = this._welcomeEl.querySelector('.dash-val-tokens');
-    if (sessionsEl) sessionsEl.textContent = st.sessions;
-    if (messagesEl) messagesEl.textContent = st.messages;
-    if (tokensEl) tokensEl.textContent = st.tokens.toLocaleString();
+    if (sessionsEl) sessionsEl.textContent = st.totalSessions || 0;
+    if (messagesEl) messagesEl.textContent = st.totalMessages || 0;
+    if (tokensEl) tokensEl.textContent = ((st.totalMessages || 0) * 500).toLocaleString();
 
     const timeline = this._welcomeEl.querySelector('.dash-timeline-list');
     if (timeline) {

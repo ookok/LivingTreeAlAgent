@@ -67,6 +67,8 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "sensetime": ["推理", "中文", "分析", "代码", "reasoning", "chinese", "analysis", "code"],
     "sensetime-pro": ["推理", "深度思考", "长文本", "reasoning", "deep", "long-context"],
     "sensetime-turbo": ["对话", "快速", "翻译", "chat", "fast", "translate"],
+    "freebuff": ["对话", "代码", "免费", "广告赞助", "chat", "code", "fallback", "analysis"],
+    "openrouter": ["对话", "代码", "推理", "分析", "chat", "code", "reasoning", "analysis", "多模型", "免费"],
 }
 
 

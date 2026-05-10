@@ -1,73 +1,95 @@
 class Dashboard extends Component {
-  constructor() { super('dashboard'); this._serverData = null }
+  constructor() {
+    super('dashboard');
+    this._live = {};
+    this.on('dashboard:update', () => { this._fetchLive(); this.render(); });
+  }
 
-  async init() {
-    this.render();
-    this.on('dashboard:update', () => this.render());
-    this._serverData = await LT.api.status().catch(() => null);
+  async _fetchLive() {
+    try {
+      var r = await fetch('/api/telemetry/stats'); if (r.ok) this._live.telemetry = await r.json();
+    } catch(e) {}
+    try {
+      var r = await fetch('/api/status/vitals'); if (r.ok) this._live.vitals = await r.json();
+    } catch(e) {}
     this.render();
   }
 
   template() {
-    const st = (LT.store && LT.store.stats()) || { sessions: 0, messages: 0, tokens: 0 };
-    const sd = this._serverData || {};
-    const life = sd.life_engine || {};
-    const orch = sd.orchestrator || {};
-    const cells = sd.cells || {};
-    const net = sd.network || {};
-    const tools = sd.tools_count || (LT.api._toolsCache ? LT.api._toolsCache.length : 4);
-    const recent = LT.store.sessions.slice(0, 5);
+    var S = LT.store;
+    var st = S.stats();
+    var recent = (S.sessions || []).slice(0, 5);
+    var vitals = this._live.vitals || {};
+    var tele = this._live.telemetry || {};
+    var cpu = vitals.cpu || {};
+    var mem = vitals.memory || {};
+    var llm = tele.llm || {};
 
     return `
 <div class="dash-header">
   <h2>🌳 LivingTree</h2>
-  <span class="dash-sub">数字生命体 v2.1 · ${sd.version || '本地模式'} · Gen ${life.generation || 0}</span>
+  <span class="dash-sub">v2.3 · ${tele.uptime_seconds ? Math.floor(tele.uptime_seconds/3600)+'h'+(Math.floor(tele.uptime_seconds/60)%60)+'m' : '本地模式'}</span>
 </div>
 <div class="dash-cards">
-  <div class="dash-card"><div class="dash-card-value">${st.sessions}</div><div class="dash-card-label">会话</div></div>
-  <div class="dash-card"><div class="dash-card-value">${st.messages}</div><div class="dash-card-label">消息</div></div>
-  <div class="dash-card"><div class="dash-card-value">${st.tokens.toLocaleString()}</div><div class="dash-card-label">Token</div></div>
-  <div class="dash-card"><div class="dash-card-value">${tools}</div><div class="dash-card-label">工具</div></div>
-</div>
-<div class="dash-cards" style="margin-top:0">
-  <div class="dash-card"><div class="dash-card-value">${cells.registered || 0}</div><div class="dash-card-label">AI 细胞</div></div>
-  <div class="dash-card"><div class="dash-card-value">${orch.total_agents || 0}</div><div class="dash-card-label">智能体</div></div>
-  <div class="dash-card"><div class="dash-card-value">${net.peers || 0}</div><div class="dash-card-label">P2P 节点</div></div>
-  <div class="dash-card"><div class="dash-card-value">${life.mutations || 0}</div><div class="dash-card-label">进化代数</div></div>
+  <div class="dash-card"><div class="dash-card-value">${st.totalSessions||0}</div><div class="dash-card-label">会话数</div></div>
+  <div class="dash-card"><div class="dash-card-value">${st.totalMessages||0}</div><div class="dash-card-label">总消息</div></div>
+  <div class="dash-card"><div class="dash-card-value">${llm.total_calls||0}</div><div class="dash-card-label">LLM 调用</div></div>
+  <div class="dash-card"><div class="dash-card-value" style="color:${cpu.percent>80?'var(--accent-coral)':'var(--brand-default)'}">${cpu.percent||'--'}%</div><div class="dash-card-label">CPU</div></div>
 </div>
 <div class="dash-row">
   <div class="dash-panel">
-    <div class="dash-panel-title">📊 Token 趋势</div>
-    <canvas id="dash-chart" width="400" height="140"></canvas>
+    <div class="dash-panel-title">📊 系统资源</div>
+    <div style="padding:8px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;margin:4px 0"><span>CPU</span><span style="color:var(--brand-default)">${cpu.percent||'--'}% · ${cpu.level||''}</span></div>
+      <div style="display:flex;justify-content:space-between;margin:4px 0"><span>内存</span><span>${mem.used_gb||'--'}/${mem.total_gb||'--'} GB · ${mem.level||''}</span></div>
+      <div style="display:flex;justify-content:space-between;margin:4px 0"><span>磁盘</span><span>${vitals.disk? vitals.disk.free_gb+'GB free' : '--'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin:4px 0"><span>LLM 延迟</span><span>${llm.avg_latency_ms? Math.round(llm.avg_latency_ms)+'ms' : '--'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin:4px 0"><span>LLM 成本</span><span>¥${llm.total_cost_yuan||'0'}</span></div>
+    </div>
   </div>
   <div class="dash-panel">
     <div class="dash-panel-title">🕐 最近活动</div>
-    <div class="dash-timeline" id="dash-timeline">
+    <div class="dash-timeline">
       ${recent.length
-        ? recent.map(s => `<div class="dash-timeline-item"><span class="dash-timeline-time">${new Date(s.ut).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span><span>${LT.esc(s.title)}</span></div>`).join('')
-        : '<div class="dash-timeline-item"><span class="dash-timeline-time">--</span><span>尚无活动</span></div>'}
+        ? recent.map(function(s) { return '<div class="dash-timeline-item"><span class="dash-timeline-time">' + new Date(s.ut).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) + '</span><span>' + LT.esc(s.title) + '</span></div>'; }).join('')
+        : '<div class="dash-timeline-item"><span class="dash-timeline-time">--</span><span>尚无活动记录</span></div>'}
     </div>
+  </div>
+</div>
+<div class="dash-row">
+  <div class="dash-panel">
+    <div class="dash-panel-title">🧘 AI 意识</div>
+    <div style="padding:8px;font-size:11px" id="dash-awareness">加载中...</div>
+  </div>
+  <div class="dash-panel">
+    <div class="dash-panel-title">🌿 绿能调度</div>
+    <div style="padding:8px;font-size:11px" id="dash-scheduler">加载中...</div>
   </div>
 </div>`;
   }
 
   render() {
     super.render();
-    requestAnimationFrame(() => this._drawChart());
+    this._fetchAwareness();
+    this._fetchScheduler();
   }
 
-  _drawChart() {
-    const c = LT.ge('dash-chart'); if (!c) return;
-    const ctx = c.getContext('2d'), W = c.width, H = c.height;
-    const st = (LT.store && LT.store.stats()) || { tokens: 0 };
-    const pts = [st.tokens*.1,st.tokens*.2,st.tokens*.4,st.tokens*.6,st.tokens*.7,st.tokens*.85,st.tokens];
-    const max = Math.max(...pts,1); ctx.clearRect(0,0,W,H); ctx.beginPath();
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--brand-default').trim();
-    ctx.lineWidth=1.5; ctx.lineJoin='round';
-    pts.forEach((v,i)=>{const x=20+i*(W-40)/(pts.length-1),y=H-20-(v/max)*(H-40);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
-    ctx.stroke(); ctx.fillStyle=ctx.strokeStyle+'20'; ctx.lineTo(W-20,H-20);ctx.lineTo(20,H-20);ctx.closePath();ctx.fill();
-    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-tertiary').trim();
-    ctx.font='9px sans-serif';ctx.fillText('0',2,H-4);ctx.fillText(max.toLocaleString(),2,12);
+  async _fetchAwareness() {
+    var el = document.getElementById('dash-awareness'); if (!el) return;
+    try {
+      var r = await fetch('/tree/admin/awareness'); if (r.ok) el.innerHTML = await r.text();
+    } catch(e) { el.textContent = '不可用'; }
+  }
+
+  async _fetchScheduler() {
+    var el = document.getElementById('dash-scheduler'); if (!el) return;
+    try {
+      var r = await fetch('/api/scheduler/status'); if (!r.ok) { el.textContent = '不可用'; return; }
+      var d = await r.json();
+      el.innerHTML = '<div>模式: <b style="color:var(--brand-default)">' + d.mode.toUpperCase() + '</b></div>' +
+        '<div>待处理: <b>' + d.deferred_count + '</b></div>' +
+        '<div style="font-size:10px;color:var(--text-secondary)">' + d.metaphor + '</div>';
+    } catch(e) { el.textContent = '不可用'; }
   }
 }
 LT.register('dashboard', Dashboard);

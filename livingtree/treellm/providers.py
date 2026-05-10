@@ -396,3 +396,26 @@ def create_sensetime_provider(api_key: str, model: str = "SenseChat-Turbo") -> O
         api_key=api_key,
         default_model=model,
     )
+
+
+def create_openrouter_provider(api_key: str, model: str = "") -> OpenAILikeProvider:
+    """Create an OpenRouter provider — 300+ models via unified API.
+
+    OpenRouter (openrouter.ai) provides a single OpenAI-compatible API
+    to access 300+ models from all major providers (DeepSeek, Claude,
+    GPT, Gemini, Qwen, Kimi, etc.) with automatic fallback and the
+    ability to use free-tier models.
+
+    Free models (no cost, rate-limited):
+    - deepseek/deepseek-v4-flash:free
+    - moonshotai/kimi-k2.6:free
+    - google/gemini-2.5-flash-lite:free
+
+    Key: sk-or-v1-...
+    """
+    return OpenAILikeProvider(
+        name="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+        default_model=model or "deepseek/deepseek-v4-flash:free",
+    )

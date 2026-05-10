@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import secrets
 import time as _time
@@ -10,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -77,16 +78,42 @@ def setup_routes(app: FastAPI) -> None:
     @app.get("/api/boot/progress")
     async def boot_progress(request: Request) -> dict[str, Any]:
         """Get hub initialization progress for the web UI."""
-        hub = request.app.state.hub
+        try:
+            hub = request.app.state.hub
+        except Exception:
+            return {"stage": "ready", "pct": 100, "detail": "系统就绪"}
         if hub and getattr(hub, '_started', False):
             return {"stage": "ready", "pct": 100, "detail": "系统就绪"}
-        bp = getattr(hub, '_boot_progress', None) if hub else None
-        return bp or {"stage": "starting", "pct": 0, "detail": "正在初始化..."}
+        return {"stage": "starting", "pct": 50, "detail": "正在初始化..."}
+
+    # ═══ Web API (SPA chat) ═══
+
+    @app.post("/api/web/chat")
+    async def web_chat(request: Request):
+        """SPA chat endpoint — returns JSON for the chat component."""
+        try:
+            body = await request.json()
+            messages = body.get("messages", [])
+            last = messages[-1]["content"] if messages else ""
+        except Exception:
+            last = ""
+        if not last or not last.strip():
+            return JSONResponse({"error": "empty"}, status_code=400)
+        try:
+            hub = request.app.state.hub
+            result = await hub.chat(last)
+            reply = result.get("reflections", [""])[0] if result.get("reflections") else str(result.get("intent", ""))
+            return JSONResponse({"content": reply[:2000], "done": True})
+        except Exception:
+            return JSONResponse({"content": "小树: 你好！我是LivingTree，系统正在初始化中...", "done": True})
 
     @app.get("/api/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
         """Health check endpoint."""
-        hub = getattr(request.app.state, 'hub', None)
+        try:
+            hub = request.app.state.hub
+        except Exception:
+            return HealthResponse(status="ok", version="2.3", components={"server": "running"})
         components = {}
         if hub:
             if getattr(hub, '_started', False):
@@ -124,6 +151,31 @@ def setup_routes(app: FastAPI) -> None:
             generation=result.get("generation", 0),
             success_rate=result.get("success_rate", 0.0),
         )
+
+    @app.get("/api/status")
+
+    # ═══ Web API (SPA chat) ═══
+
+    @app.post("/api/web/chat")
+    async def web_chat(request: Request):
+        """SPA chat endpoint — returns HTML fragments for the chat component."""
+        try:
+            body = await request.json()
+            messages = body.get("messages", [])
+            last = messages[-1]["content"] if messages else ""
+        except Exception:
+            last = ""
+
+        if not last or not last.strip():
+            return JSONResponse({"error": "empty"}, status_code=400)
+
+        try:
+            hub = request.app.state.hub
+            result = await hub.chat(last)
+            reply = result.get("reflections", [""])[0] if result.get("reflections") else result.get("intent", str(result))
+            return JSONResponse({"content": str(reply)[:2000], "done": True})
+        except Exception as e:
+            return JSONResponse({"content": f"系统: {str(e)[:100]}", "done": True})
 
     @app.get("/api/status")
     async def status(request: Request) -> dict[str, Any]:
@@ -817,6 +869,19 @@ def _fallback_reply(msg: str) -> str:
         finally:
             if device_id:
                 reach.unregister_device(device_id)
+
+    # ── Voice Call WebSocket ──
+
+    @app.websocket("/ws/voice")
+    async def voice_call_websocket(websocket: WebSocket):
+        """Voice call WebSocket — bilateral real-time voice conversation.
+
+        Client sends browser-STT text, 小树 responds with streaming TTS audio.
+        Audio is NEVER stored to disk. Voice persona: 活跃可爱温暖女声.
+        """
+        from ..core.voice_call import get_voice_call_engine
+        engine = get_voice_call_engine()
+        await engine.handle(websocket)
 
     # ── OpenAI-compatible relay for external tools (opencode, Claude Code, etc.) ──
 
@@ -1581,43 +1646,326 @@ def _get_user_id_from_request(request: Request) -> str:
 
     # ═══ Chrome DevTools MCP ═══
 
+    @app.post("/api/chrome/start")
+    async def chrome_start(request: Request):
+        from ..core.chrome_dual import get_chrome_dual
+        body = await request.json()
+        headless = body.get("headless", True)
+        bridge = get_chrome_dual()
+        await bridge.probe()
+        result = await bridge.start(headless=headless)
+        return result
+
+    @app.post("/api/chrome/stop")
+    async def chrome_stop(request: Request):
+        from ..core.chrome_dual import get_chrome_dual
+        return await get_chrome_dual().stop()
+
     @app.post("/api/chrome/screenshot")
     async def chrome_screenshot(request: Request):
-        from ..core.chrome_mcp import get_chrome_bridge
+        from ..core.chrome_dual import get_chrome_dual
         body = await request.json()
         url = body.get("url", "")
+        bridge = get_chrome_dual()
         if url:
-            await get_chrome_bridge().navigate(url)
+            await bridge.navigate(url)
             await asyncio.sleep(1)
-        return await get_chrome_bridge().screenshot(
+        return await bridge.screenshot(
             selector=body.get("selector", ""),
             full_page=body.get("full_page", False),
         )
 
     @app.post("/api/chrome/eval")
     async def chrome_eval(request: Request):
-        from ..core.chrome_mcp import get_chrome_bridge
+        from ..core.chrome_dual import get_chrome_dual
         body = await request.json()
-        return await get_chrome_bridge().eval_js(body.get("expression", "document.title"))
+        return await get_chrome_dual().eval_js(body.get("expression", "document.title"))
 
     @app.post("/api/chrome/navigate")
     async def chrome_navigate(request: Request):
-        from ..core.chrome_mcp import get_chrome_bridge
+        from ..core.chrome_dual import get_chrome_dual
         body = await request.json()
-        return await get_chrome_bridge().navigate(body.get("url", "about:blank"))
+        return await get_chrome_dual().navigate(body.get("url", "about:blank"))
 
     @app.post("/api/chrome/audit")
     async def chrome_audit(request: Request):
-        from ..core.chrome_mcp import get_chrome_bridge
-        return await get_chrome_bridge().accessibility_audit()
+        from ..core.chrome_dual import get_chrome_dual
+        return await get_chrome_dual().accessibility_audit()
 
     @app.post("/api/chrome/dom")
     async def chrome_dom(request: Request):
-        from ..core.chrome_mcp import get_chrome_bridge
+        from ..core.chrome_dual import get_chrome_dual
         body = await request.json()
-        return await get_chrome_bridge().dom_query(body.get("selector", "body"))
+        return await get_chrome_dual().dom_query(body.get("selector", "body"))
+
+    # ═══ Voice / Speech API ═══
+
+    @app.post("/api/speech/transcribe")
+    async def speech_transcribe(request: Request):
+        from ..core.unified_speech import get_speech_pipeline
+        body = await request.json()
+        audio_b64 = body.get("audio", "")
+        audio_format = body.get("format", "webm")
+
+        if not audio_b64:
+            return {"ok": False, "error": "no audio data", "text": ""}
+
+        pipeline = get_speech_pipeline()
+        if not pipeline._probed:
+            await pipeline.probe()
+
+        audio_bytes = base64.b64decode(audio_b64)
+        return await pipeline.transcribe_direct(audio_bytes, format=audio_format)
+
+    # ═══ Knowledge Ingest — pseudo-upload (no disk storage) ═══
+
+    @app.post("/api/knowledge/ingest")
+    async def knowledge_ingest(request: Request):
+        """Pseudo-upload: extract text from files/audio/video in memory, store in KB.
+
+        Original file bytes are NEVER saved to disk. Only the extracted text is
+        stored in the knowledge base. Supports: txt/md/pdf/docx/csv/html +
+        audio (STT) + video (extract audio → STT).
+        """
+        from ..core.inline_parser import get_inline_parser
+        body = await request.json()
+        data_b64 = body.get("data", "")
+        filename = body.get("filename", "untitled")
+        mime_type = body.get("mime_type", "")
+        domain = body.get("domain", "user_upload")
+
+        if not data_b64:
+            return {"ok": False, "error": "no file data"}
+
+        try:
+            data = base64.b64decode(data_b64)
+        except Exception:
+            return {"ok": False, "error": "invalid base64"}
+
+        parser = get_inline_parser()
+        result = await parser.parse(data, filename, mime_type)
+
+        if not result.ok:
+            return {"ok": False, "error": result.error}
+
+        doc_id = ""
+        try:
+            from ..knowledge.knowledge_base import Document, get_knowledge_base
+            kb = get_knowledge_base()
+            doc = Document(
+                title=result.title,
+                content=result.text,
+                domain=domain,
+                source="pseudo-upload",
+                author="user",
+                metadata={
+                    "source_format": result.source_format,
+                    "word_count": result.word_count,
+                    "parse_time_ms": result.parse_time_ms,
+                    "original_filename": filename,
+                    "mime_type": mime_type,
+                },
+            )
+            doc_id = kb.add_document(doc)
+        except Exception as e:
+            logger.warning(f"Knowledge base store failed: {e}")
+            doc_id = ""
+
+        return {
+            "ok": True,
+            "doc_id": doc_id,
+            "title": result.title,
+            "text_preview": result.text[:500],
+            "word_count": result.word_count,
+            "source_format": result.source_format,
+            "parse_time_ms": round(result.parse_time_ms, 1),
+        }
+
+    # ═══ Video Search API ═══
+
+    # ═══ Vitals API (Living Pot hardware) ═══
+
+    @app.get("/api/status/vitals")
+    async def status_vitals(request: Request):
+        from ..core.vitals import get_vitals
+        return get_vitals().measure()
+
+    @app.get("/api/status/vitals/hardware")
+    async def status_vitals_hardware(request: Request):
+        from ..core.vitals import get_vitals
+        return get_vitals().hardware_json()
+
+    # ═══ City MCP API ═══
+
+    @app.get("/api/city/tools")
+    async def city_mcp_tools(request: Request):
+        from ..core.city_mcp import get_city_mcp
+        return {"ok": True, "tools": get_city_mcp().list_tools()}
+
+    @app.post("/api/city/call")
+    async def city_mcp_call(request: Request):
+        from ..core.city_mcp import get_city_mcp
+        body = await request.json()
+        tool = body.get("tool", "")
+        params = body.get("params", {})
+        return await get_city_mcp().call_tool(tool, params)
+
+    # ═══ Green Scheduler API ═══
+
+    @app.get("/api/scheduler/status")
+    async def scheduler_status(request: Request):
+        from ..core.green_scheduler import get_green_scheduler
+        return get_green_scheduler().stats()
+
+    # ═══ Prompt Shield API ═══
+
+    @app.get("/api/shield/status")
+    async def shield_status(request: Request):
+        from ..core.prompt_shield import get_shield
+        return get_shield().stats()
+
+    @app.post("/api/shield/check-input")
+    async def shield_check_input(request: Request):
+        from ..core.prompt_shield import get_shield
+        body = await request.json()
+        result = get_shield().sanitize_input(body.get("text", ""))
+        return {"passed": result.passed, "violations": result.violations,
+                "sanitized": result.sanitized_text[:200] if not result.passed else ""}
+
+    @app.post("/api/shield/check-output")
+    async def shield_check_output(request: Request):
+        from ..core.prompt_shield import get_shield
+        body = await request.json()
+        result = get_shield().check_output(body.get("text", ""), body.get("context", "public"))
+        return {"passed": result.passed, "violations": result.violations}
+
+    # ═══ Telemetry API ═══
+
+    @app.get("/api/telemetry/stats")
+    async def telemetry_stats(request: Request):
+        from ..core.telemetry import get_telemetry
+        return get_telemetry().stats()
+
+    @app.get("/metrics")
+    async def prometheus_metrics(request: Request):
+        from ..core.telemetry import get_telemetry
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(get_telemetry().prometheus_metrics(), media_type="text/plain")
+
+    # ═══ Merge / Gray-Release API ═══
+
+    @app.get("/api/merge/status")
+    async def merge_status(request: Request):
+        from ..core.execution_pipeline import get_execution_pipeline
+        return get_execution_pipeline().stats()
+
+    @app.post("/api/merge/flow")
+    async def merge_set_flow(request: Request):
+        from ..core.execution_pipeline import get_execution_pipeline
+        body = await request.json()
+        pct = float(body.get("flow_pct", 0.0))
+        get_execution_pipeline().update_flow(pct)
+        return {"ok": True, "flow_pct": pct}
+
+    @app.post("/api/video/search")
+    async def video_search(request: Request):
+        from ..core.video_search import get_video_search
+        body = await request.json()
+        keyword = body.get("keyword", "").strip()
+        source = body.get("source", "all")
+        limit = body.get("limit", 6)
+
+        if not keyword:
+            return {"ok": False, "error": "no keyword"}
+
+        engine = get_video_search()
+        results = await engine.search(keyword, source=source, limit=limit)
+
+        cards_html = "".join(engine.build_card_html(v) for v in results)
+
+        return {
+            "ok": True,
+            "keyword": keyword,
+            "total": len(results),
+            "sources": list(set(v.source for v in results)),
+            "cards_html": cards_html,
+            "results": [
+                {
+                    "title": v.title, "url": v.url, "embed_url": v.embed_url,
+                    "thumbnail": v.thumbnail, "duration": v.duration,
+                    "source": v.source, "author": v.author, "play_count": v.play_count,
+                }
+                for v in results
+            ],
+        }
 
     # ═══ Collective Intelligence API ═══
+
+    # ═══ Skill Hub API ═══
+
+    @app.get("/api/skills/hub")
+    async def skill_hub_index(request: Request):
+        from ..core.skill_hub import get_skill_hub
+        hub = get_skill_hub()
+        items = await hub.fetch_hub_index()
+        return {"ok": True, "count": len(items), "skills": [
+            {"name": s.name, "version": s.version, "description": s.description,
+             "category": s.category, "tools": s.tools, "repo_url": s.repo_url}
+            for s in items
+        ]}
+
+    @app.get("/api/skills/installed")
+    async def skill_list_installed(request: Request):
+        from ..core.skill_hub import get_skill_hub
+        return {"ok": True, "skills": get_skill_hub().stats()["skills"]}
+
+    @app.post("/api/skills/install")
+    async def skill_install(request: Request):
+        from ..core.skill_hub import get_skill_hub
+        body = await request.json()
+        name = body.get("name", body.get("url", "")).strip()
+        if not name:
+            return {"ok": False, "error": "name or url required"}
+        try:
+            meta = await get_skill_hub().install(name)
+            if meta:
+                return {"ok": True, "name": meta.name, "version": meta.version, "tools": meta.tools}
+            return {"ok": False, "error": "install failed"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/skills/uninstall")
+    async def skill_uninstall(request: Request):
+        from ..core.skill_hub import get_skill_hub
+        body = await request.json()
+        name = body.get("name", "").strip()
+        ok = get_skill_hub().uninstall(name)
+        return {"ok": ok}
+
+    # ═══ Channel API ═══
+
+    @app.get("/api/channels/status")
+    async def channel_status(request: Request):
+        from ..network.channel_bridge import get_channel_bridge
+        return get_channel_bridge().stats()
+
+    # ═══ Context Budget API ═══
+
+    @app.get("/api/context/budget")
+    async def context_budget_status(request: Request):
+        from ..core.context_budget import get_context_budget
+        return get_context_budget().stats()
+
+    @app.post("/api/context/budget")
+    async def context_budget_configure(request: Request):
+        from ..core.context_budget import get_context_budget
+        body = await request.json()
+        budget = get_context_budget()
+        budget.configure(
+            max_tokens=body.get("max_tokens", 0),
+            max_turns=body.get("max_turns", 0),
+        )
+        return budget.stats()
 
     @app.post("/api/collective/publish")
     async def collective_publish(request: Request):

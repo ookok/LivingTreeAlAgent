@@ -614,19 +614,137 @@ __all__ = [
 # ═══ VAD 情感动力学 ═══
 
 import math
+import struct
 
 
 class VADVector:
     """Valence-Arousal-Dominance 三维连续情感向量。
 
     替代离散标签，实现情感的平滑过渡。
-    """
-    __slots__ = ('valence', 'arousal', 'dominance')
+    支持双模态情感来源: 文本语义驱动 + 语音语调驱动 (MiniMind-O 启发)。
 
-    def __init__(self, valence: float = 0.0, arousal: float = 0.3, dominance: float = 0.0):
+    Voice-tone extraction (from_audio): 纯DSP, 无ML依赖, 从PCM音频中提取
+    pitch/energy/tempo → arousal/valence/dominance 映射。
+    """
+    __slots__ = ('valence', 'arousal', 'dominance',
+                 'pitch_hz', 'energy_db', 'tempo_bpm', 'confidence',
+                 'source')  # "text" or "voice"
+
+    def __init__(self, valence: float = 0.0, arousal: float = 0.3, dominance: float = 0.0,
+                 pitch_hz: float = 0.0, energy_db: float = -40.0, tempo_bpm: float = 120.0,
+                 confidence: float = 0.0, source: str = "text"):
         self.valence = max(-1.0, min(1.0, valence))
         self.arousal = max(-1.0, min(1.0, arousal))
         self.dominance = max(-1.0, min(1.0, dominance))
+        self.pitch_hz = pitch_hz
+        self.energy_db = energy_db
+        self.tempo_bpm = tempo_bpm
+        self.confidence = confidence
+        self.source = source
+
+    # ═══ Static Factory: Audio → Emotion (MiniMind-O inspired) ═══
+
+    @staticmethod
+    def from_audio(audio_bytes: bytes, sample_rate: int = 16000) -> "VADVector":
+        """从原始 PCM 音频中提取语音情感 VAD 向量。
+
+        使用轻量 DSP 启发式算法 (零ML依赖):
+          - 能量 (RMS) → arousal
+          - 音高变化 (autocorrelation) → valence
+          - 语速 (syllable detection) → dominance
+
+        启发自 MiniMind-O 的 speech-native 统一表征 ——
+        语音本身携带丰富的情感信息, 无需转文字即可感知。
+        """
+        if not audio_bytes or len(audio_bytes) < sample_rate // 10:
+            return VADVector(source="voice")
+
+        try:
+            samples = VADVector._pcm_to_float(audio_bytes)
+            if len(samples) < 256:
+                return VADVector(source="voice")
+
+            energy = VADVector._compute_rms_db(samples)
+            pitch = VADVector._estimate_pitch(samples, sample_rate)
+            tempo = VADVector._estimate_tempo(samples, sample_rate)
+
+            v = VADVector(
+                valence=VADVector._pitch_variation_to_valence(samples, sample_rate),
+                arousal=VADVector._energy_to_arousal(energy),
+                dominance=VADVector._tempo_to_dominance(tempo),
+                pitch_hz=pitch,
+                energy_db=energy,
+                tempo_bpm=tempo,
+                confidence=min(0.95, len(samples) / (sample_rate * 1.5)),
+                source="voice",
+            )
+        except Exception:
+            return VADVector(source="voice")
+
+        return v
+
+    @property
+    def emotion_label(self) -> str:
+        """VAD 坐标 → 离散情感标签 (语音优先, 文本回退)。"""
+        if self.confidence > 0.4 and self.source == "voice":
+            if self.arousal > 0.4 and self.valence > 0.3:
+                return "excited"
+            if self.arousal > 0.4 and self.valence < -0.3:
+                return "angry"
+            if self.arousal < -0.3 and self.valence < -0.3:
+                return "sad"
+            if self.arousal < -0.3 and self.valence > 0.3:
+                return "calm"
+            if self.dominance > 0.5:
+                return "confident"
+            if self.dominance < -0.4:
+                return "hesitant"
+        return self.to_affect()
+
+    def to_dict(self) -> dict:
+        return {
+            "valence": round(self.valence, 3),
+            "arousal": round(self.arousal, 3),
+            "dominance": round(self.dominance, 3),
+            "pitch_hz": round(self.pitch_hz, 1),
+            "energy_db": round(self.energy_db, 1),
+            "tempo_bpm": round(self.tempo_bpm, 1),
+            "confidence": round(self.confidence, 3),
+            "source": self.source,
+        }
+
+    # ═══ Cross-modal VAD blending (text + voice fusion) ═══
+
+    def blend(self, target: "VADVector", rate: float = 0.3) -> "VADVector":
+        """Smoothly move toward target. rate=1 → instant, rate=0.1 → gradual."""
+        return VADVector(
+            valence=self.valence + rate * (target.valence - self.valence),
+            arousal=self.arousal + rate * (target.arousal - self.arousal),
+            dominance=self.dominance + rate * (target.dominance - self.dominance),
+            pitch_hz=target.pitch_hz or self.pitch_hz,
+            energy_db=target.energy_db or self.energy_db,
+            tempo_bpm=target.tempo_bpm or self.tempo_bpm,
+            confidence=max(self.confidence, target.confidence),
+            source="fusion" if self.source != target.source else self.source,
+        )
+
+    def fuse_voice(self, voice_vad: "VADVector", voice_weight: float = 0.5) -> "VADVector":
+        """融合文本VAD和语音VAD: 跨模态情感对齐 (MiniMind-O omni启发)。"""
+        if voice_vad.confidence < 0.3:
+            return self
+        w = min(0.8, max(0.1, voice_weight))
+        return VADVector(
+            valence=self.valence * (1 - w) + voice_vad.valence * w,
+            arousal=self.arousal * (1 - w) + voice_vad.arousal * w,
+            dominance=self.dominance * (1 - w) + voice_vad.dominance * w,
+            pitch_hz=voice_vad.pitch_hz,
+            energy_db=voice_vad.energy_db,
+            tempo_bpm=voice_vad.tempo_bpm,
+            confidence=max(self.confidence, voice_vad.confidence),
+            source="fusion",
+        )
+
+    # ═══ Existing methods ═══
 
     def distance_to(self, other: "VADVector") -> float:
         return math.sqrt(
@@ -634,19 +752,117 @@ class VADVector:
             + (self.arousal - other.arousal) ** 2
             + (self.dominance - other.dominance) ** 2)
 
-    def blend(self, target: "VADVector", rate: float = 0.3) -> "VADVector":
-        """Smoothly move toward target. rate=1 → instant, rate=0.1 → gradual."""
-        return VADVector(
-            valence=self.valence + rate * (target.valence - self.valence),
-            arousal=self.arousal + rate * (target.arousal - self.arousal),
-            dominance=self.dominance + rate * (target.dominance - self.dominance))
-
     def to_affect(self) -> str:
         """Get nearest discrete label."""
         return AffectiveState.nearest_state(self) if hasattr(AffectiveState, 'nearest_state') else "curiosity"
 
     def __repr__(self):
-        return f"VAD(v={self.valence:.2f}, a={self.arousal:.2f}, d={self.dominance:.2f})"
+        src = f"[{self.source}]" if self.source else ""
+        return f"VAD{src}(v={self.valence:.2f}, a={self.arousal:.2f}, d={self.dominance:.2f})"
+
+    # ═══ Audio DSP helpers (pure Python, zero ML) ═══
+
+    @staticmethod
+    def _pcm_to_float(pcm: bytes) -> list[float]:
+        count = len(pcm) // 2
+        samples = []
+        for i in range(count):
+            val = struct.unpack_from("<h", pcm, i * 2)[0]
+            samples.append(val / 32768.0)
+        return samples
+
+    @staticmethod
+    def _compute_rms_db(samples: list[float]) -> float:
+        if not samples:
+            return -96.0
+        rms = math.sqrt(sum(s * s for s in samples) / len(samples))
+        if rms < 1e-9:
+            return -96.0
+        return 20.0 * math.log10(rms)
+
+    @staticmethod
+    def _energy_to_arousal(db: float) -> float:
+        return min(1.0, max(-1.0, (db + 46.0) / 30.0))
+
+    @staticmethod
+    def _estimate_pitch(samples: list[float], sr: int) -> float:
+        if len(samples) < 512:
+            return 0.0
+        window = samples[:2048] if len(samples) > 2048 else samples
+        n = len(window)
+        min_lag = sr // 400
+        max_lag = sr // 80
+        if max_lag >= n:
+            return 0.0
+        best_corr = -1.0
+        best_lag = 0
+        for lag in range(min_lag, min(max_lag, n // 2)):
+            corr = sum(window[i] * window[i + lag] for i in range(n - lag))
+            if corr > best_corr:
+                best_corr = corr
+                best_lag = lag
+        if best_lag > 0 and best_corr > 0:
+            return sr / best_lag
+        return 0.0
+
+    @staticmethod
+    def _pitch_variation_to_valence(samples: list[float], sr: int) -> float:
+        if len(samples) < sr:
+            return 0.0
+        chunk = sr // 50
+        pitches = []
+        for i in range(0, len(samples) - chunk, chunk):
+            p = VADVector._estimate_pitch(samples[i:i + chunk], sr)
+            if p > 60:
+                pitches.append(p)
+        if len(pitches) < 3:
+            return 0.0
+        mean_p = sum(pitches) / len(pitches)
+        var_p = sum((p - mean_p) ** 2 for p in pitches) / len(pitches)
+        cv = math.sqrt(var_p) / mean_p if mean_p > 0 else 0
+        if cv < 0.05:
+            return 0.7
+        if cv < 0.15:
+            return 0.2
+        if cv < 0.30:
+            return -0.3
+        return -0.7
+
+    @staticmethod
+    def _estimate_tempo(samples: list[float], sr: int) -> float:
+        if len(samples) < sr:
+            return 120.0
+        frame = sr // 40
+        energy = []
+        for i in range(0, len(samples) - frame, frame):
+            chunk = samples[i:i + frame]
+            rms = math.sqrt(sum(s * s for s in chunk) / len(chunk))
+            energy.append(rms)
+        if not energy:
+            return 120.0
+        threshold = sum(energy) / len(energy) * 1.3
+        syllables = 0
+        above = False
+        for e in energy:
+            if e > threshold and not above:
+                syllables += 1
+                above = True
+            elif e <= threshold:
+                above = False
+        tempo = syllables * (60.0 / (len(samples) / sr))
+        return min(300.0, max(40.0, tempo))
+
+    @staticmethod
+    def _tempo_to_dominance(bpm: float) -> float:
+        if bpm > 180:
+            return 0.8
+        if bpm > 140:
+            return 0.4
+        if bpm > 100:
+            return 0.0
+        if bpm > 60:
+            return -0.4
+        return -0.8
 
 
 # VAD coordinates for discrete states

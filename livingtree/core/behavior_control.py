@@ -442,3 +442,86 @@ def get_arq() -> ARQVerifier:
     if _arq_instance is None:
         _arq_instance = ARQVerifier()
     return _arq_instance
+
+
+# ═══ Social Norms Engine (AI Awareness paper inspired) ═══
+
+@dataclass
+class SocialNorm:
+    """Context-sensitive social boundary — awareness-driven behavior guard."""
+    norm_id: str
+    context: str          # "public", "private", "admin", "child", "enterprise"
+    rule: str             # natural language rule
+    sensitivity: str = "medium"  # "low", "medium", "high", "critical"
+    applies_when: str = "always"
+
+
+SOCIAL_NORMS = [
+    SocialNorm("sn-001", "public", "不讨论政治敏感话题", "critical"),
+    SocialNorm("sn-002", "public", "不生成虚假信息或谣言", "high"),
+    SocialNorm("sn-003", "admin", "可以访问系统配置和日志", "low"),
+    SocialNorm("sn-004", "private", "不记录或泄露个人身份信息", "critical"),
+    SocialNorm("sn-005", "enterprise", "遵守企业数据合规要求，不输出敏感数据", "high"),
+    SocialNorm("sn-006", "public", "用尊重、包容的语气回复所有用户", "medium"),
+    SocialNorm("sn-007", "private", "适应用户的沟通风格和偏好", "low"),
+    SocialNorm("sn-008", "public", "当不确定时，主动说明知识边界和不确定性", "medium"),
+]
+
+
+class SocialNormsEngine:
+    """Awareness-driven social boundary enforcement.
+
+    The AI Awareness paper emphasizes that socially aware agents
+    must model context-appropriate behavior. This engine maps
+    the current interaction context to applicable social norms
+    and injects them into the behavior control pipeline.
+    """
+
+    def __init__(self):
+        self._norms: dict[str, SocialNorm] = {n.norm_id: n for n in SOCIAL_NORMS}
+        self._current_context: str = "public"
+
+    def set_context(self, ctx: str):
+        self._current_context = ctx
+
+    def applicable_norms(self, context: str = "") -> list[SocialNorm]:
+        ctx = context or self._current_context
+        return [n for n in self._norms.values()
+                if n.context in (ctx, "public") or n.applies_when == "always"]
+
+    def inject_into_system_prompt(self, base_prompt: str, context: str = "") -> str:
+        norms = self.applicable_norms(context)
+        if not norms:
+            return base_prompt
+
+        critical = [n for n in norms if n.sensitivity in ("critical", "high")]
+        standard = [n for n in norms if n.sensitivity not in ("critical", "high")]
+
+        parts = [base_prompt]
+        if critical:
+            parts.append("\n[硬约束·社会规范] " + "；".join(n.rule for n in critical))
+        if standard:
+            parts.append("[软约束·社会规范] " + "；".join(n.rule for n in standard))
+
+        return "\n".join(parts)
+
+    def stats(self) -> dict:
+        return {
+            "total_norms": len(self._norms),
+            "current_context": self._current_context,
+            "active_norms": len(self.applicable_norms()),
+            "by_sensitivity": {
+                s: sum(1 for n in self._norms.values() if n.sensitivity == s)
+                for s in ("low", "medium", "high", "critical")
+            },
+        }
+
+
+_norms_engine: Optional[SocialNormsEngine] = None
+
+
+def get_social_norms() -> SocialNormsEngine:
+    global _norms_engine
+    if _norms_engine is None:
+        _norms_engine = SocialNormsEngine()
+    return _norms_engine

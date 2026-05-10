@@ -395,6 +395,127 @@ def get_emergence_detector() -> EmergenceDetector:
     return _emergence_detector
 
 
+# ═══ Knowledge Phase Transition (Portsmouth paper inspired) ═══
+
+@dataclass
+class CriticalPoint:
+    """A knowledge concept approaching critical threshold.
+
+    Maps the Portsmouth paper's finding: language evolution follows
+    phase-transition physics. When a concept's adoption crosses a
+    critical point, it rapidly diffuses across the entire system —
+    like "roly-poly" spreading from the US South to nationwide.
+
+    Conceptually: knowledge equates to magnetic domains.
+    Below critical point → local, isolated usage.
+    Above critical point → global reorder, full system adoption.
+    """
+    concept: str
+    current_mass: float           # e.g., reference count, mention frequency
+    critical_threshold: float     # calculated from system topology
+    distance_to_critical: float   # negative = below, 0 = at, positive = above
+    isolation_index: float        # 0 = highly connected, 1 = isolated (like Newcastle)
+    predicted_survival: float     # 0 = dying, 1 = resilient local variant
+    domain: str = ""
+    neighbors: list[str] = field(default_factory=list)
+    time_to_critical: float = 0.0  # estimated cycles until threshold
+    phase_order: float = 0.0       # 0 = gradual (second-order), 1 = abrupt (first-order)
+
+
+class KnowledgePhaseDetector:
+    """Detect when knowledge concepts approach phase-transition critical points.
+
+    Maps statistical field theory to knowledge dynamics:
+      - "Isolation" = low surrounding population density → concept survives (like "spelk")
+      - "Critical mass" = adoption crosses threshold → rapid diffusion (like "roly-poly")
+      - Global reorder trigger: N concepts simultaneously above critical → full KB reindex
+    """
+
+    def __init__(self):
+        self._concepts: dict[str, CriticalPoint] = {}
+        self._triggered: list[str] = []     # concepts that crossed threshold this cycle
+
+    def feed_concept(self, name: str, mass: float, domain: str = "",
+                     isolation: float = 0.0, neighbors: list[str] = None):
+        """Update a concept's mass and check if it approaches critical."""
+        cp = self._concepts.get(name)
+        if cp is None:
+            total_mass = sum(c.current_mass for c in self._concepts.values())
+            n = max(1, len(self._concepts))
+            avg = total_mass / n if total_mass > 0 else 1.0
+            threshold = avg * (2.0 + isolation * 3.0)
+            cp = CriticalPoint(
+                concept=name, current_mass=mass,
+                critical_threshold=threshold,
+                distance_to_critical=0.0, isolation_index=isolation,
+                predicted_survival=0.5, domain=domain,
+                neighbors=neighbors or [],
+            )
+            self._concepts[name] = cp
+
+        cp.current_mass = mass
+        if cp.critical_threshold > 0:
+            cp.distance_to_critical = mass / cp.critical_threshold - 1.0
+        cp.isolation_index = isolation
+        cp.neighbors = neighbors or cp.neighbors
+
+        if cp.isolation_index > 0.7:
+            cp.predicted_survival = min(0.95, 0.4 + isolation * 0.7)
+            cp.critical_threshold *= (1.0 + isolation)
+
+        if cp.distance_to_critical > 0 and name not in self._triggered:
+            self._triggered.append(name)
+
+    def get_critical_concepts(self, min_mass: float = 0.0) -> list[CriticalPoint]:
+        """Get concepts approaching or past critical threshold."""
+        result = []
+        for c in self._concepts.values():
+            if c.current_mass >= min_mass:
+                ttc = 0.0
+                if c.critical_threshold > 0 and c.current_mass < c.critical_threshold:
+                    recent_growth = c.current_mass * 0.05
+                    if recent_growth > 0:
+                        ttc = (c.critical_threshold - c.current_mass) / recent_growth
+                c.time_to_critical = ttc
+                c.phase_order = min(1.0, abs(c.distance_to_critical) * 2)
+                result.append(c)
+        result.sort(key=lambda x: -x.distance_to_critical)
+        return result
+
+    def should_reorder_knowledge_graph(self) -> bool:
+        """Return True if enough concepts crossed critical → trigger full KB reindex."""
+        if len(self._triggered) >= max(3, len(self._concepts) * 0.15):
+            self._triggered.clear()
+            return True
+        return False
+
+    def stats(self) -> dict:
+        critical = self.get_critical_concepts()
+        return {
+            "total_concepts": len(self._concepts),
+            "above_critical": sum(1 for c in critical if c.distance_to_critical > 0),
+            "approaching": sum(1 for c in critical if -0.1 <= c.distance_to_critical <= 0),
+            "recently_triggered": len(self._triggered),
+            "top_concepts": [
+                {"name": c.concept, "mass": round(c.current_mass, 2),
+                 "threshold": round(c.critical_threshold, 2),
+                 "survival": round(c.predicted_survival, 2),
+                 "domain": c.domain}
+                for c in critical[:8]
+            ],
+        }
+
+
+_phase_detector: KnowledgePhaseDetector | None = None
+
+
+def get_phase_detector() -> KnowledgePhaseDetector:
+    global _phase_detector
+    if _phase_detector is None:
+        _phase_detector = KnowledgePhaseDetector()
+    return _phase_detector
+
+
 __all__ = [
     "EmergenceDetector", "EmergenceSignal", "EmergenceReport",
     "get_emergence_detector",

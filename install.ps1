@@ -1,102 +1,146 @@
-# LivingTree — One-Command Auto-Deploy (PowerShell)
-# Usage: powershell -c "irm https://raw...install.ps1 | iex"
-#        .\install.ps1 -Port 8100 -Relay
+# One-click installer — LivingTree AI Agent (Windows PowerShell)
+# Usage: irm https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.ps1 | iex
 
-param(
-    [int]$Port = 8100,
-    [switch]$Relay = $false,
-    [string]$InstallDir = "$env:USERPROFILE\livingtree"
-)
+param([switch]$Dev, [switch]$Relay, [switch]$NoPython)
 
 $ErrorActionPreference = "Stop"
-$Mode = if ($Relay) { "relay" } else { "client" }
+$INSTALL_DIR = "$env:USERPROFILE\livingtree"
+$VENV_DIR = "$INSTALL_DIR\.venv"
+$PYTHON_MIN = "3.10"
+$REPO_URL = "https://github.com/ookok/LivingTreeAlAgent.git"
+$REPO_GITEE = "https://gitee.com/ookok/LivingTreeAlAgent.git"
+$PORT = 8100
 
-Write-Host ""
-Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║  LivingTree Auto-Deploy (PowerShell)      ║" -ForegroundColor Cyan
-Write-Host "║  Mode: $Mode  Port: $Port" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Cyan
-Write-Host ""
+Write-Host @"
+╔══════════════════════════════════════════════╗
+║   🌳 生命之树 · LivingTree AI Agent          ║
+║       One-Click Windows Installer            ║
+╚══════════════════════════════════════════════╝
+"@ -ForegroundColor Green
 
-# [1/7] Python
-Write-Host "[1/7] Checking Python..." -ForegroundColor Yellow
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-    Write-Host "   Python not found. Downloading Python 3.14..."
-    $pyUrl = "https://mirrors.huaweicloud.com/python/3.14.0/python-3.14.0-amd64.exe"
-    $pyInstaller = "$env:TEMP\python314.exe"
-    Invoke-WebRequest -Uri $pyUrl -OutFile $pyInstaller -TimeoutSec 120
-    Start-Process -FilePath $pyInstaller -ArgumentList "/quiet InstallAllUsers=0 Include_test=0" -Wait
-    Write-Host "   Python 3.14 installed. Re-run this script."
-    return
-}
-& python --version
+# ── Check Python ──
 
-# [2/7] Clone
-Write-Host "[2/7] Downloading project..." -ForegroundColor Yellow
-$githubUrl = "https://github.com/ookok/LivingTreeAlAgent.git"
-$giteeUrl = "https://gitee.com/ookok/LivingTreeAlAgent.git"
+if (-not $NoPython) {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command python3 -ErrorAction SilentlyContinue }
+    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
 
-if (Test-Path $InstallDir) {
-    Write-Host "   Directory exists — updating..."
-    Set-Location $InstallDir
-    git pull --ff-only origin main 2>$null
+    if (-not $python) {
+        Write-Host "❌ Python not found. Installing via winget..." -ForegroundColor Red
+        winget install Python.Python.3.12 --silent --accept-package-agreements
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        refreshenv 2>$null
+        $python = Get-Command python -ErrorAction SilentlyContinue
+    }
+
+    if ($python) {
+        $ver = & $python.Source --version 2>&1
+        Write-Host "✅ Python: $ver" -ForegroundColor Green
+    } else {
+        Write-Host "❌ Python installation failed. Install manually: https://python.org" -ForegroundColor Red
+        exit 1
+    }
 } else {
-    try {
-        git clone --depth 1 $githubUrl $InstallDir 2>$null
-    } catch {
-        Write-Host "   GitHub failed, trying Gitee mirror..."
-        git clone --depth 1 $giteeUrl $InstallDir 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Cannot clone. Check network." -ForegroundColor Red
-            return
-        }
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command python3 -ErrorAction SilentlyContinue }
+}
+
+# ── Clone / Update ──
+
+if (Test-Path "$INSTALL_DIR\.git") {
+    Write-Host "📥 Updating repository..." -ForegroundColor Cyan
+    Push-Location $INSTALL_DIR
+    git pull origin main 2>$null
+    Pop-Location
+} else {
+    Write-Host "📥 Cloning repository..." -ForegroundColor Cyan
+    Remove-Item -Recurse -Force $INSTALL_DIR -ErrorAction SilentlyContinue
+    git clone --depth 1 $REPO_URL $INSTALL_DIR 2>$null
+    if (-not $?) {
+        Write-Host "  Trying mirror..." -ForegroundColor Yellow
+        git clone --depth 1 $REPO_GITEE $INSTALL_DIR
     }
 }
-Set-Location $InstallDir
 
-# [3/7] Venv
-Write-Host "[3/7] Virtual environment..." -ForegroundColor Yellow
-if (-not (Test-Path ".venv")) {
-    & python -m venv .venv
+Set-Location $INSTALL_DIR
+
+# ── Setup venv ──
+
+if (-not (Test-Path "$VENV_DIR\Scripts\python.exe")) {
+    Write-Host "📦 Creating virtual environment..." -ForegroundColor Cyan
+    & $python.Source -m venv $VENV_DIR
 }
-& .venv\Scripts\Activate.ps1
 
-# [4/7] Deps
-Write-Host "[4/7] Installing dependencies..." -ForegroundColor Yellow
-pip install -e . --quiet 2>$null
-pip install aiohttp pyyaml pydantic loguru rich textual --quiet 2>$null
+$pip = "$VENV_DIR\Scripts\pip.exe"
+$py = "$VENV_DIR\Scripts\python.exe"
 
-# [5/7] Verify
-Write-Host "[5/7] Verifying..." -ForegroundColor Yellow
-.venv\Scripts\python.exe -c "from livingtree.tui.app import LivingTreeTuiApp; print('OK')" 2>$null
+Write-Host "📦 Installing dependencies..." -ForegroundColor Cyan
+& $pip install --upgrade pip -q
+& $pip install -r requirements.txt -q
 
-# [6/7] Launcher
-Write-Host "[6/7] Creating launcher..." -ForegroundColor Yellow
-@"
-@echo off
-cd /d "%~dp0"
-call .venv\Scripts\activate.bat
-if "%1"=="relay" (
-    python relay_server.py --port $Port %2 %3 %4 %5
-) else (
-    python -m livingtree tui %*
-)
-"@ | Out-File -FilePath "livingtree.bat" -Encoding ASCII
+if ($Dev) {
+    & $pip install -r requirements-dev.txt -q 2>$null
+}
 
-[Environment]::SetEnvironmentVariable("Path", "$InstallDir;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")
+# ── Install optional tools ──
 
-# [7/7] Done
-Write-Host "[7/7] Done!" -ForegroundColor Green
-Write-Host ""
-if ($Relay) {
-    Write-Host "Starting relay server on port $Port..." -ForegroundColor Cyan
-    & .venv\Scripts\python.exe relay_server.py --port $Port
+Write-Host "📦 Installing optional tools..." -ForegroundColor Cyan
+& $pip install edge-tts -q 2>$null
+& $pip install numpy -q 2>$null
+
+# ── Check GPU ──
+
+$gpu = & nvidia-smi 2>$null
+if ($gpu) {
+    Write-Host "✅ GPU detected (NVIDIA)" -ForegroundColor Green
+}
+
+# ── Create shortcut ──
+
+$shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\LivingTree.lnk"
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut($shortcut)
+$s.TargetPath = $py
+$s.Arguments = "-m livingtree web"
+$s.WorkingDirectory = $INSTALL_DIR
+$s.Description = "生命之树 · LivingTree AI Agent"
+$s.Save()
+
+# ── Check Node.js (for npx MCP mode) ──
+
+$node = Get-Command node -ErrorAction SilentlyContinue
+if ($node) {
+    Write-Host "✅ Node.js detected (npm MCP mode available)" -ForegroundColor Green
 } else {
-    Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║  LivingTree installed successfully!      ║" -ForegroundColor Green
-    Write-Host "║                                          ║" -ForegroundColor Green
-    Write-Host "║  livingtree         Launch TUI           ║" -ForegroundColor Green
-    Write-Host "║  livingtree relay   Start relay server   ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "💡 Install Node.js for Chrome automation: https://nodejs.org" -ForegroundColor Yellow
+}
+
+# ── Done ──
+
+Write-Host @"
+
+✅ Installation complete!
+
+Start LivingTree:
+  cd $INSTALL_DIR
+  .venv\Scripts\python.exe -m livingtree
+
+Or use the Start Menu shortcut: LivingTree
+Web UI: http://localhost:$PORT/tree/living
+
+CLI Management (CowAgent style):
+  .venv\Scripts\python.exe -m livingtree start     # background daemon
+  .venv\Scripts\python.exe -m livingtree stop      # stop service
+  .venv\Scripts\python.exe -m livingtree status    # service status
+
+"@ -ForegroundColor Green
+
+# ── Auto-start (optional) ──
+
+$auto = Read-Host "Auto-start LivingTree now? (y/N)"
+if ($auto -eq "y" -or $auto -eq "Y") {
+    Write-Host "🚀 Starting LivingTree..." -ForegroundColor Cyan
+    Start-Process -FilePath $py -ArgumentList "-m livingtree web" -WorkingDirectory $INSTALL_DIR
+    Start-Sleep 3
+    Start-Process "http://localhost:$PORT/tree/living"
 }

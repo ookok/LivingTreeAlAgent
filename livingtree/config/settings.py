@@ -46,6 +46,36 @@ class ModelConfig(BaseModel):
     ollama_moe_model: str = "qwen3.6:35b-a3b"
     fallback_model: str = "qwen2.5:1.5b"  # Local fallback using Ollama
 
+    # llama.cpp server (local optimized inference)
+    llamacpp_base_url: str = "http://localhost:8080"
+    llamacpp_chat_model: str = "qwen3.5-4b"
+    llamacpp_temperature: float = 0.8
+    llamacpp_top_p: float = 0.9
+    llamacpp_top_k: int = 40
+    llamacpp_repeat_penalty: float = 1.1
+    llamacpp_max_tokens: int = 512
+
+    # MOSS-TTS-Nano GGUF (local speech synthesis, ~200MB Q4_K_M)
+    moss_tts_gguf_path: str = "models/moss-tts-nano-q4km.gguf"
+    moss_tts_voice: str = "xiaoshu"  # 小树专用声线
+    moss_tts_enabled: bool = True
+
+    # VibeVoice (premium local speech AI: ASR + TTS + VAD)
+    vibevoice_base_url: str = "http://localhost:8085"
+    vibevoice_enabled: bool = True
+    vibevoice_voice: str = "xiaoshu"  # 小树声线
+
+    # FreeBuff — ad-supported free LLM via OpenRouter (fallback tier)
+    freebuff_openrouter_key: str = ""
+    freebuff_model: str = "deepseek/deepseek-v4-flash:free"
+    freebuff_enabled: bool = True
+
+    # OpenRouter — 300+ models unified API (key stored in secrets.enc)
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_default_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    openrouter_enabled: bool = True
+
     longcat_base_url: str = "https://api.longcat.chat/openai/v1"
     longcat_api_key: str = ""
     longcat_flash_model: str = "openai/LongCat-Flash-Lite"
@@ -477,26 +507,18 @@ def _load_config() -> LTAIConfig:
         if internlm_key:
             config.model.internlm_api_key = internlm_key
             logger.info("Loaded internlm_api_key from encrypted vault")
-    except Exception as e:
-        logger.debug(f"Secret vault load skipped: {e}")
 
-    env_config = LTAIConfig.from_env()
-    if env_config.model_dump(exclude_defaults=True):
-        merged = config.model_dump()
-        _deep_merge(merged, env_config.model_dump(exclude_defaults=True))
-        config = LTAIConfig(**merged)
-        logger.info("Applied environment variable overrides")
+        # Load OpenRouter key from vault (free tier — stored encrypted)
+        openrouter_key = vault.get("openrouter_api_key", "")
+        if openrouter_key:
+            config.model.openrouter_api_key = openrouter_key
+            logger.info("Loaded openrouter_api_key from encrypted vault")
+        else:
+            logger.debug("openrouter_api_key not in vault — free tier models still work without key")
+    except Exception:
+        pass
 
     return config
-
-
-def _deep_merge(base: dict, override: dict) -> None:
-    """Recursively merge override dict into base dict."""
-    for key, value in override.items():
-        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-            _deep_merge(base[key], value)
-        else:
-            base[key] = value
 
 
 def get_config(reload: bool = False) -> LTAIConfig:

@@ -50,9 +50,14 @@ class Sidebar extends Component {
     return `
       <div class="sidebar-header">
         <div class="sidebar-logo">
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path d="M9 2l6 4v8l-6 3-6-3V6l6-4z" fill="none" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M9 6v6M6 8v4M12 8v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0">
+            <ellipse cx="10" cy="7" rx="7" ry="6.5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <ellipse cx="8" cy="10" rx="2.5" ry="3" fill="var(--brand-default)" opacity="0.3"/>
+            <ellipse cx="12" cy="10" rx="2.5" ry="3" fill="var(--brand-default)" opacity="0.3"/>
+            <circle cx="8.7" cy="10" r="1.3" fill="var(--bg-base)"/>
+            <circle cx="12.7" cy="10" r="1.3" fill="var(--bg-base)"/>
+            <path d="M9 17c0 1.5 2 2.5 2 0" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="10" y="9" text-anchor="middle" font-size="8" fill="var(--text)" font-weight="700">树</text>
           </svg>
           <span>LivingTree</span>
         </div>
@@ -61,24 +66,6 @@ class Sidebar extends Component {
             <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M13 3v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-        </button>
-      </div>
-      <div class="sidebar-nav">
-        <button class="sidebar-nav-btn" data-action="nav-search" title="智能搜索">
-          <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M11 11l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-          <span>搜索</span>
-        </button>
-        <button class="sidebar-nav-btn" data-action="nav-map" title="地图标注">
-          <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="5" r="3" fill="currentColor"/><path d="M7 8v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <span>地图</span>
-        </button>
-        <button class="sidebar-nav-btn" data-action="nav-diagram" title="图表绘制">
-          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="10" width="3" height="4" rx="0.5" fill="currentColor"/><rect x="6.5" y="6" width="3" height="8" rx="0.5" fill="currentColor"/><rect x="11" y="3" width="3" height="11" rx="0.5" fill="currentColor"/></svg>
-          <span>画图</span>
-        </button>
-        <button class="sidebar-nav-btn" data-action="nav-office" title="文档编辑">
-          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-          <span>Office</span>
         </button>
       </div>
       <div class="sidebar-search">
@@ -93,6 +80,31 @@ class Sidebar extends Component {
         </button>
       </div>
       <div class="sidebar-sessions">${sessionItems}</div>
+      <div class="sidebar-footer-actions">
+        <button class="btn-settings" data-action="open-models" title="模型选举">
+          <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="3" width="5" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="1" width="5" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+          <span>模型选举</span>
+        </button>
+        <button class="btn-settings" data-action="open-creative" title="创意可视化">
+          <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M7 2v3M7 9v3M2 7h3M9 7h3M3.5 3.5l2 2M8.5 8.5l2 2M3.5 10.5l2-2M8.5 5.5l2-2" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/></svg>
+          <span>创意可视化</span>
+        </button>
+        <div style="display:flex;gap:4px">
+          <button class="btn-settings" style="flex:1;justify-content:center" data-action="open-admin" title="管理员">
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 12c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+          </button>
+          <button class="btn-settings" style="flex:1;justify-content:center" data-action="open-mobile" title="移动端">
+            <svg width="14" height="14" viewBox="0 0 14 14"><rect x="3.5" y="1.5" width="7" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="6" y1="10.5" x2="8" y2="10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </button>
+          <button class="btn-settings" style="flex:1;justify-content:center" data-action="toggle-theme" title="切换主题">
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M7 1v1.5M7 11.5v1.5M1 7h1.5M11.5 7H13M2.8 2.8l1 1M10.2 10.2l1 1M2.8 11.2l1-1M10.2 3.8l1-1" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div style="padding:4px 10px;font-size:10px;color:var(--text-secondary);display:flex;align-items:center;gap:6px" id="sidebar-nodes">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--brand-default);display:inline-block"></span>
+          <span>单机模式</span>
+        </div>
+      </div>
       <div class="sidebar-user" data-action="user-menu">
         <div class="sidebar-user-avatar">L</div>
         <div class="sidebar-user-info">
@@ -127,7 +139,7 @@ class Sidebar extends Component {
     if (this._bound) return;
     this._bound = true;
 
-    this._clickHandler = (e) => {
+    this.el.addEventListener('click', (e) => {
       const target = e.target.closest('[data-action]');
       if (!target) return;
       const action = target.dataset.action;
@@ -153,41 +165,39 @@ class Sidebar extends Component {
           this._toggleCollapse();
           break;
         case 'user-menu':
-          this.emit('user-menu:toggle');
+          LT.emit('settings:open');
           break;
         case 'new-session':
           this._newSession();
           break;
-        case 'nav-search':
-          window.open('/search.html', '_blank');
+        case 'open-models':
+          this.emit('models:open');
           break;
-        case 'nav-map':
-          window.open('/map.html', '_blank');
+        case 'open-admin':
+          window.open('/tree/admin', '_blank');
           break;
-        case 'nav-diagram':
-          window.open('/diagram.html', '_blank');
+        case 'open-mobile':
+          window.open('/tree/reach/mobile', '_blank');
           break;
-        case 'nav-office':
-          window.open('/?office=1', '_blank');
+        case 'toggle-theme':
+          var html = document.documentElement;
+          var cur = html.getAttribute('data-theme');
+          var next = cur === 'dark' ? 'light' : 'dark';
+          html.setAttribute('data-theme', next);
+          if (LT.store) LT.store.theme = next;
+          break;
+        case 'open-creative':
+          this.emit('creative:open');
           break;
       }
-    };
+    });
 
-    this._inputHandler = (e) => {
+    this.el.addEventListener('input', (e) => {
       const target = e.target.closest('[data-action]');
       if (!target || target.dataset.action !== 'search') return;
       this._searchTerm = target.value;
       this.render();
-    };
-
-    this.el.addEventListener('click', this._clickHandler);
-    this.el.addEventListener('input', this._inputHandler);
-  }
-
-  destroy() {
-    if (this._clickHandler) this.el.removeEventListener('click', this._clickHandler);
-    if (this._inputHandler) this.el.removeEventListener('input', this._inputHandler);
-    super.destroy();
+    });
   }
 
   _switchSession(id) {

@@ -207,6 +207,20 @@ class ModelRegistry:
         ]):
             return "multimodal"
 
+        # Speech-native models — MiniMind-O, speech-to-speech, voice-first
+        if any(k in mid_lower for k in [
+            "minimind", "speech", "voice", "ministral",
+            "speech-t5", "bark", "vall-e", "audiogen",
+        ]):
+            return "speech"
+
+        # Audio models — STT/TTS/music
+        if any(k in mid_lower for k in [
+            "whisper", "sensevoice", "cosyvoice", "parakeet",
+            "tts", "stt", "asr",
+        ]):
+            return "audio"
+
         # Qwen flash models → flash tier
         if any(k in mid_lower for k in [
             "qwen-flash", "qwen3.6-flash", "qwen3.5-flash",

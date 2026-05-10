@@ -3,18 +3,12 @@ class UserMenu extends Component {
     super('user-dropdown');
     this._visible = false;
     this.on('user-menu:toggle', () => this._toggle());
-    this._docClickHandler = (e) => {
+    document.addEventListener('click', (e) => {
       if (this._visible && !this.el.contains(e.target)) {
         const su = LT.ge('sidebar-user');
         if (su && !su.contains(e.target)) this._hide();
       }
-    };
-    document.addEventListener('click', this._docClickHandler);
-  }
-
-  destroy() {
-    document.removeEventListener('click', this._docClickHandler);
-    super.destroy();
+    });
   }
 
   _toggle() {
@@ -85,13 +79,13 @@ class UserMenu extends Component {
     };
     LT.qs('[data-action="export"]', E).onclick = () => {
       this._hide();
-      LT.store.sessions.forEach(s => LT.store.export(s.id));
+      S.sessions.forEach(s => S.export(s.id));
       LT.emit('notify', { msg: '全部会话已导出', type: 'success' });
     };
     LT.qs('[data-action="clear"]', E).onclick = () => {
       this._hide();
       if (!confirm('确定清除所有本地数据？此操作不可撤销。')) return;
-      LT.store.sessions = []; LT.store.messages = {}; LT.store.activeId = null; LT.store.save();
+      S.sessions = []; S.messages = {}; S.activeId = null; S.save();
       LT.emit('notify', { msg: '数据已清除', type: 'success' });
     };
   }

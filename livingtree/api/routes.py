@@ -10,7 +10,7 @@ import time as _time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form, Query
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -88,24 +88,7 @@ def setup_routes(app: FastAPI) -> None:
 
     # ═══ Web API (SPA chat) ═══
 
-    @app.post("/api/web/chat")
-    async def web_chat(request: Request):
-        """SPA chat endpoint — returns JSON for the chat component."""
-        try:
-            body = await request.json()
-            messages = body.get("messages", [])
-            last = messages[-1]["content"] if messages else ""
-        except Exception:
-            last = ""
-        if not last or not last.strip():
-            return JSONResponse({"error": "empty"}, status_code=400)
-        try:
-            hub = request.app.state.hub
-            result = await hub.chat(last)
-            reply = result.get("reflections", [""])[0] if result.get("reflections") else str(result.get("intent", ""))
-            return JSONResponse({"content": reply[:2000], "done": True})
-        except Exception:
-            return JSONResponse({"content": "小树: 你好！我是LivingTree，系统正在初始化中...", "done": True})
+        return {"stage": "starting", "pct": 50, "detail": "正在初始化..."}
 
     @app.get("/api/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
@@ -155,27 +138,6 @@ def setup_routes(app: FastAPI) -> None:
     @app.get("/api/status")
 
     # ═══ Web API (SPA chat) ═══
-
-    @app.post("/api/web/chat")
-    async def web_chat(request: Request):
-        """SPA chat endpoint — returns HTML fragments for the chat component."""
-        try:
-            body = await request.json()
-            messages = body.get("messages", [])
-            last = messages[-1]["content"] if messages else ""
-        except Exception:
-            last = ""
-
-        if not last or not last.strip():
-            return JSONResponse({"error": "empty"}, status_code=400)
-
-        try:
-            hub = request.app.state.hub
-            result = await hub.chat(last)
-            reply = result.get("reflections", [""])[0] if result.get("reflections") else result.get("intent", str(result))
-            return JSONResponse({"content": str(reply)[:2000], "done": True})
-        except Exception as e:
-            return JSONResponse({"content": f"系统: {str(e)[:100]}", "done": True})
 
     @app.get("/api/status")
     async def status(request: Request) -> dict[str, Any]:
@@ -494,41 +456,62 @@ def setup_routes(app: FastAPI) -> None:
             pass
 
         from fastapi.responses import StreamingResponse
-        import json as _json, time as _time
+        import json as _json, time as _time, asyncio as _asyncio, httpx
 
         async def generate():
             sid = f"web_{int(_time.time()*1000)}"
+            thinking = body.get("thinking", False)
+
+            if thinking:
+                # Streaming with reasoning — call DeepSeek directly
+                from ..config import get_config
+                cfg = get_config()
+                key = cfg.model.deepseek_api_key
+                if key:
+                    try:
+                        async with httpx.AsyncClient(timeout=60) as c:
+                            async with c.stream("POST",
+                                "https://api.deepseek.com/v1/chat/completions",
+                                headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},
+                                json={"model":"deepseek-chat","max_tokens":1000,"stream":True,
+                                      "messages":[{"role":"system","content":"你是小树，LivingTree AI助手。"},
+                                                  {"role":"user","content":last_msg}]}) as resp:
+                                if resp.status_code == 200:
+                                    async for line in resp.aiter_lines():
+                                        if line.startswith("data: "):
+                                            data = line[6:].strip()
+                                            if data == "[DONE]": break
+                                            try:
+                                                d = _json.loads(data)
+                                                delta = d["choices"][0].get("delta",{})
+                                                reasoning = delta.get("reasoning_content","")
+                                                content = delta.get("content","")
+                                                if reasoning:
+                                                    yield f"data: {_json.dumps({'type':'thinking','content':reasoning,'session_id':sid})}\n\n"
+                                                if content:
+                                                    yield f"data: {_json.dumps({'type':'content','content':content,'session_id':sid})}\n\n"
+                                            except: pass
+                                    yield f"data: {_json.dumps({'type':'done','content':'','session_id':sid})}\n\n"
+                                    return
+                    except Exception:
+                        pass
+
+            # Fallback: non-streaming via hub chat
             try:
-                if hub.world and hub.world.consciousness:
-                    async for token in hub.world.consciousness.stream_of_thought(last_msg):
-                        yield f"data: {_json.dumps({'content': token, 'session_id': sid})}\n\n"
-                else:
-                    raise Exception("No consciousness available")
+                result = await hub.chat(last_msg)
+                reply = result.get("reflections", [""])[0] if result.get("reflections") else ""
+                if reply:
+                    for i in range(0, len(reply), 2):
+                        chunk = reply[i:i+2]
+                        yield f"data: {_json.dumps({'type':'content','content':chunk,'session_id':sid})}\n\n"
+                        await _asyncio.sleep(0.012)
+                    yield f"data: {_json.dumps({'type':'done','content':'','session_id':sid})}\n\n"
+                    return
             except Exception:
-                import traceback
-                logger.warning(f"Web chat stream failed, using fallback: {traceback.format_exc()[-200:]}")
-                reply = _fallback_reply(last_msg)
-                for ch in reply:
-                    yield f"data: {_json.dumps({'content': ch, 'session_id': sid})}\n\n"
-            yield "data: [DONE]\n\n"
+                pass
+            yield f"data: {_json.dumps({'type':'done','content':'模型暂时不可用','session_id':sid})}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
-
-
-def _fallback_reply(msg: str) -> str:
-    return f"""你好！我是 LivingTree AI Agent 🌳
-
-我收到了你的消息。当前模型服务正在初始化中，这是我的离线回复：
-
-> "{msg[:100]}{'...' if len(msg) > 100 else ''}"
-
-**可用功能：**
-- 知识库检索
-- 代码生成与编辑
-- 文档撰写
-- 多智能体协作
-
-请稍后再试流式对话，或通过 Web UI 使用本地功能。"""
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):

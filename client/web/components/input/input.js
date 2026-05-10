@@ -314,17 +314,47 @@ class Input extends Component {
     this._textarea.style.height = 'auto';
     var self = this;
     self._btnSend.classList.add('loading');
-
-    // Show typing indicator
     LT.emit('msg:typing');
+
+    // SSE streaming for real-time typewriter
+    // Check thinking setting
+    var thinking = localStorage.getItem('lt_thinking') === '1';
 
     fetch('/api/web/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({messages: [{role:'user', content:text}]})
-    }).then(function(r){return r.json()}).then(function(d) {
-      var reply = d.content || '';
-      LT.emit('msg:done', { content: reply });
+      body: JSON.stringify({messages: [{role:'user', content:text}], thinking: thinking})
+    }).then(async function(r) {
+      var reader = r.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var full = '';
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, {stream: true});
+        var lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (var line of lines) {
+          line = line.trim();
+          if (!line.startsWith('data: ')) continue;
+          var data = line.substring(6);
+          if (data === '[DONE]') break;
+          try {
+                var parsed = JSON.parse(data);
+                if (parsed.type === 'done') break;
+                if (parsed.type === 'thinking') {
+                  full += parsed.content;
+                  LT.emit('msg:thinking', { content: parsed.content, full: full });
+                } else if (parsed.content) {
+                  full += parsed.content;
+                  LT.emit('msg:chunk', { content: full });
+                }
+          } catch(e) {}
+        }
+      }
+      store.addMsg(sid, { role: 'assistant', content: full });
+      LT.emit('msg:done', { content: full });
       self._btnSend.classList.remove('loading');
     }).catch(function(e) {
       LT.emit('msg:done', { content: '[错误] ' + e.message });

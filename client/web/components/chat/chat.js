@@ -3,6 +3,8 @@ class Chat extends Component {
   init() {
     this._unsubs.push(LT.on('msg:user', (d) => this._onUserMsg(d.content)));
     this._unsubs.push(LT.on('msg:typing', () => this._onTyping()));
+    this._unsubs.push(LT.on('msg:thinking', (d) => this._onThinking(d.content, d.full)));
+    this._unsubs.push(LT.on('msg:chunk', (d) => this._onChunk(d.content)));
     this._unsubs.push(LT.on('msg:done', (d) => this._onDone(d.content)));
     this.render();
     this._loadInitial();
@@ -125,48 +127,43 @@ class Chat extends Component {
     this._scrollBottom();
   }
 
-  _onAgentStream() {
-    const typing = this._msgsEl.querySelector('.agent-message .typing-indicator');
-    if (typing) {
-      const msg = typing.closest('.agent-message');
-      if (msg) msg.remove();
+  _onChunk(content) {
+    this._showMessages();
+    var bubble = this._msgsEl.querySelector('.agent-message:last-child .agent-bubble');
+    if (!bubble) {
+      // Create new agent bubble
+      var div = document.createElement('div');
+      div.innerHTML = LT.renderer.agentMsg('&nbsp;', true);
+      this._msgsEl.appendChild(div.firstChild);
+      bubble = this._msgsEl.querySelector('.agent-message:last-child .agent-bubble');
     }
-    LT.renderer.append(this._msgsEl, LT.renderer.agentMsg('', true));
+    if (bubble) bubble.innerHTML = LT.renderer.md(content || '&nbsp;');
     this._scrollBottom();
   }
 
-  _onChunk(content) {
-    LT.renderer.updateStream(this._msgsEl, content);
+  _onThinking(chunk, full) {
+    this._showMessages();
+    var details = this._msgsEl.querySelector('.thinking-details:last-child');
+    if (!details) {
+      LT.renderer.append(this._msgsEl, '<div class="thinking-details"><details open><summary>🧠 思考过程</summary><div class="thinking-content"></div></details></div>');
+      details = this._msgsEl.querySelector('.thinking-details:last-child');
+    }
+    if (details) {
+      var tc = details.querySelector('.thinking-content');
+      if (tc) tc.textContent = full;
+    }
     this._scrollBottom();
   }
 
   _onDone(content) {
     this._showMessages();
-    // Remove typing indicator
     var typing = this._msgsEl.querySelector('.typing-indicator');
     if (typing) { var p = typing.closest('.message-agent'); if (p) p.remove(); else typing.remove(); }
-    // Create empty agent bubble, then typewriter fill it
-    var renderer = LT.renderer;
-    renderer.append(this._msgsEl, renderer.agentMsg('', false));
-    var bubble = this._msgsEl.querySelector('.agent-message:last-child .agent-bubble');
-    if (bubble) {
-      this._typewrite(bubble, content || '', 0);
-    }
-    // Store in store
+    // Chunks already updated the bubble via _onChunk; just finalize
     var store = LT.store;
     var sid = store.activeId;
     store.addMsg(sid, { role: 'assistant', content: content });
     this._scrollBottom();
-  }
-
-  _typewrite(el, text, i) {
-    if (i >= text.length) return;
-    var chunk = text.substring(0, i + 1);
-    el.innerHTML = LT.renderer.md(chunk);
-    this._scrollBottom();
-    var delay = 8 + Math.random() * 15;
-    var self = this;
-    setTimeout(function() { self._typewrite(el, text, i + 1); }, delay);
   }
 
   _scrollBottom() {

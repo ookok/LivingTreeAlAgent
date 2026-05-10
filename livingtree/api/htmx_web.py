@@ -2459,6 +2459,61 @@ async def tree_persona(request: Request):
     return HTMLResponse(p.build_full())
 
 
+@htmx_router.get("/chrome/panel")
+async def tree_chrome_panel(request: Request):
+    """Chrome DevTools MCP — frontend diagnostics + automated testing."""
+    from ..core.chrome_mcp import get_chrome_bridge
+    bridge = get_chrome_bridge()
+    st = bridge.status()
+
+    return HTMLResponse(
+        '<div class="card">'
+        '<h2>🔬 Chrome DevTools · 前端诊断</h2>'
+        '<p style="font-size:10px;color:var(--dim);margin:4px 0">'
+        '通过 CDP 协议控制 Chrome, 实现自动化测试、截图、性能分析</p>'
+
+        f'<div style="margin:8px 0;padding:8px;border-radius:6px;'
+        f'background:{"rgba(100,150,100,.08)" if st["available"] else "rgba(200,100,100,.06)"}">'
+        f'<span style="font-size:12px">{"🟢 Chrome 已连接" if st["available"] else "🔴 Chrome 未连接"}</span>'
+        f'<span style="font-size:10px;color:var(--dim);margin-left:8px">端口: {st["port"]}</span></div>'
+
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0">'
+        '<button onclick="chromeAction(\'screenshot\')" style="font-size:10px;padding:6px 12px">📸 截图</button>'
+        '<button onclick="chromeAction(\'navigate\',\'http://localhost:8100/tree/living\')" style="font-size:10px;padding:6px 12px">🏠 打开Canvas</button>'
+        '<button onclick="chromeAction(\'eval\',\'document.title\')" style="font-size:10px;padding:6px 12px">📋 页面标题</button>'
+        '<button onclick="chromeAction(\'audit\')" style="font-size:10px;padding:6px 12px">♿ 无障碍审计</button>'
+        '<button onclick="chromeAction(\'eval\',\'JSON.stringify(window.performance.timing)\')" style="font-size:10px;padding:6px 12px">⏱ 性能数据</button>'
+        '</div>'
+
+        '<div style="display:flex;gap:4px;margin:4px 0">'
+        '<input id="chrome-url" placeholder="URL..." value="http://localhost:8100/tree/living" style="flex:1;font-size:10px;padding:4px 6px">'
+        '<input id="chrome-selector" placeholder="CSS选择器..." style="flex:1;font-size:10px;padding:4px 6px">'
+        '<input id="chrome-js" placeholder="JS表达式..." style="flex:2;font-size:10px;padding:4px 6px">'
+        '<button onclick="chromeCustom()" style="font-size:10px;padding:4px 10px">执行</button></div>'
+
+        '<div id="chrome-result" style="margin-top:8px;font-size:11px;max-height:300px;overflow-y:auto;background:rgba(0,0,0,.05);padding:8px;border-radius:4px;min-height:40px;color:var(--dim)">点击按钮执行操作...</div>'
+
+        '<div style="margin-top:8px;font-size:9px;color:var(--dim)">'
+        '需要 Chrome 以远程调试模式运行: chrome --remote-debugging-port=9222<br>'
+        'MCP 工具: chrome_screenshot, chrome_eval, chrome_navigate, chrome_click, chrome_audit, chrome_dom</div>'
+        '</div>'
+        + '<script>'
+        'function chromeAction(action,arg){var d={action:action};if(arg)d[action==="navigate"?"url":action==="eval"?"expression":"selector"]=arg;'
+        'document.getElementById("chrome-result").textContent="执行中...";'
+        'fetch("/api/chrome/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)})'
+        '.then(r=>r.json()).then(function(r){var el=document.getElementById("chrome-result");'
+        'if(r.data){el.innerHTML="<img src=\'data:image/png;base64,"+r.data+"\' style=\'max-width:100%;border:1px solid var(--border)\'>"}'
+        'else{el.textContent=JSON.stringify(r,null,2)}}).catch(function(e){document.getElementById("chrome-result").textContent="Error: "+e})}'
+        'function chromeCustom(){var url=document.getElementById("chrome-url").value;'
+        'var sel=document.getElementById("chrome-selector").value;'
+        'var js=document.getElementById("chrome-js").value;'
+        'if(js)chromeAction("eval",js);'
+        'else if(sel)chromeAction("dom",sel);'
+        'else if(url)chromeAction("navigate",url)}'
+        '</script>'
+    )
+
+
 @htmx_router.get("/dpo/panel")
 async def tree_dpo_panel(request: Request):
     """DPO Preference Learning: no RL, just binary preferences."""

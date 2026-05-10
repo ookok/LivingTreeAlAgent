@@ -1579,6 +1579,44 @@ def _get_user_id_from_request(request: Request) -> str:
         get_dpo_hooks().on_hitl_decision(body.get("id", ""), False, body.get("context", ""))
         return {"ok": ok}
 
+    # ═══ Chrome DevTools MCP ═══
+
+    @app.post("/api/chrome/screenshot")
+    async def chrome_screenshot(request: Request):
+        from ..core.chrome_mcp import get_chrome_bridge
+        body = await request.json()
+        url = body.get("url", "")
+        if url:
+            await get_chrome_bridge().navigate(url)
+            await asyncio.sleep(1)
+        return await get_chrome_bridge().screenshot(
+            selector=body.get("selector", ""),
+            full_page=body.get("full_page", False),
+        )
+
+    @app.post("/api/chrome/eval")
+    async def chrome_eval(request: Request):
+        from ..core.chrome_mcp import get_chrome_bridge
+        body = await request.json()
+        return await get_chrome_bridge().eval_js(body.get("expression", "document.title"))
+
+    @app.post("/api/chrome/navigate")
+    async def chrome_navigate(request: Request):
+        from ..core.chrome_mcp import get_chrome_bridge
+        body = await request.json()
+        return await get_chrome_bridge().navigate(body.get("url", "about:blank"))
+
+    @app.post("/api/chrome/audit")
+    async def chrome_audit(request: Request):
+        from ..core.chrome_mcp import get_chrome_bridge
+        return await get_chrome_bridge().accessibility_audit()
+
+    @app.post("/api/chrome/dom")
+    async def chrome_dom(request: Request):
+        from ..core.chrome_mcp import get_chrome_bridge
+        body = await request.json()
+        return await get_chrome_bridge().dom_query(body.get("selector", "body"))
+
     # ═══ Collective Intelligence API ═══
 
     @app.post("/api/collective/publish")

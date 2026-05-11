@@ -120,7 +120,7 @@ class TaskGuard:
         if elapsed < 0.1:  # max 10 calls/sec
             await asyncio.sleep(0.1 - elapsed)
 
-        result = TaskResult(timed_out=False)
+        result = TaskResult(success=False, timed_out=False)
 
         for attempt in range(max_retries + 1):
             result.attempts = attempt + 1

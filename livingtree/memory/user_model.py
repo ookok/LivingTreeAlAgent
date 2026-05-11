@@ -89,7 +89,19 @@ class UserModel:
     def __init__(self):
         self.profile = UserProfile()
         self._synced = False
+        self._persona = None  # Lazy-init PersonaMemory bridge
         self._load()
+    
+    @property
+    def persona(self):
+        """Lazy-init PersonaMemory for 6-domain structured persona extraction."""
+        if self._persona is None:
+            try:
+                from .persona_memory import get_persona_memory
+                self._persona = get_persona_memory()
+            except Exception:
+                self._persona = False  # Sentinel: not available
+        return self._persona if self._persona is not False else None
 
     # ── L1: Explicit User Instructions ──
 
@@ -155,6 +167,16 @@ class UserModel:
         self.profile.peak_hour = hour
         self.profile.last_updated = time.time()
         self._save()
+        
+        # ── PersonaMemory: extract structured 6-domain facts from message ──
+        # Wire PersonaMemory into the existing UserModel observe flow
+        # (Island fix: PersonaMemory was a complete island with 0 callers)
+        pm = self.persona
+        if pm and len(message) > 20:
+            try:
+                pm.ingest(message)
+            except Exception:
+                pass  # Non-critical: persona extraction failure shouldn't block
 
     def get_habit_rules(self) -> list[str]:
         """Get implicit habit signals for prompt injection."""
@@ -209,6 +231,16 @@ class UserModel:
         rules.extend(self.get_instruction_rules())
         rules.extend(self.get_habit_rules())
         rules.extend(self.get_env_rules())
+        
+        # Enrich with PersonaMemory structured facts (cross-domain user profile)
+        pm = self.persona
+        if pm:
+            try:
+                persona_ctx = pm.get_context_for_query(role or "general")
+                if persona_ctx:
+                    rules.append(f"用户画像: {persona_ctx[:300]}")
+            except Exception:
+                pass
 
         if not rules:
             return ""

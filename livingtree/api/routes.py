@@ -100,7 +100,7 @@ def setup_routes(app: FastAPI) -> None:
         components = {}
         if hub:
             if getattr(hub, '_started', False):
-                status = hub.status() if hasattr(hub, 'status') else {}
+                status = hub.status() if callable(getattr(hub, 'status', None)) else {}
                 components = {
                     "life_engine": "ok" if status.get("life_engine") else "missing",
                     "cells": f"{status.get('cells', {}).get('registered', 0)} registered",
@@ -548,7 +548,7 @@ def setup_routes(app: FastAPI) -> None:
                     })
 
                 elif msg_type == "status":
-                    status = hub.status() if hasattr(hub, 'status') else {}
+                    status = hub.status() if callable(getattr(hub, 'status', None)) else {}
                     await websocket.send_json({"type": "status", **status})
 
                 elif msg_type == "ping":

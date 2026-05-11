@@ -1,32 +1,31 @@
-# LivingTree AI Agent — Requirements
+# LivingTree AI Agent — Core Requirements
 
-# === 框架 ===
-PyQt6>=6.5.0
+# === Web 框架 ===
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 aiohttp>=3.9.0
+jinja2>=3.0
+slowapi>=0.1.9
 
 # === 配置 & 数据 ===
 pyyaml>=6.0
 pydantic>=2.0
 requests>=2.31.0
-
-# === Google LangExtract: grounded entity extraction ===
-langextract>=1.3.0
-
-# === AI Memory ===
-cognee>=1.0.0
+loguru>=0.7.0
 
 # === 核心 ===
 -e .
 
-# === 可选 ===
-# mineru[core]>=3.0.0  # 文档解析（PDF/Word/PPT→Markdown，安装较慢）
+# === 桌面端 (可选) ===
+# PyQt6>=6.5.0
 
-# === 可选 ===
-# -e ./app
+# === AI 扩展 (可选) ===
+# langextract>=1.3.0           # Google LangExtract: grounded entity extraction
+# cognee>=1.0.0                # AI Memory pipeline
+# mineru[core]>=3.0.0          # 文档解析（PDF/Word/PPT→Markdown，安装较慢）
 
 # === 测试 ===
 pytest>=7.0
 pytest-asyncio>=0.21
 pytest-cov>=4.0
+lxml>=4.9

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import numpy as np
 import statistics
 import time
 from collections import deque
@@ -582,6 +583,100 @@ class AgentEval:
         if len(self._output_evals) % 10 == 0:
             self._save()
 
+
+    # ═══ SSDataBench: Population-Level Evaluation ═══
+
+    def eval_population(
+        self,
+        agent: str,
+        evaluands: list[dict],
+        reference_stats: dict = None,
+    ) -> dict:
+        """SSDataBench-style population-level statistical validation.
+
+        Goes beyond individual output scoring to evaluate whether a batch
+        of agent outputs preserves real-world population-level distributions.
+
+        From paper: "assessment should center on the ability of LLM-generated
+        data to reproduce real-world, population-level statistical patterns."
+
+        Args:
+            agent: Agent name
+            evaluands: List of {score, latency_ms, level} dicts from prior evals
+            reference_stats: Optional reference {mean_score, std_score, ...}
+
+        Returns:
+            Population-level report dict
+        """
+        from livingtree.observability.statistical_validator import (
+            get_validator, DimensionReport, Severity as SSSeverity,
+        )
+
+        if len(evaluands) < 10:
+            return {
+                "agent": agent, "status": "insufficient_data",
+                "message": "Need >=10 evaluands for population analysis (have {}).".format(len(evaluands)),
+            }
+
+        validator = get_validator()
+        reports = []
+
+        # 1. Score distribution
+        scores = [e.get("score", 0.5) for e in evaluands]
+        latencies = [e.get("latency_ms", 0) for e in evaluands]
+
+        # Reference: expected score distribution centered on 0.7 with some variance
+        ref_scores = [0.5 + (i % 10) * 0.05 for i in range(len(scores))]
+        reports.append(validator.validate_univariate(
+            synthetic_values=scores, reference_values=ref_scores,
+            dimension_name="score_distribution",
+        ))
+
+        # 2. Score vs latency bivariate
+        ref_latencies = [500 + (i % 5) * 200 for i in range(len(latencies))]
+        reports.append(validator.validate_bivariate(
+            synthetic_x=scores, synthetic_y=latencies,
+            reference_x=ref_scores, reference_y=ref_latencies,
+            dimension_name="score_vs_latency",
+        ))
+
+        # 3. Pass/fail ratio
+        pass_count = sum(1 for e in evaluands if e.get("level") == "pass" or e.get("score", 0) >= 0.6)
+        fail_count = sum(1 for e in evaluands if e.get("level") == "fail" or e.get("score", 0) < 0.4)
+        total = len(evaluands)
+        pass_ratio = pass_count / max(total, 1)
+
+        # 4. Variance collapse check (paper's key finding)
+        score_std = float(np.std(scores))
+        variance_collapse = score_std < 0.05  # Very low variance = typological compression
+        if variance_collapse:
+            reports.append(DimensionReport(
+                dimension="variance_collapse_check", score=20.0,
+                passed=False, severity=SSSeverity.CRITICAL,
+                synthetic_count=total, reference_count=total,
+                details="Variance collapse: score std={:.4f}. Agent outputs may be typologically compressed.".format(score_std),
+            ))
+
+        # Generate report
+        full_report = validator.ssdata_report("agent_eval:{}".format(agent), reports)
+
+        return {
+            "agent": agent,
+            "total_evaluands": total,
+            "population_score": full_report.overall_score,
+            "population_passed": full_report.passed,
+            "pass_ratio": round(pass_ratio, 3),
+            "score_mean": round(float(np.mean(scores)), 3),
+            "score_std": round(score_std, 4),
+            "score_median": round(float(np.median(scores)), 3),
+            "variance_collapse_warning": variance_collapse,
+            "dimensions": [
+                {"dim": d.dimension, "score": d.score, "passed": d.passed}
+                for d in full_report.dimensions
+            ],
+            "warnings": full_report.warnings,
+            "recommendations": full_report.recommendations,
+        }
 
     def _seed_quick_start(self):
         """Register built-in quick-start dataset if none exist."""

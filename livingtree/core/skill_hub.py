@@ -282,6 +282,19 @@ class SkillHub:
         self._installed[meta.name] = meta
         self._save_installed(meta)
 
+        # ── Orthogonality gate: warn if skill overlaps with existing ones ──
+        try:
+            score = self.skill_orthogonality_score(meta)
+            if score is not None and score.get("orthogonality_score", 0) > 0.6:
+                n_overlap = len(score.get("overlap_pairs", []))
+                logger.warning(
+                    f"Skill '{meta.name}': orthogonality_score={score['orthogonality_score']:.2f} — "
+                    f"overlaps with {n_overlap} existing skills. "
+                    f"Consider using OrthogonalityGuard for disentanglement."
+                )
+        except Exception:
+            logger.debug(f"Orthogonality check skipped for '{meta.name}'")
+
         if meta.dependencies:
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -352,6 +365,115 @@ class SkillHub:
                  "deps": list(s.dependencies.keys())}
                 for s in installed
             ],
+        }
+
+    # ═══ OrthoReg Skill Orthogonality (CVPR 2026) ═══
+
+    def skill_orthogonality_score(
+        self, new_skill: SkillMeta, existing_skills: list[SkillMeta] | None = None,
+    ) -> dict[str, Any]:
+        """Check orthogonality of a new skill against installed skills.
+
+        OrthoReg (CVPR 2026) principle: WVO prevents cross-task interference
+        by enforcing weight vector orthogonality. Applied to skills:
+        - Tools overlap: if new skill shares tools with an existing skill,
+          they may interfere (redundant or competing functionality)
+        - Triggers overlap: if they respond to the same triggers, they race
+        - Category distance: skills in the same category are more likely
+          to interfere
+
+        Used as a pre-install quality gate — high overlap (>0.6) flags
+        potential interference.
+
+        Args:
+            new_skill: The skill being evaluated for installation.
+            existing_skills: Override the comparison set (default: all installed).
+
+        Returns:
+            dict with orthogonality_score (0=perfectly orthogonal, 1=full overlap),
+            overlap_details, and recommendation.
+        """
+        import math
+
+        targets = existing_skills or list(self._installed.values())
+        if not targets:
+            return {
+                "orthogonality_score": 0.0,
+                "overlap_pairs": [],
+                "recommendation": "first_skill — no interference possible",
+            }
+
+        total_score = 0.0
+        pairs: list[dict] = []
+
+        new_tools = set(new_skill.tools or [])
+        new_triggers = set(new_skill.triggers or [])
+
+        for existing in targets:
+            if existing.name == new_skill.name:
+                continue
+
+            existing_tools = set(existing.tools or [])
+            existing_triggers = set(existing.triggers or [])
+
+            # Jaccard similarity on tools
+            tool_union = new_tools | existing_tools
+            tool_overlap = (
+                len(new_tools & existing_tools) / len(tool_union)
+                if tool_union else 0.0
+            )
+
+            # Jaccard similarity on triggers
+            trigger_union = new_triggers | existing_triggers
+            trigger_overlap = (
+                len(new_triggers & existing_triggers) / len(trigger_union)
+                if trigger_union else 0.0
+            )
+
+            # Category match bonus
+            category_match = 1.0 if new_skill.category == existing.category else 0.0
+
+            # Composite overlap score (tools weighted higher)
+            pair_score = 0.5 * tool_overlap + 0.3 * trigger_overlap + 0.2 * category_match
+
+            if pair_score > 0.05:  # Only report non-trivial overlaps
+                pairs.append({
+                    "skill": existing.name,
+                    "tool_overlap": round(tool_overlap, 3),
+                    "trigger_overlap": round(trigger_overlap, 3),
+                    "same_category": new_skill.category == existing.category,
+                    "composite_score": round(pair_score, 3),
+                })
+
+            total_score += pair_score
+
+        n = max(len(targets), 1)
+        avg_score = total_score / n
+
+        # Recommendation
+        if avg_score > 0.6:
+            rec = (
+                f"High skill overlap (score={avg_score:.2f}). "
+                f"Installing '{new_skill.name}' may cause interference with "
+                f"{len(pairs)} existing skill(s). Consider refactoring to "
+                "reduce tool/trigger overlap via OrthoReg-style disentanglement."
+            )
+        elif avg_score > 0.3:
+            rec = (
+                f"Moderate skill overlap (score={avg_score:.2f}). "
+                f"Monitor for interaction effects after installation."
+            )
+        else:
+            rec = (
+                f"Low skill overlap (score={avg_score:.2f}). "
+                f"Skill '{new_skill.name}' is well-orthogonalized — "
+                "minimal interference expected."
+            )
+
+        return {
+            "orthogonality_score": round(avg_score, 3),
+            "overlap_pairs": pairs[:10],  # Top 10 most overlapping
+            "recommendation": rec,
         }
 
     # ═══ Render HTML (QGIS-style plugin table) ═══

@@ -514,6 +514,15 @@ class KnowledgeBase:
             self.vector_store.add_vectors([(doc_id, vec)])
         except Exception as e:
             logger.warning(f"Vector index: {e}")
+
+        # ── Auto-index for lazy (section-level) retrieval ──
+        try:
+            from .lazy_index import _global_lazy_index
+            li = _global_lazy_index()
+            li.index_document(doc_id, doc.title or doc_id[:30], doc.content)
+        except Exception:
+            logger.debug(f"LazyIndex: skipped for '{doc.title}' (not imported yet)")
+
         return doc_id
 
     def search(self, vector_query: str, top_k: int = 5,

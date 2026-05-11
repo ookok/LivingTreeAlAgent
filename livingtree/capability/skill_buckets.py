@@ -1,5 +1,5 @@
 from loguru import logger
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from enum import StrEnum
 from typing import List, Dict, Optional
 
@@ -26,7 +26,7 @@ class SkillEntry(BaseModel):
     dependencies: List[str] = Field(default_factory=list)
     enabled_by_default: bool = True
 
-    @validator("maturity")
+    @field_validator("maturity")
     def _validate_maturity(cls, v: str) -> str:
         allowed = {"experimental", "stable", "core"}
         if v not in allowed:
@@ -288,7 +288,7 @@ class SkillCatalog:
     def export_manifest(self) -> Dict:
         return {
             "catalog_version": "0.1",
-            "skills": [e.dict() for e in self._entries],
+            "skills": [e.model_dump() for e in self._entries],
         }
 
 

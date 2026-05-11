@@ -12,7 +12,7 @@ from typing import List, Optional, Dict, Set
 from dataclasses import dataclass, field as dc_field
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 @dataclass
@@ -56,8 +56,7 @@ class EvolutionLesson(BaseModel):
     last_injected: float = 0.0
     tags: List[str] = Field(default_factory=list)
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
 
 class OntologyAuditor:
@@ -273,7 +272,7 @@ class EvolutionStore:
     def save(self) -> None:
         try:
             with open(self.json_path, "w", encoding="utf-8") as f:
-                json.dump([l.dict() for l in self.lessons], f, ensure_ascii=False, indent=2)
+                json.dump([l.model_dump() for l in self.lessons], f, ensure_ascii=False, indent=2)
         except Exception:
             # non-fatal
             pass

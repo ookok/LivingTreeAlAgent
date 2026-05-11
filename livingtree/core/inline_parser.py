@@ -71,7 +71,9 @@ class InlineParser:
         mime_lower = (mime_type or "").lower()
 
         try:
-            if ext == ".csv" or "csv" in mime_lower:
+            if self._is_archive(ext, data):
+                result = await self._parse_archive(data, filename)
+            elif ext == ".csv" or "csv" in mime_lower:
                 result = await self._parse_csv(data, filename)
             elif self._is_text(ext, mime_lower):
                 result = await self._parse_text(data, filename, ext)
@@ -98,6 +100,84 @@ class InlineParser:
             return ParseResult(ok=False, error=str(e), parse_time_ms=(time.time() - t0) * 1000)
 
     # ═══ Type Detection ═══
+
+    @staticmethod
+    def _is_archive(ext: str, data: bytes) -> bool:
+        """Detect if data is an archive (ZIP/TAR/gzip) by extension or magic bytes."""
+        archive_exts = {".zip", ".tar", ".gz", ".tgz", ".tar.gz"}
+        if ext in archive_exts or ext.endswith(".tar.gz") or ext.endswith(".tgz"):
+            return True
+        # Magic byte fallback
+        if len(data) >= 4:
+            if data[:4] == b'PK\x03\x04':   # ZIP
+                return True
+            if data[:2] == b'\x1f\x8b':      # gzip
+                return True
+            if len(data) >= 262 and data[257:262] == b'ustar':  # TAR
+                return True
+        return False
+
+    async def _parse_archive(self, data: bytes, filename: str) -> ParseResult:
+        """Parse archive files (ZIP/TAR/gz) — list contents, preview text files."""
+        try:
+            from .archive_preview import get_archive_previewer
+
+            previewer = get_archive_previewer()
+            fmt = previewer.detect_format(data, filename)
+            if not fmt:
+                return ParseResult(ok=False, error="Unrecognized archive format")
+
+            # List all files
+            entries = await previewer.list_files(data, fmt)
+            text_entries = [e for e in entries if not e.is_dir]
+            total_size = sum(e.size for e in text_entries)
+
+            # Build summary
+            lines = [
+                f"Archive: {filename} (format: {fmt})",
+                f"Files: {len(text_entries)} (total: {total_size:,} bytes)",
+                "",
+                "Contents:",
+            ]
+            for e in text_entries[:50]:  # limit listing to 50 entries
+                lines.append(f"  {e.name} ({e.size:,} bytes)")
+
+            if len(text_entries) > 50:
+                lines.append(f"  ... and {len(text_entries) - 50} more files")
+
+            # Preview first few text files
+            preview_limit = min(3, len(text_entries))
+            if preview_limit > 0:
+                lines.append("")
+                lines.append("Previews:")
+                for e in text_entries[:preview_limit]:
+                    if not e.name.lower().endswith(('.txt', '.md', '.csv', '.json', '.yaml', '.yml', '.py', '.log', '.html')):
+                        lines.append(f"  [{e.name}]: (binary, {e.size} bytes)")
+                        continue
+                    preview = await previewer.preview_text(data, fmt, e.name, max_chars=2000)
+                    if preview:
+                        lines.append(f"  [{e.name}]:")
+                        for pl in preview.split("\n")[:10]:
+                            lines.append(f"    {pl}")
+                        lines.append("")
+
+            content = "\n".join(lines)
+            title = Path(filename).stem.replace("_", " ").replace("-", " ")[:80]
+            return ParseResult(
+                ok=True, text=content, title=title,
+                source_format=fmt, word_count=len(content.split()),
+                metadata={
+                    "format": fmt,
+                    "files": len(text_entries),
+                    "total_size_bytes": total_size,
+                    "original_filename": filename,
+                },
+            )
+        except ImportError:
+            return ParseResult(ok=False, error="Archive parsing requires archive_preview module")
+        except Exception as e:
+            logger.warning(f"Archive parse [{filename}]: {e}")
+            return ParseResult(ok=False, error=f"Archive parse: {e}")
 
     @staticmethod
     def _is_text(ext: str, mime: str) -> bool:
@@ -144,23 +224,57 @@ class InlineParser:
             return ParseResult(ok=False, error=f"Text parse: {e}")
 
     async def _parse_csv(self, data: bytes, filename: str) -> ParseResult:
+        """Streaming CSV parser — iterates rows lazily, never materializes all.
+
+        Key optimization over the old list(reader): csv.reader rows are
+        consumed one at a time. Only the header and first 20 sample rows
+        are stored; everything else is counted and discarded.
+        """
         try:
+            # Guard against excessive input (matching _parse_text limit)
+            if len(data) > MAX_TEXT_BYTES:
+                return ParseResult(
+                    ok=False,
+                    error=f"CSV too large: {len(data)/1024/1024:.1f}MB (max 50MB)",
+                )
+
             encoding = self._detect_encoding(data)
             text = data.decode(encoding, errors="replace")
+
             reader = csv.reader(io.StringIO(text))
-            rows = list(reader)
-            summary_parts = []
-            if rows:
-                summary_parts.append(f"Columns: {', '.join(rows[0])}")
-                summary_parts.append(f"Rows: {len(rows) - 1}")
-            sample = "\n".join(" | ".join(r) for r in rows[:20])
+            header: list[str] = []
+            total_rows = 0
+            sample_rows: list[list[str]] = []
+            sample_limit = 20
+
+            for row in reader:
+                if not row or all(cell.strip() == '' for cell in row):
+                    continue  # skip empty rows
+
+                if not header:
+                    header = row
+                    continue
+
+                total_rows += 1
+                if len(sample_rows) < sample_limit:
+                    sample_rows.append(row)
+
+            if not header:
+                return ParseResult(ok=False, error="CSV has no header row")
+
+            # Build output
+            summary_parts = [
+                f"Columns: {', '.join(header)}",
+                f"Rows: {total_rows}",
+            ]
+            sample = "\n".join(" | ".join(r) for r in sample_rows)
             content = f"CSV: {'; '.join(summary_parts)}\n\n{sample}"
             title = self._extract_title(content, filename)
             return ParseResult(
                 ok=True, text=content, title=title,
                 mime_type="text/csv", source_format="csv",
                 word_count=len(content.split()),
-                metadata={"rows": len(rows) - 1, "columns": len(rows[0]) if rows else 0},
+                metadata={"rows": total_rows, "columns": len(header)},
             )
         except Exception as e:
             return ParseResult(ok=False, error=f"CSV parse: {e}")

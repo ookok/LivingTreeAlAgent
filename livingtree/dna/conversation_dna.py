@@ -18,7 +18,8 @@ Usage:
 from __future__ import annotations
 
 import json
-import time
+import math
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -122,6 +123,107 @@ class ConversationDNA:
             "suggested_pipeline": best_pipeline,
             "key_insights": insights,
             "avg_success_rate": sum(g.success_rate for g in top) / len(top),
+        }
+
+    # ═══ SSDataBench: Association Fidelity Check ═══
+
+    def check_association_fidelity(self) -> dict:
+        """SSDataBench-style fidelity check on conversation DNA gene pool.
+
+        From paper: synthetic data often distorts real-world association
+        structures. Selection bias from SIMILARITY_THRESHOLD (0.6) may
+        systematically filter certain patterns, creating a distorted gene pool.
+
+        Checks:
+          1. Domain distribution skew
+          2. Success rate vs pipeline complexity association
+          3. Temporal pattern drift (are older genes being crowded out?)
+
+        Returns:
+            Fidelity report dict
+        """
+        import numpy as np
+
+        if len(self._genes) < 20:
+            return {
+                "status": "insufficient_data",
+                "message": "Need >=20 genes for fidelity analysis (have {}).".format(len(self._genes)),
+            }
+
+        # 1. Domain distribution entropy
+        domain_counts = Counter(g.domain for g in self._genes)
+        total = len(self._genes)
+        domain_entropy = -sum(
+            (c/total) * math.log(c/total) for c in domain_counts.values() if c > 0
+        )
+        max_entropy = math.log(max(len(domain_counts), 1))
+        domain_diversity = domain_entropy / max(max(domain_counts.values(), default=0), 1) if len(domain_counts) > 1 else 1.0
+        normalized_entropy = domain_entropy / max(max_entropy, 0.001)
+
+        # Dominant domain risk
+        top_domain, top_count = domain_counts.most_common(1)[0] if domain_counts else ("none", 0)
+        dominant_ratio = top_count / max(total, 1)
+
+        # 2. Pipeline complexity vs success rate
+        complexities = [len(g.pipeline_steps) for g in self._genes]
+        successes = [g.success_rate for g in self._genes]
+        if len(complexities) > 2:
+            corr = float(np.corrcoef(complexities, successes)[0, 1])
+        else:
+            corr = 0.0
+
+        # 3. Selection bias: are low-success genes being purged?
+        # Success rate distribution
+        success_bins = Counter(
+            "high" if g.success_rate >= 0.8 else
+            "medium" if g.success_rate >= 0.6 else
+            "low"
+            for g in self._genes
+        )
+        low_ratio = success_bins.get("low", 0) / max(total, 1)
+
+        # 4. Association distortion risk
+        association_distortion_risk = (
+            dominant_ratio > 0.5 or   # One domain dominates
+            normalized_entropy < 0.5 or  # Low diversity
+            abs(corr) < 0.05           # No meaningful complexity-success relationship
+        )
+
+        recommendations = []
+        if dominant_ratio > 0.5:
+            recommendations.append(
+                "Dominant domain '{}' occupies {:.0f}% of gene pool. "
+                "Consider lowering MIN_SUCCESS_RATE or SIMILARITY_THRESHOLD "
+                "to preserve domain diversity.".format(top_domain, dominant_ratio*100)
+            )
+        if normalized_entropy < 0.5:
+            recommendations.append(
+                "Low domain diversity (entropy ratio={:.3f}). "
+                "Selection bias may be filtering out minority domains. "
+                "Consider stratified gene retention.".format(normalized_entropy)
+            )
+        if abs(corr) < 0.05:
+            recommendations.append(
+                "No detectable association between pipeline complexity and "
+                "success rate. This may indicate randomness in gene recording "
+                "or systematic distortion in success rate measurement."
+            )
+        if not recommendations:
+            recommendations.append("Gene pool association structure appears healthy.")
+
+        return {
+            "status": "analyzed",
+            "total_genes": total,
+            "domain_count": len(domain_counts),
+            "domain_distribution": dict(domain_counts.most_common()),
+            "domain_diversity": round(domain_diversity, 3),
+            "domain_entropy_ratio": round(normalized_entropy, 3),
+            "dominant_domain": top_domain,
+            "dominant_ratio": round(dominant_ratio, 3),
+            "complexity_success_correlation": round(corr, 4),
+            "low_success_ratio": round(low_ratio, 3),
+            "association_distortion_risk": association_distortion_risk,
+            "recommendations": recommendations,
         }
 
     def get_stats(self) -> dict:

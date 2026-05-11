@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import time as _time
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import aiohttp

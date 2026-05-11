@@ -4,6 +4,10 @@ Inspired by CowAgent's agent_max_context_tokens + intelligent trimming.
 When total context exceeds the budget, compresses at natural boundaries
 (conversation turns, steps) rather than raw truncation.
 
+HiLight integration (v2): Instead of raw 80-char truncation at overflow,
+uses EmphasisActor to highlight critical evidence spans in compressed
+context. This preserves key information that frozen Solver LLMs need.
+
 Integrates with existing AdaptiveFolder (adaptive_folder.py) for the
 actual compression logic, adding budget enforcement + auto-trigger.
 """
@@ -49,8 +53,10 @@ class ContextBudget:
       4. Last resort: drop oldest turns entirely
     """
 
-    def __init__(self, max_tokens: int = DEFAULT_MAX_TOKENS, max_turns: int = DEFAULT_MAX_TURNS):
+    def __init__(self, max_tokens: int = DEFAULT_MAX_TOKENS, max_turns: int = DEFAULT_MAX_TURNS,
+                 emphasizer: Any = None):
         self._state = BudgetState(max_tokens=max_tokens, max_turns=max_turns)
+        self._emphasizer = emphasizer  # Optional EmphasisActor for HiLight compression
 
     def estimate_tokens(self, text: str) -> int:
         """Fast token count estimate (Chinese: ~0.25 tokens/char, English: ~0.3)."""
@@ -135,7 +141,9 @@ class ContextBudget:
             for i, msg in enumerate(result):
                 tokens = self.estimate_tokens(str(msg.get("content", "")))
                 if used + tokens > available and i < len(result) - keep_recent:
-                    summaries.append(f"[{msg.get('role', '?')}]: {str(msg.get('content', ''))[:80]}...")
+                    content = str(msg.get("content", ""))
+                    summary = self._summarize_message(msg.get("role", "?"), content)
+                    summaries.append(summary)
                     dropped += 1
                     excess_start = i + 1
                 else:
@@ -157,12 +165,47 @@ class ContextBudget:
                      f"tokens {s.total_tokens}/{s.max_tokens}")
         return {"needs_compression": True, "compressed_history": result, "dropped": dropped}
 
+    def _summarize_message(self, role: str, content: str) -> str:
+        """Summarize a single message for compressed context.
+
+        HiLight mode: if EmphasisActor is available, extract highlighted
+        evidence spans instead of raw truncation. Preserves critical
+        information that frozen LLM solvers need.
+
+        Fallback: raw 80-char truncation (original behavior).
+        """
+        if not content:
+            return f"[{role}]: (empty)"
+
+        if self._emphasizer is None:
+            # Original fallback: raw truncation
+            return f"[{role}]: {content[:80]}..."
+
+        # HiLight: extract key evidence spans
+        try:
+            # Use an empty query → heuristic mode highlights informative tokens
+            result = self._emphasizer.emphasize("", content, budget=0.10)
+            if result.spans:
+                # Join highlighted spans with " ... " to indicate gaps
+                highlighted = " ... ".join(s.text[:100] for s in result.spans[:5])
+                return f"[{role}]: {highlighted}"
+        except Exception as e:
+            logger.debug(f"HiLight summary failed: {e}")
+
+        # Fallback
+        return f"[{role}]: {content[:80]}..."
+
 
 _budget: Optional[ContextBudget] = None
 
 
-def get_context_budget(max_tokens: int = 0, max_turns: int = 0) -> ContextBudget:
+def get_context_budget(max_tokens: int = 0, max_turns: int = 0,
+                       emphasizer: Any = None) -> ContextBudget:
     global _budget
     if _budget is None:
-        _budget = ContextBudget(max_tokens or DEFAULT_MAX_TOKENS, max_turns or DEFAULT_MAX_TURNS)
+        _budget = ContextBudget(
+            max_tokens or DEFAULT_MAX_TOKENS,
+            max_turns or DEFAULT_MAX_TURNS,
+            emphasizer=emphasizer,
+        )
     return _budget

@@ -33,11 +33,24 @@ except ImportError:
 
 
 class AgentMemory:
-    """LivingTree agent memory — wraps Cognee with user/workspace scoping."""
+    """LivingTree agent memory — wraps Cognee with user/workspace scoping.
+    Now tiered (HOT/WARM/COLD) via MemoryTierManager bridge."""
 
     def __init__(self):
         self._initialized = False
         self._fallback_file = MEMORY_DIR / "fallback_memory.json"
+        self._tier_manager = None  # Lazy-init MemoryTierManager bridge
+    
+    @property
+    def tier_manager(self):
+        """Lazy-init MemoryTierManager for HOT/WARM/COLD tiering."""
+        if self._tier_manager is None:
+            try:
+                from .collective_intel import MemoryTierManager
+                self._tier_manager = MemoryTierManager()
+            except Exception:
+                self._tier_manager = False
+        return self._tier_manager if self._tier_manager is not False else None
 
     async def _ensure_init(self):
         if self._initialized:
@@ -95,6 +108,7 @@ class AgentMemory:
                 await cognee.add(full_text, dataset_name=dataset)
                 await cognee.cognify(dataset_name=dataset)
                 logger.debug(f"Memory: remembered [{scope}] {content[:80]}")
+                self._tier_store(content, scope)
                 return True
             except Exception as e:
                 logger.warning(f"Memory remember failed: {e}")
@@ -115,7 +129,17 @@ class AgentMemory:
         if len(entries) > 500:
             entries = entries[-500:]
         self._save_fallback(entries)
+        self._tier_store(content, scope)
         return True
+    
+    def _tier_store(self, content: str, source: str = "") -> None:
+        """Bridge: forward memory to MemoryTierManager for HOT/WARM/COLD tiering."""
+        tm = self.tier_manager
+        if tm:
+            try:
+                tm.store(content, source_session=source)
+            except Exception:
+                pass  # Non-critical: tiering failure shouldn't block memory op
 
     async def recall(
         self,

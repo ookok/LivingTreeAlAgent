@@ -199,7 +199,7 @@ class IntegrationHub:
             logger.info(f"RouteMoA embedding scorer initialized ({len(getattr(self.embedding_scorer, '_profiles', []))} profiles)")
         except Exception as e:
             self.embedding_scorer = None
-            logger.debug(f"Embedding scorer skipped: {e}")
+            logger.warning(f"Embedding scorer skipped: {e}")
 
         # ── RouteMoA: Mixture of Judges + dynamic weights ──
         try:
@@ -213,7 +213,7 @@ class IntegrationHub:
                     pass
             logger.info("Holistic election + Mixture of Judges initialized")
         except Exception as e:
-            logger.debug(f"Election init skipped: {e}")
+            logger.warning(f"Election init skipped: {e}")
 
         # ── Auto-wire new modules ──
         from ..dna.cache_optimizer import CacheOptimizer
@@ -249,8 +249,8 @@ class IntegrationHub:
             from ..capability.skill_discovery import SkillDiscoveryManager
             self.world.skill_discovery = SkillDiscoveryManager()
             self.world.skill_discovery.discover_all()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"SkillDiscovery skipped: {e}")
 
         from ..knowledge.struct_mem import StructMemory
         self.struct_memory = StructMemory(world=self.world)
@@ -349,6 +349,13 @@ class IntegrationHub:
             # RouteMoA: expose embedding scorer import for late binding elsewhere
             from ..treellm.embedding_scorer import get_embedding_scorer
             vault = get_secret_vault()
+            # Default base URLs for vault-only providers (no separate config entry)
+            _DEFAULT_BASE_URLS = {
+                "modelscope": "https://api-inference.modelscope.cn/v1",
+                "bailing": "https://api.bailing.cn/v1",
+                "stepfun": "https://api.stepfun.com/v1",
+                "internlm": "https://api.sensenova.cn/v1",
+            }
             vault_providers = [
                 ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
                 ("siliconflow", "siliconflow_api_key", "siliconflow_base_url", "siliconflow_default_model", "Qwen/Qwen2.5-7B-Instruct"),
@@ -362,7 +369,7 @@ class IntegrationHub:
             for name, key_name, url_name, model_name, default_model in vault_providers:
                 key = vault.get(key_name, "")
                 if key:
-                    base_url = vault.get(url_name, "")
+                    base_url = vault.get(url_name, "") or _DEFAULT_BASE_URLS.get(name, "")
                     model = vault.get(model_name, "") or default_model
                     self.world.consciousness._llm.add_provider(OpenAILikeProvider(
                         name=name, base_url=base_url, api_key=key, default_model=model,
@@ -370,7 +377,7 @@ class IntegrationHub:
                     self.world.consciousness._paid_models.append(name)
                     logger.info(f"Vault provider: {name} ({model})")
         except Exception as e:
-            logger.debug(f"Vault providers: {e}")
+            logger.warning(f"Vault providers: {e}")
 
         # Register web2api as a local provider (no API key needed)
         try:
@@ -381,15 +388,15 @@ class IntegrationHub:
             ))
             logger.info("Web2API provider registered for model election")
         except Exception as e:
-            logger.debug(f"Web2API provider: {e}")
+            logger.warning(f"Web2API provider: {e}")
 
         # ── Register provider profiles for embedding scorer ──
         if getattr(self, 'embedding_scorer', None):
             try:
                 for name in self.world.consciousness._llm.provider_names:
                     self.embedding_scorer.update_profile(name, "", True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Embedding scorer profile update skipped: {e}")
 
         from ..dna.conversation_dna import ConversationDNA
         self.world.conversation_dna = ConversationDNA(world=self.world)
@@ -885,8 +892,8 @@ class IntegrationHub:
             try:
                 await brain.ingest_cycle(self)
                 await brain.deep_digest(self, max_items=5)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Brain ingest/digest cycle error: {e}")
             await asyncio.sleep(1800)  # 30 minutes
 
     async def _sync_provider_keys_from_relay(self) -> None:
@@ -976,8 +983,8 @@ class IntegrationHub:
                     logger.info(f"📝 {fragment.sender_role}: {fragment.content[:80]}")
             elif msg_type == "observe_request":
                 logger.info(f"Observe request from {data.get('from_id','?')}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"P2P message handling error: {e}")
 
     async def shutdown(self) -> None:
         if not self._started:
@@ -1004,8 +1011,8 @@ class IntegrationHub:
         try:
             from ..capability.session_continuity import get_session_continuity
             await get_session_continuity().save(self)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Session continuity save error: {e}")
 
         await self.daemon.stop()
         await self.world.self_healer.stop()
@@ -1303,8 +1310,8 @@ class IntegrationHub:
             try:
                 entries, synthesis = await self.struct_memory.retrieve_for_query(message)
                 mem_context = self.struct_memory.get_context_block(message, entries, synthesis)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"StructMemory retrieve error: {e}")
 
         # ── Dynamic tool discovery (no hardcoded workflows) ──
         try:
@@ -1334,8 +1341,8 @@ class IntegrationHub:
                     reasoning_effort=getattr(self, '_effort', "max"),
                 )
                 await self.session_manager.save(state)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Session state save error: {e}")
 
         cache_stats = {}
         if self.cache_optimizer:

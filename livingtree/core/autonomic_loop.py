@@ -14,6 +14,14 @@ This is the biological autonomic nervous system analog:
   - Sympathetic (fight):  detect + diagnose + repair
   - Parasympathetic (rest): verify + feedback + consolidate
 
+Intentional TD adaptive dosing (Sharifnassab et al., arXiv:2604.19033):
+  Fix parameters are not hardcoded — they are scaled by the health gap:
+    dose = γ × base_dose × (1 - subsystem_health_score)
+  - Severe degradation → large dose → aggressive correction
+  - Mild degradation → small dose → gentle nudge
+  - Optimal health → zero dose → no unnecessary intervention
+  This replaces hand-tuned hardcoded params with self-adapting dosages.
+
 Integration: one line activates the entire self-correcting system:
   loop = await start_autonomic_loop(interval_sec=120)
 """
@@ -106,13 +114,24 @@ class AutonomicLoop:
       - Hippocampus: consolidates learning (feedback)
     """
 
-    def __init__(self, module_refs: dict[str, Any] | None = None):
+    def __init__(self, module_refs: dict[str, Any] | None = None,
+                 gamma: float = 0.5):
+        """Initialize the autonomic loop.
+
+        Args:
+            module_refs: Dict of module name → module instance.
+            gamma: Intentional TD fix dose reduction fraction (0-1).
+                  0.5 = close 50% of the health gap each cycle.
+        """
         self._refs = module_refs or {}
+        self._gamma = gamma
         self._history: deque[LoopCycle] = deque(maxlen=50)
         self._running = False
         self._task: asyncio.Task | None = None
         self._cycle_count = 0
         self._total_improvements = 0.0
+        # Per-subsystem health tracking for adaptive dosing
+        self._subsystem_health: dict[str, float] = {}
 
     # ═══ Start/Stop ═══
 
@@ -177,6 +196,11 @@ class AutonomicLoop:
             logger.info(f"Cycle {cycle_id}: root cause = {root_cause} (EL residual={action_residual:.3f})")
 
         # ═══ PHASE 3: REPAIR ═══
+        # Track subsystem health scores for Intentional TD adaptive dosing
+        self._subsystem_health = {
+            s.name: s.score
+            for s in report.subsystems
+        }
         fixes = self._derive_fixes(report, root_cause, action_p)
         for fix in fixes:
             self._apply_fix(fix)
@@ -296,7 +320,14 @@ class AutonomicLoop:
     # ═══ Fix Application ═══
 
     def _apply_fix(self, fix: FixAction) -> None:
-        """Apply a fix to the target module."""
+        """Apply a fix with Intentional TD adaptive dosing.
+
+        Instead of hardcoded fix parameters, doses are computed as:
+            dose = γ × (1 - subsystem_health_score)
+        - Severe degradation (health=0.3) → dose = 0.5×0.7 = 0.35 (strong)
+        - Mild degradation  (health=0.8) → dose = 0.5×0.2 = 0.10 (gentle)
+        - Optimal health    (health=1.0) → dose = 0 (no intervention)
+        """
         fix.applied_at = time.time()
         sp = self._refs.get("plasticity")
         pool = self._refs.get("pool")
@@ -304,41 +335,61 @@ class AutonomicLoop:
         consc = self._refs.get("consciousness")
         ie = self._refs.get("inquiry_engine")
 
+        # ── Intentional TD: compute dose from health gap ──
+        def _dose(subsystem: str, base: float) -> float:
+            """Compute adaptive dose: γ × (1 - health_score) × base."""
+            health = self._subsystem_health.get(subsystem, 0.5)
+            gap = max(0.0, 1.0 - health)
+            return self._gamma * gap * base
+
         try:
             if fix.fix_type == FixType.SELF_DISTILLATION:
                 if sp:
-                    sp.regularize_distribution(strength=fix.params.get("strength", 0.1))
-                    logger.info(f"FIX: self-distillation (strength={fix.params['strength']})")
+                    strength = _dose("synaptic_plasticity", 0.3)
+                    sp.regularize_distribution(strength=max(0.01, strength))
+                    logger.info(
+                        f"FIX: self-distillation (adaptive dose={strength:.3f})")
             elif fix.fix_type == FixType.RELEASE_QUARANTINED:
                 if pool:
                     released = 0
+                    max_release = max(1, int(_dose("model_pool", 10)))
                     for m in pool._models.values():
+                        if released >= max_release:
+                            break
                         if m.status.value == "quarantined":
                             m.status = type(m.status).UNKNOWN
                             m.failure_streak = 0
                             released += 1
-                    logger.info(f"FIX: released {released} quarantined models")
+                    logger.info(
+                        f"FIX: released {released}/{max_release} quarantined models")
             elif fix.fix_type == FixType.EXPLORE_MORE:
                 if router:
-                    router._exploration_weight = fix.params.get("exploration_weight", 0.25)
-                    logger.info(f"FIX: exploration weight → {router._exploration_weight}")
+                    dose = _dose("thompson_router", 0.3)
+                    router._exploration_weight = min(0.5, dose + 0.05)
+                    logger.info(
+                        f"FIX: exploration weight → {router._exploration_weight:.3f}")
             elif fix.fix_type == FixType.INJECT_NOVELTY:
                 if consc:
+                    intensity = _dose("consciousness", 1.0)
                     consc.experience(
                         event_type="insight",
                         content="My self-model has been perturbed to escape a fixed point. I am evolving again.",
                         causal_source="self",
-                        intensity=fix.params.get("intensity", 0.8),
+                        intensity=max(0.1, intensity),
                     )
-                    logger.info("FIX: novelty injected into self-model")
+                    logger.info(
+                        f"FIX: novelty injected (adaptive intensity={intensity:.3f})")
             elif fix.fix_type == FixType.RECALIBRATE_REWARD:
                 if ie and hasattr(ie, '_reward'):
-                    ie._reward.calibrate(target_task_ratio=fix.params.get("target_ratio", 0.5))
+                    dose = _dose("economic", 0.5)
+                    ie._reward.calibrate(target_task_ratio=0.5 + dose)
                     logger.info(f"FIX: reward α → {ie._reward._alpha:.3f}")
             elif fix.fix_type == FixType.REDUCE_LTP:
-                if sp and sp.LTP_RATE > fix.params.get("ltp_rate", 0.08):
-                    sp.LTP_RATE = fix.params["ltp_rate"]
-                    logger.info(f"FIX: LTP rate → {sp.LTP_RATE:.4f}")
+                if sp:
+                    dose = _dose("synaptic_plasticity", 0.05)
+                    new_ltp = max(0.05, sp.LTP_RATE - dose)
+                    sp.LTP_RATE = new_ltp
+                    logger.info(f"FIX: LTP rate → {new_ltp:.4f}")
         except Exception as e:
             logger.error(f"Fix failed ({fix.fix_type.value}): {e}")
             fix.success = False

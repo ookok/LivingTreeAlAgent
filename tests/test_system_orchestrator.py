@@ -168,7 +168,7 @@ class TestAllSubsystemsIntegration:
         mempo.add_memory("HJ2.2标准大气扩散模型参数设置方法")
         mempo.add_memory("GB12348噪声限值标准")
 
-        await orch.initialize(memory_optimizer=mempo)
+        await orch.initialize()
 
         result = await orch.process(
             "大气扩散模型参数如何设置？",

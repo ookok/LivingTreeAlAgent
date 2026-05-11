@@ -733,9 +733,13 @@ class EconomicOrchestrator:
         self,
         roi_model: ROIModel | None = None,
         compliance_gate: ComplianceGate | None = None,
+        thermo_budget = None,
+        revenue_engine = None,
     ):
         self.roi = roi_model or ROIModel()
         self.compliance = compliance_gate or ComplianceGate()
+        self.thermo = thermo_budget  # KL budget cascade source
+        self.revenue = revenue_engine  # Revenue tracking + billing
         self._decisions: list[EconomicDecision] = []
         self._daily_cost_tracker: dict[str, float] = defaultdict(float)  # date → total_yuan
         self._session_budgets: dict[str, float] = {}
@@ -809,8 +813,20 @@ class EconomicOrchestrator:
                 suggestion=f"日预算已耗尽 (¥{daily_spent_yuan:.2f}/¥{policy.max_daily_budget_yuan:.2f})",
             )
 
-        # 4. 模型选择
+        # 4. 模型选择 (KL budget cascade influence)
         model = policy.select_model(complexity)
+
+        # ── KL budget cascade: influence model tier selection ──
+        if self.thermo and hasattr(self.thermo, 'kl_budget'):
+            kl_budget = self.thermo.kl_budget
+            if kl_budget > 0.5 and model == "deepseek/deepseek-v4-flash" and complexity > 0.5:
+                # KL budget allows exploring higher tier for complex tasks
+                if self.thermo.consume_kl_budget(0.3):
+                    model = "deepseek/deepseek-v4-pro"
+            elif kl_budget < 0.1 and model == "deepseek/deepseek-v4-pro" and complexity < 0.6:
+                # Low KL budget → conserve, use flash
+                model = "deepseek/deepseek-v4-flash"
+                self.thermo.contribute_kl_budget(0.1)  # Reward conservation
 
         # 5. ROI 评估
         roi_result = self.roi.evaluate(
@@ -841,6 +857,9 @@ class EconomicOrchestrator:
                 model = "deepseek/deepseek-v4-flash"
                 roi_result = flash_roi
                 suggestion = "已降级至 Flash 模型以通过经济审查"
+                # KL budget cascade: reward budget-saving downgrade
+                if self.thermo and hasattr(self.thermo, 'contribute_kl_budget'):
+                    self.thermo.contribute_kl_budget(0.1)
             else:
                 suggestion = roi_result.reason
 
@@ -1026,11 +1045,27 @@ def get_economic_orchestrator(
     roi_model: ROIModel | None = None,
     compliance_gate: ComplianceGate | None = None,
 ) -> EconomicOrchestrator:
-    """Get or create the singleton EconomicOrchestrator."""
+    """Get or create the singleton EconomicOrchestrator.
+    
+    Auto-wires ThermoBudget for KL budget cascade (Go/NoGo + model tier).
+    """
     global _economic_orchestrator
     if _economic_orchestrator is None:
+        # ── Wire ThermoBudget into economic decisions ──
+        try:
+            from .thermo_budget import get_thermo_budget
+            thermo = get_thermo_budget()
+        except Exception:
+            thermo = None
+        # ── Wire RevenueEngine for cost/revenue tracking ──
+        try:
+            from ..market.revenue_engine import get_investment_engine
+            revenue = get_investment_engine()
+        except Exception:
+            revenue = None
         _economic_orchestrator = EconomicOrchestrator(
-            roi_model=roi_model, compliance_gate=compliance_gate)
+            roi_model=roi_model, compliance_gate=compliance_gate,
+            thermo_budget=thermo, revenue_engine=revenue)
     return _economic_orchestrator
 
 

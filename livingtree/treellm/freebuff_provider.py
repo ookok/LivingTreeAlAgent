@@ -116,7 +116,7 @@ class FreeBuffProvider(Provider):
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
-                    return resp.status == 200, ""
+                    return True, ""  # Any HTTP response = server alive
         except Exception as e:
             return False, str(e)
 

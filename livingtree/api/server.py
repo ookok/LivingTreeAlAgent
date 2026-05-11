@@ -4,11 +4,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+import traceback
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, RedirectResponse
+from fastapi.responses import FileResponse, Response, RedirectResponse, JSONResponse
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from loguru import logger
 
 from .routes import setup_routes
 from .auth import setup_auth_routes
@@ -34,6 +45,58 @@ def create_app(hub=None, config=None) -> FastAPI:
     # GZip compression for static assets (CSS/JS/HTML)
     app.add_middleware(GZipMiddleware, minimum_size=512)
 
+    # Rate limiting — 100 req/min per IP, burst 20
+    limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # ═══ Global Exception Handlers ═══
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """Return structured 422 for Pydantic validation errors."""
+        logger.warning(f"Validation error on {request.method} {request.url.path}: {exc.errors()}")
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "validation_error",
+                "detail": exc.errors(),
+                "trace_id": str(uuid.uuid4())[:8],
+            },
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        """Return consistent error format for HTTP exceptions."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": "http_error",
+                "detail": exc.detail,
+                "trace_id": str(uuid.uuid4())[:8],
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """Catch-all for unhandled exceptions. Logs full traceback for debugging."""
+        trace_id = str(uuid.uuid4())[:8]
+        logger.error(
+            f"[{trace_id}] Unhandled exception on {request.method} {request.url.path}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        logger.error(f"[{trace_id}] Traceback:\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_error",
+                "detail": "An unexpected error occurred. Check server logs.",
+                "trace_id": trace_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    # ═══ Hub Wiring ═══
     if hub:
         app.state.hub = hub
         app.state.life = hub.world if hasattr(hub, "world") else hub

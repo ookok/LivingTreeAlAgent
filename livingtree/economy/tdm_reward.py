@@ -16,6 +16,12 @@ LivingTree pipeline as a deterministic trajectory (TDM analog):
 Surrogate reward model: learns to predict per-step reward from stage context.
 Generator (pipeline config): optimized against the surrogate model.
 
+Intentional Updates integration (Sharifnassab et al., arXiv:2604.19033):
+  NLMS diagonal scaling + Intentional TD replaces fixed learning_rate:
+    - NLMS: η_i = η_base / (ε + E[g_i²]) — per-feature adaptive step size
+    - Intentional TD: η* = γ × |error| / (|g|² + ε) — achieves fixed fractional error reduction
+  Benefit: high-gradient features auto-dampen, low-gradient features auto-explore.
+
 Integration:
   LifeEngine stages → per-step reward → surrogate model → config optimization
   GTSM plan steps → per-step reward → surrogate model → step ordering
@@ -100,14 +106,27 @@ class SurrogateRewardModel:
 
     This is a simple weighted linear model for fast online learning,
     sufficient for pipeline stage-level optimization.
+
+    Intentional TD + NLMS diagonal scaling:
+      Each feature weight has its own adaptive step size = η_base / (ε + E[g_i²]).
+      High-gradient features get smaller steps (prevents overshoot),
+      low-gradient features get larger steps (explores more fully).
+      Combined with Intentional TD: overall step size = γ × |error| / (|g|² + ε).
     """
 
-    def __init__(self, learning_rate: float = 0.01, feature_dim: int = 10):
+    def __init__(self, learning_rate: float = 0.01, feature_dim: int = 10,
+                 gamma: float = 0.3, epsilon: float = 1e-6):
         self._lr = learning_rate
+        self._gamma = gamma       # Intentional TD: target error reduction fraction
+        self._epsilon = epsilon   # NLMS: regularization for division
         self._weights: dict[str, float] = defaultdict(float)
         self._bias: float = 0.0
         self._samples: int = 0
         self._loss_history: deque[float] = deque(maxlen=100)
+        # NLMS: running average of squared gradient per feature
+        self._g2_avg: dict[str, float] = defaultdict(float)  # E[g_i²]
+        self._g2_bias_avg: float = 1e-3                     # E[g_bias²]
+        self._g2_decay: float = 0.95  # EMA decay for squared gradient
 
     def predict(self, features: dict[str, float]) -> float:
         """Predict per-step reward from context features."""
@@ -120,18 +139,63 @@ class SurrogateRewardModel:
     def train_step(
         self, features: dict[str, float], target: float,
     ) -> float:
-        """Single SGD step. Returns the loss for this sample."""
+        """Single SGD step with NLMS diagonal scaling + Intentional TD.
+
+        NLMS: Each feature weight w_i gets its own step size:
+            η_i = η_base / (ε + E[g_i²])
+        where E[g_i²] is the EMA of squared gradient magnitude for that feature.
+        High-gradient features → auto-dampen (prevent overshoot).
+        Low-gradient features → auto-amplify (explore more).
+        
+        Intentional TD: Overall step is scaled to achieve fractional error reduction γ:
+            η*_total = γ × |error| / (Σ (g_i² / (ε + E[g_i²])) + ε)
+        This guarantees each update reduces approximately γ of the prediction gap.
+        
+        Returns the loss for this sample.
+        """
         pred = self.predict(features)
         error = target - pred
         loss = error * error
 
-        # Update weights
+        # ── Compute per-feature gradients ──
+        grads: dict[str, float] = {}
         for feat, value in features.items():
-            grad = -2 * error * value
-            self._weights[feat] -= self._lr * grad
+            grads[feat] = -2 * error * value
+        bias_grad = -2 * error
 
-        # Update bias
-        self._bias -= self._lr * (-2 * error)
+        # ── Update NLMS running averages E[g_i²] ──
+        for feat, g in grads.items():
+            self._g2_avg[feat] = (self._g2_decay * self._g2_avg[feat]
+                                  + (1 - self._g2_decay) * g * g)
+        self._g2_bias_avg = (self._g2_decay * self._g2_bias_avg
+                            + (1 - self._g2_decay) * bias_grad * bias_grad)
+
+        # ── Intentional TD: compute optimal step size ──
+        if self._gamma > 0:
+            # Effective gradient norm (NLMS-scaled)
+            effective_g2 = 0.0
+            for feat, g in grads.items():
+                scaled = g / (self._epsilon + self._g2_avg[feat])
+                effective_g2 += scaled * scaled
+            # Bias contribution
+            bias_scaled = bias_grad / (self._epsilon + self._g2_bias_avg)
+            effective_g2 += bias_scaled * bias_scaled
+
+            # η* = γ × |error| / (effective_g2 + ε)
+            if effective_g2 > 0:
+                eta_star = self._gamma * abs(error) / (effective_g2 + self._epsilon)
+            else:
+                eta_star = self._gamma * abs(error) / self._epsilon
+        else:
+            eta_star = self._lr  # Legacy fixed learning rate
+
+        # ── Apply NLMS-weighted updates ──
+        for feat, g in grads.items():
+            eta_i = eta_star / (self._epsilon + self._g2_avg[feat])
+            self._weights[feat] -= eta_i * g
+
+        eta_bias = eta_star / (self._epsilon + self._g2_bias_avg)
+        self._bias -= eta_bias * bias_grad
 
         self._samples += 1
         self._loss_history.append(loss)

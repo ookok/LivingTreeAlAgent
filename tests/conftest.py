@@ -76,3 +76,29 @@ def sample_md(temp_dir) -> Path:
         encoding="utf-8",
     )
     return fpath
+
+
+@pytest.fixture(scope="session")
+def hub():
+    """Session-scoped IntegrationHub for pipeline tests."""
+    import asyncio
+    from livingtree.integration.hub import IntegrationHub
+    from livingtree.config.settings import get_config
+
+    _hub = IntegrationHub(config=get_config(), lazy=False)
+    _hub._init_sync()
+
+    async def _start():
+        await _hub._init_async()
+
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.run(_start())
+
+    yield _hub
+
+    try:
+        asyncio.run(_hub.shutdown())
+    except Exception:
+        pass

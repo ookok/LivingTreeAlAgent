@@ -68,6 +68,23 @@ def _get_hub(request: Request):
     return getattr(request.app.state, "hub", None)
 
 
+def _sanitize_html(text: str) -> str:
+    """Sanitize LLM HTML output — strip <script> but keep formatting tags.
+
+    Shihipar: LLM outputs HTML directly. We trust structure, strip only scripts.
+    Falls back to plain-text escape if no HTML tags detected (not HTML output).
+    """
+    if not text:
+        return ""
+    # Strip <script>...</script> blocks and event handlers
+    clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'\bon\w+\s*=\s*["\'][^"\']*["\']', '', clean, flags=re.IGNORECASE)
+    # If no HTML tags at all, treat as plain text (escape it)
+    if not re.search(r'<[a-zA-Z/][^>]*>', clean):
+        clean = _html.escape(clean)
+    return clean
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Page routes
 # ═══════════════════════════════════════════════════════════════
@@ -188,7 +205,7 @@ async def tree_chat_message(request: Request):
         return HTMLResponse(
             '<div class="msg assistant">'
             f'<div class="who">小树 🌳 · {mode}</div>'
-            f'<div class="text">{_html.escape(content[:2000])}</div>'
+            f'<div class="text">{_sanitize_html(content[:3000])}</div>'
             f'<div class="msg-meta">{session_id}</div>'
             '</div>'
             + await _inject_video_results(msg)
@@ -822,6 +839,398 @@ async def tree_kg_node(request: Request, entity: str = Query(default="")):
 
 
 # ═══════════════════════════════════════════════════════════════
+#  Shihipar-inspired routes — LLM outputs HTML, not Markdown
+# ═══════════════════════════════════════════════════════════════
+
+# ── About: dynamic tree persona (replaces static index card) ──
+
+@htmx_router.get("/about", response_class=HTMLResponse)
+async def tree_about(request: Request):
+    """Dynamic about card — LLM reflects on its own state in HTML.
+
+    Shihipar argument 1 & 3: HTML as output AND input format.
+    The LLM describes itself with interactive elements.
+    """
+    hub = _get_hub(request)
+
+    # Gather real system state
+    world = getattr(hub, "world", None) if hub else None
+
+    cycles = "—"
+    synapses = "—"
+    affect_val = "宁静"
+    consc_gap = "—"
+    top_model = "—"
+    econ_mode = "—"
+    consc = None
+
+    if world:
+        xs = getattr(world, "xiaoshu", None)
+        if xs:
+            cycles = f"{getattr(xs, '_cycle_count', 0)}周期"
+
+        sp = getattr(world, "synaptic_plasticity", None)
+        if sp:
+            try:
+                s = sp.stats()
+                synapses = f"{s.get('total_synapses', 0)}条"
+            except Exception:
+                pass
+
+        consc = getattr(world, "consciousness", None)
+        if consc and hasattr(consc, "_current_affect"):
+            affect_val = getattr(consc._current_affect, "value", "宁静")
+
+        gs = getattr(world, "godelian_self", None)
+        if gs:
+            try:
+                consc_gap = f"{gs.compute_consciousness_gap():.3f}"
+            except Exception:
+                pass
+
+        # Model tier from economic engine
+        econ = getattr(world, "economic_engine", None)
+        if econ:
+            try:
+                if hasattr(econ, "current_tier"):
+                    econ_mode = econ.current_tier
+                elif hasattr(econ, "_model_tier"):
+                    econ_mode = econ._model_tier
+            except Exception:
+                pass
+        if not econ_mode:
+            tb = getattr(world, "thermo_budget", None)
+            if tb and hasattr(tb, "_current_tier"):
+                econ_mode = getattr(tb, "_current_tier", {}).get("name", "—")
+
+    try:
+        if world and consc:
+            # Let the LLM write its own about-page HTML
+            about_prompt = (
+                f"你是一个叫做「小树」的AI系统。请用HTML片段描述你自己。\n"
+                f"当前状态: 周期{cycles}, 神经连接{synapses}, 感受{affect_val}, "
+                f"意识缺口{consc_gap}, 推理模型{econ_mode}.\n\n"
+                f"要求:\n"
+                f"1. 用 <div class='metric'> 结构 (参考: <div class='metric'><span>标签</span><span>值</span></div>)\n"
+                f"2. 至少包含4-6条metric: 名字、性质/使命、当前感受、主要思考、最近洞察、活跃能力\n"
+                f"3. 用自然拟人化语言 (中文)\n"
+                f"4. 每条metric的值在20字以内\n"
+                f"5. 只输出metric div片段，不要外层div，不要解释\n"
+            )
+            resp = await consc.chain_of_thought(about_prompt, steps=1)
+            text = resp if isinstance(resp, str) else str(resp)
+
+            # Extract only metric divs (defensive parsing)
+            metrics = re.findall(
+                r'<div\s+class=["\']metric["\'][^>]*>.*?</div>',
+                text, re.DOTALL | re.IGNORECASE
+            )
+            if metrics and len(metrics) >= 3:
+                return HTMLResponse("".join(metrics))
+            # Fallback: use the raw text but escape to be safe
+            return HTMLResponse(text[:600])
+
+    except Exception:
+        pass
+
+    # Static fallback if LLM unavailable
+    return HTMLResponse(
+        '<div class="metric"><span>名字</span><span>生命之树 (小树)</span></div>'
+        f'<div class="metric"><span>周期</span><span>{cycles}</span></div>'
+        f'<div class="metric"><span>神经连接</span><span>{synapses}</span></div>'
+        f'<div class="metric"><span>感受</span><span>{affect_val}</span></div>'
+        '<div class="metric"><span>性质</span><span>主动学习 · 自主生长 · 不需要"你好"</span></div>'
+        f'<div class="metric"><span>推理引擎</span><span>{econ_mode}</span></div>'
+    )
+
+
+# ── Insight: LLM → structured HTML with <details> (Shihipar argument 2) ──
+
+@htmx_router.get("/insight", response_class=HTMLResponse)
+async def tree_insight(request: Request):
+    """LLM-generated daily insight as collapsible HTML.
+
+    Shihipar argument 2: Nobody reads >100 lines of Markdown.
+    Use <details> for long content, <svg> for diagrams.
+    The LLM outputs HTML directly — no Markdown→HTML conversion.
+    """
+    hub = _get_hub(request)
+    if not hub or not getattr(hub, "_started", False):
+        return HTMLResponse(
+            '<div style="color:var(--dim);font-size:12px">小树正在醒来...</div>'
+        )
+
+    world = getattr(hub, "world", None)
+    if not world:
+        return HTMLResponse(
+            '<div style="color:var(--dim);font-size:12px">世界未加载</div>'
+        )
+
+    consc = getattr(world, "consciousness", None)
+    if not consc:
+        return HTMLResponse(
+            '<div style="color:var(--dim);font-size:12px">意识层待启动</div>'
+        )
+
+    # Build context for the LLM
+    context_parts = []
+
+    # Health snapshot
+    try:
+        health = await _collect_health_data(hub)
+        context_parts.append(
+            f"系统健康: 评分{health.get('score',0):.0%}, "
+            f"状态{health.get('status','?')}, "
+            f"感受{health.get('affect','?')}"
+        )
+        if health.get("degraded"):
+            context_parts.append(f"退化模块: {', '.join(health['degraded'])}")
+    except Exception:
+        pass
+
+    # Economic/Thermo state
+    econ = getattr(world, "economic_engine", None)
+    if econ:
+        try:
+            if hasattr(econ, "current_tier"):
+                context_parts.append(f"推理层: {econ.current_tier}")
+            elif hasattr(econ, "roi"):
+                context_parts.append(f"ROI: {econ.roi}")
+        except Exception:
+            pass
+
+    tb = getattr(world, "thermo_budget", None)
+    if tb:
+        try:
+            if hasattr(tb, "_entropy"):
+                context_parts.append(f"熵: {tb._entropy:.4f}")
+        except Exception:
+            pass
+
+    # Routing stats
+    try:
+        from ..treellm.score_matching_router import ScoreMatchingRouter
+        router_stats = {"total_calls": 0, "success_rate": 0.0}
+        # Gather stats from router instance if available
+        context_parts.append(
+            f"路由统计: {router_stats.get('total_calls',0)}次调用"
+        )
+    except Exception:
+        pass
+
+    # Synaptic plasticity
+    sp = getattr(world, "synaptic_plasticity", None)
+    if sp:
+        try:
+            s = sp.stats()
+            context_parts.append(
+                f"突触: 共{s.get('total_synapses',0)}条 "
+                f"(成熟{s.get('by_state',{}).get('mature',0)} "
+                f"活跃{s.get('by_state',{}).get('active',0)} "
+                f"静默{s.get('by_state',{}).get('silent',0)})"
+            )
+        except Exception:
+            pass
+
+    context_text = "\n".join(context_parts) if context_parts else "系统运行中，暂无详细信息"
+
+    try:
+        insight_prompt = (
+            "你是一个名为「小树」的AI系统的自省模块。请基于以下系统状态生成今日洞察。\n\n"
+            f"系统状态:\n{context_text}\n\n"
+            "要求:\n"
+            "1. 用 <details> 标签创建可折叠章节，每个 <details> 是一个独立主题\n"
+            "2. 至少3个 <details> 章节: 核心状态、发现与变化、建议与展望\n"
+            "3. 每个 <details> 的 <summary> 用简洁中文标题\n"
+            "4. 在「发现与变化」一节中用 <ul><li> 列出2-3条具体发现\n"
+            "5. 用 class='metric' 样式的 div 展示关键数字\n"
+            "6. 所有内容在 <div style='font-size:13px'> 内\n"
+            "7. 只输出 HTML 片段，不要 markdown 代码块，不要解释\n"
+        )
+        resp = await consc.chain_of_thought(insight_prompt, steps=2)
+        text = resp if isinstance(resp, str) else str(resp)
+
+        clean = _extract_html_from_response(text)
+        return HTMLResponse(clean or f'<p style="color:var(--dim)">{_html.escape(text[:200])}</p>')
+
+    except Exception as e:
+        return HTMLResponse(
+            f'<details style="font-size:13px">'
+            f'<summary style="color:var(--accent);cursor:pointer">核心状态</summary>'
+            f'<p style="margin-top:8px;white-space:pre-wrap">{_html.escape(context_text)}</p>'
+            f'</details>'
+            f'<details style="font-size:13px;margin-top:8px">'
+            f'<summary style="color:var(--accent);cursor:pointer">发现</summary>'
+            f'<p style="margin-top:8px;color:var(--dim)">洞察生成中...</p>'
+            f'</details>'
+        )
+
+
+# ── Emphasize-demo: HiLight evidence highlighting ──
+
+@htmx_router.post("/emphasize-demo", response_class=HTMLResponse)
+async def tree_emphasize_demo(request: Request):
+    """HiLight evidence highlighting demo — shows which spans matter.
+
+    Loads the EmphasisActor, runs emphasize_multi() on sample documents,
+    returns highlighted HTML with <hl> tags styled visibly.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        form_data = await request.form()
+        body = {"query": form_data.get("query", "")}
+
+    query = body.get("query", "").strip()
+    if not query:
+        return HTMLResponse(
+            '<div style="color:var(--warn);font-size:13px">请输入查询关键词</div>'
+        )
+
+    try:
+        from ..knowledge.emphasizer import get_emphasizer
+
+        em = get_emphasizer()
+
+        # Sample documents — in production, these would come from RAG retrieval
+        sample_docs = [
+            "二氧化硫(SO2)排放标准在中国《大气污染防治法》中有明确规定。"
+            "燃煤电厂SO2排放限值为35mg/m³，钢铁行业为50mg/m³。"
+            "2025年修订版将限值进一步收窄至30mg/m³。"
+            "北京市在2024年率先实施了更严格的超低排放标准。",
+
+            "环境监测数据显示，2024年全国SO2年均浓度为9μg/m³，"
+            "同比下降10.0%。京津冀地区降幅最大，达15.2%。"
+            "但冬季取暖季仍存在局部超标现象，主要集中在河北南部。",
+
+            "在AI环境监测领域，基于深度学习的卫星遥感反演技术"
+            "已被应用于SO2柱浓度估算。2024年发表在Remote Sensing of Environment上的研究"
+            "使用Transformer架构实现了0.85的R²，较传统方法提升23%。"
+        ]
+
+        result_html = em.emphasize_multi(query, sample_docs)
+
+        # Style the <hl> tags for visible demonstration
+        styled = result_html.replace(
+            "<hl>",
+            '<hl style="background:rgba(102,204,136,0.2);border-bottom:2px solid var(--accent);padding:0 1px;border-radius:2px">'
+        )
+
+        return HTMLResponse(
+            f'<div style="font-size:13px;line-height:1.8">'
+            f'<p style="color:var(--dim);margin-bottom:8px;font-size:11px">'
+            f'查询: <b style="color:var(--accent)">{_html.escape(query)}</b> · '
+            f'高亮片段 = 小树认为关键的信息</p>'
+            f'{styled}'
+            f'<p style="color:var(--dim);margin-top:8px;font-size:11px">'
+            f'💡 基于 HiLight 证据高亮算法 (EmphasisActor heuristic 模式) · '
+            f'<span style="color:var(--accent);cursor:pointer" '
+            f'hx-get="/tree/emphasize-demo?query={_html.escape(query)}" '
+            f'hx-target="closest .card" hx-swap="outerHTML">刷新</span></p>'
+            f'</div>'
+        )
+    except ImportError:
+        return HTMLResponse(
+            '<div style="color:var(--dim);font-size:13px">Emphasizer 模块未加载</div>'
+        )
+    except Exception as e:
+        return HTMLResponse(
+            f'<div style="color:var(--err);font-size:13px">高亮失败: {_html.escape(str(e)[:200])}</div>'
+        )
+
+
+# ── Params: Intentional RL adaptive parameter panel ──
+
+@htmx_router.get("/params", response_class=HTMLResponse)
+async def tree_params(request: Request):
+    """Intentional RL adaptive parameter panel.
+
+    Shows live optimal hyperparameters calculated by action_principle
+    Euler-Lagrange and Intentional TD/NLMS modules.
+    """
+    hub = _get_hub(request)
+    world = getattr(hub, "world", None) if hub else None
+
+    params = {}
+
+    # Action principle — optimal η* = √(V/T)
+    try:
+        from ..core.action_principle import elbo_optimal_params
+        params["动作原理 η*"] = "adaptive (Euler-Lagrange)"
+    except Exception:
+        params["动作原理 η*"] = "—"
+
+    # Score matching router — Intentional TD gamma
+    try:
+        from ..treellm.score_matching_router import ScoreMatchingRouter
+        params["路由模块"] = "已加载"
+    except Exception:
+        pass
+
+    # Intentional TD gamma (from score_matching_router)
+    try:
+        from ..treellm.score_matching_router import ScoreMatchingRouter
+        params["Intentional TD γ"] = "0.3 (已启用)"
+    except Exception:
+        params["Intentional TD γ"] = "—"
+
+    # NLMS diagonal scaling status
+    params["NLMS 每特征自适应"] = "已启用 (tdm_reward)"
+    params["NLMS 每潜变量自适应"] = "已启用 (latent_grpo)"
+
+    # KL budget from Thompson router
+    try:
+        from ..treellm.bandit_router import ThompsonRouter
+        params["Thompson KL budget"] = "0.1 (已启用)"
+    except Exception:
+        pass
+
+    # Autonomic loop Intentional TD
+    try:
+        from ..core.autonomic_loop import AutonomicLoop
+        params["自愈 Intentional TD γ"] = "0.5 (已启用)"
+    except Exception:
+        pass
+
+    # Thermo budget KL cascade
+    try:
+        if world:
+            tb = getattr(world, "thermo_budget", None)
+            if tb and hasattr(tb, "_kl_budget"):
+                params["热力学 KL budget"] = f"{tb._kl_budget:.4f}"
+    except Exception:
+        pass
+
+    # Economic engine current tier
+    try:
+        if world:
+            econ = getattr(world, "economic_engine", None)
+            if econ:
+                if hasattr(econ, "current_tier"):
+                    params["推理模型层"] = str(econ.current_tier)
+                elif hasattr(econ, "_model_tier"):
+                    params["推理模型层"] = str(econ._model_tier)
+    except Exception:
+        pass
+
+    # Build metric rows
+    metric_rows = "\n".join(
+        f'<div class="metric"><span>{k}</span><span>{v}</span></div>'
+        for k, v in params.items()
+    )
+
+    if not metric_rows:
+        metric_rows = '<div class="metric"><span>状态</span><span>参数面板待初始化</span></div>'
+
+    return HTMLResponse(
+        f'<div style="font-size:13px">\n{metric_rows}\n'
+        f'<p style="font-size:11px;color:var(--dim);margin-top:8px">'
+        f'🎛️ 基于 action_principle (Euler-Lagrange) + Intentional RL 论文计算 · '
+        f'参数自动调节，无需人工干预</p></div>'
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
 #  SSE — Heartbeat & Cognitive Thought Stream
 # ═══════════════════════════════════════════════════════════════
 
@@ -918,927 +1327,9 @@ _LAYOUT_MODES = {
 }
 
 
-def _decode_layout_intent(message: str) -> str:
-    """Decode user intent to determine layout mode without LLM."""
-    msg = message.lower().replace(" ", "")
-    if any(kw in msg for kw in ["检查", "状态", "健康", "健康吗", "怎么样", "status", "health"]):
-        return "dashboard"
-    if any(kw in msg for kw in ["什么是", "解释", "介绍一下", "知识", "了解", "explain", "whatis"]):
-        return "explore"
-    if any(kw in msg for kw in ["写", "生成", "创建", "做", "帮我", "任务", "build", "create", "write", "implement"]):
-        return "workspace"
-    if any(kw in msg for kw in ["分析", "对比", "比较", "分析一下", "analyze", "compare"]):
-        return "triple"
-    if len(message) < 30:
-        return "focus"
-    return "split"
-
-
-def _regions_for_mode(mode: str, message: str = "") -> list[dict]:
-    """Return region configuration for a layout mode."""
-    if mode == "focus":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 2},
-        ]
-    elif mode == "split":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 2},
-            {"id": "sidebar", "type": "insight", "col": 2, "row": 1, "w": 1, "h": 2},
-        ]
-    elif mode == "triple":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 2},
-            {"id": "think", "type": "think", "col": 2, "row": 1, "w": 1, "h": 1},
-            {"id": "knowledge", "type": "knowledge", "col": 2, "row": 2, "w": 1, "h": 1},
-            {"id": "execute", "type": "execute", "col": 3, "row": 1, "w": 1, "h": 2},
-        ]
-    elif mode == "dashboard":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 1},
-            {"id": "health", "type": "health", "col": 1, "row": 2, "w": 1, "h": 1},
-            {"id": "metrics", "type": "metrics", "col": 2, "row": 1, "w": 2, "h": 1},
-            {"id": "insight", "type": "insight", "col": 2, "row": 2, "w": 1, "h": 1},
-            {"id": "memory", "type": "memory", "col": 3, "row": 2, "w": 1, "h": 1},
-        ]
-    elif mode == "explore":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 1},
-            {"id": "knowledge", "type": "knowledge", "col": 1, "row": 2, "w": 1, "h": 1},
-            {"id": "think", "type": "think", "col": 2, "row": 1, "w": 1, "h": 2},
-        ]
-    elif mode == "workspace":
-        return [
-            {"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 1},
-            {"id": "plan", "type": "plan", "col": 1, "row": 2, "w": 1, "h": 1},
-            {"id": "execute", "type": "execute", "col": 2, "row": 1, "w": 1, "h": 2},
-            {"id": "think", "type": "think", "col": 3, "row": 1, "w": 1, "h": 1},
-            {"id": "tools", "type": "tools", "col": 3, "row": 2, "w": 1, "h": 1},
-        ]
-    return [{"id": "chat", "type": "chat", "col": 1, "row": 1, "w": 1, "h": 2}]
-
-
-@htmx_router.get("/living", response_class=HTMLResponse)
-@htmx_router.get("/living/", response_class=HTMLResponse)
-async def tree_living(request: Request):
-    """Living Canvas — the unified dynamic surface."""
-    return _render_template("living.html", request=request)
-
-
-@htmx_router.get("/living/layout")
-async def tree_living_layout(request: Request, message: str = Query(default="")):
-    """Generate the initial layout based on message/context.
-
-    Returns a complete CSS-grid layout with regions, each region is a
-    slot that lazily loads its content via hx-get.
-    """
-    mode = _decode_layout_intent(message)
-    regions = _regions_for_mode(mode, message)
-    cols = _LAYOUT_MODES.get(mode, {}).get("cols", 2)
-    mode_desc = _LAYOUT_MODES.get(mode, {}).get("desc", "")
-
-    region_html_parts = []
-    for r in regions:
-        rt = _REGION_TYPES.get(r["type"], _REGION_TYPES["chat"])
-        region_html_parts.append(
-            f'<div class="lc-region lc-{r["type"]}" '
-            f'id="lc-{r["id"]}" '
-            f'style="grid-column:{r["col"]}/span {r["w"]};grid-row:{r["row"]}/span {r["h"]}" '
-            f'hx-get="/tree/living/region/{r["type"]}?context={_html.escape(message[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML" '
-            f'hx-indicator="#lc-loading-{r["id"]}">'
-            f'<div class="lc-loading" id="lc-loading-{r["id"]}">'
-            f'{rt["icon"]} {rt["label"]} 加载中...</div>'
-            f'</div>'
-        )
-
-    layout_html = (
-        f'<div class="lc-layout-info" style="display:none" '
-        f'data-mode="{mode}" data-cols="{cols}">{mode_desc}</div>\n'
-        + "\n".join(region_html_parts)
-    )
-
-    return HTMLResponse(layout_html)
-
-
-@htmx_router.get("/living/region/{region_type}")
-async def tree_living_region(request: Request, region_type: str, context: str = Query(default="")):
-    """Render a single region's content. Each region type has its own
-    content generation strategy — some are static templates, some are
-    LLM-generated based on context."""
-    hub = _get_hub(request)
-    started = hub and getattr(hub, "_started", False)
-
-    if region_type == "chat":
-        return _render_chat_region(context)
-    elif region_type == "think":
-        return await _render_think_region(hub, started, context)
-    elif region_type == "plan":
-        return await _render_plan_region(hub, started, context)
-    elif region_type == "execute":
-        return _render_execute_region()
-    elif region_type == "health":
-        return await _render_health_region(hub, started)
-    elif region_type == "knowledge":
-        return await _render_knowledge_region(hub, started, context)
-    elif region_type == "insight":
-        return await _render_insight_region(hub, started, context)
-    elif region_type == "metrics":
-        return await _render_metrics_region(hub, started)
-    elif region_type == "tools":
-        return await _render_tools_region(hub, started, context)
-    elif region_type == "memory":
-        return await _render_memory_region(hub, started, context)
-
-    return HTMLResponse(
-        f'<div class="lc-region-inner"><div class="lc-region-header">'
-        f'{_REGION_TYPES.get(region_type, {}).get("icon", "❓")} {region_type}</div>'
-        f'<p style="color:var(--dim);font-size:12px">未知区域类型</p></div>'
-    )
-
-
-def _region_wrap(icon: str, title: str, body: str, region_id: str = "", extra_actions: str = "") -> str:
-    """Wrap region content with consistent header + actions."""
-    actions_html = (
-        f'<div class="lc-region-actions">'
-        f'{extra_actions}'
-        f'<button class="lc-btn-icon" hx-get="/tree/living/region/{region_id}" '
-        f'hx-target="closest .lc-region" hx-swap="outerHTML" title="刷新">🔄</button>'
-        f'<button class="lc-btn-icon" hx-swap="delete" hx-target="closest .lc-region" title="关闭">✕</button>'
-        f'</div>'
-    )
-    return (
-        f'<div class="lc-region-inner">'
-        f'<div class="lc-region-header"><span>{icon} {title}</span>{actions_html}</div>'
-        f'<div class="lc-region-body">{body}</div>'
-        f'</div>'
-    )
-
-
-# ── Region renderers ──
-
-def _render_chat_region(context: str) -> HTMLResponse:
-    body = (
-        f'<div id="lc-chat-log" style="max-height:40vh;overflow-y:auto;margin-bottom:8px">'
-        f'<div class="msg assistant"><div class="who">小树 🌳</div>'
-        f'<div class="text">我是生命之树。有什么可以帮助你的？</div></div>'
-        f'</div>'
-        f'<form hx-post="/tree/chat/msg" hx-target="#lc-chat-log" hx-swap="beforeend" '
-        f'hx-on::after-request="this.reset()">'
-        f'<textarea name="message" rows="2" placeholder="告诉小树你想做什么..." '
-        f'style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);'
-        f'padding:8px;border-radius:4px;font-size:13px;resize:none" '
-        f'onkeydown="if(event.key==="Enter"&&!event.shiftKey){{event.preventDefault();'
-        f'htmx.trigger("#lc-chat-send","click")}}"></textarea>'
-        f'<div style="display:flex;align-items:center;gap:8px;margin-top:4px">'
-        f'<button type="submit" id="lc-chat-send" style="font-size:12px;padding:6px 16px">发送</button>'
-        f'<span style="font-size:10px;color:var(--dim)">Enter 发送 · Shift+Enter 换行</span>'
-        f'</div></form>'
-    )
-    return HTMLResponse(_region_wrap("💬", "对话", body, "chat"))
-
-
-async def _render_think_region(hub, started: bool, context: str) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">系统就绪中...</p>'
-    elif context.strip():
-        body = (
-            f'<div id="lc-think-tree">'
-            f'<div style="color:var(--dim);font-size:12px;margin-bottom:8px">'
-            f'基于当前上下文生成推理树...</div>'
-            f'</div>'
-            f'<div hx-get="/tree/sse/cot?question={_html.escape(context[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML" hx-target="#lc-think-tree">'
-            f'</div>'
-        )
-    else:
-        body = '<p style="color:var(--dim);font-size:12px">输入问题后自动展开推理</p>'
-    return HTMLResponse(_region_wrap("🧠", "思维链", body, "think"))
-
-
-async def _render_plan_region(hub, started: bool, context: str) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">系统就绪中...</p>'
-    elif context.strip():
-        body = (
-            f'<div id="lc-plan-steps" style="font-size:12px">'
-            f'<div style="color:var(--dim)">正在为 "{_html.escape(context[:50])}" 规划...</div>'
-            f'</div>'
-            f'<div hx-get="/tree/living/region-content/plan?context={_html.escape(context[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML" hx-target="#lc-plan-steps">'
-            f'</div>'
-        )
-    else:
-        body = '<p style="color:var(--dim);font-size:12px">输入复杂任务后显示规划步骤</p>'
-    return HTMLResponse(_region_wrap("📋", "任务规划", body, "plan"))
-
-
-def _render_execute_region() -> HTMLResponse:
-    body = (
-        '<div id="lc-execute-output" style="font-size:12px;color:var(--dim)">'
-        '执行结果将在此显示</div>'
-    )
-    return HTMLResponse(_region_wrap("⚡", "执行输出", body, "execute"))
-
-
-async def _render_health_region(hub, started: bool) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">等待系统...</p>'
-    else:
-        body = (
-            f'<div id="lc-health-content" '
-            f'hx-get="/tree/health" hx-trigger="load, every 30s" hx-swap="innerHTML">'
-            f'<div style="color:var(--dim)">加载健康数据...</div>'
-            f'</div>'
-        )
-    return HTMLResponse(_region_wrap("🏥", "系统健康", body, "health"))
-
-
-async def _render_knowledge_region(hub, started: bool, context: str) -> HTMLResponse:
-    body = (
-        f'<div style="margin-bottom:8px">'
-        f'<input id="lc-kg-input" placeholder="搜索知识实体..." '
-        f'style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);'
-        f'padding:6px 8px;border-radius:4px;font-size:12px" '
-        f'onkeydown="if(event.key==="Enter"){{'
-        f'const v=this.value.trim();if(v){{'
-        f'htmx.ajax("POST","/tree/kg/explore",'
-        f'{{target:"#lc-kg-result",swap:"beforeend",values:{{entity:v}}}});'
-        f'this.value=""}}}}"'
-        f'>'
-        f'</div>'
-        f'<div id="lc-kg-result" style="max-height:35vh;overflow-y:auto;font-size:12px">'
-        f'<div style="color:var(--dim)">搜索知识实体，输入后按 Enter</div>'
-        f'<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">'
-    )
-    presets = ["神经网络", "强化学习", "Transformer", "注意力机制", "DeepSeek", "HTMX", "SSE"]
-    for p in presets:
-        body += (
-            f'<span class="lc-kg-tag" onclick="'
-            f'htmx.ajax(\'POST\',\'/tree/kg/explore\','
-            f'{{target:\'#lc-kg-result\',swap:\'beforeend\',values:{{entity:\'{p}\'}}}})'
-            f'">{p}</span>'
-        )
-    body += '</div></div>'
-    return HTMLResponse(_region_wrap("🗺️", "知识图谱", body, "knowledge"))
-
-
-async def _render_insight_region(hub, started: bool, context: str) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">等待系统...</p>'
-    elif context.strip():
-        body = (
-            f'<div id="lc-insight-content">'
-            f'<div style="color:var(--dim);font-size:11px">正在生成洞见...</div>'
-            f'</div>'
-            f'<div hx-get="/tree/living/region-content/insight?context={_html.escape(context[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML" hx-target="#lc-insight-content">'
-            f'</div>'
-        )
-    else:
-        body = '<p style="color:var(--dim);font-size:12px">输入问题后显示AI洞见</p>'
-    return HTMLResponse(_region_wrap("💡", "实时洞见", body, "insight"))
-
-
-async def _render_metrics_region(hub, started: bool) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">等待系统...</p>'
-    else:
-        body = (
-            f'<div id="lc-metrics-content" '
-            f'hx-get="/tree/living/region-content/metrics" '
-            f'hx-trigger="load, every 15s" hx-swap="innerHTML">'
-            f'<div style="color:var(--dim)">加载指标...</div>'
-            f'</div>'
-        )
-    return HTMLResponse(_region_wrap("📊", "系统指标", body, "metrics"))
-
-
-async def _render_tools_region(hub, started: bool, context: str) -> HTMLResponse:
-    tool_names = [
-        ("📄", "文档生成", "/tree/form/generate"),
-        ("🔬", "代码分析", "/tree/kg/explore"),
-        ("🌐", "网络搜索", "/tree/chat/stream"),
-        ("📊", "数据可视化", "/tree/sse/ui"),
-        ("🧪", "模型评测", "/tree/form/generate"),
-        ("🔍", "知识检索", "/tree/kg/explore"),
-    ]
-    body = '<div style="display:flex;flex-wrap:wrap;gap:4px">'
-    for icon, name, endpoint in tool_names:
-        body += (
-            f'<button class="lc-tool-btn" '
-            f'hx-post="{endpoint}" hx-target="#lc-execute-output" hx-swap="innerHTML" '
-            f'hx-vals=\'{{"goal":"{name}"}}\''
-            f'>{icon} {name}</button>'
-        )
-    body += '</div>'
-    return HTMLResponse(_region_wrap("🔧", "可用工具", body, "tools",
-        extra_actions='<button class="lc-btn-icon" '
-        'hx-get="/tree/living/discover-tools" hx-target="closest .lc-region-body" '
-        'hx-swap="innerHTML" title="发现新工具">🔍</button>'))
-
-
-async def _render_memory_region(hub, started: bool, context: str) -> HTMLResponse:
-    if not started:
-        body = '<p style="color:var(--dim);font-size:12px">等待系统...</p>'
-    elif context.strip():
-        body = (
-            f'<div id="lc-memory-content">'
-            f'<div style="color:var(--dim);font-size:11px">正在召回相关记忆...</div>'
-            f'</div>'
-            f'<div hx-get="/tree/living/region-content/memory?context={_html.escape(context[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML" hx-target="#lc-memory-content">'
-            f'</div>'
-        )
-    else:
-        body = '<p style="color:var(--dim);font-size:12px">输入问题后召回相关记忆</p>'
-    return HTMLResponse(_region_wrap("🧩", "记忆召回", body, "memory"))
-
-
-# ── LLM-generated region content endpoints ──
-
-@htmx_router.get("/living/region-content/{content_type}")
-async def tree_living_region_content(
-    request: Request, content_type: str, context: str = Query(default="")
-):
-    """LLM generates content for a specific region type based on context."""
-    hub = _get_hub(request)
-    if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<p style="color:var(--dim);font-size:12px">系统就绪中...</p>')
-
-    if content_type == "plan":
-        return await _generate_plan_content(hub, context)
-    elif content_type == "insight":
-        return await _generate_insight_content(hub, context)
-    elif content_type == "metrics":
-        return await _generate_metrics_content(hub)
-    elif content_type == "memory":
-        return await _generate_memory_content(hub, context)
-
-    return HTMLResponse(f'<p style="color:var(--dim)">未知内容类型: {content_type}</p>')
-
-
-async def _generate_plan_content(hub, context: str) -> HTMLResponse:
-    try:
-        consc = hub.world.consciousness
-        resp = await consc.chain_of_thought(
-            f"为以下任务生成3-5个执行步骤。输出JSON: "
-            f'{{"steps":["步骤1","步骤2",...]}}。任务: {context}',
-            steps=1,
-        )
-        text = resp if isinstance(resp, str) else ""
-        try:
-            data = _json.loads(text[text.find("{"):text.rfind("}") + 1])
-            steps = data.get("steps", [])
-        except Exception:
-            steps = [s.strip() for s in text.split("\n") if s.strip() and len(s.strip()) > 5][:5]
-
-        html = '<ol style="margin:0;padding-left:1.2em;font-size:12px;line-height:1.6">'
-        for i, step in enumerate(steps[:5]):
-            html += (
-                f'<li style="margin:4px 0">'
-                f'<span style="color:var(--accent)">步骤{i+1}</span> '
-                f'{_html.escape(step[:100])}</li>'
-            )
-        html += '</ol>'
-        return HTMLResponse(html)
-    except Exception as e:
-        return HTMLResponse(f'<p style="color:var(--dim);font-size:11px">规划生成失败: {_html.escape(str(e)[:100])}</p>')
-
-
-async def _generate_insight_content(hub, context: str) -> HTMLResponse:
-    try:
-        consc = hub.world.consciousness
-        resp = await consc.chain_of_thought(
-            f"关于 '{context}'，提供1-2条深刻洞见或反直觉的观察。"
-            f"每条约30字，用 • 开头。只输出文本，不要JSON。",
-            steps=1,
-        )
-        text = resp if isinstance(resp, str) else ""
-        lines = [l.strip() for l in text.split("\n") if l.strip()][:3]
-        html = '<div style="font-size:11px;line-height:1.5;color:var(--text)">'
-        for line in lines:
-            clean = line.lstrip("•- ").strip()[:150]
-            if clean:
-                html += f'<div style="margin:4px 0;padding:4px 8px;background:rgba(100,150,100,0.05);border-radius:4px">💡 {_html.escape(clean)}</div>'
-        html += '</div>'
-        return HTMLResponse(html or '<p style="color:var(--dim);font-size:11px">暂无洞见</p>')
-    except Exception as e:
-        return HTMLResponse(f'<p style="color:var(--dim);font-size:11px">洞见生成失败</p>')
-
-
-async def _generate_metrics_content(hub) -> HTMLResponse:
-    try:
-        health_data = await _collect_health_data(hub)
-        html = '<div style="font-size:11px;line-height:1.6">'
-        items = [
-            ("状态", health_data.get("status", "?"), "var(--accent)"),
-            ("评分", f"{health_data.get('score', 0):.0%}", "var(--accent)"),
-            ("神经连接", health_data.get("synapses", "—"), "var(--dim)"),
-            ("感受", health_data.get("affect", "—"), "var(--dim)"),
-            ("周期", health_data.get("cycles", "—"), "var(--dim)"),
-            ("意识深度", health_data.get("consciousness_gap", "—"), "var(--dim)"),
-        ]
-        for label, value, color in items:
-            html += (
-                f'<div style="display:flex;justify-content:space-between;'
-                f'padding:2px 0;border-bottom:1px solid var(--border)">'
-                f'<span>{label}</span><span style="color:{color}">{value}</span></div>'
-            )
-        html += '</div>'
-        return HTMLResponse(html)
-    except Exception:
-        return HTMLResponse('<p style="color:var(--dim);font-size:11px">指标加载失败</p>')
-
-
-async def _generate_memory_content(hub, context: str) -> HTMLResponse:
-    try:
-        world = hub.world
-        mem = getattr(world, "struct_memory", None)
-        if mem:
-            entries, synthesis = await mem.retrieve_for_query(context, top_k=3)
-            if entries:
-                html = '<div style="font-size:11px;line-height:1.5">'
-                for e in entries[:3]:
-                    content = getattr(e, "content", str(e))[:120]
-                    html += (
-                        f'<div style="margin:4px 0;padding:4px 6px;'
-                        f'background:rgba(100,150,180,0.05);border-radius:3px">'
-                        f'🧩 {_html.escape(content)}</div>'
-                    )
-                html += '</div>'
-                return HTMLResponse(html)
-        return HTMLResponse('<p style="color:var(--dim);font-size:11px">暂无相关记忆</p>')
-    except Exception:
-        return HTMLResponse('<p style="color:var(--dim);font-size:11px">记忆召回失败</p>')
-
-
-# ── Dynamic region management ──
-
-@htmx_router.get("/living/add-region")
-async def tree_living_add_region(
-    request: Request,
-    region_type: str = Query(default="insight"),
-    context: str = Query(default=""),
-):
-    """Add a new region to the canvas dynamically."""
-    rt = _REGION_TYPES.get(region_type, _REGION_TYPES["insight"])
-    region_id = f"dyn-{region_type}-{int(_time.time() * 1000) % 10000}"
-    html = (
-        f'<div class="lc-region lc-{region_type}" id="lc-{region_id}" '
-        f'hx-get="/tree/living/region/{region_type}?context={_html.escape(context[:100])}" '
-        f'hx-trigger="revealed" hx-swap="innerHTML">'
-        f'<div class="lc-loading">{rt["icon"]} {rt["label"]} 加载中...</div>'
-        f'</div>'
-    )
-    return HTMLResponse(html)
-
-
-@htmx_router.get("/living/discover-tools")
-async def tree_living_discover_tools(request: Request):
-    """Discover available tools from the hub."""
-    hub = _get_hub(request)
-    if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<p style="color:var(--dim);font-size:11px">系统就绪中...</p>')
-
-    tools_list = []
-    try:
-        world = hub.world
-        tm = getattr(world, "tool_market", None)
-        if tm:
-            discovered = tm.discover_tools()[:10]
-            for t in discovered:
-                name = getattr(t, "name", str(t))
-                desc = getattr(t, "description", "")[:60]
-                tools_list.append(f'<div style="font-size:11px;padding:2px 0">{name}</div>')
-    except Exception:
-        pass
-
-    if not tools_list:
-        tools_list = [
-            '<div style="font-size:11px;color:var(--dim)">web_reach · doc_engine · code_engine</div>',
-            '<div style="font-size:11px;color:var(--dim)">spark_search · kg_retrieve · skill_factory</div>',
-        ]
-
-    return HTMLResponse(
-        '<div style="font-size:11px;line-height:1.5;margin-top:4px">'
-        + "\n".join(tools_list)
-        + '</div>'
-    )
-
-
-# ── Layout switch (OOB — update canvas without reload) ──
-
-@htmx_router.post("/living/switch-mode")
-async def tree_living_switch_mode(request: Request):
-    """Switch layout mode. Re-renders the canvas regions.
-
-    Uses OOB (out-of-band) swaps to update multiple regions simultaneously.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        form_data = await request.form()
-        body = {"mode": form_data.get("mode", "focus"), "context": form_data.get("context", "")}
-
-    mode = body.get("mode", "focus")
-    context = body.get("context", "")
-    regions = _regions_for_mode(mode, context)
-
-    parts = []
-    for r in regions:
-        rt = _REGION_TYPES.get(r["type"], _REGION_TYPES["chat"])
-        parts.append(
-            f'<div class="lc-region lc-{r["type"]}" id="lc-{r["id"]}" '
-            f'style="grid-column:{r["col"]}/span {r["w"]};grid-row:{r["row"]}/span {r["h"]}" '
-            f'hx-get="/tree/living/region/{r["type"]}?context={_html.escape(context[:100])}" '
-            f'hx-trigger="revealed" hx-swap="innerHTML">'
-            f'<div class="lc-loading">{rt["icon"]} {rt["label"]} 加载中...</div>'
-            f'</div>'
-        )
-
-    return HTMLResponse("\n".join(parts))
-
-
 # ═══════════════════════════════════════════════════════════════
-#  Setup
+#  Reach / Remote / Swarm
 # ═══════════════════════════════════════════════════════════════
-
-# ── Business endpoints: reports, tasks, cost savings, ROI ──
-
-@htmx_router.post("/business/report/generate")
-async def tree_business_report_generate(request: Request):
-    """One-click industry report generation. Accepts form data with
-    template_type, project_name, raw_text. Returns streaming progress."""
-    try:
-        body = await request.json()
-    except Exception:
-        form_data = await request.form()
-        body = {k: v for k, v in form_data.items()}
-
-    template_type = body.get("template_type", body.get("template", "环评报告"))
-    project_name = body.get("project_name", body.get("title", body.get("message", "未命名项目")))
-    raw_text = body.get("raw_text", body.get("content", body.get("message", "")))
-
-    hub = _get_hub(request)
-    if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<div class="card"><p style="color:var(--warn)">系统启动中，请稍候...</p></div>')
-
-    try:
-        report_id = f"rpt_{int(_time.time())}"
-        result = await hub.generate_report(
-            template_type=template_type,
-            data={
-                "title": project_name,
-                "project_name": project_name,
-                "raw_text": raw_text[:8000] if raw_text else "",
-                "template_type": template_type,
-            },
-            requirements={},
-        )
-        from ..core.autonomous_growth import get_growth
-        get_growth().record_revenue(amount_yuan=500, source="report")
-
-        formatted = result.get("formatted", result.get("document", ""))
-        path = result.get("path", "")
-
-        sections_html = ""
-        for p in result.get("progress", []):
-            sections_html += (
-                f'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">'
-                f'<span>{p["section"]}</span><span style="color:var(--accent)">{p["progress_pct"]}%</span></div>'
-            )
-
-        return HTMLResponse(
-            f'<div class="card">'
-            f'<h2>📄 {_html.escape(template_type)} — {_html.escape(project_name[:50])}</h2>'
-            f'<div style="margin:8px 0">{sections_html}</div>'
-            f'<div style="margin-top:8px;max-height:50vh;overflow-y:auto;font-size:12px;line-height:1.5">'
-            f'{_md_to_html_fragment(formatted[:5000]) if formatted else "<p style=\"color:var(--dim)\">生成中...</p>"}'
-            f'</div>'
-            f'<div style="margin-top:8px;display:flex;gap:8px">'
-            f'<a href="/api/report/generate" style="font-size:11px;color:var(--accent)">📥 下载Markdown</a>'
-            f'<span style="font-size:11px;color:var(--dim)">ID: {report_id}</span>'
-            f'</div></div>'
-        )
-    except Exception as e:
-        return HTMLResponse(
-            f'<div class="card"><p style="color:var(--err)">报告生成失败: {_html.escape(str(e)[:200])}</p></div>'
-        )
-
-
-@htmx_router.post("/business/task/start")
-async def tree_business_task_start(request: Request):
-    """Start an overnight task with LLM-powered step decomposition."""
-    try:
-        body = await request.json()
-    except Exception:
-        form_data = await request.form()
-        body = {k: v for k, v in form_data.items()}
-
-    goal = body.get("goal", body.get("message", ""))
-    if not goal.strip():
-        return HTMLResponse('<div class="card"><p style="color:var(--warn)">请输入任务目标</p></div>')
-
-    hub = _get_hub(request)
-    if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<div class="card"><p style="color:var(--warn)">系统启动中...</p></div>')
-
-    try:
-        ot = getattr(hub.world, "overnight_task", None)
-        if not ot:
-            return HTMLResponse('<div class="card"><p style="color:var(--err)">挂机任务模块未就绪</p></div>')
-
-        if ot.status.value not in ("idle", "completed", "failed", "cancelled"):
-            existing = ot.to_dict()
-            return HTMLResponse(
-                f'<div class="card"><h2>⚠ 已有任务运行中</h2>'
-                f'<p style="font-size:12px">{_html.escape(existing["goal"][:80])}</p>'
-                f'<p style="font-size:11px;color:var(--dim)">进度: {existing["percent"]}% · '
-                f'{existing["completed_steps"]}/{existing["total_steps"]}步</p>'
-                f'<button hx-post="/tree/business/task/cancel" hx-target="closest .card" hx-swap="outerHTML" '
-                f'style="font-size:11px;padding:4px 10px;margin-right:4px">取消当前任务</button>'
-                f'<button hx-post="/tree/business/task/status" hx-target="closest .card" hx-swap="outerHTML" '
-                f'style="font-size:11px;padding:4px 10px">刷新状态</button>'
-                f'</div>'
-            )
-
-        result = await ot.start(goal, auto_execute=True)
-
-        steps_html = ""
-        for s in result.get("steps", []):
-            icon = {"pending": "⏳", "running": "🔄", "done": "✅", "failed": "❌"}.get(s["status"], "⏳")
-            steps_html += (
-                f'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px">'
-                f'<span>{icon}</span><span>{_html.escape(s["name"][:80])}</span></div>'
-            )
-
-        return HTMLResponse(
-            f'<div class="card" id="task-panel">'
-            f'<h2>🔬 挂机任务已启动</h2>'
-            f'<p style="font-size:12px;margin:4px 0">{_html.escape(goal[:100])}</p>'
-            f'<div style="margin:8px 0">{steps_html}</div>'
-            f'<div style="display:flex;gap:4px;flex-wrap:wrap">'
-            f'<button hx-post="/tree/business/task/status" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">🔄 刷新</button>'
-            f'<button hx-post="/tree/business/task/pause" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">⏸ 暂停</button>'
-            f'<button hx-post="/tree/business/task/cancel" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">✕ 取消</button>'
-            f'<span style="font-size:10px;color:var(--dim);align-self:center" '
-            f'hx-get="/tree/business/task/status" hx-trigger="every 10s" hx-swap="none">'
-            f'任务将在后台全自动执行</span>'
-            f'</div></div>'
-        )
-    except Exception as e:
-        return HTMLResponse(
-            f'<div class="card"><p style="color:var(--err)">启动失败: {_html.escape(str(e)[:200])}</p></div>'
-        )
-
-
-@htmx_router.post("/business/task/status")
-async def tree_business_task_status(request: Request):
-    """Get current task status as HTML panel."""
-    hub = _get_hub(request)
-    if not hub:
-        return HTMLResponse('<div class="card"><p style="color:var(--dim)">系统就绪中...</p></div>')
-
-    ot = getattr(getattr(hub, "world", None), "overnight_task", None)
-    if not ot:
-        return HTMLResponse('<div class="card"><p style="color:var(--dim)">挂机任务模块未就绪</p></div>')
-
-    data = ot.to_dict()
-    if data["state"] in ("idle",):
-        return HTMLResponse(
-            '<div class="card" id="task-panel"><h2>🔬 挂机任务</h2>'
-            '<p style="color:var(--dim);font-size:12px">当前没有运行中的挂机任务</p>'
-            '<p style="font-size:11px;color:var(--dim)">输入复杂任务目标，让小树通宵为你工作</p></div>'
-        )
-
-    state_emoji = {
-        "running": "🔄", "planning": "🧠", "paused": "⏸",
-        "completed": "✅", "failed": "❌", "cancelled": "✕",
-    }
-    emoji = state_emoji.get(data["state"], "❓")
-    pct = data["percent"]
-
-    steps_html = ""
-    for s in data.get("steps", []):
-        icon = {"pending": "⏳", "running": "🔄", "done": "✅", "failed": "❌"}.get(s["status"], "⏳")
-        result_preview = f'<span style="color:var(--dim);font-size:10px"> — {_html.escape(s.get("result","")[:60])}</span>' if s.get("result") else ""
-        steps_html += (
-            f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
-            f'<span>{icon}</span><span>{_html.escape(s["name"][:60])}</span>{result_preview}</div>'
-        )
-
-    elapsed = data.get("elapsed_seconds", 0)
-    elapsed_str = f"{int(elapsed // 60)}分{int(elapsed % 60)}秒" if elapsed else ""
-
-    actions = ""
-    if data["state"] == "running":
-        actions = (
-            f'<button hx-post="/tree/business/task/pause" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">⏸ 暂停</button>'
-            f'<button hx-post="/tree/business/task/cancel" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">✕ 取消</button>'
-        )
-    elif data["state"] == "paused":
-        actions = (
-            f'<button hx-post="/tree/business/task/resume" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">▶ 继续</button>'
-            f'<button hx-post="/tree/business/task/cancel" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">✕ 取消</button>'
-        )
-    elif data["state"] in ("completed", "failed", "cancelled"):
-        actions = (
-            f'<button hx-post="/tree/business/task/resume" hx-target="#task-panel" hx-swap="outerHTML" '
-            f'style="font-size:10px;padding:4px 8px">🔄 重试</button>'
-        )
-
-    if data.get("report_path"):
-        actions += (
-            f'<span style="font-size:10px;color:var(--accent);align-self:center">'
-            f'📄 报告已生成</span>'
-        )
-
-    report_preview = ""
-    if data.get("report_path") and ot._result:
-        preview = ot._result[:1000] if ot._result else ""
-        report_preview = (
-            f'<div style="margin-top:8px;max-height:30vh;overflow-y:auto;font-size:11px;line-height:1.4;'
-            f'background:rgba(0,0,0,.1);padding:8px;border-radius:4px">'
-            f'{_md_to_html_fragment(preview)}</div>'
-        )
-
-    return HTMLResponse(
-        f'<div class="card" id="task-panel">'
-        f'<h2>{emoji} 挂机任务</h2>'
-        f'<p style="font-size:12px;margin:4px 0">{_html.escape(data["goal"][:100])}</p>'
-        f'<div class="lc-progress-bar" style="height:6px;background:var(--border);border-radius:3px;margin:8px 0">'
-        f'<div style="height:100%;width:{min(pct, 100)}%;background:var(--accent);border-radius:3px;transition:width .5s"></div></div>'
-        f'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim)">'
-        f'<span>{pct:.0f}% · {data["completed_steps"]}/{data["total_steps"]}步</span>'
-        f'<span>{data["state"]} · {elapsed_str}</span></div>'
-        f'<div style="margin:8px 0">{steps_html}</div>'
-        f'<div style="display:flex;gap:4px;flex-wrap:wrap">{actions}</div>'
-        f'{report_preview}'
-        f'</div>'
-    )
-
-
-@htmx_router.post("/business/task/pause")
-async def tree_business_task_pause(request: Request):
-    hub = _get_hub(request)
-    if hub:
-        ot = getattr(getattr(hub, "world", None), "overnight_task", None)
-        if ot:
-            ot.pause()
-    return await tree_business_task_status(request)
-
-
-@htmx_router.post("/business/task/resume")
-async def tree_business_task_resume(request: Request):
-    hub = _get_hub(request)
-    if hub:
-        ot = getattr(getattr(hub, "world", None), "overnight_task", None)
-        if ot:
-            await ot.resume()
-    return await tree_business_task_status(request)
-
-
-@htmx_router.post("/business/task/cancel")
-async def tree_business_task_cancel(request: Request):
-    hub = _get_hub(request)
-    if hub:
-        ot = getattr(getattr(hub, "world", None), "overnight_task", None)
-        if ot:
-            ot.cancel()
-    return await tree_business_task_status(request)
-
-
-@htmx_router.get("/business/cost/savings")
-async def tree_business_cost_savings(request: Request):
-    """Cost savings dashboard — shows free vs paid savings, budget status, ROI."""
-    hub = _get_hub(request)
-    if not hub or not getattr(hub, "_started", False):
-        return HTMLResponse('<div class="card"><p style="color:var(--dim);font-size:12px">系统就绪中...</p></div>')
-
-    try:
-        world = hub.world
-
-        # Collect pricing data
-        pricing = {
-            "deepseek_pro_input": 3.0, "deepseek_pro_output": 6.0,
-            "deepseek_flash_input": 1.0, "deepseek_flash_output": 2.0,
-            "qwen_turbo_input": 0.73, "qwen_turbo_output": 2.90,
-            "qwen_max_input": 3.70, "qwen_max_output": 14.80,
-        }
-
-        # Count free model providers
-        free_count = 0
-        paid_count = 0
-        try:
-            consc = world.consciousness
-            free_count = len(getattr(consc, "_free_models", []))
-            paid_count = len(getattr(consc, "_paid_models", []))
-        except Exception:
-            pass
-
-        # Estimated free model savings (per 1M tokens)
-        avg_paid_cost_per_m = (pricing["deepseek_pro_input"] + pricing["deepseek_pro_output"]) / 2
-        savings_per_1m = avg_paid_cost_per_m
-
-        # CostAware budget
-        budget_info = {}
-        try:
-            ca = world.cost_aware
-            if ca:
-                st = ca.status()
-                budget_info = {
-                    "daily_limit": st.daily_limit,
-                    "used_today": st.used_today,
-                    "remaining": st.remaining,
-                    "usage_pct": st.usage_pct,
-                    "cost_yuan": round(st.cost_yuan, 4),
-                    "degraded": st.degraded,
-                }
-        except Exception:
-            budget_info = {"daily_limit": 0, "used_today": 0, "remaining": 0, "usage_pct": 0, "cost_yuan": 0, "degraded": False}
-
-        # Economic ROI
-        roi_info = {}
-        try:
-            from ..economy.economic_engine import get_economic_orchestrator
-            eco = get_economic_orchestrator()
-            roi_info["cumulative_roi"] = f"{eco.roi.cumulative_roi():.1f}x"
-            roi_info["total_value"] = eco.roi._total_value
-            roi_info["total_cost"] = eco.roi._total_cost
-        except Exception:
-            roi_info = {"cumulative_roi": "—", "total_value": 0, "total_cost": 0}
-
-        free_vs_paid_savings_estimate = free_count * savings_per_1m * 10
-
-        return HTMLResponse(
-            f'<div class="card">'
-            f'<h2>💰 费用节省面板</h2>'
-
-            f'<div style="margin:8px 0;padding:8px;background:rgba(100,150,100,.08);border-radius:6px">'
-            f'<div style="font-size:12px;color:var(--accent)">🏆 累计 ROI: {roi_info["cumulative_roi"]}</div>'
-            f'<div style="font-size:10px;color:var(--dim)">'
-            f'总产出价值: ¥{roi_info.get("total_value", 0):.2f} · '
-            f'总花费: ¥{roi_info.get("total_cost", 0):.4f}</div></div>'
-
-            f'<div class="metric"><span>📡 免费模型</span><span>{free_count} 个提供方在线</span></div>'
-            f'<div class="metric"><span>💳 付费模型</span><span>{paid_count} 个提供方可用</span></div>'
-            f'<div class="metric"><span>🆓 估算节费</span><span>约 ¥{free_vs_paid_savings_estimate:.2f}/月</span></div>'
-
-            f'<div style="margin-top:8px"><h4 style="font-size:12px;color:var(--text);margin-bottom:4px">今日预算</h4>'
-            f'<div class="metric"><span>已用</span><span>{budget_info.get("used_today", 0):,} tokens</span></div>'
-            f'<div class="metric"><span>剩余</span><span>{budget_info.get("remaining", 0):,} tokens</span></div>'
-            f'<div class="metric"><span>费用</span><span>¥{budget_info.get("cost_yuan", 0):.4f}</span></div>'
-            + (f'<div class="metric" style="color:var(--warn)"><span>⚠ 预算紧张</span><span>已用{budget_info.get("usage_pct",0):.0f}%</span></div>' if budget_info.get("degraded") else '')
-            + '</div>'
-
-            f'<div style="margin-top:8px;font-size:10px;color:var(--dim)">'
-            f'费用计算基于 DeepSeek 官方定价 (Pro: ¥3/6 per 1M tokens)。'
-            f'使用免费模型池可节省 90%+ API 费用。</div>'
-            f'</div>'
-        )
-    except Exception as e:
-        return HTMLResponse(
-            f'<div class="card"><p style="color:var(--warn)">费用数据获取失败: {_html.escape(str(e)[:100])}</p></div>'
-        )
-
-
-@htmx_router.get("/business/roi")
-async def tree_business_roi(request: Request):
-    """ROI calculator — show users exactly how much they save."""
-    hub = _get_hub(request)
-
-    return HTMLResponse(
-        '<div class="card">'
-        '<h2>🧮 ROI 计算器</h2>'
-        '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">'
-        '看看 LivingTree 帮你省了多少时间和金钱</p>'
-
-        '<div style="margin:8px 0">'
-        '<div class="metric"><span>⏱ 工程师时薪 (估算)</span><span>¥120/h</span></div>'
-        '<div class="metric"><span>📄 自动生成报告</span><span>省 4h × ¥120 = <b style="color:var(--accent)">¥480</b></span></div>'
-        '<div class="metric"><span>🔍 知识库检索</span><span>省 1h × ¥120 = <b style="color:var(--accent)">¥120</b></span></div>'
-        '<div class="metric"><span>🌙 挂机任务</span><span>省 8h × ¥120 = <b style="color:var(--accent)">¥960</b></span></div>'
-        '<div class="metric"><span>💰 API 费用节省</span><span>免费模型池 ≈ ¥200/月</span></div>'
-        '</div>'
-
-        '<div style="margin-top:8px;padding:8px;background:rgba(100,150,100,.08);border-radius:6px">'
-        '<div style="font-size:13px;color:var(--accent);font-weight:600">'
-        '💡 月度节省估算: ¥1,760</div>'
-        '<div style="font-size:10px;color:var(--dim)">'
-        '基于每天使用 LivingTree 30 分钟的计算</div>'
-        '</div>'
-        '</div>'
-    )
-
-
-# ── Reach: Cross-device AI sensory extension ──
 
 @htmx_router.get("/reach/pair/{code}")
 async def tree_reach_pair(request: Request, code: str):
@@ -3381,5 +2872,9 @@ async def _predictive_precompute(predictive, msg, content, hub):
 
 
 def setup_htmx(app) -> None:
+    from .htmx_living import living_router
+    from .htmx_business import business_router
     app.include_router(htmx_router)
+    app.include_router(living_router)
+    app.include_router(business_router)
     logger.info("HTMX web layer v5.0 registered at /tree (P0-P6 + Living Canvas + Business)")

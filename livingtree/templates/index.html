@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="grid2">
-  <div class="card">
+  <div class="card" id="about-card">
     <h2>🌳 关于小树</h2>
-    <div class="metric"><span>名字</span><span>生命之树 (小树)</span></div>
-    <div class="metric"><span>状态</span><span><span class="status-dot green"></span>运行中</span></div>
-    <div class="metric"><span>性质</span><span>主动学习 · 自主生长 · 不需要"你好"</span></div>
+    <div hx-get="/tree/about" hx-trigger="load" hx-swap="innerHTML">
+      <div class="metric"><span>名字</span><span>生命之树 (小树)</span></div>
+      <div class="metric"><span>状态</span><span><span class="status-dot green"></span>运行中</span></div>
+      <div class="metric"><span>性质</span><span>主动学习 · 自主生长 · 不需要"你好"</span></div>
+    </div>
   </div>
   <div class="card">
     <h2>⚡ 快速对话</h2>
@@ -14,12 +16,21 @@
       <button type="submit" style="margin-top:8px">发送</button>
     </form>
     <div id="quick-result" style="margin-top:12px"></div>
-    <!-- SSE streaming alternative -->
+    <!-- SSE streaming via HTMX SSE extension -->
     <div style="margin-top:8px;font-size:11px;color:var(--dim)">
       试试 <span style="color:var(--accent);cursor:pointer"
-            onclick="quickStream()">⚡ 流式渲染</span>
+             hx-get="/tree/sse/chat" hx-target="#quick-stream-result" hx-swap="innerHTML"
+             hx-trigger="click"
+             hx-vals='js:{msg: document.querySelector("#quick-result").previousElementSibling?.querySelector("textarea")?.value || ""}'
+             hx-indicator="#stream-indicator">
+        ⚡ 流式渲染</span>
     </div>
-    <div id="quick-stream-result" style="margin-top:8px"></div>
+    <div id="stream-indicator" class="htmx-indicator" style="color:var(--accent);font-size:11px">⚡ 流式生成中...</div>
+    <div id="quick-stream-result" style="margin-top:8px"
+         sse-connect="/tree/sse/chat"
+         sse-swap="message"
+         hx-swap="innerHTML">
+    </div>
   </div>
 </div>
 
@@ -57,22 +68,41 @@
   </div>
 </div>
 
-<script>
-function quickStream() {
-  const textarea = document.querySelector('#quick-result').previousElementSibling.querySelector('textarea');
-  const msg = textarea.value.trim();
-  if (!msg) return;
-  const result = document.getElementById('quick-stream-result');
-  result.innerHTML = '<div style="color:var(--accent);font-size:12px">⚡ 流式生成中...</div>';
-  const evtSource = new EventSource('/tree/sse/chat?msg=' + encodeURIComponent(msg));
-  evtSource.onmessage = function(e) {
-    if (e.data === '[DONE]') { evtSource.close(); return; }
-    try {
-      const data = JSON.parse(e.data);
-      if (data.html) result.innerHTML = data.html;
-    } catch(err) {}
-  };
-  evtSource.onerror = function() { evtSource.close(); };
-}
-</script>
+<!-- Shihipar Card 1: 今日洞察 — LLM→HTML with <details> collapsible sections -->
+<div class="card" style="margin-top:16px">
+  <h2>💡 今日洞察</h2>
+  <p style="font-size:12px;color:var(--dim);margin-bottom:8px">
+    小树根据系统状态与知识图谱生成的HTML洞察 — 可折叠、可交互
+  </p>
+  <div id="insight-card" hx-get="/tree/insight" hx-trigger="load, every 120s" hx-swap="innerHTML">
+    <div style="color:var(--dim);font-size:12px">小树正在思考...</div>
+  </div>
+</div>
+
+<!-- Shihipar Card 2: 证据高亮演示 — HiLight emphasizer -->
+<div class="card" style="margin-top:16px">
+  <h2>🔍 证据高亮 · 信息密度</h2>
+  <p style="font-size:12px;color:var(--dim);margin-bottom:8px">
+    智能标注检索文档中的关键证据片段，提升大模型信息吸收效率
+  </p>
+  <form hx-post="/tree/emphasize-demo" hx-target="#emphasize-result" hx-swap="innerHTML"
+        hx-indicator="#emphasize-loading">
+    <input name="query" placeholder="输入查询 (如: SO2排放标准)" 
+           style="width:100%;margin-bottom:8px" />
+    <button type="submit" style="font-size:12px;padding:6px 16px">🔍 高亮证据</button>
+  </form>
+  <div id="emphasize-loading" class="htmx-indicator" style="color:var(--accent);font-size:11px">分析文档中...</div>
+  <div id="emphasize-result" style="margin-top:12px"></div>
+</div>
+
+<!-- Shihipar Card 3: 自适应参数面板 — Intentional RL params -->
+<div class="card" style="margin-top:16px">
+  <h2>🎛️ 自适应参数 · Intentional RL</h2>
+  <p style="font-size:12px;color:var(--dim);margin-bottom:8px">
+    基于 action_principle Euler-Lagrange 计算的动态学习参数 — 实时调节，无需手调
+  </p>
+  <div id="params-panel" hx-get="/tree/params" hx-trigger="load, every 60s" hx-swap="innerHTML">
+    <div style="color:var(--dim);font-size:12px">计算最优参数中...</div>
+  </div>
+</div>
 {% endblock %}

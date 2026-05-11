@@ -22,11 +22,15 @@ Integration with KnowledgeBase:
 from __future__ import annotations
 
 import re
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, Iterator, TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from .file_chunk_reader import FileChunkReader
 
 
 # ═══ Data Types ═══
@@ -51,9 +55,29 @@ class SectionRef:
     def size_chars(self) -> int:
         return self.char_end - self.char_start
 
-    def load(self, full_content: str) -> str:
-        """Load the actual section content from the full document string."""
-        return full_content[self.char_start:self.char_end]
+    def load(self, full_content: str | None = None, *,
+             reader: 'FileChunkReader | None' = None) -> str:
+        """Load the actual section content.
+
+        Supports two modes:
+          - full_content: the entire document string (current behavior)
+          - reader: FileChunkReader for zero-copy mmap-based loading
+
+        Prefers reader (mmap) when both are provided — no full document
+        load needed, reads only the section's byte range from disk.
+
+        Raises:
+            ValueError: if neither full_content nor reader is provided.
+        """
+        if reader is not None:
+            raw = reader.mmap_range(self.char_start, self.char_end - self.char_start)
+            return raw.decode('utf-8', errors='replace')
+        if full_content is not None:
+            return full_content[self.char_start:self.char_end]
+        raise ValueError(
+            f"SectionRef.load() requires full_content or reader "
+            f"(section '{self.section_title}')"
+        )
 
 
 @dataclass
@@ -273,6 +297,82 @@ class LazyIndex:
         )
         return idx
 
+    def index_from_reader(
+        self, doc_id: str, title: str, reader: FileChunkReader,
+        probe_size: int = 65536,
+    ) -> DocumentIndex:
+        """Build section index from a FileChunkReader — only reads what's needed.
+
+        Instead of loading the full document into memory, this reads a probe
+        window (default 64KB) from the start of the file to detect section
+        headers. Sections found within the probe window are indexed; sections
+        beyond it require a full index pass (use index_document for that).
+
+        This is a tradeoff: fast first-pass indexing at the cost of only
+        covering sections in the probe window. For most documents, headers
+        are concentrated near the top.
+
+        Args:
+            doc_id: Document identifier.
+            title: Document title for metadata.
+            reader: FileChunkReader wrapping the source file.
+            probe_size: Bytes to read from file start for header detection.
+
+        Returns:
+            DocumentIndex with sections found in the probe window.
+        """
+        actual_size = min(probe_size, reader.get_file_size())
+        if actual_size <= 0:
+            # Empty file
+            idx = DocumentIndex(
+                doc_id=doc_id, doc_title=title,
+                total_chars=0, sections=[],
+                indexed_at=time.time(), section_count=0,
+            )
+            self._indices[doc_id] = idx
+            return idx
+
+        try:
+            raw = reader.mmap_range(0, actual_size)
+            content = raw.decode('utf-8', errors='replace')
+        except Exception as e:
+            logger.warning(f"LazyIndex.index_from_reader: read failed for '{title}': {e}")
+            idx = DocumentIndex(
+                doc_id=doc_id, doc_title=title,
+                total_chars=reader.get_file_size(),
+                sections=[], indexed_at=time.time(), section_count=0,
+            )
+            self._indices[doc_id] = idx
+            return idx
+
+        sections = self._parser.parse(content)
+        for s in sections:
+            s.doc_id = doc_id
+            s.doc_title = title
+
+        idx = DocumentIndex(
+            doc_id=doc_id,
+            doc_title=title,
+            total_chars=reader.get_file_size(),
+            sections=sections,
+            indexed_at=time.time(),
+            section_count=len(sections),
+        )
+        self._indices[doc_id] = idx
+        self._total_sections += len(sections)
+
+        # Evict oldest if over capacity
+        if len(self._indices) > self._max_docs:
+            oldest = min(self._indices.keys(),
+                        key=lambda k: self._indices[k].indexed_at)
+            self._indices.pop(oldest, None)
+
+        logger.debug(
+            f"LazyIndex (reader): '{title[:40]}' → {len(sections)} sections "
+            f"(probe={actual_size} bytes, total={reader.get_file_size()} bytes)",
+        )
+        return idx
+
     def has_index(self, doc_id: str) -> bool:
         return doc_id in self._indices
 
@@ -337,23 +437,31 @@ class LazyIndex:
     # ── Load on Demand ──
 
     def load_section(
-        self, section: SectionRef, content_getter,
+        self, section: SectionRef, content_getter=None, *,
+        reader: FileChunkReader | None = None,
     ) -> str:
         """Load a single section's content on demand.
 
-        The content_getter is a callable that provides the full document
-        content given a doc_id. This is where the lazy loading happens:
-        we only read the full content when actually needed.
+        Supports two modes:
+          - content_getter: callable that returns full document string (current)
+          - reader: FileChunkReader for zero-copy mmap loading (new)
+
+        Prefers reader when provided — avoids loading the full document.
 
         Args:
             section: SectionRef with byte offsets
-            content_getter: async fn(doc_id) → full_content_string
+            content_getter: async fn(doc_id) → full_content_string (legacy)
+            reader: FileChunkReader for mmap-based loading (preferred)
 
         Returns:
             The section's text content
         """
         self._total_chars_saved += section.size_chars
-        return section.load(content_getter(section.doc_id))
+        if reader is not None:
+            return section.load(reader=reader)
+        if content_getter is not None:
+            return section.load(full_content=content_getter(section.doc_id))
+        raise ValueError("load_section requires content_getter or reader")
 
     def load_top_sections(
         self, results: list[LazySearchResult], content_getter,
@@ -390,6 +498,17 @@ class LazyIndex:
 
 
 # ═══ KnowledgeBase Integration ═══
+
+_lazy_instance: 'LazyIndex | None' = None
+
+
+def _global_lazy_index() -> LazyIndex:
+    """Get or create the global LazyIndex singleton."""
+    global _lazy_instance
+    if _lazy_instance is None:
+        _lazy_instance = LazyIndex()
+    return _lazy_instance
+
 
 def integrate_with_knowledge_base(kb=None) -> LazyIndex:
     """Create a LazyIndex and hook into KnowledgeBase.add_knowledge().

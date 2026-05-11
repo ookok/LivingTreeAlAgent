@@ -378,8 +378,119 @@ class PipelineOrchestrator:
         ]):
             return "gtsm"
 
+        # Complex multi-domain → Orchestrated (Expert decomposition + parallel sub-agents)
+        if len(plan) > 5 and any(kw in task_lower for kw in [
+            "研究报告", "全面分析", "综合评估", "多领域", "多方",
+            "complex", "comprehensive", "multi-domain", "multidisciplinary",
+            "环评", "调研", "尽调", "due diligence",
+        ]):
+            return "orchestrated"
+
         # Default: GTSM hybrid (best general-purpose)
         return "gtsm"
+
+    def select_scored(self, task: str, context: dict | None = None) -> dict[str, Any]:
+        """StarVLA scored auto-selection with confidence-weighted ranking.
+
+        Unlike the fast if/elif heuristic in select(), this method computes
+        a multi-factor score for each pipeline mode and returns the full
+        ranking with confidence scores — enabling StarVLA's backbone ×
+        action head abstraction to make traceable, auditable decisions.
+
+        Score dimensions (0-1 each):
+          - task_fit: how well the mode handles the task type
+          - complexity_match: whether mode complexity matches task complexity
+          - tool_compatibility: how well mode handles available tools
+          - history_performance: past success rate for similar tasks
+          - latency_budget: whether mode fits time constraints
+
+        Returns:
+            dict with ranking, top pick, and per-mode score breakdown
+        """
+        ctx = context or {}
+        task_lower = task.lower()
+        length = len(task)
+        plan = ctx.get("plan", [])
+        plan_len = len(plan) if isinstance(plan, list) else 0
+        has_tools = bool(ctx.get("tools"))
+        complexity = min(1.0, length / 500 + plan_len / 10)
+
+        scores = {}
+        for mode_name in self._pipelines:
+            mode_scores = {}
+
+            # Task fit: semantic keyword matching
+            if mode_name == "dag":
+                mode_scores["task_fit"] = 1.0 if length < 80 else max(0.1, 1.0 - length / 200)
+            elif mode_name == "react":
+                mode_scores["task_fit"] = 0.9 if has_tools else 0.4
+            elif mode_name == "behavior_tree":
+                mode_scores["task_fit"] = 0.9 if plan_len > 3 else 0.3
+            elif mode_name == "gtsm":
+                mode_scores["task_fit"] = 0.8  # General-purpose
+            else:
+                mode_scores["task_fit"] = 0.5
+
+            # Complexity match: higher complexity → prefer BehaviorTree/GTSM
+            if complexity > 0.6:
+                complexity_score = 1.0 if mode_name in ("behavior_tree", "gtsm") else 0.3
+            elif complexity > 0.3:
+                complexity_score = 0.8 if mode_name in ("gtsm", "react") else 0.5
+            else:
+                complexity_score = 1.0 if mode_name == "dag" else 0.5
+            mode_scores["complexity_match"] = complexity_score
+
+            # Tool compatibility
+            if has_tools:
+                tool_score = 1.0 if mode_name == "react" else (
+                    0.6 if mode_name in ("gtsm", "behavior_tree") else 0.3)
+            else:
+                tool_score = 1.0 if mode_name in ("dag", "gtsm") else 0.7
+            mode_scores["tool_compatibility"] = tool_score
+
+            # History performance: reward modes that succeeded recently
+            mode_history = [r for r in self._history[-20:] if r.mode == mode_name]
+            if mode_history:
+                success_rate = sum(1 for r in mode_history if r.success) / len(mode_history)
+            else:
+                success_rate = 0.6  # Default for untested modes
+            mode_scores["history_performance"] = success_rate
+
+            # Weighted total (equal weights for simplicity, tunable)
+            weights = {"task_fit": 0.3, "complexity_match": 0.25,
+                       "tool_compatibility": 0.25, "history_performance": 0.2}
+            total = sum(weights[k] * v for k, v in mode_scores.items())
+            scores[mode_name] = {"total": round(total, 4), "breakdown": mode_scores}
+
+        # Sort by total score descending
+        ranking = sorted(scores.items(), key=lambda x: x[1]["total"], reverse=True)
+        top_pick = ranking[0][0]
+        top_score = ranking[0][1]["total"]
+        second_score = ranking[1][1]["total"] if len(ranking) > 1 else 0
+
+        # Confidence: difference between top pick and second best
+        confidence = min(1.0, max(0.3, top_score - second_score + 0.5))
+
+        # Tie-break: if margin < 0.05, use more exploratory mode
+        if top_score - second_score < 0.05:
+            tie_break = {"dag": "react", "react": "gtsm",
+                         "behavior_tree": "gtsm", "gtsm": "behavior_tree"}
+            top_pick = tie_break.get(top_pick, top_pick)
+            top_score = scores[top_pick]["total"]
+
+        return {
+            "task": task[:80],
+            "complexity": round(complexity, 3),
+            "ranking": [{"mode": m, "score": s["total"],
+                        "breakdown": s["breakdown"]}
+                       for m, s in ranking],
+            "selected": top_pick,
+            "confidence": round(confidence, 3),
+            "rationale": f"Selected '{top_pick}' (score={top_score:.3f}, "
+                         f"margin={top_score - second_score:.3f}) "
+                         f"for complexity={complexity:.2f}, "
+                         f"tools={'yes' if has_tools else 'no'}",
+        }
 
     # ── Execute ──
 

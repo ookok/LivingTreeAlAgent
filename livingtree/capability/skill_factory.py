@@ -182,6 +182,13 @@ class SkillFactory:
     def register_skill(self, spec: SkillSpec) -> None:
         self._skills[spec.name] = spec
 
+    def register(self, name: str, description: str) -> Skill:
+        """Register a crystallized skill with name + description (convenience).
+        
+        Used by SkillCrystallizer for Memory→Skill auto-graduation.
+        """
+        return self.create_skill(name=name, description=description, code=None)
+
     def get_skill(self, name: str) -> Optional[SkillSpec]:
         return self._skills.get(name)
 

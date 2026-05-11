@@ -152,18 +152,28 @@ class ThompsonRouter:
     Schaeffer et al. (2023) lesson:
       - No magic: gains come from systematic exploration, not emergent miracles
       - Track all dimensions: rein in overconfidence with uncertainty estimates
+
+    Intentional PG KL budget (Sharifnassab et al., arXiv:2604.19033):
+      Per-step policy change is bounded by a KL budget ≡ maximum distributional shift.
+      Replaces ad-hoc UCB weight + cold_boost with a principled exploration schedule:
+        bonus = kl_budget × uncertainty × sqrt(log(total_calls) / arm_calls)
+      - Cold start (few calls) → large bonus → rapid initialization
+      - Converged (many calls) → small bonus → exploitation mode
+      - No manual tuning needed for exploration/exploitation threshold.
     """
 
     def __init__(
         self,
         decay_rate: float = 0.0001,        # Per-call belief decay toward prior
-        exploration_weight: float = 0.15,   # UCB exploration bonus weight
-        min_calls_for_exploit: int = 10,    # Minimum data before exploitation mode
+        exploration_weight: float = 0.15,   # Legacy UCB weight (superseded by kl_budget)
+        min_calls_for_exploit: int = 10,    # Legacy cold start threshold (superseded)
+        kl_budget: float = 0.1,             # Intentional PG: max KL per update
     ):
         self._arms: dict[str, ProviderBandit] = {}
         self._decay_rate = decay_rate
         self._exploration_weight = exploration_weight
         self._min_calls_for_exploit = min_calls_for_exploit
+        self._kl_budget = kl_budget
         self._total_selections = 0
 
     # ── Arm Management ──
@@ -197,8 +207,12 @@ class ThompsonRouter:
     ) -> list[tuple[str, float]]:
         """Thompson-sample the best N providers.
 
-        Uses UCB-style bonus: score = expected_value + exploration_bonus × weight
-        This balances exploitation (high expected value) with exploration (high uncertainty).
+        Intentional PG KL budget (instead of ad-hoc UCB + cold_boost):
+        1. Thompson sample from Beta posteriors
+        2. Add KL-budgeted exploration bonus:
+           bonus = kl_budget × uncertainty × sqrt(log(total_calls) / arm_calls)
+        This naturally handles cold start (few calls→large bonus) and
+        convergence (many calls→small bonus) without manual thresholds.
 
         Returns:
             List of (provider_name, thompson_score) sorted descending
@@ -210,14 +224,24 @@ class ThompsonRouter:
         for arm in arms:
             # Thompson sample: draw from posterior
             ts = arm.sample_composite(weights)
-            # UCB bonus: encourage exploring uncertain arms
-            ucb = arm.exploration_bonus * self._exploration_weight
-            # Cold start boost: new providers get temporary exploration bonus
-            cold_boost = 0.0
-            if arm.total_calls < self._min_calls_for_exploit:
-                cold_boost = 0.3 * (1 - arm.total_calls / self._min_calls_for_exploit)
 
-            score = ts + ucb + cold_boost
+            # ── KL budget exploration bonus ──
+            # Replaces UCB + cold_boost with unified Intentional PG bonus
+            if self._kl_budget > 0:
+                total_calls = max(1, self._total_selections)
+                arm_calls = max(1, arm.total_calls)
+                # KL-UCB style: bonus proportional to uncertainty,
+                # decaying as arm gets more calls
+                kl_bonus = (self._kl_budget
+                           * arm.exploration_bonus
+                           * math.sqrt(math.log(total_calls + 1) / arm_calls))
+            else:
+                # Legacy mode: UCB + cold_boost (for backward compatibility)
+                kl_bonus = arm.exploration_bonus * self._exploration_weight
+                if arm.total_calls < self._min_calls_for_exploit:
+                    kl_bonus += 0.3 * (1 - arm.total_calls / self._min_calls_for_exploit)
+
+            score = ts + kl_bonus
             scored.append((arm.provider_name, round(score, 4)))
 
         scored.sort(key=lambda x: -x[1])

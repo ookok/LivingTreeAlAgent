@@ -9,7 +9,7 @@ import pytest_asyncio
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from aiohttp import web
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 
 
 class TestRelayAPI(AioHTTPTestCase):
@@ -20,7 +20,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Health ──
 
-    @unittest_run_loop
     async def test_health(self):
         resp = await self.client.get("/health")
         assert resp.status == 200
@@ -29,7 +28,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Login ──
 
-    @unittest_run_loop
     async def test_login_success(self):
         resp = await self.client.post("/login", json={"username": "admin", "password": "admin123"})
         assert resp.status == 200
@@ -37,24 +35,20 @@ class TestRelayAPI(AioHTTPTestCase):
         assert "api_key" in data
         assert data["username"] == "admin"
 
-    @unittest_run_loop
     async def test_login_wrong_password(self):
         resp = await self.client.post("/login", json={"username": "admin", "password": "wrong"})
         assert resp.status == 401
 
-    @unittest_run_loop
     async def test_login_missing_fields(self):
         resp = await self.client.post("/login", json={"username": "admin"})
         assert resp.status == 400
 
     # ── Status (requires auth) ──
 
-    @unittest_run_loop
     async def test_status_unauthorized(self):
         resp = await self.client.get("/status")
         assert resp.status == 401
 
-    @unittest_run_loop
     async def test_status_with_key(self):
         # Login first to get api_key
         login_resp = await self.client.post("/login", json={"username": "admin", "password": "admin123"})
@@ -65,13 +59,11 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Admin (without login, should redirect to login page) ──
 
-    @unittest_run_loop
     async def test_admin_unauthenticated(self):
         resp = await self.client.get("/admin")
         assert resp.status == 200
         assert "login" in (await resp.text()).lower()
 
-    @unittest_run_loop
     async def test_admin_login_page(self):
         resp = await self.client.get("/admin/login")
         assert resp.status == 200
@@ -79,14 +71,12 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Peer endpoints ──
 
-    @unittest_run_loop
     async def test_peer_register(self):
         resp = await self.client.post("/peers/register", json={
             "peer_id": "test-peer-1", "port": 9999, "metadata": {"username": "test"}
         })
         assert resp.status == 200
 
-    @unittest_run_loop
     async def test_peer_discover(self):
         # Register a peer first
         await self.client.post("/peers/register", json={
@@ -99,7 +89,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Cost report (requires auth) ──
 
-    @unittest_run_loop
     async def test_cost_report(self):
         login_resp = await self.client.post("/login", json={"username": "admin", "password": "admin123"})
         api_key = (await login_resp.json())["api_key"]
@@ -111,7 +100,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── LLM Proxy (requires subscription pool configured) ──
 
-    @unittest_run_loop
     async def test_llm_proxy_no_subscription(self):
         login_resp = await self.client.post("/login", json={"username": "admin", "password": "admin123"})
         api_key = (await login_resp.json())["api_key"]
@@ -123,7 +111,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Web search (requires external network) ──
 
-    @unittest_run_loop
     async def test_web_search(self):
         login_resp = await self.client.post("/login", json={"username": "admin", "password": "admin123"})
         api_key = (await login_resp.json())["api_key"]
@@ -136,7 +123,6 @@ class TestRelayAPI(AioHTTPTestCase):
 
     # ── Metrics ──
 
-    @unittest_run_loop
     async def test_metrics(self):
         resp = await self.client.get("/metrics")
         assert resp.status == 200

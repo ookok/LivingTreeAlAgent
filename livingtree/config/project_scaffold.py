@@ -143,9 +143,9 @@ class ProjectScaffold:
         profile_path = p / "profile.json"
         skills_path = p / "skills.json"
         with profile_path.open("w", encoding="utf-8") as f:
-            f.write(__import__("json").dumps(profile.dict(), indent=4, default=str))
+            f.write(__import__("json").dumps(profile.model_dump(), indent=4, default=str))
         with skills_path.open("w", encoding="utf-8") as f:
-            f.write(__import__("json").dumps(skills.dict(), indent=4, default=str))
+            f.write(__import__("json").dumps(skills.model_dump(), indent=4, default=str))
         logger.info("Saved project scaffold for %s", profile.name)
 
     def load_project(self, name: str) -> Optional[Tuple[ProjectProfile, ProjectSkills]]:
@@ -185,8 +185,8 @@ class ProjectScaffold:
             return {}
         profile, skills = loaded
         return {
-            "profile": profile.dict(),
-            "skills": skills.dict(),
+            "profile": profile.model_dump(),
+            "skills": skills.model_dump(),
         }
 
     def get_active_capabilities(self, name: str) -> List[str]:

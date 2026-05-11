@@ -139,3 +139,111 @@ class MultiAgentDebate:
             if v.output and v.confidence < 0.5:
                 dissent.append(f"{v.agent}: {v.output[:100]}")
         return dissent[:3]
+
+    # ═══ SSDataBench: View Diversity Analysis ═══
+
+    def analyze_diversity(self, recent_debates: list[DebateResult] = None) -> dict:
+        """SSDataBench-style variance analysis of agent view diversity.
+
+        From paper: LLMs "compress real-world heterogeneity into simplified
+        typological structures." Checks if 5 predefined agent roles exhibit
+        sufficient diversity — or fall into the typological collapse pattern.
+
+        Returns:
+            dict with:
+            - view_length_variance: variance of output lengths across agents
+            - confidence_dispersion: standard deviation of confidence scores
+            - semantic_overlap: estimated pairwise output similarity
+            - typological_compression_risk: True if diversity is too low
+        """
+        import numpy as np
+        import hashlib
+
+        if not recent_debates:
+            return {
+                "status": "no_data",
+                "message": "No recent debates available for diversity analysis.",
+            }
+
+        all_views: list[AgentView] = []
+        for d in recent_debates:
+            all_views.extend(d.views)
+
+        if len(all_views) < 10:
+            return {
+                "status": "insufficient_data",
+                "message": "Need ≥10 agent views for meaningful analysis (have {}).".format(len(all_views)),
+                "view_count": len(all_views),
+            }
+
+        # 1. Output length variance
+        lengths = [len(v.output) for v in all_views if v.output]
+        length_var = float(np.var(lengths)) if lengths else 0.0
+        length_cv = float(np.std(lengths) / max(np.mean(lengths), 1)) if lengths else 0.0
+
+        # 2. Confidence dispersion
+        confidences = [v.confidence for v in all_views]
+        conf_std = float(np.std(confidences)) if confidences else 0.0
+
+        # 3. Semantic overlap: estimated via n-gram hash similarity
+        def _ngram_hash(text: str, n: int = 2) -> set:
+            text = text.lower()[:500]
+            return {hashlib.md5(text[i:i+n].encode()).hexdigest()[:8]
+                    for i in range(len(text) - n + 1)}
+
+        groups: dict[str, list[AgentView]] = {}
+        for v in all_views:
+            groups.setdefault(v.agent, []).append(v)
+
+        pairwise_similarities = []
+        agent_names = list(groups.keys())
+        for i in range(len(agent_names)):
+            for j in range(i + 1, len(agent_names)):
+                set_a = set()
+                set_b = set()
+                for v in groups[agent_names[i]]:
+                    set_a.update(_ngram_hash(v.output))
+                for v in groups[agent_names[j]]:
+                    set_b.update(_ngram_hash(v.output))
+                intersection = len(set_a & set_b)
+                union = len(set_a | set_b)
+                if union > 0:
+                    pairwise_similarities.append(intersection / union)
+
+        avg_similarity = float(np.mean(pairwise_similarities)) if pairwise_similarities else 0.0
+
+        # 4. Typological compression check
+        # Paper finding: LLM outputs often collapse to a few templates
+        typological_compression_risk = (
+            length_cv < 0.15 and  # Too little length variation
+            conf_std < 0.08 and   # Too little confidence variation
+            avg_similarity > 0.65  # Too much overlap between roles
+        )
+
+        recommendations = []
+        if typological_compression_risk:
+            recommendations.append(
+                "CRITICAL: Typological compression detected. "
+                "5 predefined roles may not produce sufficient diversity. "
+                "Consider: (1) adding role-specific temperature variation, "
+                "(2) introducing randomized persona traits per debate, "
+                "(3) increasing the distinctiveness of role definitions."
+            )
+        elif avg_similarity > 0.5:
+            recommendations.append(
+                "Moderate overlap between agent views. "
+                "Consider adding more contrasting role definitions or "
+                "randomizing agent prompt prefixes."
+            )
+
+        return {
+            "status": "analyzed",
+            "view_count": len(all_views),
+            "agent_count": len(groups),
+            "length_variance": round(length_var, 1),
+            "length_cv": round(length_cv, 3),
+            "confidence_std": round(conf_std, 3),
+            "avg_pairwise_similarity": round(avg_similarity, 4),
+            "typological_compression_risk": typological_compression_risk,
+            "recommendations": recommendations,
+        }

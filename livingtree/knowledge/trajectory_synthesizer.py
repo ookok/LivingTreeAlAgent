@@ -117,10 +117,22 @@ TOOL_COMBINATION_TEMPLATES = [
         "pattern": "research_synthesis",
         "categories": ["search", "knowledge", "doc"],
         "steps": [
-            {"thought": "Search for relevant sources on {topic}", "action": "web_search"},
-            {"thought": "Extract key entities from found documents", "action": "entity_linking"},
+            {"thought": "Search the web for relevant sources on {topic}", "action": "web_search"},
+            {"thought": "Visit the most promising result page for details", "action": "visit_page"},
+            {"thought": "Extract key entities from the visited content", "action": "entity_linking"},
             {"thought": "Query knowledge graph for entity relationships", "action": "query_graph"},
             {"thought": "Generate a structured document from findings", "action": "doc_engine"},
+        ],
+    },
+    {
+        "pattern": "web_deep_research",
+        "categories": ["search", "web"],
+        "steps": [
+            {"thought": "Search the web for information about {topic}", "action": "web_search"},
+            {"thought": "Visit the top result to read full content", "action": "visit_page"},
+            {"thought": "Search for related aspects of the topic", "action": "web_search"},
+            {"thought": "Visit another authoritative source for cross-validation", "action": "visit_page"},
+            {"thought": "Synthesize findings from all sources", "action": "chain_of_thought"},
         ],
     },
     {
@@ -921,6 +933,96 @@ web_reach, chain_of_thought"""
         except Exception:
             pass
         return {}
+
+    # ═══ SSDataBench Statistical Realism Validation ═══
+
+    def validate_statistical_realism(self) -> Optional[dict]:
+        """SSDataBench-style population-level validation of synthesized trajectories.
+
+        Evaluates five dimensions (from PNAS paper):
+          1. Univariate — step count distribution
+          2. Bivariate — tool diversity vs difficulty association
+          3. Multivariate — step count × tool count prediction of difficulty
+          4. Sequence — action sequence n-gram distribution
+          5. Covariate — step count vs diversity_score association
+
+        Returns SSDataReport as dict, or None if insufficient data.
+        """
+        from livingtree.observability.statistical_validator import get_validator
+
+        trajectories = self._trajectories
+        if len(trajectories) < 30:
+            logger.debug("Statistical validation needs ≥30 trajectories (have {})".format(len(trajectories)))
+            return None
+
+        validator = get_validator()
+        reports = []
+
+        # 1. Univariate: step count distribution
+        step_counts = [t.num_steps for t in trajectories]
+        # Reference: uniform-ish distribution across 3-8 steps (target range)
+        ref_step_counts = list(range(MIN_STEPS, MAX_STEPS + 1)) * (len(trajectories) // (MAX_STEPS - MIN_STEPS + 1) + 1)
+        ref_step_counts = ref_step_counts[:len(trajectories)]
+        reports.append(validator.validate_univariate(
+            synthetic_values=step_counts,
+            reference_values=ref_step_counts,
+            dimension_name="step_count_distribution",
+        ))
+
+        # 2. Bivariate: tool count vs difficulty
+        tool_counts = [len(t.tools_used) for t in trajectories]
+        difficulties = [t.difficulty_score for t in trajectories]
+        ref_tool_counts = [min(i % 5 + 1, MAX_STEPS) for i in range(len(trajectories))]
+        ref_difficulties = [0.3 + tc * 0.12 for tc in ref_tool_counts]
+        reports.append(validator.validate_bivariate(
+            synthetic_x=tool_counts, synthetic_y=difficulties,
+            reference_x=ref_tool_counts, reference_y=ref_difficulties,
+            dimension_name="tools_vs_difficulty",
+        ))
+
+        # 3. Multivariate: step count + tool count → difficulty
+        features = [[float(t.num_steps), float(len(t.tools_used))] for t in trajectories]
+        outcomes = [t.difficulty_score for t in trajectories]
+        ref_features = [[float(ri), float(rj)] for ri, rj in zip(ref_step_counts, ref_tool_counts)]
+        ref_outcomes = ref_difficulties
+        reports.append(validator.validate_multivariate(
+            synthetic_features=features, synthetic_outcomes=outcomes,
+            reference_features=ref_features, reference_outcomes=ref_outcomes,
+            dimension_name="step_tool_to_difficulty",
+        ))
+
+        # 4. Sequence: action sequence bigram distribution
+        action_seqs = [[s.action for s in t.steps] for t in trajectories]
+        ref_action_seqs = [
+            [tpl["steps"][i % len(tpl["steps"])]["action"]
+             for i in range(random.randint(MIN_STEPS, MAX_STEPS))]
+            for tpl in random.sample(TOOL_COMBINATION_TEMPLATES,
+                                     min(len(TOOL_COMBINATION_TEMPLATES), len(trajectories)))
+        ]
+        reports.append(validator.validate_sequence(
+            synthetic_sequences=action_seqs,
+            reference_sequences=ref_action_seqs,
+            dimension_name="action_sequence_distribution",
+        ))
+
+        # 5. Covariate: step count vs diversity_score
+        diversity_scores = [t.metadata.get("diversity_score", 0.5) for t in trajectories]
+        reports.append(validator.validate_covariate(
+            synthetic_sequences=action_seqs,
+            synthetic_covariates=diversity_scores,
+            reference_sequences=ref_action_seqs,
+            reference_covariates=[0.5 + random.random() * 0.3 for _ in ref_action_seqs],
+            dimension_name="steps_vs_diversity",
+        ))
+
+        report = validator.ssdata_report("trajectory_synthesizer", reports)
+        logger.info(
+            "SSDataBench validation: overall={}, passed={}, criticals={}, warnings={}".format(
+                report.overall_score, report.passed,
+                report.critical_count, report.warning_count,
+            )
+        )
+        return report.to_dict()
 
     def get_stats(self) -> dict:
         return dict(self._stats)

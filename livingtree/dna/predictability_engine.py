@@ -423,14 +423,175 @@ class PredictabilityEngine:
     def process_predictability(
         self, process_name: str, quality_series: Sequence[float],
     ) -> float:
-        """How predictable is a dynamical process (e.g. retrieval quality)?
-
-        Uses the same entropy + horizon measures but tailored for
-        process-level analysis rather than raw time series.
-        """
+        """How predictable is a dynamical process (e.g. retrieval quality)?"""
         self.feed_batch(process_name, quality_series)
         report = self.analyze(process_name)
         return report.predictability_score
+
+    # ═══ SDE Model Fitting (Bosso et al. 2025) ═══
+
+    def fit_sde_model(
+        self, name: str, dt: float = 1.0,
+    ) -> dict[str, Any]:
+        r"""Fit a simplified SDE model to a time series and estimate drift/diffusion.
+
+        Bosso et al. (2025) framework: from noisy data {X_t}, estimate both
+        the deterministic drift f(X) and stochastic diffusion g(X) in:
+
+            dX_t = f(X_t) dt + g(X_t) dW_t
+
+        This provides a COMPLETE model of the system's dynamics — not just
+        "how predictable" but "HOW it evolves" and "WHERE the noise comes from."
+
+        Method (Euler-Maruyama discretization):
+            1. Compute increments ΔX_i = X_{i+1} - X_i at each step
+            2. Drift estimate: μ(x) = E[ΔX | X ≈ x] / dt  (conditional mean of increments)
+            3. Diffusion estimate: σ²(x) = Var[ΔX | X ≈ x] / dt  (conditional variance)
+
+        Returns:
+            dict with:
+                drift_values: list of μ(x_i) estimates
+                diffusion_values: list of σ(x_i) estimates
+                drift_rms: RMS drift magnitude
+                diffusion_rms: RMS diffusion magnitude
+                signal_to_noise: |drift| / diffusion ratio (higher = more deterministic)
+                noise_type: "additive" (constant σ), "multiplicative" (σ ∝ x), or "mixed"
+                prediction_interval_95: (lower, upper) 95% confidence bound for next step
+        """
+        values = list(self._series.get(name, []))
+        n = len(values)
+        if n < 20:
+            return {
+                "error": "insufficient data (need ≥20 points)",
+                "drift_values": [], "diffusion_values": [],
+                "drift_rms": 0.0, "diffusion_rms": 0.0,
+                "signal_to_noise": 0.0, "noise_type": "unknown",
+                "prediction_interval_95": (0.0, 0.0),
+            }
+
+        # Step 1: Compute increments
+        increments = [values[i + 1] - values[i] for i in range(n - 1)]
+        m = len(increments)
+
+        # Step 2: Bin the state space for conditional statistics
+        # Use equal-frequency binning (~sqrt(N) bins)
+        n_bins = max(3, int(math.sqrt(m)))
+        sorted_vals = sorted(values[:-1])  # X_t for each increment
+        bin_size = m // n_bins
+
+        drift_estimates: list[float] = []
+        diffusion_estimates: list[float] = []
+        x_midpoints: list[float] = []
+
+        for b in range(n_bins):
+            start_idx = b * bin_size
+            end_idx = start_idx + bin_size if b < n_bins - 1 else m
+            # Get the values in this bin (using sorted order for bin boundaries)
+            bin_mask = sorted_vals[start_idx:end_idx]
+            if not bin_mask:
+                continue
+            bin_min = bin_mask[0]
+            bin_max = bin_mask[-1]
+
+            # Find increments whose X_t falls in this bin
+            bin_incs = [
+                increments[i] for i in range(m)
+                if bin_min <= values[i] <= bin_max
+            ]
+            bin_xs = [
+                values[i] for i in range(m)
+                if bin_min <= values[i] <= bin_max
+            ]
+            if len(bin_incs) < 3:
+                continue
+
+            # Conditional mean → drift μ(x)
+            mu = sum(bin_incs) / len(bin_incs) / dt
+            # Conditional variance → diffusion σ²(x)
+            var = sum((inc - sum(bin_incs) / len(bin_incs)) ** 2
+                      for inc in bin_incs) / len(bin_incs) / dt
+            sigma = math.sqrt(max(0.0, var))
+
+            x_mid = sum(bin_xs) / len(bin_xs)
+            drift_estimates.append(mu)
+            diffusion_estimates.append(sigma)
+            x_midpoints.append(x_mid)
+
+        if not drift_estimates:
+            return {
+                "error": "binning failed — data range too narrow",
+                "drift_values": [], "diffusion_values": [],
+                "drift_rms": 0.0, "diffusion_rms": 0.0,
+                "signal_to_noise": 0.0, "noise_type": "unknown",
+                "prediction_interval_95": (0.0, 0.0),
+            }
+
+        # Step 3: Compute summary statistics
+        drift_rms = math.sqrt(
+            sum(d ** 2 for d in drift_estimates) / len(drift_estimates))
+        diffusion_rms = math.sqrt(
+            sum(s ** 2 for s in diffusion_estimates) / len(diffusion_estimates))
+
+        signal_to_noise = (
+            drift_rms / diffusion_rms if diffusion_rms > 1e-9 else float('inf'))
+
+        # Noise type classification
+        # Check if σ(x) is constant (additive) or scales with x (multiplicative)
+        if len(x_midpoints) >= 3 and len(diffusion_estimates) >= 3:
+            # Linear regression: σ ~ α·x + β
+            n_pts = len(x_midpoints)
+            mean_x = sum(x_midpoints) / n_pts
+            mean_s = sum(diffusion_estimates) / n_pts
+            cov_xs = sum(
+                (x - mean_x) * (s - mean_s)
+                for x, s in zip(x_midpoints, diffusion_estimates)) / n_pts
+            var_x = sum((x - mean_x) ** 2 for x in x_midpoints) / n_pts
+            if var_x > 1e-9:
+                slope = cov_xs / var_x
+                # If σ scales with x → multiplicative noise (intrinsic)
+                # If σ is constant → additive noise (extrinsic)
+                if abs(slope) > 0.1 * diffusion_rms:
+                    noise_type = "multiplicative"  # Intrinsic — noise from parameters
+                else:
+                    noise_type = "additive"  # Extrinsic — measurement noise
+            else:
+                noise_type = "additive"
+        else:
+            noise_type = "additive"
+
+        # Step 4: Prediction interval (95%)
+        # Next-step prediction: X_{t+1} = X_t + μ(X_t)·dt + σ(X_t)·√dt·Z
+        # 95% CI: X_t + μ·dt ± 1.96·σ·√dt
+        if drift_estimates and diffusion_estimates and dt > 0:
+            last_x = values[-1]
+            # Use the drift/diffusion estimate closest to the current state
+            best_idx = 0
+            best_dist = float('inf')
+            for i, xm in enumerate(x_midpoints):
+                d = abs(xm - last_x)
+                if d < best_dist:
+                    best_dist = d
+                    best_idx = i
+            mu_now = drift_estimates[best_idx]
+            sigma_now = diffusion_estimates[best_idx]
+            pred_mean = last_x + mu_now * dt
+            half_width = 1.96 * sigma_now * math.sqrt(dt)
+            prediction_interval = (pred_mean - half_width, pred_mean + half_width)
+        else:
+            prediction_interval = (values[-1], values[-1])
+
+        return {
+            "drift_values": [round(d, 6) for d in drift_estimates],
+            "diffusion_values": [round(s, 6) for s in diffusion_estimates],
+            "x_midpoints": [round(x, 6) for x in x_midpoints],
+            "drift_rms": round(drift_rms, 6),
+            "diffusion_rms": round(diffusion_rms, 6),
+            "signal_to_noise": round(signal_to_noise, 3) if signal_to_noise != float('inf') else "inf",
+            "noise_type": noise_type,
+            "prediction_interval_95": tuple(round(v, 6) for v in prediction_interval),
+            "sample_size": n,
+            "n_bins": n_bins,
+        }
 
     # ═══ Stats ═══
 
@@ -620,3 +781,13 @@ def get_horizon_engine() -> LinguisticHorizonEngine:
     if _horizon_engine is None:
         _horizon_engine = LinguisticHorizonEngine()
     return _horizon_engine
+
+_predictability_engine: PredictabilityEngine | None = None
+
+
+def get_predictability_engine(history_size: int = 200) -> PredictabilityEngine:
+    """Get or create the singleton PredictabilityEngine instance."""
+    global _predictability_engine
+    if _predictability_engine is None:
+        _predictability_engine = PredictabilityEngine(history_size=history_size)
+    return _predictability_engine

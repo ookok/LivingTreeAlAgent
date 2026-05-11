@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import networkx as nx
+from loguru import logger
 
 
 # ═══ Data Types ═══
@@ -153,6 +154,60 @@ class HypergraphStore:
             pass
 
         return h_id
+
+    def orthogonal_insert(
+        self, hyperedge: Hyperedge, max_cosine_similarity: float = 0.3,
+    ) -> tuple[str, float]:
+        """Insert with orthogonality check — inspired by OrthoReg WVO (CVPR 2026).
+
+        OrthoReg insight: maintaining Weight Vector Orthogonality (WVO)
+        prevents task interference. Here we enforce knowledge vector
+        orthogonality: new knowledge should not be a near-duplicate of existing.
+
+        The hyperedge is treated as a sparse feature vector (entities +
+        relation as bag-of-words). Cosine similarity against ALL existing
+        hyperedges is computed. If max_cosine exceeds the threshold, the
+        insert is REJECTED as redundant/interfering knowledge.
+
+        Args:
+            hyperedge: The hyperedge to insert.
+            max_cosine_similarity: Maximum allowed cosine (0-1).
+                                   Default 0.3 ≈ 72° minimum angle.
+
+        Returns:
+            (hyperedge_id, max_cosine_similarity_found).
+            empty string id means rejected.
+        """
+        import math
+
+        # Build sparse feature vector from entities + relation
+        feature_set = set(hyperedge.entities)
+        feature_set.add(f"rel:{hyperedge.relation}")
+        feature_norm = math.sqrt(len(feature_set))
+
+        max_cos = 0.0
+        for existing in self._hyperedges.values():
+            existing_set = set(existing.entities)
+            existing_set.add(f"rel:{existing.relation}")
+            existing_norm = math.sqrt(len(existing_set))
+
+            intersection = len(feature_set & existing_set)
+            cos_sim = (
+                intersection / (feature_norm * existing_norm)
+                if feature_norm > 0 and existing_norm > 0
+                else 0.0
+            )
+            max_cos = max(max_cos, cos_sim)
+
+        if max_cos > max_cosine_similarity:
+            logger.debug(
+                f"OrthoReg: rejected hyperedge '{hyperedge.relation}' "
+                f"(cos_sim={max_cos:.3f} > {max_cosine_similarity})"
+            )
+            return ("", max_cos)
+
+        h_id = self.add_hyperedge(hyperedge)
+        return (h_id, max_cos)
 
     def get_hyperedge(self, h_id: str) -> Hyperedge | None:
         return self._hyperedges.get(h_id)

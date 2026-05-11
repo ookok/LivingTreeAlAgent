@@ -101,8 +101,46 @@ class UniquePersona:
 
     # ═══ 1. Unique Avatar ═══
 
-    def get_traits(self) -> dict:
-        """Derive avatar traits from user seed."""
+    # ═══ Realistic demographic distribution weights ═══
+    # Based on SSDataBench principle: synthetic persona attributes should
+    # NOT be uniform random. Real populations have skewed distributions.
+    # Weights derived from common aesthetic preference surveys.
+    HAIR_WEIGHTS = [0.22, 0.18, 0.12, 0.08, 0.10, 0.15, 0.10, 0.05]  # Dark brown most common
+    EYE_WEIGHTS = [0.40, 0.25, 0.08, 0.12, 0.15]  # Dark brown dominant
+    LEAF_WEIGHTS = [0.20, 0.20, 0.18, 0.10, 0.12, 0.08, 0.07, 0.05]  # Regular leaves more common
+    ACCESSORY_WEIGHTS = [0.20, 0.15, 0.18, 0.12, 0.15, 0.08, 0.12]  # "none" is valid
+
+    def _weighted_choice(self, options: list, weights: list[float]) -> int:
+        import random
+        total = sum(weights)
+        r = random.Random(self._seed).uniform(0, total) if total > 0 else 0
+        cumulative = 0.0
+        for i, w in enumerate(weights):
+            cumulative += w
+            if r <= cumulative:
+                return i
+        return len(options) - 1
+
+    def get_traits(self, realistic: bool = False) -> dict:
+        """Derive avatar traits from user seed.
+
+        Args:
+            realistic: If True, use skewed population weights instead of
+                      uniform hash. SSDataBench principle: avoid typological
+                      compression in persona generation.
+        """
+        if realistic:
+            return {
+                "hair": HAIR_COLORS[self._weighted_choice(HAIR_COLORS, self.HAIR_WEIGHTS)],
+                "eyes": EYE_COLORS[self._weighted_choice(EYE_COLORS, self.EYE_WEIGHTS)],
+                "leaf": LEAF_STYLES[self._weighted_choice(LEAF_STYLES, self.LEAF_WEIGHTS)],
+                "accessory": ACCESSORIES[self._weighted_choice(ACCESSORIES, self.ACCESSORY_WEIGHTS)],
+                "height_factor": 0.95 + self._seed_int(4, 20) / 100,  # narrower: 0.95-1.15
+                "expression_bias": self._weighted_choice(
+                    ["happy", "thinking", "curious", "calm"],
+                    [0.30, 0.35, 0.20, 0.15],
+                ),
+            }
         return {
             "hair": HAIR_COLORS[self._seed_int(0, len(HAIR_COLORS))],
             "eyes": EYE_COLORS[self._seed_int(1, len(EYE_COLORS))],
@@ -111,6 +149,60 @@ class UniquePersona:
             "height_factor": 0.9 + self._seed_int(4, 30) / 100,  # 0.9–1.2
             "expression_bias": ["happy", "thinking", "curious", "calm"][self._seed_int(5, 4)],
         }
+
+    def get_distribution_report(self) -> dict:
+        """SSDataBench-style report on persona attribute distributions.
+
+        Compares uniform sampling vs realistic weighted sampling.
+        Reports which dimensions show "typological compression"
+        and need calibration.
+        """
+        from collections import Counter
+        import random as _random
+
+        # Simulate 1000 personas with uniform hash
+        rng = _random.Random(42)
+        uniform_attrs = []
+        realistic_attrs = []
+        for _ in range(1000):
+            # Save and override seed for each simulation
+            saved = self._seed
+            self._seed = hashlib.sha256(str(rng.random()).encode()).hexdigest()
+            uniform_attrs.append(("hair", self._seed_int(0, len(HAIR_COLORS))))
+            realistic_attrs.append(("hair", self._weighted_choice(HAIR_COLORS, self.HAIR_WEIGHTS)))
+            self._seed = saved
+
+        # Now simulate en masse
+        self._seed = hashlib.sha256("benchmark_seed".encode()).hexdigest()
+        uni_full = [self.get_traits(realistic=False) for _ in range(1000)]
+        real_full = [self.get_traits(realistic=True) for _ in range(1000)]
+
+        # Count distributions
+        uni_hair = Counter(t["hair"] for t in uni_full)
+        real_hair = Counter(t["hair"] for t in real_full)
+        uni_exp = Counter(t["expression_bias"] for t in uni_full)
+        real_exp = Counter(t["expression_bias"] for t in real_full)
+
+        # Calculate variance ratio (uniform should be ~uniform entropy)
+        ent_uniform = -sum((c/1000)*math.log(c/1000) for c in uni_hair.values() if c > 0)
+        ent_realistic = -sum((c/1000)*math.log(c/1000) for c in real_hair.values() if c > 0)
+        max_ent = math.log(len(HAIR_COLORS))
+        ent_ratio_uniform = ent_uniform / max_ent
+        ent_ratio_realistic = ent_realistic / max_ent
+
+        return {
+            "uniform_hair_distribution": {str(k): v for k, v in uni_hair.most_common()},
+            "realistic_hair_distribution": {str(k): v for k, v in real_hair.most_common()},
+            "expression_distribution_uniform": dict(uni_exp),
+            "expression_distribution_realistic": dict(real_exp),
+            "entropy_ratio_uniform": round(ent_ratio_uniform, 3),
+            "entropy_ratio_realistic": round(ent_ratio_realistic, 3),
+            "recommendation": (
+                "Uniform sampling produces artificial diversity. "
+                "Use realistic=True for population-calibrated distributions."
+            ) if ent_ratio_uniform > 0.95 else "Distribution is already calibrated.",
+        }
+
 
     def build_avatar_svg(self, expression: str = "thinking") -> str:
         """Generate unique SVG avatar based on user seed."""

@@ -6,6 +6,14 @@ Based on Vardalaki & Harnett (MIT, 2022), Nature:
   memories. This is the biological implementation of incremental,
   non-destructive knowledge acquisition.
 
+Enhanced by 微调致幻 (Fine-tuning induced Hallucination & Interference Detection
+with Self-distillation, arXiv:2604.15574):
+  Large language models fine-tuned on specific tasks exhibit interference
+  between old and new knowledge, causing hallucinations. This paper's
+  self-distillation regularization prevents catastrophic forgetting by
+  penalizing large distributional shifts across the synaptic population.
+  Implemented as: interference_ratio → degradation_alert → regularize_distribution.
+
 Enhanced onto existing LivingTree modules:
   1. HypergraphStore edges → synapse maturity (silent → active → mature)
   2. LazyIndex sections → silent knowledge awaiting activation
@@ -302,14 +310,16 @@ class SynapticPlasticity:
     def self_distillation_loss(self) -> float:
         """Compute self-distillation regularization loss.
 
-        Kaplan et al. (2026): self-distillation prevents hallucinations
-        by regularizing output-distribution drift. When new knowledge is
-        added, the overall distribution of synaptic weights should not
-        shift too far from its previous state.
+        微调致幻 (arXiv:2604.15574, Kaplan et al. 2026): self-distillation
+        prevents hallucinations by regularizing output-distribution drift.
+        When new knowledge is added, the overall distribution of synaptic
+        weights should not shift too far from its previous state.
 
         Loss = KL(old_distribution || new_distribution)
         This penalizes large distributional shifts across the entire
-        synaptic population.
+        synaptic population, detecting the fine-tuning interference that
+        causes hallucination (hallucinations arise when new-task gradients
+        overwrite old-task synaptic patterns).
         """
         if not self._synapses:
             return 0.0

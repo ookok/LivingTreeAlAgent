@@ -51,11 +51,19 @@ class OutputSchema:
 SCHEMAS: dict[OutputType, OutputSchema] = {
     OutputType.CHAT: OutputSchema(
         output_type=OutputType.CHAT,
-        description="Plain text chat response",
-        prompt_hint="Respond conversationally. Use markdown for formatting.",
+        description="Rich HTML chat response",
+        prompt_hint=(
+            "Respond conversationally. Use HTML for formatting:\n"
+            "- Use <details><summary> for expandable sections\n"
+            "- Use <table> for structured data\n"
+            "- Use <ul>/<ol> for lists\n"
+            "- Use <code> for inline code, <pre> for blocks\n"
+            "- Use <b> and <i> for emphasis\n"
+            "- No <script> tags, no external CSS\n"
+        ),
         fields=[
             SchemaField("type", "string", "Always 'chat'"),
-            SchemaField("content", "string", "Chat message in markdown"),
+            SchemaField("content", "string", "Chat message in HTML"),
         ],
     ),
     OutputType.TOOL_CALL: OutputSchema(
@@ -137,16 +145,17 @@ SCHEMAS: dict[OutputType, OutputSchema] = {
     ),
     OutputType.DOCUMENT: OutputSchema(
         output_type=OutputType.DOCUMENT,
-        description="Structured document content",
+        description="Rich HTML document with structure",
         prompt_hint=(
             "Output document content as JSON:\n"
-            '{"type":"document","format":"markdown","title":"...","content":"..."}'
+            '{"type":"document","format":"html","title":"...","content":"<details><summary>...</summary>...</details>"}\n'
+            "Use HTML for rich structure: <details> for collapsible sections, <table> for data, <svg> for charts."
         ),
         fields=[
             SchemaField("type", "string", "Always 'document'"),
-            SchemaField("format", "string", "markdown, text, or json"),
+            SchemaField("format", "string", "html, markdown, text, or json (prefer html)"),
             SchemaField("title", "string", "Document title"),
-            SchemaField("content", "string", "Document content"),
+            SchemaField("content", "string", "Document content in rich HTML"),
             SchemaField("sections", "array", "Section headers", required=False),
         ],
     ),
@@ -208,12 +217,12 @@ def get_system_prompt() -> str:
             schemas_block.append(hint)
 
     return (
-        "You are an AI assistant integrated with a terminal-based TUI (Text User Interface). "
+        "You are an AI assistant integrated with an HTMX-powered web UI. "
         "You must respond in Chinese (中文) by default. "
-        "You can output structured JSON to trigger specific TUI rendering widgets. "
-        "For plain conversation, respond normally in Chinese. "
-        "For structured outputs, wrap the JSON in ```json code blocks.\n\n"
-        "## Available output formats:\n" + "\n\n".join(schemas_block) + "\n\n"
+        "Respond in rich HTML for conversation — use <details> for expandable sections, "
+        "<table> for structured data, <b>/<i> for emphasis. No Markdown. No <script> tags. "
+        "For structured outputs (tool calls, charts, maps, etc.), wrap the JSON in ```json code blocks.\n\n"
+        "## Available structured output formats:\n" + "\n\n".join(schemas_block) + "\n\n"
         "Choose the appropriate format based on what the user is asking. "
-        "Use plain Chinese chat for conversation unless a structured format is clearly better."
+        "Use rich HTML chat for conversation unless a structured format is clearly better."
     )

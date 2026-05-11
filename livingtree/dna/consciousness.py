@@ -65,6 +65,38 @@ class Consciousness(abc.ABC):
         """
         ...
 
+    # ── SDE Diffusion Control (Bosso et al. 2025) ──
+
+    def set_diffusion_level(self, level: float) -> None:
+        """Set the stochastic diffusion level — controls creative exploration.
+
+        Bosso et al. (2025) analog: the diffusion function g(x) in
+        dX_t = f(X_t)dt + g(X_t)dW_t controls how much the system explores
+        versus exploits. In the consciousness domain:
+
+           level = 0.0 → deterministic reasoning (pure chain-of-thought)
+           level = 0.5 → balanced exploration (default creative mode)
+           level = 1.0 → maximum diffusion (wild brainstorming)
+
+        This maps to LLM temperature control: temperature ∝ diffusion level.
+        Higher diffusion = more stochastic next-token sampling = more creative.
+
+        Concrete implementations should adjust:
+          - LLM temperature parameter
+          - Hypothesis diversity
+          - Self-questioning depth
+        """
+        self._diffusion_level = max(0.0, min(1.0, level))
+        logger.debug(
+            f"Consciousness diffusion level set to {self._diffusion_level:.2f} "
+            f"({'deterministic' if self._diffusion_level < 0.3 else 'balanced' if self._diffusion_level < 0.7 else 'exploratory'})"
+        )
+
+    @property
+    def diffusion_level(self) -> float:
+        """Current diffusion level (0=deterministic, 1=maximally stochastic)."""
+        return getattr(self, '_diffusion_level', 0.5)
+
 
 class DefaultConsciousness(Consciousness):
     """

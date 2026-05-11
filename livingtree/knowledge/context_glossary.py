@@ -12,7 +12,7 @@ import re
 from typing import List, Dict, Optional
 from pathlib import Path
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DomainTerm(BaseModel):
@@ -24,8 +24,7 @@ class DomainTerm(BaseModel):
     examples: List[str] = Field(default_factory=list)
     priority: int = 0
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ContextGlossary:
@@ -66,7 +65,7 @@ class ContextGlossary:
         try:
             import json
             data = {
-                "terms": {term.term: term.dict() for term in self._terms.values()}
+                "terms": {term.term: term.model_dump() for term in self._terms.values()}
             }
             self.GLOSSARY_FILE.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"

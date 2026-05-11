@@ -163,13 +163,15 @@ class AgenticRAG:
         r"^(现在几|今天星期|今天是|日期|时间)",
     ]
 
-    def __init__(self, consciousness: Any = None):
+    def __init__(self, consciousness: Any = None, emphasizer: Any = None):
         """初始化.
 
         Args:
             consciousness: LLM consciousness for reasoning + generation.
+            emphasizer: Optional EmphasisActor for HiLight evidence highlighting.
         """
         self._consciousness = consciousness
+        self._emphasizer = emphasizer
         self._total_queries = 0
         self._total_tokens = 0
         self._cb = RAGCircuitBreaker(
@@ -521,7 +523,12 @@ class AgenticRAG:
         self, query: str, docs: list[str], domain: str,
         history: list[RetrievalRound],
     ) -> tuple[str, float, str]:
-        """生成答案 + 置信度评估."""
+        """生成答案 + 置信度评估.
+
+        HiLight integration: if EmphasisActor is available, highlights
+        key evidence spans in context before passing to frozen Solver.
+        Falls back to raw truncation if no emphasizer is configured.
+        """
         if not docs:
             return "未找到相关文档", 0.0, "no_docs"
 
@@ -529,9 +536,12 @@ class AgenticRAG:
             # Heuristic: return first doc summary
             return docs[0][:500], 0.5, "heuristic"
 
-        context = "\n\n".join(f"[{i+1}] {d[:800]}" for i, d in enumerate(docs[:5]))
+        # ── HiLight: Evidence highlighting ──────────────────────────
+        context, highlight_spans_count = self._build_emphasized_context(query, docs)
+
         prompt = (
-            f"[RAG Generation] Answer the query using ONLY the provided context.\n\n"
+            f"[RAG Generation] Answer the query using ONLY the provided context.\n"
+            f"Evidence highlighted with <hl> tags indicates key information.\n\n"
             f"Query: {query}\n"
             f"Domain: {domain}\n\n"
             f"Context:\n{context}\n\n"
@@ -550,6 +560,11 @@ class AgenticRAG:
                 # OKH-RAG: blend in structural correctness
                 structural = self._structural_score(query, docs)
                 confidence = base_confidence * 0.7 + structural * 0.3
+
+                # ── HiLight RL: train emphasis policy from task reward ──
+                if self._emphasizer is not None and highlight_spans_count > 0:
+                    self._train_emphasizer_async(query, docs, confidence)
+
                 return (
                     data.get("answer", docs[0][:300]),
                     round(confidence, 3),
@@ -559,6 +574,72 @@ class AgenticRAG:
             logger.debug(f"AgenticRAG generate: {e}")
 
         return docs[0][:500], 0.5, "fallback"
+
+    # ── HiLight: Context Building ──────────────────────────────────
+
+    def _build_emphasized_context(
+        self, query: str, docs: list[str],
+    ) -> tuple[str, int]:
+        """Build context string with optional evidence highlighting.
+
+        If EmphasisActor is configured, uses HiLight to highlight key
+        evidence spans with <hl> tags. Otherwise falls back to raw
+        truncation (original behavior).
+
+        Returns:
+            (context_string, highlight_spans_count)
+        """
+        if self._emphasizer is None:
+            # Original fallback: truncate each doc to 800 chars
+            context = "\n\n".join(
+                f"[{i+1}] {d[:800]}" for i, d in enumerate(docs[:5])
+            )
+            return context, 0
+
+        try:
+            emphasized = self._emphasizer.emphasize_multi(
+                query, docs[:5], budget=None,
+            )
+            # Count highlight spans for feedback
+            hl_count = emphasized.count("<hl>")
+            logger.debug(
+                f"HiLight emphasized context: {hl_count} highlight spans, "
+                f"docs={len(docs[:5])}"
+            )
+            return emphasized, hl_count
+        except Exception as e:
+            logger.warning(f"HiLight emphasis failed, falling back to raw: {e}")
+            context = "\n\n".join(
+                f"[{i+1}] {d[:800]}" for i, d in enumerate(docs[:5])
+            )
+            return context, 0
+
+    def _train_emphasizer_async(
+        self, query: str, docs: list[str], reward: float,
+    ) -> None:
+        """Fire-and-forget RL training for EmphasisActor.
+
+        Uses the Solver's confidence as task reward to train the
+        highlighting policy via grouped policy gradient.
+
+        TODO: can be upgraded to asyncio.create_task() for true async.
+        """
+        if self._emphasizer is None:
+            return
+        try:
+            for doc in docs[:3]:
+                if len(doc) < 20:
+                    continue
+                result = self._emphasizer.train_step(
+                    query, doc, reward,
+                )
+                if result.get("step", 0) % 50 == 0:
+                    logger.info(
+                        f"EmphasisActor trained: step={result['step']}, "
+                        f"loss={result.get('loss', 0):.4f}"
+                    )
+        except Exception as e:
+            logger.debug(f"EmphasisActor train: {e}")
 
     async def _needs_retrieval(self, query: str) -> bool:
         """判断查询是否需要外部检索."""
@@ -678,7 +759,17 @@ class AgenticRAG:
             "total_queries": self._total_queries,
             "total_tokens": self._total_tokens,
             "has_consciousness": self._consciousness is not None,
+            "has_emphasizer": self._emphasizer is not None,
         }
+
+    @property
+    def emphasizer(self):
+        """Access the EmphasisActor for external training control."""
+        return self._emphasizer
+
+    @emphasizer.setter
+    def emphasizer(self, value):
+        self._emphasizer = value
 
 
 # ── Singleton ──────────────────────────────────────────────────────
@@ -686,12 +777,15 @@ class AgenticRAG:
 _agentic_rag: AgenticRAG | None = None
 
 
-def get_agentic_rag(consciousness: Any = None) -> AgenticRAG:
+def get_agentic_rag(consciousness: Any = None, emphasizer: Any = None) -> AgenticRAG:
     global _agentic_rag
     if _agentic_rag is None:
-        _agentic_rag = AgenticRAG(consciousness=consciousness)
-    elif consciousness and not _agentic_rag._consciousness:
-        _agentic_rag._consciousness = consciousness
+        _agentic_rag = AgenticRAG(consciousness=consciousness, emphasizer=emphasizer)
+    else:
+        if consciousness and not _agentic_rag._consciousness:
+            _agentic_rag._consciousness = consciousness
+        if emphasizer is not None and _agentic_rag._emphasizer is None:
+            _agentic_rag._emphasizer = emphasizer
     return _agentic_rag
 
 

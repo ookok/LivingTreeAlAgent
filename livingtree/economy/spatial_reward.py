@@ -378,6 +378,102 @@ class SpatialGRPOOptimizer:
         """Whether spatial info positively contributes for this action."""
         return self._spatial_weights.get(action, 0.0) > 0.1
 
+    # ═══ Closed-Loop Validation (STReasoner spatial injection closure) ═══
+
+    def closed_loop_validation(
+        self, actions: list[str],
+        baseline_quality: dict[str, float],
+        with_spatial_quality: dict[str, float],
+    ) -> dict[str, Any]:
+        """Validate that spatial injection genuinely improves policy.
+
+        STReasoner closed-loop: baseline → spatial injection → GRPO →
+        policy update → re-evaluate against baseline. This method measures
+        whether the spatial-aware policy actually outperforms the baseline,
+        closing the loop that the original implementation left open.
+
+        The key metric is Δ = with_spatial_quality - baseline_quality.
+        If Δ > 0 for most actions, spatial injection is validated.
+        If Δ ≤ 0, the system should recalibrate.
+
+        Args:
+            actions: List of action IDs to validate
+            baseline_quality: Quality scores WITHOUT spatial injection
+            with_spatial_quality: Quality scores WITH spatial injection
+
+        Returns:
+            dict with validation report, including whether the loop is closed
+        """
+        deltas = {}
+        improved = []
+        degraded = []
+        unchanged = []
+
+        for action in actions:
+            baseline = baseline_quality.get(action, 0.0)
+            spatial = with_spatial_quality.get(action, 0.0)
+            delta = spatial - baseline
+            deltas[action] = delta
+
+            if delta > 0.01:
+                improved.append((action, delta))
+            elif delta < -0.01:
+                degraded.append((action, abs(delta)))
+            else:
+                unchanged.append(action)
+
+        total = len(actions)
+        improved_count = len(improved)
+        degraded_count = len(degraded)
+        avg_delta = sum(deltas.values()) / max(total, 1)
+        closure_rate = improved_count / max(total, 1)
+
+        # Loop is closed if > 50% of actions improved with spatial injection
+        loop_closed = closure_rate > 0.5 and avg_delta > 0
+
+        # Spatial efficiency: how much improvement per unit of degradation
+        total_improvement = sum(d for _, d in improved)
+        total_degradation = sum(d for _, d in degraded)
+        spatial_efficiency = (
+            total_improvement / max(total_degradation, 0.001)
+            if total_degradation > 0 else float('inf')
+        )
+
+        if loop_closed:
+            status = "closed"
+            recommendation = (
+                f"Spatial injection validated: {closure_rate:.0%} actions "
+                f"improved (avg +{avg_delta:.4f}). Continue with spatial GRPO."
+            )
+        elif closure_rate > 0.3:
+            status = "partial"
+            recommendation = (
+                f"Spatial injection partially effective: {closure_rate:.0%} "
+                f"improved. Increase spatial feature depth or recalibrate "
+                f"graph topology before next GRPO round."
+            )
+        else:
+            status = "open"
+            recommendation = (
+                f"Spatial injection NOT validated: only {closure_rate:.0%} "
+                f"improved (avg Δ={avg_delta:.4f}). Revert to baseline "
+                f"policy and investigate graph topology mismatch."
+            )
+
+        return {
+            "loop_status": status,
+            "loop_closed": loop_closed,
+            "closure_rate": round(closure_rate, 4),
+            "avg_delta": round(avg_delta, 4),
+            "improved_count": improved_count,
+            "degraded_count": degraded_count,
+            "unchanged_count": len(unchanged),
+            "spatial_efficiency": round(spatial_efficiency, 4),
+            "best_improvement": max(deltas.values()) if deltas else 0.0,
+            "worst_degradation": min(deltas.values()) if deltas else 0.0,
+            "recommendation": recommendation,
+        }
+
     # ── Statistical Tests ──
 
     def spatial_significance(self) -> float:

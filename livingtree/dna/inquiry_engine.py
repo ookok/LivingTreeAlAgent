@@ -477,13 +477,20 @@ class InquiryEngine:
 
     Combines Counterparty Agent + Two-Tiered Reward + Experience Repository
     into a single integrated engine for strategic multi-turn inquiry.
+
+    HiLight integration (v2): Uses the two-tiered reward signal (task_accuracy
+    + interaction_quality) as RL training reward for the EmphasisActor.
+    Each completed inquiry trajectory provides per-turn (query, response, reward)
+    training samples — the more inquiries completed, the better the highlighting
+    policy becomes at identifying critical evidence in inquiry responses.
     """
 
-    def __init__(self):
+    def __init__(self, emphasizer: Any = None):
         self._counterparty = CounterpartyAgent()
         self._reward = TwoTieredReward()
         self._repo = ExperienceRepository()
         self._active_trajectories: dict[str, ClinicalTrajectory] = {}
+        self._emphasizer = emphasizer  # Optional EmphasisActor for HiLight RL training
 
     # ── Start Inquiry ──
 
@@ -562,17 +569,153 @@ class InquiryEngine:
         # Store in experience repository
         self._repo.store(traj)
 
+        # ── HiLight RL: train emphasis policy from inquiry reward ──
+        if self._emphasizer is not None and traj.turns:
+            self._train_emphasizer_from_trajectory(traj, combined)
+
         logger.info(
             f"Inquiry ended: {traj_id} — task={task:.2f} inter={inter:.2f} "
             f"combined={combined:.2f} ({len(traj.turns)} turns, {traj.total_information_gain:.2f} IG)",
         )
         return traj
 
+    # ── HiLight RL Training ────────────────────────────────────────
+
+    def _train_emphasizer_from_trajectory(
+        self, traj: ClinicalTrajectory, combined_reward: float,
+    ) -> None:
+        """Train EmphasisActor using inquiry trajectory as RL signal.
+
+        Each inquiry turn provides a (query, response, reward) tuple:
+          - query: the agent's question (what to look for)
+          - context: the counterparty's response (where evidence lives)
+          - reward: the combined task+interaction score
+
+        High-reward turns → policy learns to highlight response spans
+        that led to high information gain.
+        """
+        if self._emphasizer is None:
+            return
+
+        try:
+            for turn in traj.turns:
+                if len(turn.counterparty_response) < 30:
+                    continue
+                # Per-turn reward: weight by information gain
+                turn_reward = combined_reward * (0.5 + 0.5 * turn.information_gain)
+                result = self._emphasizer.train_step(
+                    turn.agent_question,
+                    turn.counterparty_response,
+                    turn_reward,
+                )
+
+            logger.debug(
+                f"HiLight trained from inquiry {traj.trajectory_id}: "
+                f"reward={combined_reward:.2f}, turns={len(traj.turns)}"
+            )
+        except Exception as e:
+            logger.debug(f"HiLight inquiry training failed: {e}")
+
+    @property
+    def emphasizer(self):
+        """Access the EmphasisActor for external training control."""
+        return self._emphasizer
+
+    @emphasizer.setter
+    def emphasizer(self, value):
+        self._emphasizer = value
+
     # ── Suggest Next Question ──
 
     def suggest_question(self, domain: str) -> str | None:
         """Suggest the best next question based on experience repository."""
         return self._repo.suggest_question(domain)
+
+    # ── Doctor-R1 Enhanced Trajectory Filtering ═────────────────────
+
+    def filter_trajectories(
+        self, min_information_gain: float = 0.5,
+        min_task_accuracy: float = 0.3,
+        max_trajectories: int = 50,
+    ) -> list:
+        """Filter high-quality trajectories for experience replay.
+
+        Doctor-R1 (arXiv:2510.04284): only store trajectories where the
+        inquiry process led to meaningful outcomes. This prevents the
+        experience repository from being diluted by low-quality interactions
+        that would corrupt the policy learning signal.
+
+        Filtering criteria:
+          1. Total information gain ≥ min_information_gain
+          2. Task accuracy ≥ min_task_accuracy
+          3. Multi-turn trajectories preferred over single-turn
+
+        Returns:
+            Sorted list of qualifying trajectories (best first)
+        """
+        all_trajs = self._repo.get_all()
+        filtered = []
+        for traj in all_trajs:
+            if traj.total_information_gain >= min_information_gain:
+                if traj.task_accuracy >= min_task_accuracy:
+                    filtered.append(traj)
+
+        # Multi-turn bonus: order by composite quality score
+        filtered.sort(
+            key=lambda t: (
+                t.task_accuracy * 0.4 +
+                t.interaction_quality * 0.3 +
+                t.total_information_gain * 0.2 +
+                (0.1 if len(t.turns) >= 3 else 0.0)
+            ),
+            reverse=True,
+        )
+        return filtered[:max_trajectories]
+
+    def replay_buffer_sample(
+        self, n: int = 5, domain: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Sample from replay buffer for Doctor-R1 policy learning.
+
+        Periodically sample past successful inquiry trajectories to
+        reinforce question patterns that led to high information gain.
+        This closes the training loop:
+          inquiry → outcome → filter → replay → improve
+
+        Args:
+            n: Number of trajectory segments to sample
+            domain: Optional domain filter
+
+        Returns:
+            List of replay samples with question, response, and outcome
+        """
+        import random
+        qualified = self.filter_trajectories(min_information_gain=0.3)
+        if domain:
+            qualified = [
+                t for t in qualified
+                if t.domain == domain or t.domain == "general"
+            ]
+
+        if not qualified:
+            return []
+
+        samples = []
+        for _ in range(min(n, len(qualified))):
+            traj = random.choice(qualified)
+            if traj.turns:
+                best_turn = max(traj.turns, key=lambda t: t.information_gain)
+                samples.append({
+                    "trajectory_id": traj.trajectory_id,
+                    "domain": traj.domain,
+                    "question": best_turn.agent_question,
+                    "response": best_turn.counterparty_response[:200],
+                    "information_gain": best_turn.information_gain,
+                    "task_accuracy": traj.task_accuracy,
+                    "lesson": traj.lessons_learned[0] if traj.lessons_learned else "",
+                })
+
+        return samples
 
     # ── Stats ──
 
@@ -581,6 +724,7 @@ class InquiryEngine:
             "active_inquiries": len(self._active_trajectories),
             "reward": self._reward.stats(),
             "repository": self._repo.stats(),
+            "has_emphasizer": self._emphasizer is not None,
         }
 
 
@@ -589,10 +733,12 @@ class InquiryEngine:
 _inquiry: InquiryEngine | None = None
 
 
-def get_inquiry_engine() -> InquiryEngine:
+def get_inquiry_engine(emphasizer: Any = None) -> InquiryEngine:
     global _inquiry
     if _inquiry is None:
-        _inquiry = InquiryEngine()
+        _inquiry = InquiryEngine(emphasizer=emphasizer)
+    elif emphasizer is not None and _inquiry._emphasizer is None:
+        _inquiry._emphasizer = emphasizer
     return _inquiry
 
 

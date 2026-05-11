@@ -61,9 +61,9 @@ class Provider:
                     f"{self.base_url}/chat/completions",
                     json={"model": self.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
                     headers=self._headers(),
-                    timeout=aiohttp.ClientTimeout(total=10),
+                    timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
-                    return resp.status in (200, 429), ""  # 429 = alive but throttled
+                    return True, ""  # Any HTTP response = server alive; errors caught by except
         except Exception as e:
             return False, str(e)
 

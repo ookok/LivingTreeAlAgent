@@ -16,6 +16,13 @@ Core formula (GTSM routing):
   score_matching(provider_i) = Σ_j relevance(j, task) × ∂log P(provider_i | task) 
   Provider selection = argmax_i score_matching(provider_i)
 
+Intentional TD integration (Sharifnassab et al., arXiv:2604.19033):
+  Instead of fixed learning rate _lr, use Intentional TD:
+    η* = γ × |error| → reduces the score-to-target gap by fraction γ each update
+  - γ=0.3: close 30% of gap per feedback → fast adaptation, smooth convergence
+  - Auto-scales: large gap→large step, small gap→small step (no manual tuning)
+  - Cold-start: rapid initialization; Converged: fine-grained adjustments
+
 Integration:
   Replace or augment HolisticElection.get_best() with score-matched selection
   for tasks near decision boundaries (uncertain type_classifier output).
@@ -85,9 +92,20 @@ class ScoreMatchingRouter:
       - Fallback: score matching always returns a valid provider
     """
 
-    def __init__(self, learning_rate: float = 0.05, diffusion_steps: int = 5):
+    def __init__(self, learning_rate: float = 0.05, diffusion_steps: int = 5,
+                 gamma: float = 0.3):
+        """Initialize ScoreMatchingRouter with Intentional TD.
+
+        Args:
+            learning_rate: Fixed LR (legacy; superseded by gamma).
+            diffusion_steps: Steps in the score diffusion process.
+            gamma: Intentional TD error reduction fraction (0-1).
+                   0.3 = close 30% of score-target gap per feedback.
+                   Set to 0.0 to fall back to fixed learning_rate.
+        """
         self._lr = learning_rate
         self._diffusion_steps = diffusion_steps
+        self._gamma = gamma
 
         # Score function memory: (provider, condition) → learned score
         self._scores: dict[tuple[str, str], float] = defaultdict(lambda: 0.5)
@@ -275,29 +293,47 @@ class ScoreMatchingRouter:
         self, provider: str, task_type: str, success: bool,
         latency_ms: float = 0, cost_yuan: float = 0,
     ) -> None:
-        """Update the learned score function based on call outcome.
+        """Update the learned score function via Intentional TD.
 
-        This is the online gradient boosting step: each call provides one
-        gradient update to the score function. Per the GTSM paper, gradient
-        boosting over scores is asymptotically optimal.
+        Intentional TD (Sharifnassab et al., arXiv:2604.19033):
+          1. Compute ideal target score based on reward signal
+          2. Compute error = target_ideal - current_score
+          3. Apply η* = γ × |error| → reduces gap by fraction γ
+             (If γ=0 → fallback to fixed learning_rate)
+
+        Benefit over fixed _lr:
+          - Cold start (large error): γ × big_gap → rapid initialization
+          - Converged (small error): γ × tiny_gap → fine-grained tuning
+          - No manual tuning: γ is interpretable ("30% toward ideal each step")
         """
         key = (provider, task_type)
         current = self._scores[key]
 
-        # Reward signal: success → increase, failure → decrease
-        # Quality bonus: fast + cheap = higher reward
+        # ── Reward signal ──
         reward = 1.0 if success else -0.3
         latency_bonus = max(0, 1.0 - latency_ms / 10000) * 0.1
         cost_bonus = max(0, 1.0 - cost_yuan / 0.1) * 0.1
 
+        # ── Ideal target: what perfect knowledge would set ──
         if success:
-            target = min(1.0, current + self._lr * (reward + latency_bonus + cost_bonus))
+            target_ideal = min(1.0, current + reward + latency_bonus + cost_bonus)
         else:
-            target = max(0.01, current + self._lr * reward)
+            target_ideal = max(0.01, current + reward)
 
-        # Gradient: direction and magnitude of change
-        grad = target - current
-        self._scores[key] = target
+        # ── Intentional TD step ──
+        error = target_ideal - current
+        if self._gamma > 0:
+            # η* = γ × |error| → reduces gap by fraction γ
+            adjusted = current + self._gamma * error
+            # Clamp to valid score range
+            new_score = max(0.01, min(1.0, adjusted))
+        else:
+            # Fallback: fixed learning rate (legacy mode)
+            new_score = max(0.01, min(1.0, current + self._lr * error))
+
+        # ── Record gradient for trend analysis ──
+        grad = new_score - current
+        self._scores[key] = new_score
         self._gradients[provider].append(grad)
         if len(self._gradients[provider]) > 50:
             self._gradients[provider] = self._gradients[provider][-50:]

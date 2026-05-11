@@ -18,7 +18,7 @@ import time
 from typing import Any
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class EntityEntry(BaseModel):
@@ -36,8 +36,7 @@ class EntityEntry(BaseModel):
     created_at: float = 0.0
     updated_at: float = 0.0
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EntityRegistry:

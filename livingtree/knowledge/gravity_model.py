@@ -382,6 +382,154 @@ class KnowledgeGravity:
         """Register an entity's embedding for precise distance computation."""
         self._entity_embeddings[entity_id] = embedding
 
+    # ── Knowledge Growth SDE Fitting (Bosso et al. 2025) ──
+
+    def fit_growth_sde(self, metric_name: str = "total_mass") -> dict[str, Any]:
+        """Fit an SDE model to knowledge hypergraph growth dynamics.
+
+        Bosso et al. (2025): knowledge growth as a stochastic process
+        dK_t = μ(K_t)dt + σ(K_t)dW_t where:
+          - μ(K) = growth drift (how fast the knowledge space expands)
+          - σ(K) = diffusion (volatility of expansion, innovation bursts)
+
+        Uses the access frequency histogram as a proxy for growth rate,
+        computing conditional mean (drift) and variance (diffusion).
+
+        Returns:
+            dict with drift/diffusion estimates, growth regime, and
+            a prediction for the next 5 growth steps.
+        """
+        if not self._hg:
+            return {"error": "no hypergraph available"}
+
+        # Compute entity mass growth trajectory from access counts
+        masses: list[float] = []
+        timestamps: list[float] = []
+
+        for eid in self._hg._entities:
+            mass = self.compute_mass(eid)
+            masses.append(mass.raw_mass)
+            timestamps.append(mass.last_updated)
+
+        # Sort by time to get growth trajectory
+        sorted_pairs = sorted(zip(timestamps, masses), key=lambda p: p[0])
+        # Filter out zero-timestamp entries
+        growth = [(t, m) for t, m in sorted_pairs if t > 0]
+
+        if len(growth) < 10:
+            return {
+                "error": f"insufficient growth data ({len(growth)} points, need ≥10)",
+                "growth_rate": 0.0, "diffusion_estimate": 0.0,
+                "growth_regime": "unknown",
+                "prediction_steps": [],
+            }
+
+        times = [t for t, _ in growth]
+        masses_sorted = [m for _, m in growth]
+
+        # Normalize time to relative scale
+        t0 = times[0]
+        t_norm = [t - t0 for t in times]
+        total_time = t_norm[-1] if t_norm[-1] > 0 else 1.0
+
+        # Compute increments in mass and time
+        dM = [masses_sorted[i + 1] - masses_sorted[i] for i in range(len(masses_sorted) - 1)]
+        dt_vals = [t_norm[i + 1] - t_norm[i] for i in range(len(t_norm) - 1)]
+
+        # Bin by mass level to compute conditional statistics
+        n_bins = max(3, min(10, len(dM) // 5))
+        bin_edges = [masses_sorted[0] + (masses_sorted[-1] - masses_sorted[0]) * i / n_bins
+                     for i in range(n_bins + 1)]
+
+        drift_binned: list[float] = []
+        diff_binned: list[float] = []
+        mass_midpoints: list[float] = []
+
+        for b in range(n_bins):
+            m_low = bin_edges[b]
+            m_high = bin_edges[b + 1]
+            incs = [
+                dM[i] / max(dt_vals[i], 1e-9)
+                for i in range(len(dM))
+                if m_low <= masses_sorted[i] < m_high and dt_vals[i] > 0
+            ]
+            if len(incs) < 3:
+                continue
+
+            mu = sum(incs) / len(incs)  # Drift: mean growth rate in this mass bin
+            var = sum((v - mu) ** 2 for v in incs) / len(incs)  # Diffusion: variance
+            sigma = math.sqrt(max(0.0, var))
+
+            drift_binned.append(mu)
+            diff_binned.append(sigma)
+            mass_midpoints.append((m_low + m_high) / 2)
+
+        if not drift_binned:
+            return {
+                "error": "binning failed", "growth_rate": 0.0,
+                "diffusion_estimate": 0.0, "growth_regime": "unknown",
+                "prediction_steps": [],
+            }
+
+        # Overall growth metrics
+        avg_drift = sum(drift_binned) / len(drift_binned)
+        avg_diffusion = sum(diff_binned) / len(diff_binned)
+
+        # Growth regime classification
+        if avg_drift > 0.1 * avg_diffusion and avg_diffusion > 0:
+            regime = "deterministic_growth"  # Drift dominates → steady expansion
+        elif avg_diffusion > 3 * abs(avg_drift) and avg_diffusion > 0:
+            regime = "innovation_burst"  # Diffusion dominates → unpredictable exploration
+        elif avg_drift < 0:
+            regime = "decay"  # Negative drift → knowledge erosion
+        else:
+            regime = "stable"
+
+        # Prediction: simple Euler-Maruyama for next 5 steps
+        last_mass = masses_sorted[-1]
+        dt_predict = total_time / len(t_norm) * 5  # ~5 time steps
+        predictions = []
+        current = last_mass
+        for _ in range(5):
+            # Use drift/diffusion from nearest mass bin
+            best_i = min(range(len(mass_midpoints)),
+                         key=lambda i: abs(mass_midpoints[i] - current))
+            mu_pred = drift_binned[best_i]
+            sigma_pred = diff_binned[best_i]
+            # Deterministic prediction (mean path)
+            current = current + mu_pred * dt_predict
+            # Add 95% CI
+            lower = current - 1.96 * sigma_pred * math.sqrt(dt_predict)
+            upper = current + 1.96 * sigma_pred * math.sqrt(dt_predict)
+            predictions.append({
+                "step": _ + 1,
+                "predicted_mass": round(current, 4),
+                "ci_95_lower": round(lower, 4),
+                "ci_95_upper": round(upper, 4),
+            })
+
+        return {
+            "growth_rate": round(avg_drift, 6),
+            "diffusion_estimate": round(avg_diffusion, 6),
+            "signal_to_noise": round(abs(avg_drift) / max(avg_diffusion, 1e-9), 3),
+            "growth_regime": regime,
+            "n_entities": len(masses_sorted),
+            "n_bins": n_bins,
+            "drift_binned": [round(d, 6) for d in drift_binned],
+            "diffusion_binned": [round(s, 6) for s in diff_binned],
+            "mass_midpoints": [round(m, 4) for m in mass_midpoints],
+            "prediction_steps": predictions,
+            "implication": (
+                "Steady knowledge accumulation — maintain current strategy"
+                if regime == "deterministic_growth"
+                else "Innovation bursts detected — embrace exploration diversity"
+                if regime == "innovation_burst"
+                else "Knowledge erosion — need intervention (more queries, new sources)"
+                if regime == "decay"
+                else "Stable knowledge state — occasional refresh recommended"
+            ),
+        }
+
     @property
     def hypergraph(self):
         return self._hg

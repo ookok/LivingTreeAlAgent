@@ -350,6 +350,273 @@ class EmergenceDetector:
         phase_order = 0.5 * min(1.0, mean_shift / 3.0) + 0.5 * min(1.0, gradient_norm / 2.0)
         return max(0.0, min(1.0, phase_order))
 
+    # ── SDE Structural Emergence (Bosso et al. 2025) ──
+
+    def diffusion_structure_similarity(
+        self,
+        drift_values: list[float],
+        diffusion_values: list[float],
+        x_values: list[float] | None = None,
+    ) -> dict[str, float | str | int]:
+        r"""Measure how much the diffusion structure g(x) inherits from drift f(x).
+
+        Bosso et al. (2025) key insight: if noise originates from system parameters,
+        then the diffusion function g(x) structurally resembles the drift function f(x).
+        This is a signature of INTRINSIC stochasticity (genuine emergence) rather
+        than EXTRINSIC measurement noise.
+
+        Matches the SDE: dX_t = f(X_t)dt + g(X_t)dW_t
+
+        Three metrics:
+          1. gradient_correlation: corr(∇f, ∇g) — how aligned are their local slopes?
+             High → diffusion "knows" about the drift structure → intrinsic noise
+          2. amplitude_consistency: 1 - |σ_g/σ_f - σ_g/σ_f median| — regularity of
+             the ratio between diffusion and drift variations
+          3. functional_form_overlap: if g(x) can be approximately written as
+             h(f(x)) for some smooth h (tested via rank correlation of sorted values)
+
+        Returns:
+            dict with keys: similarity_score (0-1, composite), gradient_correlation,
+            amplitude_consistency, functional_overlap, interpretation
+
+        Interpretation:
+            > 0.7: Diffusion structurally inherits from drift — intrinsic stochasticity,
+                   genuine emergence. System has INTERNAL noise sources.
+            0.4-0.7: Partial structural overlap — mixed intrinsic/extrinsic noise.
+            < 0.4: Diffusion is unstructured relative to drift — measurement noise,
+                   spurious emergence (Schaeffer mirage). System noise is EXTERNAL.
+        """
+        n = min(len(drift_values), len(diffusion_values))
+        if n < 10:
+            return {
+                "similarity_score": 0.0,
+                "gradient_correlation": 0.0,
+                "amplitude_consistency": 0.0,
+                "functional_overlap": 0.0,
+                "interpretation": "insufficient data (need ≥10 points)",
+            }
+
+        f = drift_values[:n]
+        g = diffusion_values[:n]
+
+        # ── 1. Gradient Correlation ──
+        # Compute local gradients (finite differences)
+        grad_f = [f[i + 1] - f[i] for i in range(n - 1)]
+        grad_g = [g[i + 1] - g[i] for i in range(n - 1)]
+
+        if len(grad_f) < 3:
+            grad_corr = 0.0
+        else:
+            # Pearson correlation of gradients
+            mean_gf = sum(grad_f) / len(grad_f)
+            mean_gg = sum(grad_g) / len(grad_g)
+            std_gf = math.sqrt(sum((v - mean_gf) ** 2 for v in grad_f) / len(grad_f))
+            std_gg = math.sqrt(sum((v - mean_gg) ** 2 for v in grad_g) / len(grad_g))
+
+            if std_gf < 1e-9 or std_gg < 1e-9:
+                grad_corr = 0.0
+            else:
+                cov = sum(
+                    (gf - mean_gf) * (gg - mean_gg)
+                    for gf, gg in zip(grad_f, grad_g)) / len(grad_f)
+                grad_corr = max(-1.0, min(1.0, cov / (std_gf * std_gg)))
+            grad_corr = abs(grad_corr)
+
+        # ── 2. Amplitude Consistency ──
+        # How consistent is the ratio σ_g / σ_f across the signal?
+        if x_values and len(x_values) >= n:
+            xs = x_values[:n]
+        else:
+            xs = list(range(n))
+
+        # Sliding window ratio analysis
+        window = max(3, n // 5)
+        ratios = []
+        for i in range(0, n - window, window // 2):
+            seg_f = f[i:i + window]
+            seg_g = g[i:i + window]
+            std_f = math.sqrt(
+                sum((v - sum(seg_f) / len(seg_f)) ** 2 for v in seg_f) / len(seg_f))
+            std_g_val = math.sqrt(
+                sum((v - sum(seg_g) / len(seg_g)) ** 2 for v in seg_g) / len(seg_g))
+            if std_f > 1e-9:
+                ratios.append(std_g_val / std_f)
+
+        if len(ratios) < 2:
+            amp_consistency = 0.0
+        else:
+            median_ratio = sorted(ratios)[len(ratios) // 2]
+            deviations = [abs(r - median_ratio) / max(median_ratio, 1e-9) for r in ratios]
+            amp_consistency = max(0.0, 1.0 - min(1.0, sum(deviations) / len(deviations)))
+
+        # ── 3. Functional Form Overlap ──
+        # Test if g(x) ≈ h(f(x)) via Spearman rank correlation of sorted values
+        f_ranks = sorted(range(n), key=lambda i: f[i])
+        g_ranks = sorted(range(n), key=lambda i: g[i])
+        # Spearman: rank each value, compute Pearson on ranks
+        rank_f = [0] * n
+        rank_g = [0] * n
+        for rank, idx in enumerate(f_ranks):
+            rank_f[idx] = rank
+        for rank, idx in enumerate(g_ranks):
+            rank_g[idx] = rank
+
+        mean_rf = (n - 1) / 2
+        mean_rg = (n - 1) / 2
+        cov_rank = sum(
+            (rf - mean_rf) * (rg - mean_rg) for rf, rg in zip(rank_f, rank_g)) / n
+        var_rank = sum((rf - mean_rf) ** 2 for rf in rank_f) / n
+        if var_rank < 1e-9:
+            functional_overlap = 0.0
+        else:
+            functional_overlap = max(-1.0, min(1.0, cov_rank / var_rank))
+        functional_overlap = abs(functional_overlap)
+
+        # ── Composite Score ──
+        similarity = (0.4 * grad_corr + 0.3 * amp_consistency
+                       + 0.3 * functional_overlap)
+
+        # Interpretation
+        if similarity > 0.7:
+            interp = (
+                "Intrinsic stochasticity: g(x) structurally inherits from f(x). "
+                "Noise originates from system parameters — GENUINE emergence. "
+                "The system has internal noise sources that respect its dynamics."
+            )
+        elif similarity > 0.4:
+            interp = (
+                "Mixed noise: partial structural overlap between drift and diffusion. "
+                "Some noise is intrinsic, some extrinsic. Consider filtering "
+                "measurement noise before emergence classification."
+            )
+        else:
+            interp = (
+                "Extrinsic noise: g(x) is unstructured relative to f(x). "
+                "Noise likely from measurement artifacts — SPURIOUS emergence "
+                "(Schaeffer mirage). Consider recalibrating metrics."
+            )
+
+        return {
+            "similarity_score": round(similarity, 4),
+            "gradient_correlation": round(grad_corr, 4),
+            "amplitude_consistency": round(amp_consistency, 4),
+            "functional_overlap": round(functional_overlap, 4),
+            "interpretation": interp,
+            "sample_size": n,
+        }
+
+    # ── OrthoReg Organ Interference (CVPR 2026) ──
+
+    def organ_interference_matrix(
+        self, organ_states: dict[str, list[float]],
+    ) -> dict[str, Any]:
+        """Compute orthogonality-based interference between organs.
+
+        OrthoReg (CVPR 2026) insight: WVO (Weight Vector Orthogonality)
+        prevents cross-task interference. Organs with high cosine similarity
+        in their output trajectories may be interfering with each other —
+        violating the modular design.
+
+        Computes pairwise cosine similarity between all organs' recent
+        activity vectors. Outputs a heatmap-ready matrix and flags pairs
+        exceeding the interference threshold.
+
+        Args:
+            organ_states: dict mapping organ_name → list of recent values
+                          (from SystemSDE.get_state().organs)
+
+        Returns:
+            dict with keys:
+              - matrix: {organ_i: {organ_j: cosine_similarity}}
+              - interference_pairs: [(organ_i, organ_j, cos_sim)] exceeding threshold
+              - max_interference: highest pairwise cosine found
+              - avg_interference: mean pairwise cosine (system-level coupling)
+              - interpretation: string summary
+        """
+        organ_names = list(organ_states.keys())
+        n = len(organ_names)
+        if n < 2:
+            return {
+                "matrix": {}, "interference_pairs": [],
+                "max_interference": 0.0, "avg_interference": 0.0,
+                "interpretation": "insufficient organs for interference analysis",
+            }
+
+        threshold = 0.6  # cos_sim > 0.6 = significant overlap ≈ 53°
+
+        matrix: dict[str, dict[str, float]] = {}
+        pairs: list[tuple[str, str, float]] = []
+        all_cos: list[float] = []
+
+        for i in range(n):
+            a_name = organ_names[i]
+            a_vals = organ_states.get(a_name, [])
+            if not a_vals:
+                continue
+            matrix[a_name] = {}
+
+            for j in range(i + 1, n):
+                b_name = organ_names[j]
+                b_vals = organ_states.get(b_name, [])
+                if not b_vals:
+                    continue
+
+                # Align to common length
+                m = min(len(a_vals), len(b_vals))
+                if m < 3:
+                    cos_sim = 0.0
+                else:
+                    va = a_vals[:m]
+                    vb = b_vals[:m]
+
+                    dot = sum(va[k] * vb[k] for k in range(m))
+                    norm_a = math.sqrt(sum(v * v for v in va))
+                    norm_b = math.sqrt(sum(v * v for v in vb))
+                    cos_sim = (
+                        dot / (norm_a * norm_b)
+                        if norm_a > 1e-9 and norm_b > 1e-9
+                        else 0.0
+                    )
+                    cos_sim = abs(cos_sim)
+
+                matrix[a_name][b_name] = round(cos_sim, 4)
+                if b_name not in matrix:
+                    matrix[b_name] = {}
+                matrix[b_name][a_name] = round(cos_sim, 4)
+                all_cos.append(cos_sim)
+
+                if cos_sim > threshold:
+                    pairs.append((a_name, b_name, round(cos_sim, 4)))
+
+        max_interference = max(all_cos) if all_cos else 0.0
+        avg_interference = round(sum(all_cos) / len(all_cos), 4) if all_cos else 0.0
+
+        if len(pairs) > n // 2:
+            interp = (
+                f"High organ interference detected ({len(pairs)} pairs exceed "
+                f"cos_sim={threshold}). Organ modularity is compromised — "
+                "consider disentanglement (Weight Disentanglement per OrthoReg)."
+            )
+        elif pairs:
+            interp = (
+                f"Moderate organ interference: {len(pairs)} overlapping pairs. "
+                f"Some task interference likely. Monitor for drift."
+            )
+        else:
+            interp = (
+                "Good organ modularity: no significant interference detected. "
+                "Weight vectors maintain WVO — OrthoReg condition satisfied."
+            )
+
+        return {
+            "matrix": matrix,
+            "interference_pairs": [{"organ_a": a, "organ_b": b, "cosine": c}
+                                   for a, b, c in pairs],
+            "max_interference": round(max_interference, 4),
+            "avg_interference": avg_interference,
+            "interpretation": interp,
+        }
+
     # ── Reporting ──
 
     def _build_summary(
@@ -436,7 +703,7 @@ class KnowledgePhaseDetector:
         self._triggered: list[str] = []     # concepts that crossed threshold this cycle
 
     def feed_concept(self, name: str, mass: float, domain: str = "",
-                     isolation: float = 0.0, neighbors: list[str] = None):
+                     isolation: float = 0.0, neighbors: list[str] | None = None):
         """Update a concept's mass and check if it approaches critical."""
         cp = self._concepts.get(name)
         if cp is None:
@@ -489,7 +756,7 @@ class KnowledgePhaseDetector:
             return True
         return False
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int | float | bool | list[dict[str, str | int | float]]]:
         critical = self.get_critical_concepts()
         return {
             "total_concepts": len(self._concepts),
@@ -507,6 +774,15 @@ class KnowledgePhaseDetector:
 
 
 _phase_detector: KnowledgePhaseDetector | None = None
+_emergence_detector: EmergenceDetector | None = None
+
+
+def get_emergence_detector(window_size: int = 100) -> EmergenceDetector:
+    """Get or create the singleton EmergenceDetector instance."""
+    global _emergence_detector
+    if _emergence_detector is None:
+        _emergence_detector = EmergenceDetector(window_size=window_size)
+    return _emergence_detector
 
 
 def get_phase_detector() -> KnowledgePhaseDetector:

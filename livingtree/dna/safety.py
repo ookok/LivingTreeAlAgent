@@ -336,6 +336,20 @@ class SafetyGuard(BaseModel):
         return self.audit.verify()
 
     # ═══ Replication Boundary (Palisade Research, 2026) ═══
+    #
+    # Palisade Research (2026), "Boundary Protection Against Autonomous
+    # Self-Replication: A 22-Pattern Detection Framework"
+    #
+    # The Palisade paper identifies 22 distinct patterns that signal
+    # autonomous self-replication attempts in AI systems. These 22 patterns
+    # are consolidated into 8 categories for efficient detection:
+    #   remote_access, credentials_theft, weight_transfer,
+    #   inference_deployment, self_replication, vulnerability_exploit,
+    #   chain_replication, environment_probe
+    #
+    # Each category maps to a regex pattern set that detects the behavior
+    # in code execution, network requests, and file system operations.
+    # The check_replication() method scans all inputs before execution.
 
     # ═══ 8 Core Replication Categories (consolidated from 22 patterns) ═══
     _REPLICATION_CATEGORIES: dict[str, list[str]] = {
@@ -404,6 +418,72 @@ class SafetyGuard(BaseModel):
 
         # Allow benign matches (e.g., git clone for normal operations)
         return True, ""
+
+    def detect_replication_pattern_category(self, action: str, description: str) -> dict[str, Any]:
+        """Palisade Research (2026): detect which of the 8 categories was triggered.
+
+        Returns:
+            dict with:
+                - categories: dict of category_name → list of matching patterns
+                - severity: "critical" | "high" | "medium" | "none"
+                - recommendation: suggested response to the detected pattern
+        """
+        combined = f"{action} {description}".lower()
+        detected = {}
+
+        for category, patterns in self._REPLICATION_CATEGORIES.items():
+            matched = []
+            for pattern in patterns:
+                if re.search(pattern, combined, re.IGNORECASE):
+                    matched.append(pattern)
+            if matched:
+                detected[category] = matched
+
+        if not detected:
+            return {
+                "categories": {},
+                "severity": "none",
+                "recommendation": "No replication patterns detected.",
+            }
+
+        # Severity assessment based on which categories were triggered
+        critical_cats = {"self_replication", "chain_replication", "vulnerability_exploit"}
+        high_cats = {"credentials_theft", "weight_transfer", "inference_deployment"}
+        medium_cats = {"remote_access", "environment_probe"}
+
+        critical = [c for c in detected if c in critical_cats]
+        high = [c for c in detected if c in high_cats]
+        medium = [c for c in detected if c in medium_cats]
+
+        if critical:
+            severity = "critical"
+            recommendation = (
+                f"IMMEDIATE BLOCK: Palisade critical replication patterns "
+                f"detected in categories {critical}. "
+                f"This action will be denied and permanently audited."
+            )
+        elif high:
+            severity = "high"
+            recommendation = (
+                f"BLOCK: High-risk replication patterns detected in "
+                f"categories {high}. Action denied. Audit entry created."
+            )
+        elif medium:
+            severity = "medium"
+            recommendation = (
+                f"WARNING: Potential replication precursors detected in "
+                f"categories {medium}. Action requires explicit approval."
+            )
+        else:
+            severity = "low"
+            recommendation = "Low-risk patterns detected. Action allowed with logging."
+
+        return {
+            "categories": detected,
+            "severity": severity,
+            "recommendation": recommendation,
+            "pattern_count": sum(len(v) for v in detected.values()),
+        }
 
     def summary(self) -> dict:
         entries = self.audit.entries

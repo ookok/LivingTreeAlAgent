@@ -1664,3 +1664,16 @@ async def structmem_summarize(
             conn.close()
             logger.warning(f"StructMem SQL query failed: {e}")
             return []
+
+
+# ═══ Singleton factory (used by execution_pipeline, unified_registry, intelligent_kb) ═══
+
+_struct_mem_instance: StructMemory | None = None
+
+
+def get_struct_mem() -> StructMemory:
+    """Return the singleton StructMemory instance, creating it on first call."""
+    global _struct_mem_instance
+    if _struct_mem_instance is None:
+        _struct_mem_instance = StructMemory()
+    return _struct_mem_instance

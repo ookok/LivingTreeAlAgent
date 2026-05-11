@@ -312,7 +312,7 @@ class ExecutionPipeline:
 
     async def _memorize(self, user_input: str, result: ExecutionResult, config: ModelConfig):
         try:
-            from ..dna.struct_mem import get_struct_mem
+            from ..knowledge.struct_mem import get_struct_mem
             mem = get_struct_mem()
             if mem:
                 mem.store(

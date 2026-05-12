@@ -65,3 +65,4 @@ data/
 frp/
 test_*.py
 diag_*.py
+__pycache__/

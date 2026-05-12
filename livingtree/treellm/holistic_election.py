@@ -34,6 +34,7 @@ WEIGHTS = {
     "rate_limit": 0.07,
     "cache": 0.10,
     "sticky": 0.10,       # Session binding: prefer same model
+    "hifloat8": 0.0,      # HiFloat8 cone-precision boost (weighted by task_type)
 }
 
 # NOTE: Pattern 5 dynamic weights will be used via get_dynamic_weights(task_type).
@@ -209,9 +210,36 @@ class HolisticElection:
         """Score all candidates holistically. Returns ranked list."""
         results = []
 
-        # Phase 1: Ping all alive candidates
+        # Phase 1: Ping all alive candidates (skip circuit-broken providers)
+        breaker = None
+        try:
+            from .circuit_breaker import get_circuit_breaker
+            breaker = get_circuit_breaker()
+        except Exception:
+            pass
+
         alive_scores = []
+        ping_count = 0
+
+        # Token Accountant: shared price vector for router layer
+        try:
+            from ..api.token_accountant import get_token_accountant, AllocationLayer
+            accountant = get_token_accountant()
+            prices = accountant.get_price_vector()
+            max_pings = prices.max_ping_providers
+        except Exception:
+            accountant = None
+            max_pings = len(candidates)
+
         for name in candidates:
+            # Skip providers with open circuit breaker (Token中转站熔断)
+            if breaker and breaker.is_open(name):
+                continue
+
+            # Token Accountant: limit pings to prevent over-routing
+            if accountant and ping_count >= max_pings:
+                break
+
             p = providers.get(name)
             if not p:
                 continue
@@ -219,6 +247,17 @@ class HolisticElection:
             ok, latency = await p.ping()
             if not ok:
                 continue
+
+            ping_count += 1
+            # Token Accountant: record router layer allocation
+            if accountant:
+                accountant.record_allocation(
+                    layer=AllocationLayer.ROUTER,
+                    action="ping",
+                    tokens_spent=50,  # ~50 tokens per ping
+                    actual_benefit=1.0 if ok else 0.0,
+                    latency_ms=latency,
+                )
 
             score = ProviderScore(
                 name=name,
@@ -284,6 +323,14 @@ class HolisticElection:
                 score.scores["sticky"] = sb.stickiness_score(sid, name)
             except Exception:
                 score.scores["sticky"] = 0.0
+
+            # Score 8: HiFloat8 cone-precision support (Ascend 950 acceleration)
+            # Higher score for HiFloat8-wrapped providers, especially with long context
+            try:
+                hifloat8_enabled = getattr(p, 'hifloat8_supported', False)
+                score.scores["hifloat8"] = 1.0 if hifloat8_enabled else 0.0
+            except Exception:
+                score.scores["hifloat8"] = 0.0
 
             # Apply dynamic weights based on task_type (Pattern 5)
             weights = get_dynamic_weights(task_type)
@@ -566,16 +613,29 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "cache": 0.10,
             "sticky": 0.10,
         }
+    if t == "long_context":
+        return {
+            "latency": 0.10,
+            "quality": 0.20,
+            "cost": 0.08,
+            "capability": 0.15,
+            "freshness": 0.05,
+            "rate_limit": 0.05,
+            "cache": 0.05,
+            "sticky": 0.05,
+            "hifloat8": 0.27,  # HiFloat8 gives 2.60x boost at 128K
+        }
     if t == "reasoning":
         return {
             "latency": 0.05,
-            "quality": 0.40,
+            "quality": 0.38,
             "cost": 0.08,
             "capability": 0.17,
             "freshness": 0.05,
             "rate_limit": 0.05,
             "cache": 0.10,
             "sticky": 0.10,
+            "hifloat8": 0.02,
         }
     if t == "chat":
         return {

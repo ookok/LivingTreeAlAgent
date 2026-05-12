@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Living Canvas · 生命画布</title>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+<!-- LeaferJS Canvas Engine (零依赖, 66KB gzip) -->
+<script src="https://unpkg.com/@leafer-ui/web@1.5.4/dist/leafer-ui.min.js"></script>
+
+<style>
+:root {
+  --bg: #0a0a0f;
+  --panel: #12121a;
+  --border: #1e1e2e;
+  --text: #c8c8d4;
+  --accent: #6c8;
+  --warn: #e8a030;
+  --err: #e05050;
+  --dim: #667;
+  --glow: rgba(102, 204, 136, 0.15);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+header h1 { font-size: 16px; color: var(--accent); }
+header .stats { font-size: 12px; color: var(--dim); }
+header nav a {
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 16px;
+  font-size: 13px;
+}
+header nav a:hover { text-decoration: underline; }
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+#canvas-container:active { cursor: grabbing; }
+#status-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--dim);
+  z-index: 10;
+  white-space: nowrap;
+}
+#hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--dim);
+  font-size: 18px;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+.phase-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  z-index: 10;
+  max-width: 200px;
+}
+.phase-indicator .phase { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌳 Living Canvas · 生命画布</h1>
+  <div class="stats" id="node-count">0 节点 | 0 连线 | 就绪</div>
+  <nav>
+    <a href="/tree/chat">对话</a>
+    <a href="/tree/dashboard">仪表盘</a>
+    <a href="/tree/canvas" style="font-weight:bold">画布</a>
+    <a href="/tree/knowledge">知识库</a>
+  </nav>
+</header>
+
+<div id="canvas-container">
+  <div id="hint">💬 在聊天框输入问题，认知过程将在此可视化</div>
+  <div class="phase-indicator" id="phase-indicator" style="display:none">
+    <div class="phase" id="current-phase"></div>
+    <div id="phase-detail" style="color:var(--dim);font-size:11px"></div>
+  </div>
+  <div id="status-bar">🖱 拖拽移动 | 滚轮缩放 | 右键平移</div>
+</div>
+
+<script src="/js/living-canvas.js"></script>
+</body>
+</html>

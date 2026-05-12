@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LivingTree · 觉醒中</title>
+<style>
+:root{--bg:#08080f;--text:#c8c8d4;--accent:#6c8;--dim:#556;--gold:#da0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px/1.6 system-ui,sans-serif;
+  height:100vh;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+
+#awakening{text-align:center;max-width:400px;padding:40px}
+
+/* Heart — pulsing, growing */
+#heart{
+  font-size:80px;animation:beat 1.2s ease-in-out infinite;
+  filter:drop-shadow(0 0 20px rgba(102,204,136,.3));
+}
+@keyframes beat{
+  0%,30%{transform:scale(1)}
+  15%{transform:scale(1.15)}
+}
+
+/* Title */
+h1{font-size:20px;color:var(--accent);margin:16px 0 4px;letter-spacing:2px}
+#subtitle{font-size:12px;color:var(--dim);margin-bottom:24px}
+
+/* Progress bar */
+#progress-track{
+  width:100%;height:3px;background:var(--border);
+  border-radius:2px;overflow:hidden;margin:16px 0;
+}
+#progress-fill{
+  height:100%;background:linear-gradient(90deg,var(--accent),var(--gold));
+  border-radius:2px;width:0%;transition:width .5s ease;
+}
+
+/* Organ list */
+#organ-list{margin-top:20px}
+.organ-row{
+  display:flex;align-items:center;gap:8px;padding:4px 0;
+  font-size:13px;color:var(--dim);opacity:0;
+  transform:translateY(8px);
+  transition:all .4s ease;
+}
+.organ-row.active{opacity:1;transform:translateY(0);color:var(--text)}
+.organ-row.done{color:var(--accent)}
+.organ-row .icon{width:20px;text-align:center;font-size:14px}
+.organ-row .name{flex:1;text-align:left}
+.organ-row .status{font-size:11px}
+
+/* BPM */
+#bpm-display{font-size:12px;color:var(--dim);margin-top:12px}
+#bpm-value{color:var(--accent);font-weight:600}
+
+/* Tip */
+#tip{font-size:11px;color:var(--dim);margin-top:20px;font-style:italic;opacity:0;transition:opacity 1s}
+#tip.show{opacity:.7}
+
+/* Ready state */
+.ready #heart{animation:none;font-size:100px}
+.ready h1{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div id="awakening">
+  <div id="heart">🌱</div>
+  <h1>LivingTree</h1>
+  <div id="subtitle">数字生命体 · 觉醒中</div>
+
+  <div id="progress-track"><div id="progress-fill"></div></div>
+
+  <div id="organ-list">
+    <div class="organ-row" data-organ="config"><span class="icon">🔐</span><span class="name">解密配置</span><span class="status">···</span></div>
+    <div class="organ-row" data-organ="modules"><span class="icon">📦</span><span class="name">加载器官模块</span><span class="status">···</span></div>
+    <div class="organ-row" data-organ="knowledge"><span class="icon">📚</span><span class="name">初始化知识层</span><span class="status">···</span></div>
+    <div class="organ-row" data-organ="treellm"><span class="icon">🌳</span><span class="name">唤醒路由系统</span><span class="status">···</span></div>
+    <div class="organ-row" data-organ="hub"><span class="icon">🧠</span><span class="name">启动神经中枢</span><span class="status">···</span></div>
+    <div class="organ-row" data-organ="server"><span class="icon">🌐</span><span class="name">开启感知端口</span><span class="status">···</span></div>
+  </div>
+
+  <div id="bpm-display">💓 <span id="bpm-value">0</span> BPM</div>
+  <div id="tip">每个器官都在苏醒...</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// LivingTree Awakening Sequence
+// ═══════════════════════════════════════════════════════
+
+const heart = document.getElementById('heart');
+const progress = document.getElementById('progress-fill');
+const bpmEl = document.getElementById('bpm-value');
+const tip = document.getElementById('tip');
+const organs = ['config','modules','knowledge','treellm','hub','server'];
+
+const tips = [
+  '加载了 520+ 器官模块...',
+  '正在解密安全凭证...',
+  '连接知识图谱节点...',
+  '唤醒树状路由系统...',
+  '体温上升中...',
+  '神经元开始放电...',
+];
+
+// ── Heartbeat animation ──
+let bpm = 0;
+const heartIcons = ['🌱','🌿','🪴','🌳'];
+let iconIdx = 0;
+
+function updateHeart(b) {
+  bpm = Math.round(b);
+  bpmEl.textContent = bpm;
+  if(bpm > 40) iconIdx = 1;
+  if(bpm > 60) iconIdx = 2;
+  if(bpm > 80) iconIdx = 3;
+  heart.textContent = heartIcons[iconIdx];
+}
+
+// ── Organ activation ──
+function activateOrgan(idx) {
+  const row = document.querySelector(`[data-organ="${organs[idx]}"]`);
+  if(!row) return;
+
+  row.classList.add('active');
+  row.querySelector('.status').textContent = '⚡';
+
+  setTimeout(() => {
+    row.classList.add('done');
+    row.classList.remove('active');
+    row.querySelector('.status').textContent = '✅';
+  }, 600 + Math.random() * 400);
+
+  progress.style.width = `${((idx+1)/organs.length)*100}%`;
+}
+
+// ── Show tips ──
+let tipIdx = 0;
+function showTip() {
+  tip.textContent = tips[tipIdx % tips.length];
+  tip.classList.add('show');
+  tipIdx++;
+}
+
+// ── Main sequence ──
+async function awaken() {
+  // Phase 0: First heartbeat
+  await sleep(200);
+  updateHeart(10);
+  showTip();
+
+  // Phase 1-6: Activate organs
+  for(let i = 0; i < organs.length; i++) {
+    await sleep(400 + Math.random() * 300);
+    activateOrgan(i);
+    updateHeart(15 + i * 12);
+    if(i % 2 === 0) showTip();
+  }
+
+  // Phase 7: Final pulse
+  await sleep(500);
+  updateHeart(72);
+  progress.style.width = '100%';
+  document.getElementById('subtitle').textContent = '觉醒完毕';
+
+  // Phase 8: Transition to main UI
+  await sleep(600);
+  document.body.classList.add('ready');
+  heart.textContent = '🌳';
+  document.querySelector('h1').textContent = '我醒了';
+
+  await sleep(800);
+
+  // Redirect to main interface
+  window.location.href = '/tree/living';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Start ──
+awaken();
+
+// ── SSE: Listen for real server events ──
+const evtSource = new EventSource('/tree/sse');
+evtSource.addEventListener('startup', (e) => {
+  try {
+    const data = JSON.parse(e.data);
+    const idx = organs.indexOf(data.organ);
+    if(idx >= 0) activateOrgan(idx);
+    progress.style.width = data.progress + '%';
+  } catch(_) {}
+});
+evtSource.onerror = () => {}; // Silently handle connection issues
+</script>
+</body>
+</html>

@@ -141,8 +141,8 @@ class TreeLLM:
             for candidate in decision.providers:
                 if candidate.name in alive:
                     return candidate.name
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("{}: {}".format("TreeLLM core", e))
 
         # Step 3: Fallback to best success rate
         best = max(alive, key=lambda n: self._stats.get(n, RouterStats(n)).success_rate)
@@ -193,8 +193,8 @@ class TreeLLM:
                             embedding_score = float(scored_sorted[0][1]) if scored_sorted else 0.0
                         else:
                             layer1_candidates_final = list(scored[: max(0, min(len(scored), top_k_per_layer * 2))])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("{}: {}".format("TreeLLM core", e))
         layer1_candidates_final = list(dict.fromkeys(layer1_candidates_final))
 
         # ── Layer 1.5: Foresight integration — lightweight probe (Pattern 4/5) ──
@@ -219,8 +219,8 @@ class TreeLLM:
                         try:
                             from loguru import logger as _logger
                             _logger.debug(f"Layer 1.5 probes: {foresight_insights['top_probes']}")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning("{}: {}".format("TreeLLM core", e))
                         # Boost layer1_candidates_final with probe-preferred names
                         probe_names = {n for n, _ in probe_results}
                         for name in probe_names:
@@ -307,7 +307,8 @@ class TreeLLM:
                         final_result = res
                         layers_used = 3
                         break
-                except Exception:
+                except Exception as e:
+                    logger.warning("{}: {}".format("TreeLLM core", e))
                     continue
         # Fallback if nothing stopped early: pick best by election score or first layer2 candidate
         if final_provider is None:
@@ -339,7 +340,8 @@ class TreeLLM:
                         l4_result = res
                         layers_used = 4
                         break
-                except Exception:
+                except Exception as e:
+                    logger.warning("{}: {}".format("TreeLLM core", e))
                     continue
 
         if l4_provider is None and (final_provider is None or final_result is None):
@@ -355,7 +357,8 @@ class TreeLLM:
                         l4_result = res
                         layers_used = 4
                         break
-                except Exception:
+                except Exception as e:
+                    logger.warning("{}: {}".format("TreeLLM core", e))
                     continue
 
         if l4_provider and l4_result:
@@ -483,8 +486,8 @@ class TreeLLM:
                     feed.election(p.name, 1.0, f"{result.tokens}t")
                     ts = get_trust_scorer()
                     ts.record(p.name, success=True, latency_ms=(time.monotonic() - t0) * 1000)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("{}: {}".format("TreeLLM core", e))
             elif result and (result.error or result.rate_limited):
                 self._record_failure(p.name, result.error, rate_limited=result.rate_limited)
             return result or ProviderResult.empty("No result")
@@ -535,7 +538,8 @@ class TreeLLM:
             if not hasattr(self, '_cache_optimizer'):
                 self._cache_optimizer = CacheOptimizer(max_tokens=64000, cache_budget=0.85)
             return self._cache_optimizer.prepare(messages)
-        except Exception:
+        except Exception as e:
+            logger.warning("{}: {}".format("TreeLLM core", e))
             return messages
 
     # ── Private ──

@@ -101,54 +101,14 @@ def create_app(hub=None, config=None) -> FastAPI:
         app.state.hub = hub
         app.state.life = hub.world if hasattr(hub, "world") else hub
     else:
-        class _DummyHub:
-            _started = True
-            _treellm = None
-            _elected = ""
-
-            def __getattr__(self, name): return None
-
-            async def _init_treellm(self):
-                from ..treellm.core import TreeLLM
-                from ..treellm.providers import create_deepseek_provider, create_longcat_provider, create_openrouter_provider, create_ollama_provider
-                from ..config import get_config
-                cfg = get_config()
-                llm = TreeLLM()
-                dk = cfg.model.deepseek_api_key
-                if dk: llm.add_provider(create_deepseek_provider(dk))
-                lk = cfg.model.longcat_api_key
-                if lk: llm.add_provider(create_longcat_provider(lk))
-                rk = cfg.model.openrouter_api_key
-                if rk: llm.add_provider(create_openrouter_provider(rk, cfg.model.openrouter_default_model))
-                llm.add_provider(create_ollama_provider())
-                self._treellm = llm
-                # Pre-elect on startup
-                if llm.provider_names:
-                    self._elected = await llm.elect(list(llm._providers.keys()))
-                    print(f"[TreeLLM] Pre-elected: {self._elected}")
-
-            async def chat(self, msg, **kw):
-                if self._treellm is None:
-                    await self._init_treellm()
-                if not self._elected:
-                    self._elected = await self._treellm.elect(list(self._treellm._providers.keys()))
-
-                result = await self._treellm.chat([{"role":"user","content":msg}], provider=self._elected)
-                text = result.text if hasattr(result,'text') and not getattr(result,'error','') else ""
-                if not text or len(text) <= 5:
-                    # Re-elect on failure
-                    self._elected = await self._treellm.elect(list(self._treellm._providers.keys()))
-                    if self._elected:
-                        result = await self._treellm.chat([{"role":"user","content":msg}], provider=self._elected)
-                        text = result.text if hasattr(result,'text') and not getattr(result,'error','') else ""
-                if text and len(text) > 5:
-                    return {"session_id":"local","intent":"chat","reflections":[text],"plan":[],"execution_results":[]}
-                return {"session_id":"local","intent":"chat","reflections":["TreeLLM选举未找到可用模型"],"plan":[],"execution_results":[]}
-
-        app.state.hub = _DummyHub()
-        # Pre-init TreeLLM at startup so first chat is fast
+        # No hub provided — create a real IntegrationHub in background
+        from ..integration.hub import IntegrationHub
+        from ..config import get_config
+        _hub = IntegrationHub(config=config or get_config())
+        app.state.hub = _hub
+        app.state.life = _hub.world if hasattr(_hub, "world") else None
         import asyncio as _asyncio
-        _asyncio.ensure_future(app.state.hub._init_treellm())
+        app.state.hub_init_task = _asyncio.ensure_future(_hub.start())
     
     setup_routes(app)
     setup_auth_routes(app)

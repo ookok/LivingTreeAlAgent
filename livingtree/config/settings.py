@@ -38,6 +38,10 @@ class ModelConfig(BaseModel):
     pro_max_tokens: int = 8192
     pro_thinking_enabled: bool = True
 
+    # HiFloat8 — Ascend 950 cone-precision acceleration (2.60x@128K)
+    hifloat8_enabled: bool = False
+    hifloat8_min_context_for_boost: int = 4096  # context tokens threshold
+
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_flash_model: str = "qwen3.5:0.8b"
     ollama_small_model: str = "qwen2.5:1.5b"

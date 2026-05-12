@@ -312,14 +312,16 @@ class ExecutionPipeline:
 
     async def _memorize(self, user_input: str, result: ExecutionResult, config: ModelConfig):
         try:
-            from ..knowledge.struct_mem import get_struct_mem
+            from ..knowledge.struct_mem import get_struct_mem, EventEntry
             mem = get_struct_mem()
             if mem:
-                mem.store(
-                    key=f"exec_{result.trace_id}",
+                mem._buffer.add(EventEntry(
+                    id=f"exec_{result.trace_id}",
+                    session_id="execution_pipeline",
+                    role="system",
                     content=result.output[:500],
-                    metadata={"model": config.model, "latency_ms": result.latency_ms},
-                )
+                    timestamp=str(time.time()),
+                ))
         except Exception:
             pass
 

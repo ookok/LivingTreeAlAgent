@@ -70,8 +70,24 @@ class Provider:
     async def _request_with_retry(
         self, payload: dict, timeout: int = 120, t0: float = 0.0
     ) -> ProviderResult:
-        """HTTP request with exponential backoff on 429 rate limits."""
+        """HTTP request with exponential backoff on 429 rate limits.
+
+        Circuit breaker: checks before call, reports success/failure after.
+        """
+        # Circuit breaker guard
+        try:
+            from .circuit_breaker import get_circuit_breaker
+            breaker = get_circuit_breaker()
+            if not breaker.before_call(self.name):
+                return ProviderResult(
+                    text="", error=f"Circuit breaker OPEN for {self.name}",
+                    tokens=0, prompt_tokens=0,
+                )
+        except Exception:
+            pass
+
         last_error = ""
+        t_start = time.time()
         for attempt in range(RATE_LIMIT_MAX_RETRIES):
             try:
                 async with aiohttp.ClientSession() as s:
@@ -129,7 +145,31 @@ class Provider:
             "max_tokens": max_tokens,
             **kwargs,
         }
-        return await self._request_with_retry(payload, timeout, t0)
+        result = await self._request_with_retry(payload, timeout, t0)
+        # Circuit breaker: report success or failure
+        try:
+            from .circuit_breaker import get_circuit_breaker
+            breaker = get_circuit_breaker()
+            if result.error:
+                breaker.on_failure(self.name, result.error)
+            else:
+                breaker.on_success(self.name, result.latency_ms)
+        except Exception:
+            pass
+        # Token Accountant: record serving layer allocation (prefill + decode)
+        try:
+            from ..api.token_accountant import get_token_accountant, AllocationLayer
+            accountant = get_token_accountant()
+            accountant.record_allocation(
+                layer=AllocationLayer.SERVING,
+                action="prefill" if result.prompt_tokens > result.tokens / 2 else "decode",
+                tokens_spent=result.tokens,
+                actual_benefit=0.8 if not result.error else 0.0,
+                latency_ms=result.latency_ms,
+            )
+        except Exception:
+            pass
+        return result
 
     async def stream(self, messages: list[dict], temperature: float = 0.3,
                      max_tokens: int = 4096, timeout: int = 120,

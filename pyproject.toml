@@ -32,7 +32,7 @@ include = ["livingtree*", "client*", "server*", "app*"]
 livingtree = "livingtree.main:main"
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py313"
 line-length = 100
 exclude = [
     ".git", ".venv", "__pycache__", "*.pyc",

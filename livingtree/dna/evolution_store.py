@@ -280,6 +280,17 @@ class EvolutionStore:
     def extract_lessons(self, session_id: str, reflections: List[str], metadata: Optional[Dict] = None) -> List[EvolutionLesson]:
         if not reflections:
             return []
+
+        # Token Accountant: filter traces by ROI before learning
+        try:
+            from ..api.token_accountant import get_token_accountant, AllocationLayer
+            accountant = get_token_accountant()
+            summary = accountant.session_summary(session_id)
+            if summary.get("avg_benefit", 0) < accountant.prices.min_trace_roi:
+                logger.debug(f"EvolutionStore: SKIP learning (ROI {summary.get('avg_benefit',0):.3f} < {accountant.prices.min_trace_roi})")
+                return []
+        except Exception:
+            pass
         new_lessons: List[EvolutionLesson] = []
 
         pattern_from_meta: Optional[str] = None

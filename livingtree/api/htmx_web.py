@@ -106,6 +106,21 @@ async def tree_dashboard(request: Request):
 async def tree_knowledge(request: Request):
     return _render_template("knowledge.html", request=request)
 
+@htmx_router.get("/canvas", response_class=HTMLResponse)
+async def tree_canvas(request: Request):
+    """Living Canvas — LeaferJS-powered cognitive flow visualization."""
+    return _render_template("canvas.html", request=request)
+
+@htmx_router.get("/living", response_class=HTMLResponse)
+async def tree_living(request: Request):
+    """Living Presence — digital lifeform interaction interface."""
+    return _render_template("living.html", request=request)
+
+@htmx_router.get("/awakening", response_class=HTMLResponse)
+async def tree_awakening(request: Request):
+    """Awakening sequence — beautiful loading experience."""
+    return _render_template("awakening.html", request=request)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  P0: Real LLM Chat — wired through hub

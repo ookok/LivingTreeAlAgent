@@ -2,713 +2,712 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0f">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.ico">
-<title>生命之树 · Living Canvas</title>
-<script src="https://unpkg.com/htmx.org@2.0.4"></script>
-<script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
-<script src="/js/localfs.js"></script>
-<link id="theme-css" rel="stylesheet" href="/tree/theme/dark">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LivingTree · 数字生命体</title>
 <style>
-body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
-:root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--accent:#6c8;--warn:#e8a030;--err:#e05050;--dim:#667}
+:root {
+  --bg: #08080f;--surface: #0f0f18;--border: #1a1a2e;--text: #c8c8d4;
+  --dim: #556;--accent: #6c8;--gold: #da0;--red: #e05050;--blue: #4a8;--purple: #84a;--cyan: #0cc;
+  --code-bg: #0d1117;--card-bg: #111822;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font:13px/1.5 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body{background:var(--bg);color:var(--text);font:14px/1.6 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
-/* ── Header ── */
-header{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
-header h1{font-size:15px;color:var(--accent)}
-header .lc-status{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:8px}
-header .lc-pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:lc-pulse 2s infinite}
-@keyframes lc-pulse{0%,100%{opacity:1}50%{opacity:.3}}
-header sse-swap="xiaoshu" hx-swap="textContent"
-       style="font-size:10px;color:var(--accent);max-width:300px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></header>
+#living-window{flex:1;display:flex;flex-direction:column;max-width:800px;margin:0 auto;width:100%;position:relative}
 
-/* ── Input Bar ── */
-.lc-input-bar{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:8px;flex-shrink:0}
-.lc-input-bar input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;outline:none}
-.lc-input-bar input:focus{border-color:var(--accent)}
-.lc-input-bar button{background:var(--accent);color:var(--bg);border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;white-space:nowrap}
-.lc-input-bar button:hover{opacity:.85}
-.lc-input-bar .lc-mode-hint{font-size:10px;color:var(--dim);align-self:center;white-space:nowrap}
+/* ── Mind Space ── */
+#mind-space{flex:1;overflow-y:auto;padding:16px 20px 0;display:flex;flex-direction:column;gap:10px;contain:strict}
+#mind-space::-webkit-scrollbar{width:4px}
+#mind-space::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
-/* ── Mode selector pills ── */
-.lc-mode-row{background:var(--bg);padding:4px 16px;display:flex;gap:4px;flex-shrink:0;border-bottom:1px solid var(--border);overflow-x:auto}
-.lc-mode-pill{font-size:10px;padding:3px 10px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--dim);cursor:pointer;white-space:nowrap;transition:all .2s}
-.lc-mode-pill:hover{color:var(--text);border-color:var(--accent)}
-.lc-mode-pill.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+/* ── Messages ── */
+.msg{max-width:88%;padding:10px 14px;border-radius:12px;animation:fadeIn .25s ease}
+.msg.user{align-self:flex-end;background:var(--accent);color:var(--bg)}
+.msg.lifeform{align-self:flex-start;background:var(--surface);border:1px solid var(--border)}
+.msg.system{align-self:center;background:transparent;color:var(--dim);font-size:12px;max-width:100%;text-align:center}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── Living Canvas Grid ── */
-.lc-canvas{flex:1;overflow-y:auto;padding:8px;display:grid;gap:8px;grid-template-columns:1fr;grid-auto-rows:minmax(120px,auto)}
-.lc-canvas.cols-2{grid-template-columns:1fr 1fr}
-.lc-canvas.cols-3{grid-template-columns:1fr 1fr 1fr}
+/* ── Rich response cards ── */
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:4px}
+.card-header{font-size:12px;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between}
+.card-type{text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.card-type.code{color:var(--cyan)}.card-type.list{color:var(--gold)}.card-type.table{color:var(--blue)}.card-type.diag{color:var(--purple)}.card-type.warn{color:var(--red)}.card-type.file{color:var(--accent)}
 
-/* ── Region (card) ── */
-.lc-region{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color .3s,opacity .3s;min-height:120px}
-.lc-region:hover{border-color:rgba(100,150,100,.3)}
-.lc-region.lc-chat{border-left:2px solid var(--accent)}
-.lc-region.lc-think{border-left:2px solid #6af}
-.lc-region.lc-plan{border-left:2px solid #fa6}
-.lc-region.lc-execute{border-left:2px solid #f6a}
-.lc-region.lc-health{border-left:2px solid var(--accent)}
-.lc-region.lc-knowledge{border-left:2px solid #6af}
-.lc-region.lc-insight{border-left:2px solid #ff6}
-.lc-region.lc-metrics{border-left:2px solid #6cf}
-.lc-region.lc-tools{border-left:2px solid #fa6}
-.lc-region.lc-memory{border-left:2px solid #c6f}
-.lc-region-inner{display:flex;flex-direction:column;height:100%}
-.lc-region-header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--accent);flex-shrink:0}
-.lc-region-body{flex:1;padding:8px 10px;overflow-y:auto;font-size:12px}
-.lc-region-actions{display:flex;gap:2px}
-.lc-btn-icon{background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;line-height:1}
-.lc-btn-icon:hover{color:var(--text);background:var(--border)}
-.lc-loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:12px;gap:6px}
-.lc-loading::before{content:"";width:10px;height:10px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:lc-spin .6s linear infinite}
-@keyframes lc-spin{to{transform:rotate(360deg)}}
+/* Code */
+pre.code-block{background:var(--code-bg);border-radius:8px;padding:12px;overflow-x:auto;font:13px/1.5 'JetBrains Mono',monospace;max-height:300px;position:relative}
+pre.code-block .copy-btn{position:absolute;top:6px;right:8px;background:var(--surface);border:1px solid var(--border);color:var(--dim);font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity .2s}
+pre.code-block:hover .copy-btn{opacity:1}
+pre.code-block .lang-tag{position:absolute;top:6px;left:8px;font-size:10px;color:var(--dim);text-transform:uppercase}
 
-/* ── Chat messages inside region ── */
-.lc-region .msg{margin-bottom:8px}
-.lc-region .msg .who{font-size:11px;color:var(--accent);margin-bottom:1px}
-.lc-region .msg .text{font-size:12px;line-height:1.5;word-break:break-word}
-.lc-region .msg .msg-meta{font-size:9px;color:var(--dim)}
+/* Table */
+table.data-table{border-collapse:collapse;width:100%;font-size:13px}
+table.data-table th{background:var(--surface);color:var(--dim);font-weight:600;padding:6px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase}
+table.data-table td{padding:5px 10px;border-bottom:1px solid var(--border)}
+table.data-table tr:hover{background:rgba(102,204,136,.05)}
 
-/* ── Knowledge tags ── */
-.lc-kg-tag{font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(100,150,180,.1);color:var(--accent);cursor:pointer;transition:all .2s}
-.lc-kg-tag:hover{background:rgba(100,150,180,.2)}
+/* List */
+.clean-list{list-style:none;padding:0}
+.clean-list li{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.clean-list li:before{content:'▸ ';color:var(--accent);margin-right:6px}
 
-/* ── Tool buttons ── */
-.lc-tool-btn{font-size:10px;padding:4px 8px;border-radius:4px;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .2s}
-.lc-tool-btn:hover{color:var(--text);border-color:var(--accent)}
+/* Diagram placeholder */
+.diagram-box{background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:16px;text-align:center;color:var(--dim);font-size:13px;min-height:80px;display:flex;align-items:center;justify-content:center}
 
-/* ── Footer ── */
-footer{background:var(--panel);border-top:1px solid var(--border);padding:4px 16px;font-size:10px;color:var(--dim);text-align:center;flex-shrink:0}
+/* File attachment */
+.file-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;margin:4px}
+.file-chip .remove{color:var(--red);cursor:pointer;font-weight:bold;font-size:16px}
 
-/* ── Transitions ── */
-.lc-region.htmx-swapping{opacity:0}
-.lc-region.htmx-added{opacity:0;animation:lc-fadein .3s forwards}
-@keyframes lc-fadein{to{opacity:1}}
+/* Collapsible */
+.collapse-toggle{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;width:100%;text-align:left;color:var(--dim);cursor:pointer;font-size:13px}
+.collapse-toggle:hover{color:var(--accent)}
+.collapse-toggle::before{content:'▶ ';display:inline-block;transition:transform .2s;font-size:10px}
+.collapse-toggle.open::before{transform:rotate(90deg)}
+.collapse-content{display:none;padding:8px 0}
+.collapse-content.open{display:block}
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+/* Thinking banner */
+.thinking{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);padding:6px 0;animation:pulse 2s infinite}
+.thinking .icon{font-size:16px}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 
-/* ── Alpine active state for pills ── */
-.lc-mode-pill[data-active]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+/* Aura & Input */
+#input-orbit{position:relative;padding:10px 16px 16px;border-top:1px solid var(--border);background:var(--surface)}
+#aura-ring{position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:calc(100% + 16px);height:5px;border-radius:0 0 6px 6px;transition:background .4s,box-shadow .4s}
+#aura-ring.calm{background:var(--accent);box-shadow:0 0 10px rgba(102,204,136,.25)}
+#aura-ring.curious{background:var(--gold)}
+#aura-ring.thinking{background:var(--blue)}
+#aura-ring.creative{background:var(--purple)}
+#aura-ring.stressed{background:var(--red)}
 
-/* ── SSE indicator ── */
-.htmx-indicator{opacity:0;transition:opacity .2s}
-.htmx-request .htmx-indicator{opacity:1}
+/* Drop zone */
+#drop-zone{display:none;position:absolute;inset:0;background:rgba(102,204,136,.08);border:2px dashed var(--accent);border-radius:14px;z-index:5;align-items:center;justify-content:center;font-size:16px;color:var(--accent)}
+#drop-zone.show{display:flex}
 
-/* ── Streaming content ── */
-.stream-content h1,.stream-content h2,.stream-content h3{color:var(--accent);margin:.5em 0 .2em;font-size:1.1em}
-.stream-content p{margin:.3em 0;line-height:1.5}
-.stream-content code{background:rgba(100,150,100,.1);padding:.1em .3em;border-radius:3px;font-size:.9em}
-.stream-content pre{background:rgba(100,150,100,.06);padding:.6em;border-radius:4px;overflow-x:auto;font-size:.8em}
-.stream-content blockquote{border-left:2px solid var(--accent);padding:.2em .6em;margin:.3em 0;color:var(--dim)}
-.stream-content ul,.stream-content ol{padding-left:1.5em;margin:.3em 0}
-.stream-content table{width:100%;border-collapse:collapse;font-size:.8em}
-.stream-content td,.stream-content th{padding:.2em .5em;border-bottom:1px solid var(--border)}
+#input-area{display:flex;align-items:flex-end;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:8px 12px;transition:border-color .3s;position:relative;z-index:10}
+#input-area:focus-within{border-color:var(--accent)}
+#msg-input{flex:1;background:transparent;border:none;color:var(--text);font-size:15px;resize:none;outline:none;min-height:24px;max-height:120px;font-family:inherit;line-height:1.5}
+#msg-input::placeholder{color:var(--dim)}
+
+#action-bar{display:flex;gap:6px;align-items:center}
+.btn{background:transparent;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:all .2s}
+.btn:hover{color:var(--accent);background:var(--border)}
+.btn.active{color:var(--accent)}.btn.recording{animation:recPulse .8s infinite}
+@keyframes recPulse{0%,100%{color:var(--red)}50%{color:var(--text)}}
+
+/* Copy & Share buttons */
+.msg-actions{display:flex;gap:4px;margin-top:4px;opacity:0;transition:opacity .2s}
+.msg:hover .msg-actions{opacity:1}
+.msg-actions button{background:var(--surface);border:1px solid var(--border);color:var(--dim);font-size:11px;padding:2px 6px;border-radius:4px;cursor:pointer}
+.msg-actions button:hover{color:var(--accent)}
+.share-menu{display:none;position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;z-index:20}
+.share-menu.show{display:block}
+
+/* Folder path input */
+#folder-bar{display:flex;gap:6px;align-items:center;padding:0 0 4px}
+#folder-path{flex:1;background:transparent;border:none;color:var(--dim);font-size:11px;outline:none;font-family:monospace}
+#folder-path::placeholder{color:var(--dim)}
+#folder-result{font-size:11px;color:var(--accent);padding:2px 0;display:none}
+#folder-result.show{display:block}
+
+#file-preview{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0}
+
+#heartbeat{font-size:12px;color:var(--dim);text-align:center;padding:4px 0}
+#stream-hint{position:absolute;top:-26px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--dim);background:var(--surface);padding:2px 10px;border-radius:10px;display:none;white-space:nowrap}
+#stream-hint.show{display:block}
 </style>
 </head>
-<body hx-ext="sse">
+<body>
 
-<!-- Header -->
-<header>
-  <h1>🌳 生命之树 · 小树</h1>
-  <div class="lc-status">
-    <span class="lc-pulse" id="lc-pulse"></span>
-    <span sse-swap="xiaoshu" hx-swap="textContent">🌱 等待连接...</span>
-    <select onchange="switchTheme(this.value)" style="background:var(--panel);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;font-size:10px;margin-left:8px">
-      <option value="dark">🌙 暗色</option>
-      <option value="light">☀ 亮色</option>
-      <option value="kami">📜 Kami</option>
-    </select>
-    <button id="pwa-install-btn" onclick="pwaInstall()" style="display:none;background:var(--accent);color:var(--bg);border:none;padding:3px 10px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:8px">📲 安装应用</button>
-    <button id="fullscreen-btn" onclick="toggleFullscreen()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px">⛶</button>
-    <button id="notify-btn" onclick="requestNotification()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px">🔔</button>
-    <button id="admin-toggle-btn" onclick="toggleAdmin()" style="background:var(--panel);border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;margin-left:4px" title="管理面板">⚙</button>
+<div id="living-window">
+  <div id="mind-space">
+    <div class="msg system">🌳 数字生命体已唤醒 · 可直接输入、拖入文件开始对话</div>
   </div>
-</header>
 
-<!-- Living Presence Layer (breathing + weather + particles) -->
-<div id="living-layer" hx-get="/tree/presence/living-layer" hx-trigger="load" hx-swap="innerHTML"></div>
+  <div id="input-orbit">
+    <div id="aura-ring" class="calm"></div>
+    <div id="stream-hint">⋯ 正在倾听</div>
+    <div id="drop-zone">📂 释放文件以上传</div>
 
-<!-- Anime Persona (floating character) -->
-<div id="xiaoshu-persona" hx-get="/tree/persona" hx-trigger="load" hx-swap="innerHTML"
-     style="position:fixed;bottom:16px;right:16px;z-index:100;pointer-events:none">
-  <div style="font-size:40px;opacity:0.3">🌱</div>
-</div>
-
-<!-- Mode selector pills -->
-<div class="lc-mode-row" id="lc-mode-row"
-     hx-get="/tree/living/mode-pills" hx-trigger="load" hx-swap="innerHTML">
-  <span class="lc-mode-pill active">专注</span>
-  <span class="lc-mode-pill">分屏</span>
-  <span class="lc-mode-pill">三栏</span>
-  <span class="lc-mode-pill">仪表盘</span>
-  <span class="lc-mode-pill">探索</span>
-  <span class="lc-mode-pill">工作区</span>
-  <span class="lc-mode-pill" onclick="startCognition()" id="pill-cognition" style="border-color:#6af">🧠 认知流</span>
-</div>
-
-<!-- Input bar -->
-<div class="lc-input-bar" x-data="{ msg: '', sending: false, currentMode: 'split', isAdmin: false }"
-     x-init="fetch('/api/admin/status').then(r=>r.json()).then(d=>{isAdmin=d.initialized}).catch(()=>{})">
-  <input type="text" x-model="msg" placeholder="告诉小树你想做什么..."
-         @input="debounceEcho(msg)"
-         @keydown.enter="if(!sending && msg.trim()){
-           sending=true;
-           const encoded = encodeURIComponent(msg.trim());
-           document.getElementById('lc-canvas').innerHTML = '<div class=lc-loading>小树正在理解你的需求并生成页面...</div>';
-           fetch('/tree/dynamic?message=' + encoded).then(r => r.text()).then(html => {
-             document.getElementById('lc-canvas').innerHTML = html;
-             htmx.process(document.getElementById('lc-canvas'));
-           });
-           fetch('/tree/chat/msg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg.trim()})})
-             .then(r=>r.text()).then(html=>{
-               const log = document.getElementById('lc-chat-log');
-               if(log){const d=document.createElement('div');d.innerHTML=html;log.appendChild(d.firstElementChild);log.scrollTop=log.scrollHeight}
-               sending=false;msg='';
-             }).catch(()=>{sending=false});
-         }">
-  <button @click="if(!sending && msg.trim()){
-    sending=true;
-    const encoded = encodeURIComponent(msg.trim());
-    document.getElementById('lc-canvas').innerHTML = '<div class=lc-loading>小树正在生成页面...</div>';
-    fetch('/tree/dynamic?message=' + encoded).then(r => r.text()).then(html => {
-      document.getElementById('lc-canvas').innerHTML = html;htmx.process(document.getElementById('lc-canvas'));
-    });
-    fetch('/tree/chat/msg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg.trim()})})
-      .then(r=>r.text()).then(html=>{
-        const log=document.getElementById('lc-chat-log');
-        if(log){const d=document.createElement('div');d.innerHTML=html;log.appendChild(d.firstElementChild);log.scrollTop=log.scrollHeight}
-        sending=false;msg='';
-      }).catch(()=>{sending=false});
-  }">发送</button>
-  <span class="lc-mode-hint">Enter发送 · 布局自动适配</span>
-</div>
-
-<!-- Living Canvas -->
-<div class="lc-canvas cols-2" id="lc-canvas"
-     hx-get="/tree/dynamic" hx-trigger="load" hx-swap="innerHTML">
-  <div class="lc-loading" style="grid-column:1/-1;min-height:300px">🌳 小树正在生成页面...</div>
-</div>
-
-<!-- Cognition Stream Visualization -->
-<div id="cognition-panel" style="display:none;padding:8px">
-  <div style="text-align:center;margin-bottom:12px">
-    <div style="font-size:18px;color:var(--accent)">🧠 认知流 — 看 AI 如何思考</div>
-    <div style="font-size:11px;color:var(--dim)">意图 → 工具 → 记忆 → 技能 → 规划 → 协作 → 执行 → 反思</div>
-  </div>
-  <div id="cog-phases" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">
-  </div>
-  <div id="cog-stream-content" style="margin-top:12px"></div>
-  <button onclick="stopCognition()" style="display:block;margin:12px auto;font-size:12px;padding:6px 16px">返回画布</button>
-</div>
-
-<!-- Business Panels Toggle -->
-<div class="lc-mode-row" style="justify-content:center;gap:8px">
-  <span class="lc-mode-pill" onclick="toggleBizPanel('report')" id="biz-pill-report">📄 行业报告</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('task')" id="biz-pill-task">🔬 挂机任务</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('cost')" id="biz-pill-cost" data-admin="1">💰 费用节省</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('roi')" id="biz-pill-roi" data-admin="1">🧮 ROI计算</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('reach')" id="biz-pill-reach">📱 感官扩展</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('swarm')" id="biz-pill-swarm" data-admin="1">🕸️ 群体智能</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('resilience')" id="biz-pill-resilience" data-admin="1">🛡️ 韧性</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('growth')" id="biz-pill-growth" data-admin="1">🌟 北极星</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('shell')" id="biz-pill-shell">💻 Shell</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('im')" id="biz-pill-im">💬 IM</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('remote')" id="biz-pill-remote">🖥 远控</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('pairing')" id="biz-pill-pairing">🔗 配对</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('creative')" id="biz-pill-creative">🎨 创意</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('qa')" id="biz-pill-qa" data-admin="1">🧪 QA</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('collective')" id="biz-pill-collective" data-admin="1">🧠 CI</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('control')" id="biz-pill-control" data-admin="1">🛡️ 行为</span>
-  <span class="lc-mode-pill" onclick="toggleBizPanel('dpo')" id="biz-pill-dpo" data-admin="1">🎯 DPO</span>
-</div>
-
-<!-- Business Panels Container -->
-<div id="lc-biz-panels" style="padding:0 8px 8px" x-data="{ activeBiz: '' }">
-  <div id="biz-panel-report" style="display:none" 
-       hx-get="/tree/business/report/generate" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-task" style="display:none"
-       hx-get="/tree/business/task/status" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-cost" style="display:none"
-       hx-get="/tree/business/cost/savings" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-roi" style="display:none"
-       hx-get="/tree/business/roi" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-reach" style="display:none"
-       hx-get="/tree/reach/demo" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-swarm" style="display:none"
-       hx-get="/tree/swarm/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-resilience" style="display:none"
-       hx-get="/tree/resilience/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-growth" style="display:none"
-       hx-get="/tree/growth/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-shell" style="display:none"
-       hx-get="/tree/shell/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-im" style="display:none"
-       hx-get="/tree/im/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-remote" style="display:none"
-       hx-get="/tree/remote/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-pairing" style="display:none"
-       hx-get="/tree/pair/all-methods" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-creative" style="display:none">
-    <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
-      <button onclick="loadCreative('timeline')" class="lc-mode-pill active" id="crea-tab-timeline">⏳ 记忆</button>
-      <button onclick="loadCreative('dream')" class="lc-mode-pill" id="crea-tab-dream">🌙 梦境</button>
-      <button onclick="loadCreative('swarm')" class="lc-mode-pill" id="crea-tab-swarm">🗺️ 群体</button>
-      <button onclick="loadCreative('emotion')" class="lc-mode-pill" id="crea-tab-emotion">💭 情绪</button>
-      <button onclick="loadCreative('twin')" class="lc-mode-pill" id="crea-tab-twin">🪞 孪生</button>
-      <button onclick="loadCreative('garden')" class="lc-mode-pill" id="crea-tab-garden">🌿 花园</button>
+    <div id="input-area">
+      <textarea id="msg-input" rows="1" placeholder="输入想法，拖入文件，或语音输入..." autofocus></textarea>
+      <div id="action-bar">
+        <button class="btn" id="btn-file" title="选择文件">📎</button>
+        <button class="btn" id="btn-voice" title="语音输入">🎤</button>
+        <button class="btn" id="btn-send" title="发送">↑</button>
+      </div>
     </div>
-    <div id="creative-content" hx-get="/tree/creative/timeline" hx-trigger="revealed" hx-swap="innerHTML"></div>
+    <div id="file-preview"></div>
+    <div id="folder-bar">
+      <button class="btn" id="btn-folder" style="font-size:12px;padding:4px 10px;display:flex;align-items:center;gap:4px">
+        📂 <span id="folder-label">选择本地项目文件夹</span>
+      </button>
+      <span id="folder-path-display" style="color:var(--accent);font-size:11px;font-family:monospace;display:none"></span>
+      <button class="btn" id="btn-scan" style="font-size:12px;padding:2px 8px;display:none">分析</button>
+    </div>
+    <div id="folder-result"></div>
+    <div id="heartbeat">💓 <b id="bpm">62</b> BPM · <span id="aura-label">平静</span></div>
   </div>
-  <div id="biz-panel-qa" style="display:none"
-       hx-get="/tree/qa/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-collective" style="display:none"
-       hx-get="/tree/collective/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-control" style="display:none"
-       hx-get="/tree/control/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-  <div id="biz-panel-dpo" style="display:none"
-       hx-get="/tree/dpo/panel" hx-trigger="revealed" hx-swap="innerHTML">
-  </div>
-</div>
 </div>
 
-<!-- Footer -->
-<footer>
-  生命之树 · LivingTree v5.0 | Living Canvas — 按需展现 · LLM驱动布局 · 零静态模块
-</footer>
-
-<!-- SSE heartbeat -->
-<div sse-connect="/tree/sse" style="display:none">
-  <div sse-swap="xiaoshu" hx-swap="none"></div>
-</div>
-
-<!-- SSE thought stream → header status -->
-<div sse-connect="/tree/sse/thoughts" style="display:none">
-  <div sse-swap="message" hx-swap="none"
-       hx-on::after-settle="document.querySelector('header .lc-status span:last-child').textContent = event.detail.xhr.responseText"></div>
-</div>
+<input type="file" id="file-input" multiple hidden>
+<input type="file" id="folder-input" webkitdirectory hidden>
 
 <script>
-function switchMode(mode) {
-  document.querySelectorAll('.lc-mode-pill').forEach(p => p.classList.remove('active'));
-  const pills = document.querySelectorAll('.lc-mode-pill');
-  const modeMap = {0:'focus',1:'split',2:'triple',3:'dashboard',4:'explore',5:'workspace'};
-  const modeNames = ['专注','分屏','三栏','仪表盘','探索','工作区'];
-  const idx = modeNames.indexOf(mode) >= 0 ? modeNames.indexOf(mode) : 1;
-  if (pills[idx]) pills[idx].classList.add('active');
+// ═══════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════
+const mind = document.getElementById('mind-space');
+const input = document.getElementById('msg-input');
+const aura = document.getElementById('aura-ring');
+const bpmEl = document.getElementById('bpm');
+const auraLabel = document.getElementById('aura-label');
+const streamHint = document.getElementById('stream-hint');
+const dropZone = document.getElementById('drop-zone');
+const filePreview = document.getElementById('file-preview');
+const fileInput = document.getElementById('file-input');
+const folderInput = document.getElementById('folder-input');
 
-  const canvas = document.getElementById('lc-canvas');
-  const cols = {focus:1,split:2,triple:3,dashboard:3,explore:2,workspace:3};
-  canvas.className = 'lc-canvas cols-' + (cols[mode] || 2);
+let bpm = 62, emotion = 'calm', thoughtCount = 0, silenceTimer = null;
+let attachedFiles = [];
 
-  canvas.innerHTML = '<div class="lc-loading" style="grid-column:1/-1;min-height:200px">切换布局...</div>';
-  fetch('/tree/living/switch-mode', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({mode: mode, context: ''}),
-  }).then(r => r.text()).then(html => {
-    canvas.innerHTML = html;
-    htmx.process(canvas);
+// ═══════════════════════════════════════════════════════
+// Heartbeat
+// ═══════════════════════════════════════════════════════
+function setHeart(b, e) {
+  bpm = Math.round(b); emotion = e;
+  bpmEl.textContent = bpm;
+  const labels = {calm:'平静',curious:'好奇',thinking:'思考中',creative:'创造中',stressed:'紧张'};
+  auraLabel.textContent = labels[e]||e;
+  aura.className = e;
+  if(bpm>100) bpmEl.style.color='var(--red)';
+  else if(bpm>80) bpmEl.style.color='var(--gold)';
+  else bpmEl.style.color='var(--accent)';
+}
+setInterval(()=>setHeart(bpm+(Math.random()-.5)*4,emotion),1500);
+
+// ═══════════════════════════════════════════════════════
+// Message rendering
+// ═══════════════════════════════════════════════════════
+function addMsg(text, type='lifeform') {
+  const el = document.createElement('div');
+  el.className = `msg ${type}`;
+  el.innerHTML = text;
+  mind.appendChild(el);
+  mind.scrollTop = mind.scrollHeight;
+}
+
+function addSystem(text) { addMsg(text, 'system'); }
+
+function addThinking(icon, text) {
+  const old = mind.querySelector('.thinking');
+  if(old) old.remove();
+  const el = document.createElement('div');
+  el.className = 'thinking';
+  el.innerHTML = `<span class="icon">${icon}</span> ${text}`;
+  mind.appendChild(el);
+  mind.scrollTop = mind.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+// Rich response cards
+// ═══════════════════════════════════════════════════════
+function addCard(type, title, content, extra={}) {
+  const el = document.createElement('div');
+  el.className = 'msg lifeform';
+
+  let body = '';
+  switch(type) {
+    case 'code':
+      const lang = extra.lang || '';
+      body = `<div class="card"><div class="card-header"><span class="card-type code">📄 ${title||'Code'}</span><span>${lang}</span></div>
+              <pre class="code-block"><span class="lang-tag">${lang}</span><button class="copy-btn" onclick="copyCode(this)">复制</button><code>${escapeHtml(content)}</code></pre></div>`;
+      break;
+    case 'list':
+      const items = Array.isArray(content) ? content : content.split('\n').filter(Boolean);
+      body = `<div class="card"><div class="card-header"><span class="card-type list">📋 ${title||'列表'}</span></div>
+              <ul class="clean-list">${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+      break;
+    case 'table':
+      body = `<div class="card"><div class="card-header"><span class="card-type table">📊 ${title||'表格'}</span></div>${content}</div>`;
+      break;
+    case 'warn':
+      body = `<div class="card"><div class="card-header"><span class="card-type warn">⚠ ${title||'警告'}</span></div><p>${content}</p></div>`;
+      break;
+    case 'diagram':
+      body = `<div class="card"><div class="card-header"><span class="card-type diag">📐 ${title||'图表'}</span></div><div class="diagram-box">${content||'图表渲染区域'}</div></div>`;
+      break;
+    case 'file':
+      body = `<div class="card"><div class="card-header"><span class="card-type file">📁 ${title||'文件'}</span></div><p>${content}</p></div>`;
+      break;
+    default:
+      body = content;
+  }
+  el.innerHTML = body;
+  mind.appendChild(el);
+  mind.scrollTop = mind.scrollHeight;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function copyCode(btn) {
+  const code = btn.parentElement.querySelector('code').textContent;
+  navigator.clipboard.writeText(code).then(()=>{
+    btn.textContent='已复制!';setTimeout(()=>btn.textContent='复制',1500);
   });
 }
 
-var _activeBizPanel = '';
-function toggleBizPanel(panel) {
-  var panels = ['report','task','cost','roi','reach','swarm','resilience','growth','shell','im','remote','pairing','creative','qa','collective','control','dpo'];
-  var wasActive = _activeBizPanel === panel;
+// ═══════════════════════════════════════════════════════
+// File handling
+// ═══════════════════════════════════════════════════════
+function handleFiles(files) {
+  for(const f of files) {
+    if(attachedFiles.find(x=>x.name===f.name)) continue;
+    attachedFiles.push(f);
+    const chip = document.createElement('span');
+    chip.className = 'file-chip';
+    chip.innerHTML = `${f.name} <span class="remove" data-name="${f.name}">×</span>`;
+    filePreview.appendChild(chip);
+  }
+  updateFileHint();
+}
 
-  panels.forEach(function(p) {
-    var el = document.getElementById('biz-panel-' + p);
-    var pill = document.getElementById('biz-pill-' + p);
-    if (el) el.style.display = 'none';
-    if (pill) pill.classList.remove('active');
-  });
+function removeFile(name) {
+  attachedFiles = attachedFiles.filter(f=>f.name!==name);
+  filePreview.querySelectorAll('.file-chip').forEach(c=>{if(c.querySelector('.remove').dataset.name===name)c.remove()});
+  updateFileHint();
+}
 
-  if (!wasActive) {
-    var el = document.getElementById('biz-panel-' + panel);
-    var pill = document.getElementById('biz-pill-' + panel);
-    if (el) {
-      el.style.display = 'block';
-      htmx.trigger(el, 'revealed');
-      if (panel === 'report' && !el.innerHTML.includes('form')) {
-        el.innerHTML = '<div class="card">' +
-          '<h2>📄 一键生成行业报告</h2>' +
-          '<p style="color:var(--dim);font-size:11px;margin-bottom:8px">选择报告类型，输入项目数据，自动生成专业报告</p>' +
-          '<form onsubmit="event.preventDefault();generateReport(this)">' +
-          '<select name="template_type" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">' +
-          '<option value="环评报告">🌍 环评报告 (EIA)</option>' +
-          '<option value="应急预案">🚨 应急预案</option>' +
-          '<option value="验收报告">✅ 验收报告</option>' +
-          '<option value="可行性研究">📊 可行性研究</option>' +
-          '</select>' +
-          '<input name="project_name" placeholder="项目名称" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">' +
-          '<textarea name="raw_text" rows="4" placeholder="输入项目关键数据和背景信息..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:12px;resize:vertical"></textarea>' +
-          '<button type="submit" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">📄 生成报告</button>' +
-          '</form></div>';
-      }
-      if (panel === 'task' && !el.innerHTML.includes('form')) {
-        el.innerHTML = '<div class="card">' +
-          '<h2>🔬 挂机长任务</h2>' +
-          '<p style="color:var(--dim);font-size:11px;margin-bottom:8px">输入任务目标，小树通宵为你工作，早上看结果</p>' +
-          '<form onsubmit="event.preventDefault();startTask(this)">' +
-          '<textarea name="goal" rows="3" placeholder="例如: 收集2024年AI行业融资数据并汇总成报告..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:12px;resize:vertical"></textarea>' +
-          '<button type="submit" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">🔬 启动挂机任务</button>' +
-          '</form></div>';
-      }
-    }
-    if (pill) pill.classList.add('active');
-    _activeBizPanel = panel;
+function updateFileHint() {
+  if(attachedFiles.length) {
+    input.placeholder = `已附加 ${attachedFiles.length} 个文件。输入你的问题...`;
   } else {
-    _activeBizPanel = '';
+    input.placeholder = '输入想法，拖入文件，或语音输入...';
   }
 }
 
-function generateReport(form) {
-  var fd = new FormData(form);
-  var panel = document.getElementById('biz-panel-report');
-  panel.innerHTML = '<div class="card"><div class="lc-loading">小树正在生成报告...</div></div>';
-  fetch('/tree/business/report/generate', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(Object.fromEntries(fd)),
-  }).then(r => r.text()).then(html => { panel.innerHTML = html; });
-}
-
-function startTask(form) {
-  var fd = new FormData(form);
-  var panel = document.getElementById('biz-panel-task');
-  panel.innerHTML = '<div class="card"><div class="lc-loading">小树正在规划任务...</div></div>';
-  fetch('/tree/business/task/start', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(Object.fromEntries(fd)),
-  }).then(r => r.text()).then(html => { panel.innerHTML = html; });
-}
-
-function distributeSwarmTask(form) {
-  var fd = new FormData(form);
-  var result = document.getElementById('swarm-result');
-  result.innerHTML = '<div style="color:var(--accent);font-size:12px">⚡ 正在向群体节点分发任务...</div>';
-  fetch('/api/swarm/status').then(r => r.json()).then(st => {
-    var endpoints = (st.peers || []).map(function(p) { return p.endpoint; });
-    if (!endpoints.length) { result.innerHTML = '<div style="color:var(--warn)">无可用节点</div>'; return; }
-    fetch('/api/swarm/task/distribute', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({goal: fd.get('goal'), peers: endpoints}),
-    }).then(r => r.json()).then(data => {
-      result.innerHTML = '<div style="font-size:11px;color:var(--accent)">' +
-        '✅ 分发完成: ' + data.completed + '/' + data.total_subtasks + ' 个子任务</div>';
-    });
-  });
-}
-
-// ── Cognition Stream ──
-var _cogEventSource = null;
-var _cogPhases = {};
-
-function startCognition() {
-  var msg = document.querySelector('.lc-input-bar input').value.trim();
-  if (!msg) { msg = prompt('输入你想做的事，观察 AI 的完整思考过程:'); }
-  if (!msg) return;
-
-  document.getElementById('lc-canvas').style.display = 'none';
-  var panel = document.getElementById('cognition-panel');
-  panel.style.display = 'block';
-  document.getElementById('cog-phases').innerHTML = '';
-  document.getElementById('cog-stream-content').innerHTML = '';
-  document.getElementById('pill-cognition').classList.add('active');
-  _cogPhases = {};
-
-  _cogEventSource = new EventSource('/tree/sse/cognition?message=' + encodeURIComponent(msg));
-
-  _cogEventSource.addEventListener('phase', function(e) {
-    var d = JSON.parse(e.data);
-    var phaseId = d.phase;
-    if (!_cogPhases[phaseId]) {
-      _cogPhases[phaseId] = d;
-      renderPhaseCard(phaseId, d);
-    } else {
-      _cogPhases[phaseId] = d;
-      updatePhaseCard(phaseId, d);
-    }
-  });
-
-  _cogEventSource.addEventListener('cog-complete', function(e) {
-    var d = JSON.parse(e.data);
-    document.getElementById('cog-stream-content').innerHTML =
-      '<div class="card" style="text-align:center;border:1px solid var(--accent)">' +
-      '<h2>✅ 认知流完成</h2>' +
-      '<p style="font-size:11px;color:var(--dim)">意图: ' + (d.intent || 'general') +
-      ' · 成功率: ' + ((d.success_rate || 0) * 100).toFixed(0) + '%</p>' +
-      '<p style="font-size:10px;color:var(--dim)">' + (d.session_id || '') + '</p></div>';
-    closeCogSource();
-  });
-
-  _cogEventSource.addEventListener('cog-error', function(e) {
-    document.getElementById('cog-stream-content').innerHTML =
-      '<div class="card" style="color:var(--err)"><p>认知流出错</p></div>';
-    closeCogSource();
-  });
-
-  _cogEventSource.onerror = function() { closeCogSource(); };
-}
-
-function closeCogSource() {
-  if (_cogEventSource) { _cogEventSource.close(); _cogEventSource = null; }
-}
-
-function stopCognition() {
-  closeCogSource();
-  document.getElementById('cognition-panel').style.display = 'none';
-  document.getElementById('lc-canvas').style.display = '';
-  document.getElementById('pill-cognition').classList.remove('active');
-}
-
-var _phaseIcons = {
-  intent: '🧠', tools: '🔧', memory: '🧩', skills: '🎯',
-  planning: '📋', agents: '👥', execution: '⚡', reflection: '🪞', quality: '✅'
-};
-
-function renderPhaseCard(phaseId, d) {
-  var icon = d.icon || _phaseIcons[phaseId] || '🔄';
-  var statusColor = d.status === 'done' ? 'var(--accent)' : 'var(--warn)';
-  var statusIcon = d.status === 'done' ? '✅' : d.status === 'running' ? '🔄' : '⏳';
-
-  var detailHtml = '';
-  if (phaseId === 'intent' && d.intent) {
-    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px">' +
-      d.intent + (d.domain ? ' · ' + d.domain : '') +
-      (d.confidence ? ' · ' + (d.confidence*100).toFixed(0) + '%' : '') + '</div>';
-  } else if (phaseId === 'tools' && d.tools) {
-    detailHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">' +
-      (d.tools || []).map(function(t) {
-        return '<span style="font-size:10px;padding:2px 6px;background:rgba(100,150,180,.1);border-radius:8px;color:var(--accent)">' + t.name + '</span>';
-      }).join('') + '</div>';
-  } else if (phaseId === 'memory' && d.entries > 0) {
-    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px">召回 ' + d.entries + ' 条记忆</div>';
-  } else if (phaseId === 'skills' && d.skills) {
-    detailHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">' +
-      (d.skills || []).slice(0,6).map(function(s) {
-        return '<span style="font-size:10px;padding:2px 6px;background:rgba(150,150,100,.1);border-radius:8px;color:#fa6">' + s + '</span>';
-      }).join('') + '</div>';
-  } else if (phaseId === 'planning' && d.steps) {
-    detailHtml = '<div style="margin-top:4px;font-size:10px;line-height:1.5">' +
-      (d.steps || []).map(function(s, i) {
-        return '<div style="padding:2px 0">' + s.num + '. ' + s.name + '</div>';
-      }).join('') + '</div>';
-  } else if (phaseId === 'agents' && d.roles_active) {
-    detailHtml = '<div style="font-size:10px;color:var(--accent);margin-top:4px">' + d.roles_active + ' 个专家角色协作中</div>';
-  } else if (phaseId === 'execution' && d.result) {
-    detailHtml = '<div style="font-size:10px;color:var(--dim);margin-top:4px;max-height:80px;overflow-y:auto">' + (d.result || '').substring(0, 200) + '</div>';
-  } else if (phaseId === 'reflection' && d.reflections) {
-    detailHtml = '<div style="margin-top:4px;font-size:10px;line-height:1.4;color:var(--dim)">' +
-      (d.reflections || []).map(function(r) { return '<div style="margin:2px 0">💭 ' + r.substring(0, 120) + '</div>'; }).join('') + '</div>';
-  }
-
-  var card = document.createElement('div');
-  card.id = 'cog-card-' + phaseId;
-  card.className = 'card';
-  card.style.cssText = 'border-left:3px solid ' + statusColor + ';animation:lc-fadein .3s;min-width:250px';
-  card.innerHTML =
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-    '<span style="font-size:20px">' + icon + '</span>' +
-    '<span style="font-size:13px;font-weight:600;color:var(--text)">' + (d.label || phaseId) + '</span>' +
-    '<span style="margin-left:auto;font-size:11px">' + statusIcon + '</span>' +
-    '</div>' + detailHtml;
-
-  document.getElementById('cog-phases').appendChild(card);
-}
-
-function updatePhaseCard(phaseId, d) {
-  var card = document.getElementById('cog-card-' + phaseId);
-  if (!card) return;
-  var statusColor = d.status === 'done' ? 'var(--accent)' : 'var(--warn)';
-  var statusIcon = d.status === 'done' ? '✅' : d.status === 'running' ? '🔄' : '⏳';
-  card.style.borderLeftColor = statusColor;
-  var statusSpan = card.querySelector('span:last-child');
-  if (statusSpan && statusSpan.textContent !== statusIcon) statusSpan.textContent = statusIcon;
-}
-
-document.querySelectorAll('.lc-mode-pill').forEach((pill, i) => {
-  const modes = ['focus','split','triple','dashboard','explore','workspace'];
-  pill.addEventListener('click', () => switchMode(modes[i]));
+filePreview.addEventListener('click', e=>{
+  if(e.target.classList.contains('remove')) removeFile(e.target.dataset.name);
 });
 
-function switchTheme(name) {
-  document.getElementById('theme-css').href = '/tree/theme/' + name;
-  localStorage.setItem('lt-theme', name);
-}
-(function() {
-  var saved = localStorage.getItem('lt-theme') || 'dark';
-  document.getElementById('theme-css').href = '/tree/theme/' + saved;
-  var sel = document.querySelector('header select');
-  if (sel) sel.value = saved;
-})();
+btnFile.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',()=>handleFiles(fileInput.files));
 
-function execShell() {
-  var cmd = document.getElementById('shell-cmd').value.trim();
-  if (!cmd) return;
-  var out = document.getElementById('shell-output');
-  out.innerHTML = '<div style="color:var(--accent);font-size:12px">▶ ' + cmd.substring(0, 60) + '...</div>';
-  fetch('/tree/shell/exec', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({command: cmd, mount: localStorage.getItem('lt-mount') || ''}),
-  }).then(r => r.text()).then(html => { out.innerHTML = html; });
-}
+// Drag & drop
+document.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('show')});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget||e.relatedTarget===document.documentElement)dropZone.classList.remove('show')});
+document.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('show');
+  const items = e.dataTransfer.items;
+  if(items) {
+    const entries = [];
+    for(const item of items) {
+      if(item.kind==='file') entries.push(item.webkitGetAsEntry?item.webkitGetAsEntry():item.getAsFile());
+    }
+    processEntries(entries);
+  }
+});
 
-function quickExec(cmd) {
-  document.getElementById('shell-cmd').value = cmd;
-  execShell();
-}
-
-function mountFolder() {
-  var path = document.getElementById('shell-mount-path').value.trim();
-  if (!path) return;
-  var name = path.replace(/\\/g, '/').split('/').pop();
-  fetch('/tree/shell/mount', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({path: path, name: name}),
-  }).then(r => r.text()).then(html => {
-    document.getElementById('mount-result').innerHTML = html;
-    localStorage.setItem('lt-mount', name);
-  });
+async function processEntries(entries) {
+  const files = [];
+  for(const entry of entries) {
+    if(entry.isFile) {
+      files.push(await getFile(entry));
+    } else if(entry.isDirectory) {
+      const subFiles = await readDir(entry);
+      files.push(...subFiles);
+    }
+  }
+  handleFiles(files);
 }
 
-/* ═══ Interactive Tool Canvas ═══ */
-var _drawStates={};
-function initDrawCanvas(id){var c=document.getElementById(id);if(!c)return;var ctx=c.getContext('2d');_drawStates[id]={ctx:ctx,drawing:false,color:'#000',width:2};c.onmousedown=function(e){_drawStates[id].drawing=true;_draw(e,id)};c.onmouseup=c.onmouseleave=function(){_drawStates[id].drawing=false;_drawStates[id].ctx.beginPath()};c.onmousemove=function(e){_draw(e,id)};c.ontouchstart=function(e){e.preventDefault();_drawStates[id].drawing=true;_drawTouch(e,id)};c.ontouchmove=function(e){e.preventDefault();_drawTouch(e,id)};c.ontouchend=function(){_drawStates[id].drawing=false}}
-function _draw(e,id){var s=_drawStates[id];if(!s||!s.drawing)return;var r=s.ctx.canvas.getBoundingClientRect();s.ctx.lineWidth=s.width;s.ctx.lineCap='round';s.ctx.strokeStyle=s.color;s.ctx.lineTo(e.clientX-r.left,e.clientY-r.top);s.ctx.stroke();s.ctx.beginPath();s.ctx.moveTo(e.clientX-r.left,e.clientY-r.top)}
-function _drawTouch(e,id){var s=_drawStates[id];if(!s||!s.drawing)return;var r=s.ctx.canvas.getBoundingClientRect();var t=e.touches[0];s.ctx.lineWidth=s.width;s.ctx.lineCap='round';s.ctx.strokeStyle=s.color;s.ctx.lineTo(t.clientX-r.left,t.clientY-r.top);s.ctx.stroke();s.ctx.beginPath();s.ctx.moveTo(t.clientX-r.left,t.clientY-r.top)}
-function setDrawColor(id,c){if(_drawStates[id])_drawStates[id].color=c}
-function setDrawWidth(id,w){if(_drawStates[id])_drawStates[id].width=w}
-function clearCanvas(id){var c=document.getElementById(id);if(c)c.getContext('2d').clearRect(0,0,c.width,c.height)}
-function runCalc(id){var e=document.getElementById('calc-expr-'+id).value,r=document.getElementById('calc-result-'+id),h=document.getElementById('calc-history-'+id);try{var s=e.replace(/sqrt\(/g,'Math.sqrt(').replace(/\^/g,'**');var v=eval(s);r.textContent=e+' = '+v;h.textContent+=e+' = '+v+'\n'}catch(err){r.textContent='错误: '+err.message}}
-function insertCalc(id,op){var e=document.getElementById('calc-expr-'+id);e.value+=op;e.focus()}
-function runCode(id){var c=document.getElementById('code-editor-'+id).value,l=document.getElementById('code-lang-'+id).value,o=document.getElementById('code-output-'+id);o.style.display='block';o.textContent='运行中...';fetch('/tree/shell/exec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:l==='python'?'python -c '+JSON.stringify(c):l==='bash'?c:'node -e '+JSON.stringify(c)})}).then(r=>r.text()).then(h=>{var t=document.createElement('div');t.innerHTML=h;var p=t.querySelector('pre');o.textContent=p?p.textContent:'完成'})}
-function collectFormData(id){var d={};var c=document.getElementById(id);if(c){c.querySelectorAll('input,select,textarea').forEach(function(e){if(e.name)d[e.name]=e.value})}return d}
-function collectTableData(id){var r=[];var c=document.getElementById('tool-'+id);if(c){c.querySelectorAll('tr').forEach(function(t){var cells=[];t.querySelectorAll('input').forEach(function(i){cells.push(i.value)});if(cells.length)r.push(cells)})}submitToolResult(id,'table',{rows:r})}
-function submitToolResult(id,type,data){var c=document.getElementById('tool-'+id);fetch('/tree/tools/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offer_id:id,tool_type:type,result:data})}).then(r=>r.text()).then(h=>{var l=document.getElementById('lc-chat-log')||document.getElementById('chat-log');if(l){var d=document.createElement('div');d.innerHTML=h;l.appendChild(d.firstElementChild);l.scrollTop=l.scrollHeight}if(c){c.style.opacity='0.5';setTimeout(function(){if(c)c.remove()},2000)}})}
+function getFile(entry) {
+  return new Promise(resolve=>entry.file(resolve));
+}
 
-/* ═══ Performance: Stream Render ═══ */
-var _streamRender={buffer:'',lastUpdate:0,throttleMs:100,targetEl:null,
-  init:function(id,ms){this.targetEl=document.getElementById(id);this.throttleMs=ms||100;this.buffer='';this.lastUpdate=0},
-  update:function(html,force){this.buffer=html;var n=Date.now();if(!force&&n-this.lastUpdate<this.throttleMs)return;if(this.targetEl){this.targetEl.innerHTML=this.buffer;this.targetEl.scrollTop=this.targetEl.scrollHeight}this.lastUpdate=n},
-  flush:function(){this.update(this.buffer,true)}
+async function readDir(dirEntry) {
+  const files = [];
+  const reader = dirEntry.createReader();
+  const entries = await new Promise(resolve=>reader.readEntries(resolve));
+  for(const entry of entries) {
+    if(entry.isFile) files.push(await getFile(entry));
+    else if(entry.isDirectory) files.push(...await readDir(entry));
+  }
+  return files;
+}
+
+// ═══════════════════════════════════════════════════════
+// Voice input
+// ═══════════════════════════════════════════════════════
+let isRecording = false;
+const btnVoice = document.getElementById('btn-voice');
+
+btnVoice.addEventListener('click',async()=>{
+  const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR) return addSystem('🎤 语音需要Chrome浏览器');
+  if(isRecording){isRecording=false;btnVoice.classList.remove('active','recording');return}
+  const rec = new SR();rec.lang='zh-CN';rec.interimResults=true;rec.continuous=true;
+  rec.onstart=()=>{isRecording=true;btnVoice.classList.add('active','recording');addSystem('🎤 聆听中...')};
+  rec.onresult=e=>{let t='';for(let i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;input.value=t};
+  rec.onerror=e=>{isRecording=false;btnVoice.classList.remove('active','recording')};
+  rec.onend=()=>{isRecording=false;btnVoice.classList.remove('active','recording')};
+  rec.start();
+});
+
+// ═══════════════════════════════════════════════════════
+// Send message
+// ═══════════════════════════════════════════════════════
+const thinkStages = [
+  {d:200,i:'💓',t:'听到了...',b:72,e:'curious'},
+  {d:400,i:'🌈',t:'理解意图中...',b:78,e:'thinking'},
+  {d:600,i:'🧠',t:'调动知识层...',b:85,e:'thinking'},
+  {d:800,i:'💭',t:'推理中...',b:90,e:'creative'},
+  {d:1000,i:'📝',t:'组织回复...',b:75,e:'calm'},
+];
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if(!text && !attachedFiles.length) return;
+
+  // User message
+  let userMsg = text;
+  if(attachedFiles.length) {
+    userMsg += `\n📎 附件: ${attachedFiles.map(f=>f.name).join(', ')}`;
+  }
+  addMsg(userMsg, 'user');
+  thoughtCount++;
+
+  // Show stream hint
+  streamHint.classList.add('show');
+  streamHint.textContent = `⋯ 已接收 ${thoughtCount} 条`;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Check if user wants response
+  const wantsResponse = /[？?]|你觉得|帮我|怎么样|分析|代码|文档/.test(text) || attachedFiles.length > 0;
+
+  if(wantsResponse || thoughtCount >= 2) {
+    streamHint.classList.remove('show');
+    thoughtCount = 0;
+
+    // Progressive thinking
+    for(const s of thinkStages) {
+      await new Promise(r=>setTimeout(r,s.d));
+      addThinking(s.i, s.t);
+      setHeart(s.b, s.e);
+    }
+
+    // Remove thinking
+    const t = mind.querySelector('.thinking');
+    if(t) t.remove();
+
+    // Generate rich response based on content type
+    const resp = generateResponse(text, attachedFiles);
+    for(const card of resp) {
+      addCard(card.type, card.title, card.content, card.extra||{});
+    }
+
+    // Clear files after processing
+    attachedFiles = [];
+    filePreview.innerHTML = '';
+    updateFileHint();
+    setHeart(62, 'calm');
+  } else {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(async () => {
+      if(thoughtCount > 0) {
+        streamHint.classList.remove('show');
+        thoughtCount = 0;
+        for(const s of thinkStages) {
+          await new Promise(r=>setTimeout(r,s.d));
+          addThinking(s.i, s.t);setHeart(s.b, s.e);
+        }
+        const t = mind.querySelector('.thinking');if(t) t.remove();
+        const resp = generateResponse(text, attachedFiles);
+        for(const card of resp) addCard(card.type, card.title, card.content, card.extra||{});
+        attachedFiles = [];filePreview.innerHTML = '';updateFileHint();
+        setHeart(62, 'calm');
+      }
+    }, 3000);
+  }
+}
+
+function generateResponse(text, files) {
+  const cards = [];
+  const t = text.toLowerCase();
+
+  // File analysis
+  if(files.length) {
+    cards.push({type:'file',title:'文件分析',content:`分析了 ${files.length} 个文件：${files.map(f=>f.name).join('、')}`});
+    if(files.some(f=>f.name.endsWith('.py')||f.name.endsWith('.js')||f.name.endsWith('.ts'))) {
+      cards.push({type:'code',title:'代码结构预览',content:'# 正在分析代码结构...\ndef analyze_code():\n    pass',extra:{lang:'python'}});
+    }
+  }
+
+  // Code request
+  if(/代码|code|函数|function|class|实现/.test(t)) {
+    cards.push({type:'code',title:'代码方案',content:'def solution():\n    """基于你的需求生成的代码"""\n    pass',extra:{lang:'python'}});
+  }
+
+  // List request
+  if(/列表|推荐|哪些|几个/.test(t)) {
+    cards.push({type:'list',title:'推荐列表',content:['选项一：基于当前上下文分析','选项二：考虑性能和成本','选项三：未来可扩展性']});
+  }
+
+  // Warning
+  if(/错误|bug|error|fix|修复/.test(t)) {
+    cards.push({type:'warn',title:'需要注意',content:'检测到潜在问题。建议先进行代码审查，确保没有副作用。'});
+  }
+
+  // Architecture
+  if(/架构|设计|结构|architecture/.test(t)) {
+    cards.push({type:'diagram',title:'架构图','📐 架构图将在完整环境中渲染'});
+  }
+
+  // Default: smart text response
+  if(!cards.length) {
+    cards.push({type:'text',title:'',content:'我理解你的问题。基于当前知识库和上下文，我的分析是：这是一个需要多维度考虑的问题。建议从以下几个方面入手...'});
+  }
+
+  return cards;
+}
+
+// ═══════════════════════════════════════════════════════
+// Events
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-send').addEventListener('click',sendMessage);
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,120)+'px'});
+
+// Init
+const h = new Date().getHours();
+addSystem(`🌳 数字生命体已唤醒 · ${h<6?'深夜':h<12?'早上':h<18?'下午':'晚上'}好 · 可直接输入、拖入文件、或输入本地文件夹路径`);
+setHeart(62,'calm');
+input.focus();
+
+// ═══════════════════════════════════════════════════════
+// Copy individual message
+// ═══════════════════════════════════════════════════════
+mind.addEventListener('click', e => {
+  if(e.target.classList.contains('copy-msg-btn')) {
+    const msgEl = e.target.closest('.msg');
+    const text = msgEl.textContent.replace(/复制|分享|语音/g,'').trim();
+    navigator.clipboard.writeText(text);
+    e.target.textContent='已复制';setTimeout(()=>e.target.textContent='复制',1500);
+  }
+  if(e.target.classList.contains('share-msg-btn')) {
+    const msgEl = e.target.closest('.msg');
+    const text = msgEl.textContent.trim();
+    if(navigator.share){navigator.share({text:text})}else{
+      navigator.clipboard.writeText(text);
+      addSystem('📋 已复制到剪贴板（浏览器不支持原生分享）');
+    }
+  }
+});
+
+// Add copy/share buttons to all lifeform messages after they appear
+const msgObserver = new MutationObserver(mutations => {
+  for(const m of mutations) {
+    for(const node of m.addedNodes) {
+      if(node.classList && node.classList.contains('lifeform') && !node.querySelector('.msg-actions')) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        actions.innerHTML = '<button class="copy-msg-btn">复制</button><button class="share-msg-btn">分享</button>';
+        node.appendChild(actions);
+      }
+    }
+  }
+});
+msgObserver.observe(mind, {childList:true, subtree:true});
+
+// ═══════════════════════════════════════════════════════
+// Copy entire conversation
+// ═══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if(e.ctrlKey && e.key==='c' && document.activeElement===document.body) {
+    const allMsgs = mind.querySelectorAll('.msg:not(.system)');
+    const text = Array.from(allMsgs).map(m=>{
+      const role = m.classList.contains('user')?'用户':'🌳';
+      return `${role}: ${m.textContent.trim()}`;
+    }).join('\n\n');
+    if(text) {
+      navigator.clipboard.writeText(text);
+      addSystem('📋 全部对话已复制 (' + allMsgs.length + ' 条消息)');
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// Local folder selection (Native File System API)
+// ═══════════════════════════════════════════════════════
+const btnFolder = document.getElementById('btn-folder');
+const folderLabel = document.getElementById('folder-label');
+const folderPathDisplay = document.getElementById('folder-path-display');
+const btnScan = document.getElementById('btn-scan');
+const folderResult = document.getElementById('folder-result');
+let selectedFolderPath = '';
+let selectedFolderHandle = null;
+
+btnFolder.addEventListener('click', async () => {
+  try {
+    // Try Native File System API first
+    if('showDirectoryPicker' in window) {
+      const handle = await window.showDirectoryPicker();
+      selectedFolderHandle = handle;
+      selectedFolderPath = handle.name;
+    } else {
+      // Fallback: use webkitdirectory input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.webkitdirectory = true;
+      input.onchange = () => {
+        if(input.files.length > 0) {
+          selectedFolderPath = input.files[0].webkitRelativePath.split('/')[0];
+          showFolderSelected();
+        }
+      };
+      input.click();
+      return;
+    }
+  } catch(e) {
+    // User cancelled or not supported → fallback to manual input
+    const path = prompt('请输入本地项目文件夹的完整路径 (如 D:\\myproject)：');
+    if(path) { selectedFolderPath = path; showFolderSelected(); }
+    return;
+  }
+  if(selectedFolderPath) showFolderSelected();
+});
+
+function showFolderSelected() {
+  folderLabel.textContent = '已选择';
+  folderPathDisplay.textContent = selectedFolderPath;
+  folderPathDisplay.style.display = 'inline';
+  btnScan.style.display = 'inline';
+}
+
+async function scanFolder() {
+  if(!selectedFolderPath) return;
+  folderResult.classList.remove('show');
+  addSystem('📂 正在分析: ' + selectedFolderPath);
+  setHeart(75, 'thinking');
+  try {
+    // Send full path to server for local analysis
+    const payload = selectedFolderHandle
+      ? { path: selectedFolderPath, mode: 'handle' }
+      : { path: selectedFolderPath };
+    const res = await fetch('/api/local/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(res.ok) {
+      folderResult.textContent = `✅ ${data.file_count} 个文件 · ${data.total_size_mb} MB`;
+      folderResult.classList.add('show');
+      addCard('file', `📂 ${selectedFolderPath}`,
+        `共 ${data.file_count} 个文件 (${data.total_size_mb} MB)。主要类型: ${Object.entries(data.extensions||{}).slice(0,5).map(([k,v])=>`${k}(${v})`).join(', ')}。`);
+      addMsg('需要我分析哪些方面？代码结构、依赖关系、还是生成文档？', 'lifeform');
+
+      // Save path for file operations
+      window._projectPath = selectedFolderPath;
+    } else {
+      folderResult.textContent = `❌ ${data.detail||'无法访问。请确认路径正确且服务器有读取权限。'}`;
+      folderResult.classList.add('show');
+    }
+  } catch(e) {
+    folderResult.textContent = '❌ 服务器不可达';
+    folderResult.classList.add('show');
+  }
+  setHeart(62, 'calm');
+}
+
+btnScan.addEventListener('click', scanFolder);
+
+// ═══════════════════════════════════════════════════════
+// WeChat / WeCom Share (QR code fallback)
+// ═══════════════════════════════════════════════════════
+function shareToWechat(text) {
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+  const card = document.createElement('div');
+  card.className = 'msg lifeform';
+  card.innerHTML = `<div class="card"><div class="card-header"><span class="card-type diag">📱 分享</span></div>
+    <p style="font-size:12px;color:var(--dim);margin-bottom:8px">扫描二维码分享到微信</p>
+    <img src="${url}" alt="QR Code" style="width:160px;height:160px;border-radius:8px;background:white;padding:4px">
+    <p style="font-size:11px;color:var(--dim);margin-top:4px">或复制文本手动粘贴</p></div>`;
+  mind.appendChild(card);
+  mind.scrollTop = mind.scrollHeight;
+}
+
+// Update share button to support WeChat
+mind.addEventListener('click', e => {
+  if(e.target.classList.contains('share-msg-btn')) {
+    const msgEl = e.target.closest('.msg');
+    const text = msgEl.textContent.replace(/复制|分享|语音/g,'').trim();
+
+    // Try WeChat URL scheme first
+    const wechatUrl = `weixin://dl/moments?text=${encodeURIComponent(text)}`;
+    const tryWechat = window.open(wechatUrl, '_blank');
+
+    // If WeChat didn't open (blocked or not installed), show QR
+    setTimeout(() => {
+      if(tryWechat && !tryWechat.closed) return;
+      shareToWechat(text);
+    }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// Local file operations (via server — browser can't directly)
+// ═══════════════════════════════════════════════════════
+// File operations: read/write/execute all go through the server
+// The server has local filesystem access. Browser sends commands.
+async function localFileOp(op, filePath, content) {
+  if(!window._projectPath && !filePath.startsWith('/') && !filePath.match(/^[A-Z]:/)) {
+    addSystem('⚠ 请先选择本地项目文件夹');
+    return null;
+  }
+  const fullPath = window._projectPath ? `${window._projectPath}/${filePath}` : filePath;
+  try {
+    const res = await fetch('/api/local/file', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({op, path:fullPath, content})
+    });
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+// Hook into send to handle file operation commands
+const origSend = sendMessage;
+sendMessage = async function() {
+  const text = input.value.trim();
+
+  // Detect file operation commands
+  if(/^read\s+/i.test(text)) {
+    const filePath = text.replace(/^read\s+/i,'').trim();
+    const result = await localFileOp('read', filePath);
+    if(result) addCard('code', filePath.split('/').pop(), result.content||result.error, {lang:'auto'});
+    input.value = '';return;
+  }
+  if(/^write\s+(\S+)\s*\n/i.test(text)) {
+    const match = text.match(/^write\s+(\S+)\s*\n([\s\S]*)/i);
+    if(match) {
+      const result = await localFileOp('write', match[1], match[2]);
+      if(result) addSystem(result.ok ? `✅ 已写入 ${match[1]}` : `❌ ${result.error}`);
+    }
+    input.value = '';return;
+  }
+  if(/^(run|exec|sh|bash)\s+/i.test(text)) {
+    const cmd = text.replace(/^(run|exec|sh|bash)\s+/i,'').trim();
+    const result = await localFileOp('exec', '', cmd);
+    if(result) addCard('code', 'Terminal', result.output||result.error, {lang:'bash'});
+    input.value = '';return;
+  }
+
+  return origSend();
 };
-
-/* ═══ IM ═══ */
-var _imWs=null,_imUid='',_imName='';
-function imConnect(){_imUid=document.getElementById('im-user-id').value.trim();_imName=document.getElementById('im-user-name').value.trim()||_imUid;if(!_imUid)return;_imWs=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+location.host+'/ws/im?user_id='+encodeURIComponent(_imUid)+'&name='+encodeURIComponent(_imName));_imWs.onopen=function(){document.getElementById('im-status').innerHTML='<span style=color:var(--accent)>● 已连接 ('+_imUid+')</span>'};_imWs.onmessage=function(e){_imOnMsg(JSON.parse(e.data))};_imWs.onclose=function(){document.getElementById('im-status').innerHTML='<span style=color:var(--err)>● 断开</span>'}}
-function _imOnMsg(d){var l=document.getElementById('im-chat-log');if(!l)return;var t=d.type||'';if(t==='dm'||t==='group_msg'){l.innerHTML+='<div style=padding:2px_0><b style=color:var(--accent)>'+d.sender_name+'</b>: '+d.content+'</div>';l.scrollTop=l.scrollHeight}else if(t==='presence'){l.innerHTML+='<div style=font-size:10px;color:var(--dim)>'+d.sender_id+' '+d.content+'</div>';l.scrollTop=l.scrollHeight}else if(t==='history'){(d.messages||[]).forEach(function(m){l.innerHTML+='<div style=padding:2px_0><b style=color:var(--accent)>'+m.sender_name+'</b>: '+m.content+'</div>'});l.scrollTop=l.scrollHeight}else if(t==='contacts'){var c=d.contacts||[];var el=document.getElementById('im-contacts-list');el.innerHTML=c.map(function(x){return'<div style=padding:3px_0;display:flex;justify-content:space-between><span>'+x.name+' <span style=color:'+(x.status==='online'?'var(--accent)':'var(--dim)')+'>●</span></span><span style=font-size:10px;color:var(--dim)>'+x.user_id+'</span></div>'}).join('')}else if(t==='groups'){var gs=d.groups||[];document.getElementById('im-groups-list').innerHTML=gs.map(function(g){return'<div style=padding:3px_0;cursor:pointer;color:var(--accent)" onclick=document.getElementById("im-chat-group").value="'+g.group_id+'">📁 '+g.name+' ('+g.members.length+'人)</div>'}).join('')}else if(t==='nearby'){var ns=d.users||[];document.getElementById('im-nearby-list').innerHTML=ns.map(function(u){return'<div style=padding:3px_0;display:flex;justify-content:space-between><span>'+u.name+' ●</span><button onclick=document.getElementById("im-add-id").value="'+u.user_id+'";document.getElementById("im-add-name").value="'+u.name+'" style=font-size:9px;padding:1px_6px>+好友</button></div>'}).join('')||'<div style=color:var(--dim)>没有附近的人</div>'}else if(t==='meeting_created'){var m=d.meeting;document.getElementById('im-meeting-result').innerHTML='<div style=color:var(--accent)>✅ 会议创建: '+m.topic+'</div><div style=font-size:10px;color:var(--dim)>ID: '+m.meeting_id+' · '+m.participants.length+' 参与者</div>'+(m.agenda||[]).map(function(a,i){return'<div style=font-size:10px;padding:1px_0>'+(i+1)+'. '+a+'</div>'}).join('')}}
-function imSendMsg(){if(!_imWs)return;var to=document.getElementById('im-chat-to').value.trim();var gid=document.getElementById('im-chat-group').value.trim();var content=document.getElementById('im-chat-msg').value.trim();if(!content)return;_imWs.send(JSON.stringify(to?{type:'dm',to:to,content:content,sender_name:_imName}:{type:'group_msg',group_id:gid,content:content}));document.getElementById('im-chat-msg').value='';var l=document.getElementById('im-chat-log');l.innerHTML+='<div style=padding:2px_0><b>我</b>: '+content+'</div>';l.scrollTop=l.scrollHeight}
-function imAddContact(){var id=document.getElementById('im-add-id').value.trim();var name=document.getElementById('im-add-name').value.trim();if(!id||!_imWs)return;_imWs.send(JSON.stringify({type:'add_contact',contact_id:id,contact_name:name}));document.getElementById('im-contacts-list').innerHTML+='<div style=color:var(--accent)>✅ 已添加 '+name+'</div>'}
-function imCreateGroup(){var name=document.getElementById('im-group-name').value.trim();if(!name||!_imWs)return;_imWs.send(JSON.stringify({type:'create_group',name:name,members:[]}))}
-function imRefreshNearby(){if(_imWs)_imWs.send(JSON.stringify({type:'nearby'}))}
-function imCreateMeeting(){var topic=document.getElementById('im-mtg-topic').value.trim();var agents=document.getElementById('im-mtg-agents').value.trim();if(!topic||!_imWs)return;var ps=agents?agents.split(',').map(function(n,i){return{id:'ai_'+i,name:n.trim(),role:n.trim(),persona:'你是'+n.trim()+',参与会议讨论'}}):[{id:'ai_0',name:'分析师',role:'Analyst',persona:'分析核心事实和逻辑'},{id:'ai_1',name:'批判者',role:'Critic',persona:'识别弱点和风险'},{id:'ai_2',name:'综合者',role:'Synthesizer',persona:'综合多元观点'}];_imWs.send(JSON.stringify({type:'create_meeting',topic:topic,ai_participants:ps}))}
-function imSwitchTab(t){['chat','contacts','groups','nearby','meetings'].forEach(function(x){var e=document.getElementById('im-tab-'+x+'-content');var b=document.getElementById('im-tab-'+x);if(e)e.style.display=x===t?'block':'none';if(b)b.classList.toggle('active',x===t)});if(t==='contacts'&&_imWs)_imWs.send(JSON.stringify({type:'get_contacts'}));if(t==='groups'&&_imWs)_imWs.send(JSON.stringify({type:'get_groups'}));if(t==='nearby'&&_imWs)_imWs.send(JSON.stringify({type:'nearby'}))}
-function startAudioPairing(){var c=new(window.AudioContext||window.webkitAudioContext)();fetch('/api/pairing/audio').then(r=>r.json()).then(function(d){var o=c.createOscillator(),g=c.createGain();g.gain.value=0.3;o.connect(g);g.connect(c.destination);var t=c.currentTime;d.frequencies.forEach(function(f,i){o.frequency.setValueAtTime(f.freq,t+i*0.08)});o.start(t);o.stop(t+d.frequencies.length*0.08+0.1);document.getElementById('audio-pair-status').innerHTML='<span style=color:var(--accent)>🔊 超声波发射中...</span>'})}
-function pairLanDevice(id){fetch('/api/pairing/lan/'+id,{method:'POST'}).then(r=>r.json()).then(function(d){alert(d.ok?'已配对':'失败')})}
-
-/* ═══ PWA + Native Capabilities ═══ */
-var _pwaDeferredPrompt=null,_wakeLock=null,_badgeCount=0;
-window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_pwaDeferredPrompt=e;document.getElementById('pwa-install-btn').style.display='inline-block'});
-function pwaInstall(){if(_pwaDeferredPrompt){_pwaDeferredPrompt.prompt();_pwaDeferredPrompt.userChoice.then(r=>{if(r.outcome==='accepted')document.getElementById('pwa-install-btn').style.display='none';_pwaDeferredPrompt=null})}}
-
-// Fullscreen
-function toggleFullscreen(){if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(()=>{});document.getElementById('fullscreen-btn').textContent='⛶'}else{document.exitFullscreen();document.getElementById('fullscreen-btn').textContent='⛶'}}
-document.addEventListener('fullscreenchange',()=>{document.getElementById('fullscreen-btn').textContent=document.fullscreenElement?'⛶':'⛶'});
-
-// Wake Lock (prevent screen sleep during shell/task execution)
-async function acquireWakeLock(){try{_wakeLock=await navigator.wakeLock.request('screen');document.getElementById('fullscreen-btn').textContent='⛶'}catch(e){}}
-function releaseWakeLock(){if(_wakeLock){_wakeLock.release().catch(()=>{});_wakeLock=null}}
-
-// Push Notifications
-async function requestNotification(){
-  if(!('Notification' in window))return;
-  var perm=await Notification.requestPermission();
-  if(perm!=='granted')return;
-  document.getElementById('notify-btn').textContent='🔔';
-  var reg=await navigator.serviceWorker.ready;
-  var vapidResp=await fetch('/api/push/vapid-key');
-  var vapid=await vapidResp.json();
-  var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(vapid.public_key)});
-  await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint,keys:{p256dh:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),auth:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))},user_id:localStorage.getItem('lt-user')||''})});
-}
-function notify(title,body,url){if(Notification.permission==='granted'){new Notification(title,{body:body,icon:'/assets/icon.svg',badge:'/assets/icon.svg',vibrate:[200,100,200],data:{url:url||'/tree/living'}})}}
-function urlB64ToUint8Array(b){var pad='='.repeat((4-b.length%4)%4);var raw=atob((b+pad).replace(/-/g,'+').replace(/_/g,'/'));return new Uint8Array([...raw].map(c=>c.charCodeAt(0)))}
-
-// Badge
-function setBadge(n){_badgeCount=n;if('setAppBadge' in navigator)navigator.setAppBadge(n).catch(()=>{});else if(navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'SET_BADGE',count:n})}
-function clearBadge(){_badgeCount=0;if('clearAppBadge' in navigator)navigator.clearAppBadge().catch(()=>{});else if(navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'CLEAR_BADGE'})}
-
-// Vibration
-function vibrate(ms){if('vibrate' in navigator)navigator.vibrate(ms||200)}
-
-// Screen Capture
-async function startScreenCapture(){try{var stream=await navigator.mediaDevices.getDisplayMedia({video:true});return stream}catch(e){return null}}
-function stopScreenCapture(stream){if(stream)stream.getTracks().forEach(t=>t.stop())}
-
-// Protocol Handler registration
-if('registerProtocolHandler' in navigator){try{navigator.registerProtocolHandler('web+lt','/tree/living?protocol=%s','小树')}catch(e){}}
-
-// Initialize notifications on load
-if('Notification' in window && Notification.permission==='granted'){document.getElementById('notify-btn').textContent='🔔'}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){})}
-
-var _isAdmin=false,_adminToken='';
-function toggleAdmin(){
-  if(_isAdmin){_isAdmin=false;updateAdminPills();document.getElementById('admin-toggle-btn').textContent='⚙';_adminToken='';return}
-  var p=prompt('管理员密码:');
-  if(!p)return;
-  fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})})
-  .then(r=>r.json()).then(d=>{
-    if(d.token){_isAdmin=true;_adminToken=d.token;updateAdminPills();document.getElementById('admin-toggle-btn').textContent='⚙'}
-    else{alert('密码错误')}
-  })
-}
-function updateAdminPills(){
-  document.querySelectorAll('[data-admin="1"]').forEach(function(el){el.style.display=_isAdmin?'':'none'})
-}
-// Hide admin pills by default
-updateAdminPills();
-
-function loadCreative(tab) {
-  ['timeline','dream','swarm','emotion','twin','garden'].forEach(function(t) {
-    var b = document.getElementById('crea-tab-'+t);
-    if (b) b.classList.toggle('active', t === tab);
-  });
-  var el = document.getElementById('creative-content');
-  el.innerHTML = '<div class="lc-loading" style="min-height:200px">加载中...</div>';
-  var url = tab === 'garden' ? '/tree/creative/garden' : '/tree/creative/' + tab;
-  fetch(url).then(r => r.text()).then(html => { el.innerHTML = html; });
-}
 </script>
-
 </body>
 </html>

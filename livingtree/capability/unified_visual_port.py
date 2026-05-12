@@ -138,7 +138,8 @@ class VisualAdapter(ABC):
             from PIL import Image
             with Image.open(io.BytesIO(img)) as im:
                 return im.size
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return 0, 0
 
 
@@ -191,7 +192,8 @@ class ImageAdapter(VisualAdapter):
         path = data if isinstance(data, str) else str(data.get("image_path", ""))
         try:
             return Path(path).read_bytes()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return None
 
     def _extract_meta(self, data: Any) -> dict:
@@ -200,7 +202,8 @@ class ImageAdapter(VisualAdapter):
             from PIL import Image
             with Image.open(path) as im:
                 return {"path": path, "format": im.format, "mode": im.mode, "size": im.size}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return {"path": path}
 
 
@@ -395,7 +398,8 @@ class TableAdapter(VisualAdapter):
                 headers = next(reader, [])
                 rows = list(reader)
             return {"headers": headers, "rows": rows[:100], "title": Path(path).name}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return {"headers": [], "rows": [], "title": path}
 
     def render_text(self, data: Any) -> str:
@@ -713,7 +717,8 @@ class DiagramAdapter(VisualAdapter):
             return dot.pipe()
         except ImportError:
             return None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return None
 
     def _render_mermaid(self, source: str) -> Optional[bytes]:
@@ -846,7 +851,8 @@ class UnifiedVisualPort:
             return str(data)
         try:
             return json.dumps(data, ensure_ascii=False, indent=2, default=str)[:4000]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"UnifiedVisual: {e}")
             return str(data)[:4000]
 
 

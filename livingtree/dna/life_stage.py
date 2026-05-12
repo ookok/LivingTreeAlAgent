@@ -68,7 +68,41 @@ class StageMixin:
 
     async def _cognize(self, ctx: LifeContext) -> None:
         mem_context = ctx.metadata.get("struct_mem_context", "")
+
+        # Latent Pre-Reasoning (arXiv:2604.02029):
+        # Fast vector-space analysis before expensive explicit CoT
+        try:
+            from .latent_reasoner import get_latent_reasoner
+            reasoner = get_latent_reasoner()
+            latent_ctx = reasoner.pre_reason(ctx.user_input, ctx.metadata)
+            ctx.metadata["latent_context"] = {
+                "category": latent_ctx.task_category,
+                "complexity": latent_ctx.estimated_complexity,
+                "strategy": latent_ctx.recommended_strategy.value,
+                "budget_factor": latent_ctx.budget_factor,
+            }
+
+            if reasoner.should_skip_cot(latent_ctx):
+                ctx.intent = f"simple_{latent_ctx.task_category}"
+                ctx.metadata["cognition"] = ctx.intent
+                return
+        except Exception:
+            pass
         cog_prompt = f"Analyze intent and required knowledge: {ctx.user_input}"
+
+        # Cache-Safe Prompt tracking: log KV cache hit likelihood
+        try:
+            from ..treellm.cache_safe_prompt import get_cache_safe_prompt
+            csp = get_cache_safe_prompt()
+            assembly = csp.build(
+                system_prompt="Analyze user intent for cognitive processing",
+                retrieved_context="",
+                user_query=ctx.user_input,
+            )
+            ctx.metadata["cache_hit_likelihood"] = assembly.cache_hit_likelihood
+            ctx.metadata["stable_prefix_tokens"] = assembly.stable_prefix_tokens
+        except Exception:
+            pass
 
         # Adaptively inject domain terminology from glossary (mattpocock/skills)
         glossary = getattr(self.world, 'context_glossary', None)
@@ -81,10 +115,58 @@ class StageMixin:
                 pass
 
         if mem_context:
-            cog_prompt = f"{cog_prompt}\n\nRelevant memory context:\n{mem_context[:4000]}"
+            # Cone-Precision Prompt Assembly (#3): arrange content in cone layout
+            try:
+                from .cone_assembler import get_cone_assembler
+                from ..treellm.hifloat8_provider import estimate_speedup
+                ctx_len = len(ctx.user_input) // 2
+                speedup = estimate_speedup(ctx_len)
+                assembler = get_cone_assembler(max_tokens=8192)
+                assembler.set_speedup(speedup)
+                # Core = memory context, supporting = domain context
+                assembled = assembler.assemble(
+                    core=[{"text": mem_context, "source": "struct_mem"}],
+                    supporting=[{"text": domain_context[:2000], "source": "glossary"}] if domain_context else [],
+                )
+                cog_prompt = f"Analyze intent: {ctx.user_input}\n\n{assembled}"
+            except Exception:
+                cog_prompt = f"{cog_prompt}\n\nRelevant memory context:\n{mem_context[:4000]}"
 
         ctx.intent = await self.consciousness.chain_of_thought(cog_prompt)
         ctx.metadata["cognition"] = ctx.intent
+
+        # Interleaved Visual CoT (arXiv:2601.19834):
+        # Insert visual world model step between verbal reasoning steps
+        try:
+            from .visual_world import (
+                get_visual_router, get_visual_generator,
+                WorldModelCapability, ModalityPreference,
+            )
+            router = get_visual_router()
+            preference = router.classify(ctx.user_input, ctx.metadata)
+            ctx.metadata["modality_preference"] = preference.value
+
+            if preference in (ModalityPreference.VISUAL, ModalityPreference.INTERLEAVED):
+                generator = get_visual_generator(self.consciousness)
+                if router.needs_simulation(ctx.user_input):
+                    vwm = await generator.generate(
+                        ctx.user_input, WorldModelCapability.SIMULATION, ctx.metadata
+                    )
+                elif router.needs_reconstruction(ctx.user_input):
+                    vwm = await generator.generate(
+                        ctx.user_input, WorldModelCapability.RECONSTRUCTION, ctx.metadata
+                    )
+                else:
+                    vwm = await generator.generate(
+                        ctx.user_input, WorldModelCapability.SIMULATION, ctx.metadata
+                    )
+
+                if vwm:
+                    ctx.metadata["visual_world_model"] = vwm.to_prompt_block()
+                    # Inject visual model into cognition prompt for richer reasoning
+                    cog_prompt = f"{cog_prompt}\n\n{vwm.to_prompt_block()}"
+        except Exception:
+            pass
 
         kb = self.world.knowledge_base
         if kb:
@@ -440,6 +522,22 @@ class StageMixin:
 
     async def _execute(self, ctx: LifeContext) -> None:
         logger.debug(f"[execute] {len(ctx.plan)} steps")
+
+        # Token Accountant: marginal benefit check before executing
+        try:
+            from ..api.token_accountant import get_token_accountant, AllocationLayer
+            accountant = get_token_accountant()
+            est_tokens = ctx.metadata.get("estimated_tokens", 5000)
+            benefit = ctx.metadata.get("predicted_quality", 0.7)
+            if not accountant.should_allocate(
+                AllocationLayer.AGENT, "execute", est_tokens, benefit,
+                session_id=getattr(ctx, 'stage_id', ''),
+            ):
+                logger.info(f"TokenAccountant: SKIP execution (benefit<cost)")
+                ctx.execution_results = [{"status": "skipped", "reason": "marginal_benefit_insufficient"}]
+                return
+        except Exception:
+            pass
         orchestrator = self.world.orchestrator
         hitl = self.world.hitl
         cost = self.world.cost_aware

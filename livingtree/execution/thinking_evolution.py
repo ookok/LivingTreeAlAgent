@@ -419,12 +419,35 @@ class ThinkingEvolution:
         return ranked
 
     def get_population_stats(self) -> dict[str, Any]:
+        # Rank Collapse Monitor (NeurIPS 2025 Oral: condensation→collapse detection)
+        rank_info = {}
+        try:
+            from .rank_monitor import get_rank_monitor
+            monitor = get_rank_monitor()
+            snapshot = monitor.analyze(self._population)
+            rank_info = {
+                "diversity_state": snapshot.state.value,
+                "effective_rank": snapshot.effective_rank,
+                "diversity_score": round(snapshot.diversity_score, 3),
+                "dominant_directions": snapshot.dominant_direction_count,
+                "entropy": round(snapshot.entropy, 3),
+                "needs_intervention": monitor.should_intervene(),
+            }
+            if monitor.should_intervene():
+                strength = monitor.get_intervention_strength()
+                logger.warning(
+                    f"ThinkingEvolution: rank collapse detected — "
+                    f"intervention strength={strength:.2f}"
+                )
+        except Exception:
+            pass
         return {
             "population_size": len(self._population),
             "generation": self._current_generation,
             "elite_pool_size": len(self.elite_pool.candidates),
             "avg_fitness": sum(c.fitness for c in self._population) / max(len(self._population), 1),
             "best_fitness": max((c.fitness for c in self._population), default=0),
+            **rank_info,
         }
 
     def get_process_metrics(self) -> dict[str, Any]:

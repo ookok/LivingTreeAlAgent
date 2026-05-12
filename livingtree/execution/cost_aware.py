@@ -106,13 +106,21 @@ class CostAware:
         self._degraded_at: Optional[str] = None
         self._session_budget: dict[str, int] = {}
 
-    def record(self, model: str, tokens: int) -> None:
-        """Record token usage. Cost in CNY based on DeepSeek official pricing."""
+    def record(self, model: str, tokens: int, speedup_ratio: float = 1.0) -> None:
+        """Record token usage. Cost in CNY based on DeepSeek official pricing.
+
+        Args:
+            model: Provider model name.
+            tokens: Raw token count.
+            speedup_ratio: HiFloat8 or other acceleration ratio (1.0 = no speedup).
+                           Effective tokens = raw / speedup_ratio.
+        """
+        effective_tokens = max(1, int(tokens / speedup_ratio))
         inp_yuan_per_1M = PRICE_YUAN_PER_1M_INPUT.get(model, 1.0)
         out_yuan_per_1M = PRICE_YUAN_PER_1M_OUTPUT.get(model, 2.0)
         avg_yuan_per_1M = (inp_yuan_per_1M + out_yuan_per_1M) / 2
-        cost = tokens / 1_000_000 * avg_yuan_per_1M
-        usage = TokenUsage(model=model, tokens=tokens, cost_yuan=cost)
+        cost = effective_tokens / 1_000_000 * avg_yuan_per_1M
+        usage = TokenUsage(model=model, tokens=effective_tokens, cost_yuan=cost)
         with self._lock:
             self._usage.append(usage)
             self._cleanup_old()

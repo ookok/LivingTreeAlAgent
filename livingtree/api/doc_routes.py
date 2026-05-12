@@ -395,8 +395,8 @@ def setup_doc_routes(app: FastAPI) -> None:
                     "has_template": bool(meta.get("template_fields")),
                     "has_citations": bool(meta.get("citations")),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"DocRoutes: {e}")
         return docs
 
     # ── Delete document ──
@@ -715,8 +715,8 @@ def setup_doc_routes(app: FastAPI) -> None:
                 elif diagram_type == "causal" and hasattr(hub, 'dna'):
                     # Could pull real rule chain data
                     pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"DocRoutes: {e}")
 
         return {"type": diagram_type, "config": config, "status": "generated"}
 
@@ -788,8 +788,8 @@ def setup_doc_routes(app: FastAPI) -> None:
                         try:
                             async for token in hub.world.consciousness.stream_of_thought(review_prompt):
                                 result_text += token
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"DocRoutes: {e}")
                     try:
                         loop.run_until_complete(_llm_review())
                     except RuntimeError:
@@ -1111,8 +1111,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
                 search_q = f"{context.get('title', '')} {' '.join(f.get('label', '') for f in fields)}"
                 kb_results = hub.knowledge.search(search_q, top_k=5)
                 kb_texts = [r.get('text', '')[:500] for r in kb_results if r.get('text')]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"DocRoutes: {e}")
 
         # ── Build RAG context ──
         rag_context = "\n".join(kb_texts) if kb_texts else ""
@@ -1150,8 +1150,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
                         try:
                             async for token in hub.world.consciousness.stream_of_thought(prompt):
                                 result_text += token
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"DocRoutes: {e}")
                     try:
                         loop.run_until_complete(_llm_fill())
                     except RuntimeError:
@@ -1222,8 +1222,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
                 data = json.loads(f.read_text())
                 data["id"] = f.stem
                 profiles.append(data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"DocRoutes: {e}")
         return profiles
 
     @app.post("/api/auto-fill/profiles")
@@ -1326,8 +1326,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
                                 "updated_at": meta.get('updated_at', 0),
                                 "reviewed": meta.get('reviewed', False),
                             })
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"DocRoutes: {e}")
             except Exception as e:
                 logger.debug(f"Document search unavailable: {e}")
 
@@ -1356,8 +1356,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
                                 "profile_id": pf.stem,
                                 "fields": len(data.get('values', {})),
                             })
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"DocRoutes: {e}")
 
         # Deduplicate by title
         seen = set()
@@ -1398,8 +1398,8 @@ p{margin:8px 0;padding:6px 10px;border-radius:4px;position:relative}
             try:
                 results = hub.knowledge.search(q, top_k=5)
                 suggestions = [r.get('text', '')[:60] for r in results if r.get('text')]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"DocRoutes: {e}")
         if not suggestions:
             suggestions = [
                 f"{q} 环评标准", f"{q} 工艺流程", f"{q} 环保法规",

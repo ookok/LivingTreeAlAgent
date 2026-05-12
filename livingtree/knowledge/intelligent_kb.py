@@ -80,7 +80,21 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
 
     Paths: document_kb (FTS5+embedding RRF) + knowledge_base (cosine) + struct_mem + graph.
     KnowledgeRouter pre-selects optimal paths before retrieval to avoid unnecessary work.
+    HiFloat8-aware: dynamically expands top_k when long-context acceleration is available.
     """
+    # HiFloat8 dynamic top_k: expand retrieval window when speedup available
+    effective_top_k = top_k
+    try:
+        if hub and hasattr(hub, 'embedding_scorer') and hub.embedding_scorer:
+            from ..treellm.hifloat8_provider import estimate_speedup
+            # Estimate context from query length
+            ctx_est = len(query) // 2  # rough token estimate
+            speedup = estimate_speedup(ctx_est)
+            if speedup > 1.2:
+                # Expand top_k proportionally to speedup (max 3x)
+                effective_top_k = min(top_k * 3, int(top_k * speedup))
+    except Exception:
+        pass
     results: dict[str, RetrievalResult] = {}
 
     active_paths = {"doc_kb", "kb", "struct_mem", "graph"}
@@ -117,7 +131,7 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
             from ..knowledge.document_kb import DocumentKB
             kb = DocumentKB()
             for q in expanded_queries[:2]:
-                hits = kb.search(q, top_k=top_k)
+                hits = kb.search(q, top_k=effective_top_k)
                 for hit in hits:
                     key = hit.chunk.id
                     if key not in results or hit.score > results[key].score:
@@ -137,7 +151,7 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
         try:
             from ..knowledge.knowledge_base import KnowledgeBase
             base = KnowledgeBase()
-            docs = base.search(query, top_k=top_k)
+            docs = base.search(query, top_k=effective_top_k)
             for doc in docs:
                 key = f"kb-{doc.id}"
                 results.setdefault(key, RetrievalResult(
@@ -180,6 +194,34 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
             pass
 
     sorted_results = sorted(results.values(), key=lambda r: -r.score)
+    # FDAC: apply adaptive compression based on learned profiles
+    try:
+        from .fdac_compressor import get_fdac
+        fdac = get_fdac()
+        for r in sorted_results:
+            relevance = r.score  # use retrieval score as relevance proxy
+            r.precision_tier = fdac.get_precision_tier(relevance)
+            r.compression_ratio = fdac.get_compression_ratio(r.source)
+            if relevance < 0.5 and len(r.text) > 300:
+                r.text = r.text[:int(len(r.text) * r.compression_ratio)] + "..."
+    except Exception:
+        pass
+
+    # Self-Play Skill Discovery (arXiv:2604.27660):
+    # Extract context-specific skills from retrieved knowledge
+    try:
+        from ..dna.selfplay_skill import get_skill_discoverer
+        discoverer = get_skill_discoverer()
+        # Use first retrieved chunk as context for skill extraction
+        if sorted_results:
+            first = sorted_results[0]
+            discoverer.discover_from_context(
+                first.text, first.source,
+                existing_skills=None,
+            )
+    except Exception:
+        pass
+
     return sorted_results[:top_k]
 
 

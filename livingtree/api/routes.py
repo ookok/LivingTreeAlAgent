@@ -4,16 +4,29 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import secrets
 import time as _time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form, Query
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from loguru import logger
+
+
+class LocalFolderRequest(BaseModel):
+    path: str
+
+
+class FileOperationRequest(BaseModel):
+    op: str        # "read", "write", "exec", "list"
+    path: str = ""  # File or directory path
+    content: Optional[str] = None  # Content for write, command for exec
 
 
 class ChatRequest(BaseModel):
@@ -116,6 +129,28 @@ def setup_routes(app: FastAPI) -> None:
         return HealthResponse(status="starting", version="2.1.0",
             components={"boot": "waiting for hub..."})
 
+    @app.post("/api/cache/flush")
+    async def flush_cache():
+        """Flush hot response cache. Returns count of removed entries."""
+        try:
+            from ..treellm.response_cache import get_response_cache
+            cache = get_response_cache()
+            removed = cache.flush()
+            stats = cache.stats
+            return {"status": "flushed", "removed": removed, "stats": stats}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)[:200]}
+
+    @app.get("/api/cache/stats")
+    async def cache_stats():
+        """Get response cache statistics."""
+        try:
+            from ..treellm.response_cache import get_response_cache
+            cache = get_response_cache()
+            return {"status": "ok", "stats": cache.stats}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)[:200]}
+
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         """Send a message to the life engine and get results."""
@@ -134,6 +169,163 @@ def setup_routes(app: FastAPI) -> None:
             generation=result.get("generation", 0),
             success_rate=result.get("success_rate", 0.0),
         )
+
+    @app.post("/api/chat/stream")
+    async def chat_stream(req: ChatRequest, request: Request):
+        """Progressive streaming chat with Flash-First + Parallel Race + Skeleton.
+
+        Returns SSE stream: skeleton → phases → tokens → complete.
+        User sees first token at ~100ms (vs ~5s for blocking /api/chat).
+        """
+        hub = request.app.state.hub
+        if not hub:
+            raise HTTPException(status_code=503, detail="Hub not initialized")
+
+        async def generate():
+            try:
+                from ..treellm.flash_first_stream import get_flash_first
+                orchestrator = get_flash_first(hub)
+
+                async for chunk in orchestrator.chat_stream(
+                    req.message, req.context, hub
+                ):
+                    event_data = json.dumps({
+                        "type": chunk.type,
+                        "content": chunk.content,
+                        "phase": chunk.phase,
+                        "model": chunk.model,
+                        "ts": chunk.timestamp,
+                    }, ensure_ascii=False)
+                    yield f"event: {chunk.type}\ndata: {event_data}\n\n"
+
+                # Fallback: also run cognition_stream for phase visualization
+                try:
+                    from .cognition_stream import cognition_stream as cs
+                    async for sse in cs(hub, req.message):
+                        yield sse
+                except Exception:
+                    pass
+
+            except Exception as e:
+                error_data = json.dumps({"error": str(e)[:200]})
+                yield f"event: error\ndata: {error_data}\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
+
+    @app.post("/api/local/analyze")
+    async def analyze_local_folder(req: LocalFolderRequest):
+        """Analyze a local folder directly — no upload needed."""
+        folder_path = Path(req.path)
+        if not folder_path.exists():
+            raise HTTPException(404, f"Folder not found: {req.path}")
+        if not folder_path.is_dir():
+            raise HTTPException(400, "Path must be a folder")
+
+        files = []
+        total_size = 0
+        extensions = {}
+        try:
+            for item in folder_path.rglob("*"):
+                if item.is_file() and "__pycache__" not in str(item) and ".git" not in str(item):
+                    rel = str(item.relative_to(folder_path))
+                    size = item.stat().st_size
+                    total_size += size
+                    ext = item.suffix or "no_ext"
+                    extensions[ext] = extensions.get(ext, 0) + 1
+                    files.append({"path": rel, "size": size, "ext": ext})
+        except PermissionError:
+            raise HTTPException(403, "Permission denied")
+
+        files.sort(key=lambda f: -f["size"])
+        return {
+            "path": str(folder_path), "file_count": len(files),
+            "total_size_mb": round(total_size / (1024 * 1024), 1),
+            "extensions": dict(sorted(extensions.items(), key=lambda x: -x[1])[:10]),
+            "largest_files": files[:20],
+        }
+
+    @app.post("/api/local/file")
+    async def local_file_operation(req: FileOperationRequest):
+        """Execute file operations on the local filesystem via the server.
+
+        Browser cannot access local filesystem directly (security),
+        but the server can. Operations: read, write, exec, list.
+        """
+        import subprocess
+
+        file_path = Path(req.path) if req.path else None
+
+        if req.op == "read":
+            if not file_path or not file_path.exists():
+                return {"ok": False, "error": f"File not found: {req.path}"}
+            try:
+                content = file_path.read_text("utf-8")
+                return {"ok": True, "content": content[:10000], "size": len(content)}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        elif req.op == "write":
+            if not file_path:
+                return {"ok": False, "error": "No path specified"}
+            try:
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(req.content or "", "utf-8")
+                return {"ok": True, "written": len(req.content or ""),
+                        "path": str(file_path)}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        elif req.op == "exec":
+            if not req.content:
+                return {"ok": False, "error": "No command specified"}
+            # Security: whitelist only safe commands
+            ALLOWED_PREFIXES = [
+                "python ", "pip ", "pytest", "git ", "dir", "ls",
+                "cat ", "type ", "echo ", "node ", "npm ",
+            ]
+            cmd_lower = req.content.strip().lower()
+            if not any(cmd_lower.startswith(p) for p in ALLOWED_PREFIXES):
+                return {"ok": False, "error": f"Command not allowed. Allowed prefixes: {ALLOWED_PREFIXES}"}
+            # Restrict to project directory
+            work_dir = str(file_path) if file_path and file_path.is_dir() else str(Path.cwd())
+            try:
+                result = subprocess.run(
+                    req.content, shell=True,
+                    capture_output=True, text=True, timeout=30,
+                    cwd=work_dir,
+                )
+                return {"ok": True,
+                        "output": result.stdout[:5000] or result.stderr[:5000],
+                        "exit_code": result.returncode}
+            except subprocess.TimeoutExpired:
+                return {"ok": False, "error": "Command timed out (30s)"}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        elif req.op == "list":
+            if not file_path or not file_path.is_dir():
+                return {"ok": False, "error": "Not a directory"}
+            try:
+                items = []
+                for item in sorted(file_path.iterdir()):
+                    items.append({
+                        "name": item.name,
+                        "type": "dir" if item.is_dir() else "file",
+                        "size": item.stat().st_size if item.is_file() else 0,
+                    })
+                return {"ok": True, "items": items[:100]}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        return {"ok": False, "error": f"Unknown operation: {req.op}"}
 
     @app.get("/api/status")
 

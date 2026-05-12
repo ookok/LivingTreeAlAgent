@@ -140,6 +140,17 @@ class LifeEngine(BranchMixin, StageMixin):
             except Exception as e:
                 logger.debug(f"SideGit pre_turn: {e}")
 
+        # Organ Dashboard + Living Presence: register for this run cycle
+        try:
+            from .organ_dashboard import get_organ_dashboard
+            dashboard = get_organ_dashboard()
+            dashboard.start_session(
+                getattr(ctx, 'stage_id', f"run_{int(time.time())}"),
+                ctx.user_input,
+            )
+        except Exception:
+            pass
+
         try:
             await self._stage("perceive", self._perceive, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
@@ -887,6 +898,16 @@ class LifeEngine(BranchMixin, StageMixin):
 
             # CRV coherence gate check
             if not gate_enabled:
+                # Focus-Dilution Scheduler (ICML 2026 Spotlight): step after each stage
+                try:
+                    from .focus_dilution import get_focus_dilution_scheduler
+                    fd = get_focus_dilution_scheduler()
+                    phase = fd.step(name, ctx.metadata)
+                    ctx.metadata["focus_phase"] = phase.value
+                    ctx.metadata["focus_topk_factor"] = fd.get_topk_factor()
+                    ctx.metadata["focus_temperature_shift"] = fd.get_temperature_shift()
+                except Exception:
+                    pass
                 break
 
             gate_result = self._gate_stage(name, ctx, allowed_recalibrations=max_recalibrations)

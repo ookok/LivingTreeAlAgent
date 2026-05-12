@@ -63,3 +63,5 @@ installed_deps.txt
 scripts/diag*.py
 data/
 frp/
+test_*.py
+diag_*.py

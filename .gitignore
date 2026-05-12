@@ -57,3 +57,7 @@ livingtree/tui/textual/
 toad/
 build_relay/
 relay_server.spec
+.workbuddy/
+*_audit_report.md
+installed_deps.txt
+scripts/diag*.py

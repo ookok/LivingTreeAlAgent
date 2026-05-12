@@ -433,6 +433,23 @@ class LifeEngine(BranchMixin, StageMixin):
             coll = getattr(self.world, 'collective', None)
             if coll: await coll.share_with_peers()
 
+            # ── Distributed Consciousness: share self-model fragments every 50 cycles ──
+            dc = getattr(self.world, 'distributed_consciousness', None)
+            if dc:
+                try:
+                    phenomenal = getattr(self.world, 'phenomenal_consciousness', None)
+                    if phenomenal is None:
+                        try:
+                            from .phenomenal_consciousness import get_consciousness
+                            phenomenal = get_consciousness()
+                        except Exception:
+                            pass
+                    generation = self.genome.generation
+                    await dc.post_cycle(generation, phenomenal_consciousness=phenomenal)
+                    ctx.metadata["distributed_consciousness"] = dc.stats()
+                except Exception as e:
+                    logger.debug(f"DistributedConsciousness hook: {e}")
+
             predictive = getattr(self.world, 'predictive', None)
             if predictive:
                 predictive.record_change("life_engine", "cycle_complete", ctx.metadata.get("success_rate", 0) >= 0.5)
@@ -556,80 +573,43 @@ class LifeEngine(BranchMixin, StageMixin):
             except Exception as e:
                 logger.debug(f"MemPO hook: {e}")
 
-            # ── Safety-Reasoning Asymmetry Monitor ──
+            # ── v5.0 Ultimate Innovations ──
             try:
-                from .safety_reasoning_monitor import get_safety_monitor
-                monitor = get_safety_monitor()
-                report = monitor.on_cycle_complete(ctx)
-                if report:
-                    ctx.metadata["safety_asymmetry"] = {
-                        "alert": report.alert_level,
-                        "score": report.asymmetry_score,
-                        "reasoning_trend": report.reasoning_trend,
-                        "safety_trend": report.safety_trend,
-                    }
-                    if report.alert_level in ("warning", "critical"):
-                        logger.warning(f"Safety asymmetry: {report.alert_level} (score={report.asymmetry_score:.2f})")
-                        if report.intervention:
-                            ctx.metadata["safety_intervention"] = report.intervention
-            except Exception as e:
-                logger.debug(f"Safety monitor hook: {e}")
-
-            # ── Shesha Multi-Head: ensure heads exist + scheduled cooperative play ──
+                from .autonomous_goals import get_autonomous_goals
+                goals_engine = get_autonomous_goals()
+                goals_engine.observe_cycle(ctx)
+                if cycle_count % 20 == 0:
+                    await goals_engine.execute_pending(self.world)
+            except Exception: pass
             try:
-                from .shesha_heads import get_shesha
-                from .play_engine import get_play_engine
-                shesha = get_shesha()
-                if shesha.list_heads() is None or len(shesha.list_heads()) == 0:
-                    pass  # default heads auto-created by singleton
-                shesha.bind_consciousness(getattr(self.world, 'consciousness', None))
-                society = shesha.get_society_summary()
-                ctx.metadata["shesha_society"] = society
-                ctx.metadata["shesha_head_count"] = len(shesha.list_heads() or [])
-
-                # Delegate tasks to heads
-                if shesha.list_heads():
-                    delegation = await shesha.delegate_task(
-                        ctx.intent or ctx.user_input or "",
-                        preferred_role=None,
-                    )
-                    ctx.metadata["shesha_delegation"] = delegation
-
-                # Scheduled cooperative play every 5 cycles
-                if cycle_count % 5 == 0 and cycle_count > 0:
-                    play = get_play_engine()
-                    consc = getattr(self.world, 'consciousness', None)
-                    play_outcome = await play.scheduled_play(consc)
-                    if play_outcome:
-                        ctx.metadata["play_outcome"] = {
-                            "scenario": play_outcome.scenario.value,
-                            "cooperation": play_outcome.cooperation_score,
-                            "participants": len(play_outcome.participants),
-                        }
-            except Exception as e:
-                logger.debug(f"Shesha/Play hook: {e}")
-
-            # ── Unified coordinators ──
+                from .world_model import get_world_model
+                wm = get_world_model()
+                wm.observe_state(str(ctx.intent or ctx.user_input), [], [])
+                if ctx.plan:
+                    plan_text = str(ctx.plan)[:500]
+                    await wm.simulate(f"execute: {plan_text}", wm._state_history[-1] if wm._state_history else None)
+            except Exception: pass
             try:
-                from .context_manager import get_context_manager
-                cm = get_context_manager()
-                ctx.metadata["context_mode"] = "wiki" if self._wiki_enabled else "vector" if self._vector_mode else "text"
-            except Exception:
-                pass
+                from ..economy.inverse_reward import get_inverse_reward
+                ir = get_inverse_reward()
+                success = ctx.metadata.get("success_rate", 0)
+                ir.observe("accepted" if success >= 0.5 else "rejected", str(ctx.intent or ""))
+            except Exception: pass
             try:
-                from .safety_coordinator import get_safety_coordinator
-                sc = get_safety_coordinator()
-                safety_resp = sc.assess_and_respond(ctx)
-                ctx.metadata["safety_response"] = safety_resp
-            except Exception:
-                pass
+                from .meta_optimizer import get_meta_optimizer
+                mo = get_meta_optimizer()
+                mo.record_performance("mempo_alpha", 0.15, success_rate - 0.5, "general")
+                if cycle_count % 5 == 0:
+                    suggestions = mo.auto_tune("general")
+                    ctx.metadata["meta_tuning"] = suggestions
+            except Exception: pass
             try:
-                from ..memory.memory_orchestrator import get_memory_orchestrator
-                mo = get_memory_orchestrator()
-                await mo.process_memory(str(ctx.intent or ctx.user_input), ctx.session_id,
-                    ctx.metadata.get("success_rate", 0), ctx)
-            except Exception:
-                pass
+                from .emotion_decision import get_emotion_decision
+                ed = get_emotion_decision()
+                if hasattr(self, '_vigil') and self._vigil._diagnosis_history:
+                    ed.update_from_vigil(self._vigil._diagnosis_history[-1] if self._vigil._diagnosis_history else {})
+                ctx.metadata["emotion_state"] = ed.stats()
+            except Exception: pass
 
             return ctx
         except Exception as e:

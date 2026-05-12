@@ -35,6 +35,10 @@ from .reasoning_chain import ReasoningChain, DecisionNode, ChainSummary, get_rea
 from .skill_progression import SkillProgression, SkillMetric, ProgressReport, Milestone, get_skill_progression
 from .autonomous_core import AutonomousCore, DiscoveredWork, ActionPlan, AuditFinding, CycleResult, IntentType, get_autonomous_core
 from .local_intelligence import LocalIntelligence, IntelligenceTier, TierResponse, LocalIQ, get_local_intelligence
+from .autonomous_goals import (
+    AutonomousGoal, GoalStatus, PatternCategory, ObservedPattern, GoalStats,
+    PatternObserver, AutonomousGoalEngine, get_autonomous_goals,
+)
 
 __all__ = [
     "LifeEngine",
@@ -63,4 +67,6 @@ __all__ = [
     "AutonomousCore", "DiscoveredWork", "ActionPlan", "AuditFinding", "CycleResult", "IntentType",
     "get_autonomous_core",
     "LocalIntelligence", "IntelligenceTier", "TierResponse", "LocalIQ", "get_local_intelligence",
+    "AutonomousGoal", "GoalStatus", "PatternCategory", "ObservedPattern", "GoalStats",
+    "PatternObserver", "AutonomousGoalEngine", "get_autonomous_goals",
 ]

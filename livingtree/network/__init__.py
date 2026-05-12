@@ -27,6 +27,9 @@ from .scinet_hardening import (
 from .relay_registry import RelayRegistry, RelayServer, RelayList, get_relay_registry
 from .config_sync import ConfigSyncer, ConfigPackage, get_config_syncer
 from .p2p_node import get_p2p_node
+from .distributed_consciousness import (
+    ConsciousnessFragment, DistributedSelf, get_distributed_self,
+)
 
 # Original network
 from .node import Node, NodeInfo
@@ -64,6 +67,7 @@ __all__ = [
     "RelayRegistry", "RelayServer", "RelayList", "get_relay_registry",
     "ConfigSyncer", "ConfigPackage", "get_config_syncer",
     "get_p2p_node",
+    "ConsciousnessFragment", "DistributedSelf", "get_distributed_self",
     # Original
     "Node", "NodeInfo", "Discovery", "PeerInfo", "NATTraverser",
     "Reputation", "EncryptedChannel", "EncryptedMessage", "DualMode", "SyncQueueItem",

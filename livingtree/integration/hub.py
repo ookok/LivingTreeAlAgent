@@ -323,6 +323,12 @@ class IntegrationHub:
         self.world.collective = CollectiveConsciousness(world=self.world)
         logger.debug("CollectiveConsciousness initialized")
 
+        from ..network.distributed_consciousness import get_distributed_self
+        dc = get_distributed_self()
+        self.world.distributed_consciousness = dc
+        dc.register_with_p2p()
+        logger.debug("DistributedSelf initialized")
+
         # ── SwarmCoordinator: Direct P2P collaboration ──
         from ..network.swarm_coordinator import get_swarm
         self.swarm = get_swarm()

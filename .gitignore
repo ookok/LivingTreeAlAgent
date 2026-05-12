@@ -61,3 +61,5 @@ relay_server.spec
 *_audit_report.md
 installed_deps.txt
 scripts/diag*.py
+data/
+frp/

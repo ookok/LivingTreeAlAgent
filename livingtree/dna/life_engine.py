@@ -631,6 +631,33 @@ class LifeEngine(BranchMixin, StageMixin):
                 ctx.metadata["gep_events"] = len(gep._events)
             except Exception: pass
 
+            # ── RLVR Monitor: detect rise-then-fall collapse ──
+            try:
+                from .rlvr_monitor import get_rlvr_monitor
+                rlm = get_rlvr_monitor()
+                rlm.record("mempo", success_rate, ctx.metadata.get("confidence", 0.5), cycle_count)
+                pattern = rlm.detect_rise_then_fall("mempo")
+                if pattern and pattern.warning_level != "normal":
+                    ctx.metadata["rlvr_warning"] = {
+                        "level": pattern.warning_level,
+                        "decline_rate": pattern.decline_rate,
+                        "collapse_eta": pattern.collapse_eta_cycles,
+                        "intervention": rlm.get_intervention("mempo", pattern),
+                    }
+                    logger.warning(f"RLVR: {pattern.warning_level} for mempo — decline={pattern.decline_rate:.3f}")
+            except Exception: pass
+
+            # ── External Verifier: escape intrinsic reward ceiling ──
+            try:
+                from .external_verifier import get_external_verifier
+                ev = get_external_verifier()
+                output_text = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
+                external_reward = await ev.get_external_reward(output_text, ctx.user_input or "")
+                ctx.metadata["external_reward"] = external_reward
+                if abs(external_reward) > 0.5:
+                    ctx.metadata["verified_signal"] = "strong_verification"
+            except Exception: pass
+
             return ctx
         except Exception as e:
             logger.error(f"Cycle {ctx.session_id} failed: {e}")

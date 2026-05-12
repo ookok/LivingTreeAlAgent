@@ -1,10 +1,11 @@
 [common]
-server_addr = www.mogoo.com.cn
+server_addr = 139.199.124.242
 server_port = 7000
 token = mogoo
 
 [web]
-type = tcp
+type = http                 
 local_ip = 127.0.0.1
-local_port = 8100
-remote_port = 8899
+local_port = 8000    
+vhost_http_port = 8888     
+custom_domains = www.mogoo.com.cn 

@@ -611,6 +611,26 @@ class LifeEngine(BranchMixin, StageMixin):
                 ctx.metadata["emotion_state"] = ed.stats()
             except Exception: pass
 
+            # ── GEP: compile experience into compact Genes (Evolver-inspired) ──
+            try:
+                from .evolution_gene import get_gene_pool, GeneCompiler
+                from .gep_protocol import get_gep_protocol
+                pool = get_gene_pool()
+                gep = get_gep_protocol()
+                compiler = GeneCompiler()
+                gene = compiler.compile_from_session(ctx, success_rate)
+                if gene:
+                    existing = pool.find_matching(gene.trigger, top_k=1)
+                    if existing and existing[0].effectiveness() < gene.effectiveness():
+                        pool.evolve_gene(existing[0].id, gene.actions, gene.constraints, gene.failure_warnings)
+                        gep.record_event("gene_evolved", existing[0].id, existing[0].to_dict(), gene.to_dict(), "improved", True)
+                    elif not existing:
+                        pool.add_gene(gene.trigger, gene.actions, gene.constraints, gene.failure_warnings)
+                        gep.record_event("gene_created", gene.id, None, gene.to_dict(), "new", True)
+                ctx.metadata["gene_pool_size"] = len(pool._genes)
+                ctx.metadata["gep_events"] = len(gep._events)
+            except Exception: pass
+
             return ctx
         except Exception as e:
             logger.error(f"Cycle {ctx.session_id} failed: {e}")

@@ -39,6 +39,7 @@ from .autonomous_goals import (
     AutonomousGoal, GoalStatus, PatternCategory, ObservedPattern, GoalStats,
     PatternObserver, AutonomousGoalEngine, get_autonomous_goals,
 )
+from .gep_protocol import GEPProtocol, EvolutionEvent, get_gep_protocol
 
 __all__ = [
     "LifeEngine",
@@ -69,4 +70,5 @@ __all__ = [
     "LocalIntelligence", "IntelligenceTier", "TierResponse", "LocalIQ", "get_local_intelligence",
     "AutonomousGoal", "GoalStatus", "PatternCategory", "ObservedPattern", "GoalStats",
     "PatternObserver", "AutonomousGoalEngine", "get_autonomous_goals",
+    "GEPProtocol", "EvolutionEvent", "get_gep_protocol",
 ]

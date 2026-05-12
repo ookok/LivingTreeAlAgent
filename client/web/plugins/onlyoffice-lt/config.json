@@ -1,0 +1,33 @@
+{
+  "name": "LivingTree AI",
+  "nameLocale": {
+    "zh": "LivingTree AI 助手"
+  },
+  "guid": "asc.{LivingTreeAI}",
+  "version": "2.1.0",
+  "variations": [
+    {
+      "description": "AI-powered document assistant: rewrite, summarize, translate, RAG search",
+      "descriptionLocale": {
+        "zh": "AI 驱动的文档助手：改写、总结、翻译、知识库检索"
+      },
+      "url": "index.html",
+      "icons": [],
+      "isViewer": false,
+      "EditorsSupport": ["word", "slide", "cell"],
+      "isVisual": true,
+      "isModal": false,
+      "isInsideMode": true,
+      "initDataType": "text",
+      "initData": "",
+      "isUpdateOleOnResize": false,
+      "buttons": [
+        {
+          "text": "AI 助手",
+          "primary": true
+        }
+      ],
+      "size": [320, 500]
+    }
+  ]
+}

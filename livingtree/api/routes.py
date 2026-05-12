@@ -14,7 +14,7 @@ from typing import Any, Optional
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form, Query
-from fastapi.responses import Response, StreamingResponse, JSONResponse
+from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -151,6 +151,106 @@ def setup_routes(app: FastAPI) -> None:
         except Exception as e:
             return {"status": "error", "detail": str(e)[:200]}
 
+    @app.get("/api/admin/config")
+    async def get_admin_config(request: Request):
+        cfg = get_config()
+        return {
+            "ollama_url": cfg.ollama_base_url,
+            "onlyoffice_url": os.environ.get("ONLYOFFICE_URL", ""),
+        }
+
+    @app.post("/api/admin/config")
+    async def save_admin_config(request: Request):
+        data = await request.json()
+        provider = data.get("provider", "")
+        key = data.get("key", "")
+        if provider and key:
+            env_map = {
+                "deepseek": "DEEPSEEK_API_KEY", "modelscope": "MODELSCOPE_API_KEY",
+                "bailing": "BAILING_API_KEY", "stepfun": "STEPFUN_API_KEY",
+                "internlm": "INTERNLM_API_KEY", "openrouter": "OPENROUTER_API_KEY",
+                "nvidia": "NVIDIA_API_KEY", "longcat": "LONGCAT_API_KEY",
+                "sensetime": "SENSETIME_API_KEY", "siliconflow": "SILICONFLOW_API_KEY",
+                "zhipu": "ZHIPU_API_KEY", "spark": "SPARK_API_KEY",
+            }
+            env_key = env_map.get(provider, provider.upper() + "_API_KEY")
+            os.environ[env_key] = key
+            return {"ok": True, "provider": provider}
+        for k, v in data.items():
+            if v and k.endswith("_url"):
+                os.environ[k.upper()] = str(v)
+        return {"ok": True}
+
+    @app.get("/api/admin/export")
+    async def export_config(request: Request):
+        """Export all admin configuration as encrypted file."""
+        cfg = get_config()
+        data = {
+            "api_keys": {
+                "deepseek": cfg.deepseek_api_key, "modelscope": cfg.modelscope_api_key,
+                "bailing": cfg.bailing_api_key, "stepfun": cfg.stepfun_api_key,
+                "internlm": cfg.internlm_api_key, "openrouter": cfg.openrouter_api_key,
+            },
+            "urls": {
+                "ollama": cfg.ollama_base_url,
+                "onlyoffice": os.environ.get("ONLYOFFICE_URL", ""),
+            },
+            "exported_at": time.time(),
+        }
+        plain = json.dumps(data, ensure_ascii=False)
+        # AES encrypt with project-derived key
+        from hashlib import sha256
+        enc_key = sha256(b"livingtree_admin_export").digest()
+        import base64 as b64
+        from cryptography.fernet import Fernet
+        try:
+            f = Fernet(b64.urlsafe_b64encode(enc_key))
+            encrypted = f.encrypt(plain.encode())
+            return Response(content=encrypted, media_type="application/octet-stream",
+                          headers={"Content-Disposition": "attachment; filename=config.enc"})
+        except ImportError:
+            # Fallback: simple XOR with key hash
+            key_bytes = enc_key
+            encrypted = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(plain.encode()))
+            return Response(content=encrypted, media_type="application/octet-stream",
+                          headers={"Content-Disposition": "attachment; filename=config.enc"})
+
+    @app.post("/api/admin/import")
+    async def import_config(request: Request):
+        """Import encrypted configuration file."""
+        body = await request.body()
+        from hashlib import sha256
+        enc_key = sha256(b"livingtree_admin_export").digest()
+        import base64 as b64
+        try:
+            from cryptography.fernet import Fernet
+            f = Fernet(b64.urlsafe_b64encode(enc_key))
+            plain = f.decrypt(body).decode()
+        except ImportError:
+            key_bytes = enc_key
+            plain = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(body)).decode()
+        except Exception:
+            raise HTTPException(400, "Invalid or corrupted config file")
+
+        try:
+            data = json.loads(plain)
+            # Restore API keys
+            for provider, key in data.get("api_keys", {}).items():
+                if key:
+                    env_map = {
+                        "deepseek": "DEEPSEEK_API_KEY", "modelscope": "MODELSCOPE_API_KEY",
+                        "bailing": "BAILING_API_KEY", "stepfun": "STEPFUN_API_KEY",
+                        "internlm": "INTERNLM_API_KEY", "openrouter": "OPENROUTER_API_KEY",
+                    }
+                    os.environ[env_map.get(provider, provider.upper() + "_API_KEY")] = key
+            # Restore URLs
+            for k, v in data.get("urls", {}).items():
+                if v:
+                    os.environ[k.upper() + "_URL"] = v
+            return {"ok": True, "restored": len(data.get("api_keys", {}))}
+        except Exception as e:
+            raise HTTPException(400, f"Invalid config: {e}")
+
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         """Send a message to the life engine and get results."""
@@ -168,6 +268,57 @@ def setup_routes(app: FastAPI) -> None:
             mutations=result.get("mutations", 0),
             generation=result.get("generation", 0),
             success_rate=result.get("success_rate", 0.0),
+        )
+
+    @app.post("/api/chat/stream/resume")
+    async def chat_stream_resume(request: Request):
+        """Resume a streaming session from a given offset.
+
+        Client sends: X-Session-ID + X-Received-Length headers.
+        Server resumes streaming from that offset if session cached.
+        """
+        session_id = request.headers.get("X-Session-ID", "")
+        received_len = int(request.headers.get("X-Received-Length", "0"))
+
+        # Check session cache
+        from ..api.stream_session import get_session_cache
+        cache = get_session_cache()
+        session = cache.get(session_id)
+
+        if not session:
+            return JSONResponse(
+                {"error": "Session not found or expired"},
+                status_code=404,
+            )
+
+        async def generate():
+            text = session.get("full_text", "")
+            if received_len >= len(text):
+                yield f"event: done\ndata: {{}}\n\n"
+                return
+
+            # Resume from offset
+            remaining = text[received_len:]
+            chunk_size = 50
+            for i in range(0, len(remaining), chunk_size):
+                chunk = remaining[i:i + chunk_size]
+                event_data = json.dumps({
+                    "text": chunk,
+                    "offset": received_len + i + len(chunk),
+                    "total": len(text),
+                }, ensure_ascii=False)
+                yield f"event: resume\ndata: {event_data}\n\n"
+                await asyncio.sleep(0.03)
+
+            yield f"event: done\ndata: {{}}\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     @app.post("/api/chat/stream")
@@ -222,6 +373,110 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post("/api/local/analyze")
     async def analyze_local_folder(req: LocalFolderRequest):
+        """Analyze a local folder directly — no upload needed."""
+        folder_path = Path(req.path)
+        if not folder_path.exists():
+            raise HTTPException(404, f"Folder not found: {req.path}")
+        if not folder_path.is_dir():
+            raise HTTPException(400, "Path must be a folder")
+        files = []
+        total_size = 0
+        extensions = {}
+        try:
+            for item in folder_path.rglob("*"):
+                if item.is_file() and "__pycache__" not in str(item) and ".git" not in str(item):
+                    rel = str(item.relative_to(folder_path))
+                    size = item.stat().st_size
+                    total_size += size
+                    ext = item.suffix or "no_ext"
+                    extensions[ext] = extensions.get(ext, 0) + 1
+                    files.append({"path": rel, "size": size, "ext": ext})
+        except PermissionError:
+            raise HTTPException(403, "Permission denied")
+        files.sort(key=lambda f: -f["size"])
+        return {
+            "path": str(folder_path), "file_count": len(files),
+            "total_size_mb": round(total_size / (1024 * 1024), 1),
+            "extensions": dict(sorted(extensions.items(), key=lambda x: -x[1])[:10]),
+            "largest_files": files[:20],
+        }
+
+    @app.get("/api/doc/view")
+    async def view_document(path: str = Query("")):
+        """Render a local document as HTML for in-browser viewing.
+
+        Supports: .docx → HTML (python-docx), .xlsx → HTML table (openpyxl),
+        .pdf → iframe, .txt/.md → text.
+        """
+        file_path = Path(path)
+        if not file_path.exists():
+            raise HTTPException(404, f"File not found: {path}")
+
+        suffix = file_path.suffix.lower()
+
+        # PDF → serve directly for browser native viewer
+        if suffix == ".pdf":
+            return FileResponse(file_path, media_type="application/pdf")
+
+        # DOCX → convert to HTML
+        if suffix in (".docx", ".doc"):
+            try:
+                from docx import Document
+                doc = Document(str(file_path))
+                html_parts = ['<div class="doc-render">']
+                for para in doc.paragraphs:
+                    style = para.style.name if para.style else ""
+                    text = para.text
+                    if not text.strip():
+                        html_parts.append("<br>")
+                    elif "Heading" in style:
+                        level = style.replace("Heading ", "").replace("Heading", "1")
+                        html_parts.append(f"<h{level}>{text}</h{level}>")
+                    else:
+                        html_parts.append(f"<p>{text}</p>")
+                for table in doc.tables:
+                    html_parts.append('<table class="data-table">')
+                    for row in table.rows:
+                        html_parts.append("<tr>" + "".join(f"<td>{c.text}</td>" for c in row.cells) + "</tr>")
+                    html_parts.append("</table>")
+                html_parts.append("</div>")
+                return JSONResponse({"html": "\n".join(html_parts), "type": "docx"})
+            except Exception as e:
+                return JSONResponse({"html": f"<p>无法解析文档: {e}</p>", "type": "error"})
+
+        # XLSX → convert to HTML table
+        if suffix in (".xlsx", ".xls"):
+            try:
+                from openpyxl import load_workbook
+                wb = load_workbook(str(file_path), data_only=True)
+                html_parts = ['<div class="doc-render">']
+                for sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    html_parts.append(f"<h3>{sheet_name}</h3><table class='data-table'>")
+                    for row in ws.iter_rows(max_row=min(100, ws.max_row), values_only=True):
+                        html_parts.append("<tr>" + "".join(
+                            f"<td>{str(c)[:200] if c is not None else ''}</td>" for c in row
+                        ) + "</tr>")
+                    html_parts.append("</table>")
+                html_parts.append("</div>")
+                return JSONResponse({"html": "\n".join(html_parts), "type": "xlsx"})
+            except Exception as e:
+                return JSONResponse({"html": f"<p>无法解析表格: {e}</p>", "type": "error"})
+
+        # TXT/MD → return as text
+        if suffix in (".txt", ".md", ".py", ".json", ".yaml", ".yml", ".csv"):
+            try:
+                content = file_path.read_text("utf-8")[:50000]
+                lang = suffix.replace(".", "")
+                return JSONResponse({
+                    "html": f"<pre class='code-block'><code>{content}</code></pre>",
+                    "type": "text",
+                    "lang": lang,
+                })
+            except Exception:
+                pass
+
+        raise HTTPException(400, f"Unsupported format: {suffix}")
         """Analyze a local folder directly — no upload needed."""
         folder_path = Path(req.path)
         if not folder_path.exists():

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "attr_6a7b428b0c45",
+    "timestamp": 1778055304.7668076,
+    "simulation_id": "sim_001",
+    "failed_component": "treellm",
+    "root_cause_component": "knowledge_base",
+    "failure_chain": [
+      "kb",
+      "glossary",
+      "treellm"
+    ],
+    "error_message": "KeyError",
+    "severity": "error",
+    "resolved": true,
+    "resolution": "Fixed entity"
+  }
+]

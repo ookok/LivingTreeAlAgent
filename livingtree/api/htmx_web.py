@@ -92,19 +92,11 @@ def _sanitize_html(text: str) -> str:
 @htmx_router.get("", response_class=HTMLResponse)
 @htmx_router.get("/", response_class=HTMLResponse)
 async def tree_index(request: Request):
-    return _render_template("index.html", request=request)
+    """极简设计: 首页直接进入生命体界面."""
+    return _render_template("living.html", request=request)
 
-@htmx_router.get("/chat", response_class=HTMLResponse)
-async def tree_chat(request: Request):
-    return _render_template("chat.html", request=request)
-
-@htmx_router.get("/dashboard", response_class=HTMLResponse)
-async def tree_dashboard(request: Request):
-    return _render_template("dashboard.html", request=request)
-
-@htmx_router.get("/knowledge", response_class=HTMLResponse)
-async def tree_knowledge(request: Request):
-    return _render_template("knowledge.html", request=request)
+# ── 已移除的冗余页面 (chat/dashboard/knowledge/about/reach_mobile/trae) ──
+# SSE 和 API 功能路由保留不变
 
 @htmx_router.get("/canvas", response_class=HTMLResponse)
 async def tree_canvas(request: Request):

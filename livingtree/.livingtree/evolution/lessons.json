@@ -1,0 +1,383 @@
+[
+  {
+    "id": "3adb23cd-24d7-4d93-9ff0-a23dd6d9790e",
+    "session_id": "verify",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "Fixed memory leak in parser",
+    "context": "session verify reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778050864.6262136,
+    "decay_factor": 0.7972826319846474,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "fixed",
+      "memory",
+      "leak",
+      "parser"
+    ]
+  },
+  {
+    "id": "a4f46092-2b1d-40cd-8eda-99266667c9fd",
+    "session_id": "cd35241f96a3",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "intent",
+    "context": "session cd35241f96a3 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494079.5640802,
+    "decay_factor": 0.9682760493714868,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "intent"
+    ]
+  },
+  {
+    "id": "af9f8b80-92f6-4890-9355-4f9392500639",
+    "session_id": "cd35241f96a3",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "success",
+    "context": "session cd35241f96a3 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494079.5642216,
+    "decay_factor": 0.9682760494260324,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "success"
+    ]
+  },
+  {
+    "id": "b41d0dc2-545d-4a29-93f9-a4a72f9bb064",
+    "session_id": "cd35241f96a3",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "tokens",
+    "context": "session cd35241f96a3 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494079.564249,
+    "decay_factor": 0.9682760494366104,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "tokens"
+    ]
+  },
+  {
+    "id": "18c11396-efe1-4820-a79c-06e64da50dfa",
+    "session_id": "cd35241f96a3",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "reflections",
+    "context": "session cd35241f96a3 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494079.564268,
+    "decay_factor": 0.9682760494439691,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "reflections"
+    ]
+  },
+  {
+    "id": "0e798f24-88b5-40c7-8789-bad609c7d2ec",
+    "session_id": "7780497494df",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "intent",
+    "context": "session 7780497494df reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494892.4859412,
+    "decay_factor": 0.9685896766326494,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "intent"
+    ]
+  },
+  {
+    "id": "71a6fbae-d91b-4185-a2ac-2e1b6fd292a5",
+    "session_id": "7780497494df",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "success",
+    "context": "session 7780497494df reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494892.4860747,
+    "decay_factor": 0.9685896766841595,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "success"
+    ]
+  },
+  {
+    "id": "05ac688b-dfde-435c-80b6-2acbf9229e1a",
+    "session_id": "7780497494df",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "tokens",
+    "context": "session 7780497494df reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494892.4861064,
+    "decay_factor": 0.9685896766963932,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "tokens"
+    ]
+  },
+  {
+    "id": "8e0ef074-4bcb-4306-9c12-0070c9f55fc7",
+    "session_id": "7780497494df",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "reflections",
+    "context": "session 7780497494df reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778494892.4861283,
+    "decay_factor": 0.9685896767048556,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "reflections"
+    ]
+  },
+  {
+    "id": "466c1aa2-939e-4c81-961a-3f6d7ceb13a3",
+    "session_id": "c3e46033a2d2",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "intent",
+    "context": "session c3e46033a2d2 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549415.778317,
+    "decay_factor": 0.9896248974566474,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "intent"
+    ]
+  },
+  {
+    "id": "7899a6b1-cae0-43dc-a9c6-6f0abc1883a7",
+    "session_id": "c3e46033a2d2",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "success",
+    "context": "session c3e46033a2d2 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549415.7784505,
+    "decay_factor": 0.9896248975081576,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "success"
+    ]
+  },
+  {
+    "id": "f73a0cd8-7a0a-43e7-892d-537416dbbca7",
+    "session_id": "c3e46033a2d2",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "tokens",
+    "context": "session c3e46033a2d2 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549415.7784796,
+    "decay_factor": 0.9896248975193794,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "tokens"
+    ]
+  },
+  {
+    "id": "2feccb0e-9199-4e9f-8158-0c9482deea16",
+    "session_id": "c3e46033a2d2",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "reflections",
+    "context": "session c3e46033a2d2 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549415.7785,
+    "decay_factor": 0.98962489752729,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "reflections"
+    ]
+  },
+  {
+    "id": "c0497784-d8ae-454e-859e-33ed108cd1b4",
+    "session_id": "0b2719514dc9",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "intent",
+    "context": "session 0b2719514dc9 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549669.123135,
+    "decay_factor": 0.989722638513019,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "intent"
+    ]
+  },
+  {
+    "id": "f7bbb3a8-649a-44a8-8791-8dcf48349556",
+    "session_id": "0b2719514dc9",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "success",
+    "context": "session 0b2719514dc9 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549669.1232636,
+    "decay_factor": 0.9897226385625976,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "success"
+    ]
+  },
+  {
+    "id": "ff124c3c-275b-4baf-95a1-db754b952515",
+    "session_id": "0b2719514dc9",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "tokens",
+    "context": "session 0b2719514dc9 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549669.1232927,
+    "decay_factor": 0.9897226385738195,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "tokens"
+    ]
+  },
+  {
+    "id": "22df6f98-ebfb-483a-b6db-4719631dc9b8",
+    "session_id": "0b2719514dc9",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "reflections",
+    "context": "session 0b2719514dc9 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778549669.1233134,
+    "decay_factor": 0.989722638581822,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "reflections"
+    ]
+  },
+  {
+    "id": "a209e0cc-a8a2-42d5-8412-0888b8168633",
+    "session_id": "e71b336ed338",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "intent",
+    "context": "session e71b336ed338 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778561720.1815865,
+    "decay_factor": 0.9943719666192745,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "intent"
+    ]
+  },
+  {
+    "id": "3aff0fc4-407c-4249-93ab-50eb1e229c48",
+    "session_id": "e71b336ed338",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "success",
+    "context": "session e71b336ed338 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778561720.1817286,
+    "decay_factor": 0.9943719666740961,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "success"
+    ]
+  },
+  {
+    "id": "a403c01e-d64d-4f18-8f0b-3a7f50fb105e",
+    "session_id": "e71b336ed338",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "tokens",
+    "context": "session e71b336ed338 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778561720.1817758,
+    "decay_factor": 0.9943719666923085,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "tokens"
+    ]
+  },
+  {
+    "id": "0c0f709d-0684-4bbf-ad54-c555a3a48cf5",
+    "session_id": "e71b336ed338",
+    "pattern": "generation",
+    "category": "insight",
+    "severity": "low",
+    "lesson_text": "reflections",
+    "context": "session e71b336ed338 reflections",
+    "success_rate": 0.5,
+    "tokens_used": 0,
+    "created_at": 1778561720.1817973,
+    "decay_factor": 0.994371966700587,
+    "times_injected": 0,
+    "last_injected": 0.0,
+    "tags": [
+      "reflections"
+    ]
+  }
+]

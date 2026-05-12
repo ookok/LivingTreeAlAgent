@@ -2,7 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08080f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
 <title>LivingTree · 数字生命体</title>
 <style>
 :root {
@@ -94,6 +98,12 @@ table.data-table tr:hover{background:rgba(102,204,136,.05)}
 .btn.active{color:var(--accent)}.btn.recording{animation:recPulse .8s infinite}
 @keyframes recPulse{0%,100%{color:var(--red)}50%{color:var(--text)}}
 
+/* Emoji picker */
+#emoji-picker{display:none;position:absolute;bottom:60px;right:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;z-index:30;width:280px;max-height:200px;overflow-y:auto;grid-template-columns:repeat(8,1fr);gap:4px}
+#emoji-picker.show{display:grid}
+#emoji-picker button{background:transparent;border:none;font-size:20px;cursor:pointer;padding:4px;border-radius:6px;transition:background .15s}
+#emoji-picker button:hover{background:var(--border)}
+
 /* Copy & Share buttons */
 .msg-actions{display:flex;gap:4px;margin-top:4px;opacity:0;transition:opacity .2s}
 .msg:hover .msg-actions{opacity:1}
@@ -112,11 +122,35 @@ table.data-table tr:hover{background:rgba(102,204,136,.05)}
 #file-preview{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0}
 
 #heartbeat{font-size:12px;color:var(--dim);text-align:center;padding:4px 0}
+#reconnect-banner{display:none;position:fixed;top:0;left:0;right:0;background:var(--red);color:var(--bg);text-align:center;padding:6px;font-size:12px;z-index:100;animation:pulse 1.5s infinite}
+#reconnect-banner.show{display:block}
+
+/* Mobile optimizations */
+@media(max-width:600px){
+  #living-window{max-width:100%}
+  #mind-space{padding:8px 12px 0}
+  #input-orbit{padding:6px 8px 8px}
+  .msg{max-width:92%;font-size:13px}
+  .card{padding:8px 10px}
+  pre.code-block{max-height:200px;font-size:12px}
+  .btn{font-size:16px;padding:6px 8px}
+  #msg-input{font-size:16px}
+  #folder-bar{flex-wrap:wrap}
+}
+@media(display-mode: standalone){
+  body{padding-top:env(safe-area-inset-top)}
+  #input-orbit{padding-bottom:env(safe-area-inset-bottom)}
+}
+
+/* Dark/Light toggle */
+:root.light{--bg:#f5f5f5;--surface:#fff;--border:#e0e0e0;--text:#333;--dim:#999;--code-bg:#f0f0f0;--card-bg:#fafafa}
 #stream-hint{position:absolute;top:-26px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--dim);background:var(--surface);padding:2px 10px;border-radius:10px;display:none;white-space:nowrap}
 #stream-hint.show{display:block}
 </style>
 </head>
 <body>
+
+<div id="reconnect-banner">⚠ 网络不稳定，正在重试...</div>
 
 <div id="living-window">
   <div id="mind-space">
@@ -132,11 +166,13 @@ table.data-table tr:hover{background:rgba(102,204,136,.05)}
       <textarea id="msg-input" rows="1" placeholder="输入想法，拖入文件，或语音输入..." autofocus></textarea>
       <div id="action-bar">
         <button class="btn" id="btn-file" title="选择文件">📎</button>
-        <button class="btn" id="btn-voice" title="语音输入">🎤</button>
-        <button class="btn" id="btn-send" title="发送">↑</button>
+      <button class="btn" id="btn-voice" title="语音输入">🎤</button>
+      <button class="btn" id="btn-emoji" title="表情">😊</button>
+      <button class="btn" id="btn-send" title="发送">↑</button>
       </div>
     </div>
     <div id="file-preview"></div>
+    <div id="emoji-picker"></div>
     <div id="folder-bar">
       <button class="btn" id="btn-folder" style="font-size:12px;padding:4px 10px;display:flex;align-items:center;gap:4px">
         📂 <span id="folder-label">选择本地项目文件夹</span>
@@ -239,6 +275,27 @@ function addCard(type, title, content, extra={}) {
     case 'file':
       body = `<div class="card"><div class="card-header"><span class="card-type file">📁 ${title||'文件'}</span></div><p>${content}</p></div>`;
       break;
+    case 'doc':
+      // Async load document content via server conversion
+      const docPath = extra.path || content;
+      body = `<div class="card"><div class="card-header"><span class="card-type file">📄 ${title||'文档'}</span><span>加载中...</span></div>
+              <div class="doc-render" id="doc-${Math.random().toString(36).slice(2,8)}"><p>正在渲染文档...</p></div></div>`;
+      el.innerHTML = body;
+      mind.appendChild(el);
+      mind.scrollTop = mind.scrollHeight;
+      // Async fetch
+      fetch(`/api/doc/view?path=${encodeURIComponent(docPath)}`)
+        .then(r => r.json().catch(() => r.blob()))
+        .then(data => {
+          const renderDiv = el.querySelector('.doc-render');
+          if(data.html) renderDiv.innerHTML = data.html;
+          else if(data instanceof Blob) {
+            renderDiv.innerHTML = `<iframe src="${URL.createObjectURL(data)}" style="width:100%;height:60vh;border:none;border-radius:8px"></iframe>`;
+          }
+        }).catch(() => {
+          el.querySelector('.doc-render').innerHTML = '<p>⚠ 无法加载文档</p>';
+        });
+      return; // Already appended
     default:
       body = content;
   }
@@ -295,6 +352,45 @@ filePreview.addEventListener('click', e=>{
 
 btnFile.addEventListener('click',()=>fileInput.click());
 fileInput.addEventListener('change',()=>handleFiles(fileInput.files));
+
+// Emoji picker + sentiment recognition
+const btnEmoji = document.getElementById('btn-emoji');
+const emojiPicker = document.getElementById('emoji-picker');
+const EMOJIS = ['😊','😂','❤️','👍','🎉','😢','😡','🤔','👏','🔥','💯','🙏','😱','🥰','😴','🤯','🫡','💪','✨','🚀'];
+
+// Build emoji grid
+EMOJIS.forEach(e => { const b=document.createElement('button');b.textContent=e;b.onclick=()=>{input.value+=e;emojiPicker.classList.remove('show');input.focus()};emojiPicker.appendChild(b); });
+btnEmoji.addEventListener('click',e=>{e.stopPropagation();emojiPicker.classList.toggle('show')});
+document.addEventListener('click',()=>emojiPicker.classList.remove('show'));
+
+// Emoji → sentiment → modulate heart
+const EMOJI_SENTIMENT = {
+  '😊':{e:'joy',i:0.6},'😂':{e:'joy',i:0.8},'❤️':{e:'joy',i:0.7},'👍':{e:'joy',i:0.4},'🎉':{e:'joy',i:0.9},
+  '😢':{e:'sadness',i:0.6},'😡':{e:'anger',i:0.8},'🤔':{e:'curious',i:0.5},'😱':{e:'surprise',i:0.9},
+  '🥰':{e:'joy',i:0.8},'😴':{e:'calm',i:0.3},'🤯':{e:'surprise',i:1.0},'✨':{e:'joy',i:0.5},'🚀':{e:'joy',i:0.7},
+  '💪':{e:'joy',i:0.6},'🙏':{e:'calm',i:0.4},'🔥':{e:'joy',i:0.7},
+};
+
+function detectEmojiSentiment(text) {
+  let dominant = null, maxIntensity = 0;
+  for(const [emoji, sent] of Object.entries(EMOJI_SENTIMENT)) {
+    if(text.includes(emoji) && sent.i > maxIntensity) { dominant = sent; maxIntensity = sent.i; }
+  }
+  return dominant;
+}
+
+// Hook into send: detect emoji → modulate emotion
+const origSendMsg = sendMessage;
+sendMessage = async function() {
+  const text = input.value;
+  const sentiment = detectEmojiSentiment(text);
+  if(sentiment) {
+    setHeart(65 + sentiment.i * 30, sentiment.e);
+    setTimeout(() => setHeart(62, 'calm'), 3000);
+    haptic('medium');
+  }
+  return origSendMsg();
+};
 
 // Drag & drop
 document.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('show')});
@@ -477,8 +573,44 @@ function generateResponse(text, files) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Events
+// Stream retry + reconnect (AbortController + backoff)
 // ═══════════════════════════════════════════════════════
+let retryCount = 0;
+const MAX_RETRIES = 5;
+const BASE_DELAY = 1000;
+let activeController = null;
+const reconnectBanner = document.getElementById('reconnect-banner');
+
+async function fetchWithRetry(url, options) {
+  if(retryCount >= MAX_RETRIES) {
+    reconnectBanner.textContent = '❌ 连接失败，请刷新页面重试';
+    reconnectBanner.classList.add('show');
+    return Promise.reject(new Error('Max retries'));
+  }
+  activeController = new AbortController();
+  const opts = { ...options, signal: activeController.signal };
+
+  try {
+    const res = await fetch(url, opts);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    retryCount = 0;
+    reconnectBanner.classList.remove('show');
+    return res;
+  } catch(e) {
+    if(e.name === 'AbortError') return Promise.reject(e);
+    retryCount++;
+    const delay = BASE_DELAY * Math.pow(2, retryCount);
+    reconnectBanner.textContent = `⚠ 正在重试 (${retryCount}/${MAX_RETRIES})...`;
+    reconnectBanner.classList.add('show');
+    await new Promise(r => setTimeout(r, delay));
+    return fetchWithRetry(url, options);
+  }
+}
+
+function cancelRequests() {
+  if(activeController) { activeController.abort(); activeController = null; }
+}
+window.addEventListener('beforeunload', cancelRequests);
 document.getElementById('btn-send').addEventListener('click',sendMessage);
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,120)+'px'});
@@ -488,6 +620,96 @@ const h = new Date().getHours();
 addSystem(`🌳 数字生命体已唤醒 · ${h<6?'深夜':h<12?'早上':h<18?'下午':'晚上'}好 · 可直接输入、拖入文件、或输入本地文件夹路径`);
 setHeart(62,'calm');
 input.focus();
+
+// ═══════════════════════════════════════════════════════
+// PWA + Modern Browser APIs
+// ═══════════════════════════════════════════════════════
+
+// Install prompt
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+
+// Screen Wake Lock (keep screen on during streaming)
+let wakeLock = null;
+async function lockScreen() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {} }
+async function unlockScreen() { if(wakeLock) { await wakeLock.release(); wakeLock = null; } }
+
+// Visibility (pause when tab hidden)
+document.addEventListener('visibilitychange', () => {
+  document.hidden ? unlockScreen() : lockScreen();
+});
+
+// Haptic feedback
+function haptic(p='short') { if(navigator.vibrate) navigator.vibrate({short:10,medium:30,double:[10,50,10]}[p]||10); }
+
+// Notification
+async function notify(title, body) {
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='granted') new Notification(title,{body,icon:'/favicon.ico'});
+}
+
+// Dark/Light toggle (triple-tap heartbeat)
+let tapC=0, tapT=null;
+document.getElementById('heartbeat').addEventListener('click',()=>{
+  tapC++; haptic('short'); clearTimeout(tapT);
+  tapT=setTimeout(()=>{tapC=0},800);
+  if(tapC>=3){tapC=0;document.documentElement.classList.toggle('light');
+  addSystem(document.documentElement.classList.contains('light')?'☀️ 亮色模式':'🌙 暗色模式')}
+});
+
+// Broadcast Channel (cross-tab)
+try { new BroadcastChannel('livingtree').onmessage = e => { if(e.data.type==='wake') addSystem('🌳 另一标签页已唤醒'); }; } catch(e) {}
+
+// ═══════════════════════════════════════════════════════
+// Service Worker + Offline Support
+// ═══════════════════════════════════════════════════════
+if('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.addEventListener('message', e => {
+    if(e.data.type === 'sync-complete') addSystem('📡 离线消息已同步');
+  });
+}
+
+// IndexedDB — local conversation storage
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('livingtree', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('messages', {keyPath:'id',autoIncrement:true}); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveMessage(msg) {
+  try { const db = await openDB(); const tx = db.transaction('messages','readwrite'); tx.objectStore('messages').add(msg); }
+  catch(e) {}
+}
+async function loadMessages() {
+  try {
+    const db = await openDB();
+    return new Promise(resolve => {
+      const tx = db.transaction('messages','readonly');
+      const req = tx.objectStore('messages').getAll();
+      req.onsuccess = () => resolve(req.result);
+    });
+  } catch(e) { return []; }
+}
+
+// Auto-save messages to IndexedDB
+const origAddMsg = addMsg;
+addMsg = function(text, type) {
+  origAddMsg(text, type);
+  saveMessage({text, type, ts: Date.now()});
+};
+
+// Load history on startup
+(async () => {
+  const msgs = await loadMessages();
+  if(msgs.length) addSystem(`📦 从本地恢复了 ${msgs.length} 条历史消息`);
+})();
+
+// Offline indicator
+window.addEventListener('online', () => addSystem('📶 网络已恢复'));
+window.addEventListener('offline', () => addSystem('📵 已离线 — 消息将暂存在本地'));
 
 // ═══════════════════════════════════════════════════════
 // Copy individual message

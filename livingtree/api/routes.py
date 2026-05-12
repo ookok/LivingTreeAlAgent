@@ -582,8 +582,6 @@ def setup_routes(app: FastAPI) -> None:
 
         return {"ok": False, "error": f"Unknown operation: {req.op}"}
 
-    @app.get("/api/status")
-
     # ═══ Web API (SPA chat) ═══
 
     @app.get("/api/status")
@@ -610,14 +608,6 @@ def setup_routes(app: FastAPI) -> None:
             return [t.model_dump() for t in tools]
         except Exception:
             return []
-
-    @app.get("/api/skills")
-    async def list_skills(request: Request) -> list[str]:
-        """List all registered skills."""
-        hub = request.app.state.hub
-        if not hub:
-            raise HTTPException(status_code=503, detail="Hub not initialized")
-        return hub.skill_factory.discover_skills()
 
     @app.get("/api/metrics")
     async def metrics(request: Request) -> dict[str, Any]:
@@ -720,17 +710,6 @@ def setup_routes(app: FastAPI) -> None:
             return []
         return [{"id": r.id, "task": r.task_name, "question": r.question,
                  "status": r.status, "created": r.created} for r in hub.world.hitl.get_pending()]
-
-    @app.post("/api/hitl/approve")
-    async def hitl_approve(request: Request) -> dict[str, Any]:
-        """Approve a HITL request."""
-        hub = request.app.state.hub
-        body = await request.json()
-        req_id = body.get("id", "")
-        if hub and hub.world.hitl:
-            ok = hub.world.hitl.approve(req_id, body.get("response", ""))
-            return {"approved": ok}
-        return {"approved": False, "error": "HITL not available"}
 
     @app.post("/api/hitl/deny")
     async def hitl_deny(request: Request) -> dict[str, Any]:
@@ -2253,6 +2232,45 @@ def _get_user_id_from_request(request: Request) -> str:
     async def shield_status(request: Request):
         from ..core.prompt_shield import get_shield
         return get_shield().stats()
+
+    # ═══ Virtual FS API ═══
+
+    @app.post("/api/vfs/execute")
+    async def vfs_execute(request: Request):
+        """Execute a command on the Virtual File System."""
+        body = await request.json()
+        command = body.get("command", "")
+        if not command:
+            return {"error": "no command"}
+        try:
+            from ..capability.virtual_fs import get_virtual_fs
+            vfs = get_virtual_fs()
+            result = await vfs.execute(command)
+            return {"ok": True, "output": result[:5000]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ═══ Wiki Search API ═══
+
+    @app.post("/api/wiki/search")
+    async def wiki_search(request: Request):
+        body = await request.json()
+        query = body.get("query", "")
+        path = body.get("path", "")
+        section = body.get("section", "")
+        try:
+            from ..knowledge.context_wiki import get_context_wiki
+            wiki = get_context_wiki()
+            if path:
+                pages = [wiki._pages.get(path)]
+            elif section:
+                pages = [p for p in wiki._pages.values() if p.section == section]
+            else:
+                pages = wiki.query(query) if query else list(wiki._pages.values())[:10]
+            result = [{"path": p.path, "title": p.title, "content": p.content[:500]} for p in pages if p]
+            return {"ok": True, "pages": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     @app.post("/api/shield/check-input")
     async def shield_check_input(request: Request):

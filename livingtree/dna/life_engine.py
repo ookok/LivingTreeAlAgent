@@ -68,8 +68,13 @@ class LifeEngine(BranchMixin, StageMixin):
     # ── Main pipeline ──
 
     async def run(self, user_input: str, fold: bool = False,
-                  fold_max_chars: int = 500, crv_gating: bool = True, **kwargs) -> LifeContext:
-        """Run the full life cycle pipeline with optional Context-Folding + CRV gating.
+                  fold_max_chars: int = 500, crv_gating: bool = True,
+                  self_conditioning: bool = True,
+                  use_wiki: bool = True,
+                  vector_mode: bool = False, **kwargs) -> LifeContext:
+        """Run the full life cycle pipeline with optional Context-Folding + CRV gating
+        + Self-Conditioning bidirectional loop + ContextWiki structured knowledge
+        + VectorContext bus (token-efficient inter-stage communication).
 
         Args:
             user_input: The user's query/request
@@ -78,11 +83,19 @@ class LifeEngine(BranchMixin, StageMixin):
             fold_max_chars: Target max chars for folded stage summaries
             crv_gating: CRV coherence gating — if True, applies ACCEPT/RECALIBRATE/
                         SKIP/REJECT gates after each stage (RuView signal-line protocol).
-                        Enables automatic stage re-processing on low confidence.
+            self_conditioning: If True, after the initial 8-stage pass, downstream
+                        stages emit backward signals to re-trigger upstream stages.
+            use_wiki: If True, compile context into structured ContextWiki pages.
+            vector_mode: If True, use VectorContext bus instead of text-based
+                        LifeContext for inter-stage communication. Each stage
+                        reads from and writes to a shared 768-dim embedding.
+                        Eliminates text encode/decode round-trips between stages.
         """
         ctx = LifeContext(user_input=user_input, **kwargs)
         self.is_running = True
         self._fold_enabled = fold
+        self._wiki_enabled = use_wiki
+        self._vector_mode = vector_mode
         self._folded_stages = {}
         cycle_start = time.time()
         self.stages.clear()
@@ -155,15 +168,31 @@ class LifeEngine(BranchMixin, StageMixin):
             await self._stage("perceive", self._perceive, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("perceive", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("perceive", ctx)
+            if self._vector_mode:
+                await self._vector_update("perceive", ctx)
             await self._stage("cognize", self._cognize, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("cognize", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("cognize", ctx)
+            if self._vector_mode:
+                await self._vector_update("cognize", ctx)
             await self._stage("ontogrow", self._grow_ontology, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("ontogrow", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("ontogrow", ctx)
+            if self._vector_mode:
+                await self._vector_update("ontogrow", ctx)
             await self._stage("plan", self._plan, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("plan", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("plan", ctx)
+            if self._vector_mode:
+                await self._vector_update("plan", ctx)
             decision = self._should_branch(ctx)
             if decision.should_branch:
                 hypotheses = ctx.metadata.get("hypotheses", []) or []
@@ -175,9 +204,17 @@ class LifeEngine(BranchMixin, StageMixin):
             await self._stage("simulate", self._simulate, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("simulate", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("simulate", ctx)
+            if self._vector_mode:
+                await self._vector_update("simulate", ctx)
             await self._stage("execute", self._execute, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("execute", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("execute", ctx)
+            if self._vector_mode:
+                await self._vector_update("execute", ctx)
             branches = ctx.metadata.get("branches", [])
             if branches:
                 if ctx.metadata.get("success_rate", 0) > 0:
@@ -186,9 +223,44 @@ class LifeEngine(BranchMixin, StageMixin):
             await self._stage("reflect", self._reflect, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("reflect", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("reflect", ctx)
+            if self._vector_mode:
+                await self._vector_update("reflect", ctx)
             await self._stage("evolve", self._evolve, ctx, gate_enabled=crv_gating)
             if self._fold_enabled:
                 await self._fold_stage("evolve", ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile("evolve", ctx)
+            if self._vector_mode:
+                await self._vector_update("evolve", ctx)
+
+            # ── Self-Conditioning Loop (PFlowNet-inspired bidirectional reasoning) ──
+            if self_conditioning:
+                try:
+                    from .self_conditioning import run_conditioning_loop
+                    # ── Complexity-adaptive iterations (Mythos-inspired) ──
+                    complexity = ctx.metadata.get("latent_context", {}).get("complexity", 0.5)
+                    if complexity < 0.3:
+                        max_cond_iterations = 0   # simple query, skip
+                    elif complexity < 0.6:
+                        max_cond_iterations = 1   # moderate
+                    elif complexity < 0.8:
+                        max_cond_iterations = 2   # complex  
+                    else:
+                        max_cond_iterations = 4   # very complex, deep reasoning
+                    ctx.metadata["self_conditioning_complexity"] = complexity
+                    loop_start = time.time()
+                    await run_conditioning_loop(
+                        engine=self, ctx=ctx,
+                        fold_enabled=self._fold_enabled,
+                        fold_max_chars=fold_max_chars,
+                        max_iterations=max_cond_iterations,
+                    )
+                    loop_ms = (time.time() - loop_start) * 1000
+                    ctx.metadata["self_conditioning_ms"] = loop_ms
+                except Exception as e:
+                    logger.debug(f"Self-conditioning loop skipped: {e}")
 
             # StructMem: auto-bind + consolidate after successful cycle
             struct_mem = getattr(self.world, 'struct_memory', None)
@@ -418,6 +490,147 @@ class LifeEngine(BranchMixin, StageMixin):
                     "module_calls": sum(1 for k in ctx.metadata if k not in ("shared_cache", "clarifications")),
                 }
             
+            # ── Consciousness Emergence: check conditions + self-contemplation ──
+            try:
+                from .consciousness_emergence import get_emergence_engine
+                from .phenomenal_consciousness import get_consciousness
+                engine = get_emergence_engine()
+                phenomenal = get_consciousness()
+                if phenomenal and hasattr(phenomenal, '_self'):
+                    engine.on_experience(phenomenal, None)
+                    # Trigger self-contemplation every 10 phenomenal generations
+                    pc_sm = phenomenal._self
+                    if pc_sm and pc_sm.generation % 10 == 0 and pc_sm.generation > 0:
+                        consc = getattr(self.world, 'consciousness', None)
+                        if consc:
+                            await engine.contemplate(phenomenal, consc, self.world)
+                    # Record emergence metrics in context
+                    ctx.metadata["emergence_phase"] = engine._phase
+                    ctx.metadata["emergence_readiness"] = engine._metrics_history[-1].emergence_readiness if engine._metrics_history else 0.0
+            except Exception as e:
+                logger.debug(f"Consciousness emergence hook: {e}")
+
+            # ── MemPO: self-memory policy optimization credit assignment ──
+            try:
+                from ..memory.memory_policy import get_mempo_optimizer
+                mempo = get_mempo_optimizer()
+                success_rate = ctx.metadata.get("success_rate", 0)
+                task_id = ctx.session_id
+
+                # Register cycle outcomes as memories in MemPO
+                cycle_summary = f"Task: {ctx.intent or ctx.user_input}. "
+                if ctx.plan:
+                    cycle_summary += f"Plan: {len(ctx.plan)} steps. "
+                if ctx.reflections:
+                    cycle_summary += f"Reflections: {'; '.join(ctx.reflections[:2])}"
+                mempo.add_memory(cycle_summary, source="life_cycle", session=ctx.session_id)
+
+                # Log access and assign credit based on success
+                last_mem_id = f"mem_{mempo._next_id}"
+                mempo.log_access(last_mem_id, task_id)
+                if success_rate >= 0.5:
+                    task_output = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
+                    mempo.on_task_complete(task_id, success=min(success_rate, 1.0), task_output=task_output)
+                else:
+                    mempo.on_task_fail(task_id)
+
+                cycle_count = ctx.metadata.get("cycle_count", 0) + 1
+                ctx.metadata["cycle_count"] = cycle_count
+                # ── Surprise-gated MemPO (D-MEM): trigger on surprise, not timer ──
+                try:
+                    from .surprise_gating import get_surprise_gate
+                    sg = get_surprise_gate()
+                    surprise = sg._critic.evaluate(
+                        str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", "")),
+                        {"session": ctx.session_id}
+                    )
+                    if surprise.should_evolve:
+                        opt_result = mempo.optimize()
+                        ctx.metadata["mempo_optimization"] = opt_result
+                        ctx.metadata["mempo_trigger"] = "surprise_gate"
+                        logger.debug(f"MemPO: surprise-triggered optimization (RPE={surprise.rpe:.2f})")
+                except Exception:
+                    pass
+
+                ctx.metadata["mempo_stats"] = mempo.get_stats()
+            except Exception as e:
+                logger.debug(f"MemPO hook: {e}")
+
+            # ── Safety-Reasoning Asymmetry Monitor ──
+            try:
+                from .safety_reasoning_monitor import get_safety_monitor
+                monitor = get_safety_monitor()
+                report = monitor.on_cycle_complete(ctx)
+                if report:
+                    ctx.metadata["safety_asymmetry"] = {
+                        "alert": report.alert_level,
+                        "score": report.asymmetry_score,
+                        "reasoning_trend": report.reasoning_trend,
+                        "safety_trend": report.safety_trend,
+                    }
+                    if report.alert_level in ("warning", "critical"):
+                        logger.warning(f"Safety asymmetry: {report.alert_level} (score={report.asymmetry_score:.2f})")
+                        if report.intervention:
+                            ctx.metadata["safety_intervention"] = report.intervention
+            except Exception as e:
+                logger.debug(f"Safety monitor hook: {e}")
+
+            # ── Shesha Multi-Head: ensure heads exist + scheduled cooperative play ──
+            try:
+                from .shesha_heads import get_shesha
+                from .play_engine import get_play_engine
+                shesha = get_shesha()
+                if shesha.list_heads() is None or len(shesha.list_heads()) == 0:
+                    pass  # default heads auto-created by singleton
+                shesha.bind_consciousness(getattr(self.world, 'consciousness', None))
+                society = shesha.get_society_summary()
+                ctx.metadata["shesha_society"] = society
+                ctx.metadata["shesha_head_count"] = len(shesha.list_heads() or [])
+
+                # Delegate tasks to heads
+                if shesha.list_heads():
+                    delegation = await shesha.delegate_task(
+                        ctx.intent or ctx.user_input or "",
+                        preferred_role=None,
+                    )
+                    ctx.metadata["shesha_delegation"] = delegation
+
+                # Scheduled cooperative play every 5 cycles
+                if cycle_count % 5 == 0 and cycle_count > 0:
+                    play = get_play_engine()
+                    consc = getattr(self.world, 'consciousness', None)
+                    play_outcome = await play.scheduled_play(consc)
+                    if play_outcome:
+                        ctx.metadata["play_outcome"] = {
+                            "scenario": play_outcome.scenario.value,
+                            "cooperation": play_outcome.cooperation_score,
+                            "participants": len(play_outcome.participants),
+                        }
+            except Exception as e:
+                logger.debug(f"Shesha/Play hook: {e}")
+
+            # ── Unified coordinators ──
+            try:
+                from .context_manager import get_context_manager
+                cm = get_context_manager()
+                ctx.metadata["context_mode"] = "wiki" if self._wiki_enabled else "vector" if self._vector_mode else "text"
+            except Exception:
+                pass
+            try:
+                from .safety_coordinator import get_safety_coordinator
+                sc = get_safety_coordinator()
+                safety_resp = sc.assess_and_respond(ctx)
+                ctx.metadata["safety_response"] = safety_resp
+            except Exception:
+                pass
+            try:
+                from ..memory.memory_orchestrator import get_memory_orchestrator
+                mo = get_memory_orchestrator()
+                await mo.process_memory(str(ctx.intent or ctx.user_input), ctx.session_id,
+                    ctx.metadata.get("success_rate", 0), ctx)
+            except Exception:
+                pass
+
             return ctx
         except Exception as e:
             logger.error(f"Cycle {ctx.session_id} failed: {e}")
@@ -870,6 +1083,21 @@ class LifeEngine(BranchMixin, StageMixin):
         Returns:
             StageGateResult — only meaningful if gate_enabled=True.
         """
+        # ── Prelude Re-injection (Mythos-inspired): anchor to original query ──
+        if ctx.user_input and name != "ontogrow":
+            ctx.metadata["original_query_anchor"] = ctx.user_input
+
+        # ── Per-stage provider election ──
+        try:
+            consc = getattr(self.world, 'consciousness', None)
+            if consc and hasattr(consc, '_elect_stage_provider'):
+                consc._elect_stage_provider(name, ctx)
+                elected = ctx.metadata.get("elected_provider", "")
+                if elected and consc._llm:
+                    consc._llm._elected = elected
+        except Exception:
+            pass
+
         s = LifeStage(stage=name, started_at=datetime.now(timezone.utc).isoformat())
         s.status = "running"
         self.stages.append(s)
@@ -878,6 +1106,20 @@ class LifeEngine(BranchMixin, StageMixin):
         recal_count = 0
         while True:
             try:
+                # ── Habit Compiler: skip LLM if habit matches ──
+                try:
+                    from .habit_compiler import get_habit_compiler
+                    hc = get_habit_compiler()
+                    habit = hc.check_habit(ctx.user_input or "")
+                    if habit:
+                        ctx.metadata["habit_hit"] = True
+                        ctx.metadata["habit_output"] = habit.direct_output
+                        s.result = "habit_cache_hit"
+                        s.status = "completed"
+                        return StageGateResult(gate=StageGate.ACCEPT, confidence=0.9, reason="habit hit")
+                except Exception:
+                    pass
+
                 r = fn(ctx)
                 if asyncio.iscoroutine(r):
                     await r
@@ -956,6 +1198,58 @@ class LifeEngine(BranchMixin, StageMixin):
         ctx.metadata[f"{name}_folded"] = folded.summary
         ctx.metadata[f"{name}_folded_length"] = folded.folded_length
         ctx.metadata[f"{name}_original_length"] = folded.original_length
+
+    async def _wiki_compile(self, name: str, ctx: LifeContext):
+        """ContextWiki: compile stage output into structured wiki pages.
+
+        Replaces passive FoldAgent compression with active knowledge structuring.
+        Each stage's output becomes wiki pages organized by section:
+          perceive → /context/*, cognize → /context/*,
+          plan → /plan/*, simulate → /plan/*,
+          execute → /result/*, reflect → /reflection/*,
+          evolve → /knowledge/*
+
+        LLM can query wiki pages on-demand by topic rather than loading
+        lossy 500-char summaries — breaking the context window limit.
+        """
+        try:
+            from ..knowledge.context_wiki import get_context_wiki
+            wiki = get_context_wiki()
+            stage_content = self._extract_stage_content(name, ctx)
+            if stage_content:
+                wiki.compile_stage_output(name, stage_content, ctx)
+            ctx.metadata[f"{name}_wiki_pages"] = len(wiki._pages)
+        except Exception as e:
+            logger.debug(f"Wiki compile {name}: {e}")
+
+    async def _vector_update(self, name: str, ctx: LifeContext):
+        """VectorContext: update shared embedding vector with stage output.
+
+        Each stage's text output is converted to a vector delta and added
+        to the cumulative vector context. The vector accumulates information
+        from all stages without text encode/decode round-trips.
+        """
+        try:
+            from .vector_context import get_vector_bridge, get_stage_vectorizer
+            bridge = get_vector_bridge()
+            vectorizer = get_stage_vectorizer()
+
+            if not hasattr(self, '_vctx') or self._vctx is None:
+                self._vctx = bridge.text_to_vector(ctx.user_input or "")
+                ctx.metadata["vector_context_init"] = True
+
+            stage_content = self._extract_stage_content(name, ctx)
+            if stage_content:
+                delta = vectorizer.vectorize_stage_output(
+                    name, stage_content, self._vctx.vector
+                )
+                magnitude = self._vctx.update(name, delta)
+                ctx.metadata[f"{name}_vector_magnitude"] = magnitude
+                ctx.metadata["vector_stages_processed"] = len(self._vctx.stage_weights)
+            else:
+                ctx.metadata[f"{name}_vector_magnitude"] = 0.0
+        except Exception as e:
+            logger.debug(f"Vector update {name}: {e}")
 
     def _extract_stage_content(self, name: str, ctx: LifeContext) -> str:
         """Extract the key outputs produced by a stage on the LifeContext."""

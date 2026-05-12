@@ -187,6 +187,7 @@ class AgenticRAG:
         max_tokens: int = 50_000,
         domain: str = "general",
         hitl_callback=None,  # async fn(result) → bool (approved)
+        dialogue_context: list[str] | None = None,
     ) -> AgenticResult:
         """Agentic RAG主入口——自动决策→检索→生成→反思.
 
@@ -197,6 +198,7 @@ class AgenticRAG:
             max_tokens: Token预算上限
             domain: 领域上下文
             hitl_callback: HITL模式回调 async def callback(result) -> bool
+            dialogue_context: 最近对话轮次，用于指代消解和上下文感知检索
 
         Returns:
             AgenticResult with full retrieval trajectory
@@ -204,6 +206,19 @@ class AgenticRAG:
         self._total_queries += 1
         start_time = time.time()
         self._cb.reset()
+        self._dialogue_context = dialogue_context or []
+
+        # ── Reasoning-aware context injection (MemReranker-inspired) ──
+        if self._dialogue_context:
+            try:
+                from .reasoning_reranker import get_reasoning_reranker
+                rr = get_reasoning_reranker()
+                enriched = rr.inject_dialogue_context(query, self._dialogue_context)
+                if enriched != query:
+                    logger.debug(f"Context injection: '{query[:50]}' → '{enriched[:60]}'")
+                    query = enriched
+            except Exception:
+                pass
 
         # 0. Adaptive short-path: auto-detect simple queries and route directly
         if mode == RAGMode.ITERATIVE and self._is_short_path(query):
@@ -214,6 +229,17 @@ class AgenticRAG:
             return result
 
         # 1. 选择模式（如 auto）
+        # ── Retrieval Decision Framework: classify query shape, choose strategy ──
+        try:
+            from .retrieval_framework import get_retrieval_framework
+            rdf = get_retrieval_framework()
+            user_ctx = {"access_level": getattr(self, '_user_access_level', None)}
+            retrieval_decision = rdf.decide(query, user_ctx)
+            self._retrieval_strategy = retrieval_decision.strategy
+            logger.debug(f"RDF: shape={retrieval_decision.shape.value} method={retrieval_decision.strategy.primary_method}")
+        except Exception:
+            self._retrieval_strategy = None
+
         if mode == RAGMode.CONDITIONAL:
             result = await self._conditional_rag(query, domain, max_tokens)
         elif mode == RAGMode.PLANNING:
@@ -512,6 +538,32 @@ class AgenticRAG:
             results = await unified_retrieve(
                 query, top_k=5)
             docs = [r.text if hasattr(r, 'text') else str(r) for r in results]
+
+            # ── Reasoning-aware reranking (MemReranker-inspired) ──
+            if len(docs) > 1:
+                try:
+                    from .reasoning_reranker import get_reasoning_reranker
+                    rr = get_reasoning_reranker()
+                    candidates = [
+                        {"text": d, "score": 0.5, "source": domain, "doc_id": d[:50]}
+                        for d in docs
+                    ]
+                    reasoning = await rr.generate_reasoning(
+                        query,
+                        dialogue_context=getattr(self, '_dialogue_context', None),
+                    )
+                    calibrated = rr.rerank(candidates, reasoning, top_k=min(5, len(docs)))
+                    doc_map = {d[:50]: d for d in docs}
+                    reordered = []
+                    for c in calibrated:
+                        key = c.doc_id[:50] if hasattr(c, 'doc_id') else str(c.doc_id)[:50]
+                        if key in doc_map:
+                            reordered.append(doc_map[key])
+                    if reordered:
+                        docs = reordered
+                except Exception:
+                    pass
+
             return docs
         except Exception as e:
             logger.debug(f"AgenticRAG retrieve: {e}")

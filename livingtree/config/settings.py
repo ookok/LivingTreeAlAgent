@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModelConfig(BaseModel):
@@ -194,6 +194,50 @@ class ModelConfig(BaseModel):
     max_tokens: int = 4096
     top_p: float = 0.9
     embedding_model: str = "all-MiniLM-L6-v2"
+
+    @model_validator(mode='after')
+    def validate_provider_config(self) -> 'ModelConfig':
+        remote_providers = [
+            'deepseek', 'longcat', 'xiaomi', 'aliyun', 'zhipu',
+            'dmxapi', 'spark', 'siliconflow', 'mofang', 'nvidia',
+            'modelscope', 'bailing', 'stepfun', 'internlm',
+            'sensetime', 'openrouter',
+        ]
+
+        warnings = []
+        has_configured = False
+
+        for prefix in remote_providers:
+            base_url = getattr(self, f'{prefix}_base_url', '')
+            api_key = getattr(self, f'{prefix}_api_key', '')
+
+            if base_url and not api_key:
+                warnings.append(f"{prefix}: base_url configured but api_key is empty")
+            elif base_url and api_key:
+                has_configured = True
+
+        for w in warnings:
+            logger.warning(f"ModelConfig: {w}")
+
+        if self.ollama_base_url:
+            has_configured = True
+        if self.llamacpp_base_url:
+            has_configured = True
+
+        if self.flash_model == self.pro_model:
+            logger.warning(
+                f"ModelConfig: flash_model and pro_model are both '{self.flash_model}' — "
+                "consider using different models for flash vs pro"
+            )
+
+        if not has_configured:
+            logger.warning(
+                "ModelConfig: no provider is fully configured "
+                "(base_url + api_key both non-empty). "
+                "System will have limited LLM functionality."
+            )
+
+        return self
 
 
 class CellConfig(BaseModel):

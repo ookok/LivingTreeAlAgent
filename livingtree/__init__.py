@@ -47,6 +47,26 @@ __all__ = [
     "AgenticRAG", "Reranker",
     # Execution (new)
     "PlanValidator", "FitnessLandscape", "DiffusionPlanner", "PipelineOptimizer",
+    # Core infrastructure
+    "get_concurrency_guard",
+    # Event bus
+    "get_event_bus",
+    # DNA defense & signaling
+    "get_immune_system", "get_endocrine",
+    # TreeLLM connection pool
+    "get_connection_pool", "close_connection_pool",
+    # Economy metabolism
+    "get_metabolism",
+    # Cell dream pretraining
+    "get_dream_pretrainer",
+    # Observability
+    "get_otel",
+    # TreeLLM cache
+    "get_cache_hierarchy",
+    # Swarm evolution
+    "get_swarm_evolution",
+    # Emotional memory
+    "get_emotional_memory",
 ]
 
 
@@ -112,6 +132,27 @@ _LAZY = {
     "FitnessLandscape": ".execution",
     "DiffusionPlanner": ".execution",
     "PipelineOptimizer": ".execution",
+    # Core infrastructure
+    "get_concurrency_guard": ".core.concurrency_guard",
+    "get_event_bus": ".infrastructure.event_bus_v2",
+    # DNA defense & signaling
+    "get_immune_system": ".dna.immune_system",
+    "get_endocrine": ".dna.hormone_signaling",
+    # TreeLLM connection pool
+    "get_connection_pool": ".treellm.connection_pool",
+    "close_connection_pool": ".treellm.connection_pool",
+    # Economy metabolism
+    "get_metabolism": ".economy.metabolism",
+    # Cell dream pretraining
+    "get_dream_pretrainer": ".cell.dream_pretraining",
+    # Observability
+    "get_otel": ".observability.otel_integration",
+    # TreeLLM cache
+    "get_cache_hierarchy": ".treellm.cache_hierarchy",
+    # Swarm evolution
+    "get_swarm_evolution": ".dna.swarm_evolution",
+    # Emotional memory
+    "get_emotional_memory": ".memory.emotional_memory",
 }
 
 

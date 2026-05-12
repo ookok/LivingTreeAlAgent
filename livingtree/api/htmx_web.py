@@ -8,6 +8,7 @@ Innovative frontend designs combining LLM-generated HTML + HTMX:
   P4: Generative UI card streaming (LLM outputs HTMX-enhanced HTML fragments)
   P5: Adaptive form generation (LLM creates multi-step forms with field linkage)
   P6: Knowledge graph interactive exploration (LLM generates expandable graph nodes)
+  P7: Task decomposition tree — live SSE visualization of recursive decomposition
 
 Routes:
   GET  /tree                    → main dashboard
@@ -2859,6 +2860,50 @@ async def tree_perf_stats(request: Request):
         f'<div class="metric"><span>估算省费用</span><span>¥{fs["estimated_cost_saved_yuan"]:.6f}</span></div></div>'
         '</div>'
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  P7: Task decomposition tree — live SSE visualization
+# ═══════════════════════════════════════════════════════════════
+
+@htmx_router.get("/task", response_class=HTMLResponse)
+async def tree_task_page(request: Request):
+    """Task decomposition visualization page."""
+    return _render_template("task_tree.html", request=request)
+
+
+@htmx_router.get("/task/tree")
+async def tree_task_sse(request: Request, task: str = Query(default="")):
+    """SSE stream of task decomposition tree.
+
+    Query params:
+        task: task description to decompose, or task_id to resume
+    """
+    if not task.strip():
+        async def empty():
+            yield f"event: task_error\ndata: {_json.dumps({'error': '请提供任务描述'})}\n\n"
+        return StreamingResponse(empty(), media_type="text/event-stream")
+
+    hub = _get_hub(request)
+
+    async def stream():
+        try:
+            from ..execution.task_tree import get_task_decomposer
+
+            decomposer = get_task_decomposer()
+
+            if hub and hub.world and hub.world.consciousness:
+                decomposer.set_consciousness(hub.world.consciousness)
+            decomposer.set_hub(hub)
+
+            async for sse_event in decomposer.decompose(task, max_depth=4, max_children=6):
+                yield sse_event
+
+        except Exception as e:
+            logger.error(f"Task tree SSE error: {e}")
+            yield f"event: task_error\ndata: {_json.dumps({'error': str(e)[:500]})}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 async def _predictive_precompute(predictive, msg, content, hub):

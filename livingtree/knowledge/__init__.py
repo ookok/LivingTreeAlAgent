@@ -43,6 +43,7 @@ from .knowledge_router import KnowledgeRouter, RouteDecision, RouteTarget, get_k
 from .ideablock_enricher import IdeaBlockEnricher, IdeaBlockMeta, get_ideablock_enricher
 from .agentic_rag import AgenticRAG, AgenticResult, RetrievalRound, RAGMode, get_agentic_rag
 from .reranker import Reranker, RankedDocument, RerankResult, get_reranker
+from .context_wiki import ContextWiki, WikiPage, WikiSection, WikiTool, get_context_wiki, reset_context_wiki
 
 __all__ = [
     "KnowledgeBase", "Document", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult",
@@ -80,4 +81,5 @@ __all__ = [
     "IdeaBlockEnricher", "IdeaBlockMeta", "get_ideablock_enricher",
     "AgenticRAG", "AgenticResult", "RetrievalRound", "RAGMode", "get_agentic_rag",
     "Reranker", "RankedDocument", "RerankResult", "get_reranker",
+    "ContextWiki", "WikiPage", "WikiSection", "WikiTool", "get_context_wiki", "reset_context_wiki",
 ]

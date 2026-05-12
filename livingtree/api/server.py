@@ -96,6 +96,25 @@ def create_app(hub=None, config=None) -> FastAPI:
             },
         )
 
+    # ═══ Startup: ConcurrencyGuard ═══
+    @app.on_event("startup")
+    async def startup_concurrency_guard():
+        try:
+            from ..core.concurrency_guard import get_concurrency_guard
+            guard = get_concurrency_guard()
+            logger.info(f"ConcurrencyGuard active (max_concurrent={guard.max_concurrent})")
+        except Exception as e:
+            logger.warning(f"ConcurrencyGuard startup skipped: {e}")
+
+    # ═══ OTEL Middleware ═══
+    try:
+        from ..observability.otel_integration import get_otel, OtelMiddleware
+        otel = get_otel()
+        app.add_middleware(OtelMiddleware)
+        logger.info("OTEL middleware wired")
+    except Exception as e:
+        logger.debug(f"OTEL middleware skipped: {e}")
+
     # ═══ Hub Wiring ═══
     if hub:
         app.state.hub = hub

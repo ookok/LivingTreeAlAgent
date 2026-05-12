@@ -158,6 +158,29 @@ class TreeLLM:
 
         Returns a dict with provider, result, layer info, scores, and cost accounting.
         """
+        # ── Task Vector Geometry: ID vs OOD mode detection ──
+        route_mode = "ood"  # default
+        task_vector_id = None
+        tv_similarity = 0.0
+        tv_convex_dist = 0.0
+        tv_cached_provider = None
+        try:
+            from ..dna.task_vector_geometry import get_task_geometry, text_to_embedding
+            geo = get_task_geometry()
+            q_embedding = text_to_embedding(query)
+            decision = geo.classify(q_embedding, task_type)
+            route_mode = decision.mode
+            if route_mode == "id":
+                task_vector_id = decision.nearest_vector_id
+                tv_similarity = decision.similarity_score
+                tv_convex_dist = decision.convex_hull_distance
+                tv_cached_provider = decision.recommended_provider
+                # If ID and we have a cached best provider, fast-path it
+                if tv_cached_provider and tv_cached_provider in self._providers:
+                    logger.debug(f"Task vector ID match: {tv_cached_provider} (similarity={tv_similarity:.2f})")
+        except Exception as e:
+            logger.debug(f"Task vector geometry skipped: {e}")
+
         # Prepare initial candidate list
         layer1_candidates = list(candidates) if candidates else list(self._providers.keys())
         if not layer1_candidates:
@@ -368,6 +391,7 @@ class TreeLLM:
         return {
             "provider": final_provider or "",
             "result": final_result,
+            "mode": route_mode,
             "layers_used": layers_used,
             "candidates_per_layer": {
                 "layer1": layer1_candidates_final,
@@ -380,6 +404,13 @@ class TreeLLM:
                 "election_score": election_score,
                 "self_assessment": float(self_assessment_score),
                 "final_decision": "early_stop" if final_result and self_assessment_score > early_stop_threshold else "fallback",
+            },
+            "task_vector": {
+                "mode": route_mode,
+                "vector_id": task_vector_id,
+                "similarity": tv_similarity,
+                "convex_hull_distance": tv_convex_dist,
+                "cached_provider": tv_cached_provider,
             },
             "cost_saved": "Used layering providers (embedded scoring + alive ping)",
             "foresight": foresight_insights,

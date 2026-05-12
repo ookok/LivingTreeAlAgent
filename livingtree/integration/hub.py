@@ -568,6 +568,15 @@ class IntegrationHub:
         logger.info(f"  Flash: {self.config.model.flash_model} | Pro: {self.config.model.pro_model}")
         logger.info(f"  Node: {self.world.node.info.name} ({self.world.node.info.id[:12]})")
 
+        # ── ConcurrencyGuard: global resource limiter ──
+        try:
+            from ..core.concurrency_guard import get_concurrency_guard
+            guard = get_concurrency_guard()
+            logger.info(f"ConcurrencyGuard initialized (max_concurrent={guard.max_concurrent})")
+        except Exception as e:
+            guard = None
+            logger.debug(f"ConcurrencyGuard: {e}")
+
         # ── AsyncDisk: batched file I/O ──
         from ..core.async_disk import get_disk
         await get_disk().start()
@@ -582,7 +591,10 @@ class IntegrationHub:
         await self._register_health_checks()
         await self.world.self_healer.start()
         await self.world.node.register()
-        asyncio.create_task(self.world.node.heartbeat(self.config.network.heartbeat_interval))
+        if guard:
+            guard.spawn("hub_heartbeat", self.world.node.heartbeat(self.config.network.heartbeat_interval))
+        else:
+            asyncio.create_task(self.world.node.heartbeat(self.config.network.heartbeat_interval))
         self._register_agents()
 
         # ── Model registry (deferred if lazy) ──
@@ -663,7 +675,10 @@ class IntegrationHub:
         try:
             from ..capability.idle_consolidator import get_idle_consolidator
             ic = get_idle_consolidator()
-            asyncio.create_task(ic.start(self, idle_threshold=60))
+            if guard:
+                guard.spawn("hub_idle_consolidator", ic.start(self, idle_threshold=60))
+            else:
+                asyncio.create_task(ic.start(self, idle_threshold=60))
             logger.info("IdleConsolidator started (60s threshold)")
         except Exception as e:
             logger.debug(f"IdleConsolidator: {e}")
@@ -716,7 +731,10 @@ class IntegrationHub:
         try:
             from ..network.proxy_fetcher import get_proxy_pool
             pool = get_proxy_pool()
-            asyncio.create_task(pool.start_background())
+            if guard:
+                guard.spawn("hub_proxy_pool", pool.start_background())
+            else:
+                asyncio.create_task(pool.start_background())
             logger.info(f"ProxyPool started ({pool.stats()['total']} cached)")
         except Exception as e:
             logger.debug(f"ProxyPool: {e}")
@@ -881,6 +899,66 @@ class IntegrationHub:
             logger.info("Scinet proxy started (localhost:7890)")
         except Exception as e:
             logger.debug(f"Scinet: {e}")
+
+        # ── ImmuneSystem: auto-defense against adversarial inputs ──
+        try:
+            from ..dna.immune_system import get_immune_system
+            immune = get_immune_system()
+            logger.info(f"ImmuneSystem initialized (threat_count={len(immune.known_threats)})")
+        except Exception as e:
+            logger.debug(f"ImmuneSystem: {e}")
+
+        # ── HormoneNetwork: inter-organ signaling ──
+        try:
+            from ..dna.hormone_signaling import get_endocrine
+            endocrine = get_endocrine()
+            await endocrine.start_pulse()
+            logger.info("HormoneNetwork initialized — pulse started")
+        except Exception as e:
+            logger.debug(f"HormoneNetwork: {e}")
+
+        # ── MetabolismEngine: cost budgeting ──
+        try:
+            from ..economy.metabolism import get_metabolism
+            metabolism = get_metabolism()
+            daily_budget = getattr(self.config, 'daily_token_budget', 1_000_000)
+            daily_cost = getattr(self.config, 'daily_cost_yuan', 50.0)
+            metabolism.allocate_daily_budget(total_tokens=daily_budget, total_cost_yuan=daily_cost)
+            logger.info(f"MetabolismEngine initialized (budget={daily_budget} tokens, ¥{daily_cost})")
+        except Exception as e:
+            logger.debug(f"MetabolismEngine: {e}")
+
+        # ── CacheHierarchy: multi-tier response cache ──
+        try:
+            from ..treellm.cache_hierarchy import get_cache_hierarchy
+            cache_h = get_cache_hierarchy()
+            logger.info(f"CacheHierarchy initialized (tiers={len(cache_h._tiers)})")
+        except Exception as e:
+            logger.debug(f"CacheHierarchy: {e}")
+
+        # ── OTEL Integration: OpenTelemetry tracing ──
+        try:
+            from ..observability.otel_integration import get_otel
+            otel = get_otel()
+            logger.info(f"OTEL integration initialized (service={otel.service_name})")
+        except Exception as e:
+            logger.debug(f"OTEL: {e}")
+
+        # ── SwarmEvolution: collective learning ──
+        try:
+            from ..dna.swarm_evolution import get_swarm_evolution
+            swarm_evo = get_swarm_evolution()
+            logger.info(f"SwarmEvolution initialized")
+        except Exception as e:
+            logger.debug(f"SwarmEvolution: {e}")
+
+        # ── EmotionalMemory: experience-weighted recall ──
+        try:
+            from ..memory.emotional_memory import get_emotional_memory
+            emo_mem = get_emotional_memory()
+            logger.info(f"EmotionalMemory initialized (entries={len(emo_mem._store)})")
+        except Exception as e:
+            logger.debug(f"EmotionalMemory: {e}")
 
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""

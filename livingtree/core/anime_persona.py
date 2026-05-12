@@ -433,6 +433,14 @@ function xiaoPointTo(selector,msg){var el=document.querySelector(selector);if(el
         Intended for real-time voice dialog updates.
         """
         expr = self.voice_expression(vad)
+        try:
+            from ..memory.emotional_memory import get_emotional_memory
+            em = get_emotional_memory()
+            emo_ctx = em.emotional_context()
+            if emo_ctx and emo_ctx.get("dominant_emotion"):
+                text = f"[当前情感: {emo_ctx['dominant_emotion']}] {text}"
+        except Exception:
+            pass
         return {
             "expression": expr,
             "text": text[:200],

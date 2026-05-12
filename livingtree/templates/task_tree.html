@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Tree · 任务分解</title>
+<script src="/js/task-tree.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080f;--surface:#0f0f18;--border:#1a1a2e;--text:#c8c8d4;
+  --text-dim:#667;--accent:#6c8;--gold:#da0;--red:#e05050;
+  --blue:#4a8;--purple:#84a;--cyan:#0cc;
+}
+body{background:var(--bg);color:var(--text);font:13px/1.5 system-ui,sans-serif;overflow:hidden;height:100vh}
+#task-tree-root{height:100vh;overflow:hidden}
+</style>
+</head>
+<body>
+
+{% set task_desc = task|default('') %}
+<div id="task-tree-root" data-task="{{ task_desc }}">
+  <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:16px">
+    任务分解加载中…
+  </div>
+</div>
+
+</body>
+</html>

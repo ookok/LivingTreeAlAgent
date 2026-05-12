@@ -286,6 +286,16 @@ class ScinetService:
 
     async def _connect_with_fallback(self, host: str, port: int):
         """Try direct connect, then proxy pool, then DomainIPPool."""
+        # 0. ScinetHardener proxy fallback
+        try:
+            from .scinet_hardening import get_scinet_hardener
+            hardener = get_scinet_hardener()
+            result = await hardener.execute("CONNECT", f"{host}:{port}")
+            if result and result.get("ok"):
+                return result["connection"]
+        except Exception:
+            pass
+
         # 1. Direct connection
         try:
             r, w = await asyncio.wait_for(

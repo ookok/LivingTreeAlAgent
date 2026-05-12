@@ -19,6 +19,18 @@ from .memory_policy import (
     RetentionPolicy,
     TokenBudget,
     MemPOOptimizer,
+    SchemaValidator,
+)
+from .emotional_memory import (
+    EmotionType,
+    EmotionVector,
+    EmotionalMemory,
+    EmotionalMemoryStore,
+    detect_emotion,
+    dyad_name,
+    dyad_vector,
+    PLUTCHIK_DYADS,
+    get_emotional_memory,
 )
 from .user_model import UserModel, UserProfile, UserCorrection, UserHabit, get_user_model
 
@@ -29,5 +41,9 @@ __all__ = [
     "RetentionPolicy",
     "TokenBudget",
     "MemPOOptimizer",
+    "SchemaValidator",
+    "EmotionType", "EmotionVector", "EmotionalMemory", "EmotionalMemoryStore",
+    "detect_emotion", "dyad_name", "dyad_vector", "PLUTCHIK_DYADS",
+    "get_emotional_memory",
     "UserModel", "UserProfile", "UserCorrection", "UserHabit", "get_user_model",
 ]

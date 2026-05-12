@@ -34,6 +34,11 @@ from .document_understanding import (
 from .incremental_doc import (
     IncrementalDoc, DocSnapshot, ParagraphFingerprint, VersionDiff, get_incremental_doc,
 )
+from .virtual_fs import (
+    VFSEntry, Resource, RAMResource, DiskResource,
+    HTTPResource, GitHubResource, KBResource,
+    VirtualFS, get_virtual_fs, reset_virtual_fs,
+)
 
 __all__ = [
     "SkillFactory", "ToolMarket", "DocEngine", "CodeEngine", "MaterialCollector",
@@ -58,4 +63,7 @@ __all__ = [
     "DocumentUnderstanding", "DocumentAnalysis", "Finding", "FindingSeverity", "SectionPurpose",
     "get_doc_understanding",
     "IncrementalDoc", "DocSnapshot", "ParagraphFingerprint", "VersionDiff", "get_incremental_doc",
+    "VFSEntry", "Resource", "RAMResource", "DiskResource",
+    "HTTPResource", "GitHubResource", "KBResource",
+    "VirtualFS", "get_virtual_fs", "reset_virtual_fs",
 ]

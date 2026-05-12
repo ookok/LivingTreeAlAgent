@@ -90,43 +90,48 @@ class Provider:
         t_start = time.time()
         for attempt in range(RATE_LIMIT_MAX_RETRIES):
             try:
-                async with aiohttp.ClientSession() as s:
-                    async with s.post(
-                        f"{self.base_url}/chat/completions",
-                        json=payload,
-                        headers=self._headers(),
-                        timeout=aiohttp.ClientTimeout(total=timeout),
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            choice = data["choices"][0]
-                            msg = choice.get("message", {})
-                            usage = data.get("usage", {})
-                            return ProviderResult(
-                                text=msg.get("content", ""),
-                                reasoning=msg.get("reasoning_content", ""),
-                                tokens=usage.get("total_tokens", 0),
-                                prompt_tokens=usage.get("prompt_tokens", 0),
-                                cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0)
-                                    or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
-                                model=data.get("model", payload.get("model", self.default_model)),
-                                latency_ms=(time.monotonic() - t0) * 1000,
-                            )
-                        elif resp.status == 429:
-                            self._rate_limit_count += 1
-                            self._last_rate_limit = time.time()
-                            body = await resp.text()
-                            last_error = f"HTTP 429 (rate limited): {body[:100]}"
-                            if attempt < RATE_LIMIT_MAX_RETRIES - 1:
-                                delay = min(RATE_LIMIT_BASE_DELAY * (2 ** attempt), RATE_LIMIT_MAX_DELAY)
-                                await asyncio.sleep(delay)
-                                continue
-                            return ProviderResult(error=last_error, rate_limited=True,
-                                                   latency_ms=(time.monotonic() - t0) * 1000)
-                        else:
-                            body = await resp.text()
-                            return ProviderResult(error=f"HTTP {resp.status}: {body[:200]}",
-                                                   latency_ms=(time.monotonic() - t0) * 1000)
+                from .connection_pool import get_connection_pool
+                pool = get_connection_pool()
+                status, body, _latency = await pool.request(
+                    self.name,
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers(),
+                    json_payload=payload,
+                    timeout=timeout,
+                )
+                if status == 200:
+                    choice = body["choices"][0]
+                    msg = choice.get("message", {})
+                    usage = body.get("usage", {})
+                    return ProviderResult(
+                        text=msg.get("content", ""),
+                        reasoning=msg.get("reasoning_content", ""),
+                        tokens=usage.get("total_tokens", 0),
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0)
+                            or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
+                        model=body.get("model", payload.get("model", self.default_model)),
+                        latency_ms=(time.monotonic() - t0) * 1000,
+                    )
+                elif status == 429:
+                    self._rate_limit_count += 1
+                    self._last_rate_limit = time.time()
+                    last_error = f"HTTP 429 (rate limited): {str(body)[:100]}"
+                    if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                        delay = min(RATE_LIMIT_BASE_DELAY * (2 ** attempt), RATE_LIMIT_MAX_DELAY)
+                        await asyncio.sleep(delay)
+                        continue
+                    return ProviderResult(error=last_error, rate_limited=True,
+                                           latency_ms=(time.monotonic() - t0) * 1000)
+                elif status == 0:
+                    last_error = body.get("error", str(body))
+                    if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                        await asyncio.sleep(RATE_LIMIT_BASE_DELAY)
+                        continue
+                else:
+                    return ProviderResult(error=f"HTTP {status}: {str(body)[:200]}",
+                                           latency_ms=(time.monotonic() - t0) * 1000)
             except Exception as e:
                 last_error = str(e)
                 if attempt < RATE_LIMIT_MAX_RETRIES - 1:

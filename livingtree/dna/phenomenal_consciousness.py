@@ -302,6 +302,18 @@ class PhenomenalConsciousness:
             f"[{new_affect.value}] {metacog[:80]} "
             f"(continuity={continuity:.2f}, delta={len(self_model_delta)} traits)",
         )
+
+        # ── Consciousness Emergence: track conditions after each experience ──
+        try:
+            from .consciousness_emergence import get_emergence_engine
+            engine = get_emergence_engine()
+            engine.on_experience(self, None)  # GodelianSelf ref resolved inside
+            # Trigger self-contemplation every 10 generations
+            if sm.generation % 10 == 0:
+                pass  # Contemplation triggered externally by LifeEngine
+        except Exception:
+            pass
+
         return report
 
     # ═══ Affective Computation ═══

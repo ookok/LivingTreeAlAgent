@@ -109,6 +109,12 @@ class P2PNode:
         if RELAY_ENABLED:
             self._tasks.append(asyncio.create_task(self._heartbeat_loop()))
             self._tasks.append(asyncio.create_task(self._ws_listen()))
+        try:
+            from ..dna.swarm_evolution import get_swarm_evolution
+            se = get_swarm_evolution()
+            se.register_with_p2p(self)
+        except Exception:
+            pass
         logger.info(f"P2P started: {self.node_id[:16]}" + (" (relay)" if RELAY_ENABLED else " (local)"))
 
     async def stop(self):

@@ -16,6 +16,12 @@ from .scinet_cache import SemanticCache, CacheEntry, DeltaCompressor, get_semant
 from .scinet_webtransport import WebTransportServer, WTSession, get_webtransport_server
 from .scinet_vllm import VLLMTrafficEngine, TrafficPatternGenerator, SemanticContentSplitter, get_vllm_engine
 from .scinet_swarm import SwarmNetwork, SplitModel, SwarmConsensus, RegionalHub, get_swarm_network, get_regional_hub
+from .scinet_hardening import (
+    ScinetHardener, DeepProxyHealth, HealthResult, HealthStage,
+    ProxyConnectionPool, MultiSourceDomainAccelerator, AcceleratedRequest,
+    SmartFailoverChain, FailoverResult, ProxyPoolRotator, ProxyScore,
+    get_scinet_hardener,
+)
 
 # Relay registry & config sync
 from .relay_registry import RelayRegistry, RelayServer, RelayList, get_relay_registry
@@ -88,4 +94,9 @@ __all__ = [
     "WebTransportServer", "WTSession", "get_webtransport_server",
     "VLLMTrafficEngine", "TrafficPatternGenerator", "SemanticContentSplitter", "get_vllm_engine",
     "SwarmNetwork", "SplitModel", "SwarmConsensus", "RegionalHub", "get_swarm_network", "get_regional_hub",
+    # Scinet Hardening v1.0
+    "ScinetHardener", "DeepProxyHealth", "HealthResult", "HealthStage",
+    "ProxyConnectionPool", "MultiSourceDomainAccelerator", "AcceleratedRequest",
+    "SmartFailoverChain", "FailoverResult", "ProxyPoolRotator", "ProxyScore",
+    "get_scinet_hardener",
 ]

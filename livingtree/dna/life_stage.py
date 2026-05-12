@@ -89,6 +89,10 @@ class StageMixin:
         except Exception:
             pass
         cog_prompt = f"Analyze intent and required knowledge: {ctx.user_input}"
+        # ── Prelude anchor: always remind of original query ──
+        anchor = ctx.metadata.get("original_query_anchor", "")
+        if anchor:
+            cog_prompt = f"原始问题: {anchor}\n\n{cog_prompt}"
 
         # Cache-Safe Prompt tracking: log KV cache hit likelihood
         try:
@@ -412,9 +416,12 @@ class StageMixin:
                 clarifier.record(cq)
                 ctx.metadata["clarified_answers"][cq.id] = cq.answer
 
-        hypotheses = await self.consciousness.hypothesis_generation(
-            f"Given intent: {ctx.intent}, what are possible approaches?"
-        )
+        hypo_prompt = f"Given intent: {ctx.intent}, what are possible approaches?"
+        # ── Prelude anchor: always remind of original query ──
+        anchor = ctx.metadata.get("original_query_anchor", "")
+        if anchor:
+            hypo_prompt = f"原始问题: {anchor}\n\n{hypo_prompt}"
+        hypotheses = await self.consciousness.hypothesis_generation(hypo_prompt)
         ctx.metadata["hypotheses"] = hypotheses
 
         # Skill catalog: enrich planning context with relevant capabilities
@@ -755,8 +762,13 @@ class StageMixin:
                     return kb.search(query) if hasattr(kb, 'search') else []
                 tools["search_knowledge"] = _search_kb
 
+            task_str = ctx.user_input or ctx.intent or "execute plan"
+            # ── Prelude anchor: always remind of original query ──
+            anchor = ctx.metadata.get("original_query_anchor", "")
+            if anchor:
+                task_str = f"原始问题: {anchor}\n\n{task_str}"
             trajectory = await react.run(
-                task=ctx.user_input or ctx.intent or "execute plan",
+                task=task_str,
                 tools=tools,
                 context={"knowledge": ctx.retrieved_knowledge, "plan": ctx.plan},
             )
@@ -983,7 +995,10 @@ class StageMixin:
         except Exception:
             pass
 
-        reflection = f"{total} steps: {ok} ok, {fail} failed"
+        # ── Prelude anchor: always remind of original query ──
+        anchor = ctx.metadata.get("original_query_anchor", "")
+        anchor_str = f"原始问题: {anchor}\n\n" if anchor else ""
+        reflection = anchor_str + f"{total} steps: {ok} ok, {fail} failed"
         if fail:
             errors = [r.get("error", "?") for r in ctx.execution_results if r.get("error")]
             reflection += f". Errors: {errors}"

@@ -29,6 +29,49 @@ from typing import Any, Optional
 from loguru import logger
 
 
+# ═══ Schema Validator ═══
+
+class SchemaValidator:
+    """Schema-constrained memory validation (SCG-MEM inspired).
+    
+    Prevents "structural hallucinations" — where the LLM generates
+    memory keys that don't exist in the memory store. Validates that
+    retrieved memories conform to expected cognitive schemas.
+    """
+    
+    SCHEMAS = {
+        "fact": ["entity", "property", "value", "source", "timestamp"],
+        "event": ["actor", "action", "object", "time", "location", "outcome"],
+        "preference": ["user", "category", "value", "confidence", "evidence"],
+        "procedure": ["goal", "steps", "tools", "constraints", "result"],
+    }
+    
+    def validate(self, memory_content: str, schema_type: str = "fact") -> tuple[bool, str]:
+        """Check if memory content matches expected schema structure.
+        Returns (is_valid, reason).
+        """
+        schema = self.SCHEMAS.get(schema_type, self.SCHEMAS["fact"])
+        content_lower = memory_content.lower()
+        
+        # Count how many schema fields are present
+        present = sum(1 for field in schema if field in content_lower)
+        coverage = present / len(schema)
+        
+        if coverage >= 0.6:
+            return True, f"schema_coverage={coverage:.0%}"
+        elif coverage >= 0.3:
+            return True, f"partial_schema coverage={coverage:.0%}"
+        else:
+            return False, f"schema_mismatch expected={schema_type} coverage={coverage:.0%}"
+    
+    def classify_schema(self, content: str) -> str:
+        """Auto-detect which cognitive schema a memory belongs to."""
+        scores = {}
+        for stype, fields in self.SCHEMAS.items():
+            scores[stype] = sum(1 for f in fields if f in content.lower()) / len(fields)
+        return max(scores, key=scores.get)
+
+
 # ═══ Memory Item ═══
 
 @dataclass
@@ -279,6 +322,38 @@ class RetentionPolicy:
             return "COMPRESS"
         return "FORGET"
 
+    def differential_decay(self, memories: dict[str, MemoryItem]) -> dict[str, float]:
+        """Apply biologically-inspired differential decay rates.
+        
+        FadeMem insight: not all memories decay at the same rate.
+        - Frequently accessed → slow decay (half-life 30 days)
+        - High importance → slow decay (half-life 14 days)  
+        - Low importance + low access → fast decay (half-life 2 days)
+        - Cold (7 days untouched) → accelerated decay (half-life 12 hours)
+        
+        Returns: {mem_id: decay_multiplier} (0-1, multiply importance by this)
+        """
+        now = time.time()
+        decay_map = {}
+        for mid, mem in memories.items():
+            age_days = (now - mem.last_accessed) / 86400 if mem.last_accessed else (now - mem.created_at) / 86400
+            
+            if mem.access_count >= 10:
+                half_life = 30  # frequent access → slow decay
+            elif mem.importance >= 2.0:
+                half_life = 14  # high importance → moderate decay
+            elif mem.is_cold:
+                half_life = 0.5  # cold → fast decay
+            elif mem.access_count >= 3:
+                half_life = 7  # moderate access
+            else:
+                half_life = 2  # low access → decay
+            
+            decay = 0.5 ** (age_days / half_life)
+            decay_map[mid] = min(1.0, max(0.01, decay))
+        
+        return decay_map
+
     def apply_policy(
         self,
         memory_store: dict[str, MemoryItem],
@@ -288,6 +363,12 @@ class RetentionPolicy:
 
         Returns (retained_ids, compressed_ids, forgotten_ids).
         """
+        # ── FadeMem differential decay ──
+        decay_map = self.differential_decay(memory_store)
+        for mid, multiplier in decay_map.items():
+            if mid in memory_store:
+                memory_store[mid].importance *= multiplier
+
         now = now or time.time()
         retained, compressed, forgotten = [], [], []
 
@@ -327,6 +408,12 @@ class RetentionPolicy:
             "avg_importance": sum(m.importance for m in memory_store.values()) / len(memory_store),
             "avg_access_count": sum(m.access_count for m in memory_store.values()) / len(memory_store),
         }
+
+    def decay_stats(self, memories) -> dict:
+        decay_map = self.differential_decay(memories)
+        fast = sum(1 for v in decay_map.values() if v < 0.3)
+        slow = sum(1 for v in decay_map.values() if v > 0.8)
+        return {"total": len(decay_map), "fast_decay": fast, "slow_decay": slow, "avg_multiplier": sum(decay_map.values())/max(len(decay_map),1)}
 
 
 # ═══ Token Budget ═══
@@ -464,6 +551,18 @@ class MemPOOptimizer:
             self._next_id += 1
             mem_id = f"mem_{self._next_id}"
             self._memories[mem_id] = MemoryItem(content=content, metadata=metadata)
+            # ── SCG-MEM schema validation ──
+            validator = SchemaValidator()
+            schema_type = validator.classify_schema(content)
+            valid, reason = validator.validate(content, schema_type)
+            if not valid:
+                logger.debug(f"SCG-MEM: memory {mem_id} rejected — {reason}")
+                # Still store but mark as low confidence
+                self._memories[mem_id].metadata["schema_valid"] = False
+                self._memories[mem_id].metadata["schema_type"] = schema_type
+            else:
+                self._memories[mem_id].metadata["schema_valid"] = True
+                self._memories[mem_id].metadata["schema_type"] = schema_type
             if len(self._memories) > self._retention.max_memories * 2:
                 self.optimize()
             return mem_id
@@ -562,3 +661,27 @@ class MemPOOptimizer:
                 "credit": self._credit_assigner.get_stats(),
                 "policy": self._retention.get_policy_stats(self._memories),
             }
+
+
+# ── Singleton ──
+
+_mempo_instance: MemPOOptimizer | None = None
+
+
+def get_mempo_optimizer(
+    keep_threshold: float = 0.5,
+    compress_threshold: float = 0.15,
+    max_memories: int = 1000,
+    alpha: float = 0.15,
+) -> MemPOOptimizer:
+    """Get or create the global MemPO optimizer singleton."""
+    global _mempo_instance
+    if _mempo_instance is None:
+        _mempo_instance = MemPOOptimizer(
+            keep_threshold=keep_threshold,
+            compress_threshold=compress_threshold,
+            max_memories=max_memories,
+            alpha=alpha,
+        )
+        logger.info("MemPOOptimizer singleton created")
+    return _mempo_instance

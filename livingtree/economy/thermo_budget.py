@@ -206,6 +206,23 @@ class ThermodynamicBudget:
         """
         state = self._state
 
+        # ── Metabolism check ──
+        try:
+            from .metabolism import get_metabolism
+            meta = get_metabolism()
+            if not meta.can_afford("economy", "budget_eval"):
+                return ThermoDecision(
+                    task_id=task_id,
+                    proceed=False,
+                    model_tier="flash",
+                    allocated_budget=0.0,
+                    temperature_now=round(state.temperature, 3),
+                    entropy_now=round(state.entropy, 3),
+                    recommendation="metabolism: insufficient resources",
+                )
+        except Exception:
+            pass
+
         # ── KL budget: decay and accumulate from entropy ──
         self._kl_budget *= self._kl_budget_decay  # Gradual decay of unused budget
         if state.entropy > 0.4:

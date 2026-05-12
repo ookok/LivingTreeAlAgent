@@ -15,7 +15,7 @@ from livingtree.dna.organ_dashboard import (
 )
 
 
-async def test_query(idx: int, query: str):
+async def _run_query(idx: int, query: str):
     """Test one query with full organ visibility instrumentation."""
     sid = f"travel_test_{idx}"
     dashboard = get_organ_dashboard()
@@ -75,7 +75,7 @@ async def main():
 
     all_results = []
     for idx, query in queries:
-        result = await test_query(idx, query)
+        result = await _run_query(idx, query)
         all_results.append(result)
 
     # Cross-query analysis

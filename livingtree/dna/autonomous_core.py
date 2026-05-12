@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -104,6 +104,140 @@ class CycleResult:
     foresight_decisions: list[str] = field(default_factory=list)  # Qian et al. 2026 governance decisions
     tokens_used: int = 0
     cost_yuan: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class VIGILDiagnostician:
+    """VIGIL-inspired emotional self-diagnosis for autonomous agents.
+    
+    Ingests behavioral logs from AutonomousCore cycles, appraises
+    events into structured emotional representations, and derives
+    RBT (Retrospective Behavioral Taxonomy) diagnoses.
+    
+    RBT categories:
+      - STRENGTH: repeated successes, reliable patterns
+      - OPPORTUNITY: near-misses, fixable issues  
+      - FAILURE: systematic errors, needs intervention
+    """
+    
+    def __init__(self):
+        self._emobank: deque[dict] = deque(maxlen=100)
+        self._diagnosis_history: list[dict] = []
+        self._emotion_decay = 0.95  # per cycle
+    
+    def appraise(self, event: dict) -> dict:
+        """Convert a behavioral event to structured emotional representation.
+        
+        Event fields expected: type, success, latency_ms, tokens, error
+        Returns: {emotion, intensity, confidence, valence}
+        """
+        if event.get("success", False):
+            if event.get("latency_ms", 0) < 2000:
+                emotion = "satisfaction"
+                intensity = 0.7
+            else:
+                emotion = "relief"  # slow but succeeded
+                intensity = 0.4
+            valence = 0.6
+        else:
+            error = event.get("error", "")
+            if "timeout" in str(error).lower():
+                emotion = "frustration"
+                intensity = 0.6
+            elif "permission" in str(error).lower():
+                emotion = "confusion"
+                intensity = 0.5
+            else:
+                emotion = "disappointment"
+                intensity = 0.4
+            valence = -0.3
+        
+        appraisal = {
+            "emotion": emotion,
+            "intensity": intensity,
+            "confidence": min(1.0, 0.5 + event.get("confidence", 0) * 0.5),
+            "valence": valence,
+            "timestamp": time.time(),
+            "event_type": event.get("type", "unknown"),
+        }
+        self._emobank.append(appraisal)
+        return appraisal
+    
+    def decay_emotions(self):
+        """Apply exponential decay to all emotions in emobank."""
+        for entry in self._emobank:
+            entry["intensity"] *= self._emotion_decay
+    
+    def diagnose(self) -> dict:
+        """Derive RBT diagnosis from recent emotional history.
+        
+        Returns: {strengths: [...], opportunities: [...], failures: [...]}
+        """
+        self.decay_emotions()
+        
+        if len(self._emobank) < 5:
+            return {"strengths": [], "opportunities": [], "failures": [], "summary": "insufficient data"}
+        
+        recent = list(self._emobank)[-20:]
+        
+        strengths = []
+        opportunities = []
+        failures = []
+        
+        for entry in recent:
+            if entry["valence"] > 0.3 and entry["intensity"] > 0.5:
+                strengths.append(f"{entry['emotion']}: {entry['event_type']}")
+            elif entry["valence"] < 0 and entry["intensity"] > 0.5:
+                failures.append(f"{entry['emotion']}: {entry['event_type']} (intensity={entry['intensity']:.1f})")
+            elif entry["valence"] > 0 and entry["intensity"] < 0.4:
+                opportunities.append(f"可改进: {entry['event_type']} (低强度成功)")
+        
+        # Summarize
+        summary_parts = []
+        if len(failures) >= 3:
+            summary_parts.append(f"⚠ {len(failures)} recent failures — consider intervention")
+        if len(strengths) > len(failures):
+            summary_parts.append(f"✓ {len(strengths)} strengths dominate — system healthy")
+        if not summary_parts:
+            summary_parts.append("steady state — no significant patterns")
+        
+        diagnosis = {
+            "strengths": strengths[-3:],
+            "opportunities": opportunities[-3:],
+            "failures": failures[-5:],
+            "summary": " | ".join(summary_parts),
+            "emotion_trend": self._compute_emotion_trend(),
+            "timestamp": time.time(),
+        }
+        self._diagnosis_history.append(diagnosis)
+        return diagnosis
+    
+    def _compute_emotion_trend(self) -> str:
+        """Compute whether emotional state is improving or degrading."""
+        if len(self._emobank) < 10:
+            return "stable"
+        older = list(self._emobank)[-20:-10]
+        newer = list(self._emobank)[-10:]
+        old_valence = sum(e["valence"] for e in older) / max(len(older), 1)
+        new_valence = sum(e["valence"] for e in newer) / max(len(newer), 1)
+        if new_valence > old_valence + 0.1:
+            return "improving"
+        elif new_valence < old_valence - 0.1:
+            return "degrading"
+        return "stable"
+    
+    def get_emotional_state(self) -> dict:
+        """Return current emotional summary for dashboard."""
+        trend = self._compute_emotion_trend()
+        current = list(self._emobank)[-5:] if self._emobank else []
+        dominant = max(set(e["emotion"] for e in current), key=lambda x: sum(1 for e in current if e["emotion"]==x)) if current else "neutral"
+        return {
+            "dominant_emotion": dominant,
+            "trend": trend,
+            "bank_size": len(self._emobank),
+            "diagnosis_count": len(self._diagnosis_history),
+            "last_diagnosis": self._diagnosis_history[-1]["summary"] if self._diagnosis_history else "none",
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -126,6 +260,8 @@ class AutonomousCore:
         self._cycle_count = 0
         self._total_auto_actions = 0
         self._governance = get_foresight_governance()
+        self._vigil = VIGILDiagnostician()
+        self._max_actions_per_cycle = self.MAX_AUTO_ACTIONS_PER_CYCLE
         self._sim_count_this_cycle = 0
         self._load_log()
 
@@ -148,7 +284,7 @@ class AutonomousCore:
         # 论文核心发现: 不加治理的模拟比不模拟更差。在每次执行前，
         # 评估是否需要模拟、多少次、何时停止。
         foresight_results: dict[str, dict[str, Any]] = {}
-        for work in prioritized[:self.MAX_AUTO_ACTIONS_PER_CYCLE]:
+        for work in prioritized[:self._max_actions_per_cycle]:
             if not work.auto_executable:
                 continue
             decision, reason = self._foresight_gate(work)
@@ -209,7 +345,7 @@ class AutonomousCore:
 
         # ── Phase 3: Decompose & Execute ──
         total_tokens = 0
-        for work in prioritized[:self.MAX_AUTO_ACTIONS_PER_CYCLE]:
+        for work in prioritized[:self._max_actions_per_cycle]:
             if total_tokens > self.MAX_TOKENS_PER_CYCLE:
                 result.skipped.append(f"{work.description} (token budget)")
                 continue
@@ -245,6 +381,25 @@ class AutonomousCore:
             self._history = self._history[-50:]
         self._save_log()
         self._governance._save()
+
+        # ── VIGIL emotional diagnosis ──
+        if hasattr(self, '_vigil'):
+            event = {
+                "type": "autonomous_cycle",
+                "success": len(result.executed) > 0,
+                "latency_ms": 0,
+                "tokens": result.tokens_used,
+                "error": "",
+                "confidence": 0.5,
+            }
+            self._vigil.appraise(event)
+            if len(self._vigil._emobank) >= 20:
+                diagnosis = self._vigil.diagnose()
+                result.metadata["vigil_diagnosis"] = diagnosis["summary"]
+                if diagnosis["failures"] and len(diagnosis["failures"]) >= 3:
+                    self._max_actions_per_cycle = max(1, self._max_actions_per_cycle - 1)
+                elif not diagnosis["failures"] and diagnosis["strengths"]:
+                    self._max_actions_per_cycle = min(10, self._max_actions_per_cycle + 1)
 
         gov_score = self._governance.metrics.governance_score
         logger.info(

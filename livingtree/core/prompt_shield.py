@@ -177,6 +177,15 @@ class PromptShield:
     def defend(self, user_input: str, llm_output: str = "",
                context: str = "public") -> dict:
         """Run the full three-layer defense pipeline."""
+        try:
+            from ..dna.immune_system import get_immune_system
+            im = get_immune_system()
+            passed, response = im.check_input(user_input)
+            if not passed:
+                return {"safe": False, "reason": f"immune_system: {response.threat_type}"}
+        except Exception:
+            pass
+
         input_result = self.sanitize_input(user_input)
         if not input_result.passed:
             return {"passed": False, "layer": "input", "action": "block",

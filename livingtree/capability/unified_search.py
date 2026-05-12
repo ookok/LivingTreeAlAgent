@@ -189,7 +189,11 @@ class UnifiedSearch:
         try:
             raw = await engine.query(q, limit=limit)
             if not raw:
-        return []
+                return []
+            return [UnifiedResult(**r) if isinstance(r, dict) else r for r in raw]
+        except Exception as e:
+            logger.warning(f"Search engine '{name}' failed: {e}")
+            return []
 
     def _filter_by_credibility(self, results: list[UnifiedResult]) -> list[UnifiedResult]:
         """Down-rank low-credibility sources (LDR-inspired source scoring)."""
@@ -203,21 +207,6 @@ class UnifiedSearch:
         except Exception:
             pass
         return results
-
-            from .ddg_search import DDGResult
-            if name == "spark":
-                from .spark_search import SearchResult
-            results = []
-            for r in raw:
-                if hasattr(r, 'title') and hasattr(r, 'url'):
-                    results.append(UnifiedResult(
-                        title=r.title, url=r.url,
-                        summary=getattr(r, 'summary', ''), source=name,
-                    ))
-            return results
-        except Exception as e:
-            logger.debug(f"Engine {name} query failed: {e}")
-            return []
 
     @staticmethod
     def _rrf_merge(engine_results: dict[str, list[UnifiedResult]],

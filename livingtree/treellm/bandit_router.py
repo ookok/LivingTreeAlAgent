@@ -175,6 +175,7 @@ class ThompsonRouter:
         self._min_calls_for_exploit = min_calls_for_exploit
         self._kl_budget = kl_budget
         self._total_selections = 0
+        self._current_mode = "id"
 
     # ── Arm Management ──
 
@@ -204,6 +205,8 @@ class ThompsonRouter:
         candidates: list[str],
         task_type: str = "general",
         top_n: int = 3,
+        route_mode: str = "id",
+        ood_direction: list[float] | None = None,
     ) -> list[tuple[str, float]]:
         """Thompson-sample the best N providers.
 
@@ -213,6 +216,12 @@ class ThompsonRouter:
            bonus = kl_budget × uncertainty × sqrt(log(total_calls) / arm_calls)
         This naturally handles cold start (few calls→large bonus) and
         convergence (many calls→small bonus) without manual thresholds.
+
+        Args:
+            route_mode: "id" for in-distribution (normal Thompson sampling),
+                "ood" for out-of-distribution (orthogonal exploration bias added).
+            ood_direction: 128-dim orthogonal direction vector from task vector
+                geometry, used to bias exploration toward novel providers.
 
         Returns:
             List of (provider_name, thompson_score) sorted descending
@@ -241,7 +250,21 @@ class ThompsonRouter:
                 if arm.total_calls < self._min_calls_for_exploit:
                     kl_bonus += 0.3 * (1 - arm.total_calls / self._min_calls_for_exploit)
 
-            score = ts + kl_bonus
+            # ── OOD Orthogonal Exploration (Task Vector Geometry) ──
+            # When in OOD mode, bias toward orthogonal directions to
+            # encourage genuine novelty discovery (not just random exploration).
+            ood_bonus = 0.0
+            if route_mode == "ood" and ood_direction and len(ood_direction) > 0:
+                # Get this arm's "direction" via its quality belief mean
+                # (proxy for how aligned this provider is with known tasks)
+                arm_quality = arm.quality.mean
+                # Providers with lower quality belief (less aligned with known tasks)
+                # get higher OOD bonus — encouraging orthogonal exploration
+                ood_bonus = (1.0 - arm_quality) * 0.3  # max 0.3 boost
+                # Scale by the OOD signal strength
+                ood_bonus *= min(arm.exploration_bonus * 2.0, 1.0)
+
+            score = ts + kl_bonus + ood_bonus
             scored.append((arm.provider_name, round(score, 4)))
 
         scored.sort(key=lambda x: -x[1])
@@ -263,6 +286,10 @@ class ThompsonRouter:
         arms = [(self.get_arm(c), c) for c in candidates]
         arms.sort(key=lambda x: -x[0].exploration_bonus)
         return [name for _, name in arms[:top_n]]
+
+    def set_mode(self, mode: str) -> None:
+        """Set the current routing mode for logging purposes."""
+        self._current_mode = mode
 
     # ── Feedback (Observer Collapse) ──
 

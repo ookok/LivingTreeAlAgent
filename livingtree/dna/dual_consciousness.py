@@ -305,6 +305,39 @@ class DualModelConsciousness(Consciousness):
                 return p
         return None
 
+    # ═══ Per-stage provider election (Mythos-inspired dynamic expert meeting) ═══
+
+    def _elect_stage_provider(self, stage_name: str, ctx=None) -> None:
+        """Elect the best provider for a specific pipeline stage.
+
+        Mythos-inspired: different stages need different experts.
+        - perceive/cognize → fast flash model (low latency, broad knowledge)
+        - plan/simulate → pro model (reasoning depth)
+        - execute → code-optimized provider if available
+        - reflect/evolve → cheapest available (local if possible)
+
+        Sets ctx.metadata["elected_provider"] so downstream code can use it.
+        """
+        stage_preference = {
+            "perceive":  ("flash", "Fast perception needs low latency"),
+            "cognize":   ("flash", "Intent analysis benefits from broad knowledge"),
+            "ontogrow":  ("flash", "Lightweight ontology extraction"),
+            "plan":      ("pro",   "Planning needs deep reasoning"),
+            "simulate":  ("pro",   "Simulation needs counterfactual reasoning"),
+            "execute":   ("pro",   "Execution may need code capability"),
+            "reflect":   ("flash", "Reflection benefits from fresh perspective"),
+            "evolve":    ("local", "Evolution should use cheapest available"),
+        }
+        tier, reason = stage_preference.get(stage_name, ("flash", ""))
+        try:
+            if hasattr(self, '_tiers') and tier in self._tiers:
+                elected = self._tiers[tier]
+                if elected and ctx:
+                    ctx.metadata["elected_provider"] = elected
+                    ctx.metadata["election_reason"] = reason
+        except Exception:
+            pass
+
     # ═══ Local model registration ═══
 
     async def register_local_models(self):
@@ -571,6 +604,17 @@ class DualModelConsciousness(Consciousness):
         from ..core.model_spec import get_spec
         constitution = get_spec().get_system_context()
         system_msg = f"{constitution}\n\n快速分析用户意图。流式输出思考过程。"
+        temperature = self._longcat_temp
+        # ── Entropy Drive: boost temperature when deadlock detected ──
+        try:
+            from .entropy_drive import get_entropy_drive
+            ed = get_entropy_drive()
+            boost = ed.get_temperature_boost()
+            if boost > 0:
+                temperature = min(1.5, temperature + boost)
+        except Exception:
+            pass
+
         elected = await self.get_l1_provider()
         if elected:
             try:
@@ -580,7 +624,7 @@ class DualModelConsciousness(Consciousness):
                         {"role": "user", "content": prompt},
                     ],
                     provider=elected,
-                    temperature=self._longcat_temp,
+                    temperature=temperature,
                     max_tokens=self._longcat_max_tokens,
                     timeout=self.timeout,
                 ):
@@ -623,6 +667,17 @@ class DualModelConsciousness(Consciousness):
         user_msg = f"深度推理以下问题 ({steps}步):\n\n{question}"
 
         # Step 1: Use L2 (pro) tier-elected provider
+        temperature = kwargs.get("temperature", self.pro_temperature)
+        # ── Entropy Drive: boost temperature when deadlock detected ──
+        try:
+            from .entropy_drive import get_entropy_drive
+            ed = get_entropy_drive()
+            boost = ed.get_temperature_boost()
+            if boost > 0:
+                temperature = min(1.5, temperature + boost)
+        except Exception:
+            pass
+
         elected = await self.get_l2_provider()
         if elected:
             try:
@@ -630,7 +685,7 @@ class DualModelConsciousness(Consciousness):
                     messages=[{"role": "system", "content": system_msg},
                               {"role": "user", "content": user_msg}],
                     provider=elected,
-                    temperature=kwargs.get("temperature", self.pro_temperature),
+                    temperature=temperature,
                     max_tokens=min(kwargs.get("max_tokens", 8192), 8192),
                     timeout=self.timeout,
                 )

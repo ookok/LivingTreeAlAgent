@@ -291,85 +291,32 @@ class TreeLLM:
         embedding_score = 0.0
         try:
             from .embedding_scorer import get_embedding_scorer
-            if get_embedding_scorer:
-                scorer = get_embedding_scorer()
-                if scorer is not None and hasattr(scorer, "score_and_filter"):
-                    scored = scorer.score_and_filter(query, scorer._profiles)
-                    if isinstance(scored, list) and scored:
-                        # Expect [(cand, score), ...] or [cand, ...]
-                        if scored and isinstance(scored[0], tuple) and len(scored[0]) == 2:
-                            scored_sorted = sorted(scored, key=lambda t: float(t[1]), reverse=True)
-                            layer1_candidates_final = [p for p, s in scored_sorted[: max(1, min(len(scored_sorted), top_k_per_layer * 2))]]
-                            embedding_score = float(scored_sorted[0][1]) if scored_sorted else 0.0
-                        else:
-                            layer1_candidates_final = list(scored[: max(0, min(len(scored), top_k_per_layer * 2))])
-        except Exception as e:
-            logger.warning("{}: {}".format("TreeLLM core", e))
+            scorer = get_embedding_scorer()
+            if scorer and hasattr(scorer, "score_and_filter"):
+                scored = scorer.score_and_filter(query, scorer._profiles)
+                if isinstance(scored, list) and scored:
+                    real_candidates = set(layer1_candidates)
+                    valid_scores = [(n, s) for n, s in scored if n in real_candidates]
+                    if valid_scores:
+                        valid_scores.sort(key=lambda t: -t[1])
+                        layer1_candidates_final = [n for n, _ in valid_scores[:top_k_per_layer]]
+                        embedding_score = valid_scores[0][1] if valid_scores else 0.0
+        except Exception:
+            pass
         layer1_candidates_final = list(dict.fromkeys(layer1_candidates_final))
 
-        # ── Layer 1.5: Foresight integration — lightweight probe (Pattern 4/5) ──
-        foresight_insights: dict[str, Any] = {}
-        if layer1_candidates_final and len(layer1_candidates_final) > 3:
-            try:
-                from .foresight_gate import get_foresight_gate
-                gate = get_foresight_gate()
-                decision = gate.assess(query, task_type, [], "normal")
-                if getattr(decision, "should_simulate", False) and getattr(decision, "depth", 0) >= 2:
-                    # Run lightweight probes on top-2 candidates using embedding scorer
-                    try:
-                        from .embedding_scorer import get_embedding_scorer
-                        scorer = get_embedding_scorer()
-                        probe_results = scorer.score_and_filter(query, getattr(scorer, "_profiles", {}), top_k=2)
-                        foresight_insights = {
-                            "simulated": True,
-                            "top_probes": [(n, round(s, 3)) for n, s in probe_results],
-                            "depth": getattr(decision, "depth", 0),
-                            "reason": getattr(decision, "reason", ""),
-                        }
-                        try:
-                            from loguru import logger as _logger
-                            _logger.debug(f"Layer 1.5 probes: {foresight_insights['top_probes']}")
-                        except Exception as e:
-                            logger.warning("{}: {}".format("TreeLLM core", e))
-                        # Boost layer1_candidates_final with probe-preferred names
-                        probe_names = {n for n, _ in probe_results}
-                        for name in probe_names:
-                            if name not in layer1_candidates_final and len(layer1_candidates_final) < top_k_per_layer * 3:
-                                layer1_candidates_final.append(name)
-                    except ImportError:
-                        pass
-            except ImportError:
-                pass
-        # Layer 2: Election scoring + alive-ping
+        # Layer 2: Election scoring
         layer2_candidates: list[str] = []
         election_score = 0.0
         try:
-            layer2_provider_scores = []
             election = get_election()
-            try:
-                # Historical call style from elect(): score_providers(names, providers, free_models)
-                scores = await election.score_providers(layer1_candidates_final, self._providers, [])
-                if scores:
-                    # scores is list[ProviderScore]; extract (name, total) tuples
-                    layer2_provider_scores = [(s.name, float(s.total)) for s in scores]
-            except Exception:
-                layer2_provider_scores = []
-            if layer2_provider_scores:
-                layer2_provider_scores.sort(key=lambda t: t[1], reverse=True)
-                top2 = layer2_provider_scores[: max(1, min(len(layer2_provider_scores), top_k_per_layer))]
-                # Ping each candidate to confirm alive
-                for prov, sc in top2:
-                    alive = True
-                    try:
-                        if hasattr(election, "ping"):
-                            alive = election.ping(prov)
-                    except Exception:
-                        alive = False
-                    if alive:
-                        layer2_candidates.append(prov)
-                layer2_candidates = list(dict.fromkeys(layer2_candidates))
-                if top2:
-                    election_score = float(top2[0][1])
+            scores = await election.score_providers(layer1_candidates_final, self._providers, [])
+            if scores:
+                layer2_scores = [(s.name, float(s.total)) for s in scores]
+                layer2_scores.sort(key=lambda t: -t[1])
+                top2 = layer2_scores[:top_k_per_layer]
+                election_score = float(top2[0][1]) if top2 else 0.0
+                layer2_candidates = [p for p, _ in top2]
         except Exception:
             layer2_candidates = layer1_candidates_final[:top_k_per_layer]
 
@@ -576,34 +523,12 @@ class TreeLLM:
                 "cached_provider": tv_cached_provider,
             },
             "cost_saved": "Used layering providers (embedded scoring + alive ping)",
-            "foresight": foresight_insights,
-            "synapse": synapse_result,
-            "deep_probe": probing_result,
-            "micro_turn": micro_turn_state,
-            "stigmergy": bool(stigmergy_ctx) if 'stigmergy_ctx' in dir() else False,
-
-        }
-
-        # ── JointEvolution: record trajectory ──
-        if je and traj_id:
-            try:
-                je.record_perception(traj_id, query=original_query, task_type=task_type,
-                                     deep_probe_strategies=(probing_result.get("strategies", [])
-                                                            if probing_result else []))
-                je.record_cognition(traj_id, elected_provider=final_provider or "",
-                                    routing_method="route_layered",
-                                    deep_probe_used=deep_probe,
-                                    self_play_used=self_play,
-                                    aggregate_used=aggregate)
-                success = final_result is not None and bool(final_provider)
-                je.record_behavior(traj_id, provider=final_provider or "",
-                                   success=success,
-                                   tokens_used=getattr(final_result, 'tokens', 0) if hasattr(final_result, 'tokens') else 0)
-                je.complete_trajectory(traj_id, overall_success=success)
-            except Exception as e:
-                logger.debug(f"JointEvolution recording: {e}")
-
-        return result
+                        "foresight": foresight_insights,
+                        "synapse": synapse_result,
+                        "deep_probe": probing_result,
+                        "micro_turn": micro_turn_state,
+                        "stigmergy": bool(stigmergy_ctx) if 'stigmergy_ctx' in dir() else False,
+            }
 
     def route_layered_sync(self, query: str, **kwargs) -> dict[str, Any]:
         """Synchronous wrapper for route_layered."""

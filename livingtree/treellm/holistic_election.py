@@ -258,33 +258,36 @@ class HolisticElection:
             if not p:
                 continue
             stats = self.get_stats(name)
-            ok, latency = await p.ping()
+            ok, err = await p.ping()
             if not ok:
                 continue
 
             ping_count += 1
             # Token Accountant: record router layer allocation
             if accountant:
-                accountant.record_allocation(
-                    layer=AllocationLayer.ROUTER,
-                    action="ping",
-                    tokens_spent=50,  # ~50 tokens per ping
-                    actual_benefit=1.0 if ok else 0.0,
-                    latency_ms=latency,
-                )
+                try:
+                    accountant.record_allocation(
+                        layer=AllocationLayer.ROUTER,
+                        action="ping",
+                        tokens_spent=50,
+                        actual_benefit=1.0 if ok else 0.0,
+                        latency_ms=stats.avg_latency_ms,
+                    )
+                except Exception:
+                    pass
 
             score = ProviderScore(
                 name=name,
                 alive=True,
                 is_free=name in free_models,
-                latency_ms=latency,
+                latency_ms=stats.avg_latency_ms,
                 success_rate=stats.success_rate,
                 last_used=stats.last_used,
             )
 
             # Score 1: Latency (normalized: faster = higher score)
             avg_lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
-            lat = float(latency) if latency else 200
+            lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
             max_latency = max(max(100, avg_lat), lat)
             score.scores["latency"] = 1.0 - min(lat / max_latency, 0.95)
 

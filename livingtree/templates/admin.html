@@ -56,6 +56,19 @@ h1{color:var(--pico-primary)}h2{font-size:1rem;margin:2rem 0 .5rem;color:var(--p
 <h2>🗑️ 缓存</h2>
 <button id="btn-flush">清空响应缓存</button>
 
+<h2>🌐 Scinet 网络加速</h2>
+<div id="scinet-panel" style="background:var(--pico-form-element-background-color);border:1px solid var(--pico-form-element-border-color);border-radius:8px;padding:1rem">
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.8rem">
+    <span style="font-weight:bold">状态:</span>
+    <span id="scinet-status" style="padding:2px 12px;border-radius:12px;font-size:.85rem">检查中…</span>
+  </div>
+  <div id="scinet-details" style="font-size:.85rem;color:var(--pico-muted-color);line-height:1.6"></div>
+  <div style="display:flex;gap:.5rem;margin-top:.8rem">
+    <button id="btn-scinet-start" style="font-size:.8rem;padding:.3rem .8rem">▶ 启动</button>
+    <button id="btn-scinet-stop" style="font-size:.8rem;padding:.3rem .8rem">⏹ 停止</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -126,6 +139,46 @@ document.getElementById('file-import').addEventListener('change', async e => {
     if(cfg.onlyoffice_url) document.getElementById('onlyoffice-url').value = cfg.onlyoffice_url;
   } catch(e) {}
 })();
+
+// ── Scinet panel ──
+async function refreshScinet() {
+  const statusEl = document.getElementById('scinet-status');
+  const detailsEl = document.getElementById('scinet-details');
+  try {
+    const res = await fetch('/api/scinet/status');
+    const s = await res.json();
+    if (s.running) {
+      statusEl.textContent = '🟢 运行中';
+      statusEl.style.background = 'rgba(102,204,136,0.2)';
+      statusEl.style.color = '#6c8';
+      detailsEl.innerHTML =
+        `端口: ${s.port} | 运行: ${Math.floor(s.uptime_seconds/60)}分钟<br>` +
+        `请求: ${s.total_requests} (成功:${s.success_requests} 失败:${s.failed_requests})<br>` +
+        `流量: ${s.bandwidth_mb}MB | <a href="${s.pac_url}" target="_blank">PAC配置</a>`;
+    } else {
+      statusEl.textContent = '⚫ 已停止';
+      statusEl.style.background = 'rgba(136,136,136,0.2)';
+      statusEl.style.color = '#888';
+      detailsEl.textContent = 'Scinet 未启动';
+    }
+  } catch(e) {
+    statusEl.textContent = '⚠ 不可用';
+    statusEl.style.background = 'rgba(224,80,80,0.2)';
+    statusEl.style.color = '#e05050';
+    detailsEl.textContent = '无法连接 Scinet 服务';
+  }
+}
+document.getElementById('btn-scinet-start').addEventListener('click', async () => {
+  await fetch('/api/scinet/start', {method:'POST'});
+  setTimeout(refreshScinet, 500);
+  toast('Scinet 已启动');
+});
+document.getElementById('btn-scinet-stop').addEventListener('click', async () => {
+  await fetch('/api/scinet/stop', {method:'POST'});
+  setTimeout(refreshScinet, 500);
+  toast('Scinet 已停止');
+});
+refreshScinet();
 </script>
 </body>
 </html>

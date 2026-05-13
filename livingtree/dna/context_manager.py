@@ -70,13 +70,16 @@ class ContextManager:
     # ── Mode implementations ───────────────────────────────────────
 
     def _simple_context(self, ctx: Any) -> str:
-        """Bare-minimum context: just the user intent, truncated to 300 chars."""
-        raw = ""
-        if hasattr(ctx, "intent") and ctx.intent:
-            raw = str(ctx.intent)
-        elif hasattr(ctx, "user_input") and ctx.user_input:
-            raw = str(ctx.user_input)
-        return raw[:300]
+        """Zero-LLM deterministic context — for very simple queries."""
+        parts = []
+        if ctx.user_input:
+            parts.append(f"Q: {ctx.user_input[:200]}")
+        if ctx.intent:
+            parts.append(f"Intent: {ctx.intent[:100]}")
+        if ctx.plan:
+            plan_steps = [s.get('description', str(s))[:50] for s in ctx.plan[:3]]
+            parts.append(f"Plan: {' → '.join(plan_steps)}")
+        return " | ".join(parts)[:400]
 
     def _wiki_context(self, ctx: Any, max_chars: int) -> str:
         """Structured wiki pages: on-demand retrieval of relevant topic pages.

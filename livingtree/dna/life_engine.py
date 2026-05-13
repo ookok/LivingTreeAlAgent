@@ -528,59 +528,75 @@ class LifeEngine(BranchMixin, StageMixin):
                 logger.debug(f"Consciousness emergence hook: {e}")
 
             # ── MemPO: self-memory policy optimization credit assignment ──
+            cycle_count = ctx.metadata.get("cycle_count", 0) + 1
+            ctx.metadata["cycle_count"] = cycle_count
+            # ── Attention Budget: prune hooks by complexity ──
             try:
-                from ..memory.memory_policy import get_mempo_optimizer
-                mempo = get_mempo_optimizer()
-                success_rate = ctx.metadata.get("success_rate", 0)
-                task_id = ctx.session_id
-
-                # Register cycle outcomes as memories in MemPO
-                cycle_summary = f"Task: {ctx.intent or ctx.user_input}. "
-                if ctx.plan:
-                    cycle_summary += f"Plan: {len(ctx.plan)} steps. "
-                if ctx.reflections:
-                    cycle_summary += f"Reflections: {'; '.join(ctx.reflections[:2])}"
-                mempo.add_memory(cycle_summary, source="life_cycle", session=ctx.session_id)
-
-                # Log access and assign credit based on success
-                last_mem_id = f"mem_{mempo._next_id}"
-                mempo.log_access(last_mem_id, task_id)
-                if success_rate >= 0.5:
-                    task_output = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
-                    mempo.on_task_complete(task_id, success=min(success_rate, 1.0), task_output=task_output)
-                else:
-                    mempo.on_task_fail(task_id)
-
-                cycle_count = ctx.metadata.get("cycle_count", 0) + 1
-                ctx.metadata["cycle_count"] = cycle_count
-                # ── Surprise-gated MemPO (D-MEM): trigger on surprise, not timer ──
+                from .attention_budget import get_attention_budget
+                ab = get_attention_budget()
+                complexity = ctx.metadata.get("latent_context", {}).get("complexity", 0.5)
+                active_hooks = ab.get_active_hooks(complexity, cycle_count)
+                ctx.metadata["active_hooks"] = active_hooks
+                ctx.metadata["attention_budget"] = ab.stats()
+            except Exception:
+                active_hooks = None  # run everything
+            if active_hooks and "mempo_credit" not in active_hooks:
+                pass  # skip
+            else:
                 try:
-                    from .surprise_gating import get_surprise_gate
-                    sg = get_surprise_gate()
-                    surprise = sg._critic.evaluate(
-                        str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", "")),
-                        {"session": ctx.session_id}
-                    )
-                    if surprise.should_evolve:
-                        opt_result = mempo.optimize()
-                        ctx.metadata["mempo_optimization"] = opt_result
-                        ctx.metadata["mempo_trigger"] = "surprise_gate"
-                        logger.debug(f"MemPO: surprise-triggered optimization (RPE={surprise.rpe:.2f})")
-                except Exception:
-                    pass
+                    from ..memory.memory_policy import get_mempo_optimizer
+                    mempo = get_mempo_optimizer()
+                    success_rate = ctx.metadata.get("success_rate", 0)
+                    task_id = ctx.session_id
 
-                ctx.metadata["mempo_stats"] = mempo.get_stats()
-            except Exception as e:
-                logger.debug(f"MemPO hook: {e}")
+                    # Register cycle outcomes as memories in MemPO
+                    cycle_summary = f"Task: {ctx.intent or ctx.user_input}. "
+                    if ctx.plan:
+                        cycle_summary += f"Plan: {len(ctx.plan)} steps. "
+                    if ctx.reflections:
+                        cycle_summary += f"Reflections: {'; '.join(ctx.reflections[:2])}"
+                    mempo.add_memory(cycle_summary, source="life_cycle", session=ctx.session_id)
+
+                    # Log access and assign credit based on success
+                    last_mem_id = f"mem_{mempo._next_id}"
+                    mempo.log_access(last_mem_id, task_id)
+                    if success_rate >= 0.5:
+                        task_output = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
+                        mempo.on_task_complete(task_id, success=min(success_rate, 1.0), task_output=task_output)
+                    else:
+                        mempo.on_task_fail(task_id)
+
+                    # ── Surprise-gated MemPO (D-MEM): trigger on surprise, not timer ──
+                    try:
+                        from .surprise_gating import get_surprise_gate
+                        sg = get_surprise_gate()
+                        surprise = sg._critic.evaluate(
+                            str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", "")),
+                            {"session": ctx.session_id}
+                        )
+                        if surprise.should_evolve:
+                            opt_result = mempo.optimize()
+                            ctx.metadata["mempo_optimization"] = opt_result
+                            ctx.metadata["mempo_trigger"] = "surprise_gate"
+                            logger.debug(f"MemPO: surprise-triggered optimization (RPE={surprise.rpe:.2f})")
+                    except Exception:
+                        pass
+
+                    ctx.metadata["mempo_stats"] = mempo.get_stats()
+                except Exception as e:
+                    logger.debug(f"MemPO hook: {e}")
 
             # ── v5.0 Ultimate Innovations ──
-            try:
-                from .autonomous_goals import get_autonomous_goals
-                goals_engine = get_autonomous_goals()
-                goals_engine.observe_cycle(ctx)
-                if cycle_count % 20 == 0:
-                    await goals_engine.execute_pending(self.world)
-            except Exception: pass
+            if active_hooks and "autonomous_goals" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .autonomous_goals import get_autonomous_goals
+                    goals_engine = get_autonomous_goals()
+                    goals_engine.observe_cycle(ctx)
+                    if cycle_count % 20 == 0:
+                        await goals_engine.execute_pending(self.world)
+                except Exception: pass
             try:
                 from .world_model import get_world_model
                 wm = get_world_model()
@@ -595,68 +611,83 @@ class LifeEngine(BranchMixin, StageMixin):
                 success = ctx.metadata.get("success_rate", 0)
                 ir.observe("accepted" if success >= 0.5 else "rejected", str(ctx.intent or ""))
             except Exception: pass
-            try:
-                from .meta_optimizer import get_meta_optimizer
-                mo = get_meta_optimizer()
-                mo.record_performance("mempo_alpha", 0.15, success_rate - 0.5, "general")
-                if cycle_count % 5 == 0:
-                    suggestions = mo.auto_tune("general")
-                    ctx.metadata["meta_tuning"] = suggestions
-            except Exception: pass
-            try:
-                from .emotion_decision import get_emotion_decision
-                ed = get_emotion_decision()
-                if hasattr(self, '_vigil') and self._vigil._diagnosis_history:
-                    ed.update_from_vigil(self._vigil._diagnosis_history[-1] if self._vigil._diagnosis_history else {})
-                ctx.metadata["emotion_state"] = ed.stats()
-            except Exception: pass
+            if active_hooks and "meta_optimizer" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .meta_optimizer import get_meta_optimizer
+                    mo = get_meta_optimizer()
+                    mo.record_performance("mempo_alpha", 0.15, success_rate - 0.5, "general")
+                    if cycle_count % 5 == 0:
+                        suggestions = mo.auto_tune("general")
+                        ctx.metadata["meta_tuning"] = suggestions
+                except Exception: pass
+            if active_hooks and "emotion_decision" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .emotion_decision import get_emotion_decision
+                    ed = get_emotion_decision()
+                    if hasattr(self, '_vigil') and self._vigil._diagnosis_history:
+                        ed.update_from_vigil(self._vigil._diagnosis_history[-1] if self._vigil._diagnosis_history else {})
+                    ctx.metadata["emotion_state"] = ed.stats()
+                except Exception: pass
 
             # ── GEP: compile experience into compact Genes (Evolver-inspired) ──
-            try:
-                from .evolution_gene import get_gene_pool, GeneCompiler
-                from .gep_protocol import get_gep_protocol
-                pool = get_gene_pool()
-                gep = get_gep_protocol()
-                compiler = GeneCompiler()
-                gene = compiler.compile_from_session(ctx, success_rate)
-                if gene:
-                    existing = pool.find_matching(gene.trigger, top_k=1)
-                    if existing and existing[0].effectiveness() < gene.effectiveness():
-                        pool.evolve_gene(existing[0].id, gene.actions, gene.constraints, gene.failure_warnings)
-                        gep.record_event("gene_evolved", existing[0].id, existing[0].to_dict(), gene.to_dict(), "improved", True)
-                    elif not existing:
-                        pool.add_gene(gene.trigger, gene.actions, gene.constraints, gene.failure_warnings)
-                        gep.record_event("gene_created", gene.id, None, gene.to_dict(), "new", True)
-                ctx.metadata["gene_pool_size"] = len(pool._genes)
-                ctx.metadata["gep_events"] = len(gep._events)
-            except Exception: pass
+            if active_hooks and "gep_compile" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .evolution_gene import get_gene_pool, GeneCompiler
+                    from .gep_protocol import get_gep_protocol
+                    pool = get_gene_pool()
+                    gep = get_gep_protocol()
+                    compiler = GeneCompiler()
+                    gene = compiler.compile_from_session(ctx, success_rate)
+                    if gene:
+                        existing = pool.find_matching(gene.trigger, top_k=1)
+                        if existing and existing[0].effectiveness() < gene.effectiveness():
+                            pool.evolve_gene(existing[0].id, gene.actions, gene.constraints, gene.failure_warnings)
+                            gep.record_event("gene_evolved", existing[0].id, existing[0].to_dict(), gene.to_dict(), "improved", True)
+                        elif not existing:
+                            pool.add_gene(gene.trigger, gene.actions, gene.constraints, gene.failure_warnings)
+                            gep.record_event("gene_created", gene.id, None, gene.to_dict(), "new", True)
+                    ctx.metadata["gene_pool_size"] = len(pool._genes)
+                    ctx.metadata["gep_events"] = len(gep._events)
+                except Exception: pass
 
             # ── RLVR Monitor: detect rise-then-fall collapse ──
-            try:
-                from .rlvr_monitor import get_rlvr_monitor
-                rlm = get_rlvr_monitor()
-                rlm.record("mempo", success_rate, ctx.metadata.get("confidence", 0.5), cycle_count)
-                pattern = rlm.detect_rise_then_fall("mempo")
-                if pattern and pattern.warning_level != "normal":
-                    ctx.metadata["rlvr_warning"] = {
-                        "level": pattern.warning_level,
-                        "decline_rate": pattern.decline_rate,
-                        "collapse_eta": pattern.collapse_eta_cycles,
-                        "intervention": rlm.get_intervention("mempo", pattern),
-                    }
-                    logger.warning(f"RLVR: {pattern.warning_level} for mempo — decline={pattern.decline_rate:.3f}")
-            except Exception: pass
+            if active_hooks and "rlvr_monitor" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .rlvr_monitor import get_rlvr_monitor
+                    rlm = get_rlvr_monitor()
+                    rlm.record("mempo", success_rate, ctx.metadata.get("confidence", 0.5), cycle_count)
+                    pattern = rlm.detect_rise_then_fall("mempo")
+                    if pattern and pattern.warning_level != "normal":
+                        ctx.metadata["rlvr_warning"] = {
+                            "level": pattern.warning_level,
+                            "decline_rate": pattern.decline_rate,
+                            "collapse_eta": pattern.collapse_eta_cycles,
+                            "intervention": rlm.get_intervention("mempo", pattern),
+                        }
+                        logger.warning(f"RLVR: {pattern.warning_level} for mempo — decline={pattern.decline_rate:.3f}")
+                except Exception: pass
 
             # ── External Verifier: escape intrinsic reward ceiling ──
-            try:
-                from .external_verifier import get_external_verifier
-                ev = get_external_verifier()
-                output_text = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
-                external_reward = await ev.get_external_reward(output_text, ctx.user_input or "")
-                ctx.metadata["external_reward"] = external_reward
-                if abs(external_reward) > 0.5:
-                    ctx.metadata["verified_signal"] = "strong_verification"
-            except Exception: pass
+            if active_hooks and "external_verifier" not in active_hooks:
+                pass  # skip
+            else:
+                try:
+                    from .external_verifier import get_external_verifier
+                    ev = get_external_verifier()
+                    output_text = str(ctx.intent or "") + " " + str(ctx.metadata.get("cognition", ""))
+                    external_reward = await ev.get_external_reward(output_text, ctx.user_input or "")
+                    ctx.metadata["external_reward"] = external_reward
+                    if abs(external_reward) > 0.5:
+                        ctx.metadata["verified_signal"] = "strong_verification"
+                except Exception: pass
 
             return ctx
         except Exception as e:
@@ -888,18 +919,22 @@ class LifeEngine(BranchMixin, StageMixin):
 
         # ── Dream Engine: extract creative insights on successful cycles ──
         if ok:
-            try:
-                from ..dna.dream_engine import get_dream_engine
-                dreamer = get_dream_engine({k: getattr(self.world, k, None) for k in
-                    ['knowledge_base', 'hypergraph_store', 'phenomenal', 'prediction_engine']})
-                if dreamer.should_dream():
-                    report = await dreamer.dream()
-                    if report:
-                        ctx.metadata["dream_report"] = str(report)[:500]
-                        logger.info(f"[evolve] Dream insight: "
-                                    f"{str(report.hint)[:80] if report.hint else 'generated'}")
-            except Exception as e:
-                logger.debug(f"[evolve] Dream skipped: {e}")
+            active_hooks = ctx.metadata.get("active_hooks")
+            if active_hooks and "dream_school" not in active_hooks:
+                pass
+            else:
+                try:
+                    from ..dna.dream_engine import get_dream_engine
+                    dreamer = get_dream_engine({k: getattr(self.world, k, None) for k in
+                        ['knowledge_base', 'hypergraph_store', 'phenomenal', 'prediction_engine']})
+                    if dreamer.should_dream():
+                        report = await dreamer.dream()
+                        if report:
+                            ctx.metadata["dream_report"] = str(report)[:500]
+                            logger.info(f"[evolve] Dream insight: "
+                                        f"{str(report.hint)[:80] if report.hint else 'generated'}")
+                except Exception as e:
+                    logger.debug(f"[evolve] Dream skipped: {e}")
 
         # ── LatentGRPO ↔ TDM Reward: coordinate latent space + reward model optimization ──
         if ok:

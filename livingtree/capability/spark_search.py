@@ -67,7 +67,7 @@ class SparkSearch:
                 timeout=15.0,
                 max_retries=2,
                 use_mirror=False,
-                use_proxy=True,
+                use_proxy=False,
             )
 
             if status != 200:

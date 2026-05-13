@@ -562,7 +562,7 @@ class TreeLLM:
 
     async def chat(self, messages: list[dict], provider: str = "",
                    temperature: float = 0.7, max_tokens: int = 4096,
-                   timeout: int = 120, model: str = "", **kwargs) -> ProviderResult:
+                   timeout: int = 120, model: str = "", tools: bool = False, **kwargs) -> ProviderResult:
         p = self._resolve_provider(provider)
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
@@ -571,7 +571,12 @@ class TreeLLM:
         if max_tokens < 800 and hasattr(p, 'pro_thinking_enabled'):
             p.pro_thinking_enabled = False
 
-        # ── Token optimization: apply CacheDirector for prefix caching ──
+        # ── Tool-calling: inject system instructions ──
+        if tools and messages:
+            messages = [{
+                "role": "system",
+                "content": "You can use tools. To search the web, output: <tool_call name=\"web_search\">query text</tool_call>. To search knowledge base: <tool_call name=\"kb_search\">query</tool_call>. Tool results will be prepended automatically."
+            }] + messages
         provider_name = p.name if p else ""
         from .cache_director import get_cache_director
         director = get_cache_director()
@@ -595,7 +600,28 @@ class TreeLLM:
                                   model=model or kwargs.get("model_extra", ""))
             # Handle thinking mode: when text is empty but reasoning exists
             if result and not result.text and result.reasoning:
-                result.text = result.reasoning  # Use reasoning as response
+                result.text = result.reasoning
+
+            # ── Tool-calling: LLM requests → ReactExecutor executes ──
+            if result and result.text:
+                import re
+                tc = re.search(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', result.text, re.DOTALL)
+                if tc:
+                    tool_name = tc.group(1)
+                    tool_args = tc.group(2).strip()
+                    try:
+                        from ..execution.react_executor import ReactExecutor
+                        rex = ReactExecutor()
+                        if tool_name == "web_search":
+                            tool_result = await rex._tool_web_search(tool_args)
+                        elif tool_name == "kb_search":
+                            tool_result = await rex._tool_kb_search(tool_args)
+                        else:
+                            tool_result = f"[tool:{tool_name}] not found"
+                        # Prepend tool result to LLM response
+                        result.text = f"[tool_result: {tool_name}]\n{tool_result}\n\n{result.text}"
+                    except ImportError:
+                        pass  # Use reasoning as response
             if result and result.text:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],

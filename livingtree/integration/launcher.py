@@ -26,6 +26,7 @@ class LaunchMode(enum.Enum):
     TEST = "test"
     QUICK = "quick"
     CHECK = "check"
+    TUI = "tui"  # deprecated — kept for backward compat
 
 
 def launch(mode: LaunchMode, config: Optional[LTAIConfig] = None) -> int:

@@ -83,14 +83,11 @@ class ErrorInterceptor:
         self._counter = 0
         self._original_excepthook = sys.excepthook
         self._original_async_handler = None
-        self._tui_app: Any = None
         self._installed = False
 
-    def install(self, tui_app: Any = None) -> None:
+    def install(self) -> None:
         if self._installed:
             return
-
-        self._tui_app = tui_app
 
         sys.excepthook = self._handle_sync_error
         self._hook_asyncio()
@@ -103,9 +100,6 @@ class ErrorInterceptor:
 
         self._installed = True
         logger.info("ErrorInterceptor installed (sync + async + signals)")
-
-        if self._tui_app:
-            self._tui_app._error_interceptor = self
 
     def uninstall(self) -> None:
         if not self._installed:
@@ -177,16 +171,6 @@ class ErrorInterceptor:
             is_async=False,
         )
 
-        if self._tui_app and hasattr(self._tui_app, 'notify'):
-            try:
-                self._tui_app.notify(
-                    f"{exc_type.__name__}: {str(exc_value)[:80]}",
-                    severity="error",
-                    timeout=8,
-                )
-            except Exception:
-                pass
-
         self._original_excepthook(exc_type, exc_value, exc_tb)
 
     def _handle_async_error(self, loop, context):
@@ -222,11 +206,7 @@ class ErrorInterceptor:
             severity="warning",
         )
 
-        if self._tui_app and hasattr(self._tui_app, 'action_quit'):
-            try:
-                self._tui_app.action_quit()
-            except Exception:
-                pass
+        # TUI removed — graceful shutdown handled elsewhere
 
     def _record(
         self,
@@ -311,11 +291,11 @@ class ErrorInterceptor:
 _interceptor: Optional[ErrorInterceptor] = None
 
 
-def install(tui_app: Any = None) -> ErrorInterceptor:
+def install() -> ErrorInterceptor:
     global _interceptor
     if _interceptor is None:
         _interceptor = ErrorInterceptor()
-    _interceptor.install(tui_app)
+    _interceptor.install()
     return _interceptor
 
 

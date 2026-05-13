@@ -53,12 +53,8 @@ class LSPManager:
 
     async def start(self) -> None:
         self._running = True
-        try:
-            from ..tui.widgets.opencode_lsp import OpenCodeLSPBridge
-            self._opencode_bridge = OpenCodeLSPBridge(opencode_bin=self._opencode_bin)
-            logger.debug("LSP Manager using opencode backend (30+ languages)")
-        except ImportError:
-            logger.debug("LSP Manager started (opencode bridge unavailable)")
+        # OpenCodeLSPBridge removed (TUI stub). LSP operates standalone.
+        logger.debug("LSP Manager started (opencode bridge unavailable — TUI removed)")
 
     async def stop(self) -> None:
         self._running = False

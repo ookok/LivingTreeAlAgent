@@ -117,7 +117,7 @@ class UnifiedRegistry:
 
     def build_default(self):
         if self._built: return
-        from ..tui.widgets.enhanced_tool_call import SYSTEM_TOOLS, EXPERT_ROLES
+        from ..capability.tool_registry import SYSTEM_TOOLS, EXPERT_ROLES
         for name, t in SYSTEM_TOOLS.items():
             self.register_tool(RegistryTool(name=name, description=t["description"], category=t.get("category",""),
                                             formula=t.get("formula",""), params=t.get("params",{}), source="hardcoded"))

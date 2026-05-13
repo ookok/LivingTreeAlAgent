@@ -147,7 +147,7 @@ class ToolMeta:
 
         # Find the tool's source file
         try:
-            from ..tui.widgets.enhanced_tool_call import SYSTEM_TOOLS
+            from .tool_registry import SYSTEM_TOOLS
             tool_def = SYSTEM_TOOLS.get(tool_name)
             if not tool_def:
                 result.improvement = f"Tool {tool_name} not found in registry"
@@ -208,14 +208,7 @@ class ToolMeta:
         except Exception:
             pass
 
-        # Check enhanced_tool_call.py
-        try:
-            import inspect
-            enhanced_path = Path(__file__).parent.parent / "tui" / "widgets" / "enhanced_tool_call.py"
-            if enhanced_path.exists():
-                return enhanced_path.read_text(encoding="utf-8")[:10000]
-        except Exception:
-            pass
+        # enhanced_tool_call.py has been removed (TUI removed).
 
         return ""
 

@@ -109,15 +109,15 @@ def launch_split(root: Path) -> None:
         f"{python} -c \"print('Code pane ready')\"",
     ]
 
-    # Actually, launch the TUI in the main pane and split only if user wants
-    tui_cmd = [
+    # TUI removed — WT setup uses web server instead
+    web_cmd = [
         str(wt_exe),
         "--title", "🌳 LivingTree",
         "-d", str(root),
-        f"{python}", "-m", "livingtree", "tui", "--direct",
+        f"{python}", "-m", "livingtree", "web",
     ]
-    print(f"[WT] Split launch: {' '.join(tui_cmd)}")
-    subprocess.Popen(tui_cmd, cwd=str(root))
+    print(f"[WT] Launch: {' '.join(web_cmd)}")
+    subprocess.Popen(web_cmd, cwd=str(root))
 
 
 def setup_all(root: str = ".") -> None:

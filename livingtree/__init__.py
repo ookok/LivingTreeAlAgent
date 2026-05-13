@@ -35,8 +35,6 @@ __all__ = [
     "IntegrationHub", "launch", "LaunchMode",
     "LTAIConfig", "get_config", "reload_config",
     "setup_observability", "get_logger",
-    "LivingTreeTuiApp", "ChatScreen", "CodeScreen", "KnowledgeScreen",
-    "SettingsScreen",
     "CacheOptimizer", "ToolCallRepair", "ThoughtHarvester",
     "RLMRunner", "SideGit", "SubAgentRoles", "SessionManager",
     "LSPManager", "SSEAgentServer", "SkillDiscoveryManager",
@@ -113,12 +111,6 @@ _LAZY = {
     "IntegrationHub": ".integration",
     "launch": ".integration",
     "LaunchMode": ".integration",
-    # TUI
-    "LivingTreeTuiApp": ".tui",
-    "ChatScreen": ".tui",
-    "CodeScreen": ".tui",
-    "KnowledgeScreen": ".tui",
-    "SettingsScreen": ".tui",
     # Economy
     "EconomicOrchestrator": ".economy",
     "EconomicPolicy": ".economy",

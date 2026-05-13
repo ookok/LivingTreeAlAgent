@@ -149,14 +149,8 @@ class SystemOrchestrator:
         self._task_state = get_state_manager()
         self._prompt_injector = get_prompt_injector()
 
-        # ── Web2API ──
-        from ..web2api import Web2APIServer
-        self._web2api_server = Web2APIServer()
-        try:
-            await self._web2api_server.start()
-            logger.info("Web2API server started on port 5001")
-        except Exception as e:
-            logger.debug(f"Web2API auto-start skipped: {e}")
+        # ── Web2API (removed — TUI stub) ──
+        logger.debug("Web2API removed — system uses web server instead")
 
         logger.info(
             "SystemOrchestrator: ALL subsystems initialized — "

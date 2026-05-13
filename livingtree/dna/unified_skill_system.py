@@ -24,7 +24,7 @@ from ..treellm.skill_router import PureTfidf, RouteResult, RoutingDecision
 from ..dna.skill_graph import SkillGraph, SkillNode, get_skill_graph
 from ..dna.skill_self_learn import LearnedSkill, KnowledgeNudge
 from ..dna.meta_memory import get_meta_memory
-from ..tui.widgets.enhanced_tool_call import SYSTEM_TOOLS, EXPERT_ROLES
+from ..capability.tool_registry import SYSTEM_TOOLS, EXPERT_ROLES
 
 GRAPH_FILE = Path(".livingtree/skill_graph.json")
 SKILL_FILE = Path(".livingtree/learned_skills.json")

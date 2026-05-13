@@ -112,7 +112,7 @@ class ExpertRoleManager:
 
         Returns list of {id, name, industry, profession, description}.
         """
-        from ..tui.widgets.enhanced_tool_call import EXPERT_ROLES
+        from ..capability.tool_registry import EXPERT_ROLES
         from ..dna.prompt_optimizer import ROLE_TEMPLATES
 
         results = []

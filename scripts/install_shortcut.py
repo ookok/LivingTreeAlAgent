@@ -97,13 +97,8 @@ def install():
     wt_path = root / ".wt" / "WindowsTerminal.exe"
     if not wt_path.exists():
         print("[LivingTree] Pre-downloading Windows Terminal...")
-        # Import our bootstrapper's download
-        bootstrapper = root / "livingtree" / "tui" / "wt_bootstrap.py"
-        result = subprocess.run(
-            [sys.executable, str(bootstrapper), "--download"],
-            capture_output=True, text=True, timeout=300, cwd=str(root),
-        )
-        print(result.stdout.strip())
+        # WT pre-download removed (TUI removed).
+        print("[LivingTree] TUI removed — skipping WT pre-download")
     else:
         print(f"[LivingTree] WT already installed: {wt_path}")
 
@@ -129,8 +124,7 @@ def install():
         print("[LivingTree] WARNING: pythonw.exe not found — shortcut will show console")
         pythonw = sys.executable
 
-    bs = root / "livingtree" / "tui" / "wt_bootstrap.py"
-
+    # TUI removed — shortcut points to web server
     ps = f"""
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")

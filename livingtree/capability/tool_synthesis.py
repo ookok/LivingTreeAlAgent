@@ -243,7 +243,7 @@ class ToolSynthesizer:
 
         # Register in SYSTEM_TOOLS
         try:
-            from ..tui.widgets.enhanced_tool_call import SYSTEM_TOOLS
+            from .tool_registry import SYSTEM_TOOLS
             SYSTEM_TOOLS[tool.name] = {
                 "name": tool.name.replace("_", " ").title(),
                 "category": f"synthesized/{tool.category}",

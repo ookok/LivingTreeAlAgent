@@ -47,7 +47,7 @@ class SinkType(str, Enum):
     KAFKA = "kafka"
     POSTGRES = "postgres"
     DISK = "disk"
-    TUI = "tui"
+    # TUI removed
 
 
 class SourceType(str, Enum):

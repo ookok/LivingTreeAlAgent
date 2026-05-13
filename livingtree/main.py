@@ -11,7 +11,6 @@ Usage:
     python -m livingtree web               # Web server with UI
     python -m livingtree server            # API server only
     python -m livingtree client            # Interactive CLI chat
-    python -m livingtree tui               # Textual TUI
     python -m livingtree test              # Integration tests
     python -m livingtree check             # Environment check
     python -m livingtree skill install X   # Install a skill
@@ -96,8 +95,6 @@ def main():
         launch(LaunchMode.SERVER)
     elif command in ("client", "cli"):
         launch(LaunchMode.CLIENT)
-    elif command == "tui":
-        launch(LaunchMode.TUI)
     elif command == "test":
         launch(LaunchMode.TEST)
     elif command in ("check", "env"):
@@ -525,7 +522,6 @@ Service Management (CowAgent style):
 Server:
   web, ui            Web server with Living Canvas UI
   server, api        API server only
-  tui                Textual TUI (terminal UI)
   client, cli        Interactive CLI chat
 
 Skills & Channels:

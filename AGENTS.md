@@ -1,116 +1,53 @@
-# LivingTree AI Agent v2.3 — AGENTS.md
+# LivingTree AI Agent v2.4 — AGENTS.md
 
-> 2026-05-10 | Python 3.14+ | FastAPI + HTMX + WebRTC | ~340 files
+> 2026-05-13 | Python 3.14+ | FastAPI + HTMX + WebRTC | 36 treellm modules | 18 LLM providers
 
 ## OVERVIEW
 
-Digital life form AI platform. Primary interface: **Living Canvas** — LLM-generated dynamic web UI.
-12-organ biological architecture + 7-layer self-evolution without model training.
+Digital life form AI platform. 12-organ biological architecture + self-evolving agentic system.
+TreeLLM: multi-LLM orchestration with cognitive forcing, competitive elimination, stigmergy memory.
 
 ## QUICK START
-
 ```bash
-# Primary: Living Canvas web UI
-python -m livingtree web            # http://localhost:8100 → /tree/living
-
-# One-click install
-powershell -c "irm https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.ps1 | iex"
-bash <(curl -fsSL https://raw.githubusercontent.com/ookok/LivingTreeAlAgent/main/install.sh)
-
-# Admin Console (unified)
-http://localhost:8100/tree/admin    # All panels in one view
-
-# CLI (CowAgent style)
-livingtree start                    # Background daemon
-livingtree stop                     # Stop service
-livingtree status                   # Service status
-livingtree logs 50                  # Last 50 log lines
-livingtree skill hub                # Browse skill marketplace
-livingtree skill install X          # Install skill
-livingtree secrets set openrouter_api_key sk-or-v1-...
+python -m livingtree web            # http://localhost:8100
+livingtree secrets set deepseek_api_key sk-xxx
+livingtree vitals                   # 7-organ health check
 ```
 
-## ARCHITECTURE (v2.3 — 本对话新增)
+## ARCHITECTURE (v2.4)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                   Living Canvas (HTMX + WebRTC + PWA)            │
-│  Chat · Video Search · Voice Call · Pseudo-Upload · Admin Console│
-├──────────────────────────────────────────────────────────────────┤
-│  Core Engine (30+ new modules from 2026-05-10 session)           │
-│  ┌─────────────────────────────────────────────────────────┐     │
-│  │ Chrome & Speech                                           │     │
-│  │  chrome_dual.py (npx MCP / CDP)  voice_call.py (实时通话)   │     │
-│  │  unified_speech.py (统一语音)    moss_tts_engine.py (GGUF) │     │
-│  │  llamacpp_backend.py (本地LLM)  freebuff_provider.py(广告) │     │
-│  ├─────────────────────────────────────────────────────────┤     │
-│  │ AI Routing & Models                                       │     │
-│  │  model_dashboard.py (LLMFit评估)  processing_framework.py   │     │
-│  │  openrouter provider (300+模型)  DiLoCo decoupled_executor  │     │
-│  │  context_budget.py (智能压缩)     auto_classifier.py (9领域) │     │
-│  ├─────────────────────────────────────────────────────────┤     │
-│  │ Knowledge & Quality                                       │     │
-│  │  inline_parser.py (伪上传)       knowledge_lineage.py (血缘)│     │
-│  │  quality_guard.py (6参数化测试)   skill_hub.py (插件生态)    │     │
-│  │  video_search.py (B站+YT)        enhanced_skill_hub.py      │     │
-│  ├─────────────────────────────────────────────────────────┤     │
-│  │ Admin & Visualization                                     │     │
-│  │  admin_console (统一面板)        organ_dashboard.py (12器官) │     │
-│  │  creative_viz.py (知识气象图)    system_health.py (goodput)  │     │
-│  │  emergence_detector.py (相变检测) predictability (语言视域)  │     │
-│  ├─────────────────────────────────────────────────────────┤     │
-│  │ Network & Channels                                        │     │
-│  │  channel_bridge.py (6通道)       swarm_coordinator (片段同步)│     │
-│  │  Scinet proxy (YouTube隧道)      anime_persona (语音驱动)    │     │
-│  └─────────────────────────────────────────────────────────┘     │
-├──────────────────────────────────────────────────────────────────┤
-│  Existing 45+ Modules (unchanged)                                │
-│  dna/ · knowledge/ · execution/ · treellm/ · economy/ · cell/   │
-└──────────────────────────────────────────────────────────────────┘
+TreeLLM (36 modules, 18 providers)
+├── Routing: core + holistic_election + bandit_router + classifier + providers
+├── Enhancement: deep_probe + adversarial_selfplay + depth_grading + reasoning_budget
+├── Competition: competitive_eliminator + joint_evolution
+├── Aggregation: synapse_aggregator + reasoning_dependency_graph
+├── Strategy: strategic_orchestrator + fluid_collective
+├── Interaction: concurrent_stream + micro_turn_aware + proactive_interject
+└── Health: vital_signs (7-organ check)
 ```
 
-## KEY NEW MODULES (this session: ~40 files)
+## KEY IMPROVEMENTS (2026-05-13 session)
 
-| Category | Module | Lines | Inspired by |
-|----------|--------|-------|-------------|
-| **Chrome** | chrome_dual.py + chrome_mcp_node.mjs | 750 | npx MCP / CDP dual-mode |
-| **Voice** | voice_call.py + unified_speech.py | 630 | MiniMind-O speech-native |
-| **TTS** | moss_tts_engine.py (GGUF Q4_K_M) | 490 | MOSS-TTS-Nano ~200MB |
-| **LLM** | llamacpp_backend.py + freebuff_provider.py | 430 | llama.cpp + OpenRouter |
-| **Models** | model_dashboard.py + auto_classifier.py | 560 | LLMFit + OpenMetadata |
-| **Knowledge** | inline_parser.py + knowledge_lineage.py | 700 | QGIS pseudo-upload + OM lineage |
-| **Processing** | processing_framework.py + decoupled_executor.py | 500 | QGIS toolbox + DiLoCo |
-| **Admin** | enhanced_skill_hub.py + organ_dashboard.py | 580 | QGIS plugins + layer tree |
-| **Channels** | channel_bridge.py + swarm fragment sync | 480 | CowAgent 7-channel |
-| **Election** | context_budget.py + L4 smart fallback | 280 | CowAgent + route_layered upgrade |
-| **Video** | video_search.py (Bilibili WBI + YT) | 330 | multi-source search |
-| **Config** | skill_hub.py + secrets vault | 360 | encrypted key storage |
+| Category | Count | Description |
+|----------|-------|-------------|
+| Critical bugs fixed | 5 | election await, ProviderScore iteration, embedding scorer import, empty chat fallback, ping cache |
+| Modules created | 17 | deep_probe, adversarial_selfplay, depth_grading, synapse_aggregator, competitive_eliminator, joint_evolution, strategic_orchestrator, reasoning_dependency_graph, fluid_collective, concurrent_stream, micro_turn_aware, proactive_interject, reasoning_budget, vital_signs, learning_sources, NatureLearner, classifier(SkillRouter) |
+| Modules deleted | 12 | freebuff_provider, hifloat8_provider, provider_registry, local_scanner, gateway, bootstrap, flash_first_stream, parallel_drafter, mtp_drafter, structured_enforcer, prompt_cache, cache_safe_prompt |
+| Providers configured | 18 | deepseek, longcat, xiaomi, aliyun, zhipu, hunyuan, baidu, spark, siliconflow, mofang, nvidia, modelscope, bailing, stepfun, internlm, sensetime, openrouter, dmxapi |
 
-## COMMANDS (CowAgent style)
-
-```bash
-livingtree start|stop|restart|status|logs|update   # service mgmt
-livingtree skill hub|list|install|search|uninstall  # skills
-livingtree channel weixin|feishu|dingtalk|qq        # channels
-livingtree secrets list|set|get|delete              # vault
-livingtree config [key] [val]                       # config
-```
-
-## SECRETS
-
-API keys stored encrypted in `config/secrets.enc` (Fernet + machine-derived key).
-Never commit plaintext keys. Use: `livingtree secrets set KEY VALUE`
+## RESEARCH PAPERS INTEGRATED
+- Sun et al. "Robot Cognitive Learning" (3-body P→C→B framework)
+- Werfel "Fluid Thinking about Collective Intelligence" (stigmergy)
+- TML "Interaction Models" (micro-turn + concurrent streaming)
+- DeepSeek-V4 Technical Report (3-tier reasoning budget)
+- Klang et al. "Orchestrated Multi Agents" (multi-agent > single-agent)
+- Buehler "PRefLexOR" (recursive self-reflection)
+- Fang et al. "Self-Evolving AI Agents Survey" (4-component framework)
+- Yona et al. "Hallucinations Undermine Trust" (metacognitive certainty)
 
 ## CONVENTIONS
-
-- **All new code** goes in `livingtree/` — never in `client/`
-- **Secrets**: `livingtree secrets set` → `config/secrets.enc`
-- **Admin**: `/tree/admin` unified console
-- **WebSocket**: `/ws/voice` for calls, `/ws/im` for messaging, `/ws/reach` for sensors
-- **Self-triggering**: New features auto-activate, no manual calls needed
-
-## ANTI-PATTERNS
-
-- ❌ Don't hardcode API keys — use `livingtree secrets set`
-- ❌ Don't store audio/video on disk — use inline_parser / unified_speech
-- ❌ Don't add static admin pages — use /tree/admin unified console
+- All new code in `livingtree/`
+- Secrets: `livingtree secrets set KEY VALUE` → `config/secrets.enc`
+- API: `/tree/living` (canvas), `/tree/admin` (console)
+- Test: `python test_queries.py` (3-turn conversation test)

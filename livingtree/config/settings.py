@@ -182,7 +182,7 @@ class ModelConfig(BaseModel):
     internlm_small_model: str = "internlm2.5-7b-chat"
 
     sensetime_base_url: str = "https://api.sensetime.com/v1"
-    sensetime_api_key: str = "sk-9kybnl63EsTepGUEwOK9H5FwIKlUkGkC"
+    sensetime_api_key: str = ""
     sensetime_flash_model: str = "SenseChat-Turbo"
     sensetime_flash_temperature: float = 0.3
     sensetime_flash_max_tokens: int = 4096
@@ -190,50 +190,83 @@ class ModelConfig(BaseModel):
     sensetime_pro_temperature: float = 0.5
     sensetime_pro_max_tokens: int = 8192
 
+    hunyuan_base_url: str = "https://api.hunyuan.cloud.tencent.com/v1"
+    hunyuan_api_key: str = ""
+    hunyuan_flash_model: str = "hunyuan-lite"
+    hunyuan_pro_model: str = "hunyuan-pro"
+
+    baidu_base_url: str = "https://qianfan.baidubce.com/v2"
+    baidu_api_key: str = ""
+    baidu_flash_model: str = "ernie-speed"
+    baidu_pro_model: str = "ernie-4.0"
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
     embedding_model: str = "all-MiniLM-L6-v2"
 
+    @staticmethod
+    def _all_providers() -> list[str]:
+        return ['deepseek', 'longcat', 'xiaomi', 'aliyun', 'zhipu',
+                'dmxapi', 'spark', 'siliconflow', 'mofang', 'nvidia',
+                'modelscope', 'bailing', 'stepfun', 'internlm',
+                'sensetime', 'openrouter', 'hunyuan', 'baidu']
+
     @model_validator(mode='after')
     def validate_provider_config(self) -> 'ModelConfig':
-        remote_providers = [
-            'deepseek', 'longcat', 'xiaomi', 'aliyun', 'zhipu',
-            'dmxapi', 'spark', 'siliconflow', 'mofang', 'nvidia',
-            'modelscope', 'bailing', 'stepfun', 'internlm',
-            'sensetime', 'openrouter',
-        ]
-
+        remote_providers = self._all_providers()
         warnings = []
         has_configured = False
 
         for prefix in remote_providers:
             base_url = getattr(self, f'{prefix}_base_url', '')
             api_key = getattr(self, f'{prefix}_api_key', '')
-
             if base_url and not api_key:
-                warnings.append(f"{prefix}: base_url configured but api_key is empty")
+                warnings.append(prefix)
             elif base_url and api_key:
                 has_configured = True
 
-        for w in warnings:
-            logger.warning(f"ModelConfig: {w}")
+        object.__setattr__(self, '_provider_warnings', warnings)
+        object.__setattr__(self, '_has_configured', has_configured)
 
         if self.ollama_base_url:
-            has_configured = True
+            object.__setattr__(self, '_has_configured', True)
         if self.llamacpp_base_url:
-            has_configured = True
+            object.__setattr__(self, '_has_configured', True)
 
         if self.flash_model == self.pro_model:
             logger.warning(
                 f"ModelConfig: flash_model and pro_model are both '{self.flash_model}' — "
                 "consider using different models for flash vs pro"
             )
+        return self
 
-        if not has_configured:
+    def report_configured_providers(self) -> None:
+        """Log a single summary line after vault keys are loaded.
+
+        Re-checks actual api_key values (post vault-loading) rather than
+        relying on pre-vault validation state.
+        """
+        all_p = self._all_providers()
+        configured = [p for p in all_p if getattr(self, f'{p}_api_key', '')]
+        missing = [p for p in all_p if p not in configured]
+
+        if configured:
+            logger.info(
+                f"ModelConfig: {len(configured)}/{len(all_p)} "
+                f"providers ready"
+            )
+        if missing:
+            logger.debug(
+                f"ModelConfig: {len(missing)} providers without keys "
+                f"({', '.join(missing)})"
+            )
+
+        if not missing:  # All providers have keys → fully configured
+            pass
+        elif len(missing) == len(all_p):
             logger.warning(
-                "ModelConfig: no provider is fully configured "
-                "(base_url + api_key both non-empty). "
+                "ModelConfig: no provider is fully configured. "
                 "System will have limited LLM functionality."
             )
 
@@ -520,6 +553,9 @@ def _load_config() -> LTAIConfig:
         spark_key = vault.get("spark_api_key", "")
         if spark_key:
             config.model.spark_api_key = spark_key
+            spark_url = vault.get("spark_base_url", "")
+            if spark_url:
+                config.model.spark_base_url = spark_url
             logger.info("Loaded spark_api_key from encrypted vault")
 
         siliconflow_key = vault.get("siliconflow_api_key", "")
@@ -556,6 +592,12 @@ def _load_config() -> LTAIConfig:
             config.model.internlm_api_key = internlm_key
             logger.info("Loaded internlm_api_key from encrypted vault")
 
+        # Load SenseTime key from vault
+        sensetime_key = vault.get("sensetime_api_key", "")
+        if sensetime_key:
+            config.model.sensetime_api_key = sensetime_key
+            logger.info("Loaded sensetime_api_key from encrypted vault")
+
         # Load OpenRouter key from vault (free tier — stored encrypted)
         openrouter_key = vault.get("openrouter_api_key", "")
         if openrouter_key:
@@ -563,10 +605,85 @@ def _load_config() -> LTAIConfig:
             logger.info("Loaded openrouter_api_key from encrypted vault")
         else:
             logger.debug("openrouter_api_key not in vault — free tier models still work without key")
+
+        # Load Hunyuan key from vault
+        hunyuan_key = vault.get("hunyuan_api_key", "")
+        if hunyuan_key:
+            config.model.hunyuan_api_key = hunyuan_key
+            logger.info("Loaded hunyuan_api_key from encrypted vault")
+
+        # Load Baidu key from vault
+        baidu_key = vault.get("baidu_api_key", "")
+        if baidu_key:
+            config.model.baidu_api_key = baidu_key
+            logger.info("Loaded baidu_api_key from encrypted vault")
     except Exception:
         pass
 
+    # ── Load additional providers from YAML ──
+    _load_providers_yaml(config)
+
+    # ── Summary report (silent — no per-provider warnings) ──
+    config.model.report_configured_providers()
+
     return config
+
+
+def _load_providers_yaml(config: LTAIConfig) -> None:
+    """Load additional providers from config/providers.yaml.
+
+    Allows users to add new LLM providers without modifying settings.py.
+    Format:
+      providers:
+        - name: my-provider
+          base_url: https://api.example.com/v1
+          api_key: sk-xxx  # or ${MY_PROVIDER_KEY} for env var
+          flash_model: my-model-flash
+          pro_model: my-model-pro
+    """
+    providers_yaml = Path("config/providers.yaml")
+    if not providers_yaml.exists():
+        return
+
+    try:
+        import yaml
+        data = yaml.safe_load(providers_yaml.read_text(encoding="utf-8"))
+        providers = data.get("providers", [])
+        if not providers:
+            return
+
+        loaded = 0
+        for p in providers:
+            name = p.get("name", "")
+            if not name:
+                continue
+
+            # Resolve env vars in api_key
+            api_key = p.get("api_key", "")
+            if api_key.startswith("${") and api_key.endswith("}"):
+                env_var = api_key[2:-1]
+                api_key = os.environ.get(env_var, "")
+
+            base_url = p.get("base_url", "")
+            if base_url:
+                setattr(config.model, f"{name}_base_url", base_url)
+            if api_key:
+                setattr(config.model, f"{name}_api_key", api_key)
+
+            flash = p.get("flash_model", "")
+            pro = p.get("pro_model", "")
+            if flash:
+                setattr(config.model, f"{name}_flash_model", flash)
+            if pro:
+                setattr(config.model, f"{name}_pro_model", pro)
+
+            loaded += 1
+            logger.info(f"Loaded provider '{name}' from config/providers.yaml")
+
+        if loaded:
+            logger.info(f"Loaded {loaded} additional providers from config/providers.yaml")
+    except Exception as e:
+        logger.warning(f"Failed to load config/providers.yaml: {e}")
 
 
 def get_config(reload: bool = False) -> LTAIConfig:

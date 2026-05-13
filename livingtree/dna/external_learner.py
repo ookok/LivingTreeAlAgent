@@ -1,10 +1,13 @@
-"""External Learning Drivers — GitHub trending + arXiv paper learning.
+"""External Learning Drivers — GitHub trending + arXiv paper + Nature learning.
 
-Two new evolution drivers:
-  1. GitHub Learner: Search trending repos for related patterns → suggest code improvements
-  2. arXiv Learner: Fetch latest papers → extract insights → propose architectural changes
+Three evolution drivers:
+  1. GitHub Learner: Search trending repos for related patterns
+  2. arXiv Learner: Fetch latest papers → extract insights
+  3. Nature Learner: Search Nature.com journals for collective intelligence,
+     multi-agent, LLM reasoning, and heterogeneous computing research
 
-Integration: feeds suggestions into self_evolution.py's mutation pipeline.
+All three feed into self_evolution.py's mutation pipeline.
+Integration: uses LearningSourceRegistry for user-configurable queries.
 """
 
 from __future__ import annotations
@@ -574,9 +577,12 @@ class ArxivLearner:
             self._paper_cache.parent.mkdir(parents=True, exist_ok=True)
             data = {
                 "papers": [
-                    {"arxiv_id": p.arxiv_id, "title": p.title, "abstract": p.abstract,
-                     "relevance_score": p.relevance_score}
-                    for p in self._papers[:30]
+                    {
+                        "arxiv_id": p.arxiv_id, "title": p.title, "abstract": p.abstract,
+                        "authors": p.authors, "published": p.published,
+                        "key_insights": p.key_insights, "relevance_score": p.relevance_score,
+                    }
+                    for p in self._papers[-100:]
                 ]
             }
             self._paper_cache.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
@@ -584,6 +590,333 @@ class ArxivLearner:
             pass
 
 
+# ═══════════════════════════════════════════════════════
+# Part 3: Nature Learner
+# ═══════════════════════════════════════════════════════
+
+class NatureLearner:
+    """Learn from Nature.com papers across relevant journals.
+
+    Searches Nature, Nature Machine Intelligence, Scientific Reports,
+    npj Artificial Intelligence, Nature Communications, and Communications
+    Chemistry for papers relevant to LivingTree's architecture.
+
+    Extracts: architectural insights, experimental validations,
+    collective intelligence patterns, heterogeneous system designs.
+    """
+
+    # Nature.com journals to search (via their APIs)
+    JOURNALS = [
+        ("nature", "Nature"),
+        ("natmachintell", "Nature Machine Intelligence"),
+        ("srep", "Scientific Reports"),
+        ("npjai", "npj Artificial Intelligence"),
+        ("ncomms", "Nature Communications"),
+        ("npjdigitalmed", "npj Digital Medicine"),
+    ]
+
+    # LivingTree-relevant search queries for Nature papers
+    DOMAIN_QUERIES = [
+        ("multi_agent_orchestration",
+         "multi-agent LLM orchestration collective intelligence routing"),
+        ("reasoning_depth",
+         "chain-of-thought reasoning self-improvement reflection LLM"),
+        ("collective_intelligence",
+         "swarm intelligence stigmergy collective behavior emergence"),
+        ("heterogeneous_computing",
+         "heterogeneous GPU kernel disaggregation resource allocation scheduling"),
+        ("agent_coordination",
+         "autonomous agent coordination modular planning memory"),
+    ]
+
+    # Mapping: Nature domain → LivingTree module
+    MODULE_MAPPING = {
+        "multi_agent_orchestration": ["treellm/core.py", "treellm/holistic_election.py"],
+        "reasoning_depth": ["treellm/deep_probe.py", "treellm/adversarial_selfplay.py"],
+        "collective_intelligence": ["treellm/fluid_collective.py", "treellm/synapse_aggregator.py"],
+        "heterogeneous_computing": ["treellm/reasoning_dependency_graph.py", "treellm/strategic_orchestrator.py"],
+        "agent_coordination": ["treellm/competitive_eliminator.py", "dna/external_learner.py"],
+    }
+
+    def __init__(self):
+        self._learned: list[LearnedPattern] = []
+        self._papers: list[ArxivPaper] = []  # Reuse ArxivPaper type for Nature papers
+        self._cache_file = Path(".livingtree/nature_learned.json")
+        self._paper_cache = Path(".livingtree/nature_papers.json")
+        self._load_cache()
+
+    def search_recent_papers(self, max_results: int = 30) -> list[ArxivPaper]:
+        """Search Nature.com journals for recent relevant papers.
+
+        Tries Semantic Scholar API first (free, no key needed), falls back
+        to heuristic known-paper list. Production can add Nature API key.
+        """
+        papers = []
+
+        # Try Semantic Scholar API first
+        api_papers = self._search_semantic_scholar(max_results)
+        if api_papers:
+            papers.extend(api_papers)
+            logger.info(
+                f"NatureLearner: Semantic Scholar returned {len(api_papers)} papers"
+            )
+
+        # Fill with heuristics if API returned too few
+        if len(papers) < 5:
+            for domain, query in self.DOMAIN_QUERIES:
+                related = self._heuristic_search(query, domain)
+                papers.extend(related)
+
+        seen = set()
+        unique = []
+        for p in sorted(papers, key=lambda x: -x.relevance_score):
+            if p.title not in seen:
+                seen.add(p.title)
+                unique.append(p)
+
+        self._papers = unique[:max_results]
+        self._save_papers()
+        logger.info(
+            f"NatureLearner: found {len(self._papers)} relevant papers "
+            f"across Nature journals"
+        )
+        return self._papers
+
+    def _search_semantic_scholar(self, max_results: int = 20) -> list[ArxivPaper]:
+        """Search Semantic Scholar API for recent relevant papers.
+
+        Semantic Scholar is free, no API key required. Returns up to max_results
+        papers matching LivingTree's domain queries across multiple fields.
+        """
+        papers: list[ArxivPaper] = []
+        search_queries = [
+            "multi-agent LLM orchestration collective intelligence",
+            "large language model reasoning chain-of-thought self-improvement",
+            "swarm intelligence stigmergy coordination emergence",
+        ]
+
+        try:
+            import aiohttp
+            import asyncio
+
+            async def _fetch():
+                results = []
+                async with aiohttp.ClientSession() as session:
+                    for query in search_queries[:2]:  # Limit to 2 queries
+                        url = (
+                            "https://api.semanticscholar.org/graph/v1/paper/search"
+                            f"?query={query}&limit={max_results // 2}"
+                            "&fields=title,authors,year,journal,externalIds"
+                        )
+                        try:
+                            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    data = await resp.json()
+                                    for p in data.get("data", []):
+                                        ext_ids = p.get("externalIds", {})
+                                        doi = ext_ids.get("DOI", "")
+                                        arxiv_id = ext_ids.get("ArXiv", "")
+                                        paper_id = arxiv_id or doi or str(p.get("paperId", ""))
+
+                                        # Filter: only keep Nature-family journals or highly relevant
+                                        journal = (p.get("journal") or {}).get("name", "")
+                                        journal_lower = journal.lower()
+                                        nature_journals = ["nature", "sci rep", "nat commun",
+                                                          "nat mach", "npj", "scientific reports"]
+                                        is_nature = any(nj in journal_lower for nj in nature_journals)
+
+                                        if is_nature or len(results) < 5:
+                                            results.append(ArxivPaper(
+                                                arxiv_id=f"ss:{paper_id[:30]}",
+                                                title=p.get("title", ""),
+                                                authors=[a.get("name", "") for a in (p.get("authors") or [])],
+                                                categories=["semantic_scholar"],
+                                                published=f"{journal} ({p.get('year', '')})",
+                                                relevance_score=0.6 if is_nature else 0.4,
+                                                key_insights=[],
+                                            ))
+                        except Exception:
+                            continue
+                return results
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # In async context, use create_task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _fetch())
+                    papers = future.result(timeout=15)
+            else:
+                papers = asyncio.run(_fetch())
+
+        except ImportError:
+            logger.debug("NatureLearner: aiohttp not available for Semantic Scholar API")
+        except Exception as e:
+            logger.debug(f"NatureLearner Semantic Scholar: {e}")
+
+        return papers[:max_results]
+
+    def _heuristic_search(self, query: str, domain: str) -> list[ArxivPaper]:
+        """Heuristic paper discovery from known Nature publications.
+
+        Maps query terms to known high-relevance Nature papers.
+        In production: calls Nature API or Semantic Scholar API.
+        """
+        known_papers: dict[str, list[dict]] = {
+            "multi_agent_orchestration": [
+                {"title": "Orchestrated multi agents sustain accuracy under clinical-scale workloads",
+                 "authors": ["Klang", "Omar", "Raut"], "journal": "npj Health Systems",
+                 "year": "2026", "insight": "Multi-agent orchestrator preserves accuracy with 65x fewer tokens"},
+                {"title": "Multi-agent AI systems need transparency",
+                 "authors": ["Nature Machine Intelligence Editorial"], "journal": "Nat Mach Intell",
+                 "year": "2026", "insight": "Framework for evaluating multi-agent transparency and cost"},
+                {"title": "Evaluating routing stability and coordination in swarm-based multi-agent TOD",
+                 "authors": [], "journal": "Scientific Reports",
+                 "year": "2026", "insight": "Coordination metrics: delegation quality, coverage, loop rate, recovery"},
+            ],
+            "reasoning_depth": [
+                {"title": "PRefLexOR: preference-based recursive language modeling for reasoning",
+                 "authors": ["Buehler"], "journal": "npj Artificial Intelligence",
+                 "year": "2025", "insight": "Recursive self-reflection via reflect tags improves reasoning depth"},
+                {"title": "DR-CoT: dynamic recursive chain of thought with meta reasoning",
+                 "authors": [], "journal": "Scientific Reports",
+                 "year": "2025", "insight": "Voting mechanism with context truncation for ensemble reasoning"},
+                {"title": "Use large language model to enhance reasoning of another",
+                 "authors": [], "journal": "Scientific Reports",
+                 "year": "2026", "insight": "GRPO with structural reward for reasoning improvement"},
+            ],
+            "collective_intelligence": [
+                {"title": "Fluid thinking about collective intelligence",
+                 "authors": ["Werfel"], "journal": "Nat Mach Intell",
+                 "year": "2026", "insight": "Static vs fluid topologies; mobility as alternative to multiplicity"},
+                {"title": "Collective intelligence for AI-assisted chemical synthesis",
+                 "authors": ["Li", "Sarkar", "Lu"], "journal": "Nature",
+                 "year": "2026", "insight": "2,498 Voronoi-clustered experts for MOSAIC framework"},
+                {"title": "Unraveling emergence of collective behavior in networks of cognitive agents",
+                 "authors": ["Zomer", "De Domenico"], "journal": "npj Artificial Intelligence",
+                 "year": "2026", "insight": "Network topology controls exploration-exploitation in LLM swarms"},
+                {"title": "A collective intelligence model for swarm robotics applications",
+                 "authors": ["Nitti", "de Tullio", "Federico"], "journal": "Nat Commun",
+                 "year": "2025", "insight": "Swarm Cooperation Model for limited-size collectives"},
+            ],
+            "heterogeneous_computing": [
+                {"title": "Tessera: Unlocking Heterogeneous GPUs through Kernel-Granularity Disaggregation",
+                 "authors": ["Hu", "Qin", "Wang"], "journal": "arXiv (cs.DC)",
+                 "year": "2026", "insight": "Kernel-level disaggregation; heterogeneous pair exceeds homogeneous"},
+            ],
+            "agent_coordination": [
+                {"title": "Modular Agentic Planner for planning with LLMs",
+                 "authors": [], "journal": "Nature Communications",
+                 "year": "2025", "insight": "Brain-inspired modules: error monitoring, state prediction, task decomposition"},
+                {"title": "MCP-SIM: memory-coordinated multi-agent simulation framework",
+                 "authors": [], "journal": "npj Artificial Intelligence",
+                 "year": "2026", "insight": "Shared persistent memory for 6 specialized simulation agents"},
+                {"title": "A self-correcting multi-agent LLM framework",
+                 "authors": [], "journal": "npj Artificial Intelligence",
+                 "year": "2026", "insight": "Planning-acting-reflecting-revising cycles with memory coordination"},
+            ],
+        }
+
+        result = []
+        for paper in known_papers.get(domain, []):
+            title = paper.get("title", "")
+            # Compute relevance based on query-term overlap
+            query_terms = set(query.lower().split())
+            title_terms = set(title.lower().split())
+            overlap = len(query_terms & title_terms) / max(len(query_terms), 1)
+            relevance = min(1.0, 0.4 + overlap * 0.6)
+
+            result.append(ArxivPaper(
+                arxiv_id=f"nature:{paper.get('journal','')}:{paper.get('year','')}",
+                title=title,
+                authors=paper.get("authors", []),
+                categories=[domain],
+                published=f"{paper.get('journal','')} ({paper.get('year','')})",
+                relevance_score=round(relevance, 3),
+                key_insights=[paper.get("insight", "")] if paper.get("insight") else [],
+            ))
+        return result
+
+    def extract_patterns(self, papers: list[ArxivPaper] | None = None) -> list[LearnedPattern]:
+        """Extract actionable patterns from Nature papers."""
+        papers = papers or self._papers
+        patterns = []
+
+        for paper in papers:
+            if not paper.key_insights:
+                continue
+
+            # Determine which LivingTree module this maps to
+            target_files = []
+            for domain_key, files in self.MODULE_MAPPING.items():
+                if any(domain_key in cat for cat in paper.categories):
+                    target_files = files
+                    break
+
+            if not target_files:
+                target_files = ["treellm/"]  # Default to treellm
+
+            for insight in paper.key_insights:
+                pattern = LearnedPattern(
+                    source="nature",
+                    source_url=f"https://www.nature.com/search?q={paper.title[:50]}",
+                    category="architecture",
+                    title=f"[Nature] {paper.title[:80]}",
+                    description=insight,
+                    confidence=paper.relevance_score,
+                    applicable_files=target_files,
+                    suggested_change=f"Consider insight from {paper.published}: {insight}",
+                )
+                patterns.append(pattern)
+
+        self._learned = patterns
+        self._save_cache()
+        logger.info(f"NatureLearner: extracted {len(patterns)} patterns")
+        return patterns
+
+    def _load_cache(self) -> None:
+        try:
+            if self._cache_file.exists():
+                data = json.loads(self._cache_file.read_text("utf-8"))
+                self._learned = [LearnedPattern(**p) for p in data.get("patterns", [])]
+        except Exception:
+            pass
+
+    def _save_cache(self) -> None:
+        try:
+            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "patterns": [
+                    {"source": p.source, "source_url": p.source_url, "category": p.category,
+                     "title": p.title, "description": p.description, "confidence": p.confidence,
+                     "applicable_files": p.applicable_files, "suggested_change": p.suggested_change}
+                    for p in self._learned[-50:]
+                ]
+            }
+            self._cache_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
+        except Exception:
+            pass
+
+    def _save_papers(self) -> None:
+        try:
+            self._paper_cache.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "papers": [
+                    {
+                        "arxiv_id": p.arxiv_id, "title": p.title,
+                        "authors": p.authors, "published": p.published,
+                        "key_insights": p.key_insights, "relevance_score": p.relevance_score,
+                    }
+                    for p in self._papers[-50:]
+                ]
+            }
+            self._paper_cache.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
+        except Exception:
+            pass
+
+
+# ═══════════════════════════════════════════════════════
+# Part 4: External Evolution Driver (orchestrator)
 # ═══════════════════════════════════════════════════════
 # Part 3: Unified External Learner
 # ═══════════════════════════════════════════════════════
@@ -600,13 +933,14 @@ class ExternalEvolutionDriver:
     def __init__(self):
         self.github = GitHubLearner()
         self.arxiv = ArxivLearner()
+        self.nature = NatureLearner()
         self._all_patterns: list[LearnedPattern] = []
         self._last_run = 0.0
 
     async def run_cycle(self) -> dict:
         """Run one complete external learning cycle.
 
-        Returns: {github_patterns, arxiv_patterns, total, proposals}
+        Returns: {github_patterns, arxiv_patterns, nature_patterns, total, proposals}
         """
         self._last_run = time.time()
         results = {}
@@ -634,6 +968,18 @@ class ExternalEvolutionDriver:
         except Exception as e:
             logger.warning(f"ArxivLearner: {e}")
             results["arxiv_error"] = str(e)[:100]
+
+        # Nature: search papers → extract patterns
+        try:
+            nature_papers = self.nature.search_recent_papers()
+            nature_patterns = self.nature.extract_patterns(nature_papers)
+            results["nature_papers"] = len(nature_papers)
+            results["nature_patterns"] = len(nature_patterns)
+            self._all_patterns.extend(nature_patterns)
+            logger.info(f"NatureLearner: {len(nature_papers)} papers → {len(nature_patterns)} patterns")
+        except Exception as e:
+            logger.warning(f"NatureLearner: {e}")
+            results["nature_error"] = str(e)[:100]
 
         results["total_patterns"] = len(self._all_patterns)
         results["proposals"] = self.arxiv.propose_changes(self._all_patterns)
@@ -666,7 +1012,61 @@ class ExternalEvolutionDriver:
             "last_run": self._last_run,
             "github_learned": sum(1 for p in self._all_patterns if p.source == "github"),
             "arxiv_learned": sum(1 for p in self._all_patterns if p.source == "arxiv"),
+            "nature_learned": sum(1 for p in self._all_patterns if p.source == "nature"),
         }
+
+    # ── Auto-Fetch Loop (OpenHuman-inspired 20-minute cycle) ────
+
+    async def auto_fetch_loop(self, interval_minutes: int = 20,
+                              max_iterations: int = 0) -> None:
+        """Background loop: automatically fetch new learning content.
+
+        From OpenHuman: "every twenty minutes the core walks each active
+        connection and pulls fresh data into the memory tree."
+
+        Runs run_cycle() at the specified interval. Set max_iterations=0
+        for infinite loop (suitable for daemon mode).
+        """
+        import asyncio
+        iteration = 0
+        logger.info(
+            f"ExternalEvolutionDriver: auto-fetch started "
+            f"(interval={interval_minutes}min)"
+        )
+        while max_iterations == 0 or iteration < max_iterations:
+            try:
+                results = await self.run_cycle()
+                logger.info(
+                    f"Auto-fetch cycle {iteration + 1}: "
+                    f"github={results.get('github_patterns', 0)}, "
+                    f"arxiv={results.get('arxiv_patterns', 0)}, "
+                    f"nature={results.get('nature_patterns', 0)}"
+                )
+                # Feed into evolution pipeline
+                self.feed_to_evolution()
+                # Deposit top patterns into FluidCollective memory tree
+                try:
+                    from ..treellm.fluid_collective import get_fluid_collective, TraceType
+                    fc = get_fluid_collective()
+                    for p in self._all_patterns[-5:]:
+                        if p.confidence > 0.5:
+                            fc.deposit(
+                                model=f"learner:{p.source}",
+                                content=p.description,
+                                trace_type=TraceType.INSIGHT,
+                                domain=p.category,
+                                confidence=p.confidence,
+                            )
+                except ImportError:
+                    pass
+            except Exception as e:
+                logger.warning(f"Auto-fetch cycle error: {e}")
+
+            iteration += 1
+            if max_iterations == 0 or iteration < max_iterations:
+                await asyncio.sleep(interval_minutes * 60)
+
+        logger.info("ExternalEvolutionDriver: auto-fetch stopped")
 
 
 # ── Singleton ──

@@ -1,31 +1,19 @@
-"""QualityGuard — Unified retrieval validation + hallucination detection + parametric tests.
+"""QualityGuard — Parameterized knowledge quality tests.
 
 Inspired by OpenMetadata's Data Quality Test Library:
   - Parameterized test templates with reusable SQL-like conditions
   - Auto-scoring per knowledge domain
   - Test template library for consistency checks
 
-Usage:
-    from livingtree.knowledge.quality_guard import (
-        RetrievalValidator, HallucinationGuard,
-        KnowledgeQualityTest, run_quality_tests,
-    )
+Note: RetrievalValidator and HallucinationGuard are imported directly
+from their respective modules (retrieval_validator.py, hallucination_guard.py).
 """
-
-from .retrieval_validator import RetrievalValidator, ValidatedHit, ValidationResult
-from .hallucination_guard import (
-    HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats,
-)
-
-__all__ = [
-    "RetrievalValidator", "ValidatedHit", "ValidationResult",
-    "HallucinationGuard", "HallucinationReport", "SentenceCheck", "HallucinationStats",
-    "KnowledgeQualityTest", "QualityTestTemplate", "run_quality_tests", "QUALITY_TEMPLATES",
-]
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from loguru import logger
+
+__all__ = ["KnowledgeQualityTest", "run_quality_tests", "QUALITY_TEMPLATES"]
 
 
 @dataclass

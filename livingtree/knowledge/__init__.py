@@ -34,7 +34,7 @@ from .intelligent_kb import (
 from .query_decomposer import QueryDecomposer, DecomposedQuery, SubQuery, DecomposedResult
 from .retrieval_validator import RetrievalValidator, ValidatedHit, ValidationResult
 from .hallucination_guard import HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
-from .quality_guard import RetrievalValidator, ValidatedHit, ValidationResult, HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
+from .quality_guard import KnowledgeQualityTest, run_quality_tests, QUALITY_TEMPLATES
 from .content_quality import ContentQuality, QualityScore, ContentLabel
 from .cognitive_delta import CognitiveDelta, DeltaResult, DeltaDecision
 from .engram_store import EngramStore, EngramEntry, get_engram_store
@@ -44,6 +44,7 @@ from .ideablock_enricher import IdeaBlockEnricher, IdeaBlockMeta, get_ideablock_
 from .agentic_rag import AgenticRAG, AgenticResult, RetrievalRound, RAGMode, get_agentic_rag
 from .reranker import Reranker, RankedDocument, RerankResult, get_reranker
 from .context_wiki import ContextWiki, WikiPage, WikiSection, WikiTool, get_context_wiki, reset_context_wiki
+from .learning_sources import LearningSourceRegistry, LearningSource, ResearchDirection, get_learning_sources
 
 __all__ = [
     "KnowledgeBase", "Document", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult",
@@ -82,4 +83,5 @@ __all__ = [
     "AgenticRAG", "AgenticResult", "RetrievalRound", "RAGMode", "get_agentic_rag",
     "Reranker", "RankedDocument", "RerankResult", "get_reranker",
     "ContextWiki", "WikiPage", "WikiSection", "WikiTool", "get_context_wiki", "reset_context_wiki",
+    "LearningSourceRegistry", "LearningSource", "ResearchDirection", "get_learning_sources",
 ]

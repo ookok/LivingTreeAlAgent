@@ -436,6 +436,20 @@ class IntegrationHub:
         self.world.opencode_providers = []
         logger.debug("OpenCode bridge initialized (lazy discovery on first election)")
 
+        # ── SessionPersistence: restore identity from previous run ──
+        try:
+            from ..dna.session_persistence import get_session_persistence
+            from ..dna.phenomenal_consciousness import get_consciousness
+            phenomenal = get_consciousness()
+            if phenomenal:
+                restored = get_session_persistence().restore(
+                    phenomenal_consciousness=phenomenal,
+                )
+                if restored:
+                    logger.info("SessionPersistence: identity restored from disk")
+        except Exception as e:
+            logger.debug(f"SessionPersistence restore skipped: {e}")
+
         from ..dna.life_daemon import LifeDaemon
         self.daemon = LifeDaemon(self.world, interval_minutes=30.0)
 

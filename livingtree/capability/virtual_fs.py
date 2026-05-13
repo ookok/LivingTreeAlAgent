@@ -1077,6 +1077,12 @@ def get_virtual_fs() -> VirtualFS:
     global _vfs
     if _vfs is None:
         _vfs = VirtualFS()
+        # Mount public-apis on demand (lazy, no disk)
+        try:
+            from .public_apis_resource import get_public_apis
+            _vfs.mount("/public-apis", get_public_apis())
+        except Exception:
+            pass
         logger.info("VirtualFS singleton created")
     return _vfs
 

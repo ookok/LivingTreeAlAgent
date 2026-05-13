@@ -334,6 +334,18 @@ class HolisticElection:
 
             # Apply dynamic weights based on task_type (Pattern 5)
             weights = get_dynamic_weights(task_type)
+            # ── InverseReward → Provider election influence ──
+            try:
+                from ..economy.inverse_reward import get_inverse_reward
+                ir = get_inverse_reward()
+                prefs = ir.get_preference_profile()
+                if prefs.get("prefers_speed", 0) > 0.5:
+                    weights["latency"] = weights.get("latency", 0.18) * 1.3
+                    weights["quality"] = weights.get("quality", 0.23) * 0.9
+                if prefs.get("prefers_simplicity", 0) > 0.5:
+                    weights["cost"] = weights.get("cost", 0.15) * 1.2
+            except Exception:
+                pass
             # ensure all keys exist in scores
             for k in weights:
                 score.scores.setdefault(k, 0.0)

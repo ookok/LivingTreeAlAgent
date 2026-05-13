@@ -2272,6 +2272,18 @@ def _get_user_id_from_request(request: Request) -> str:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @app.post("/api/tools/wiki_search")
+    async def tool_wiki_search(request: Request):
+        body = await request.json()
+        query = body.get("query", "")
+        try:
+            from ..knowledge.context_wiki import WikiTool
+            wt = WikiTool()
+            result = await wt.search_wiki(query)
+            return {"ok": True, "result": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     @app.post("/api/shield/check-input")
     async def shield_check_input(request: Request):
         from ..core.prompt_shield import get_shield

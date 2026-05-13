@@ -618,6 +618,20 @@ class WorldModel:
         logger.info(f"WorldModel plan validation: {'PASS' if is_safe else 'FAIL'} — {summary[:120]}")
         return is_safe, all_outcomes, summary
 
+    async def validate_plan_risks(
+        self,
+        plan_steps: list,
+        consciousness: Any = None,
+    ) -> list[dict]:
+        """Auto-correction: simulate each step and flag high-risk ones with suggestions."""
+        results = []
+        for step in plan_steps:
+            step_str = step.get("description", str(step)) if isinstance(step, dict) else str(step)
+            outcome = await self.simulate(f"execute: {step_str}", None, consciousness)
+            if outcome.risk_level() == "high":
+                results.append({"step": step_str, "risk": "high", "suggestion": f"Consider: {outcome.side_effects}"})
+        return results
+
 
 _world_model: Optional[WorldModel] = None
 

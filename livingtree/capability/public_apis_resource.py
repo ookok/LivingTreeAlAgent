@@ -490,6 +490,58 @@ class PublicAPIsResource(Resource):
             "loaded": True,
         }
 
+    # ── Live API Calling ───────────────────────────────────────────
+
+    def _find_api(self, api_name: str) -> APIEntry | None:
+        """Look up an API entry by name (case-insensitive, partial match).
+
+        Searches all loaded categories for an API whose name contains
+        the given string. Returns the first match.
+        """
+        if not self._cache:
+            return None
+        lower = api_name.strip().lower()
+        for cat_entries in self._cache.values():
+            for entry in cat_entries:
+                if lower in entry.name.lower():
+                    return entry
+        return None
+
+    async def call_api(self, api_name: str, params: dict | None = None) -> dict[str, Any]:
+        """Actually call a public API and return results. On-demand, no caching.
+
+        Looks up the API by name in the cached public-apis directory,
+        then makes an HTTP GET to its URL with the given query parameters.
+
+        Args:
+            api_name: Name or partial name of the API to call
+            params: Optional query parameters for the HTTP request
+
+        Returns:
+            {"ok": True, "data": ...} on success,
+            {"ok": False, "status": http_code} on HTTP error,
+            {"error": "API not found"} if no match,
+            {"ok": False, "error": str(e)} on exception
+        """
+        await self._ensure_loaded()
+        entry = self._find_api(api_name)
+        if not entry:
+            return {"error": "API not found"}
+        if not entry.url:
+            return {"ok": False, "error": "API has no URL"}
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    entry.url,
+                    params=params or {},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    if resp.status == 200:
+                        return {"ok": True, "data": await resp.json()}
+                    return {"ok": False, "status": resp.status}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
 
 # ══════════════════════════════════════════════════════════════════════
 # Singleton

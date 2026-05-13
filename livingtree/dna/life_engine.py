@@ -193,6 +193,16 @@ class LifeEngine(BranchMixin, StageMixin):
                 await self._wiki_compile("plan", ctx)
             if self._vector_mode:
                 await self._vector_update("plan", ctx)
+            # ── WorldModel → Plan feedback: validate plan for high-risk steps ──
+            try:
+                from .world_model import get_world_model
+                wm = get_world_model()
+                risks = await wm.validate_plan_risks(ctx.plan)
+                if any(r["risk"] == "high" for r in risks):
+                    ctx.metadata["plan_risks"] = risks
+                    logger.warning(f"WorldModel: {len(risks)} risks in plan")
+            except Exception:
+                pass
             decision = self._should_branch(ctx)
             if decision.should_branch:
                 hypotheses = ctx.metadata.get("hypotheses", []) or []
@@ -673,6 +683,13 @@ class LifeEngine(BranchMixin, StageMixin):
                             "intervention": rlm.get_intervention("mempo", pattern),
                         }
                         logger.warning(f"RLVR: {pattern.warning_level} for mempo — decline={pattern.decline_rate:.3f}")
+                    if pattern and pattern.warning_level == "critical":
+                        try:
+                            from .surprise_gating import get_surprise_gate
+                            sg = get_surprise_gate()
+                            sg.set_fast_threshold(0.9)
+                            ctx.metadata["rlvr_frozen"] = True
+                        except Exception: pass
                 except Exception: pass
 
             # ── External Verifier: escape intrinsic reward ceiling ──
@@ -688,6 +705,38 @@ class LifeEngine(BranchMixin, StageMixin):
                     if abs(external_reward) > 0.5:
                         ctx.metadata["verified_signal"] = "strong_verification"
                 except Exception: pass
+
+            # ── EvalDashboard: record unified evaluation metrics ──
+            try:
+                from ..observability.eval_dashboard import get_eval_dashboard
+                get_eval_dashboard().record_cycle(ctx)
+            except Exception: pass
+
+            # ── SessionPersistence: save identity across restarts ──
+            try:
+                from .session_persistence import get_session_persistence
+                phenomenal = getattr(self.world, 'phenomenal_consciousness', None)
+                if phenomenal is None:
+                    try:
+                        from .phenomenal_consciousness import get_consciousness
+                        phenomenal = get_consciousness()
+                    except Exception:
+                        pass
+                conversation_dna = getattr(self.world, 'conversation_dna', None)
+                struct_mem = getattr(self.world, 'struct_memory', None)
+                gene_pool = None
+                try:
+                    from .evolution_gene import get_gene_pool
+                    gene_pool = get_gene_pool()
+                except Exception:
+                    pass
+                get_session_persistence().save(
+                    phenomenal_consciousness=phenomenal,
+                    conversation_dna=conversation_dna,
+                    struct_mem=struct_mem,
+                    gene_pool=gene_pool,
+                )
+            except Exception: pass
 
             return ctx
         except Exception as e:
@@ -1175,7 +1224,13 @@ class LifeEngine(BranchMixin, StageMixin):
                     habit = hc.check_habit(ctx.user_input or "")
                     if habit:
                         ctx.metadata["habit_hit"] = True
-                        ctx.metadata["habit_output"] = habit.direct_output
+                        # Write habit output to appropriate ctx field based on stage
+                        if name == "cognize":
+                            ctx.intent = habit.direct_output[:200]
+                        elif name == "plan":
+                            import json as _json
+                            try: ctx.plan = _json.loads(habit.direct_output)
+                            except: ctx.plan = [{"description": habit.direct_output[:100]}]
                         s.result = "habit_cache_hit"
                         s.status = "completed"
                         return StageGateResult(gate=StageGate.ACCEPT, confidence=0.9, reason="habit hit")

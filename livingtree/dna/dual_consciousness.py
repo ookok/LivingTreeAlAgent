@@ -612,6 +612,7 @@ class DualModelConsciousness(Consciousness):
             boost = ed.get_temperature_boost()
             if boost > 0:
                 temperature = min(1.5, temperature + boost)
+                prompt = ed.inject_entropy_prompt() or prompt
         except Exception:
             pass
 
@@ -675,6 +676,7 @@ class DualModelConsciousness(Consciousness):
             boost = ed.get_temperature_boost()
             if boost > 0:
                 temperature = min(1.5, temperature + boost)
+                user_msg = ed.inject_entropy_prompt() or user_msg
         except Exception:
             pass
 

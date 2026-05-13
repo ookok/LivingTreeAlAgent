@@ -242,6 +242,16 @@ class EmotionDecision:
         )
         self._state_history.append(self._current_state)
 
+        # Forward VIGIL diagnosis to emotion-driven behavior
+        if vigil_diagnosis:
+            summary = vigil_diagnosis.get("summary", "")
+            if "failures" in str(summary).lower() or "degrading" in str(summary).lower():
+                self._current_state.dominant = "frustration"
+                self._current_state.valence = -0.3
+            elif "strengths" in str(summary).lower() or "improving" in str(summary).lower():
+                self._current_state.dominant = "satisfaction"
+                self._current_state.valence = 0.5
+
         if old_dominant != dominant:
             logger.info(
                 "EmotionDecision: {} → {} (intensity={:.2f}, valence={:+.2f})",

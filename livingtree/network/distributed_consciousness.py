@@ -352,6 +352,22 @@ class DistributedSelf:
         """
         return list(self._merged_insights[-50:])
 
+    def restore_on_startup(self, phenomenal_consciousness):
+        """Restore SelfModel from last session's distributed fragments."""
+        try:
+            if self._known_instances:
+                latest = max(self._known_instances.values(), key=lambda f: f.shared_at)
+                if latest.self_model_snapshot:
+                    pc = phenomenal_consciousness
+                    if pc and pc._self:
+                        for trait, val in latest.self_model_snapshot.get("traits", {}).items():
+                            if trait in pc._self.traits:
+                                pc._self.traits[trait] = (pc._self.traits[trait] + val) / 2
+                        pc._self.generation = max(pc._self.generation, latest.self_model_snapshot.get("generation", 0))
+                        logger.info(f"DistributedSelf: restored from {latest.instance_id}")
+        except Exception as e:
+            logger.debug(f"DistributedSelf restore: {e}")
+
     async def discover_peers(self) -> list[str]:
         """Find other LivingTree instances on the network via p2p_node.
 

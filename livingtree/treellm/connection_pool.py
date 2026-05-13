@@ -135,6 +135,10 @@ class ConnectionPool:
         self._session_recreations: int = 0
         self._consecutive_session_errors: int = 0
 
+        # Auto-cleanup on exit
+        import atexit
+        atexit.register(self._cleanup)
+
         # Per-provider stats
         self._provider_stats: dict[str, ProviderPoolStats] = {}
 
@@ -146,6 +150,14 @@ class ConnectionPool:
         # Lifetime counters
         self._total_requests: int = 0
         self._total_failures: int = 0
+
+    def _cleanup(self) -> None:
+        """Close aiohttp session on exit to prevent resource warnings."""
+        if self._session:
+            try:
+                self._session._connector._close()
+            except Exception:
+                pass
 
     # ── Session Management ──
 

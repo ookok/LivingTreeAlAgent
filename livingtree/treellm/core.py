@@ -305,6 +305,9 @@ class TreeLLM:
             pass
         layer1_candidates_final = list(dict.fromkeys(layer1_candidates_final))
 
+        # ── Foresight placeholder ──
+        foresight_insights: dict[str, Any] = {}
+
         # Layer 2: Election scoring
         layer2_candidates: list[str] = []
         election_score = 0.0

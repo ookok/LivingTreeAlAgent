@@ -53,18 +53,27 @@ class Provider:
         self.default_model = default_model
         self._rate_limit_count = 0
         self._last_rate_limit = 0.0
+        self._last_ping_time = 0.0
+        self._last_ping_ok = False
 
     async def ping(self) -> tuple[bool, str]:
+        # Cache: skip ping if recently checked (< 15s)
+        if self._last_ping_time and time.time() - self._last_ping_time < 15:
+            return self._last_ping_ok, ""
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.post(
                     f"{self.base_url}/chat/completions",
                     json={"model": self.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
                     headers=self._headers(),
-                    timeout=aiohttp.ClientTimeout(total=5),
+                    timeout=aiohttp.ClientTimeout(total=3),
                 ) as resp:
-                    return True, ""  # Any HTTP response = server alive; errors caught by except
+                    self._last_ping_time = time.time()
+                    self._last_ping_ok = True
+                    return True, ""
         except Exception as e:
+            self._last_ping_time = time.time()
+            self._last_ping_ok = False
             return False, str(e)
 
     async def _request_with_retry(

@@ -34,30 +34,8 @@ from typing import Any, AsyncIterator
 
 from .classifier import TinyClassifier
 from .providers import Provider, ProviderResult, create_deepseek_provider, create_longcat_provider
-from .holistic_election import get_election
+from .holistic_election import get_election, RouterStats
 
-
-@dataclass
-class RouterStats:
-    provider: str
-    calls: int = 0
-    successes: int = 0
-    failures: int = 0
-    total_tokens: int = 0
-    total_latency_ms: float = 0.0
-    last_latency_ms: float = 0.0
-    last_error: str = ""
-    recent_successes: list = field(default_factory=list)
-    recent_latencies: list = field(default_factory=list)
-    rate_limits: int = 0
-
-    @property
-    def success_rate(self) -> float:
-        return self.successes / max(self.calls, 1)
-
-    @property
-    def avg_latency_ms(self) -> float:
-        return self.total_latency_ms / max(self.calls, 1)
 
 
 class TreeLLM:
@@ -67,6 +45,44 @@ class TreeLLM:
         self._stats: dict[str, RouterStats] = {}
         self._elected: str = ""
         self._classifier = TinyClassifier()
+
+    # ── Bootstrap from config ──
+
+    @classmethod
+    def from_config(cls) -> "TreeLLM":
+        """Create a fully initialized TreeLLM from the system config.
+
+        Autoregisters all providers with configured API keys from the vault.
+        This is the canonical entry point — no manual provider registration needed.
+        """
+        llm = cls()
+        try:
+            from livingtree.config.settings import get_config
+            config = get_config().model
+
+            # Map provider name → (api_key_attr, create_fn, thinking_disabled_for_chat)
+            provider_specs = [
+                ("deepseek", "deepseek_api_key", create_deepseek_provider, False),
+                ("longcat", "longcat_api_key", create_longcat_provider, True),
+            ]
+
+            for name, key_attr, create_fn, _no_think in provider_specs:
+                api_key = getattr(config, key_attr, "")
+                if api_key:
+                    try:
+                        provider = create_fn(api_key)
+                        llm.add_provider(provider)
+                    except Exception as e:
+                        logger.debug(f"TreeLLM.from_config: {name} skipped ({e})")
+
+            logger.info(
+                f"TreeLLM.from_config: bootstrapped with "
+                f"{len(llm._providers)} providers: {list(llm._providers.keys())}"
+            )
+        except Exception as e:
+            logger.warning(f"TreeLLM.from_config: {e}")
+
+        return llm
 
     # ── Provider management ──
 
@@ -153,11 +169,83 @@ class TreeLLM:
         self, query: str, candidates: list[str] | None = None,
         max_layers: int = 3, early_stop_threshold: float = 0.85,
         top_k_per_layer: int = 3, task_type: str = "general",
+        aggregate: bool = False,
+        deep_probe: bool = False,
+        self_play: bool = False,
     ) -> dict[str, Any]:
         """Layered routing inspired by RouteMoA (Pattern 3) with Output Aggregation (Pattern 6).
 
+        When aggregate=True: runs top-K models and fuses outputs via SynapseAggregator.
+        When deep_probe=True: rewrites query via DeepProbe to force deep reasoning.
+        When self_play=True: runs adversarial self-play on best output for extra depth.
+
         Returns a dict with provider, result, layer info, scores, and cost accounting.
         """
+        # ── DeepProbe: cognitive forcing rewriter (reinstate original for display) ──
+        probing_result: dict[str, Any] | None = None
+        original_query = query
+
+        # ── JointEvolution: start trajectory recording ──
+        try:
+            from .joint_evolution import get_joint_evolution
+            je = get_joint_evolution()
+            traj_id = je.start_trajectory(query=original_query, task_id=f"layered_{id(self)}",
+                                          task_description=original_query[:200])
+        except ImportError:
+            je = None
+            traj_id = ""
+
+        # ── FluidCollective: inject stigmergic context ──
+        try:
+            from .fluid_collective import get_fluid_collective
+            fc = get_fluid_collective()
+            stigmergy_ctx = fc.retrieve_context(domain=task_type, max_traces=3)
+            if stigmergy_ctx:
+                query = stigmergy_ctx + "\n\n" + query
+        except ImportError:
+            pass
+
+        if deep_probe:
+            try:
+                from .deep_probe import get_deep_probe
+                probe = get_deep_probe()
+                # Chat queries: use depth=1 (light probe, don't over-structure)
+                depth = 1 if task_type == "chat" else None
+                result = probe.rewrite(query, task_type=task_type, depth=depth)
+                query = result.rewritten
+                probing_result = {
+                    "original": result.original,
+                    "strategies": [s.value for s in result.strategies_applied],
+                    "probe_depth": result.probe_depth,
+                    "expected_steps": result.expected_steps,
+                    "anti_cache_seed": result.anti_cache_seed,
+                }
+                logger.info(
+                    f"DeepProbe: [{task_type}] depth={result.probe_depth}, "
+                    f"strategies={len(result.strategies_applied)}"
+                )
+            except Exception as e:
+                logger.debug(f"DeepProbe skipped: {e}")
+
+        # ── MicroTurnAware: classify conversational state ──
+        micro_turn_state: dict[str, Any] | None = None
+        try:
+            from .micro_turn_aware import get_micro_turn_aware
+            mta = get_micro_turn_aware()
+            ctx = mta.classify(original_query, time_since_last_input=0.5)
+            micro_turn_state = {
+                "state": ctx.current_state.value,
+                "should_route_now": ctx.should_route_now,
+                "should_probe_deep": ctx.should_probe_deep,
+                "weave_opportunity": ctx.weave_opportunity,
+                "conversation_rhythm": round(ctx.conversation_rhythm, 2),
+                "optimal_response_delay_ms": ctx.optimal_response_delay_ms,
+            }
+            # If MicroTurnAware suggests deep probing, override
+            if ctx.should_probe_deep and not deep_probe:
+                deep_probe = True
+        except ImportError:
+            pass
         # ── Task Vector Geometry: ID vs OOD mode detection ──
         route_mode = "ood"  # default
         task_vector_id = None
@@ -202,12 +290,11 @@ class TreeLLM:
         layer1_candidates_final = list(layer1_candidates)
         embedding_score = 0.0
         try:
-            scorer_mod = __import__(".embedding_scorer", globals(), locals(), ["get_embedding_scorer"], 0)
-            get_embedding_scorer = getattr(scorer_mod, "get_embedding_scorer", None)
+            from .embedding_scorer import get_embedding_scorer
             if get_embedding_scorer:
                 scorer = get_embedding_scorer()
                 if scorer is not None and hasattr(scorer, "score_and_filter"):
-                    scored = scorer.score_and_filter(query, layer1_candidates_final)
+                    scored = scorer.score_and_filter(query, scorer._profiles)
                     if isinstance(scored, list) and scored:
                         # Expect [(cand, score), ...] or [cand, ...]
                         if scored and isinstance(scored[0], tuple) and len(scored[0]) == 2:
@@ -261,12 +348,10 @@ class TreeLLM:
             election = get_election()
             try:
                 # Historical call style from elect(): score_providers(names, providers, free_models)
-                scores = election.score_providers(layer1_candidates_final, self._providers, [])
+                scores = await election.score_providers(layer1_candidates_final, self._providers, [])
                 if scores:
-                    if isinstance(scores, dict):
-                        layer2_provider_scores = [(k, float(v)) for k, v in scores.items()]
-                    else:
-                        layer2_provider_scores = [(p, float(s)) for p, s in scores]
+                    # scores is list[ProviderScore]; extract (name, total) tuples
+                    layer2_provider_scores = [(s.name, float(s.total)) for s in scores]
             except Exception:
                 layer2_provider_scores = []
             if layer2_provider_scores:
@@ -341,8 +426,18 @@ class TreeLLM:
                 layers_used = 3
             elif layer1_candidates_final:
                 final_provider = layer1_candidates_final[0]
-                final_result = await self.chat([], provider=final_provider)
+                final_result = await self.chat([{"role": "user", "content": query}], provider=final_provider)
                 layers_used = 1
+                # Run self-assessment on fallback result
+                if final_result:
+                    try:
+                        from .holistic_election import get_election
+                        election = get_election()
+                        if hasattr(final_result, 'text') and final_result.text:
+                            sa = election.self_assess(final_result.text)
+                            self_assessment_score = float(sa)
+                    except Exception:
+                        pass
 
         # ── Layer 4: Smart fallback with local LLM guarantee ──
         l4_provider = None
@@ -388,6 +483,74 @@ class TreeLLM:
             final_provider = l4_provider
             final_result = l4_result
 
+        # ── SynapseAggregator: multi-model reasoning fusion ──
+        synapse_result: dict[str, Any] | None = None
+        if aggregate and final_result and final_provider:
+            try:
+                from .synapse_aggregator import get_synapse_aggregator, ModelOutput
+                aggregator = get_synapse_aggregator()
+                # Collect outputs from layer2_candidates that were actually invoked
+                agg_outputs: list[ModelOutput] = []
+                for candidate in (layer2_candidates or [])[:top_k_per_layer]:
+                    if candidate == final_provider:
+                        continue  # Already have this
+                    try:
+                        res = await self.chat(
+                            [{"role": "user", "content": query}],
+                            provider=candidate, max_tokens=4096,
+                        )
+                        text = ""
+                        if isinstance(res, ProviderResult):
+                            text = getattr(res, "text", "") or getattr(res, "content", "") or ""
+                        elif isinstance(res, dict):
+                            text = res.get("text") or res.get("content") or ""
+                        elif isinstance(res, str):
+                            text = res
+                        if text:
+                            agg_outputs.append(ModelOutput(
+                                provider=candidate,
+                                text=text,
+                                tokens=getattr(res, "tokens", 0) if hasattr(res, "tokens") else len(text),
+                                election_score=self._stats.get(candidate, RouterStats(candidate)).success_rate,
+                            ))
+                    except Exception:
+                        pass
+
+                # Add the main result as primary output
+                main_text = ""
+                if isinstance(final_result, ProviderResult):
+                    main_text = getattr(final_result, "text", "") or ""
+                elif isinstance(final_result, dict):
+                    main_text = final_result.get("text") or final_result.get("content") or ""
+                elif isinstance(final_result, str):
+                    main_text = final_result
+                if main_text:
+                    agg_outputs.insert(0, ModelOutput(
+                        provider=final_provider,
+                        text=main_text,
+                        tokens=getattr(final_result, "tokens", 0) if hasattr(final_result, "tokens") else len(main_text),
+                        election_score=self._stats.get(final_provider, RouterStats(final_provider)).success_rate,
+                    ))
+
+                if len(agg_outputs) >= 2:
+                    agg_result = await aggregator.aggregate(
+                        outputs=agg_outputs, query=query, task_type=task_type,
+                    )
+                    synapse_result = {
+                        "aggregated_text": agg_result.aggregated_text,
+                        "method": agg_result.method,
+                        "consensus_level": agg_result.consensus_level,
+                        "contributions": agg_result.contributions,
+                        "grounded_in": agg_result.grounded_in,
+                        "conflict_resolutions": agg_result.conflict_resolutions,
+                    }
+                    logger.info(
+                        f"SynapseAggregator: fused {len(agg_outputs)} models "
+                        f"via '{agg_result.method}' (consensus={agg_result.consensus_level:.2f})"
+                    )
+            except Exception as e:
+                logger.warning(f"SynapseAggregator integration: {e}")
+
         return {
             "provider": final_provider or "",
             "result": final_result,
@@ -414,7 +577,33 @@ class TreeLLM:
             },
             "cost_saved": "Used layering providers (embedded scoring + alive ping)",
             "foresight": foresight_insights,
+            "synapse": synapse_result,
+            "deep_probe": probing_result,
+            "micro_turn": micro_turn_state,
+            "stigmergy": bool(stigmergy_ctx) if 'stigmergy_ctx' in dir() else False,
+
         }
+
+        # ── JointEvolution: record trajectory ──
+        if je and traj_id:
+            try:
+                je.record_perception(traj_id, query=original_query, task_type=task_type,
+                                     deep_probe_strategies=(probing_result.get("strategies", [])
+                                                            if probing_result else []))
+                je.record_cognition(traj_id, elected_provider=final_provider or "",
+                                    routing_method="route_layered",
+                                    deep_probe_used=deep_probe,
+                                    self_play_used=self_play,
+                                    aggregate_used=aggregate)
+                success = final_result is not None and bool(final_provider)
+                je.record_behavior(traj_id, provider=final_provider or "",
+                                   success=success,
+                                   tokens_used=getattr(final_result, 'tokens', 0) if hasattr(final_result, 'tokens') else 0)
+                je.complete_trajectory(traj_id, overall_success=success)
+            except Exception as e:
+                logger.debug(f"JointEvolution recording: {e}")
+
+        return result
 
     def route_layered_sync(self, query: str, **kwargs) -> dict[str, Any]:
         """Synchronous wrapper for route_layered."""
@@ -422,48 +611,7 @@ class TreeLLM:
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(self.route_layered(query, **kwargs))
 
-    # ── Output Aggregation (Pattern 6) ──
-    def aggregate_outputs(self, outputs: list[str], scores: list[float] | None = None,
-                          method: str = "best") -> str:
-        if not outputs:
-            return ""
-        if scores is None or len(scores) != len(outputs):
-            scores = [0.0 for _ in outputs]
 
-        if method == "longest":
-            # Return the longest string
-            return max(outputs, key=lambda s: len(s))
-        if method == "consensus" and len(outputs) >= 2:
-            # Find pairwise consensus with Jaccard similarity > 0.5
-            from math import ceil
-            best_candidate = outputs[0]
-            best_score = scores[0]
-            for i in range(len(outputs)):
-                for j in range(i + 1, len(outputs)):
-                    sim = self._jaccard_similarity(outputs[i], outputs[j])
-                    if sim > 0.5 and scores[i] > best_score:
-                        best_candidate = outputs[i]
-                        best_score = scores[i]
-                    if sim > 0.5 and scores[j] > best_score:
-                        best_candidate = outputs[j]
-                        best_score = scores[j]
-            return best_candidate
-        # Default: best by score, or first if scores unavailable
-        if scores:
-            idx = int(max(range(len(scores)), key=lambda i: scores[i]))
-            return outputs[idx]
-        return max(outputs, key=lambda s: len(s))
-
-    @staticmethod
-    def _jaccard_similarity(text_a: str, text_b: str) -> float:
-        """Simple word-level Jaccard similarity."""
-        if not text_a or not text_b:
-            return 0.0
-        set_a = set(text_a.lower().split())
-        set_b = set(text_b.lower().split())
-        if not set_a or not set_b:
-            return 0.0
-        return len(set_a & set_b) / len(set_a | set_b)
 
     # ── Chat ──
 
@@ -473,6 +621,10 @@ class TreeLLM:
         p = self._resolve_provider(provider)
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
+
+        # ── Disable thinking for short queries (no budget for reasoning overhead) ──
+        if max_tokens < 800 and hasattr(p, 'pro_thinking_enabled'):
+            p.pro_thinking_enabled = False
 
         # ── Token optimization: apply CacheDirector for prefix caching ──
         provider_name = p.name if p else ""
@@ -496,6 +648,9 @@ class TreeLLM:
             result = await p.chat(messages, temperature=temperature,
                                   max_tokens=max_tokens, timeout=timeout,
                                   model=model or kwargs.get("model_extra", ""))
+            # Handle thinking mode: when text is empty but reasoning exists
+            if result and not result.text and result.reasoning:
+                result.text = result.reasoning  # Use reasoning as response
             if result and result.text:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
@@ -562,10 +717,28 @@ class TreeLLM:
         }
 
     def _optimize_messages(self, messages: list[dict]) -> list[dict]:
-        """Apply token optimizations: prefix caching + system prompt trimming."""
+        """Apply token optimizations: HTML cleaning + URL shortening + prefix caching."""
+        import re
+        html_tag = re.compile(r'<[^>]+>')
+        long_url = re.compile(r'https?://[^\s]{50,}')
+
+        for msg in messages:
+            content = str(msg.get("content", ""))
+            if not content:
+                continue
+            # HTML → plain text
+            if '<' in content and '>' in content:
+                content = html_tag.sub(' ', content)
+            # Long URLs → domain-only
+            content = long_url.sub(
+                lambda m: '[link:' + (re.search(r'https?://([^/]+)', m.group(0)).group(1)
+                                        if re.search(r'https?://([^/]+)', m.group(0)) else 'url') + ']',
+                content
+            )
+            msg["content"] = content
+
         try:
             from ..dna.cache_optimizer import CacheOptimizer
-            # Use a shared optimizer instance per TreeLLM
             if not hasattr(self, '_cache_optimizer'):
                 self._cache_optimizer = CacheOptimizer(max_tokens=64000, cache_budget=0.85)
             return self._cache_optimizer.prepare(messages)

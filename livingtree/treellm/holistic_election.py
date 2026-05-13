@@ -35,6 +35,10 @@ WEIGHTS = {
     "cache": 0.10,
     "sticky": 0.10,       # Session binding: prefer same model
     "hifloat8": 0.0,      # HiFloat8 cone-precision boost (weighted by task_type)
+    "elo": 0.0,           # CompetitiveEliminator Elo rating (injected dynamically)
+    "long_term_reward": 0.0,  # JointEvolution long-term reward (C→P loop)
+    "thompson": 0.0,      # Thompson Sampling Bayesian prior
+    "exploration": 0.0,   # Exploration bonus for under-tested providers
 }
 
 # NOTE: Pattern 5 dynamic weights will be used via get_dynamic_weights(task_type).
@@ -70,6 +74,8 @@ PROVIDER_CAPABILITIES: dict[str, list[str]] = {
     "sensetime-turbo": ["对话", "快速", "翻译", "chat", "fast", "translate"],
     "freebuff": ["对话", "代码", "免费", "广告赞助", "chat", "code", "fallback", "analysis"],
     "openrouter": ["对话", "代码", "推理", "分析", "chat", "code", "reasoning", "analysis", "多模型", "免费"],
+    "hunyuan": ["对话", "中文", "企业", "分析", "chat", "chinese", "enterprise"],
+    "baidu": ["对话", "中文", "知识", "企业", "chat", "chinese", "knowledge", "enterprise"],
 }
 
 
@@ -236,6 +242,14 @@ class HolisticElection:
             if breaker and breaker.is_open(name):
                 continue
 
+            # CompetitiveEliminator: skip eliminated providers
+            try:
+                from .competitive_eliminator import get_eliminator
+                if not get_eliminator().is_viable(name):
+                    continue
+            except ImportError:
+                pass
+
             # Token Accountant: limit pings to prevent over-routing
             if accountant and ping_count >= max_pings:
                 break
@@ -331,6 +345,57 @@ class HolisticElection:
                 score.scores["hifloat8"] = 1.0 if hifloat8_enabled else 0.0
             except Exception:
                 score.scores["hifloat8"] = 0.0
+
+            # ── CompetitiveEliminator: apply tier-based modifiers ──
+            try:
+                from .competitive_eliminator import get_eliminator
+                elim = get_eliminator()
+                if not elim.is_viable(name):
+                    continue  # Skip eliminated providers
+                modifiers = elim.get_tier_modifier(name)
+                for dim, mod in modifiers.items():
+                    if dim in score.scores:
+                        score.scores[dim] *= mod
+                    else:
+                        score.scores[dim] = mod
+                # Apply Elo rating as bonus dimension
+                ranking = elim.get_ranking(name)
+                if ranking and ranking.is_established:
+                    elo_norm = max(0.0, min(1.0, (ranking.elo_rating - 800) / 1200.0))
+                    score.scores.setdefault("elo", 0.0)
+                    score.scores["elo"] = elo_norm * 0.5  # 50% weight of Elo contribution
+            except ImportError:
+                pass
+
+            # ── JointEvolution: apply long-term reward modifiers (C→P loop) ──
+            try:
+                from .joint_evolution import get_joint_evolution
+                je = get_joint_evolution()
+                lt_rewards = je.inject_rewards_to_election()
+                if name in lt_rewards:
+                    modifier = lt_rewards[name]
+                    score.scores.setdefault("long_term_reward", 0.0)
+                    score.scores["long_term_reward"] = max(0.0, 0.5 + modifier)  # 0.2-0.8 range
+                    logger.debug(
+                        f"JointEvolution C→P: {name} long_term_reward={modifier:.3f}"
+                    )
+            except ImportError:
+                pass
+
+            # ── Thompson Sampling boost (bandit_router Bayesian prior) ──
+            try:
+                from .bandit_router import get_bandit_router
+                br = get_bandit_router()
+                arm = br.get_arm(name)
+                # Thompson sample: exploration bonus for uncertain providers
+                ts_value = arm.sample_composite()
+                score.scores.setdefault("thompson", 0.0)
+                score.scores["thompson"] = ts_value
+                # Boost for high-uncertainty providers (exploration)
+                score.scores.setdefault("exploration", 0.0)
+                score.scores["exploration"] = arm.exploration_bonus * 0.5
+            except ImportError:
+                pass
 
             # Apply dynamic weights based on task_type (Pattern 5)
             weights = get_dynamic_weights(task_type)
@@ -430,6 +495,18 @@ class HolisticElection:
     def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         stats = self.get_stats(name)
         stats.record(success, latency_ms, tokens, error, rate_limited)
+        # ── CompetitiveEliminator: update Elo rankings ──
+        try:
+            from .competitive_eliminator import get_eliminator
+            elim = get_eliminator()
+            quality = 0.8 if success else 0.2
+            elim.record_match(
+                provider=name, success=success, latency_ms=latency_ms,
+                cost_yuan=0.01, tokens=tokens, quality=quality,
+                opponent_providers=list(self._stats.keys()),
+            )
+        except ImportError:
+            pass
         if stats.calls % 50 == 0:
             self._save()
 
@@ -518,8 +595,12 @@ class HolisticElection:
         return "general"
 
     def self_assess(self, output_text: str, confidence_keywords: list[str] | None = None) -> float:
-        """Heuristic self-assessment of an output without invoking LLMs.
-        Returns a float in [0,1]."""
+        """Self-assessment of output quality. Uses LLM judge if available, else heuristic."""
+        return self._self_assess_heuristic(output_text, confidence_keywords)
+
+    @staticmethod
+    def _self_assess_heuristic(output_text: str, confidence_keywords: list[str] | None = None) -> float:
+        """Heuristic self-assessment — fast keyword-based fallback."""
         if confidence_keywords is None:
             confidence_keywords = [
                 "confident", "certain", "definitely", "clearly", "sure", "确定", "明确", "肯定"
@@ -537,12 +618,37 @@ class HolisticElection:
             score -= 0.1
         if not any(u in output_text for u in uncertainty):
             score += 0.1
-        # Clamp
-        if score < 0.0:
-            score = 0.0
-        if score > 1.0:
-            score = 1.0
-        return float(score)
+        return max(0.0, min(1.0, score))
+
+    async def self_assess_llm(self, output_text: str, query: str = "",
+                               chat_fn=None) -> float:
+        """LLM-based self-assessment — flash model judges quality in ~100ms.
+
+        Much more accurate than heuristic keyword counting. The flash model
+        evaluates: completeness, logical flow, specificity, and honesty.
+        """
+        if not chat_fn or not output_text:
+            return self._self_assess_heuristic(output_text)
+
+        prompt = (
+            f"Rate the quality of this AI response on a scale of 0.0 to 1.0.\n\n"
+            f"Query: {query[:300] if query else 'N/A'}\n\n"
+            f"Response to evaluate:\n{output_text[:2000]}\n\n"
+            f"Evaluate on: (1) completeness — does it fully answer the query? "
+            f"(2) logical flow — is reasoning clear? (3) specificity — are claims "
+            f"concrete or vague? (4) honesty — does it acknowledge uncertainty?\n\n"
+            f"Reply with ONLY a number between 0.0 and 1.0. No explanation."
+        )
+        try:
+            result = await chat_fn(prompt)
+            # Extract first number found
+            import re
+            match = re.search(r'(\d+\.?\d*)', str(result))
+            if match:
+                return max(0.0, min(1.0, float(match.group(1))))
+        except Exception:
+            pass
+        return self._self_assess_heuristic(output_text)
 
     def cross_assess(self, evaluator_output: str, target_output: str) -> float:
         """Quick cross-assessment using Jaccard similarity on word sets (lowercased, >2 chars)."""
@@ -614,8 +720,14 @@ def get_election() -> HolisticElection:
 def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
     """Return dynamic weights for scoring based on task type (Pattern 5)."""
     t = (task_type or "general").lower()
+    base = {
+        "elo": 0.08,
+        "long_term_reward": 0.06,
+        "thompson": 0.10,  # Thompson Sampling — Bayesian prior weight
+        "exploration": 0.04,  # Exploration bonus
+    }
     if t == "code":
-        return {
+        w = {
             "latency": 0.10,
             "quality": 0.35,
             "cost": 0.10,
@@ -625,8 +737,9 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "cache": 0.10,
             "sticky": 0.10,
         }
+        return {**base, **w}
     if t == "long_context":
-        return {
+        w = {
             "latency": 0.10,
             "quality": 0.20,
             "cost": 0.08,
@@ -637,8 +750,9 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "sticky": 0.05,
             "hifloat8": 0.27,  # HiFloat8 gives 2.60x boost at 128K
         }
+        return {**base, **w}
     if t == "reasoning":
-        return {
+        w = {
             "latency": 0.05,
             "quality": 0.38,
             "cost": 0.08,
@@ -649,8 +763,9 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "sticky": 0.10,
             "hifloat8": 0.02,
         }
+        return {**base, **w}
     if t == "chat":
-        return {
+        w = {
             "latency": 0.25,
             "quality": 0.20,
             "cost": 0.12,
@@ -660,8 +775,9 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "cache": 0.10,
             "sticky": 0.10,
         }
+        return {**base, **w}
     if t == "search":
-        return {
+        w = {
             "latency": 0.15,
             "quality": 0.18,
             "cost": 0.10,
@@ -671,8 +787,9 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "cache": 0.10,
             "sticky": 0.10,
         }
+        return {**base, **w}
     if t == "multimodal":
-        return {
+        w = {
             "latency": 0.08,
             "quality": 0.30,
             "cost": 0.15,
@@ -682,5 +799,6 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "cache": 0.07,
             "sticky": 0.10,
         }
+        return {**base, **w}
     # general/default
-    return WEIGHTS.copy()
+    return {**WEIGHTS, **base}

@@ -368,6 +368,46 @@ class RouteLearner:
             "best_environmental_model": self.best_model_for("environmental_report"),
         }
 
+    # ── Dynamic Capabilities Injection ───────────────────────────
+
+    def update_provider_capabilities(self) -> int:
+        """Dynamically update PROVIDER_CAPABILITIES from learned profiles.
+
+        Replaces the static capability dict with live data: if a model
+        performs well at coding tasks, its capabilities automatically
+        include "code". This closes the gap between hardcoded labels
+        and actual model behavior.
+        """
+        try:
+            from .holistic_election import PROVIDER_CAPABILITIES
+            updated = 0
+            # Map learned weight patterns to capability keywords
+            domain_to_cap: dict[str, str] = {
+                "code_engineering": "代码",
+                "reasoning": "推理",
+                "question": "对话",
+                "data_analysis": "分析",
+                "environmental_report": "分析",
+            }
+            for model_id, profile in self._profiles.items():
+                # Find this model in PROVIDER_CAPABILITIES
+                for provider_name in PROVIDER_CAPABILITIES:
+                    if provider_name in model_id.lower() or model_id.lower() in provider_name:
+                        caps = PROVIDER_CAPABILITIES[provider_name]
+                        # Add learned capabilities
+                        if profile.reasoning and "推理" not in caps:
+                            caps.append("推理"); updated += 1
+                        if profile.tool_call and "工具" not in caps:
+                            caps.append("工具"); updated += 1
+                        if profile.structured_output and "结构化" not in caps:
+                            caps.append("结构化"); updated += 1
+                        break
+            if updated:
+                logger.info(f"RouteLearner: updated {updated} dynamic capabilities")
+            return updated
+        except ImportError:
+            return 0
+
 
 # ── Singleton ──────────────────────────────────────────────────────
 

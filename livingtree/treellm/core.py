@@ -172,14 +172,12 @@ class TreeLLM:
         aggregate: bool = False,
         deep_probe: bool = False,
         self_play: bool = False,
+        model: bool = True,     # False = preprocess only (no LLM), for knowledge storage etc.
     ) -> dict[str, Any]:
-        """Layered routing inspired by RouteMoA (Pattern 3) with Output Aggregation (Pattern 6).
+        """Layered routing.
 
-        When aggregate=True: runs top-K models and fuses outputs via SynapseAggregator.
-        When deep_probe=True: rewrites query via DeepProbe to force deep reasoning.
-        When self_play=True: runs adversarial self-play on best output for extra depth.
-
-        Returns a dict with provider, result, layer info, scores, and cost accounting.
+        When model=False: runs preprocessing only (stigmergy, DeepProbe, 
+        MicroTurn, JointEvolution) without calling LLM — ~100ms for storage ops.
         """
         # ── DeepProbe: cognitive forcing rewriter (reinstate original for display) ──
         probing_result: dict[str, Any] | None = None
@@ -246,6 +244,19 @@ class TreeLLM:
                 deep_probe = True
         except ImportError:
             pass
+
+        # ── Fast path: preprocess only, no LLM ──
+        if not model:
+            return {
+                "provider": "preprocess", "result": None, "mode": "preprocess",
+                "layers_used": 0,
+                "scores": {"final_decision": "preprocess_only"},
+                "cost_saved": "Skipped LLM (~2min)",
+                "deep_probe": probing_result,
+                "micro_turn": micro_turn_state,
+                "stigmergy": True if 'stigmergy_ctx' in dir() and stigmergy_ctx else False,
+            }
+
         # ── Task Vector Geometry: ID vs OOD mode detection ──
         route_mode = "ood"  # default
         task_vector_id = None

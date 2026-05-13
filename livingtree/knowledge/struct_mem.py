@@ -821,6 +821,15 @@ class StructMemory:
             new_entries.append(entry)
             self._stats["entries_total"] += 1
 
+        # Cap entries at 10_000 to prevent unbounded memory growth
+        if len(self._entries) > 10_000:
+            excess = list(self._entries.keys())[:len(self._entries) - 10_000]
+            for k in excess:
+                self._entries.pop(k, None)
+        # Cap synthesis at 500
+        if len(self._synthesis) > 500:
+            self._synthesis = self._synthesis[-500:]
+
         self._stats["bind_count"] += 1
         logger.debug(f"StructMem bound {len(new_entries)} entries (total={self._stats['entries_total']})")
         return new_entries

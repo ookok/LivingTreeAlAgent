@@ -111,6 +111,10 @@ def main():
         from relay_server import main as relay_main
         sys.argv = [sys.argv[0]] + sys.argv[2:]
         relay_main()
+    elif command == "canary":
+        _svc_canary(sys.argv[2:])
+    elif command == "recording" or command == "record":
+        _svc_recording(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -287,6 +291,56 @@ def _svc_skill(args: list):
         for s in results:
             print(f"  {s.name} [{s.category}] — {s.description[:80]}")
 
+    elif sub == "enable" and len(args) > 1:
+        if hub.toggle(args[1], True):
+            print(f"  Enabled: {args[1]}")
+        else:
+            print(f"  Not found: {args[1]}")
+
+    elif sub == "disable" and len(args) > 1:
+        if hub.toggle(args[1], False):
+            print(f"  Disabled: {args[1]}")
+        else:
+            print(f"  Not found: {args[1]}")
+
+    elif sub == "create" and len(args) > 1:
+        from .capability.skill_factory import get_skill_factory
+        factory = get_skill_factory()
+        skill = factory.create_skill(args[1], args[2] if len(args) > 2 else "", category=args[3] if len(args) > 3 else "custom")
+        if skill:
+            print(f"  Created: {skill.name} [{skill.category}]")
+        else:
+            print("  Create failed")
+
+    elif sub == "discover":
+        from .capability.skill_discovery import SkillDiscoveryManager
+        skills = SkillDiscoveryManager().discover()
+        if skills:
+            for s in skills:
+                print(f"  {s.name} — {s.description[:80]}")
+        else:
+            print("  No SKILL.md files found")
+
+    elif sub == "propose" and len(args) > 1:
+        from .dna.unified_skill_system import get_skill_system
+        skill = get_skill_system().propose_skill(" ".join(args[1:]))
+        print(f"  Proposed: {skill.name} — {skill.description[:80]}")
+
+    elif sub == "graph":
+        from .dna.skill_graph import get_skill_graph
+        g = get_skill_graph()
+        print(f"  Nodes: {len(g._nodes)}")
+        for node in list(g._nodes.values())[:15]:
+            print(f"    {node.name} → {len(node.dependencies)} deps, {len(node.compositions)} comps")
+        print(f"  Clusters: {len(g.get_clusters())}")
+
+    elif sub == "report":
+        from .dna.skill_progression import get_skill_progression
+        sp = get_skill_progression()
+        report = sp.generate_report(top_k=10)
+        for item in report:
+            print(f"  {item['skill']}: {item['level']} (success={item['success_rate']:.0%}, trend={item['trend']})")
+
     else:
         print(f"Unknown skill command: {sub}")
 
@@ -358,7 +412,75 @@ def _svc_secrets(args: list):
         print("Usage: livingtree secrets [list|set KEY VAL|get KEY|delete KEY]")
 
 
-def _svc_trace(args: list):
+def _svc_canary(args: list):
+    """Run canary regression tests against baseline."""
+    import asyncio
+
+    async def _run():
+        from .treellm.canary_tester import get_canary_tester
+        from .treellm.core import TreeLLM
+        tester = get_canary_tester()
+        print(f"\n  Running {tester.query_count} canary queries...\n")
+
+        llm = TreeLLM()
+        if args and args[0] == "baseline":
+            await tester.set_baseline(llm)
+            print(f"  Baseline saved to .livingtree/canary_baseline.json")
+        else:
+            report = await tester.run(llm)
+            print(f"  {report.summary()}")
+            if report.regressions:
+                print(f"\n  Regressions:")
+                for r in report.results:
+                    if r.regressed:
+                        print(f"    [{r.query_id}] provider={r.provider} latency={r.latency_ms:.0f}ms")
+
+        print(f"  Canary queries: .livingtree/canary_queries.json")
+        print(f"  Baseline:       .livingtree/canary_baseline.json")
+
+    asyncio.run(_run())
+
+
+def _svc_recording(args: list):
+    """Task recording and replay. usage: livingtree record [start|stop|list|replay|export|delete] [args]"""
+    import asyncio
+
+    async def _run():
+        from .treellm.recording_engine import get_recording_engine, ReplayMode
+        engine = get_recording_engine()
+        if not args:
+            print("Usage: record [start|stop|list|replay|export|delete|render] [...]")
+            return
+        sub = args[0].lower()
+        if sub == "start":
+            title = args[1] if len(args) > 1 else ""
+            print(f"  Recording started: {engine.start(title=title)}")
+        elif sub == "stop":
+            rec = engine.stop()
+            if rec: print(f"  Saved: {rec.id} ({len(rec.events)} events, {rec.duration_ms}ms)")
+        elif sub == "list":
+            for r in engine.list_recordings():
+                print(f"  {r['id']} [{r['events']}e, {r['duration_ms']}ms] {r['title'][:60]}")
+        elif sub == "replay" and len(args) > 1:
+            async for e in engine.replay(args[1], ReplayMode.STREAMING, float(args[2]) if len(args)>2 else 1.0):
+                print(f"  [{e.ts/1000:.2f}s] {e.type}: {str(e.result)[:100]}")
+        elif sub == "export" and len(args) > 1:
+            fmt = args[2] if len(args) > 2 else "json"
+            content = engine.export(args[1], fmt)
+            if content:
+                import os; os.makedirs(".livingtree/recordings", exist_ok=True)
+                path = f".livingtree/recordings/{args[1]}.{fmt}"
+                open(path,"w",encoding="utf-8").write(content)
+                print(f"  Exported to {path}")
+        elif sub == "delete" and len(args) > 1:
+            print(f"  {'Deleted' if engine.delete(args[1]) else 'Not found'}: {args[1]}")
+        elif sub == "render" and len(args) > 1:
+            view = args[2] if len(args) > 2 else "timeline"
+            print(json.dumps(engine.render(args[1], view), indent=2, ensure_ascii=False)[:5000])
+
+    asyncio.run(_run())
+
+
     """Diagnostic: visualize trigger chain and routing decisions."""
     print("\n🔍 LivingTree Trace — 触发链可视化\n")
 
@@ -530,10 +652,19 @@ Skills & Channels:
   skill install X     Install skill from hub/GitHub
   skill search X      Search skills
   skill uninstall X   Uninstall skill
+  skill enable X      Enable a skill
+  skill disable X     Disable a skill
+  skill create X [code] [category]  Create a new skill
+  skill discover      Scan SKILL.md files
+  skill propose X     Propose a skill from task description
+  skill graph         Show skill dependency graph
+  skill report        Show skill progression report
   channel X           Set messaging channel (weixin/feishu/...)
 
 Other:
   test               Run integration tests
+  canary             Run canary regression tests
+  canary baseline    Save current routing as baseline
   check, env         Environment check
   relay              Start relay server
   quick [msg]        Single quick interaction

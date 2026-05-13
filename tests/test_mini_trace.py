@@ -56,12 +56,10 @@ class TestInitChain:
         assert self.hub.world.node is not None
 
     def test_model_registry_import(self):
-        """Model registry bootstrap imports."""
-        import importlib.util
-        spec = importlib.util.find_spec("livingtree.treellm.bootstrap")
-        if spec:
-            from livingtree.treellm.bootstrap import setup_model_registry
-            assert setup_model_registry is not None
+        """Model registry imports correctly."""
+        from livingtree.treellm.model_registry import ModelRegistry
+        registry = ModelRegistry.instance()
+        assert registry is not None
 
     def test_skill_factory_wired(self):
         """SkillFactory is wired."""
@@ -91,15 +89,13 @@ class TestInitChain:
         """The full init chain imports all key submodules without crashing."""
         # These are the modules that were historically broken
         modules = [
-            "livingtree.treellm.skill_router",
+            "livingtree.treellm.classifier",
             "livingtree.capability.tool_synthesis",
             "livingtree.capability.tool_meta",
             "livingtree.lsp.lsp_manager",
             "livingtree.dna.expert_role_manager",
             "livingtree.dna.unified_skill_system",
-            "livingtree.dna.tui_orchestrator",
             "livingtree.core.unified_registry",
-            "livingtree.execution.panel_agent",
             "livingtree.core.execution_pipeline",
         ]
         for mod_name in modules:

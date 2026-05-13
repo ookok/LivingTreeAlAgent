@@ -258,7 +258,13 @@ def setup_routes(app: FastAPI) -> None:
         if not hub:
             raise HTTPException(status_code=503, detail="Hub not initialized")
 
-        result = await hub.chat(req.message, **req.context)
+        # Route through unified input bus
+        try:
+            from ..treellm.living_input_bus import get_living_input_bus, InputSource
+            bus = get_living_input_bus()
+            result = await bus.normalize_and_route(InputSource.WEB, request, hub)
+        except Exception:
+            result = await hub.chat(req.message, **req.context)
         return ChatResponse(
             session_id=result["session_id"],
             intent=result.get("intent"),
@@ -334,28 +340,37 @@ def setup_routes(app: FastAPI) -> None:
 
         async def generate():
             try:
-                from ..treellm.flash_first_stream import get_flash_first
-                orchestrator = get_flash_first(hub)
+                from ..treellm.concurrent_stream import get_concurrent_stream, set_stream_chat_fn
+                cs = get_concurrent_stream()
+                llm = hub.world.consciousness._llm
 
-                async for chunk in orchestrator.chat_stream(
-                    req.message, req.context, hub
+                async def _chat_fn(messages, provider, stream=True):
+                    async for token in llm.stream(messages, provider=provider):
+                        yield token
+
+                set_stream_chat_fn(_chat_fn)
+                flash_model = await llm.smart_route(req.message, task_type="chat")
+                # Elect pro model via L2 tier
+                tiers = await hub.world.consciousness._elect_tiers()
+                pro_model = tiers.get(2, flash_model) if tiers else flash_model
+
+                async for event in cs.stream(
+                    query=req.message,
+                    flash_model=flash_model,
+                    pro_model=pro_model,
+                    system_prompt=req.context,
+                    task_type="chat",
                 ):
                     event_data = json.dumps({
-                        "type": chunk.type,
-                        "content": chunk.content,
-                        "phase": chunk.phase,
-                        "model": chunk.model,
-                        "ts": chunk.timestamp,
+                        "type": event.kind,
+                        "content": event.text,
+                        "phase": "stream",
+                        "model": event.provider,
+                        "ts": event.timestamp,
                     }, ensure_ascii=False)
-                    yield f"event: {chunk.type}\ndata: {event_data}\n\n"
-
-                # Fallback: also run cognition_stream for phase visualization
-                try:
-                    from .cognition_stream import cognition_stream as cs
-                    async for sse in cs(hub, req.message):
-                        yield sse
-                except Exception:
-                    pass
+                    yield f"event: {event.kind}\ndata: {event_data}\n\n"
+                # NOTE: cognition_stream fallback removed — it redundantly called engine.run()
+                # which doubled LLM cost. ConcurrentStream already provides full output.
 
             except Exception as e:
                 error_data = json.dumps({"error": str(e)[:200]})
@@ -371,10 +386,28 @@ def setup_routes(app: FastAPI) -> None:
             },
         )
 
+    # ═══ Unified Living Input (any modality → canonical → pipeline) ═══
+
+    @app.post("/api/living/input")
+    async def living_input(request: Request):
+        """Unified input — text, JSON, files, refs. Device-agnostic."""
+        hub = request.app.state.hub
+        if not hub:
+            raise HTTPException(status_code=503, detail="Hub not initialized")
+        try:
+            from ..treellm.living_input_bus import get_living_input_bus, InputSource
+            bus = get_living_input_bus()
+            result = await bus.normalize_and_route(InputSource.WEB, request, hub)
+            return {"ok": True, "session_id": result.get("session_id", "perpetual"), "result": result}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     @app.post("/api/local/analyze")
     async def analyze_local_folder(req: LocalFolderRequest):
         """Analyze a local folder directly — no upload needed."""
-        folder_path = Path(req.path)
+        folder_path = Path(req.path).resolve()
+        if not str(folder_path).startswith(str(Path.cwd().resolve())):
+            raise HTTPException(403, "Path traversal not allowed")
         if not folder_path.exists():
             raise HTTPException(404, f"Folder not found: {req.path}")
         if not folder_path.is_dir():
@@ -514,9 +547,9 @@ def setup_routes(app: FastAPI) -> None:
         Browser cannot access local filesystem directly (security),
         but the server can. Operations: read, write, exec, list.
         """
-        import subprocess
-
-        file_path = Path(req.path) if req.path else None
+        file_path = Path(req.path).resolve() if req.path else None
+        if file_path and not str(file_path).startswith(str(Path.cwd().resolve())):
+            raise HTTPException(403, "Path traversal not allowed")
 
         if req.op == "read":
             if not file_path or not file_path.exists():
@@ -543,17 +576,21 @@ def setup_routes(app: FastAPI) -> None:
                 return {"ok": False, "error": "No command specified"}
             # Security: whitelist only safe commands
             ALLOWED_PREFIXES = [
-                "python ", "pip ", "pytest", "git ", "dir", "ls",
+                "python ", "pip ", "pytest ", "git ", "dir ", "ls ",
                 "cat ", "type ", "echo ", "node ", "npm ",
             ]
             cmd_lower = req.content.strip().lower()
             if not any(cmd_lower.startswith(p) for p in ALLOWED_PREFIXES):
                 return {"ok": False, "error": f"Command not allowed. Allowed prefixes: {ALLOWED_PREFIXES}"}
-            # Restrict to project directory
+            # Block command chaining and shell metacharacters
+            if any(k in req.content for k in ("&&", "||", ";", "|", "`", "$(", "${")):
+                return {"ok": False, "error": "Command chaining not allowed"}
             work_dir = str(file_path) if file_path and file_path.is_dir() else str(Path.cwd())
             try:
+                import shlex
+                cmd_parts = shlex.split(req.content.strip())
                 result = subprocess.run(
-                    req.content, shell=True,
+                    cmd_parts,
                     capture_output=True, text=True, timeout=30,
                     cwd=work_dir,
                 )
@@ -889,38 +926,19 @@ def setup_routes(app: FastAPI) -> None:
             thinking = body.get("thinking", False)
 
             if thinking:
-                # Streaming with reasoning — call DeepSeek directly
-                from ..config import get_config
-                cfg = get_config()
-                key = cfg.model.deepseek_api_key
-                if key:
-                    try:
-                        async with httpx.AsyncClient(timeout=60) as c:
-                            async with c.stream("POST",
-                                "https://api.deepseek.com/v1/chat/completions",
-                                headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},
-                                json={"model":"deepseek-chat","max_tokens":1000,"stream":True,
-                                      "messages":[{"role":"system","content":"你是小树，LivingTree AI助手。"},
-                                                  {"role":"user","content":last_msg}]}) as resp:
-                                if resp.status_code == 200:
-                                    async for line in resp.aiter_lines():
-                                        if line.startswith("data: "):
-                                            data = line[6:].strip()
-                                            if data == "[DONE]": break
-                                            try:
-                                                d = _json.loads(data)
-                                                delta = d["choices"][0].get("delta",{})
-                                                reasoning = delta.get("reasoning_content","")
-                                                content = delta.get("content","")
-                                                if reasoning:
-                                                    yield f"data: {_json.dumps({'type':'thinking','content':reasoning,'session_id':sid})}\n\n"
-                                                if content:
-                                                    yield f"data: {_json.dumps({'type':'content','content':content,'session_id':sid})}\n\n"
-                                            except: pass
-                                    yield f"data: {_json.dumps({'type':'done','content':'','session_id':sid})}\n\n"
-                                    return
-                    except Exception:
-                        pass
+                try:
+                    llm = hub.world.consciousness._llm
+                    flash_model = await llm.smart_route(last_msg, task_type="chat")
+                    if flash_model:
+                        async for token in llm.stream(
+                            [{"role": "user", "content": last_msg}],
+                            provider=flash_model, max_tokens=4096,
+                        ):
+                            yield f"data: {_json.dumps({'type':'content','content':token,'session_id':sid})}\n\n"
+                        yield f"data: {_json.dumps({'type':'done','content':'','session_id':sid})}\n\n"
+                        return
+                except Exception:
+                    pass
 
             # Fallback: non-streaming via hub chat
             try:
@@ -2219,6 +2237,59 @@ def _get_user_id_from_request(request: Request) -> str:
         params = body.get("params", {})
         return await get_city_mcp().call_tool(tool, params)
 
+    # ═══ Unified MCP API (aggregates all MCP tool sources) ═══
+
+    @app.get("/api/mcp/tools")
+    async def mcp_tools(request: Request):
+        """List all MCP tools from all sources (server + chrome + city)."""
+        tools = []
+        try:
+            from ..mcp.server import MCPServer
+            tools.extend(MCPServer.TOOLS)
+        except Exception:
+            pass
+        try:
+            from ..core.chrome_mcp import CHROME_MCP_TOOLS
+            tools.extend(CHROME_MCP_TOOLS)
+        except Exception:
+            pass
+        try:
+            from ..core.city_mcp import CITY_MCP_TOOLS
+            tools.extend(CITY_MCP_TOOLS)
+        except Exception:
+            pass
+        return {"ok": True, "tools": [{"name": t.get("name",""), "description": t.get("description","")} for t in tools], "count": len(tools)}
+
+    @app.post("/api/mcp/call")
+    async def mcp_call(request: Request):
+        """Call an MCP tool by name, routed to the correct handler."""
+        body = await request.json()
+        tool = body.get("tool", "")
+        params = body.get("params", {})
+        try:
+            from ..mcp.server import MCPServer
+            for t in MCPServer.TOOLS:
+                if t.get("name") == tool:
+                    handler = t.get("handler")
+                    if handler:
+                        result = handler(**params) if callable(handler) else str(handler)
+                        return {"ok": True, "result": result}
+        except Exception:
+            pass
+        try:
+            from ..core.chrome_mcp import get_chrome_mcp
+            for t in getattr(get_chrome_mcp(), 'CHROME_MCP_TOOLS', []):
+                if t.get("name") == tool:
+                    return await get_chrome_mcp().execute(tool, params)
+        except Exception:
+            pass
+        try:
+            from ..core.city_mcp import get_city_mcp
+            return await get_city_mcp().call_tool(tool, params)
+        except Exception:
+            pass
+        return {"ok": False, "error": f"Tool '{tool}' not found"}
+
     # ═══ Green Scheduler API ═══
 
     @app.get("/api/scheduler/status")
@@ -2535,3 +2606,184 @@ def _get_user_id_from_request(request: Request) -> str:
                 except Exception:
                     pass
         return {"ok": True, "sent": sent}
+
+    # ═══ Living Dashboard API (统一数据总线,多态渲染) ═══
+
+    @app.get("/api/living/events")
+    async def living_events(request: Request, event_type: str = "", organ: str = "",
+                             format: str = "card", limit: int = 50):
+        """Unified data bus — capability-probed polymorphic rendering.
+
+        Query params:
+          ?format=card|table|timeline|graph|tree|metric|log|auto
+          ?cap=plain|rich|struct|visual|media|spatial  (explicit override)
+          ?max_bytes=N  (performance budget)
+          ?dark=1       (dark mode)
+        """
+        try:
+            from ..treellm.living_scheduler import get_living_scheduler
+            ls = get_living_scheduler()
+            events = ls.get_events(event_type=event_type, source_organ=organ, limit=limit)
+            rendered = ls.render(events, format=RenderFormat(format) if format != "auto" else RenderFormat.CARD, request=request)
+            return {"ok": True, "count": len(events), "rendered": rendered}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/living/dashboard")
+    async def living_dashboard(request: Request):
+        """Full organism dashboard — scheduler state + resources + escalations."""
+        try:
+            from ..treellm.living_scheduler import get_living_scheduler
+            ls = get_living_scheduler()
+            state = ls.state()
+            return {"ok": True, "dashboard": state}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/living/hitl")
+    async def living_hitl(request: Request):
+        """List pending human-in-the-loop escalations."""
+        try:
+            from ..treellm.living_scheduler import get_living_scheduler
+            ls = get_living_scheduler()
+            return {"ok": True, "escalations": ls._escalator.pending()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/living/hitl/{task_id}")
+    async def living_hitl_resolve(task_id: str, request: Request):
+        """Human resolves an escalation."""
+        body = await request.json()
+        decision = body.get("decision", "")
+        try:
+            from ..treellm.living_scheduler import get_living_scheduler
+            ls = get_living_scheduler()
+            ls._escalator.resolve(task_id, decision)
+            return {"ok": True, "task_id": task_id, "resolved": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ═══ CapabilityBus API (统一能力发现和调用) ═══
+
+    @app.get("/api/capabilities")
+    async def list_capabilities(request: Request, category: str = ""):
+        """List all capabilities. ?category=tool|skill|mcp|role|user|llm|vfs"""
+        try:
+            from ..treellm.capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            if category:
+                caps = await bus.list(category)
+            else:
+                caps = await bus.list_all()
+            return {"ok": True, "count": len(caps), "capabilities": caps}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/capabilities/{cap_id}")
+    async def invoke_capability(cap_id: str, request: Request):
+        """Invoke a capability by ID. E.g., POST /api/capabilities/tool:web_search"""
+        try:
+            from ..treellm.capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            body = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+            result = await bus.invoke(cap_id, **body)
+            return {"ok": True, "capability": cap_id, "result": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/capabilities/prompt")
+    async def capability_prompt(request: Request, categories: str = ""):
+        """Generate LLM system prompt fragment listing capabilities."""
+        try:
+            from ..treellm.capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            cats = [c.strip() for c in categories.split(",") if c.strip()] if categories else None
+            fragment = await bus.prompt_fragment(cats)
+            return {"ok": True, "prompt": fragment}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ═══ Recording API (任务录制与重放) ═══
+
+    @app.post("/api/recording/start")
+    async def recording_start(request: Request):
+        body = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            rec_id = get_recording_engine().start(
+                title=body.get("title", ""),
+                task_type=body.get("task_type", "general"),
+            )
+            return {"ok": True, "recording_id": rec_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/recording/stop")
+    async def recording_stop(request: Request):
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            rec = get_recording_engine().stop()
+            if rec:
+                return {"ok": True, "recording": rec.to_dict()}
+            return {"ok": False, "error": "No active recording"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/recordings")
+    async def recording_list(request: Request):
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            recordings = get_recording_engine().list_recordings()
+            return {"ok": True, "recordings": recordings}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/recording/{rec_id}")
+    async def recording_get(rec_id: str, request: Request, format: str = "json"):
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            engine = get_recording_engine()
+            if format in ("xml", "jsonl"):
+                content = engine.export(rec_id, format)
+                if content:
+                    return {"ok": True, "format": format, "content": content}
+            rec = engine._recordings.get(rec_id) or engine._load(rec_id)
+            if rec:
+                return {"ok": True, "recording": rec.to_dict()}
+            return {"ok": False, "error": f"Recording not found: {rec_id}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/recording/{rec_id}/replay")
+    async def recording_replay(rec_id: str, request: Request, mode: str = "streaming", speed: float = 1.0):
+        try:
+            from ..treellm.recording_engine import get_recording_engine, ReplayMode
+            engine = get_recording_engine()
+            mode_enum = ReplayMode(mode) if mode in [m.value for m in ReplayMode] else ReplayMode.STREAMING
+            async def generate():
+                async for evt in engine.replay(rec_id, mode=mode_enum, speed=speed):
+                    yield f"data: {json.dumps(evt.to_dict(), ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            from fastapi.responses import StreamingResponse
+            return StreamingResponse(generate(), media_type="text/event-stream")
+        except Exception as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/recording/{rec_id}/render")
+    async def recording_render(rec_id: str, request: Request, view: str = "timeline"):
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            rendered = get_recording_engine().render(rec_id, view)
+            return {"ok": True, "view": view, "rendered": rendered}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.delete("/api/recording/{rec_id}")
+    async def recording_delete(rec_id: str, request: Request):
+        try:
+            from ..treellm.recording_engine import get_recording_engine
+            deleted = get_recording_engine().delete(rec_id)
+            return {"ok": True, "deleted": deleted}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

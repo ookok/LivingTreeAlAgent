@@ -20,7 +20,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..treellm.skill_router import PureTfidf, RouteResult, RoutingDecision
+from ..treellm.classifier import SkillRouter, PureTfidf, RouteResult, RoutingDecision
 from ..dna.skill_graph import SkillGraph, SkillNode, get_skill_graph
 from ..dna.skill_self_learn import LearnedSkill, KnowledgeNudge
 from ..dna.meta_memory import get_meta_memory
@@ -158,6 +158,15 @@ class UnifiedSkillSystem:
         return scored
 
     def build(self):
+        # ── SkillDiscovery: scan SKILL.md files ──
+        try:
+            from ..capability.skill_discovery import SkillDiscoveryManager
+            discovered = SkillDiscoveryManager().discover()
+            for skill in discovered:
+                self._tool_texts[f"skill:{skill.name}"] = f"Skill:{skill.name}. {skill.description}"
+        except Exception:
+            pass
+
         all_texts = list(self._provider_texts.values()) + list(self._tool_texts.values()) + list(self._role_texts.values()) + list(self._meta_strategy_texts.values())
         if not all_texts:
             return
@@ -195,6 +204,14 @@ class UnifiedSkillSystem:
         name = "-".join(keywords) if keywords else f"skill-{len(self._skills)+1}"
         skill = LearnedSkill(name=name, description=task[:120], prompt_template=task, proposed=True)
         self._skills[skill.name] = skill
+        # Auto-register in ToolMarket for discoverability
+        try:
+            from ..capability.tool_market import get_tool_market
+            market = get_tool_market()
+            market.register(name, task[:200], category="learned",
+                           handler=lambda inputs=None: {"status": "proposed", "name": name})
+        except Exception:
+            pass
         self._save()
         return skill
 

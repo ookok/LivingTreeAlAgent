@@ -57,12 +57,13 @@ class Provider:
         self._last_ping_ok = False
 
     async def ping(self) -> tuple[bool, str]:
-        # Cache: skip ping if recently checked (< 60s)
         if self._last_ping_time and time.time() - self._last_ping_time < 60:
             return self._last_ping_ok, ""
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
+            from .connection_pool import get_connection_pool
+            pool = get_connection_pool()
+            s = await pool.get_session()
+            async with s.post(
                     f"{self.base_url}/chat/completions",
                     json={"model": self.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
                     headers=self._headers(),
@@ -196,20 +197,25 @@ class Provider:
             "stream": True,
             **kwargs,
         }
+        tok_count = 0
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/chat/completions",
-                    json=payload,
+            # Use ConnectionPool shared session (avoids TCP+TLS per request)
+            from .connection_pool import get_connection_pool
+            pool = get_connection_pool()
+            s = await pool.get_session()
+            async with s.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
                     if resp.status == 429:
-                        yield f"\n[NVIDIA rate limited — backoff triggered]"
-                        return
+                        self._rate_limit_count += 1
+                        self._last_rate_limit = time.time()
+                        raise RuntimeError(f"{self.name}: rate limited")
                     if resp.status != 200:
-                        yield f"\n[HTTP {resp.status}]"
-                        return
+                        body = (await resp.text())[:200]
+                        raise RuntimeError(f"{self.name}: HTTP {resp.status}: {body}")
                     buf = b""
                     async for chunk in resp.content.iter_any():
                         buf += chunk
@@ -225,8 +231,10 @@ class Provider:
                                 data = json.loads(d)
                                 token = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
                                 if token:
+                                    tok_count += 1
                                     yield token
                             except Exception:
+                                pass
                                 continue
         except Exception as e:
             yield f"\n[Stream error: {e}]"

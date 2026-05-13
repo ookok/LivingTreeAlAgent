@@ -538,36 +538,38 @@ class DeepProbe:
     # ── Dynamic Strategy Learning ──────────────────────────────────
 
     def learn_from_depth(self, task_type: str, strategies_applied: list[ProbeStrategy],
-                         depth_grade: float) -> None:
+                          depth_grade: float) -> None:
         """Learn which strategies work best per task type from DepthGrading feedback.
-
-        From self-evolving agent survey (Fang et al., 2025): Optimisers should
-        adapt based on environmental feedback. Deep depth grades → reinforce
-        strategies; shallow grades → reduce their weight.
+        
+        Uses Thompson Sampling (Beta distribution) to rapidly adapt strategy selection.
+        High depth grades → reinforce; shallow grades → penalize. Converges faster
+        than EMA because Beta posteriors narrow with each observation.
         """
         if task_type not in self._strategy_success:
             self._strategy_success[task_type] = {}
         for s in strategies_applied:
             key = s.value if isinstance(s, ProbeStrategy) else str(s)
             if key not in self._strategy_success[task_type]:
-                self._strategy_success[task_type][key] = []
-            self._strategy_success[task_type][key].append(depth_grade)
+                self._strategy_success[task_type][key] = {"alpha": 2.0, "beta": 2.0}
+            # Thompson update: depth_grade as reward signal
+            reward = min(1.0, max(0.0, depth_grade))
+            self._strategy_success[task_type][key]["alpha"] += reward * 3.0
+            self._strategy_success[task_type][key]["beta"] += (1.0 - reward) * 3.0
 
-        # Update STRATEGY_MATRIX EMA every 10 feedback signals
-        total = sum(len(v) for v in self._strategy_success.get(task_type, {}).values())
-        if total >= 10 and total % 10 == 0:
+        # Adapt STRATEGY_MATRIX every 5 feedback signals (faster than before)
+        total = sum(len(v) if isinstance(v, list) else v.get("alpha", 0)
+                     for v in self._strategy_success.get(task_type, {}).values())
+        if int(total) >= 5 and int(total) % 5 == 0:
             self._adapt_matrix(task_type)
 
     def _adapt_matrix(self, task_type: str) -> None:
-        """Adapt STRATEGY_MATRIX weights based on learned performance."""
+        """Adapt STRATEGY_MATRIX from Beta posterior means."""
+        import random
         matrix = self.STRATEGY_MATRIX.get(task_type, self.STRATEGY_MATRIX["general"])
-        for key, scores in self._strategy_success.get(task_type, {}).items():
-            if len(scores) >= 3:
-                avg_depth = sum(scores) / len(scores)
-                # EMA update: 70% old + 30% new normalized score
-                old = matrix.get(key, 0.5)
-                new = max(0.1, min(1.0, old * 0.7 + avg_depth * 0.3))
-                matrix[key] = round(new, 2)
+        for key, stats in self._strategy_success.get(task_type, {}).items():
+            if isinstance(stats, dict) and "alpha" in stats:
+                mean = stats["alpha"] / max(stats["alpha"] + stats["beta"], 0.01)
+                matrix[key] = round(mean, 2)
 
     def stats(self) -> dict:
         return {

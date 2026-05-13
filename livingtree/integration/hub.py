@@ -42,6 +42,32 @@ class IntegrationHub:
         self.scinet = None
         # UnifiedNotifier: adaptive multi-channel dispatcher
         self.unified_notifier = None
+        # Track spawned tasks for cleanup/error reporting
+        self._tasks: set[asyncio.Task] = set()
+
+    def _spawn_task(self, coro, name: str = "") -> asyncio.Task:
+        """Spawn a background task with exception logging and reference tracking."""
+        task = asyncio.create_task(coro)
+        self._tasks.add(task)
+
+        def _done_callback(t: asyncio.Task):
+            self._tasks.discard(t)
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc and not isinstance(exc, (asyncio.CancelledError, GeneratorExit)):
+                logger.warning(f"Hub task '{name}' failed: {exc}")
+
+        task.add_done_callback(_done_callback)
+        return task
+
+    async def _cancel_all_tasks(self):
+        """Cancel all tracked background tasks."""
+        for task in list(self._tasks):
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+            self._tasks.clear()
 
     @property
     def consciousness(self):
@@ -65,10 +91,17 @@ class IntegrationHub:
         """Phase 2: Full initialization — heavy sync work in executor, async after."""
         if self._started:
             return
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._init_sync)
-        await self._init_async()
+        # Prevent concurrent start() calls
+        if getattr(self, '_starting', False):
+            await self._ready_event.wait()
+            return
+        self._starting = True
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._init_sync)
+            await self._init_async()
+        finally:
+            self._starting = False
 
     def _init_sync(self) -> None:
         """All synchronous heavy work — runs in thread executor."""
@@ -209,8 +242,8 @@ class IntegrationHub:
             for name in self.world.consciousness._llm.provider_names:
                 try:
                     election.get_stats(name)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Election stats init for '{name}' failed: {e}")
             logger.info("Holistic election + Mixture of Judges initialized")
         except Exception as e:
             logger.warning(f"Election init skipped: {e}")
@@ -292,8 +325,8 @@ class IntegrationHub:
         try:
             from ..config.secrets import get_secret_vault
             search_key = get_secret_vault().get("spark_search_key", "")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Secret vault spark_search_key failed: {e}")
         self.world.spark_search = SparkSearch(api_password=search_key)
         logger.debug("Spark Search initialized")
 
@@ -614,14 +647,15 @@ class IntegrationHub:
         if guard:
             guard.spawn("hub_heartbeat", self.world.node.heartbeat(self.config.network.heartbeat_interval))
         else:
-            asyncio.create_task(self.world.node.heartbeat(self.config.network.heartbeat_interval))
+            self._spawn_task(self.world.node.heartbeat(self.config.network.heartbeat_interval), "heartbeat")
         self._register_agents()
 
         # ── Model registry (deferred if lazy) ──
         if not self._lazy:
             try:
-                from ..treellm.bootstrap import setup_model_registry
-                self._model_registry = await setup_model_registry(self.config)
+                from ..treellm.model_registry import ModelRegistry
+                self._model_registry = ModelRegistry.instance()
+                logger.info("Model registry initialized")
             except Exception as e:
                 logger.debug(f"Model registry skipped: {e}")
         else:
@@ -641,9 +675,49 @@ class IntegrationHub:
             sync = get_models_dev_sync()
             if sync._models:
                 logger.info(f"Models.dev cache: {len(sync._models)} models")
-                asyncio.create_task(sync.refresh())  # Background refresh
+                self._spawn_task(sync.refresh(), "models_dev_refresh")
         except Exception as e:
             logger.debug(f"Models.dev sync skipped: {e}")
+
+        # ── RouteLearner: cross-session knowledge distillation ──
+        try:
+            from ..treellm.route_learner import get_route_learner
+            rl = get_route_learner()
+            rl.distill_from_models_dev()
+            rl.learn_from_fitness()
+            logger.info("RouteLearner: distilled routing weights from models.dev + fitness history")
+        except Exception as e:
+            logger.debug(f"RouteLearner init skipped: {e}")
+
+        # ── Inject LLM into subsystems that need it ──
+        llm = getattr(self.world.consciousness, '_llm', None)
+        if llm:
+            try:
+                from ..treellm.synapse_aggregator import get_synapse_aggregator
+                agg = get_synapse_aggregator()
+                async def _judge_wrapper(prompt: str) -> str:
+                    result = await llm.chat(
+                        [{"role": "user", "content": prompt}],
+                        max_tokens=256, temperature=0.1,
+                    )
+                    return getattr(result, 'text', '') or str(result)
+                agg.set_judge_chat_fn(_judge_wrapper)
+            except Exception as e:
+                logger.debug(f"SynapseAggregator wiring skipped: {e}")
+
+            try:
+                from ..treellm.concurrent_stream import get_concurrent_stream, set_stream_chat_fn
+                async def _cs_chat_fn(messages, provider, stream=True):
+                    if stream:
+                        async for token in llm.stream(messages, provider=provider):
+                            yield token
+                    else:
+                        result = await llm.chat(messages, provider=provider)
+                        text = getattr(result, 'text', '') or str(result)
+                        yield text
+                set_stream_chat_fn(_cs_chat_fn)
+            except Exception as e:
+                logger.debug(f"ConcurrentStream wiring skipped: {e}")
 
         # ── Local LLM scan (deferred if lazy) ──
         if not self._lazy:
@@ -655,7 +729,7 @@ class IntegrationHub:
         # ── OpenCode serve: force discovery + refresh election ──
         try:
             self.world.consciousness._opencode_cache = []
-            await self.world.consciousness._elect()
+            await self.world.consciousness._elect_tiers()
             status = self.world.consciousness.get_election_status()
             oc_count = len(status.get("opencode_providers", []))
             if oc_count:
@@ -698,7 +772,7 @@ class IntegrationHub:
             if guard:
                 guard.spawn("hub_idle_consolidator", ic.start(self, idle_threshold=60))
             else:
-                asyncio.create_task(ic.start(self, idle_threshold=60))
+                self._spawn_task(ic.start(self, idle_threshold=60), "idle_consolidator")
             logger.info("IdleConsolidator started (60s threshold)")
         except Exception as e:
             logger.debug(f"IdleConsolidator: {e}")
@@ -717,7 +791,7 @@ class IntegrationHub:
         try:
             from ..capability.agent_marketplace import get_marketplace
             am = get_marketplace()
-            asyncio.create_task(am.sync_with_relay(self))
+            self._spawn_task(am.sync_with_relay(self), "agent_market_sync")
         except Exception as e:
             logger.debug(f"Marketplace: {e}")
 
@@ -754,7 +828,7 @@ class IntegrationHub:
             if guard:
                 guard.spawn("hub_proxy_pool", pool.start_background())
             else:
-                asyncio.create_task(pool.start_background())
+                self._spawn_task(pool.start_background(), "proxy_pool")
             logger.info(f"ProxyPool started ({pool.stats()['total']} cached)")
         except Exception as e:
             logger.debug(f"ProxyPool: {e}")
@@ -787,7 +861,7 @@ class IntegrationHub:
         try:
             from ..capability.network_brain import get_network_brain
             self.world.network_brain = get_network_brain()
-            asyncio.create_task(self._brain_loop())
+            self._spawn_task(self._brain_loop(), "brain_loop")
             logger.info("NetworkBrain initialized (arxiv + github + hn + so + rss)")
         except Exception as e:
             logger.debug(f"NetworkBrain: {e}")
@@ -829,7 +903,6 @@ class IntegrationHub:
 
         self._started = True
         self._phase = 1
-        self._ready_event.set()
 
         # ── Initialize WeWork Bot (reply + KB sync) ──
         self._init_wework_bot()
@@ -853,7 +926,7 @@ class IntegrationHub:
             nat_type = await self.world.nat_traverser.detect_nat_type()
             ep = await self.world.nat_traverser.get_public_endpoint()
             logger.info(f"NAT: {nat_type.value} — public {ep[0]}:{ep[1]}")
-            asyncio.create_task(self.world.nat_traverser.health_check_loop())
+            self._spawn_task(self.world.nat_traverser.health_check_loop(), "nat_health_check")
 
         # ── Start ResilienceBrain ──
         from ..core.resilience_brain import get_resilience
@@ -915,7 +988,7 @@ class IntegrationHub:
         try:
             from ..network.scinet_service import get_scinet
             self.scinet = get_scinet(port=7890)
-            asyncio.create_task(self.scinet.start())
+            self._spawn_task(self.scinet.start(), "scinet")
             logger.info("Scinet proxy started (localhost:7890)")
         except Exception as e:
             logger.debug(f"Scinet: {e}")
@@ -979,6 +1052,45 @@ class IntegrationHub:
             logger.info(f"EmotionalMemory initialized (entries={len(emo_mem._store)})")
         except Exception as e:
             logger.debug(f"EmotionalMemory: {e}")
+
+        # ── DaemonDoctor: background self-healing daemon ──
+        try:
+            from ..treellm.daemon_doctor import get_daemon_doctor
+            doctor = get_daemon_doctor()
+            self._spawn_task(doctor.run_loop(self), "daemon_doctor")
+            logger.info("DaemonDoctor started (10min checkup interval)")
+        except Exception as e:
+            logger.debug(f"DaemonDoctor: {e}")
+
+        # ── WarmStartAccel: pre-warm providers for zero cold-start latency ──
+        try:
+            from ..treellm.warm_start_accel import get_warm_start_accel
+            accel = get_warm_start_accel()
+            llm = getattr(self.world.consciousness, '_llm', None)
+            if llm and llm._providers:
+                warmed = await accel.warmup(llm, llm._providers, self.world.consciousness._free_models)
+                logger.info(f"WarmStart: {warmed} providers pre-warmed")
+        except Exception as e:
+            logger.debug(f"WarmStart: {e}")
+
+        # ── LivingStore: unified liquid/solid storage ──
+        try:
+            from ..treellm.living_store import get_living_store
+            store = get_living_store()
+            self.world.living_store = store
+            logger.info("LivingStore: unified storage online (ram/cache/temp/disk/db/config)")
+        except Exception as e:
+            logger.debug(f"LivingStore: {e}")
+
+        # ── Pre-warm CapabilityBus for zero cold-start ──
+        try:
+            from ..treellm.capability_bus import get_capability_bus
+            await get_capability_bus()._ensure_discovered()
+            logger.info("CapabilityBus: pre-warmed")
+        except Exception as e:
+            logger.debug(f"CapabilityBus warm: {e}")
+
+        self._ready_event.set()
 
     async def _brain_loop(self):
         """Periodic knowledge ingestion cycle."""
@@ -1118,6 +1230,13 @@ class IntegrationHub:
         if self._session:
             await self._session.close()
         self._started = False
+        # ── Flush LivingStore write-back buffer ──
+        try:
+            from ..treellm.living_store import get_living_store
+            await get_living_store().shutdown()
+        except Exception:
+            pass
+
         logger.info("🌳 LivingTree offline")
 
     # ── Overnight Task API ──────────────────────────────────
@@ -1195,6 +1314,12 @@ class IntegrationHub:
         "resume": ["继续任务", "继续挂机", "恢复任务", "恢复挂机", "resume", "continue"],
         "status": ["任务进度", "挂机进度", "当前进度", "进度", "status", "progress"],
     }
+
+    async def _quick_embed(self, text: str) -> list[float] | None:
+        """Fast hash-based embedding for semantic cache lookup (no API call)."""
+        import hashlib
+        h = hashlib.sha256(text.encode()).digest()
+        return [float(b) / 255.0 for b in h[:16]]  # 16-dim deterministic embedding
 
     def _is_long_running_task(self, message: str) -> bool:
         """Detect if user message implies a long-running background task."""
@@ -1317,7 +1442,7 @@ class IntegrationHub:
             except Exception as e:
                 logger.error(f"Background task failed: {e}")
 
-        asyncio.create_task(_run_in_background())
+        self._spawn_task(_run_in_background(), "overnight_task")
 
         return {
             "mode": "task_control",
@@ -1370,6 +1495,65 @@ class IntegrationHub:
             await self.start()
         self.world.metrics.life_cycles.inc()
 
+        # ── ContextMoE: per-session memory multiplexing ──
+        sid = kwargs.get("session_id") or f"term_{hash(str(kwargs.get('_request_headers', '')) or 'default') & 0xFFFF:04x}"
+        moe_result = None
+        try:
+            from ..treellm.context_moe import get_context_moe
+            moe = await get_context_moe(sid)
+            task_type = kwargs.get("task_type", "general")
+            result = await moe.query(message, task_type)
+            enriched_msg = moe.build_enriched_message(message, result)
+            if enriched_msg != message:
+                message = enriched_msg
+                kwargs["moe_enriched"] = True
+            moe_result = result
+        except Exception:
+            pass
+        moe_result = None
+        try:
+            from ..treellm.context_moe import get_context_moe
+            moe = get_context_moe()
+            task_type = kwargs.get("task_type", "general")
+            result = await moe.query(message, task_type)
+            enriched_msg = moe.build_enriched_message(message, result)
+            if enriched_msg != message:
+                message = enriched_msg
+                kwargs["moe_enriched"] = True
+            moe_result = result
+        except Exception:
+            pass
+
+        # ── UserSignal: process implicit feedback from previous response ──
+        try:
+            from ..treellm.user_signal import get_user_signal
+            collector = get_user_signal()
+            signal = collector.on_next_message(sid, message)
+            if signal and signal.confidence > 0.5:
+                from ..treellm.competitive_eliminator import get_eliminator
+                get_eliminator().record_match(
+                    signal.provider, success=signal.quality > 0.5,
+                    quality=signal.quality,
+                )
+                logger.debug(f"UserSignal: {signal.provider} quality={signal.quality:.2f} ({signal.reason})")
+        except Exception:
+            pass
+
+        # ── ConversationStateMachine: track flow + adapt routing ──
+        try:
+            from ..treellm.conversation_state_machine import get_conversation_state_machine
+            csm = get_conversation_state_machine()
+            intent_val = kwargs.get("task_type", "general")
+            domain_val = kwargs.get("domain", "general")
+            stage = csm.transition(sid, message, intent_val, domain_val)
+            hint = csm.routing_hint(stage)
+            kwargs.setdefault("task_type", hint.get("task_type", intent_val))
+            kwargs["csm_stage"] = stage
+            kwargs["csm_hint"] = hint
+            logger.debug(f"CSM: stage={stage} hint={hint}")
+        except Exception:
+            pass
+
         # ── Direct-start bypass ──
         if message.strip().lower() in ("直接开始", "直接开始吧", "跳过", "skip", "确认开始", "开始吧"):
             return await self._start_background_task("用户确认: " + message, skip_assessment=True)
@@ -1400,6 +1584,9 @@ class IntegrationHub:
                         "results": [s.result[:500] for s in ctx.steps if s.result],
                         "stats": {"total": status["total"], "done": status["done"], "failed": status["failed"]},
                     }
+                # If pipeline has < 3 steps, fall through but keep plan in context for engine
+                if ctx.steps:
+                    kwargs["pipeline_plan"] = ctx
         except Exception as e:
             logger.debug(f"Intent routing: {e}")
 
@@ -1410,6 +1597,24 @@ class IntegrationHub:
                 mem_context = self.struct_memory.get_context_block(message, entries, synthesis)
             except Exception as e:
                 logger.debug(f"StructMemory retrieve error: {e}")
+
+        # ── SemanticDedupCache: skip LLM if semantically identical query ──
+        try:
+            from ..treellm.semantic_cache import get_semantic_cache
+            cache = get_semantic_cache()
+            q_emb = await self._quick_embed(message)
+            if q_emb:
+                cached = cache.get(q_emb)
+                if cached:
+                    logger.info("SemanticDedupCache: HIT — returning cached answer")
+                    return {
+                        "session_id": sid, "intent": "general",
+                        "reflections": [cached],
+                        "execution_results": cached[:500],
+                        "cache_hit": True,
+                    }
+        except Exception:
+            pass
 
         # ── Dynamic tool discovery (no hardcoded workflows) ──
         try:
@@ -1424,6 +1629,39 @@ class IntegrationHub:
                 logger.debug("Tool dispatch: %d tools for '%s'", len(tools), message[:50])
         except Exception as e:
             logger.debug("Tool discovery: %s", e)
+
+        # ── TokenCircuitBreaker: budget-aware progressive degradation ──
+        try:
+            from ..treellm.token_circuit_breaker import get_token_circuit_breaker
+            from ..treellm.budget_router import get_budget_router
+            tcb = get_token_circuit_breaker()
+            csm_hint = kwargs.pop("csm_hint", {})
+            top_k = csm_hint.get("top_k", 3)
+            mt = csm_hint.get("max_tokens", kwargs.get("max_tokens", 4096))
+            tk, mt, agg = tcb.allocate(sid, get_budget_router(), top_k, mt)
+            kwargs["csm_hint"] = {"top_k": tk, "max_tokens": mt, "aggregate": agg}
+        except Exception:
+            pass
+
+        # ── CrossSessionBridge: inject past memories ──
+        try:
+            from ..treellm.cross_session_bridge import get_cross_session_bridge
+            bridge = get_cross_session_bridge()
+            enriched = bridge.inject_context(sid, message)
+            if enriched != message:
+                message = enriched
+        except Exception:
+            pass
+
+        # ── QueryClassifier: fast local task type (pre-engine) ──
+        try:
+            from ..treellm.query_classifier import get_query_classifier
+            qc = get_query_classifier()
+            local_type, confidence = qc.classify(message)
+            if not qc.needs_llm_classification(confidence):
+                kwargs["task_type"] = local_type
+        except Exception:
+            pass
 
         ctx = await self._run_engine(message, mem_context, **kwargs)
 
@@ -1442,9 +1680,148 @@ class IntegrationHub:
             except Exception as e:
                 logger.debug(f"Session state save error: {e}")
 
+        # ── ContinuousConsciousness: update perpetual state ──
+        try:
+            response_text = (ctx.reflections or [""])[0] if ctx.reflections else ""
+            is_err = bool(ctx.metadata.get("stage_error_execute"))
+            from ..treellm.continuous_consciousness import get_continuous_consciousness
+            await get_continuous_consciousness().on_response(response_text, success=not is_err)
+        except Exception:
+            pass
+
+        # ── CrossSessionBridge: extract durable memories ──
+        try:
+            from ..treellm.cross_session_bridge import get_cross_session_bridge
+            bridge = get_cross_session_bridge()
+            messages = [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": str(ctx.metadata.get("cognition", ""))},
+            ]
+            await bridge.extract_memories(sid, messages)
+        except Exception:
+            pass
+
         cache_stats = {}
         if self.cache_optimizer:
             cache_stats = self.cache_optimizer.stats()
+
+        # ── UserSignal: mark current response for future feedback ──
+        try:
+            provider = ctx.metadata.get("elected_provider", "")
+            if provider:
+                from ..treellm.user_signal import get_user_signal
+                get_user_signal().mark_response(ctx.session_id, provider, message)
+        except Exception:
+            pass
+
+        # ── AdversarialGate: review response before delivery ──
+        response_text = (ctx.reflections or [""])[0] if ctx.reflections else ""
+        if response_text:
+            try:
+                from ..treellm.adversarial_gate import get_adversarial_gate
+                gate = get_adversarial_gate()
+                llm_fn = self.world.consciousness._llm.chat
+                review = await gate.review(response_text, message, llm_fn)
+                if not review.passed:
+                    logger.warning(f"AdversarialGate flagged: {review.reason[:80]}")
+                    regenerated = await gate.regenerate(
+                        message, response_text, llm_fn, review.reason,
+                    )
+                    if regenerated:
+                        ctx.reflections = [regenerated]
+            except Exception:
+                pass
+
+        # ── CrossSessionBridge: inject memories from past sessions ──
+        try:
+            from ..treellm.cross_session_bridge import get_cross_session_bridge
+            bridge = get_cross_session_bridge()
+            enriched = bridge.inject_context(sid, message)
+            if enriched != message:
+                message = enriched
+                logger.debug("CrossSessionBridge: injected past context")
+        except Exception:
+            pass
+
+        # ── QueryClassifier: fast local task type classification ──
+        task_type = kwargs.get("task_type", "general")
+        try:
+            from ..treellm.query_classifier import get_query_classifier
+            qc = get_query_classifier()
+            local_type, confidence = qc.classify(message)
+            if qc.needs_llm_classification(confidence):
+                pass  # Will use recognize_intent below
+            else:
+                task_type = local_type
+                kwargs["task_type"] = task_type
+        except Exception:
+            pass
+
+        # ── SemanticDedupCache: cache response ──
+        try:
+            from ..treellm.semantic_cache import get_semantic_cache
+            cache = get_semantic_cache()
+            q_emb = await self._quick_embed(message)
+            if q_emb and response_text:
+                cache.set(q_emb, response_text)
+        except Exception:
+            pass
+
+        # ── PredictiveRouter + HealthPredictor: record outcomes ──
+        try:
+            from ..treellm.predictive_router import get_predictive_router
+            from ..treellm.health_predictor import get_health_predictor
+            from ..treellm.latency_oracle import get_latency_oracle
+            from ..treellm.provider_round_robin import get_provider_round_robin
+            from ..treellm.specialization_tracker import get_specialization_tracker
+            prov = ctx.metadata.get("elected_provider", "")
+            latency = ctx.metadata.get("total_latency_ms", 0)
+            task_type = kwargs.get("task_type", "general")
+            is_err = bool(ctx.metadata.get("stage_error_execute"))
+            if prov:
+                get_predictive_router().record(prov, success=not is_err, latency_ms=latency)
+                get_health_predictor().record(prov, latency_ms=latency, is_error=is_err)
+                get_latency_oracle().record(prov, latency_ms=latency)
+                get_provider_round_robin().mark_used(prov)
+                depth = ctx.metadata.get("depth_grade", 0.5)
+                get_specialization_tracker().record(prov, task_type, depth, latency, not is_err)
+        except Exception:
+            pass
+
+        # ── SkillProgression: record skill outcome ──
+        try:
+            from ..dna.skill_progression import get_skill_progression
+            sp = get_skill_progression()
+            skill_name = ctx.metadata.get("top_tool", task_type)
+            sp.record_outcome(
+                skill=skill_name, success=not is_err,
+                confidence=ctx.metadata.get("confidence", 0.5),
+                latency_ms=latency, session=sid,
+            )
+        except Exception:
+            pass
+
+        # ── ConfidenceCalibrator: assess + auto-escalate ──
+        response_text = (ctx.reflections or [""])[0] if ctx.reflections else ""
+        if response_text and not ctx.metadata.get("cache_hit"):
+            try:
+                from ..treellm.confidence_calibrator import get_confidence_calibrator
+                cal = get_confidence_calibrator()
+                llm_fn = self.world.consciousness._llm.chat
+                level, score = await cal.assess(response_text, message, llm_fn)
+                if level == "low":
+                    logger.warning(f"ConfidenceCalibrator: LOW ({score:.0%}) — regenerating with L2 pro")
+                    regenerated = await llm_fn(
+                        [{"role":"user","content":f"Re-answer with higher confidence:{message[:500]}"}],
+                        provider="", max_tokens=2048,
+                    )
+                    new_text = getattr(regenerated, 'text', '') or str(regenerated)
+                    if new_text:
+                        ctx.reflections = [cal.format(new_text, level, score)]
+                else:
+                    ctx.reflections = [cal.format(response_text, level, score)]
+            except Exception:
+                pass
 
         return {
             "session_id": ctx.session_id, "intent": ctx.intent,

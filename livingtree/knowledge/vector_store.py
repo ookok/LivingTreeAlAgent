@@ -128,7 +128,9 @@ class VectorStore:
         self.collection = collection_name
         self.embedding_backend = embedding_backend or LocalEmbeddingBackend()
         self._vectors: dict[str, list[float]] = {}
-        # Use MemoryOptimizer's embedding cache for large memory utilization
+        self._matrix_cache: Any = None   # numpy array cache
+        self._matrix_ids: list[str] = []  # keys corresponding to cached matrix
+        self._matrix_dirty = True
         self._cache = None
         if _HAS_MEMORY_OPT:
             try:
@@ -161,6 +163,12 @@ class VectorStore:
     def add_vectors(self, items: List[Tuple[str, List[float]]]) -> None:
         for doc_id, vec in items:
             self._vectors[doc_id] = vec
+        self._matrix_dirty = True
+        # Cap at 50_000 vectors to prevent unbounded memory growth
+        if len(self._vectors) > 50_000:
+            excess = list(self._vectors.keys())[:len(self._vectors) - 50_000]
+            for k in excess:
+                self._vectors.pop(k, None)
 
     def search_similar(self, query_vec: list[float], top_k: int = 5) -> list[str]:
         if not self._vectors:
@@ -181,10 +189,14 @@ class VectorStore:
                 logger.debug("Accelerator cosine failed: %s, falling back to NumPy", e)
         try:
             import numpy as np
-            ids = list(self._vectors.keys())
-            matrix = np.array([self._vectors[k] for k in ids])
-            query = np.array(query_vec)
-            # Batch cosine: dot / (norm_a * norm_b)
+            if self._matrix_dirty or self._matrix_cache is None:
+                ids = list(self._vectors.keys())
+                self._matrix_cache = np.array([self._vectors[k] for k in ids], dtype=np.float32)
+                self._matrix_ids = ids
+                self._matrix_dirty = False
+            matrix = self._matrix_cache
+            ids = self._matrix_ids
+            query = np.array(query_vec, dtype=np.float32)
             dots = np.dot(matrix, query)
             norms_a = np.linalg.norm(matrix, axis=1)
             norm_b = np.linalg.norm(query) or 1.0

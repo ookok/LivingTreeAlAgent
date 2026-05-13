@@ -123,8 +123,8 @@ class ConcurrentStream:
     ) -> AsyncIterator[StreamEvent]:
         """Execute dual-track concurrent streaming.
 
-        Track 1 (flash): starts immediately, streams tokens in real-time.
-        Track 2 (pro): dispatched asynchronously, insights woven in later.
+        Track 1 (flash): streams tokens in real-time via asyncio.Queue.
+        Track 2 (pro): dispatched asynchronously, insights woven in at pause points.
 
         Args:
             query: User query.
@@ -140,98 +140,109 @@ class ConcurrentStream:
         session_t0 = time.monotonic()
         sequence = 0
 
+        if not self._chat_fn:
+            yield StreamEvent(kind=StreamEventKind.ERROR, text="No chat function configured", sequence=0)
+            return
+
         messages = [{"role": "user", "content": query}]
         if system_prompt:
             messages.insert(0, {"role": "system", "content": system_prompt})
 
-        # ── Track 1: Flash model (real-time) ──
-        flash_task = asyncio.create_task(
-            self._run_flash_track(messages, flash_model, query)
-        )
+        # Token queue for real-time flash token delivery
+        token_queue: asyncio.Queue = asyncio.Queue(maxsize=256)
 
-        # ── Track 2: Pro model (background, if specified) ──
+        # Track 1: Flash model streams tokens into the queue
+        flash_done = asyncio.Event()
+        flash_error: str = ""
+
+        async def _flash_producer():
+            nonlocal flash_error
+            try:
+                async for token in self._chat_fn(messages, flash_model, stream=True):
+                    await token_queue.put(token)
+            except Exception as e:
+                flash_error = str(e)
+            finally:
+                flash_done.set()
+
+        flash_producer_task = asyncio.create_task(_flash_producer())
+
+        # Track 2: Pro model (background, if specified)
         pro_task = None
         if pro_model and pro_model != flash_model:
             pro_task = asyncio.create_task(
                 self._run_pro_track(messages, pro_model, query, task_type)
             )
 
-        # ── Orchestrate: interleave flash stream with pro insights ──
         flash_tokens: list[str] = []
-        flash_complete = False
         pro_insights_buffer: list[str] = []
         weave_count = 0
         flash_first_token_ms = 0.0
 
         try:
-            while not flash_complete:
-                # Wait for next flash token or pro insight
-                done, _ = await asyncio.wait(
-                    [flash_task] + ([pro_task] if pro_task and not pro_task.done() else []),
-                    timeout=0.1,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                for task in done:
-                    if task == flash_task:
+            while not flash_done.is_set() or not token_queue.empty():
+                try:
+                    token = await asyncio.wait_for(token_queue.get(), timeout=0.1)
+                except asyncio.TimeoutError:
+                    # Check if pro insights arrived while waiting
+                    if pro_task and pro_task.done() and not pro_task.exception():
                         try:
-                            result = task.result()
-                            if isinstance(result, str):
-                                token = result
-                                if not flash_tokens:
-                                    flash_first_token_ms = (time.monotonic() - session_t0) * 1000
-                                flash_tokens.append(token)
-                                sequence += 1
-                                yield StreamEvent(
-                                    kind=StreamEventKind.FLASH_TOKEN,
-                                    text=token, provider=flash_model,
-                                    sequence=sequence,
-                                )
-
-                                # Check if it's a good weave point
-                                if (pro_insights_buffer and
-                                    self._is_weave_point(flash_tokens, weave_count)):
-                                    for insight in pro_insights_buffer:
-                                        weave_count += 1
-                                        sequence += 1
-                                        yield StreamEvent(
-                                            kind=StreamEventKind.PRO_INSIGHT,
-                                            text=insight, provider=pro_model,
-                                            sequence=sequence,
-                                        )
-                                    pro_insights_buffer.clear()
-
-                            elif isinstance(result, StreamEvent):
-                                if result.kind == StreamEventKind.FLASH_COMPLETE:
-                                    flash_complete = True
-                                    sequence += 1
-                                    yield StreamEvent(
-                                        kind=StreamEventKind.FLASH_COMPLETE,
-                                        provider=flash_model, sequence=sequence,
-                                    )
-                                elif result.kind == StreamEventKind.ERROR:
-                                    sequence += 1
-                                    yield result
-                                    flash_complete = True
-
-                        except Exception as e:
-                            logger.warning(f"ConcurrentStream flash error: {e}")
-                            flash_complete = True
-
-                    elif task == pro_task:
-                        try:
-                            result = task.result()
+                            result = pro_task.result()
                             if isinstance(result, list):
-                                # Batch of insights
                                 pro_insights_buffer.extend(result[:self.MAX_PRO_INSIGHTS])
                                 self._stats["weaves"] += len(result)
                             elif isinstance(result, str) and result:
                                 pro_insights_buffer.append(result)
                                 self._stats["weaves"] += 1
-                        except Exception as e:
-                            logger.debug(f"ConcurrentStream pro error: {e}")
+                        except Exception:
+                            pass
+                    continue
 
-            # ── Post-flash: deliver remaining pro insights ──
+                if not flash_tokens:
+                    flash_first_token_ms = (time.monotonic() - session_t0) * 1000
+                flash_tokens.append(token)
+                sequence += 1
+                yield StreamEvent(
+                    kind=StreamEventKind.FLASH_TOKEN,
+                    text=token, provider=flash_model,
+                    sequence=sequence,
+                )
+
+                # Check for weave point
+                if (pro_insights_buffer and
+                    self._is_weave_point(flash_tokens, weave_count)):
+                    for insight in pro_insights_buffer:
+                        weave_count += 1
+                        sequence += 1
+                        yield StreamEvent(
+                            kind=StreamEventKind.PRO_INSIGHT,
+                            text=insight, provider=pro_model,
+                            sequence=sequence,
+                        )
+                    pro_insights_buffer.clear()
+
+            # Wait for flash producer to fully complete
+            await flash_producer_task
+            if flash_error:
+                sequence += 1
+                yield StreamEvent(kind=StreamEventKind.ERROR, text=flash_error, sequence=sequence)
+            else:
+                sequence += 1
+                yield StreamEvent(
+                    kind=StreamEventKind.FLASH_COMPLETE,
+                    provider=flash_model, sequence=sequence,
+                )
+
+            # Post-flash: deliver remaining pro insights
+            if pro_task and not pro_task.done():
+                try:
+                    pro_result = await asyncio.wait_for(pro_task, timeout=30.0)
+                    if isinstance(pro_result, list) and pro_result:
+                        pro_insights_buffer.extend(pro_result[:self.MAX_PRO_INSIGHTS])
+                        self._stats["weaves"] += len(pro_result)
+                except asyncio.TimeoutError:
+                    pass
+
             if pro_insights_buffer:
                 sequence += 1
                 yield StreamEvent(
@@ -248,21 +259,30 @@ class ConcurrentStream:
                         sequence=sequence,
                     )
 
-            # ── Pro model complete (if still running) ──
-            if pro_task and not pro_task.done():
+            # Pro complete
+            if pro_task and pro_task.done() and not pro_task.exception():
                 try:
-                    pro_output = await asyncio.wait_for(pro_task, timeout=30.0)
-                    if isinstance(pro_output, str) and pro_output:
-                        sequence += 1
-                        yield StreamEvent(
-                            kind=StreamEventKind.PRO_COMPLETE,
-                            text=pro_output, provider=pro_model,
-                            sequence=sequence,
-                        )
-                except asyncio.TimeoutError:
+                    raw = pro_task.result()
+                    pro_text = " ".join(raw) if isinstance(raw, list) else str(raw) if raw else ""
+                    if pro_text:
+                        try:
+                            full_output = []
+                            async for token in self._chat_fn(pro_messages if 'pro_messages' in dir() else messages, pro_model, stream=True):
+                                full_output.append(token)
+                            full_text = "".join(full_output)
+                            if full_text and full_text != "".join(flash_tokens):
+                                sequence += 1
+                                yield StreamEvent(
+                                    kind=StreamEventKind.PRO_COMPLETE,
+                                    text=full_text, provider=pro_model,
+                                    sequence=sequence,
+                                )
+                        except Exception:
+                            pass
+                except Exception:
                     pass
 
-            # ── Session metadata ──
+            # Session metadata
             total_ms = (time.monotonic() - session_t0) * 1000
             sequence += 1
             yield StreamEvent(
@@ -278,7 +298,7 @@ class ConcurrentStream:
             )
 
         except asyncio.CancelledError:
-            flash_task.cancel()
+            flash_producer_task.cancel()
             if pro_task:
                 pro_task.cancel()
             raise
@@ -289,29 +309,7 @@ class ConcurrentStream:
                 text=str(e), sequence=sequence,
             )
 
-    # ── Track Runners ─────────────────────────────────────────────
-
-    async def _run_flash_track(
-        self, messages: list[dict], flash_model: str, query: str,
-    ) -> StreamEvent | str:
-        """Track 1: Run flash model for real-time streaming presence."""
-        if not self._chat_fn:
-            return StreamEvent(
-                kind=StreamEventKind.ERROR,
-                text="No chat function configured",
-            )
-
-        try:
-            tokens: list[str] = []
-            async for token in self._chat_fn(messages, flash_model, stream=True):
-                tokens.append(token)
-                # Yield each token back to orchestrator
-                # (hack: return each token individually via task result)
-                # Actually need a better pattern — use queue
-
-            return StreamEvent(kind=StreamEventKind.FLASH_COMPLETE)
-        except Exception as e:
-            return StreamEvent(kind=StreamEventKind.ERROR, text=str(e))
+    # ── Pro Track Runner ─────────────────────────────────────────
 
     async def _run_pro_track(
         self, messages: list[dict], pro_model: str, query: str, task_type: str,
@@ -470,12 +468,19 @@ class ConcurrentStream:
     # ── Auto-connect to TreeLLM ────────────────────────────────────
 
     def auto_connect(self) -> bool:
-        """Auto-connect ConcurrentStream to TreeLLM for dual-track streaming."""
+        """Auto-connect ConcurrentStream to TreeLLM for dual-track streaming.
+        
+        If TreeLLM has no providers, call set_stream_chat_fn() to inject one.
+        """
         try:
             from .core import TreeLLM
             llm = TreeLLM()
 
             async def _chat_fn(messages, provider, stream=True):
+                if len(llm._providers) == 0:
+                    logger.debug("ConcurrentStream: no providers — returning empty")
+                    yield ""
+                    return
                 if stream:
                     async for token in llm.stream(messages, provider=provider):
                         yield token

@@ -39,6 +39,7 @@ WEIGHTS = {
     "long_term_reward": 0.0,  # JointEvolution long-term reward (C→P loop)
     "thompson": 0.0,      # Thompson Sampling Bayesian prior
     "exploration": 0.0,   # Exploration bonus for under-tested providers
+    "budget": 0.0,        # BudgetRouter cost-aware modifier (injected dynamically)
 }
 
 # NOTE: Pattern 5 dynamic weights will be used via get_dynamic_weights(task_type).
@@ -214,9 +215,9 @@ class HolisticElection:
         task_type: str = "general",
     ) -> list[ProviderScore]:
         """Score all candidates holistically. Returns ranked list."""
-        results = []
+        alive_scores: list[ProviderScore] = []
 
-        # Phase 1: Ping (cached 60s — fast after first call)
+        # Phase 1: Filter (circuit breaker, competitor eliminator)
         breaker = None
         try:
             from .circuit_breaker import get_circuit_breaker
@@ -224,218 +225,121 @@ class HolisticElection:
         except Exception:
             pass
 
-        alive_scores = []
-        ping_count = 0
-
-        # Token Accountant: shared price vector for router layer
-        try:
-            from ..api.token_accountant import get_token_accountant, AllocationLayer
-            accountant = get_token_accountant()
-            prices = accountant.get_price_vector()
-            max_pings = prices.max_ping_providers
-        except Exception:
-            accountant = None
-            max_pings = len(candidates)
-
+        # Phase 2: Parallel ping all candidates
+        to_ping: list[tuple[str, Any]] = []
         for name in candidates:
-            # Skip providers with open circuit breaker (Token中转站熔断)
             if breaker and breaker.is_open(name):
                 continue
-
-            # CompetitiveEliminator: skip eliminated providers
             try:
                 from .competitive_eliminator import get_eliminator
                 if not get_eliminator().is_viable(name):
                     continue
             except ImportError:
                 pass
-
-            # Token Accountant: limit pings to prevent over-routing
-            if accountant and ping_count >= max_pings:
-                break
-
             p = providers.get(name)
             if not p:
                 continue
-            stats = self.get_stats(name)
+            to_ping.append((name, p))
+
+        async def _ping_one(name, p):
             ok, err = await p.ping()
+            return name, p, ok, err
+
+        ping_results = await asyncio.gather(*[_ping_one(n, p) for n, p in to_ping])
+
+        # Phase 3: Score alive candidates
+        weights = get_dynamic_weights(task_type)
+        # InverseReward adjustments
+        try:
+            from ..economy.inverse_reward import get_inverse_reward
+            ir = get_inverse_reward()
+            prefs = ir.get_preference_profile()
+            if prefs.get("prefers_speed", 0) > 0.5:
+                weights["latency"] = weights.get("latency", 0.18) * 1.3
+                weights["quality"] = weights.get("quality", 0.23) * 0.9
+            if prefs.get("prefers_simplicity", 0) > 0.5:
+                weights["cost"] = weights.get("cost", 0.15) * 1.2
+        except Exception:
+            pass
+
+        for name, p, ok, err in ping_results:
             if not ok:
                 continue
-
-            ping_count += 1
-            # Token Accountant: record router layer allocation
-            if accountant:
-                try:
-                    accountant.record_allocation(
-                        layer=AllocationLayer.ROUTER,
-                        action="ping",
-                        tokens_spent=50,
-                        actual_benefit=1.0 if ok else 0.0,
-                        latency_ms=stats.avg_latency_ms,
-                    )
-                except Exception:
-                    pass
+            stats = self.get_stats(name)
 
             score = ProviderScore(
-                name=name,
-                alive=True,
+                name=name, alive=True,
                 is_free=name in free_models,
                 latency_ms=stats.avg_latency_ms,
                 success_rate=stats.success_rate,
                 last_used=stats.last_used,
             )
 
-            # Score 1: Latency (normalized: faster = higher score)
-            avg_lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
+            # Score dimensions
             lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
-            max_latency = max(max(100, avg_lat), lat)
-            score.scores["latency"] = 1.0 - min(lat / max_latency, 0.95)
-
-            # Score 2: Quality (recent success rate)
+            score.scores["latency"] = 1.0 - min(lat / max(200, lat), 0.95)
             score.scores["quality"] = stats.recent_quality
-
-            # Score 3: Cost (free = 1.0, paid = 0.3)
             score.scores["cost"] = 1.0 if score.is_free else 0.3
+            score.scores["capability"] = self._capability_match(name, query)
 
-            # Score 3.5: Rate-limit penalty (temp -0.5 if recently throttled)
+            if stats.last_used > 0:
+                hours_since = (time.time() - stats.last_used) / 3600
+                score.scores["freshness"] = max(0.0, 1.0 - hours_since / 24.0)
+            else:
+                score.scores["freshness"] = 0.5
+
             rl_count = getattr(p, '_rate_limit_count', 0)
             rl_last = getattr(p, '_last_rate_limit', 0.0)
             rl_penalty = 0.0
             if rl_last > 0:
                 seconds_since = time.time() - rl_last
-                if seconds_since < 60:  # within last minute: full penalty
-                    rl_penalty = 0.5
-                elif seconds_since < 300:  # within 5 min: decay
-                    rl_penalty = 0.5 * (1.0 - (seconds_since - 60) / 240)
-                # Accumulated rate limits also count
-                if rl_count > 3:
-                    rl_penalty = min(0.8, rl_penalty + 0.1 * (rl_count - 3))
+                if seconds_since < 60: rl_penalty = 0.5
+                elif seconds_since < 300: rl_penalty = 0.5 * (1.0 - (seconds_since - 60) / 240)
+                if rl_count > 3: rl_penalty = min(0.8, rl_penalty + 0.1 * (rl_count - 3))
             score.scores["rate_limit"] = max(0.0, 1.0 - rl_penalty)
 
-            # Score 4: Capability match
-            score.capability_match = self._capability_match(name, query)
-            score.scores["capability"] = score.capability_match
-
-            # Score 5: Freshness (recently used = higher)
-            if stats.last_used > 0:
-                hours_since = (time.time() - stats.last_used) / 3600
-                score.scores["freshness"] = max(0.0, 1.0 - hours_since / 24.0)
-            else:
-                score.scores["freshness"] = 0.5  # neutral for never-used
-
-            # Score 6: Cache benefit (how much can prefix-cache save?)
             try:
                 from .cache_director import get_cache_director
-                cd = get_cache_director()
-                score.scores["cache"] = cd.cache_score(name)
+                score.scores["cache"] = get_cache_director().cache_score(name)
             except Exception:
                 score.scores["cache"] = 0.0
 
-            # Score 7: Session stickiness (prefer same model across turns)
             try:
                 from .session_binding import get_session_binding
-                sb = get_session_binding()
-                # Get session ID from query context (passed via kwargs or global)
                 sid = query[:20] if query else "default"
-                score.scores["sticky"] = sb.stickiness_score(sid, name)
+                score.scores["sticky"] = get_session_binding().stickiness_score(sid, name)
             except Exception:
                 score.scores["sticky"] = 0.0
 
-            # Score 8: HiFloat8 cone-precision support (Ascend 950 acceleration)
-            # Higher score for HiFloat8-wrapped providers, especially with long context
+            # BudgetRouter: cost-aware modifier
             try:
-                hifloat8_enabled = getattr(p, 'hifloat8_supported', False)
-                score.scores["hifloat8"] = 1.0 if hifloat8_enabled else 0.0
+                from .budget_router import get_budget_router
+                budget = get_budget_router()
+                estimated_cost = 0.0 if score.is_free else 0.003
+                bf = budget.budget_factor(name, estimated_cost)
+                score.scores["budget"] = bf
             except Exception:
-                score.scores["hifloat8"] = 0.0
+                score.scores["budget"] = 1.0
 
-            # ── CompetitiveEliminator: apply tier-based modifiers ──
+            # ProviderRoundRobin: cooldown consecutive provider
             try:
-                from .competitive_eliminator import get_eliminator
-                elim = get_eliminator()
-                if not elim.is_viable(name):
-                    continue  # Skip eliminated providers
-                modifiers = elim.get_tier_modifier(name)
-                for dim, mod in modifiers.items():
-                    if dim in score.scores:
-                        score.scores[dim] *= mod
-                    else:
-                        score.scores[dim] = mod
-                # Apply Elo rating as bonus dimension
-                ranking = elim.get_ranking(name)
-                if ranking and ranking.is_established:
-                    elo_norm = max(0.0, min(1.0, (ranking.elo_rating - 800) / 1200.0))
-                    score.scores.setdefault("elo", 0.0)
-                    score.scores["elo"] = elo_norm * 0.5  # 50% weight of Elo contribution
-            except ImportError:
-                pass
-
-            # ── JointEvolution: apply long-term reward modifiers (C→P loop) ──
-            try:
-                from .joint_evolution import get_joint_evolution
-                je = get_joint_evolution()
-                lt_rewards = je.inject_rewards_to_election()
-                if name in lt_rewards:
-                    modifier = lt_rewards[name]
-                    score.scores.setdefault("long_term_reward", 0.0)
-                    score.scores["long_term_reward"] = max(0.0, 0.5 + modifier)  # 0.2-0.8 range
-                    logger.debug(
-                        f"JointEvolution C→P: {name} long_term_reward={modifier:.3f}"
-                    )
-            except ImportError:
-                pass
-
-            # ── Thompson Sampling boost (bandit_router Bayesian prior) ──
-            try:
-                from .bandit_router import get_bandit_router
-                br = get_bandit_router()
-                arm = br.get_arm(name)
-                # Thompson sample: exploration bonus for uncertain providers
-                ts_value = arm.sample_composite()
-                score.scores.setdefault("thompson", 0.0)
-                score.scores["thompson"] = ts_value
-                # Boost for high-uncertainty providers (exploration)
-                score.scores.setdefault("exploration", 0.0)
-                score.scores["exploration"] = arm.exploration_bonus * 0.5
-            except ImportError:
-                pass
-
-            # Apply dynamic weights based on task_type (Pattern 5)
-            weights = get_dynamic_weights(task_type)
-            # ── InverseReward → Provider election influence ──
-            try:
-                from ..economy.inverse_reward import get_inverse_reward
-                ir = get_inverse_reward()
-                prefs = ir.get_preference_profile()
-                if prefs.get("prefers_speed", 0) > 0.5:
-                    weights["latency"] = weights.get("latency", 0.18) * 1.3
-                    weights["quality"] = weights.get("quality", 0.23) * 0.9
-                if prefs.get("prefers_simplicity", 0) > 0.5:
-                    weights["cost"] = weights.get("cost", 0.15) * 1.2
+                from .provider_round_robin import get_provider_round_robin
+                rr = get_provider_round_robin()
+                cf = rr.cooldown_factor(name)
+                score.scores["sticky"] = score.scores.get("sticky", 1.0) * cf
             except Exception:
                 pass
-            # ensure all keys exist in scores
+
+            # Dynamic weights total
             for k in weights:
                 score.scores.setdefault(k, 0.0)
-            # Weighted total using dynamic weights
-            score.total = sum(
-                weights[k] * score.scores.get(k, 0)
-                for k in weights
-            )
-            # Real-time health adjustment (live feedback from RouterStats)
+            score.total = sum(weights[k] * score.scores.get(k, 0) for k in weights)
             health_factor = self._health_adjustment(name, stats)
             score.total *= health_factor
-            # Pattern 5: expose latency and cost currencies for later analysis
-            try:
-                score.avg_latency_ms = stats.avg_latency_ms
-            except Exception:
-                score.avg_latency_ms = 0.0
-            try:
-                base_cost = 5.0
-                scale = max(0.0, min(1.0, score.scores.get("cost", 0.0)))
-                score.cost_yuan_per_1k = base_cost * (1.0 - scale)
-            except Exception:
-                score.cost_yuan_per_1k = 0.0
+
+            score.avg_latency_ms = stats.avg_latency_ms
+            score.cost_yuan_per_1k = 0.0
+
             alive_scores.append(score)
 
         alive_scores.sort(key=lambda s: -s.total)
@@ -493,7 +397,15 @@ class HolisticElection:
         if stats.failures > stats.successes and stats.calls > 5:
             factor *= 0.5
 
-        return max(0.05, factor)
+        # HealthPredictor: predictive pre-failure detection
+        try:
+            from .health_predictor import get_health_predictor
+            hp_factor = get_health_predictor().health_factor(name)
+            factor *= hp_factor
+        except Exception:
+            pass
+
+        return max(factor, 0.05)
 
     def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         stats = self.get_stats(name)
@@ -513,19 +425,21 @@ class HolisticElection:
         if stats.calls % 50 == 0:
             self._save()
 
-    def get_best(self, candidates: list[str], providers: dict[str, Any], free_models: list[str]) -> str:
+    def get_best(self, candidates: list[str], providers: dict[str, Any], free_models: list[str],
+                  task_type: str = "general") -> str:
         """Synchronous shortcut: get best provider by composite score snapshot."""
         best = None
         best_score = -1.0
+        weights = get_dynamic_weights(task_type)
         for name in candidates:
             p = providers.get(name)
             if not p:
                 continue
             stats = self.get_stats(name)
             score = (
-                stats.success_rate * WEIGHTS["quality"]
-                + (1.0 if name in free_models else 0.3) * WEIGHTS["cost"]
-                + (1.0 - min(stats.avg_latency_ms / 5000.0, 0.95)) * WEIGHTS["latency"]
+                stats.success_rate * weights.get("quality", 0.23)
+                + (1.0 if name in free_models else 0.3) * weights.get("cost", 0.15)
+                + (1.0 - min(stats.avg_latency_ms / 5000.0, 0.95)) * weights.get("latency", 0.18)
             )
             if score > best_score:
                 best_score = score
@@ -710,13 +624,18 @@ class HolisticElection:
 
 # ═══ Global ═══
 
+import threading
+
 _election: HolisticElection | None = None
+_election_lock = threading.Lock()
 
 
 def get_election() -> HolisticElection:
     global _election
     if _election is None:
-        _election = HolisticElection()
+        with _election_lock:
+            if _election is None:
+                _election = HolisticElection()
     return _election
 
 
@@ -803,5 +722,12 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "sticky": 0.10,
         }
         return {**base, **w}
-    # general/default
-    return {**WEIGHTS, **base}
+    # general/default — apply adaptive weight adjustment
+    w = {**WEIGHTS, **base}
+    try:
+        from .adaptive_weights import get_adaptive_weights
+        aw = get_adaptive_weights()
+        w = aw.adjust(w, {}, -1, 0, 18)
+    except Exception:
+        pass
+    return w

@@ -56,6 +56,7 @@ class LifeEngine(BranchMixin, StageMixin):
         self.safety = world.safety
         self.stages: list[LifeStage] = []
         self.is_running = False
+        self._run_lock = asyncio.Lock()      # Prevent concurrent run() calls
         self.elite_registry: list[dict] = []
         self._branches: dict[str, Branch] = {}
         self._folded_stages: dict[str, FoldResult] = {}
@@ -92,7 +93,8 @@ class LifeEngine(BranchMixin, StageMixin):
                         Eliminates text encode/decode round-trips between stages.
         """
         ctx = LifeContext(user_input=user_input, **kwargs)
-        self.is_running = True
+        async with self._run_lock:
+            self.is_running = True
         self._fold_enabled = fold
         self._wiki_enabled = use_wiki
         self._vector_mode = vector_mode
@@ -116,23 +118,23 @@ class LifeEngine(BranchMixin, StageMixin):
                 ctx.metadata["user_profile"] = user_profile
             # Observe user message for implicit pattern + persona fact extraction
             get_user_model().observe_message(user_input)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"User profile injection failed: {e}")
         try:
             from .model_spec import get_agent_spec
             spec_context = get_agent_spec().format_for_injection()
             if spec_context:
                 ctx.metadata["agent_spec"] = spec_context
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Agent spec injection failed: {e}")
         try:
             from ..execution.context_codex import get_context_codex
             codex = get_context_codex(seed=False)
             header = codex.build_header(max_chars=500)
             if header:
                 ctx.metadata["codex_header"] = header
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Context codex build failed: {e}")
         try:
             from ..knowledge.pii_redactor import has_pii, get_pii_redactor
             if user_input and has_pii(user_input):
@@ -140,8 +142,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 ctx.metadata["original_input"] = user_input
                 user_input = cleaned
             ctx.metadata["pii_checked"] = True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"PII redaction failed: {e}")
 
         # Pre-turn side-git snapshot
         turn_id = None
@@ -161,38 +163,14 @@ class LifeEngine(BranchMixin, StageMixin):
                 getattr(ctx, 'stage_id', f"run_{int(time.time())}"),
                 ctx.user_input,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Organ dashboard start failed: {e}")
 
         try:
-            await self._stage("perceive", self._perceive, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("perceive", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("perceive", ctx)
-            if self._vector_mode:
-                await self._vector_update("perceive", ctx)
-            await self._stage("cognize", self._cognize, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("cognize", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("cognize", ctx)
-            if self._vector_mode:
-                await self._vector_update("cognize", ctx)
-            await self._stage("ontogrow", self._grow_ontology, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("ontogrow", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("ontogrow", ctx)
-            if self._vector_mode:
-                await self._vector_update("ontogrow", ctx)
-            await self._stage("plan", self._plan, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("plan", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("plan", ctx)
-            if self._vector_mode:
-                await self._vector_update("plan", ctx)
+            await self._run_stage("perceive", self._perceive, ctx, crv_gating, fold_max_chars)
+            await self._run_stage("cognize", self._cognize, ctx, crv_gating, fold_max_chars)
+            await self._run_stage("ontogrow", self._grow_ontology, ctx, crv_gating, fold_max_chars)
+            await self._run_stage("plan", self._plan, ctx, crv_gating, fold_max_chars)
             # ── WorldModel → Plan feedback: validate plan for high-risk steps ──
             try:
                 from .world_model import get_world_model
@@ -201,8 +179,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 if any(r["risk"] == "high" for r in risks):
                     ctx.metadata["plan_risks"] = risks
                     logger.warning(f"WorldModel: {len(risks)} risks in plan")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Plan risk validation failed: {e}")
             decision = self._should_branch(ctx)
             if decision.should_branch:
                 hypotheses = ctx.metadata.get("hypotheses", []) or []
@@ -211,39 +189,15 @@ class LifeEngine(BranchMixin, StageMixin):
                     b = self.fork_branch(name=f"branch-{ctx.session_id}-{i}", hypothesis=hyp, ctx=ctx)
                     created.append(b)
                 ctx.metadata["branches"] = [br.id for br in created]
-            await self._stage("simulate", self._simulate, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("simulate", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("simulate", ctx)
-            if self._vector_mode:
-                await self._vector_update("simulate", ctx)
-            await self._stage("execute", self._execute, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("execute", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("execute", ctx)
-            if self._vector_mode:
-                await self._vector_update("execute", ctx)
+            await self._run_stage("simulate", self._simulate, ctx, crv_gating, fold_max_chars)
+            await self._run_stage("execute", self._execute, ctx, crv_gating, fold_max_chars)
             branches = ctx.metadata.get("branches", [])
             if branches:
                 if ctx.metadata.get("success_rate", 0) > 0:
                     comp = self.compare_branches(branch_ids=branches)
                     ctx.metadata["branch_comparison"] = comp
-            await self._stage("reflect", self._reflect, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("reflect", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("reflect", ctx)
-            if self._vector_mode:
-                await self._vector_update("reflect", ctx)
-            await self._stage("evolve", self._evolve, ctx, gate_enabled=crv_gating)
-            if self._fold_enabled:
-                await self._fold_stage("evolve", ctx, fold_max_chars)
-            if self._wiki_enabled:
-                await self._wiki_compile("evolve", ctx)
-            if self._vector_mode:
-                await self._vector_update("evolve", ctx)
+            await self._run_stage("reflect", self._reflect, ctx, crv_gating, fold_max_chars)
+            await self._run_stage("evolve", self._evolve, ctx, crv_gating, fold_max_chars)
 
             # ── Self-Conditioning Loop (PFlowNet-inspired bidirectional reasoning) ──
             if self_conditioning:
@@ -452,8 +406,8 @@ class LifeEngine(BranchMixin, StageMixin):
                         try:
                             from .phenomenal_consciousness import get_consciousness
                             phenomenal = get_consciousness()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Phenomenal consciousness import failed: {e}")
                     generation = self.genome.generation
                     await dc.post_cycle(generation, phenomenal_consciousness=phenomenal)
                     ctx.metadata["distributed_consciousness"] = dc.stats()
@@ -484,8 +438,8 @@ class LifeEngine(BranchMixin, StageMixin):
                         content=json.dumps(cycle_output, ensure_ascii=False),
                         tags=["life_engine", "cycle", ctx.intent or "general"],
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Knowledge base sink failed: {e}")
 
             # Sink 2: P2P broadcast — share successful patterns
             p2p_presence = getattr(self.world, 'p2p_presence', None)
@@ -493,8 +447,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 try:
                     share = p2p_presence.build_share("life_engine_cycle", cycle_output)
                     ctx.metadata["p2p_shared"] = True
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"P2P broadcast share failed: {e}")
 
             # Sink 3: Log persistence — always log cycle outcome
             try:
@@ -504,8 +458,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 log_file = cycle_log_path / f"{ctx.session_id[:16]}.json"
                 log_file.write_text(json.dumps(log_entry, ensure_ascii=False, default=str), encoding="utf-8")
                 ctx.metadata["cycle_logged"] = str(log_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Cycle log save failed: {e}")
 
             # Sink 4: Metric emission for observability dashboard
             metrics = getattr(self.world, 'metrics', None)
@@ -589,8 +543,8 @@ class LifeEngine(BranchMixin, StageMixin):
                             ctx.metadata["mempo_optimization"] = opt_result
                             ctx.metadata["mempo_trigger"] = "surprise_gate"
                             logger.debug(f"MemPO: surprise-triggered optimization (RPE={surprise.rpe:.2f})")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"MemPO surprise gating failed: {e}")
 
                     ctx.metadata["mempo_stats"] = mempo.get_stats()
                 except Exception as e:
@@ -606,7 +560,7 @@ class LifeEngine(BranchMixin, StageMixin):
                     goals_engine.observe_cycle(ctx)
                     if cycle_count % 20 == 0:
                         await goals_engine.execute_pending(self.world)
-                except Exception: pass
+                except Exception as e: logger.debug(f"Autonomous goals hook failed: {e}")
             try:
                 from .world_model import get_world_model
                 wm = get_world_model()
@@ -614,13 +568,13 @@ class LifeEngine(BranchMixin, StageMixin):
                 if ctx.plan:
                     plan_text = str(ctx.plan)[:500]
                     await wm.simulate(f"execute: {plan_text}", wm._state_history[-1] if wm._state_history else None)
-            except Exception: pass
+            except Exception as e: logger.debug(f"World model observe failed: {e}")
             try:
                 from ..economy.inverse_reward import get_inverse_reward
                 ir = get_inverse_reward()
                 success = ctx.metadata.get("success_rate", 0)
                 ir.observe("accepted" if success >= 0.5 else "rejected", str(ctx.intent or ""))
-            except Exception: pass
+            except Exception as e: logger.debug(f"Inverse reward observe failed: {e}")
             if active_hooks and "meta_optimizer" not in active_hooks:
                 pass  # skip
             else:
@@ -631,7 +585,7 @@ class LifeEngine(BranchMixin, StageMixin):
                     if cycle_count % 5 == 0:
                         suggestions = mo.auto_tune("general")
                         ctx.metadata["meta_tuning"] = suggestions
-                except Exception: pass
+                except Exception as e: logger.debug(f"Meta optimizer hook failed: {e}")
             if active_hooks and "emotion_decision" not in active_hooks:
                 pass  # skip
             else:
@@ -641,7 +595,7 @@ class LifeEngine(BranchMixin, StageMixin):
                     if hasattr(self, '_vigil') and self._vigil._diagnosis_history:
                         ed.update_from_vigil(self._vigil._diagnosis_history[-1] if self._vigil._diagnosis_history else {})
                     ctx.metadata["emotion_state"] = ed.stats()
-                except Exception: pass
+                except Exception as e: logger.debug(f"Emotion decision hook failed: {e}")
 
             # ── GEP: compile experience into compact Genes (Evolver-inspired) ──
             if active_hooks and "gep_compile" not in active_hooks:
@@ -664,7 +618,7 @@ class LifeEngine(BranchMixin, StageMixin):
                             gep.record_event("gene_created", gene.id, None, gene.to_dict(), "new", True)
                     ctx.metadata["gene_pool_size"] = len(pool._genes)
                     ctx.metadata["gep_events"] = len(gep._events)
-                except Exception: pass
+                except Exception as e: logger.debug(f"GEP gene compile failed: {e}")
 
             # ── RLVR Monitor: detect rise-then-fall collapse ──
             if active_hooks and "rlvr_monitor" not in active_hooks:
@@ -689,8 +643,9 @@ class LifeEngine(BranchMixin, StageMixin):
                             sg = get_surprise_gate()
                             sg.set_fast_threshold(0.9)
                             ctx.metadata["rlvr_frozen"] = True
-                        except Exception: pass
-                except Exception: pass
+                        except Exception as e:
+                            logger.debug(f"Surprise gating failed: {e}")
+                except Exception as e: logger.debug(f"RLVR monitor hook failed: {e}")
 
             # ── External Verifier: escape intrinsic reward ceiling ──
             if active_hooks and "external_verifier" not in active_hooks:
@@ -704,13 +659,13 @@ class LifeEngine(BranchMixin, StageMixin):
                     ctx.metadata["external_reward"] = external_reward
                     if abs(external_reward) > 0.5:
                         ctx.metadata["verified_signal"] = "strong_verification"
-                except Exception: pass
+                except Exception as e: logger.debug(f"External verifier failed: {e}")
 
             # ── EvalDashboard: record unified evaluation metrics ──
             try:
                 from ..observability.eval_dashboard import get_eval_dashboard
                 get_eval_dashboard().record_cycle(ctx)
-            except Exception: pass
+            except Exception as e: logger.debug(f"Eval dashboard record failed: {e}")
 
             # ── SessionPersistence: save identity across restarts ──
             try:
@@ -720,28 +675,28 @@ class LifeEngine(BranchMixin, StageMixin):
                     try:
                         from .phenomenal_consciousness import get_consciousness
                         phenomenal = get_consciousness()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Phenomenal consciousness import failed (session persist): {e}")
                 conversation_dna = getattr(self.world, 'conversation_dna', None)
                 struct_mem = getattr(self.world, 'struct_memory', None)
                 gene_pool = None
                 try:
                     from .evolution_gene import get_gene_pool
                     gene_pool = get_gene_pool()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Gene pool import failed (session persist): {e}")
                 get_session_persistence().save(
                     phenomenal_consciousness=phenomenal,
                     conversation_dna=conversation_dna,
                     struct_mem=struct_mem,
                     gene_pool=gene_pool,
                 )
-            except Exception: pass
+            except Exception as e: logger.debug(f"Session persistence save failed: {e}")
 
             return ctx
         except Exception as e:
-            logger.error(f"Cycle {ctx.session_id} failed: {e}")
-            raise
+            logger.error(f"LifeEngine cycle {ctx.session_id} unexpected error: {e}")
+            ctx.metadata["cycle_error"] = str(e)[:500]
         finally:
             self.is_running = False
 
@@ -897,8 +852,8 @@ class LifeEngine(BranchMixin, StageMixin):
                     self.genome.add_mutation(
                         description=f"Low calibration trust ({trust:.2f}) — reducing confidence",
                         source="calibration", affected_genes=["confidence"], success=False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Calibration trust update failed: {e}")
 
         # Evidence-based evolution: incorporate distilled evidence into genome
         evidence = ctx.metadata.get("distilled_evidence")
@@ -907,8 +862,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 evo_store = getattr(self.world, 'evolution_store', None)
                 if evo_store and hasattr(evo_store, 'extract_lessons_from_evidence'):
                     evo_store.extract_lessons_from_evidence(ctx.session_id, evidence)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Evidence evolution failed: {e}")
 
         # Precipitation: distill successful session insight into KnowledgeBase
         if ok and ctx.intent and self.world.knowledge_base and self.world.distillation:
@@ -953,8 +908,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 if stats and stats.new_rules > 0:
                     logger.info(f"[evolve] Compression rules: {stats.new_rules} new, "
                                 f"{stats.total_rules} total")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Compression rules evolution failed: {e}")
 
         # Periodic meta-strategy review (every ~10 sessions)
         if self.genome.generation % 10 == 0 and ok:
@@ -963,8 +918,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 engine = get_meta_strategy_engine(self.consciousness)
                 if engine.consciousness:
                     await engine.review_and_evolve()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Meta strategy review failed: {e}")
 
         # ── Dream Engine: extract creative insights on successful cycles ──
         if ok:
@@ -1039,8 +994,8 @@ class LifeEngine(BranchMixin, StageMixin):
                         self.world.orchestrator.assign_task,
                         task=step, agents=self._list_agents(),
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"KB search retry failed: {e}")
         return {"step": step, "status": "failed", "error": "all retries exhausted"}
 
     async def process_large_document(self, content: str, chunk_size: int = 8000) -> list[str]:
@@ -1095,8 +1050,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 )
                 self.world.knowledge_base.add_knowledge(doc)
                 logger.debug(f"[evolve] Knowledge precipitated: {insight[:80]}...")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Knowledge precipitation failed: {e}")
 
     # ── Helpers (existing + CRV gating) ──
 
@@ -1121,16 +1076,23 @@ class LifeEngine(BranchMixin, StageMixin):
 
         # Per-stage confidence thresholds (CRV: gestalt=sensory > topology > coherence)
         stage_thresholds = {
-            "perceive": 0.25,    # Gestalt: broad pattern — low bar
-            "cognize": 0.35,     # Sensory: understanding depth
-            "ontogrow": 0.20,    # Topology: lightweight extraction
-            "plan": 0.40,        # Coherence: structural plan
-            "simulate": 0.30,    # Search: what-if exploration
-            "execute": 0.45,     # Model: highest bar — execution
-            "reflect": 0.25,     # Review: reflection
-            "evolve": 0.20,      # Growth: always try
+            "perceive": 0.25,
+            "cognize": 0.35,
+            "ontogrow": 0.20,
+            "plan": 0.40,
+            "simulate": 0.30,
+            "execute": 0.45,
+            "reflect": 0.25,
+            "evolve": 0.20,
         }
         threshold = stage_thresholds.get(name, min_confidence)
+
+        # Adaptive adjustment: lower thresholds when system is healthy, raise when struggling
+        success_rate = ctx.metadata.get("success_rate", 0.5)
+        if success_rate > 0.8:
+            threshold *= 0.7   # Healthy: relax gating, accept more
+        elif success_rate < 0.3:
+            threshold *= 1.3   # Struggling: tighten gating, redact more
 
         # Safety: reject if stage.error is present and critical
         stage_errors = [s.error for s in self.stages if s.stage == name and s.error]
@@ -1142,7 +1104,7 @@ class LifeEngine(BranchMixin, StageMixin):
             )
 
         # Skip: stage not needed for simple contexts
-        if complexity < 0.15 and name in ("plan", "simulate"):
+        if complexity < 0.15 and name in ("plan", "simulate", "ontogrow", "evolve"):
             return StageGateResult(
                 gate=StageGate.SKIP,
                 confidence=1.0,
@@ -1180,6 +1142,90 @@ class LifeEngine(BranchMixin, StageMixin):
             hints.append("enable struct_mem context injection")
         return hints
 
+    async def _chain_critique(self, stage_name: str, ctx: LifeContext,
+                               use_llm: bool = False) -> None:
+        """ChainReflect: lightweight self-critique after key stages.
+        
+        When use_llm=False (default), uses keyword-only heuristic (zero cost).
+        When use_llm=True, uses L1 flash for deeper critique.
+        """
+        try:
+            stage_output = str(ctx.metadata.get(f"{stage_name}_output", ""))[:800]
+            if not stage_output:
+                return
+
+            if use_llm:
+                consc = self.consciousness
+                intent = getattr(ctx, 'intent', '') or ctx.user_input or ""
+                critique_prompt = (
+                    f"Critique this {stage_name} stage output briefly (1-2 sentences). "
+                    f"What could be missing or wrong?\n\nIntent: {intent[:200]}\nOutput: {stage_output[:500]}"
+                )
+                critique = await consc.stream_of_thought(critique_prompt)
+                full_text = ""
+                async for token in critique:
+                    full_text += token
+                    if len(full_text) > 200:
+                        break
+                flags = ["missing","wrong","incomplete","overconfident",
+                         "缺少","错误","不完整","过于自信","遗漏"]
+                if any(k in full_text.lower() for k in flags):
+                    ctx.metadata[f"{stage_name}_critique_flag"] = True
+                    ctx.metadata[f"{stage_name}_critique"] = full_text[:200]
+                    logger.info(f"ChainReflect: {stage_name} flagged — {full_text[:100]}")
+            else:
+                # Zero-cost keyword heuristic
+                flags_kw = {
+                    "missing": ["缺失","缺少","missing","遗漏"],
+                    "wrong": ["错误","不对","wrong","incorrect"],
+                    "incomplete": ["不完整","未完成","incomplete","partial"],
+                }
+                for flag, keywords in flags_kw.items():
+                    if any(k in stage_output.lower() for k in keywords):
+                        ctx.metadata[f"{stage_name}_critique_flag"] = True
+                        ctx.metadata[f"{stage_name}_critique"] = f"Heuristic: {flag}"
+                        break
+        except Exception as e:
+            logger.debug(f"ChainReflect {stage_name}: {e}")
+
+    async def _run_stage(self, name: str, fn, ctx: LifeContext,
+                         crv_gating: bool, fold_max_chars: int) -> None:
+        """Run a single lifecycle stage with per-stage error recovery.
+        
+        If a stage fails, the error is recorded in ctx.metadata and
+        execution continues to the next stage. Later stages can check
+        ctx.metadata for prior failures and adapt accordingly.
+        """
+        # Check stage dependencies — skip if required prior stage failed
+        dependencies = {
+            "cognize": "perceive",
+            "plan": "cognize",
+            "execute": "plan",
+            "reflect": "execute",
+        }
+        required = dependencies.get(name)
+        if required and ctx.metadata.get(f"stage_error_{required}"):
+            logger.warning(
+                f"LifeEngine: skipping '{name}' — dependency '{required}' failed: "
+                f"{ctx.metadata[f'stage_error_{required}'][:100]}"
+            )
+            ctx.metadata[f"stage_error_{name}"] = f"Skipped: dependency '{required}' failed"
+            return
+        try:
+            await self._stage(name, fn, ctx, gate_enabled=crv_gating)
+            if self._fold_enabled:
+                await self._fold_stage(name, ctx, fold_max_chars)
+            if self._wiki_enabled:
+                await self._wiki_compile(name, ctx)
+            if self._vector_mode:
+                await self._vector_update(name, ctx)
+            # ── ChainReflect: inter-stage self-critique for key stages ──
+            if name in ("plan", "execute", "reflect"):
+                await self._chain_critique(name, ctx, use_llm=False)
+        except Exception as e:
+            logger.error(f"LifeEngine stage '{name}' failed: {e}")
+            ctx.metadata[f"stage_error_{name}"] = str(e)[:500]
+
     async def _stage(self, name: str, fn, ctx: LifeContext,
                      gate_enabled: bool = False,
                      max_recalibrations: int = 1) -> StageGateResult:
@@ -1206,8 +1252,8 @@ class LifeEngine(BranchMixin, StageMixin):
                 elected = ctx.metadata.get("elected_provider", "")
                 if elected and consc._llm:
                     consc._llm._elected = elected
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Per-stage election failed: {e}")
 
         s = LifeStage(stage=name, started_at=datetime.now(timezone.utc).isoformat())
         s.status = "running"
@@ -1234,8 +1280,8 @@ class LifeEngine(BranchMixin, StageMixin):
                         s.result = "habit_cache_hit"
                         s.status = "completed"
                         return StageGateResult(gate=StageGate.ACCEPT, confidence=0.9, reason="habit hit")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Habit compiler check failed: {e}")
 
                 r = fn(ctx)
                 if asyncio.iscoroutine(r):
@@ -1265,8 +1311,8 @@ class LifeEngine(BranchMixin, StageMixin):
                     ctx.metadata["focus_phase"] = phase.value
                     ctx.metadata["focus_topk_factor"] = fd.get_topk_factor()
                     ctx.metadata["focus_temperature_shift"] = fd.get_temperature_shift()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Focus dilution scheduler failed: {e}")
                 break
 
             gate_result = self._gate_stage(name, ctx, allowed_recalibrations=max_recalibrations)
@@ -1450,8 +1496,8 @@ class LifeEngine(BranchMixin, StageMixin):
             compressed, header = codex.compress(raw, layer=3, max_header_chars=500)
             if header:
                 return f"{header}\n---\n{compressed}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Codex context compress failed: {e}")
         return raw
 
     def folded_stage_status(self) -> dict[str, Any]:
@@ -1467,8 +1513,8 @@ class LifeEngine(BranchMixin, StageMixin):
         if registry and hasattr(registry, 'list_cells'):
             try:
                 agents.extend(registry.list_cells())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Cell registry list failed: {e}")
         return agents
 
     @staticmethod

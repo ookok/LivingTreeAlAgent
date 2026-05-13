@@ -284,10 +284,9 @@ class SkillRouter:
 
     def _save_history(self):
         try:
-            HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(HISTORY_FILE, "w") as f:
-                for h in self._history[-200:]:
-                    f.write(json.dumps(h, ensure_ascii=False) + "\n")
+            from ..core.async_disk import save_json
+            data = {"history": self._history[-200:]}
+            save_json(HISTORY_FILE, data, critical=False)
         except Exception:
             pass
 

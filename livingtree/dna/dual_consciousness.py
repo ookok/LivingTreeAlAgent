@@ -274,7 +274,10 @@ class DualModelConsciousness(Consciousness):
         self._elected_at: float = 0.0
         self._elected_tiers: dict[int, str] = {}  # L0-L4 → provider name
         self._election_lock = asyncio.Lock()
-        self._recheck_interval = 300.0
+        self._recheck_interval = 60.0     # Start aggressive, double on stable cache hits
+        self._recheck_max = 300.0          # Cap at 5 minutes
+        self._elected_at_stability = 0     # Counts stable cache hits
+        self._failure_count = 0            # Tracks consecutive failures for adaptive cooldown
         self._available: bool | None = None
         self._opencode_cache = []
 
@@ -335,48 +338,66 @@ class DualModelConsciousness(Consciousness):
                 if elected and ctx:
                     ctx.metadata["elected_provider"] = elected
                     ctx.metadata["election_reason"] = reason
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Stage provider election failed: {e}")
 
     # ═══ Local model registration ═══
 
     async def register_local_models(self):
-        """Scan local device for LLM services and auto-register."""
+        """Scan local device for LLM services and auto-register.
+        
+        Uses ModelRegistry to discover and register locally running models
+        (replaces deleted local_scanner module)."""
         try:
-            from ..treellm.local_scanner import LocalScanner
+            from ..treellm.model_registry import ModelRegistry
             from ..treellm.providers import OpenAILikeProvider
-            scanner = LocalScanner()
-            services = await scanner.scan()
-
-            for svc in services:
-                for model in svc.models:
-                    provider_name = f"local-{svc.name}-{model['id'].replace('/', '-').replace(':', '-')[:30]}"
+            registry = ModelRegistry.instance()
+            for provider_name, pm in registry._providers.items():
+                if not pm.models:
+                    continue
+                for model_info in pm.models:
+                    if not model_info.enabled:
+                        continue
+                    provider_key = f"local-{provider_name}-{model_info.short_name[:30]}"
                     self._llm.add_provider(OpenAILikeProvider(
-                        name=provider_name,
-                        base_url=svc.base_url,
-                        api_key=svc.api_key or "local",
-                        default_model=model["id"],
+                        name=provider_key,
+                        base_url=pm.base_url,
+                        api_key=pm.api_key or "local",
+                        default_model=model_info.id,
                     ))
-                    self._free_models.insert(0, provider_name)
-                    logger.info(f"  local: {provider_name}")
+                    self._free_models.insert(0, provider_key)
+                    logger.info(f"  local: {provider_key}")
         except Exception as e:
-            logger.debug(f"Local scan failed: {e}")
+            logger.debug(f"Local model registration skipped: {e}")
 
     # ═══ Election ═══
 
-    async def _elect(self) -> str:
+    async def _elect_tiers(self, force: bool = False) -> dict[int, str]:
+        """Elect L1(flash)/L2(pro)/L3(deep)/L4(user-locked) providers.
+        
+        Returns dict mapping tier number to provider name.
+        Backward compat: also sets self._elected = L3 provider.
+        """
         async with self._election_lock:
             now = time.monotonic()
+            tiers: dict[int, str] = {}
 
-            # ── Cache: return last elected if still valid ──
-            if self._elected and (now - self._elected_at) < self._recheck_interval:
-                return self._elected
+            # ── Cache: return last elected tiers if still valid ──
+            if not force and self._elected_tiers and (now - self._elected_at) < self._recheck_interval:
+                self._elected_at_stability += 1
+                if self._elected_at_stability % 10 == 0:
+                    self._recheck_interval = min(self._recheck_interval * 2, self._recheck_max)
+                return dict(self._elected_tiers)
 
-            # ── Cache: don't re-elect on failure for FAILURE_COOLDOWN ──
-            FAILURE_COOLDOWN = 30.0
+            self._elected_at_stability = 0
+
+            # ── Cache: adaptive cooldown on failures ──
+            base_cooldown = 10.0
+            max_cooldown = 120.0
+            failure_cooldown = min(base_cooldown * (2 ** min(self._failure_count, 4)), max_cooldown)
             if (self._elected == "" and self._elected_at > 0
-                    and (now - self._elected_at) < FAILURE_COOLDOWN):
-                return ""
+                    and (now - self._elected_at) < failure_cooldown):
+                return dict(self._elected_tiers) if self._elected_tiers else {}
 
             # ── Priority 1: local opencode-serve (fastest) ──
             if not self._opencode_cache:
@@ -384,8 +405,8 @@ class DualModelConsciousness(Consciousness):
                     from ..integration.opencode_bridge import OpenCodeBridge
                     bridge = OpenCodeBridge()
                     self._opencode_cache = await bridge.discover_for_election()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"OpenCode bridge discovery failed: {e}")
 
             for p in self._opencode_cache:
                 if p.get("source") == "opencode_serve":
@@ -402,15 +423,14 @@ class DualModelConsciousness(Consciousness):
                                     api_key=p.get("api_key", "opencode-local"),
                                     default_model=model,
                                 ))
-                            self._elected = name
-                            self._elected_at = now
-                            logger.info(f"Elected: opencode-serve ({model})")
-                            return name
-                    except Exception:
-                        pass
+                            tiers[1] = tiers[2] = tiers[3] = name
+                            self._set_tiers(tiers, now)
+                            logger.info(f"Elected tiers (opencode): L1/L2/L3={name} ({model})")
+                            return dict(tiers)
+                    except Exception as e:
+                        logger.debug(f"OpenCode serve adapter ping failed: {e}")
                     continue
 
-                # Non-opencode_serve models from bridge → add to quick-try list
                 from ..treellm.providers import OpenAILikeProvider
                 name = f"oc-{p['name']}"
                 if name not in self._llm._providers:
@@ -419,20 +439,41 @@ class DualModelConsciousness(Consciousness):
                         api_key=p["api_key"], default_model=p.get("model", ""),
                     ))
 
-            # ── Priority 2: free online providers (freebuff/openrouter) ──
-            # ── Priority 3: paid vault providers (skip ping — trust them) ──
+            # ── Priority 2+3: free + paid providers via holistic election ──
             all_candidates = list(dict.fromkeys(
                 self._free_models + self._paid_models
-            ))  # deduplicate, preserve order
+            ))
             all_candidates = [c for c in all_candidates if c != self._l4_provider]
 
             if all_candidates:
-                elected = await self._llm.elect(all_candidates)
-                if elected:
-                    self._elected = elected
-                    self._elected_at = now
-                    logger.info(f"Elected: {elected} (pool={len(all_candidates)})")
-                    return elected
+                # ── Get ranked list from unified ElectionBus ──
+                ranked = []
+                try:
+                    from ..treellm.election_bus import get_election_bus
+                    bus = get_election_bus()
+                    ranked = await bus.get_scores(
+                        self._llm._providers, self._free_models,
+                    )
+                except Exception as e:
+                    logger.warning(f"ElectionBus failed: {e}")
+
+                if ranked:
+                    tiers[3] = ranked[0].name
+                    if len(ranked) > 1:
+                        tiers[2] = ranked[1].name
+                    else:
+                        tiers[2] = ranked[0].name
+                    ranked_by_latency = sorted(ranked, key=lambda s: s.latency_ms or 99999)
+                    tiers[1] = ranked_by_latency[0].name
+                    self._set_tiers(tiers, now)
+                    self._failure_count = 0
+                    logger.info(
+                        f"Tier election: L1={tiers.get(1,'')} (flash) "
+                        f"L2={tiers.get(2,'')} (pro) "
+                        f"L3={tiers.get(3,'')} (deep) "
+                        f"| pool={len(all_candidates)}"
+                    )
+                    return dict(tiers)
 
             # ── Priority 4: L4 locked model ──
             if self._l4_provider:
@@ -441,124 +482,44 @@ class DualModelConsciousness(Consciousness):
                     try:
                         ok, _ = await asyncio.wait_for(l4_p.ping(), timeout=3.0)
                     except Exception:
-                        ok = True  # Trust L4 on timeout
+                        ok = True
                     if ok:
-                        self._elected = self._l4_provider
-                        self._elected_at = now
-                        logger.info(f"Fallback to L4: {self._l4_provider}")
-                        return self._l4_provider
+                        tiers[1] = tiers[2] = tiers[3] = self._l4_provider
+                        self._set_tiers(tiers, now)
+                        logger.info(f"Tier election (L4): L1/L2/L3={self._l4_provider}")
+                        return dict(tiers)
 
             # ── Priority 5: first paid provider (trust without ping) ──
             if self._paid_models:
                 first = self._paid_models[0]
-                self._elected = first
-                self._elected_at = now
-                logger.info(f"Fallback to paid: {first} (trusted, no ping)")
-                return first
+                tiers[1] = tiers[2] = tiers[3] = first
+                self._set_tiers(tiers, now)
+                logger.info(f"Tier election (paid fallback): L1/L2/L3={first}")
+                return dict(tiers)
+
+            # ── Priority 5b: first free provider ──
+            if self._free_models:
+                first = self._free_models[0]
+                tiers[1] = tiers[2] = tiers[3] = first
+                self._set_tiers(tiers, now)
+                logger.info(f"Tier election (free fallback): L1/L2/L3={first}")
+                return dict(tiers)
 
             # ── All failed — cache failure ──
             self._elected = ""
             self._elected_at = now
-            logger.warning(
-                f"All {len(all_candidates)} providers unavailable"
-                + (", will retry in {FAILURE_COOLDOWN}s" if all_candidates else "")
-            )
-            return ""
+            self._failure_count += 1
+            logger.warning("Tier election failed: no providers available")
+            return {}
 
-    # ═══ L0-L4 Tiered Election ═══
-
-    async def _elect_tiers(self, force: bool = False) -> dict[int, str]:
-        """Elect the best available provider for each L0-L4 tier.
-
-        Unlike _elect() which picks ONE winner, this maintains a per-tier
-        mapping so lightweight tasks (stream_of_thought) use flash models
-        while deep reasoning (chain_of_thought) uses pro models.
-
-        Tiers:
-          L0: Heuristic / local fallback (always available, no API needed)
-          L1: Flash/fast — stream_of_thought, recognize_intent, self_questioning
-          L2: Pro/complex — chain_of_thought, hypothesis_generation, self_writing
-          L3: Deep reasoning — system analysis, autonomous core, self_review
-          L4: User-locked — never auto-elected, manual set_l4_model()
-
-        Returns:
-            Dict mapping tier number → provider name (empty string if unavailable).
-        """
-        async with self._election_lock:
-            now = time.monotonic()
-
-            # ── Cache: return cached tiers unless forced ──
-            if not force and self._elected_tiers and (now - self._elected_at) < self._recheck_interval:
-                return dict(self._elected_tiers)
-
-            tiers: dict[int, str] = {}
-
-            # ── L4: User-locked model (never auto-elected) ──
-            if self._l4_provider:
-                tiers[4] = self._l4_provider
-
-            # ── Build candidate pool ──
-            all_candidates = list(dict.fromkeys(
-                self._free_models + self._paid_models
-            ))  # deduplicate, free first
-            all_candidates = [c for c in all_candidates if c != self._l4_provider]
-
-            if not all_candidates:
-                # No providers at all — all tiers empty
-                self._elected_tiers = tiers
-                self._elected_at = now
-                self._elected = ""
-                return tiers
-
-            # ── Get ranked list from HolisticElection ──
-            from ..treellm.holistic_election import get_election
-            ranked = await get_election().score_providers(
-                all_candidates, self._llm._providers, self._free_models,
-            )
-
-            if not ranked:
-                # All providers ping-failed — trust first paid provider
-                fallback = self._paid_models[0] if self._paid_models else (
-                    self._free_models[0] if self._free_models else ""
-                )
-                tiers[1] = tiers[2] = tiers[3] = fallback
-                self._elected_tiers = tiers
-                self._elected_at = now
-                self._elected = fallback
-                if fallback:
-                    logger.info(f"Tier election (trusted fallback): L1/L2/L3={fallback}")
-                return tiers
-
-            # ── Assign tiers from ranked list ──
-
-            # L3 (deep reasoning): top-ranked overall
-            tiers[3] = ranked[0].name
-
-            # L2 (pro/complex): second-best, or same as L3 if only one
-            if len(ranked) > 1:
-                tiers[2] = ranked[1].name
-            else:
-                tiers[2] = ranked[0].name
-
-            # L1 (flash/fast): lowest-latency provider
-            ranked_by_latency = sorted(ranked, key=lambda s: s.latency_ms or 99999)
-            tiers[1] = ranked_by_latency[0].name
-
-            self._elected_tiers = tiers
-            self._elected_at = now
-
-            # Backward compatibility: set legacy _elected to L3 (best overall)
-            self._elected = tiers[3]
-            self._llm._elected = tiers[3]
-
-            logger.info(
-                f"Tier election: L1={tiers.get(1,'')} (flash) "
-                f"L2={tiers.get(2,'')} (pro) "
-                f"L3={tiers.get(3,'')} (deep) "
-                + (f"L4={tiers.get(4,'')}" if 4 in tiers else "")
-                + f" | pool={len(all_candidates)}"
-            )
-            return dict(tiers)
+    def _set_tiers(self, tiers: dict[int, str], now: float) -> None:
+        """Update internal state after tier election success."""
+        self._elected_tiers = tiers
+        self._elected_at = now
+        self._elected = tiers.get(3, "")
+        if hasattr(self._llm, '_elected'):
+            self._llm._elected = tiers.get(3, "")
+        self._failure_count = 0
 
     async def get_l1_provider(self) -> str:
         """Get the currently elected L1 (flash) provider."""
@@ -576,6 +537,9 @@ class DualModelConsciousness(Consciousness):
         return tiers.get(3, self._elected)
 
     # ═══ Health Check ═══
+
+    async def _check_available(self) -> bool:
+        """Check if a working provider is available."""
         if self._available is not None:
             return self._available
         elected = self._llm._elected
@@ -613,8 +577,8 @@ class DualModelConsciousness(Consciousness):
             if boost > 0:
                 temperature = min(1.5, temperature + boost)
                 prompt = ed.inject_entropy_prompt() or prompt
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Entropy drive (stream) failed: {e}")
 
         elected = await self.get_l1_provider()
         if elected:
@@ -631,8 +595,8 @@ class DualModelConsciousness(Consciousness):
                 ):
                     yield t
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Stream elected provider failed: {e}")
 
         for fallback in self._free_models + self._paid_models:
             if fallback == elected:
@@ -677,8 +641,8 @@ class DualModelConsciousness(Consciousness):
             if boost > 0:
                 temperature = min(1.5, temperature + boost)
                 user_msg = ed.inject_entropy_prompt() or user_msg
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Entropy drive (chain) failed: {e}")
 
         elected = await self.get_l2_provider()
         if elected:
@@ -697,8 +661,8 @@ class DualModelConsciousness(Consciousness):
                     if reasoning:
                         reasoning = self._harvest_reasoning(reasoning)
                     return f"{reasoning}\n\n{content}" if reasoning else content
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Chain of thought elected provider failed: {e}")
 
         # Step 2: Try dedicated reasoning providers (free tier)
         reasoning_providers = [
@@ -748,8 +712,8 @@ class DualModelConsciousness(Consciousness):
             harvest = ThoughtHarvester().harvest(reasoning)
             if harvest.found:
                 return harvest.cleaned_text
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Thought harvest failed: {e}")
         return reasoning
 
     async def hypothesis_generation(self, problem: str, count: int = 3, **kwargs) -> list[str]:
@@ -771,8 +735,8 @@ class DualModelConsciousness(Consciousness):
                 hypotheses = [l.strip() for l in result.text.split("\n") if l.strip() and len(l.strip()) > 20]
                 if len(hypotheses) >= count:
                     return hypotheses[:count]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Hypothesis generation elected provider failed: {e}")
 
         for fallback in self._free_models + self._paid_models + ["deepseek"]:
             if fallback == elected:
@@ -815,8 +779,8 @@ class DualModelConsciousness(Consciousness):
                 qs = [l.strip().lstrip("- ").rstrip("?") + "?"
                       for l in result.text.split("\n") if "?" in l or any(q in l for q in ["如何", "是否", "哪些", "什么", "怎样"])]
                 return qs if qs else self._heuristic_questions(context)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Self questioning elected provider failed: {e}")
 
         for fallback in self._free_models + self._paid_models:
             if fallback == elected:
@@ -867,8 +831,8 @@ class DualModelConsciousness(Consciousness):
                 if start >= 0 and end > start:
                     return json.loads(text[start:end + 1])
                 return {"intent": "general", "domain": "general", "confidence": 0.5, "summary": text[:100]}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Recognize intent elected provider failed: {e}")
 
         if not await self._check_available():
             return {"intent": "general", "domain": "general", "confidence": 0.5}

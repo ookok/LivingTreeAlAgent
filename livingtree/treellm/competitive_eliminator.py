@@ -196,23 +196,6 @@ class CompetitiveEliminator:
             m["capability"] = m.get("capability", 1.0) * 0.5
         return m
 
-    def transfer_knowledge(self, winner: str, loser: str, transfer_ratio: float = 0.3) -> bool:
-        w, l = self._rankings.get(winner), self._rankings.get(loser)
-        if not w or not l: return False
-        gap = w.elo_rating - l.elo_rating
-        if gap > 0: l.elo_rating += gap * transfer_ratio
-        l.quality_score = round(l.quality_score * (1 - transfer_ratio) + w.quality_score * transfer_ratio, 4)
-        l.streak = 0; l.promotions += 1; self._save()
-        return True
-
-    def evolve_collective(self, transfer_ratio: float = 0.25) -> int:
-        ranked = sorted([(n, r) for n, r in self._rankings.items() if r.matches_played >= 5],
-                       key=lambda x: -x[1].elo_rating)
-        transfers, n = 0, len(ranked)
-        for i in range(n // 2):
-            if self.transfer_knowledge(ranked[i][0], ranked[-(i+1)][0], transfer_ratio): transfers += 1
-        return transfers
-
     def is_viable(self, provider: str) -> bool:
         """Check if a provider is viable (not eliminated or in cooldown)."""
         ranking = self._rankings.get(provider)
@@ -315,23 +298,14 @@ class CompetitiveEliminator:
         self._rankings.clear()
         self._save()
 
-    # ── Internal ───────────────────────────────────────────────────
-
-    def _ensure_ranking(self, provider: str) -> ModelRanking:
-        if provider not in self._rankings:
-            self._rankings[provider] = ModelRanking(provider=provider)
-        return self._rankings[provider]
-
     # ── Persistence ────────────────────────────────────────────────
 
     def _save(self) -> None:
         try:
             RANKINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            data = {
-                name: r.to_dict()
-                for name, r in self._rankings.items()
-            }
-            RANKINGS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            data = {name: r.to_dict() for name, r in self._rankings.items()}
+            from ..core.async_disk import save_json
+            save_json(RANKINGS_FILE, data, critical=False)
         except Exception as e:
             logger.debug(f"CompetitiveEliminator save: {e}")
 

@@ -29,6 +29,10 @@ DANGEROUS_PATTERNS = [
     "curl | sh", "curl | bash", "wget -O- | sh",
     "eval(", "exec(", "__import__('os')",
     "ssh ", "scp ", "nc ", "ncat ",
+    # Windows specific
+    "shutdown", "taskkill", "del /f", "rmdir /s",
+    "diskpart", "reg delete", "cacls", "icacls",
+    "takeown", "net user", "format c:",
 ]
 
 
@@ -285,9 +289,13 @@ class ShellExecutor:
                 elapsed_ms=elapsed, truncated=truncated,
             )
         except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
             return ShellResult(
                 command=command, workdir=cwd,
-                stdout="", stderr=f"命令超时 ({t}s)",
+                stdout="", stderr=f"命令超时 ({t}s) [进程已终止]",
                 exit_code=-1, elapsed_ms=t * 1000,
             )
         except Exception as e:

@@ -268,13 +268,16 @@ class SandboxedExecutor(BaseModel):
     async def execute_shell(self, command: str, cwd: str | None = None,
                             timeout: int | None = None) -> dict[str, Any]:
         cwd = cwd or self.workspace
+        # Cross-platform PATH
+        import sys
+        path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin" if sys.platform != "win32" else "")
         try:
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
-                env={"PATH": os.environ.get("PATH", "/usr/bin")},
+                env={"PATH": path},
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout or self.max_seconds)
             return {
@@ -283,7 +286,11 @@ class SandboxedExecutor(BaseModel):
                 "returncode": proc.returncode,
             }
         except asyncio.TimeoutError:
-            return {"stdout": "", "stderr": "Timeout", "returncode": -1}
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return {"stdout": "", "stderr": "Timeout [process killed]", "returncode": -1}
 
 
 class SafetyGuard(BaseModel):

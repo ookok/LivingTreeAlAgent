@@ -784,12 +784,17 @@ class SynapseAggregator:
 
         This enables debate mode and judge_validations without manual setup.
         The judge uses a flash model for fast pairwise evaluations.
+        
+        If TreeLLM has no providers, call set_judge_chat_fn() to inject one.
         """
         try:
             from .core import TreeLLM
             llm = TreeLLM()
 
             async def _judge_fn(prompt: str) -> str:
+                if len(llm._providers) == 0:
+                    logger.debug("SynapseAggregator: judge has no providers — returning empty")
+                    return ""
                 result = await llm.chat(
                     [{"role": "user", "content": prompt}],
                     max_tokens=256, temperature=0.1,
@@ -802,6 +807,14 @@ class SynapseAggregator:
         except Exception as e:
             logger.debug(f"SynapseAggregator judge auto_connect: {e}")
             return False
+
+    def set_judge_chat_fn(self, chat_fn) -> None:
+        """Inject a chat function for the judge to use.
+        
+        chat_fn: async callable(prompt: str) -> str
+        """
+        self._judge_fn = chat_fn
+        logger.info("SynapseAggregator: judge chat_fn injected")
 
     # ── Statistics ─────────────────────────────────────────────────
 

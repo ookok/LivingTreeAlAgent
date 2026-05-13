@@ -49,8 +49,8 @@ class StageMixin:
             if harvest.found:
                 ctx.metadata["harvested_tool_calls"] = harvest.tool_calls
                 logger.debug(f"[perceive] Harvested {len(harvest.tool_calls)} tool calls from thinking")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Thought harvest failed: {e}")
 
         ctx.collected_materials.append({
             "source": "consciousness",
@@ -86,27 +86,22 @@ class StageMixin:
                 ctx.intent = f"simple_{latent_ctx.task_category}"
                 ctx.metadata["cognition"] = ctx.intent
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Latent pre-reasoning failed: {e}")
         cog_prompt = f"Analyze intent and required knowledge: {ctx.user_input}"
         # ── Prelude anchor: always remind of original query ──
         anchor = ctx.metadata.get("original_query_anchor", "")
         if anchor:
             cog_prompt = f"原始问题: {anchor}\n\n{cog_prompt}"
 
-        # Cache-Safe Prompt tracking: log KV cache hit likelihood
+        # Cache-Safe Prompt tracking: estimate KV cache hit likelihood
         try:
-            from ..treellm.cache_safe_prompt import get_cache_safe_prompt
-            csp = get_cache_safe_prompt()
-            assembly = csp.build(
-                system_prompt="Analyze user intent for cognitive processing",
-                retrieved_context="",
-                user_query=ctx.user_input,
-            )
-            ctx.metadata["cache_hit_likelihood"] = assembly.cache_hit_likelihood
-            ctx.metadata["stable_prefix_tokens"] = assembly.stable_prefix_tokens
-        except Exception:
-            pass
+            from ..treellm.cache_hierarchy import get_cache_hierarchy
+            ch = get_cache_hierarchy()
+            ctx.metadata["cache_hit_likelihood"] = getattr(ch, "hit_rate", 0.0)
+            ctx.metadata["stable_prefix_tokens"] = 0
+        except Exception as e:
+            logger.debug(f"Cache hierarchy init failed: {e}")
 
         # Adaptively inject domain terminology from glossary (mattpocock/skills)
         glossary = getattr(self.world, 'context_glossary', None)
@@ -115,18 +110,15 @@ class StageMixin:
                 domain_context = glossary.get_context_for_task(ctx.user_input, max_terms=5)
                 if domain_context and len(domain_context) > 20:
                     cog_prompt = f"{cog_prompt}\n\nRelevant domain context:\n{domain_context[:2000]}"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Glossary context injection failed: {e}")
 
         if mem_context:
             # Cone-Precision Prompt Assembly (#3): arrange content in cone layout
             try:
                 from .cone_assembler import get_cone_assembler
-                from ..treellm.hifloat8_provider import estimate_speedup
                 ctx_len = len(ctx.user_input) // 2
-                speedup = estimate_speedup(ctx_len)
                 assembler = get_cone_assembler(max_tokens=8192)
-                assembler.set_speedup(speedup)
                 # Core = memory context, supporting = domain context
                 assembled = assembler.assemble(
                     core=[{"text": mem_context, "source": "struct_mem"}],
@@ -167,10 +159,9 @@ class StageMixin:
 
                 if vwm:
                     ctx.metadata["visual_world_model"] = vwm.to_prompt_block()
-                    # Inject visual model into cognition prompt for richer reasoning
                     cog_prompt = f"{cog_prompt}\n\n{vwm.to_prompt_block()}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Visual world model failed: {e}")
 
         kb = self.world.knowledge_base
         if kb:
@@ -236,17 +227,17 @@ class StageMixin:
         try:
             from ..core.entity_registry import get_entity_registry
             registry = get_entity_registry()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Entity registry init failed (ontogrow): {e}")
         try:
             from ..knowledge.context_glossary import GLOSSARY
             glossary = GLOSSARY
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Glossary init failed (ontogrow): {e}")
         try:
             kg = self.world.knowledge_base
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Knowledge base init failed (ontogrow): {e}")
 
         new_terms: list[str] = []
         for c in candidates:
@@ -286,8 +277,8 @@ class StageMixin:
                         metadata={"extracted_from": "cognize_stage", "timestamp": _t},
                     )
                     rc = eid
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Entity registration failed: {e}")
             if glossary:
                 try:
                     glossary.register(
@@ -296,8 +287,8 @@ class StageMixin:
                         definition=f"Extracted from cognition: {term}",
                         priority=0.5,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Glossary term registration failed: {e}")
             if kg and rc:
                 try:
                     if hasattr(kg, 'add_document'):
@@ -306,16 +297,16 @@ class StageMixin:
                             content=f"Cognized concept: {term}",
                             tags=["ontology_growth", "cognize"],
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Knowledge base document add failed (ontogrow): {e}")
             registered.append(term)
 
         if registered:
             ctx.metadata["ontology_growth"] = f"registered {len(registered)} concepts: {', '.join(registered)}"
             try:
                 logger.info(f"[ontogrow] Registered {len(registered)} new concepts: {registered}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Ontogrow log failed: {e}")
         else:
             ctx.metadata["ontology_growth"] = "registration failed"
 
@@ -432,8 +423,8 @@ class StageMixin:
                 suggestions = sc.suggest_skills(ctx.intent, limit=5)
                 skill_hints = [s.get("name", s) if isinstance(s, dict) else s for s in suggestions]
                 ctx.metadata["plan_skill_hints"] = skill_hints
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Skill catalog suggestion failed: {e}")
 
         planner = self.world.task_planner
         if planner:
@@ -476,8 +467,8 @@ class StageMixin:
                     hr.snapshot(f)
                 if files_to_watch:
                     ctx.metadata["harness_snapshots"] = list(files_to_watch)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Harness registry snapshot failed: {e}")
 
     # ── Stage 4: Simulate (foresight) ──
     
@@ -543,8 +534,8 @@ class StageMixin:
                 logger.info(f"TokenAccountant: SKIP execution (benefit<cost)")
                 ctx.execution_results = [{"status": "skipped", "reason": "marginal_benefit_insufficient"}]
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Token accountant check failed: {e}")
         orchestrator = self.world.orchestrator
         hitl = self.world.hitl
         cost = self.world.cost_aware
@@ -562,8 +553,8 @@ class StageMixin:
                 try:
                     s = cost.status()
                     daily_cost = s.cost_yuan
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Cost status check failed: {e}")
             decision = eco.evaluate(
                 task_id=task_id,
                 task_desc=ctx.user_input or ctx.intent or "",
@@ -597,8 +588,8 @@ class StageMixin:
                     confidence=decision.roi.roi_estimate / 10,
                     session_id=ctx.session_id or "",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Reasoning chain record failed: {e}")
 
             logger.info(f"[execute] Economic gate: GO | {decision.selected_model.split('/')[-1]} | ROI={decision.roi.roi_estimate:.1f}x")
         except Exception as e:
@@ -828,8 +819,8 @@ class StageMixin:
                             {"success": trajectory.success, "lessons": lessons,
                              "iterations": len(trajectory.steps)},
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Reflexion evolution store failed: {e}")
 
             return  # ReAct done — skip DAG path below
 
@@ -906,8 +897,8 @@ class StageMixin:
                     ctx_lc.metadata.setdefault("quality_reports", []).append({
                         "step": step_name, "passed": qr.passed, "score": qr.final_score,
                     })
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Quality checker failed: {e}")
 
             # Change Manifest: record file edits as falsifiable contracts (AHE Pattern 1)
             cm = getattr(self.world, 'change_manifest', None)
@@ -919,8 +910,8 @@ class StageMixin:
                         cm.record(file_path, description[:500], metadata={
                             "step": step_name, "session": ctx_lc.session_id, "intent": ctx_lc.intent,
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Change manifest record failed: {e}")
 
             # Share result to cache
             ctx_lc.metadata["shared_cache"][step_name] = result
@@ -940,8 +931,8 @@ class StageMixin:
                     execution_results=ctx.execution_results, reflections=ctx.reflections,
                 )
                 await checkpoint.save(ctx.session_id, cs)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Checkpoint save failed: {e}")
 
     # ── Stage 5: Reflect ──
 
@@ -970,8 +961,8 @@ class StageMixin:
                 safety_violations=ctx.metadata.get("safety_violations", 0),
                 summary=ctx.user_input or ctx.intent or "",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Fitness landscape record failed: {e}")
 
         # ── Skill Progression: 记录技能执行结果 ──
         try:
@@ -992,8 +983,8 @@ class StageMixin:
                 session=ctx.session_id or "",
                 mistake_type="execution_failure" if fail > 0 else "",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Skill progression record failed: {e}")
 
         # ── Prelude anchor: always remind of original query ──
         anchor = ctx.metadata.get("original_query_anchor", "")
@@ -1019,8 +1010,8 @@ class StageMixin:
                     "session_id": ctx.session_id, "intent": ctx.intent or "",
                     "plan_steps": len(ctx.plan), "failed_steps": fail,
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Calibration tracker record failed: {e}")
 
         # ── Reflect→StructMemory: bind reflections for ReAct future context ──
         struct_mem = getattr(self.world, 'struct_memory', None)
@@ -1046,5 +1037,5 @@ class StageMixin:
                     success_rate=rate,
                 )
                 ctx.metadata["distilled_evidence"] = evidence
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Evidence distillation failed: {e}")

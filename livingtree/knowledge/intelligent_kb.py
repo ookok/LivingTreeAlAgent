@@ -82,17 +82,13 @@ async def unified_retrieve(query: str, top_k: int = 10, hub=None) -> list[Retrie
     KnowledgeRouter pre-selects optimal paths before retrieval to avoid unnecessary work.
     HiFloat8-aware: dynamically expands top_k when long-context acceleration is available.
     """
-    # HiFloat8 dynamic top_k: expand retrieval window when speedup available
+    # HiFloat8 dynamic top_k: expand retrieval window when long context available
     effective_top_k = top_k
     try:
-        if hub and hasattr(hub, 'embedding_scorer') and hub.embedding_scorer:
-            from ..treellm.hifloat8_provider import estimate_speedup
-            # Estimate context from query length
-            ctx_est = len(query) // 2  # rough token estimate
-            speedup = estimate_speedup(ctx_est)
-            if speedup > 1.2:
-                # Expand top_k proportionally to speedup (max 3x)
-                effective_top_k = min(top_k * 3, int(top_k * speedup))
+        if hub and hasattr(hub, 'world'):
+            ctx_est = len(query) // 2
+            if ctx_est > 8000:
+                effective_top_k = min(top_k * 3, int(top_k * 1.5))
     except Exception:
         pass
     results: dict[str, RetrievalResult] = {}

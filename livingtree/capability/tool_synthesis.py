@@ -256,7 +256,7 @@ class ToolSynthesizer:
 
         # Register in SkillRouter
         try:
-            from ..treellm.skill_router import get_router
+            from ..treellm.classifier import get_router
             router = get_router()
             if hasattr(router, 'register_tool'):
                 router.register_tool(tool.name, tool.description, tool.category)

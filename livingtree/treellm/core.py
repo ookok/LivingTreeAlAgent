@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import time
 from loguru import logger
 from dataclasses import dataclass, field
@@ -36,6 +37,9 @@ from .classifier import TinyClassifier
 from .providers import Provider, ProviderResult, create_deepseek_provider, create_longcat_provider
 from .holistic_election import get_election, RouterStats
 
+# Pre-compiled regex for hot paths
+TOOL_CALL_RE = re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL)
+
 
 
 class TreeLLM:
@@ -43,6 +47,7 @@ class TreeLLM:
     def __init__(self):
         self._providers: dict[str, Provider] = {}
         self._stats: dict[str, RouterStats] = {}
+        self._stats_lock = asyncio.Lock()
         self._elected: str = ""
         self._classifier = TinyClassifier()
 
@@ -139,12 +144,16 @@ class TreeLLM:
     async def smart_route(self, prompt: str, candidates: list[str] | None = None, task_type: str = "general") -> str:
         names = candidates or list(self._providers.keys())
         alive = []
-        for name in names:
+        # Parallel ping all providers
+        async def _ping_check(name):
             p = self._providers.get(name)
             if p:
                 ok, _ = await p.ping()
                 if ok:
-                    alive.append(name)
+                    return name
+            return None
+        results = await asyncio.gather(*[_ping_check(n) for n in names])
+        alive = [r for r in results if r]
 
         if not alive:
             return ""
@@ -177,7 +186,7 @@ class TreeLLM:
     # ── Layered Dynamic Routing (Pattern 3) ──
     async def route_layered(
         self, query: str, candidates: list[str] | None = None,
-        max_layers: int = 3, early_stop_threshold: float = 0.85,
+        max_layers: int = 3, early_stop_threshold: float = 0.70,
         top_k_per_layer: int = 3, task_type: str = "general",
         aggregate: bool = False,
         deep_probe: bool = False,
@@ -204,6 +213,7 @@ class TreeLLM:
             traj_id = ""
 
         # ── FluidCollective: inject stigmergic context ──
+        stigmergy_ctx = ""
         try:
             from .fluid_collective import get_fluid_collective
             fc = get_fluid_collective()
@@ -251,6 +261,27 @@ class TreeLLM:
             except Exception as e:
                 logger.debug(f"DeepProbe skipped: {e}")
 
+        # ── AdaptiveTopK: dynamically adjust candidates per query complexity ──
+        if probing_result:
+            complexity = probing_result.get("probe_depth", 2) / 3.0
+        else:
+            # Heuristic: query length + punctuation density as complexity proxy
+            qlen = len(query)
+            question_marks = query.count("?") + query.count("？")
+            complexity = min(0.9, 0.3 + qlen / 800 + question_marks * 0.1)
+        if complexity < 0.3:
+            top_k_per_layer = 1
+            aggregate = False
+        elif complexity < 0.6:
+            top_k_per_layer = 2
+            aggregate = False
+        elif complexity < 0.8:
+            top_k_per_layer = 3
+            aggregate = True
+        else:
+            top_k_per_layer = 4
+            aggregate = True
+
         # ── MicroTurnAware: classify conversational state ──
         micro_turn_state: dict[str, Any] | None = None
         try:
@@ -290,7 +321,7 @@ class TreeLLM:
                         "scores": {"final_decision": "decomposed_to_subgoals"},
                         "cost_saved": f"Task decomposed into {len(subgoals)} sub-goals",
                         "deep_probe": None, "micro_turn": None,
-                        "stigmergy": True if 'stigmergy_ctx' in dir() and stigmergy_ctx else False,
+                        "stigmergy": bool(stigmergy_ctx),
                     }
             except ImportError:
                 pass
@@ -310,7 +341,7 @@ class TreeLLM:
                 "cost_saved": "Skipped LLM (~2min)",
                 "deep_probe": probing_result,
                 "micro_turn": micro_turn_state,
-                "stigmergy": True if 'stigmergy_ctx' in dir() and stigmergy_ctx else False,
+                "stigmergy": bool(stigmergy_ctx),
             }
 
         # ── Task Vector Geometry: ID vs OOD mode detection ──
@@ -375,13 +406,16 @@ class TreeLLM:
         # ── Foresight placeholder ──
         foresight_insights: dict[str, Any] = {}
 
-        # Layer 2: Election scoring
+        # Layer 2: Election scoring (via unified ElectionBus)
         layer2_candidates: list[str] = []
         election_score = 0.0
+        election = None
         try:
-            election = get_election()
-            scores = await election.score_providers(layer1_candidates_final, self._providers, [])
+            from .election_bus import get_election_bus
+            bus = get_election_bus()
+            scores = await bus.get_scores(self._providers, [], task_type=task_type)
             if scores:
+                election = get_election()
                 layer2_scores = [(s.name, float(s.total)) for s in scores]
                 layer2_scores.sort(key=lambda t: -t[1])
                 top2 = layer2_scores[:top_k_per_layer]
@@ -390,54 +424,70 @@ class TreeLLM:
         except Exception:
             layer2_candidates = layer1_candidates_final[:top_k_per_layer]
 
-        # Layer 3: Inference + self-assessment
+        # Layer 3: Inference + self-assessment (parallel candidates, early-stop)
         final_provider = None
         final_result = None
         layers_used = 2 if layer2_candidates else 1
         self_assessment_score = 0.0
+        l3_results: dict[str, Any] = {}  # Store results for aggregation reuse
         if layer2_candidates:
-            for candidate in layer2_candidates[:top_k_per_layer]:
-                try:
-                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)  # query routed to provider
-                    # Normalize to text
-                    text = None
-                    if isinstance(res, ProviderResult):
-                        text = getattr(res, "text", None) or getattr(res, "content", None)
-                    elif isinstance(res, dict):
-                        text = res.get("text") or res.get("content") or res.get("output")
-                    elif isinstance(res, str):
-                        text = res
-                    else:
-                        text = str(res)
+            candidates_to_try = layer2_candidates[:top_k_per_layer]
+            task_map: dict[asyncio.Task, str] = {}
+            for c in candidates_to_try:
+                task = asyncio.ensure_future(
+                    self.chat([{"role": "user", "content": query}], provider=c)
+                )
+                task_map[task] = c
+            task_set = set(task_map.keys())
+            l3_early_stop = False
+            while task_set and not l3_early_stop:
+                done, task_set = await asyncio.wait(
+                    task_set, timeout=None, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    candidate = task_map.get(task, "")
+                    try:
+                        res = task.result()
+                        text = None
+                        if isinstance(res, ProviderResult):
+                            text = getattr(res, "text", None) or getattr(res, "content", None)
+                        elif isinstance(res, dict):
+                            text = res.get("text") or res.get("content") or res.get("output")
+                        elif isinstance(res, str):
+                            text = res
+                        else:
+                            text = str(res)
 
-                    # Self-assessment
-                    assessment = None
-                    if 'election' in locals():
-                        try:
-                            assessment = election.self_assess(text)
-                        except Exception:
+                        if text:
+                            l3_results[candidate] = res  # Cache for aggregation reuse
                             assessment = None
-                    if isinstance(assessment, (int, float)):
-                        sa_score = float(assessment)
-                    elif isinstance(assessment, dict) and 'score' in assessment:
-                        try:
-                            sa_score = float(assessment.get('score', 0.0))
-                        except Exception:
-                            sa_score = 0.0
-                    else:
-                        sa_score = 0.0
-                    self_assessment_score = max(self_assessment_score, sa_score)
-                    if sa_score > early_stop_threshold:
-                        final_provider = candidate
-                        final_result = res
-                        layers_used = 3
-                        break
-                except Exception as e:
-                    logger.warning("{}: {}".format("TreeLLM core", e))
-                    continue
-        # Fallback if nothing stopped early: pick best by election score or first layer2 candidate
-        if final_provider is None:
-            if layer2_candidates:
+                            if election is not None:
+                                try:
+                                    assessment = election.self_assess(text)
+                                except Exception:
+                                    assessment = None
+                            if isinstance(assessment, (int, float)):
+                                sa_score = float(assessment)
+                            elif isinstance(assessment, dict) and 'score' in assessment:
+                                try:
+                                    sa_score = float(assessment.get('score', 0.0))
+                                except Exception:
+                                    sa_score = 0.0
+                            else:
+                                sa_score = 0.0
+                            self_assessment_score = max(self_assessment_score, sa_score)
+                            if sa_score > early_stop_threshold:
+                                final_provider = candidate
+                                final_result = res
+                                layers_used = 3
+                                l3_early_stop = True
+                                for t in task_set:
+                                    t.cancel()
+                                break
+                    except Exception as e:
+                        logger.warning("{}: {}".format("TreeLLM core", e))
+
+            if final_provider is None and layer2_candidates:
                 final_provider = layer2_candidates[0]
                 final_result = await self.chat([{"role": "user", "content": query}], provider=final_provider)
                 layers_used = 3
@@ -506,32 +556,25 @@ class TreeLLM:
             try:
                 from .synapse_aggregator import get_synapse_aggregator, ModelOutput
                 aggregator = get_synapse_aggregator()
-                # Collect outputs from layer2_candidates that were actually invoked
                 agg_outputs: list[ModelOutput] = []
-                for candidate in (layer2_candidates or [])[:top_k_per_layer]:
+                # Reuse Layer 3 results to avoid duplicate LLM calls
+                for candidate, res in l3_results.items():
                     if candidate == final_provider:
-                        continue  # Already have this
-                    try:
-                        res = await self.chat(
-                            [{"role": "user", "content": query}],
-                            provider=candidate, max_tokens=4096,
-                        )
-                        text = ""
-                        if isinstance(res, ProviderResult):
-                            text = getattr(res, "text", "") or getattr(res, "content", "") or ""
-                        elif isinstance(res, dict):
-                            text = res.get("text") or res.get("content") or ""
-                        elif isinstance(res, str):
-                            text = res
-                        if text:
-                            agg_outputs.append(ModelOutput(
-                                provider=candidate,
-                                text=text,
-                                tokens=getattr(res, "tokens", 0) if hasattr(res, "tokens") else len(text),
-                                election_score=self._stats.get(candidate, RouterStats(candidate)).success_rate,
-                            ))
-                    except Exception:
-                        pass
+                        continue
+                    text = ""
+                    if isinstance(res, ProviderResult):
+                        text = getattr(res, "text", "") or getattr(res, "content", "") or ""
+                    elif isinstance(res, dict):
+                        text = res.get("text") or res.get("content") or ""
+                    elif isinstance(res, str):
+                        text = res
+                    if text:
+                        agg_outputs.append(ModelOutput(
+                            provider=candidate,
+                            text=text,
+                            tokens=getattr(res, "tokens", 0) if hasattr(res, "tokens") else len(text),
+                            election_score=self._stats.get(candidate, RouterStats(candidate)).success_rate,
+                        ))
 
                 # Add the main result as primary output
                 main_text = ""
@@ -597,7 +640,7 @@ class TreeLLM:
                         "synapse": synapse_result,
                         "deep_probe": probing_result,
                         "micro_turn": micro_turn_state,
-                        "stigmergy": bool(stigmergy_ctx) if 'stigmergy_ctx' in dir() else False,
+                        "stigmergy": bool(stigmergy_ctx),
             }
 
     def route_layered_sync(self, query: str, **kwargs) -> dict[str, Any]:
@@ -617,17 +660,66 @@ class TreeLLM:
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
 
-        # ── Disable thinking for short queries (no budget for reasoning overhead) ──
+        # ── SessionCompressor: compress long conversations ──
+        if len(messages) > 10:
+            try:
+                from .session_compressor import get_session_compressor
+                comp = get_session_compressor()
+                messages = await comp.compress(messages, max_tokens=max_tokens,
+                                               chat_fn=self.chat)
+            except Exception:
+                pass
+
+        # ── AutoPrompt: inject optimized system prompt ──
+        task_type = kwargs.get("task_type", "general")
+        try:
+            from .auto_prompt import get_auto_prompt
+            prompt_text, _ = get_auto_prompt().select(task_type)
+            if prompt_text and not any(m.get("role") == "system" for m in messages):
+                messages = [{"role": "system", "content": prompt_text}] + messages
+        except Exception:
+            pass
+
+        # ── Disable thinking for short queries ──
         if max_tokens < 800 and hasattr(p, 'pro_thinking_enabled'):
             p.pro_thinking_enabled = False
 
+        provider_name = p.name if p else ""
+
+        # ── LatencyOracle: adaptive timeout per provider ──
+        try:
+            from .latency_oracle import get_latency_oracle
+            oracle = get_latency_oracle()
+            complexity = kwargs.get("complexity", 0.5)
+            predicted, viable = oracle.predict(provider_name, complexity)
+            if not viable:
+                logger.debug(f"LatencyOracle: skipping {provider_name} (pred={predicted}ms > timeout)")
+                return ProviderResult.empty(f"LatencyOracle: {provider_name} predicted {predicted:.0f}ms > timeout")
+            adaptive_timeout = oracle.smart_timeout(provider_name, complexity)
+            if adaptive_timeout < timeout:
+                timeout = adaptive_timeout
+        except Exception:
+            pass
+
         # ── Tool-calling: inject system instructions ──
+        # Auto-enable tools when available_tools are provided
+        if not tools and kwargs.get("available_tools"):
+            tools = True
         if tools and messages:
             messages = [{
                 "role": "system",
-                "content": "You can use tools. To search the web, output: <tool_call name=\"web_search\">query text</tool_call>. To search knowledge base: <tool_call name=\"kb_search\">query</tool_call>. Tool results will be prepended automatically."
+                "content": (
+                    "You have access to tools. Use XML format: <tool_call name=\"tool_name\">arguments</tool_call>\n"
+                    "Available tools:\n"
+                    "- web_search: search the internet. Args: query text.\n"
+                    "- kb_search: search internal knowledge base. Args: query text.\n"
+                    "- bash: run a shell command. Args: command string.\n"
+                    "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
+                    "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
+                    "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n"
+                    "After tool results, continue your reasoning. You may call multiple tools."
+                ),
             }] + messages
-        provider_name = p.name if p else ""
         from .cache_director import get_cache_director
         director = get_cache_director()
         if director.supports_cache(provider_name):
@@ -652,28 +744,80 @@ class TreeLLM:
             if result and not result.text and result.reasoning:
                 result.text = result.reasoning
 
-            # ── Tool-calling: LLM requests → ReactExecutor executes ──
-            if result and result.text:
-                import re
-                tc = re.search(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', result.text, re.DOTALL)
-                if tc:
-                    tool_name = tc.group(1)
-                    tool_args = tc.group(2).strip()
+            # ── Multi-turn tool-calling loop ──
+            MAX_TOOL_TURNS = 5
+            tool_turn = 0
+            while result and result.text and tool_turn < MAX_TOOL_TURNS:
+                tool_calls = TOOL_CALL_RE.findall(result.text)
+                if not tool_calls:
+                    break
+                tool_turn += 1
+                tool_results = []
+                for tool_name, tool_args in tool_calls[:3]:
+                    tool_result_text = ""
                     try:
-                        from ..execution.react_executor import ReactExecutor
-                        rex = ReactExecutor()
-                        if tool_name == "web_search":
-                            tool_result = await rex._tool_web_search(tool_args)
-                        elif tool_name == "kb_search":
-                            tool_result = await rex._tool_kb_search(tool_args)
+                        # Route ALL tool calls through unified CapabilityBus
+                        from .capability_bus import get_capability_bus
+                        bus = get_capability_bus()
+                        cap_id = f"tool:{tool_name}"
+                        result = await bus.invoke(cap_id, input=tool_args.strip())
+                        if isinstance(result, dict) and "error" in result:
+                            # Fallback: try via ReactExecutor for legacy tools
+                            from ..execution.react_executor import ReactExecutor
+                            rex = ReactExecutor()
+                            if tool_name == "web_search":
+                                tool_result_text = await rex._tool_web_search(tool_args.strip())
+                            elif tool_name == "kb_search":
+                                tool_result_text = await rex._tool_kb_search(tool_args.strip())
+                            elif tool_name in ("bash", "shell", "run_command", "execute"):
+                                tool_result_text = await rex._tool_run_command(tool_args.strip())
+                            elif tool_name in ("read_file", "file_read"):
+                                tool_result_text = await self._tool_read_vfs(tool_args.strip())
+                            elif tool_name in ("write_file", "file_write"):
+                                tool_result_text = await self._tool_write_vfs(tool_args.strip())
+                            else:
+                                tool_result_text = f"[tool:{tool_name}] not available"
                         else:
-                            tool_result = f"[tool:{tool_name}] not found"
-                        # Prepend tool result to LLM response
-                        result.text = f"[tool_result: {tool_name}]\n{tool_result}\n\n{result.text}"
-                    except ImportError:
-                        pass  # Use reasoning as response
+                            tool_result_text = str(result)[:5000]
+                    except Exception as e:
+                        tool_result_text = f"[tool:{tool_name} error: {e}]"
+                    tool_results.append((tool_name, tool_result_text[:5000]))
+
+                if not tool_results:
+                    break
+
+                # Build tool result messages for next LLM call
+                tool_messages = []
+                for tname, tresult in tool_results:
+                    result.text = result.text.replace(
+                        f'<tool_call name="{tname}">', '', 1
+                    ).replace('</tool_call>', '', 1)
+                    tool_messages.append({
+                        "role": "tool",
+                        "tool_name": tname,
+                        "content": tresult,
+                    })
+
+                # Call LLM again with tool results
+                messages_with_tools = list(messages) + [{"role": "assistant", "content": result.text}] + tool_messages
+                result = await p.chat(messages_with_tools, temperature=temperature,
+                                       max_tokens=max_tokens, timeout=timeout,
+                                       model=model or kwargs.get("model_extra", ""))
+                if result and result.text:
+                    result.text = f"[tool_result: {tool_results[-1][0]}]\n{tool_results[-1][1]}\n\n{result.text}"
             if result and result.text:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
+                # ── Recording capture: LLM response ──
+                try:
+                    from .recording_engine import get_recording_engine, RecordLayer
+                    get_recording_engine().capture(
+                        RecordLayer.LLM, "llm_chat",
+                        params={"messages": str(messages)[:500], "provider": p.name, "tokens": result.tokens},
+                        result=result.text[:5000], render="stream",
+                        duration_ms=(time.monotonic() - t0) * 1000,
+                    )
+                except Exception:
+                    pass
                 self._classifier.learn(prompt=str(messages[-1].get("content", ""))[:200],
                                         chosen=p.name, success=True)
                 # ── Record session binding ──
@@ -739,24 +883,39 @@ class TreeLLM:
 
     def _optimize_messages(self, messages: list[dict]) -> list[dict]:
         """Apply token optimizations: HTML cleaning + URL shortening + prefix caching."""
-        import re
-        html_tag = re.compile(r'<[^>]+>')
-        long_url = re.compile(r'https?://[^\s]{50,}')
+        # Fast path: skip optimization for clean text content
+        needs_html = any('<' in str(m.get("content", ""))
+                         and '>' in str(m.get("content", "")) for m in messages)
+        needs_url = any('http' in str(m.get("content", "")) for m in messages)
+        if not needs_html and not needs_url:
+            return messages
+
+        if not hasattr(self, '_html_tag'):
+            self._html_tag = re.compile(r'<[^>]+>')
+            self._long_url = re.compile(r'https?://[^\s]{50,}')
+            self._url_host = re.compile(r'https?://([^/]+)')
+            self._optimize_cache: dict[str, list[dict]] = {}
+
+        cache_key = str([m.get("content", "") for m in messages])
+        if cache_key in self._optimize_cache:
+            return self._optimize_cache[cache_key]
 
         for msg in messages:
             content = str(msg.get("content", ""))
             if not content:
                 continue
-            # HTML → plain text
             if '<' in content and '>' in content:
-                content = html_tag.sub(' ', content)
-            # Long URLs → domain-only
-            content = long_url.sub(
-                lambda m: '[link:' + (re.search(r'https?://([^/]+)', m.group(0)).group(1)
-                                        if re.search(r'https?://([^/]+)', m.group(0)) else 'url') + ']',
+                content = self._html_tag.sub(' ', content)
+            content = self._long_url.sub(
+                lambda m: '[link:' + (self._url_host.search(m.group(0)).group(1)
+                                       if self._url_host.search(m.group(0)) else 'url') + ']',
                 content
             )
             msg["content"] = content
+
+        if len(self._optimize_cache) > 32:
+            self._optimize_cache.clear()
+        self._optimize_cache[cache_key] = messages
 
         try:
             from ..dna.cache_optimizer import CacheOptimizer
@@ -774,15 +933,14 @@ class TreeLLM:
             return self._providers[name]
         if self._elected and self._elected in self._providers:
             return self._providers[self._elected]
-        for p in self._providers.values():
-            return p
         return None
 
     def _record_success(self, name: str, tokens: int, latency_ms: float) -> None:
         s = self._stats.get(name)
         if not s:
             return
-        s.calls += 1; s.successes += 1
+        with self._stats_lock:
+            s.calls += 1; s.successes += 1
         s.total_tokens += tokens; s.total_latency_ms += latency_ms
         s.last_latency_ms = latency_ms
         s.recent_successes.append(True)
@@ -808,12 +966,42 @@ class TreeLLM:
         s = self._stats.get(name)
         if not s:
             return
-        s.calls += 1; s.failures += 1
-        if rate_limited:
-            s.rate_limits += 1
-        s.last_error = error
+        with self._stats_lock:
+            s.calls += 1; s.failures += 1
+            if rate_limited:
+                s.rate_limits += 1
+            s.last_error = error
         s.recent_successes.append(False)
         if len(s.recent_successes) > 20:
             s.recent_successes = s.recent_successes[-20:]
         from .holistic_election import get_election
         get_election().record_result(name, False, 0, 0, error, rate_limited)
+
+    # ── Tool helpers (routed through VFS) ──
+
+    @staticmethod
+    async def _tool_read_vfs(path: str) -> str:
+        """Read file through unified VFS. Supports all mounts: /ram, /disk, /cache, etc."""
+        try:
+            from .capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            result = await bus.invoke("vfs:read", path=path.strip())
+            if isinstance(result, dict):
+                return result.get("content", str(result)[:10000])
+            return str(result)[:10000]
+        except Exception as e:
+            return f"[vfs:read error: {e}]"
+
+    @staticmethod
+    async def _tool_write_vfs(args: str) -> str:
+        """Write file through unified VFS. Format: 'path\\ncontent'."""
+        parts = args.split("\n", 1)
+        path = parts[0].strip()
+        content = parts[1] if len(parts) > 1 else ""
+        try:
+            from .capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            result = await bus.invoke("vfs:write", path=path, data=content)
+            return str(result)
+        except Exception as e:
+            return f"[vfs:write error: {e}]"

@@ -278,16 +278,19 @@ async def tree_chat_stream(request: Request):
     acc = ""
     sid = str(uuid.uuid4())[:12]
     try:
+        from livingtree.core.perf_accel import get_stream_render
+        sr = get_stream_render()
         if hub.world and hub.world.consciousness:
             async for token in hub.world.consciousness.stream_of_thought(msg):
                 acc += token
-                yield f"data: {_json.dumps({'html': _md_to_html_fragment(acc), 'partial': True, 'session_id': sid})}\n\n"
+                if sr.should_emit(acc):
+                    yield f"data: {_json.dumps({'html': _md_to_html_fragment(acc), 'partial': True, 'session_id': sid}, separators=(',', ':'))}\n\n"
             final_html = _md_to_html_fragment(acc)
-            yield f"data: {_json.dumps({'html': final_html, 'partial': False, 'session_id': sid})}\n\n"
+            yield f"data: {_json.dumps({'html': final_html, 'partial': False, 'session_id': sid}, separators=(',', ':'))}\n\n"
         else:
-            yield f"data: {_json.dumps({'html': '<p>意识层未就绪</p>', 'partial': False, 'session_id': sid})}\n\n"
+            yield f"data: {_json.dumps({'html': '<p>意识层未就绪</p>', 'partial': False, 'session_id': sid}, separators=(',', ':'))}\n\n"
     except Exception as e:
-        yield f"data: {_json.dumps({'html': f'<p>流中断: {_html.escape(str(e)[:100])}</p>', 'partial': False, 'session_id': sid})}\n\n"
+        yield f"data: {_json.dumps({'html': f'<p>流中断: {_html.escape(str(e)[:100])}</p>', 'partial': False, 'session_id': sid}, separators=(',', ':'))}\n\n"
     yield "data: [DONE]\n\n"
 
 

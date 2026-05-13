@@ -145,6 +145,23 @@ _LAZY = {
     "get_swarm_evolution": ".dna.swarm_evolution",
     # Emotional memory
     "get_emotional_memory": ".memory.emotional_memory",
+    # DNA utilities
+    "CacheOptimizer": ".dna",
+    "ToolCallRepair": ".dna",
+    "ThoughtHarvester": ".dna",
+    # Execution
+    "RLMRunner": ".execution",
+    "SideGit": ".execution",
+    "SubAgentRoles": ".execution",
+    "SessionManager": ".execution",
+    # LSP
+    "LSPManager": ".lsp",
+    # Integration
+    "SSEAgentServer": ".integration",
+    # Capability
+    "SkillDiscoveryManager": ".capability",
+    # Knowledge
+    "StructMemory": ".knowledge",
 }
 
 

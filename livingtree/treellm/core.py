@@ -79,6 +79,16 @@ class TreeLLM:
                 f"TreeLLM.from_config: bootstrapped with "
                 f"{len(llm._providers)} providers: {list(llm._providers.keys())}"
             )
+            # Quick health check
+            try:
+                from .vital_signs import get_vital_signs
+                vs = get_vital_signs()
+                import asyncio as _a
+                report = _a.get_event_loop().run_until_complete(
+                    _a.wait_for(vs.run_full_checkup(), timeout=10))
+                logger.info(f"VitalSigns: {report.summary}")
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"TreeLLM.from_config: {e}")
 
@@ -263,6 +273,27 @@ class TreeLLM:
                 aggregate = True
         except ImportError:
             pass
+
+        # ── Fast path: preprocess only, no LLM ──
+        if not model:
+            # StrategicOrchestrator: decompose multi-step tasks
+            try:
+                from .strategic_orchestrator import get_orchestrator, TaskStep
+                orch = get_orchestrator()
+                step = TaskStep(id="routed", description=original_query)
+                subgoals = orch.decompose_to_subgoals(step)
+                if len(subgoals) >= 3:
+                    return {
+                        "provider": "orchestrator", "result": None, "mode": "decomposed",
+                        "layers_used": 0,
+                        "subgoals": [{"id": s.id, "desc": s.description, "criteria": s.completion_criteria} for s in subgoals],
+                        "scores": {"final_decision": "decomposed_to_subgoals"},
+                        "cost_saved": f"Task decomposed into {len(subgoals)} sub-goals",
+                        "deep_probe": None, "micro_turn": None,
+                        "stigmergy": True if 'stigmergy_ctx' in dir() and stigmergy_ctx else False,
+                    }
+            except ImportError:
+                pass
 
         # ── Fast path: preprocess only, no LLM ──
         if not model:

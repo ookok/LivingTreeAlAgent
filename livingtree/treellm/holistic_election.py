@@ -216,7 +216,7 @@ class HolisticElection:
         """Score all candidates holistically. Returns ranked list."""
         results = []
 
-        # Phase 1: Ping all alive candidates (skip circuit-broken providers)
+        # Phase 1: Ping (cached 60s — fast after first call)
         breaker = None
         try:
             from .circuit_breaker import get_circuit_breaker

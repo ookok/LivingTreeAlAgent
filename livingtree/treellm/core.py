@@ -247,6 +247,16 @@ class TreeLLM:
 
         # ── Fast path: preprocess only, no LLM ──
         if not model:
+            # ── Tool dispatch: detect search/file/compute intents ──
+            tool_result = None
+            ql = query.lower()
+            if any(k in ql for k in ["搜索", "search", "查找", "find online"]):
+                tool_result = {"tool": "spark_search", "query": query, "status": "dispatched"}
+            elif any(k in ql for k in ["文件", "file", "write", "read", "创建", "保存"]):
+                tool_result = {"tool": "unified_file_tool", "query": query, "status": "dispatched"}
+            elif any(k in ql for k in ["计算", "compute", "calculate", "python", "运行"]):
+                tool_result = {"tool": "python_interpreter", "query": query, "status": "dispatched"}
+
             return {
                 "provider": "preprocess", "result": None, "mode": "preprocess",
                 "layers_used": 0,
@@ -255,6 +265,7 @@ class TreeLLM:
                 "deep_probe": probing_result,
                 "micro_turn": micro_turn_state,
                 "stigmergy": True if 'stigmergy_ctx' in dir() and stigmergy_ctx else False,
+                "tool_dispatch": tool_result,
             }
 
         # ── Task Vector Geometry: ID vs OOD mode detection ──

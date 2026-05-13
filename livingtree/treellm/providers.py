@@ -57,8 +57,8 @@ class Provider:
         self._last_ping_ok = False
 
     async def ping(self) -> tuple[bool, str]:
-        # Cache: skip ping if recently checked (< 15s)
-        if self._last_ping_time and time.time() - self._last_ping_time < 15:
+        # Cache: skip ping if recently checked (< 60s)
+        if self._last_ping_time and time.time() - self._last_ping_time < 60:
             return self._last_ping_ok, ""
         try:
             async with aiohttp.ClientSession() as s:
@@ -66,7 +66,7 @@ class Provider:
                     f"{self.base_url}/chat/completions",
                     json={"model": self.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
                     headers=self._headers(),
-                    timeout=aiohttp.ClientTimeout(total=3),
+                    timeout=aiohttp.ClientTimeout(total=1),
                 ) as resp:
                     self._last_ping_time = time.time()
                     self._last_ping_ok = True

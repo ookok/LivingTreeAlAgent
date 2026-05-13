@@ -203,6 +203,22 @@ class TreeLLM:
         except ImportError:
             pass
 
+        # ── ProactiveInterject: check if we should interrupt instead of routing ──
+        try:
+            from .proactive_interject import get_proactive_interject
+            pi = get_proactive_interject()
+            decision = pi.evaluate(original_query, task_type=task_type)
+            if decision.should_interject and decision.urgency > 0.5:
+                return {
+                    "provider": "interject", "result": decision.interjection_text,
+                    "mode": "interject", "layers_used": 0,
+                    "scores": {"final_decision": "interjected", "trigger": decision.trigger.value if decision.trigger else "unknown"},
+                    "deep_probe": None, "micro_turn": None,
+                    "stigmergy": False,
+                }
+        except ImportError:
+            pass
+
         if deep_probe:
             try:
                 from .deep_probe import get_deep_probe
@@ -242,6 +258,9 @@ class TreeLLM:
             # If MicroTurnAware suggests deep probing, override
             if ctx.should_probe_deep and not deep_probe:
                 deep_probe = True
+            # If user is thinking (deliberative), enable aggregation for deeper answer
+            if ctx.conversation_rhythm > 0.6 and not aggregate:
+                aggregate = True
         except ImportError:
             pass
 

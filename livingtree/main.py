@@ -121,6 +121,8 @@ def main():
         _svc_improve(sys.argv[2:])
     elif command == "cli":
         _svc_cli(sys.argv[2:])
+    elif command == "cli-anything":
+        _svc_cli_anything(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -684,6 +686,81 @@ def _svc_cli(args: list):
             for t in tools:
                 status = "✅" if t["registered"] else "📦"
                 print(f"  {status} [{t['category']}] {t['name']}")
+
+    asyncio.run(_run())
+
+
+def _svc_cli_anything(args: list):
+    """CLI-Anything framework: convert any code to CLI. usage: livingtree cli-anything [wrap|repo|manifest|publish|new] ..."""
+    import asyncio
+
+    async def _run():
+        from .treellm.cli_anything import get_cli_anything
+
+        if not args:
+            print("Usage: livingtree cli-anything [wrap|repo|manifest|publish|new|stats] ...")
+            return
+
+        ca = get_cli_anything()
+        sub = args[0].lower()
+
+        if sub == "wrap" and len(args) > 1:
+            # Wrap a Python function from a file
+            file_path = args[1]
+            func_name = args[2] if len(args) > 2 else None
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("_temp", file_path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            if func_name:
+                func = getattr(mod, func_name)
+            else:
+                # Use first public function
+                funcs = [(n, f) for n, f in mod.__dict__.items()
+                        if callable(f) and not n.startswith("_")]
+                if not funcs:
+                    print("  No public functions found")
+                    return
+                func_name, func = funcs[0]
+            script = ca.from_function(func, name=func_name, install="--install" in args)
+            print(f"  Generated: {script}")
+            print(f"  Try: python {script} --help")
+
+        elif sub == "repo" and len(args) > 1:
+            project = await ca.from_repo(args[1])
+            print(f"  Repo: {project.repo_url}")
+            print(f"  Language: {project.language}")
+            print(f"  Entry points: {project.entry_points[:10]}")
+            print(f"  Suggested commands: {len(project.suggested_commands)}")
+            for cmd in project.suggested_commands[:5]:
+                print(f"    - {cmd.name}: {cmd.description[:80]}")
+            if "--install" in args:
+                result = await ca.project.install(project)
+                print(f"  Install: {result}")
+
+        elif sub == "manifest" and len(args) > 1:
+            definition = ca.from_manifest(args[1])
+            print(f"  Name: {definition.name} v{definition.version}")
+            print(f"  Commands: {len(definition.commands)}")
+            for cmd in definition.commands:
+                print(f"    - {cmd.name} ({len(cmd.params)} params)")
+
+        elif sub == "new" and len(args) > 1:
+            path = ca.new_manifest(args[1])
+            print(f"  Created: {path}")
+            print(f"  Edit this file to define your CLI, then run:")
+            print(f"    livingtree cli-anything manifest {path}")
+
+        elif sub == "publish" and len(args) > 1:
+            definition = ca.from_manifest(args[1])
+            target = args[2] if len(args) > 2 else "pip"
+            result = ca.publish(definition, target)
+            print(f"  Published to {target}: {result}")
+
+        elif sub == "stats":
+            s = ca.stats()
+            print(f"  Generated tools: {s['generated_tools']}")
+            print(f"  Manifests: {s['manifests']}")
 
     asyncio.run(_run())
 

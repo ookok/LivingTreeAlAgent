@@ -395,9 +395,345 @@ class CLIIntrospector:
                 "tools_registered": len(self._registered)}
 
 
+# ═══ CLI Pipeline Engine — Pipe, Stdin, Env, Compose ══════════════
+
+
+@dataclass
+class CLIPipelineStep:
+    program: str
+    args: str = ""
+    stdin_data: str = ""   # If set, feed this as stdin
+    env_vars: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class CLIPipelineResult:
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
+    steps: int = 0
+    duration_ms: float = 0.0
+
+
+class CLIEngine:
+    """Advanced CLI execution: pipes, stdin, env, compose, output parsing."""
+
+    _instance: Optional["CLIEngine"] = None
+
+    @classmethod
+    def instance(cls) -> "CLIEngine":
+        if cls._instance is None:
+            cls._instance = CLIEngine()
+        return cls._instance
+
+    # ── Pipeline (Pipe Chaining) ───────────────────────────────────
+
+    async def pipeline(self, steps: list[dict],
+                       timeout: float = 60.0) -> CLIPipelineResult:
+        """Execute piped CLI chain: step1 | step2 | step3.
+
+        steps: [{"program":"ls","args":"-la"}, {"program":"grep","args":"py"}]
+        """
+        result = CLIPipelineResult(steps=len(steps))
+        t0 = time.time()
+
+        try:
+            procs = []
+            prev_stdout = None
+
+            for i, step_dict in enumerate(steps):
+                cmd = [step_dict["program"]] + (
+                    __import__('shlex').split(step_dict.get("args", ""))
+                )
+                stdin = prev_stdout if i > 0 else asyncio.subprocess.PIPE
+
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=stdin,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                # Feed stdin data for first step
+                if i == 0 and step_dict.get("stdin_data"):
+                    proc.stdin.write(step_dict["stdin_data"].encode())
+                    await proc.stdin.drain()
+                    proc.stdin.close()
+
+                procs.append(proc)
+                prev_stdout = proc.stdout
+
+            # Collect final output
+            stdout, stderr = await asyncio.wait_for(
+                procs[-1].communicate(), timeout=timeout,
+            )
+            result.stdout = stdout.decode("utf-8", errors="replace")[:50000]
+            result.stderr = stderr.decode("utf-8", errors="replace")[:5000]
+            result.exit_code = procs[-1].returncode or 0
+
+            # Cleanup earlier procs
+            for p in procs[:-1]:
+                if p.returncode is None:
+                    p.terminate()
+        except asyncio.TimeoutError:
+            result.stderr = f"Pipeline timeout ({timeout}s)"
+            result.exit_code = -1
+        except Exception as e:
+            result.stderr = str(e)[:500]
+            result.exit_code = -1
+
+        result.duration_ms = (time.time() - t0) * 1000
+        return result
+
+    # ── With Stdin / File Input ────────────────────────────────────
+
+    async def execute_with_stdin(self, program: str, args: str,
+                                 stdin_data: str = "",
+                                 input_file: str = "",
+                                 env_vars: dict[str, str] = None,
+                                 timeout: float = 30.0) -> dict:
+        """Execute with stdin data or file input."""
+        import shlex
+        cmd = [program] + shlex.split(args)
+        env = {**os.environ, **(env_vars or {})}
+
+        # File input
+        if input_file and os.path.exists(input_file):
+            stdin = open(input_file, "rb")
+        elif stdin_data:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, env=env,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            proc.stdin.write(stdin_data.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            return {"stdout": stdout.decode(errors="replace")[:50000],
+                    "stderr": stderr.decode(errors="replace")[:5000],
+                    "exit_code": proc.returncode or 0}
+        else:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return {"stdout": stdout.decode(errors="replace")[:50000],
+                "stderr": stderr.decode(errors="replace")[:5000],
+                "exit_code": proc.returncode or 0}
+
+    # ── Output Parser — Auto JSON/Table/CSV/TSV ────────────────────
+
+    def parse_output(self, text: str) -> dict:
+        """Auto-detect and parse CLI output into structured format."""
+        if not text.strip():
+            return {"format": "empty", "data": None}
+
+        # Try JSON
+        try:
+            import json
+            data = json.loads(text)
+            return {"format": "json", "data": data}
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Try CSV/TSV
+        lines = text.strip().split("\n")
+        if len(lines) >= 2:
+            # CSV
+            if "," in lines[0] and "," in lines[1]:
+                try:
+                    import csv, io
+                    reader = csv.DictReader(io.StringIO(text))
+                    rows = list(reader)
+                    if rows:
+                        return {"format": "csv", "columns": list(rows[0].keys()),
+                                "rows": [{k: v for k, v in r.items()} for r in rows[:100]]}
+                except Exception:
+                    pass
+            # TSV
+            if "\t" in lines[0] and "\t" in lines[1]:
+                headers = lines[0].split("\t")
+                rows = []
+                for line in lines[1:101]:
+                    vals = line.split("\t")
+                    if len(vals) == len(headers):
+                        rows.append(dict(zip(headers, vals)))
+                if rows:
+                    return {"format": "tsv", "columns": headers, "rows": rows}
+
+        # Try table (column-aligned text)
+        if len(lines) >= 2 and any("  " in l for l in lines[:3]):
+            return {"format": "table", "lines": [l.strip() for l in lines[:50]]}
+
+        # Plain text
+        return {"format": "text", "lines": lines[:100],
+                "line_count": len(lines), "total_chars": len(text)}
+
+    # ── Auto-Generator — NL → CLI Script → Register ────────────────
+
+    async def generate_tool(self, description: str,
+                            llm: Any = None) -> dict:
+        """Auto-generate a CLI wrapper from natural language description."""
+        import hashlib
+        import stat
+
+        if not llm:
+            try:
+                from .core import TreeLLM
+                llm = TreeLLM()
+            except Exception:
+                return {"error": "LLM not available"}
+
+        prompt = (
+            f"Generate a bash/shell script that does this task:\n"
+            f"  {description}\n\n"
+            f"Requirements:\n"
+            f"- Single executable script\n"
+            f"- Accept command-line arguments (use $1, $2, or Python argparse)\n"
+            f"- Print results to stdout (preferably JSON or table format)\n"
+            f"- Handle errors gracefully\n"
+            f"- The script will be saved and executed, so it must be SAFE\n\n"
+            f"Output ONLY the script code in a ```bash or ```python block."
+        )
+        try:
+            result = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                max_tokens=2000, temperature=0.2, task_type="code",
+            )
+            code = getattr(result, 'text', '') or str(result)
+
+            # Extract code block
+            import re
+            m = re.search(r'```(?:bash|python|sh|shell)?\n(.*?)```', code, re.DOTALL)
+            if not m:
+                return {"error": "Could not extract code from LLM response"}
+
+            script = m.group(1).strip()
+            tool_name = "cli_gen_" + hashlib.md5(description.encode()).hexdigest()[:8]
+
+            # Save as executable
+            tools_dir = Path(".livingtree/cli_tools")
+            tools_dir.mkdir(parents=True, exist_ok=True)
+            script_path = tools_dir / tool_name
+            if "import " in script or "def " in script:
+                script_path = tools_dir / f"{tool_name}.py"
+                script = "#!/usr/bin/env python3\n" + script
+            else:
+                script = "#!/bin/bash\n" + script
+            script_path.write_text(script, encoding="utf-8")
+            script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
+
+            # Auto-register
+            introspector = get_cli_introspector()
+            tool = await introspector.deep_introspect(str(script_path))
+            await introspector.register_tool(tool_name)
+
+            return {
+                "tool_name": tool_name, "path": str(script_path),
+                "registered": True, "script_length": len(script),
+            }
+        except Exception as e:
+            return {"error": str(e)[:500]}
+
+    # ── Compose / DAG Workflow ─────────────────────────────────────
+
+    async def compose(self, workflow: list[dict],
+                      timeout: float = 120.0) -> dict:
+        """Execute a DAG of CLI steps with dependencies.
+
+        workflow: [{id, program, args, depends_on:[...]}]
+        Steps with no dependencies run in parallel. Depended steps wait.
+        """
+        completed = {}
+        pending = {s["id"]: s for s in workflow}
+        results = {}
+        t0 = time.time()
+
+        while pending:
+            ready = [sid for sid, step in pending.items()
+                    if all(d in completed for d in step.get("depends_on", []))]
+            if not ready:
+                return {"error": "Deadlock detected — check dependencies",
+                        "pending": list(pending.keys())}
+
+            tasks = []
+            for sid in ready:
+                step = pending.pop(sid)
+                task = self.execute_with_stdin(
+                    step["program"], step.get("args", ""),
+                    stdin_data=completed.get(step.get("depends_on", [None])[0],
+                                            {}).get("stdout", ""),
+                )
+                tasks.append((sid, asyncio.create_task(task)))
+
+            for sid, task in tasks:
+                try:
+                    result = await asyncio.wait_for(task, timeout=timeout / max(len(ready), 1))
+                    completed[sid] = result
+                    results[sid] = result
+                except asyncio.TimeoutError:
+                    results[sid] = {"error": "Timeout", "exit_code": -1}
+                except Exception as e:
+                    results[sid] = {"error": str(e)[:200], "exit_code": -1}
+
+        return {"results": results, "steps": len(workflow),
+                "duration_ms": (time.time() - t0) * 1000}
+
+    # ── Man / TLDR Integration ─────────────────────────────────────
+
+    async def fetch_docs(self, program: str) -> dict:
+        """Fetch documentation for a CLI program via man or tldr."""
+        # Try man first
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "man", program,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if stdout:
+                return {"source": "man", "content": stdout.decode(errors="replace")[:10000]}
+        except Exception:
+            pass
+
+        # Try tldr
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tldr", program,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if stdout:
+                return {"source": "tldr", "content": stdout.decode(errors="replace")[:5000]}
+        except Exception:
+            pass
+
+        # Try --help
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                program, "--help",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            content = (stdout + stderr).decode(errors="replace")
+            if content.strip():
+                return {"source": "help", "content": content[:5000]}
+        except Exception:
+            pass
+
+        return {"source": "none", "content": f"No documentation found for {program}"}
+
+
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _introspector: Optional[CLIIntrospector] = None
+_engine: Optional[CLIEngine] = None
 
 
 def get_cli_introspector() -> CLIIntrospector:
@@ -407,4 +743,13 @@ def get_cli_introspector() -> CLIIntrospector:
     return _introspector
 
 
-__all__ = ["CLIIntrospector", "CLITool", "CLIScanResult", "get_cli_introspector"]
+def get_cli_engine() -> CLIEngine:
+    global _engine
+    if _engine is None:
+        _engine = CLIEngine()
+    return _engine
+
+
+__all__ = ["CLIIntrospector", "CLITool", "CLIScanResult",
+           "CLIEngine", "CLIPipelineResult",
+           "get_cli_introspector", "get_cli_engine"]

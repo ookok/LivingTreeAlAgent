@@ -201,9 +201,16 @@ class SessionCompressor:
             position_decay = 1.0
             if n > 10 and mid_start <= i <= mid_end:
                 distance_from_mid_center = abs(i - (mid_start + mid_end) // 2)
-                position_decay = max(0.5, 1.0 - distance_from_mid_center * 0.05 * ntk_factor)
+                # TriAttention-inspired: trigonometric position decay
+                # Uses sine modulation for distance-based key preference
+                trig_decay = math.sin(math.pi * (1.0 - distance_from_mid_center / max(mid_end - mid_start, 1) * 2))
+                trig_decay = max(0.3, trig_decay ** (1.0 / ntk_factor))
+                position_decay = trig_decay * 0.7 + (1.0 - distance_from_mid_center * 0.03) * 0.3
 
-            crit_score = relevance * 0.35 + decision_bonus * 0.30 + role_bonus * 0.10 + position_decay * 0.25
+            # TriAttention: norm-based importance — longer messages have higher Q/K norm
+            norm_bonus = min(0.15, len(content) / 5000.0)
+
+            crit_score = relevance * 0.30 + decision_bonus * 0.25 + role_bonus * 0.10 + position_decay * 0.20 + norm_bonus * 0.15
             scored.append((i, m, min(crit_score, 1.0)))
 
         total_crit = sum(s for _, _, s in scored)

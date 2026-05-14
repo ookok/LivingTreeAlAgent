@@ -453,17 +453,30 @@ class ContextMoE:
         return self._hot[-7:]  # 7±2 rule
 
     def _query_warm(self, query: str, task_type: str) -> list[MemoryBlock]:
-        """🌤️ Warm: short-term semantic search."""
+        """🌤️ Warm: short-term semantic search with TriAttention-inspired center similarity."""
         query_words = set(query.lower().split())
+        # Build query topic center from query words
+        query_topics = {w for w in query_words if len(w) > 2}
+
         scored = []
         for b in self._warm.values():
             block_words = set(b.content.lower().split())
             overlap = len(query_words & block_words) / max(len(query_words | block_words), 1)
+
+            # TriAttention: topic center similarity — topics are semantic centers
+            topic_overlap = 0.0
+            if b.topics and query_topics:
+                shared = len(set(t.name if hasattr(t, 'name') else str(t)
+                                 for t in b.topics) & query_topics)
+                topic_overlap = shared / max(len(b.topics), 1)
+
             task_match = 1.0 if b.task_type == task_type else 0.3
             hours_ago = (time.time() - b.last_accessed) / 3600
-            recency = math.exp(-hours_ago / 12)  # 12h half-life
-            score = overlap * 0.5 + task_match * 0.3 + recency * 0.2
-            if score > 0.1:
+            recency = math.exp(-hours_ago / 12)
+
+            # Enhanced scoring: topic center gets extra weight (TriAttention insight)
+            score = overlap * 0.30 + topic_overlap * 0.25 + task_match * 0.25 + recency * 0.20
+            if score > 0.08:
                 scored.append((b, score))
 
         scored.sort(key=lambda x: -x[1])
@@ -473,19 +486,29 @@ class ContextMoE:
         return [b for b, _ in scored[:3]]
 
     def _query_cold(self, query: str, task_type: str) -> list[MemoryBlock]:
-        """❄️ Cold: domain-bucketed long-term memory with forgetting curve."""
+        """❄️ Cold: domain-bucketed long-term memory with center similarity + forgetting curve."""
         query_words = set(query.lower().split())
+        query_topics = {w for w in query_words if len(w) > 2}
+
         scored = []
         for b in self._cold.values():
-            # Apply forgetting curve
             days_since_access = (time.time() - b.last_accessed) / 86400
-            b.decay_factor = math.exp(-days_since_access / 30)  # 30-day half-life
+            b.decay_factor = math.exp(-days_since_access / 30)
 
             block_words = set(b.content.lower().split())
             overlap = len(query_words & block_words) / max(len(query_words | block_words), 1)
+
+            # TriAttention: topic center similarity
+            topic_overlap = 0.0
+            if b.topics and query_topics:
+                shared = len(set(str(t) for t in b.topics) & query_topics)
+                topic_overlap = shared / max(len(b.topics), 1)
+
             task_match = 1.0 if b.task_type == task_type else 0.3
-            score = (overlap * 0.4 + task_match * 0.2
-                     + b.decay_factor * 0.2 + b.prominence * 0.2)
+
+            # Center-aware scoring: topic overlap weighted highly for cold memory
+            score = (overlap * 0.25 + topic_overlap * 0.25 +
+                    task_match * 0.20 + b.decay_factor * 0.15 + b.prominence * 0.15)
             if score > 0.08:
                 scored.append((b, score))
 

@@ -63,6 +63,9 @@ class DataValueDensity:
     def __init__(self):
         self._seen_hashes: set[int] = set()  # For novelty detection
         self._assess_count = 0
+        # IIB-LPO: track success-correlated features
+        self._success_features: dict[str, int] = {}  # feature → success_count
+        self._failure_features: dict[str, int] = {}  # feature → failure_count
 
     # ── Main Assessment ────────────────────────────────────────────
 
@@ -77,30 +80,37 @@ class DataValueDensity:
         # 2. Structural complexity: reasoning chains, code, structure
         structural = self._structural_complexity(text)
 
-        # 3. Causal signals: if-then, because, counterfactuals
+        # 3. Causal signals
         causal = self._causal_signals(text)
 
-        # 4. Novelty: how different from seen data
+        # 4. Novelty
         novelty = self._novelty(text)
 
-        # 5. Utility: from context (success, depth_grade, user_signal)
+        # 5. Utility from context
         utility = ctx.get("utility", 0.5)
 
-        # 6. Completeness: did the conversation conclude properly?
+        # 6. Completeness
         completeness = ctx.get("completeness", self._detect_completeness(text))
 
-        # Composite with dynamic weights
+        # 7. IIB-LPO: Information Bottleneck mutual information score
+        ib_score = self._ib_mutual_information(text, ctx.get("success", True))
+
+        # Composite with IB-weighted dynamic weights
         total = (
-            info_density * 0.20 +
-            structural * 0.25 +
-            causal * 0.20 +
-            novelty * 0.15 +
-            utility * 0.10 +
-            completeness * 0.10
+            info_density * 0.15 +
+            structural * 0.20 +
+            causal * 0.15 +
+            novelty * 0.10 +
+            utility * 0.15 +
+            completeness * 0.10 +
+            ib_score * 0.15  # IB weight replaces flat utility
         )
 
         verdict, suggestions = self._classify(total, info_density, causal, ctx)
         self._seen_hashes.add(hash(text[:200]))
+
+        # Update IB feature tracker
+        self._update_ib_features(text, ctx.get("success", False))
 
         return DensityReport(
             total_score=round(total, 3),
@@ -116,9 +126,78 @@ class DataValueDensity:
                 "token_count": len(text.split()),
                 "unique_ratio": len(set(text.lower().split())) / max(len(text.split()), 1),
                 "code_blocks": text.count("```"),
+                "ib_score": round(ib_score, 3),
                 "reasoning_markers": sum(1 for m in self._get_reasoning_patterns() if m in text),
             },
         )
+
+    # ── IB Mutual Information ──────────────────────────────────────
+
+    def _ib_mutual_information(self, text: str, success: bool) -> float:
+        """IIB-LPO: Estimate mutual information between data features and task success.
+
+        I(X;Y) ≈ Σ P(x,y) log(P(x,y) / (P(x)·P(y)))
+        
+        Approximated by feature-level success/failure ratio.
+        Features that appear mostly in successes get high IB score;
+        features that appear mostly in failures get low score.
+        """
+        features = self._extract_ib_features(text)
+        if not features:
+            return 0.5  # Neutral
+
+        scores = []
+        for f in features:
+            s_count = self._success_features.get(f, 0)
+            f_count = self._failure_features.get(f, 0)
+            total = s_count + f_count
+            if total == 0:
+                scores.append(0.5)  # Unknown → neutral
+            else:
+                # High success ratio → high IB value
+                success_ratio = s_count / total
+                # Laplace smoothing for low-count features
+                if total < 3:
+                    success_ratio = (s_count + 1) / (total + 2)
+                scores.append(success_ratio)
+
+        return sum(scores) / len(scores) if scores else 0.5
+
+    def _extract_ib_features(self, text: str) -> list[str]:
+        """Extract features for IB analysis — key reasoning patterns."""
+        features = []
+        text_lower = text.lower()
+
+        # Structural features
+        if "```" in text:
+            features.append("has_code_block")
+        if text.count("\n\n") >= 2:
+            features.append("structured_paragraphs")
+
+        # Reasoning features
+        reasoning_words = ["因为", "所以", "因此", "because", "therefore",
+                          "如果", "那么", "if", "then",
+                          "首先", "然后", "最后", "first", "then", "finally"]
+        for word in reasoning_words:
+            if word in text_lower:
+                features.append(f"reasoning:{word}")
+                break  # One reasoning feature per pattern group
+
+        # Completeness features
+        endings = ["总结", "综上所述", "in conclusion", "to summarize"]
+        for e in endings:
+            if e in text_lower[-300:]:
+                features.append("conclusive_ending")
+                break
+
+        return features[:5]
+
+    def _update_ib_features(self, text: str, success: bool) -> None:
+        """Update IB feature counts from this assessment."""
+        features = self._extract_ib_features(text)
+        target = self._success_features if success else self._failure_features
+        for f in features:
+            target[f] = target.get(f, 0) + 1
 
     def assess_batch(self, items: list[str], context: dict = None) -> list[DensityReport]:
         """Assess multiple items and rank by value density."""

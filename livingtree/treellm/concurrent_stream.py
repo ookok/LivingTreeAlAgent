@@ -54,6 +54,7 @@ from loguru import logger
 class StreamEventKind(StrEnum):
     """Types of events in the concurrent stream."""
     FLASH_TOKEN = "flash_token"          # Real-time token from flash model
+    EARLY_DISPATCH = "early_dispatch"     # FASTER: first N tokens dispatched immediately
     FLASH_COMPLETE = "flash_complete"    # Flash model finished
     PRO_INSIGHT = "pro_insight"          # Intermediate insight from pro model
     PRO_COMPLETE = "pro_complete"        # Pro model finished
@@ -107,13 +108,15 @@ class ConcurrentStream:
     MAX_PRO_INSIGHTS = 3              # Max intermediate weaves per session
     MIN_FLASH_TOKENS_FOR_WEAVE = 20   # Don't weave too early
 
-    def __init__(self, chat_fn: Any = None):
-        """Initialize with a chat function for LLM calls.
+    # FASTER: HAS-inspired early dispatch
+    EARLY_DISPATCH_TOKENS = 3         # Dispatch first N tokens immediately
+    EARLY_DISPATCH_TARGET_MS = 200    # Target for first dispatch <200ms
 
-        chat_fn: async callable(messages, provider, stream) -> AsyncIterator[str]
-        """
+    def __init__(self, chat_fn: Any = None):
+        """Initialize with a chat function for LLM calls."""
         self._chat_fn = chat_fn
-        self._stats = {"sessions": 0, "weaves": 0, "avg_flash_ttft": 0.0}
+        self._stats = {"sessions": 0, "weaves": 0, "avg_flash_ttft": 0.0,
+                       "early_dispatches": 0, "avg_early_dispatch_ms": 0.0}
 
     # ── Main Stream Pipeline ──────────────────────────────────────
 
@@ -207,6 +210,23 @@ class ConcurrentStream:
                     text=token, provider=flash_model,
                     sequence=sequence,
                 )
+
+                # FASTER: HAS early dispatch — first N tokens sent immediately
+                if len(flash_tokens) == self.EARLY_DISPATCH_TOKENS:
+                    early_ms = (time.monotonic() - session_t0) * 1000
+                    self._stats["early_dispatches"] += 1
+                    self._stats["avg_early_dispatch_ms"] = (
+                        self._stats["avg_early_dispatch_ms"] * 0.9 + early_ms * 0.1
+                    )
+                    sequence += 1
+                    yield StreamEvent(
+                        kind=StreamEventKind.EARLY_DISPATCH,
+                        text="".join(flash_tokens),
+                        provider=flash_model,
+                        sequence=sequence,
+                        metadata={"ttfa_ms": round(flash_first_token_ms, 1),
+                                  "early_dispatch_ms": round(early_ms, 1)},
+                    )
 
                 # Check for weave point
                 if (pro_insights_buffer and

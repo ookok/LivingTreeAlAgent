@@ -941,5 +941,10 @@ sendMessage = async function() {
   return origSend();
 };
 </script>
+<!-- A2UI Renderer: ECharts + Mermaid + Leaflet (loaded async) -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'default'});</script>
+<script src="/js/living-a2ui.js"></script>
 </body>
 </html>

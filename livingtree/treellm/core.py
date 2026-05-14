@@ -728,9 +728,15 @@ class TreeLLM:
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
                     "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
-                    "- explore_domain: spontaneously explore an unfamiliar website domain to build World Knowledge. Args: domain_or_url|optional_max_pages (default 15). Use this BEFORE answering if the query involves a domain you don't know well.\n"
-                    "- get_world_knowledge: retrieve previously cached World Knowledge for a domain. Args: domain string.\n"
-                    "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n"
+                    "- explore_domain: spontaneously explore an unfamiliar website domain to build World Knowledge.\n"
+                    "- get_world_knowledge: retrieve previously cached World Knowledge for a domain.\n"
+                    "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n\n"
+                    "When the user asks for a chart, diagram, or visualization, output in A2UI JSON format:\n"
+                    '  Chart:  {"type":"chart","chart":{"type":"bar|line|pie|scatter","data":{"labels":[...],"datasets":[{"label":"...","data":[...]}]},"options":{"title":"..."}}}\n'
+                    '  Diagram: {"type":"diagram","diagram":{"engine":"mermaid","code":"graph LR\\n  A-->B\\n  B-->C"}}\n'
+                    '  SVG:    {"type":"svg","svg":"<svg>...</svg>"}\n'
+                    '  Table:  {"type":"table","columns":["Name","Value"],"rows":[["A",1],["B",2]]}\n'
+                    '  Map:    {"type":"map","lat":31.2,"lon":118.8,"zoom":12,"markers":[{"lat":31.2,"lon":118.8,"label":"Point"}]}\n'
                     "After tool results, continue your reasoning. You may call multiple tools."
                 ),
             }] + messages

@@ -515,23 +515,46 @@ class LivingRenderer:
             render_time_ms=0,
         )
 
-    # ── L3: VISUAL — Charts, diagrams, timelines ──────────────────
+    # ── L3: VISUAL — A2UI declarative charts, diagrams, SVG, maps ──
 
     def _render_visual(self, data: dict, caps: CapabilityProfile,
                        meta: dict) -> RenderResult:
-        """Visual rendering — embeddable charts via SVG or data URIs."""
+        """A2UI declarative rendering — auto-detect visual type from data structure.
+
+        Supports:
+          chart:  {type:"chart", chart:{type:"bar|line|pie|scatter", data:{...}, options:{...}}}
+          diagram:{type:"diagram", diagram:{engine:"mermaid", code:"graph LR\n..."}}
+          svg:    {type:"svg", svg:"<svg>...</svg>"}
+          table:  {type:"table", columns:[...], rows:[...]}
+          tree:   {type:"tree", nodes:[{label, children}]}
+          map:    {type:"map", lat:..., lon:..., zoom:..., markers:[...]}
+          metric: {type:"metric", value:42, label:"成功率", unit:"%"}
+        """
+        visual_type = data.get("type", "")
+
+        if visual_type == "diagram" and "diagram" in data:
+            return self._render_a2ui_diagram(data["diagram"])
+        if visual_type == "chart" and "chart" in data:
+            return self._render_a2ui_chart(data["chart"])
+        if visual_type == "svg" and "svg" in data:
+            return self._render_a2ui_svg(data["svg"])
+        if visual_type == "table":
+            return self._render_struct(data, caps, meta)
+        if visual_type == "tree" and "tree" in data:
+            return self._render_a2ui_tree(data["tree"])
+        if visual_type == "map" and "map" in data:
+            return self._render_a2ui_map(data["map"])
+        if visual_type == "metric":
+            return self._render_a2ui_metric(data)
+
+        # Legacy fallback: embed JSON data with sparkline
         parts = [
             '<div style="padding:8px;">',
-            f'<p style="color:#6b7280;font-size:12px;">'
-            f'📊 Visual rendering requires a chart library (Chart.js/LeaferJS). '
-            f'Data payload embedded for client-side rendering.</p>',
             '<script type="application/json" class="living-chart-data">',
             json.dumps(data, default=str, ensure_ascii=False),
             '</script>',
             '</div>',
         ]
-
-        # If SVG is supported, embed a simple bar chart for metrics
         if caps.supports_svg:
             parts.append(self._render_svg_sparkline(data))
 
@@ -542,6 +565,84 @@ class LivingRenderer:
             byte_size=0,
             render_time_ms=0,
         )
+
+    # ── A2UI Renderers ─────────────────────────────────────────────
+
+    def _render_a2ui_chart(self, chart: dict) -> RenderResult:
+        """Render ECharts-compatible chart declaration."""
+        chart_type = chart.get("type", "bar")
+        chart_data = chart.get("data", {})
+        options = chart.get("options", {})
+
+        title = escape(options.get("title", ""))
+        chart_id = f"chart_{hash(str(chart_data)) & 0xFFFF:04x}"
+
+        html = (
+            f'<div class="living-a2ui" data-a2ui-type="chart" data-a2ui-chart="{escape(json.dumps(chart, ensure_ascii=False))}" style="width:100%;min-height:300px;">'
+            f'<div id="{chart_id}" style="width:100%;height:300px;"></div>'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_a2ui_diagram(self, diagram: dict) -> RenderResult:
+        """Render Mermaid/Graphviz diagram declaration."""
+        engine = diagram.get("engine", "mermaid")
+        code = diagram.get("code", "")
+
+        html = (
+            f'<div class="living-a2ui" data-a2ui-type="diagram" data-a2ui-engine="{engine}" style="background:#fff;border-radius:8px;padding:12px;overflow-x:auto;">'
+            f'<pre class="mermaid" style="text-align:center;">{escape(code)}</pre>'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_a2ui_svg(self, svg: str) -> RenderResult:
+        """Render SVG directly."""
+        html = (
+            f'<div class="living-a2ui" data-a2ui-type="svg" style="text-align:center;padding:8px;">'
+            f'{svg[:50000]}'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_a2ui_tree(self, tree: dict) -> RenderResult:
+        """Render tree data as ECharts treemap."""
+        html = (
+            f'<div class="living-a2ui" data-a2ui-type="chart" '
+            f'data-a2ui-chart="{escape(json.dumps({"type":"tree","data":tree}, ensure_ascii=False))}" '
+            f'style="width:100%;min-height:300px;"></div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_a2ui_map(self, map_data: dict) -> RenderResult:
+        """Render map data as Leaflet-compatible declaration."""
+        html = (
+            f'<div class="living-a2ui" data-a2ui-type="map" '
+            f'data-a2ui-map="{escape(json.dumps(map_data, ensure_ascii=False))}" '
+            f'style="width:100%;height:400px;border-radius:8px;"></div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_a2ui_metric(self, data: dict) -> RenderResult:
+        """Render a single metric gauge."""
+        value = data.get("value", 0)
+        label = escape(data.get("label", ""))
+        unit = escape(data.get("unit", ""))
+        color = self.COLOR_MAP.get(data.get("priority", "normal"), "#2563eb")
+
+        html = (
+            f'<div style="text-align:center;padding:16px;">'
+            f'<div style="font-size:36px;font-weight:bold;color:{color};">{value}{unit}</div>'
+            f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.STRUCT, byte_size=0, render_time_ms=0)
 
     def _render_svg_sparkline(self, data: dict) -> str:
         """Generate a tiny inline SVG sparkline for metric data."""

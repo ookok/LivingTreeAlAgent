@@ -274,8 +274,36 @@ class DebugLoop:
         except Exception:
             pass
 
-        # 2. Generate fix via LLM
+        # 1.5. Parallel context analysis (file deps, git blame, test coverage)
+        context_task = None
+        try:
+            from .debug_pro import ParallelAnalyzer
+            analyzer = ParallelAnalyzer()
+            context_task = asyncio.create_task(
+                analyzer.analyze(error.file_path, error.line_number,
+                                error.exception_type)
+            )
+        except Exception:
+            pass
+
+        # 2. Generate fix via LLM (with parallel context if available)
         prompt = self._build_fix_prompt(error, include_diff=True)
+
+        # Inject parallel analysis results
+        if context_task:
+            try:
+                ctx = await asyncio.wait_for(context_task, timeout=15.0)
+                context_lines = []
+                if ctx.dependency_issues:
+                    context_lines.append("依赖关系: " + "; ".join(ctx.dependency_issues[:5]))
+                if ctx.git_blame_info:
+                    context_lines.append(f"Git Blame: {ctx.git_blame_info[:200]}")
+                if ctx.test_coverage_gaps:
+                    context_lines.append("测试覆盖: " + "; ".join(ctx.test_coverage_gaps[:3]))
+                if context_lines:
+                    prompt += "\n\n上下文分析 (并行LLM):\n" + "\n".join(context_lines)
+            except asyncio.TimeoutError:
+                pass
         result = await self._call_llm(prompt, max_tokens=2000)
 
         if not result:

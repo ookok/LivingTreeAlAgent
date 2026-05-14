@@ -444,16 +444,22 @@ def _svc_canary(args: list):
 
 
 def _svc_debug(args: list):
-    """AI-driven autonomous debug loop. usage: livingtree debug <target> [--level L1|L2|L3] [--max-attempts N] [--args ...]"""
+    """AI-driven autonomous debug loop. usage: livingtree debug <target> [--level L1|L2|L3] [--trace] [--max-attempts N] [--args ...]"""
     import asyncio
 
     async def _run():
+        from .treellm.debug_pro import install as debug_install
         from .treellm.debug_loop import DebugLoop, DebugLevel
-        loop = DebugLoop.instance()
+
+        # Install global error interception
+        interceptor = debug_install(trace_memory="--trace" in args)
+
         target = args[0] if args else "main.py"
         level = DebugLevel.SEMI_AUTO
         max_attempts = 5
         target_args = []
+        trace_mode = "--trace" in args
+
         i = 0
         while i < len(args):
             if args[i] == "--level" and i + 1 < len(args):
@@ -462,19 +468,41 @@ def _svc_debug(args: list):
             elif args[i] == "--max-attempts" and i + 1 < len(args):
                 max_attempts = int(args[i+1])
                 i += 2
+            elif args[i] == "--trace":
+                i += 1
             elif args[i] == "--args" and i + 1 < len(args):
                 target_args = args[i+1:]
                 break
             else:
                 i += 1
 
+        # Line tracer (if --trace)
+        if trace_mode:
+            from .treellm.debug_pro import LineTracer
+            tracer = LineTracer()
+            print(f"\n  Tracing execution: {target}")
+            snapshots = await tracer.trace_file(target, max_steps=500)
+            print(f"  Captured {len(snapshots)} line snapshots")
+            for s in snapshots[-10:]:
+                print(f"    {s.file}:{s.line} — {s.function}")
+
         print(f"\n  Debug Loop: {target} (level={level.value}, max_attempts={max_attempts})")
+        loop = DebugLoop.instance()
         session = await loop.debug(target, target_args, level, max_attempts)
+
         print(f"\n  Result: {'✅ FIXED' if session.fixed else '❌ ESCALATED' if session.escalated else '⚠️ UNRESOLVED'}")
         print(f"  Attempts: {len(session.attempts)}")
         print(f"  Duration: {session.total_duration_ms/1000:.1f}s")
         for a in session.attempts:
             print(f"    #{a.attempt_number}: {a.result.value} ({a.duration_ms/1000:.1f}s) {a.llm_provider}")
+
+        # Show intercepted errors
+        if interceptor:
+            stats = interceptor.stats()
+            if stats["total_captured"] > 0:
+                print(f"\n  Errors intercepted: {stats['total_captured']} ({stats['unique_types']} types)")
+                for err_type, count in stats["top_errors"]:
+                    print(f"    {err_type}: {count}")
 
     asyncio.run(_run())
 

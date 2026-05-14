@@ -105,7 +105,20 @@ class DaemonDoctor:
         except Exception:
             pass
 
-        # 4. ContextMoE: periodic memory consolidation
+        # 4. Strategic Distiller: EvolveR-style experience→principles
+        try:
+            from .strategic_distiller import get_strategic_distiller
+            distiller = get_strategic_distiller()
+            result = await distiller.distill_from_recordings()
+            if result.principles_distilled > 0:
+                issues.append({
+                    "level": "info",
+                    "msg": f"StrategicDistiller: {result.principles_distilled} new principles",
+                })
+        except Exception:
+            pass
+
+        # 5. ContextMoE: periodic memory consolidation
         try:
             from .context_moe import get_context_moe
             moe = get_context_moe()

@@ -373,6 +373,32 @@ TOOLS = [
             "required": ["lon", "lat", "from_crs", "to_crs"],
         },
     },
+    # ═══ EIA Model Tools ═══
+    {
+        "name": "gaussian_plume",
+        "description": "Gaussian plume dispersion per GB/T3840-1991. Q(mg/s),u(m/s),x(m),stability(A-F),He(m)",
+        "inputSchema": {"type":"object","properties":{"Q":{"type":"number"},"u":{"type":"number"},"x":{"type":"number"},"stability":{"type":"string"},"y":{"type":"number"},"z":{"type":"number"},"He":{"type":"number"}},"required":["Q","u","x","stability"]},
+    },
+    {
+        "name": "streeter_phelps",
+        "description": "Streeter-Phelps DO sag curve. DO_sat(mg/L),k1(1/d),k2(1/d),L0(mg/L),t(d)",
+        "inputSchema": {"type":"object","properties":{"DO_sat":{"type":"number"},"k1":{"type":"number"},"k2":{"type":"number"},"L0":{"type":"number"},"t":{"type":"number"}},"required":["DO_sat","k1","k2","L0","t"]},
+    },
+    {
+        "name": "noise_iso9613",
+        "description": "ISO 9613-2 noise prediction. Lw(dB),r(m),ground_type(soft|mixed|hard)",
+        "inputSchema": {"type":"object","properties":{"Lw":{"type":"number"},"r":{"type":"number"},"ground_type":{"type":"string"}},"required":["Lw","r"]},
+    },
+    {
+        "name": "co2_equivalent",
+        "description": "CO2 equivalent IPCC GWP100. masses: {CO2:100,CH4:5,N2O:2}",
+        "inputSchema": {"type":"object","properties":{"masses":{"type":"object"}},"required":["masses"]},
+    },
+    {
+        "name": "hazard_quotient",
+        "description": "Ecological Hazard Quotient. HQ = exposure / reference_dose",
+        "inputSchema": {"type":"object","properties":{"exposure":{"type":"number"},"reference_dose":{"type":"number"}},"required":["exposure","reference_dose"]},
+    },
 ]
 
 
@@ -452,6 +478,12 @@ class MCPServer:
             "spatial_search": self._mcp_spatial_search,
             "distance_calc": self._mcp_distance,
             "coordinate_transform": self._mcp_coord_transform,
+            # EIA models
+            "gaussian_plume": self._mcp_gaussian_plume,
+            "streeter_phelps": self._mcp_streeter_phelps,
+            "noise_iso9613": self._mcp_noise_iso9613,
+            "co2_equivalent": self._mcp_co2_equivalent,
+            "hazard_quotient": self._mcp_hazard_quotient,
         }
 
         handler = handlers.get(method)
@@ -708,6 +740,44 @@ class MCPServer:
         elif from_crs == "WGS84" and to_crs == "CGCS2000":
             lon, lat = ct.wgs84_to_cgcs2000_3deg(lon, lat)
         return {"lon": round(lon, 6), "lat": round(lat, 6), "crs": to_crs}
+
+    # ── EIA Model handlers ──
+
+    async def _mcp_gaussian_plume(self, params: dict) -> dict:
+        from ..treellm.eia_models import AtmosphericModels
+        C = AtmosphericModels.gaussian_plume(
+            params["Q"], params["u"], params["x"],
+            params.get("y", 0), params.get("z", 0),
+            params["stability"], params.get("He", 0),
+        )
+        return {"concentration_mg_m3": round(C, 6)}
+
+    async def _mcp_streeter_phelps(self, params: dict) -> dict:
+        from ..treellm.eia_models import WaterQualityModels
+        DO = WaterQualityModels.streeter_phelps(
+            params["DO_sat"], params["k1"], params["k2"],
+            params["L0"], params.get("D0", 0), params["t"],
+        )
+        return {"DO_mg_L": round(DO, 4)}
+
+    async def _mcp_noise_iso9613(self, params: dict) -> dict:
+        from ..treellm.eia_models import NoiseModels
+        Lp = NoiseModels.point_source(
+            params["Lw"], params["r"], params.get("ground_type", "soft"),
+        )
+        return {"Lp_db": round(Lp, 1)}
+
+    async def _mcp_co2_equivalent(self, params: dict) -> dict:
+        from ..treellm.eia_models import CarbonGHGModels
+        co2e = CarbonGHGModels.co2_equivalent(params["masses"])
+        return {"co2e_tons": round(co2e, 2)}
+
+    async def _mcp_hazard_quotient(self, params: dict) -> dict:
+        from ..treellm.eia_models import EcologicalRiskModels
+        hq = EcologicalRiskModels.hazard_quotient(
+            params["exposure"], params["reference_dose"],
+        )
+        return {"HQ": round(hq, 3), "risk": "potential" if hq > 1 else "acceptable"}
 
 
 async def serve_stdio(hub=None) -> None:

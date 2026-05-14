@@ -119,6 +119,8 @@ def main():
         _svc_debug(sys.argv[2:])
     elif command == "improve":
         _svc_improve(sys.argv[2:])
+    elif command == "cli":
+        _svc_cli(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -625,6 +627,63 @@ def _svc_debug(args: list):
         if chat_result:
             print(f"  Response preview: {chat_result[:200]}...")
         print(f"{'='*60}")
+
+    asyncio.run(_run())
+
+
+def _svc_cli(args: list):
+    """CLI introspection: discover and register system CLI tools. usage: livingtree cli [scan|register NAME|register-all|search PATTERN|exec NAME -- ARGS]"""
+    import asyncio
+
+    async def _run():
+        from .treellm.cli_introspector import get_cli_introspector
+
+        if not args:
+            print("Usage: livingtree cli [scan|register NAME|register-all|search PATTERN|exec NAME -- ARGS]")
+            return
+
+        introspector = get_cli_introspector()
+        sub = args[0].lower()
+
+        if sub == "scan":
+            print("  Scanning PATH for CLI tools...")
+            tools = introspector.scan_path(max_tools=200)
+            by_cat = {}
+            for t in tools:
+                by_cat[t.category] = by_cat.get(t.category, 0) + 1
+            for cat, n in sorted(by_cat.items()):
+                print(f"    {cat}: {n} tools")
+            print(f"  Total: {len(tools)} tools discovered")
+
+        elif sub == "search" and len(args) > 1:
+            results = introspector.search(args[1])
+            for r in results:
+                print(f"  [{r['category']}] {r['name']}: {r['description'][:80]}")
+
+        elif sub == "register" and len(args) > 1:
+            await introspector.register_tool(args[1])
+            print(f"  Registered: cli:{args[1]}")
+
+        elif sub == "register-all":
+            result = await introspector.register_all()
+            print(f"  Registered: {result.registered}, Failed: {result.failed} ({result.duration_ms:.0f}ms)")
+
+        elif sub == "exec" and len(args) > 1:
+            name = args[1]
+            cli_args = " ".join(args[3:]) if len(args) > 2 and args[2] == "--" else ""
+            result = await introspector.execute(name, cli_args)
+            if "error" in result:
+                print(f"  Error: {result['error']}")
+            else:
+                print(result.get("stdout", "")[:2000])
+                if result.get("stderr"):
+                    print(f"  [stderr]: {result['stderr'][:500]}")
+
+        elif sub == "list":
+            tools = introspector.list_available(category=args[1] if len(args) > 1 else "")
+            for t in tools:
+                status = "✅" if t["registered"] else "📦"
+                print(f"  {status} [{t['category']}] {t['name']}")
 
     asyncio.run(_run())
 

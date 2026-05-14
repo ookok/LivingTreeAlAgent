@@ -246,13 +246,7 @@ class ToolExecutor:
     # ═══ Shell tools ═══
 
     async def run_command(self, command: str, workdir: str = ".", timeout: int = 30) -> ToolResult:
-        """Execute a shell command or run an inline script.
-
-        For scripts, use 'python -c ...' or 'bash -c ...'.
-        """
-        danger = self._check_dangerous(command)
-        if danger:
-            return ToolResult("run_command", False, error=f"BLOCKED: {danger}", elapsed_ms=0)
+        """Execute a shell command via unified ShellExecutor (safety + cross-platform)."""
         t0 = time.monotonic()
         try:
             # Route through unified ShellExecutor for safety + cross-platform
@@ -265,37 +259,6 @@ class ToolExecutor:
                             elapsed_ms=(time.monotonic()-t0)*1000)
         except ImportError:
             pass  # Fallback below
-
-    @staticmethod
-    def _check_dangerous(command: str) -> str:
-        """Security filter — unified blocklist for all shell tool calls."""
-        cmd_compact = command.lower().replace(" ", "").replace("\t", "").replace("`", "")
-        for pattern in [
-            "rm-rf/", "rm-rf~", "rm-rf.", "delf/s", "delf/q", "rmdir/s", "rmdir/q",
-            "format", "mkfs.", ":(){:|:&};:", ">/dev/sda",
-            "chmod777", "chmod-R777",
-            "curl|sh", "curl|bash", "wget-O-|sh", "wget-O-|bash",
-            "eval(", "exec(", "__import__('os')",
-            "shutdown", "taskkill", "diskpart", "regdelete", "icacls",
-            "takeown", "netuser", "formatc:",
-            ":(){:", "|sh", "|bash", "|zsh", "|dash",
-        ]:
-            if pattern.replace(" ", "") in cmd_compact:
-                return f"blocked pattern: {pattern}"
-        return ""
-
-    @staticmethod
-    def _preferred_shell() -> str:
-        import shutil
-        if platform.system() == "Windows":
-            pwsh = shutil.which("pwsh")
-            if pwsh:
-                return pwsh
-        if platform.system() == "Linux":
-            wsl = shutil.which("wsl")
-            if wsl:
-                return "wsl"
-        return ""
 
     # ═══ Notification tools ═══
 

@@ -312,6 +312,67 @@ TOOLS = [
             "required": ["values"],
         },
     },
+    # ═══ Map/GIS Tools ═══
+    {
+        "name": "geocode",
+        "description": "Geocode an address to lat/lon coordinates via Tianditu API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Address to geocode"},
+            },
+            "required": ["address"],
+        },
+    },
+    {
+        "name": "buffer_query",
+        "description": "Create a buffer polygon around a point and return GeoJSON.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lon": {"type": "number"}, "lat": {"type": "number"},
+                "radius_m": {"type": "number", "description": "Buffer radius in meters"},
+            },
+            "required": ["lon", "lat", "radius_m"],
+        },
+    },
+    {
+        "name": "spatial_search",
+        "description": "Check if a point is inside a polygon. Returns True/False.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lon": {"type": "number"}, "lat": {"type": "number"},
+                "polygon": {"type": "object", "description": "GeoJSON polygon"},
+            },
+            "required": ["lon", "lat", "polygon"],
+        },
+    },
+    {
+        "name": "distance_calc",
+        "description": "Calculate Haversine distance in meters between two coordinates.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lon1": {"type": "number"}, "lat1": {"type": "number"},
+                "lon2": {"type": "number"}, "lat2": {"type": "number"},
+            },
+            "required": ["lon1", "lat1", "lon2", "lat2"],
+        },
+    },
+    {
+        "name": "coordinate_transform",
+        "description": "Transform coordinates between WGS84, GCJ02, and CGCS2000 systems.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lon": {"type": "number"}, "lat": {"type": "number"},
+                "from_crs": {"type": "string", "description": "Source CRS: WGS84|GCJ02|CGCS2000"},
+                "to_crs": {"type": "string", "description": "Target CRS: WGS84|GCJ02|CGCS2000"},
+            },
+            "required": ["lon", "lat", "from_crs", "to_crs"],
+        },
+    },
 ]
 
 
@@ -385,6 +446,12 @@ class MCPServer:
             "classify_noise_level": self._classify_noise,
             "redact_pii": self._redact_pii,
             "detect_outliers": self._detect_outliers,
+            # Map/GIS tools
+            "geocode": self._mcp_geocode,
+            "buffer_query": self._mcp_buffer,
+            "spatial_search": self._mcp_spatial_search,
+            "distance_calc": self._mcp_distance,
+            "coordinate_transform": self._mcp_coord_transform,
         }
 
         handler = handlers.get(method)
@@ -601,6 +668,46 @@ class MCPServer:
         mild = [o for o in outliers if o["severity"] == "mild"]
         return {"total": len(values), "extreme_outliers": len(extreme),
                 "mild_outliers": len(mild), "details": outliers}
+
+    # ── Map/GIS handlers ──
+
+    async def _mcp_geocode(self, params: dict) -> dict:
+        from ..capability.tianditu import TiandituAPI
+        api = TiandituAPI()
+        result = await api.geocode(params["address"])
+        return {"location": result} if result else {"error": "Geocoding failed"}
+
+    async def _mcp_buffer(self, params: dict) -> dict:
+        from ..treellm.spatial_analysis import get_spatial_engine
+        engine = get_spatial_engine()
+        geojson = engine.buffer(params["lon"], params["lat"], params["radius_m"])
+        return {"geojson": geojson}
+
+    async def _mcp_spatial_search(self, params: dict) -> dict:
+        from ..treellm.spatial_analysis import get_spatial_engine
+        engine = get_spatial_engine()
+        inside = engine.point_in_polygon(params["lon"], params["lat"], params["polygon"])
+        return {"inside": inside}
+
+    async def _mcp_distance(self, params: dict) -> dict:
+        from ..treellm.spatial_analysis import get_spatial_engine
+        engine = get_spatial_engine()
+        d = engine.distance_m(params["lon1"], params["lat1"], params["lon2"], params["lat2"])
+        return {"distance_m": round(d, 1)}
+
+    async def _mcp_coord_transform(self, params: dict) -> dict:
+        from ..treellm.spatial_analysis import CoordinateTransform
+        ct = CoordinateTransform()
+        from_crs = params["from_crs"].upper()
+        to_crs = params["to_crs"].upper()
+        lon, lat = params["lon"], params["lat"]
+        if from_crs == "WGS84" and to_crs == "GCJ02":
+            lon, lat = ct.wgs84_to_gcj02(lon, lat)
+        elif from_crs == "GCJ02" and to_crs == "WGS84":
+            lon, lat = ct.gcj02_to_wgs84(lon, lat)
+        elif from_crs == "WGS84" and to_crs == "CGCS2000":
+            lon, lat = ct.wgs84_to_cgcs2000_3deg(lon, lat)
+        return {"lon": round(lon, 6), "lat": round(lat, 6), "crs": to_crs}
 
 
 async def serve_stdio(hub=None) -> None:

@@ -399,6 +399,17 @@ TOOLS = [
         "description": "Ecological Hazard Quotient. HQ = exposure / reference_dose",
         "inputSchema": {"type":"object","properties":{"exposure":{"type":"number"},"reference_dose":{"type":"number"}},"required":["exposure","reference_dose"]},
     },
+    # ═══ API Map Tools ═══
+    {
+        "name": "search_apis",
+        "description": "Search 1400+ free web APIs by keyword. Returns name, description, URL, auth type.",
+        "inputSchema": {"type":"object","properties":{"query":{"type":"string"},"category":{"type":"string"}},"required":["query"]},
+    },
+    {
+        "name": "call_api",
+        "description": "Call any discovered web API by name with parameters. Returns structured data.",
+        "inputSchema": {"type":"object","properties":{"name":{"type":"string"},"params":{"type":"object"},"method":{"type":"string"}},"required":["name"]},
+    },
 ]
 
 
@@ -484,6 +495,9 @@ class MCPServer:
             "noise_iso9613": self._mcp_noise_iso9613,
             "co2_equivalent": self._mcp_co2_equivalent,
             "hazard_quotient": self._mcp_hazard_quotient,
+            # API Map
+            "search_apis": self._mcp_search_apis,
+            "call_api": self._mcp_call_api,
         }
 
         handler = handlers.get(method)
@@ -778,6 +792,23 @@ class MCPServer:
             params["exposure"], params["reference_dose"],
         )
         return {"HQ": round(hq, 3), "risk": "potential" if hq > 1 else "acceptable"}
+
+    # ── API Map handlers ──
+
+    async def _mcp_search_apis(self, params: dict) -> dict:
+        from ..treellm.api_map import get_api_map
+        results = get_api_map().search(params["query"], params.get("category", ""))
+        return {"total": len(results), "apis": results}
+
+    async def _mcp_call_api(self, params: dict) -> dict:
+        from ..treellm.api_map import get_api_map
+        result = await get_api_map().call(
+            params["name"], params.get("params", {}),
+            params.get("method", "GET"),
+        )
+        return {"data": result.data, "status_code": result.status_code,
+                "elapsed_ms": round(result.elapsed_ms, 0),
+                "cached": result.cached, "error": result.error}
 
 
 async def serve_stdio(hub=None) -> None:

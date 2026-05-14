@@ -398,7 +398,7 @@ class LivingRenderer:
         title = escape(meta.get("title", data.get("title", "")))
         tags = data.get("tags", data.get("topics", []))
 
-        parts = ['<div class="living-card" style="font-family:system-ui;padding:12px;border-radius:8px;']
+        parts = ['<div class="living-card" style="font-family:"Maple Mono",system-ui,sans-serif;padding:12px;border-radius:8px;']
         if caps.prefers_dark:
             parts.append('background:#1e1e2e;color:#cdd6f4;border:1px solid #313244;')
         else:

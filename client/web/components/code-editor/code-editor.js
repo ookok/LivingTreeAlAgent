@@ -73,7 +73,7 @@ class CodeEditor extends Component {
       language: 'javascript',
       theme: 'vs-dark',
       fontSize: 13,
-      fontFamily: '"JetBrains Mono", "Fira Code", Consolas, monospace',
+      fontFamily: '"Maple Mono", "JetBrains Mono", "Fira Code", Consolas, monospace',
       lineNumbers: 'on',
       minimap: { enabled: true, scale: 1, showSlider: 'mouseover' },
       scrollBeyondLastLine: false,

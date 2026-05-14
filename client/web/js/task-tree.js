@@ -826,7 +826,7 @@
     _injectStyles() {
       if (document.getElementById('task-tree-runtime-styles')) return;
       const css = `
-#task-tree-root { display:flex;flex-direction:column;height:100%;background:var(--bg, #08080f);color:var(--text, #c8c8d4);font-family:system-ui,"SF Mono","Fira Code",Consolas,monospace }
+#task-tree-root { display:flex;flex-direction:column;height:100%;background:var(--bg, #08080f);color:var(--text, #c8c8d4);font-family:"Maple Mono","Cascadia Code",Consolas,monospace }
 .task-header-bar { display:flex;align-items:center;padding:8px 16px;gap:12px;border-bottom:1px solid var(--border, #1a1a2e);flex-shrink:0 }
 .task-header-bar .overall-progress { flex:1;height:8px;background:var(--border, #1a1a2e);border-radius:4px;overflow:hidden }
 .task-header-bar .overall-progress-fill { height:100%;background:linear-gradient(90deg,#4a90d9,#27ae60);border-radius:4px;transition:width .5s }

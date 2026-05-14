@@ -108,7 +108,15 @@ class Signature:
         return "\n".join(parts)
 
     def add_example(self, input_data: dict, output_data: Any, score: float = 0.5) -> None:
-        """Add a training example with quality score."""
+        """Add a training example with quality score. Density-weighted."""
+        # Apply data value density weighting
+        try:
+            from .data_value_density import get_data_value_density
+            text = str(output_data)[:2000]
+            density = get_data_value_density().assess(text).total_score
+            score = score * 0.7 + density * 0.3  # Blend quality + density
+        except Exception:
+            pass
         self.examples.append({
             **{k: v for k, v in input_data.items()},
             "output": str(output_data)[:2000],

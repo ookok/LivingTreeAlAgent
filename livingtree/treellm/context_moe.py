@@ -531,10 +531,21 @@ class ContextMoE:
                 last_accessed=time.time(),
                 task_type=task_type,
             )
+            # DataValueDensity: only store high-density memories
+            try:
+                from .data_value_density import get_data_value_density
+                dvd = get_data_value_density()
+                density = dvd.assess(content).total_score
+                if density < 0.2:
+                    continue  # Skip low-value noise
+                block.prominence = density  # Store density as prominence
+            except Exception:
+                pass
             self._hot.append(block)
 
-        # Maintain 7±2 capacity
+        # Maintain 7±2 capacity — evict lowest-density first
         if len(self._hot) > self._hot_max:
+            self._hot.sort(key=lambda b: getattr(b, 'prominence', 0.5))
             overflow = self._hot[:-self._hot_max]
             for b in overflow:
                 b.layer = ExpertLayer.WARM

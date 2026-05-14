@@ -1510,19 +1510,6 @@ class IntegrationHub:
             moe_result = result
         except Exception:
             pass
-        moe_result = None
-        try:
-            from ..treellm.context_moe import get_context_moe
-            moe = get_context_moe()
-            task_type = kwargs.get("task_type", "general")
-            result = await moe.query(message, task_type)
-            enriched_msg = moe.build_enriched_message(message, result)
-            if enriched_msg != message:
-                message = enriched_msg
-                kwargs["moe_enriched"] = True
-            moe_result = result
-        except Exception:
-            pass
 
         # ── UserSignal: process implicit feedback from previous response ──
         try:

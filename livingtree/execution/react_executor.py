@@ -635,6 +635,53 @@ class ReactExecutor:
         except Exception as e:
             return f"[ripgrep_search] Error: {e}"
 
+    async def _tool_edit_file(self, input_str: str) -> str:
+        """Atomic find-and-replace in a file. Input: path|old_str|new_str"""
+        parts = input_str.strip().split("|", 2)
+        if len(parts) < 3:
+            return "[edit_file] Error: need path|old_str|new_str"
+        path, old_str, new_str = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        te = await self._ensure_tool_executor()
+        r = await te.edit_file(path, old_str, new_str)
+        if r.success:
+            return f"[edit_file] {r.output}"
+        return f"[edit_file] Error: {r.error}"
+
+    async def _tool_delete_file(self, path: str) -> str:
+        """Delete a file or directory. Input: path"""
+        path = path.strip()
+        if not path:
+            return "[delete_file] Error: empty path"
+        te = await self._ensure_tool_executor()
+        r = await te.delete_file(path)
+        if r.success:
+            return f"[delete_file] {r.output}"
+        return f"[delete_file] Error: {r.error}"
+
+    async def _tool_create_dir(self, path: str) -> str:
+        """Create a directory (mkdir -p). Input: path"""
+        path = path.strip()
+        if not path:
+            return "[create_dir] Error: empty path"
+        te = await self._ensure_tool_executor()
+        r = await te.create_dir(path)
+        if r.success:
+            return f"[create_dir] {r.output}"
+        return f"[create_dir] Error: {r.error}"
+
+    async def _tool_glob_files(self, input_str: str) -> str:
+        """Glob pattern match for files. Input: pattern or directory|pattern"""
+        parts = input_str.strip().split("|", 1)
+        pattern = parts[-1].strip()
+        directory = parts[0].strip() if len(parts) > 1 else "."
+        if not pattern:
+            return "[glob_files] Error: pattern required"
+        te = await self._ensure_tool_executor()
+        r = await te.glob_files(pattern, directory)
+        if r.success:
+            return f"[glob_files] {r.output}"[:5000]
+        return f"[glob_files] Error: {r.error}"
+
     # ── File & Search Tools ──
 
     async def _tool_find_files(self, query: str) -> str:
@@ -1218,10 +1265,14 @@ class ReactExecutor:
             "execute": self._tool_execute,
             "execute_python": self._tool_execute_python,
             "execute_git": self._tool_execute_git,
-            # File tools (6)
+            # File tools (10)
             "read_file": self._tool_read_file,
             "write_file": self._tool_write_file,
             "append_file": self._tool_append_file,
+            "edit_file": self._tool_edit_file,
+            "delete_file": self._tool_delete_file,
+            "create_dir": self._tool_create_dir,
+            "glob_files": self._tool_glob_files,
             "list_files": self._tool_list_files,
             "find_files": self._tool_find_files,
             "ripgrep_search": self._tool_ripgrep_search,

@@ -10,7 +10,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778050864.6262136,
-    "decay_factor": 0.7305609628158954,
+    "decay_factor": 0.7302819122168016,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -31,7 +31,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494079.5640802,
-    "decay_factor": 0.9015543802027349,
+    "decay_factor": 0.9012753296036411,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -49,7 +49,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494079.5642216,
-    "decay_factor": 0.9015543802572805,
+    "decay_factor": 0.9012753296581867,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -67,7 +67,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494079.564249,
-    "decay_factor": 0.9015543802678585,
+    "decay_factor": 0.9012753296687648,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -85,7 +85,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494079.564268,
-    "decay_factor": 0.9015543802752171,
+    "decay_factor": 0.9012753296761233,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -103,7 +103,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494892.4859412,
-    "decay_factor": 0.9018680074638974,
+    "decay_factor": 0.9015889568648037,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -121,7 +121,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494892.4860747,
-    "decay_factor": 0.9018680075154076,
+    "decay_factor": 0.9015889569163138,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -139,7 +139,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494892.4861064,
-    "decay_factor": 0.9018680075276413,
+    "decay_factor": 0.9015889569285476,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -157,7 +157,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778494892.4861283,
-    "decay_factor": 0.9018680075361036,
+    "decay_factor": 0.9015889569370099,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -175,7 +175,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549415.778317,
-    "decay_factor": 0.9229032282878955,
+    "decay_factor": 0.9226241776888018,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -193,7 +193,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549415.7784505,
-    "decay_factor": 0.9229032283394057,
+    "decay_factor": 0.9226241777403119,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -211,7 +211,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549415.7784796,
-    "decay_factor": 0.9229032283506275,
+    "decay_factor": 0.9226241777515338,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -229,7 +229,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549415.7785,
-    "decay_factor": 0.9229032283585381,
+    "decay_factor": 0.9226241777594443,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -247,7 +247,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549669.123135,
-    "decay_factor": 0.9230009693442671,
+    "decay_factor": 0.9227219187451734,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -265,7 +265,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549669.1232636,
-    "decay_factor": 0.9230009693938457,
+    "decay_factor": 0.922721918794752,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -283,7 +283,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549669.1232927,
-    "decay_factor": 0.9230009694050676,
+    "decay_factor": 0.9227219188059738,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -301,7 +301,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778549669.1233134,
-    "decay_factor": 0.9230009694130701,
+    "decay_factor": 0.9227219188139762,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -319,7 +319,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778561720.1815865,
-    "decay_factor": 0.9276502974505225,
+    "decay_factor": 0.9273712468514288,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -337,7 +337,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778561720.1817286,
-    "decay_factor": 0.9276502975053441,
+    "decay_factor": 0.9273712469062504,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -355,7 +355,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778561720.1817758,
-    "decay_factor": 0.9276502975235567,
+    "decay_factor": 0.9273712469244628,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [
@@ -373,7 +373,7 @@
     "success_rate": 0.5,
     "tokens_used": 0,
     "created_at": 1778561720.1817973,
-    "decay_factor": 0.927650297531835,
+    "decay_factor": 0.9273712469327413,
     "times_injected": 0,
     "last_injected": 0.0,
     "tags": [

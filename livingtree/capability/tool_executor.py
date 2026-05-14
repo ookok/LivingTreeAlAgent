@@ -20,6 +20,7 @@ import csv
 import io
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -249,8 +250,14 @@ class ToolExecutor:
 
         For scripts, use 'python -c ...' or 'bash -c ...'.
         """
+        danger = self._check_dangerous(command)
+        if danger:
+            return ToolResult("run_command", False, error=f"BLOCKED: {danger}", elapsed_ms=0)
         t0 = time.monotonic()
         try:
+            shell = self._preferred_shell()
+            if shell:
+                command = f"{shell} -c {_quote(command)}"
             p = await asyncio.create_subprocess_shell(
                 command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
@@ -263,9 +270,41 @@ class ToolExecutor:
             return ToolResult("run_command", p.returncode == 0, out, error=err if p.returncode else "",
                             elapsed_ms=(time.monotonic()-t0)*1000)
         except asyncio.TimeoutError:
+            self._kill_on_timeout(command)
             return ToolResult("run_command", False, error=f"Timeout after {timeout}s", elapsed_ms=timeout*1000)
         except Exception as e:
             return ToolResult("run_command", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    @staticmethod
+    def _check_dangerous(command: str) -> str:
+        """Security filter — unified blocklist for all shell tool calls."""
+        cmd_compact = command.lower().replace(" ", "").replace("\t", "").replace("`", "")
+        for pattern in [
+            "rm-rf/", "rm-rf~", "rm-rf.", "delf/s", "delf/q", "rmdir/s", "rmdir/q",
+            "format", "mkfs.", ":(){:|:&};:", ">/dev/sda",
+            "chmod777", "chmod-R777",
+            "curl|sh", "curl|bash", "wget-O-|sh", "wget-O-|bash",
+            "eval(", "exec(", "__import__('os')",
+            "shutdown", "taskkill", "diskpart", "regdelete", "icacls",
+            "takeown", "netuser", "formatc:",
+            ":(){:", "|sh", "|bash", "|zsh", "|dash",
+        ]:
+            if pattern.replace(" ", "") in cmd_compact:
+                return f"blocked pattern: {pattern}"
+        return ""
+
+    @staticmethod
+    def _preferred_shell() -> str:
+        import shutil
+        if platform.system() == "Windows":
+            pwsh = shutil.which("pwsh")
+            if pwsh:
+                return pwsh
+        if platform.system() == "Linux":
+            wsl = shutil.which("wsl")
+            if wsl:
+                return "wsl"
+        return ""
 
     # ═══ Notification tools ═══
 
@@ -439,6 +478,66 @@ class ToolExecutor:
             out_path.write_text(data, encoding="utf-8")
             return ToolResult("excel_export", True, str(out_path), elapsed_ms=(time.monotonic()-t0)*1000)
 
+    # ═══ File edit tools ═══
+
+    async def edit_file(self, path: str, old_str: str, new_str: str) -> ToolResult:
+        t0 = time.monotonic()
+        try:
+            p = Path(path)
+            if not p.exists():
+                return ToolResult("edit_file", False, error=f"File not found: {path}")
+            content = p.read_text(encoding="utf-8")
+            count = content.count(old_str)
+            if count == 0:
+                return ToolResult("edit_file", False, error="old_str not found in file")
+            if count > 1:
+                return ToolResult("edit_file", False, error=f"Found {count} matches — need unique old_str")
+            new_content = content.replace(old_str, new_str)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(new_content, encoding="utf-8")
+            os.replace(str(tmp), str(p))
+            return ToolResult("edit_file", True,
+                            output=f"Replaced in {path} ({len(content)}→{len(new_content)} chars)",
+                            elapsed_ms=(time.monotonic()-t0)*1000)
+        except Exception as e:
+            return ToolResult("edit_file", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    async def delete_file(self, path: str) -> ToolResult:
+        t0 = time.monotonic()
+        try:
+            p = Path(path)
+            if not p.exists():
+                return ToolResult("delete_file", False, error=f"Not found: {path}")
+            if p.is_dir():
+                import shutil
+                shutil.rmtree(p)
+                return ToolResult("delete_file", True, output=f"Deleted dir: {path}",
+                                elapsed_ms=(time.monotonic()-t0)*1000)
+            p.unlink()
+            return ToolResult("delete_file", True, output=f"Deleted: {path}",
+                            elapsed_ms=(time.monotonic()-t0)*1000)
+        except Exception as e:
+            return ToolResult("delete_file", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    async def create_dir(self, path: str) -> ToolResult:
+        t0 = time.monotonic()
+        try:
+            Path(path).mkdir(parents=True, exist_ok=True)
+            return ToolResult("create_dir", True, output=f"Created: {path}",
+                            elapsed_ms=(time.monotonic()-t0)*1000)
+        except Exception as e:
+            return ToolResult("create_dir", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
+    async def glob_files(self, pattern: str, directory: str = ".") -> ToolResult:
+        t0 = time.monotonic()
+        try:
+            files = sorted(Path(directory).glob(pattern))[:200]
+            return ToolResult("glob_files", True,
+                            output="\n".join(str(f) for f in files),
+                            elapsed_ms=(time.monotonic()-t0)*1000)
+        except Exception as e:
+            return ToolResult("glob_files", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+
     # ═══ Helpers ═══
 
     # ── Visual tools ──
@@ -491,6 +590,25 @@ class ToolExecutor:
                               elapsed_ms=(time.monotonic() - t0) * 1000)
 
     # ═══ Helpers ═══
+
+    @staticmethod
+    def _quote(cmd: str) -> str:
+        if '"' not in cmd:
+            return f'"{cmd}"'
+        if "'" not in cmd:
+            return f"'{cmd}'"
+        return cmd
+
+    @staticmethod
+    def _kill_on_timeout(command: str) -> None:
+        try:
+            import subprocess
+            if platform.system() == "Windows":
+                subprocess.run(["taskkill", "/F", "/IM", "cmd.exe"], capture_output=True, timeout=5)
+            else:
+                subprocess.run(["pkill", "-P", str(os.getpid())], capture_output=True, timeout=5)
+        except Exception:
+            pass
 
     def _strip_table(self, html: str) -> str:
         rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL|re.IGNORECASE)

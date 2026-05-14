@@ -71,6 +71,9 @@ class LearningSource:
     source_type: str            # "arxiv", "nature", "github", "custom"
     enabled: bool = True
     base_url: str = ""
+    base_url_direct: str = ""    # direct URL when mirror is disabled
+    use_mirror: bool = True      # auto-rewrite to CN mirror
+    use_proxy: bool = False      # route through scinet/proxy
     categories: list[str] = field(default_factory=list)
     journals: list[str] = field(default_factory=list)  # for nature
     queries: list[str] = field(default_factory=list)
@@ -87,7 +90,9 @@ class LearningSource:
 BUILTIN_SOURCES: dict[str, dict[str, Any]] = {
     "arxiv": {
         "source_type": "arxiv",
-        "base_url": "https://export.arxiv.org/api/query",
+        "base_url": "https://xxx.itp.ac.cn/api/query",
+        "base_url_direct": "https://export.arxiv.org/api/query",
+        "use_mirror": True,
         "categories": ["cs.AI", "cs.CL", "cs.MA", "cs.LG", "cs.DC"],
         "queries": [
             "multi-agent LLM orchestration autonomous",
@@ -124,6 +129,17 @@ BUILTIN_SOURCES: dict[str, dict[str, Any]] = {
             "knowledge graph RAG retrieval vector",
             "LLM router model selection cost optimization",
             "self-improving AI autonomous evolution",
+        ],
+    },
+    "semantic_scholar": {
+        "source_type": "semantic_scholar",
+        "base_url": "https://api.semanticscholar.org/graph/v1",
+        "use_proxy": False,
+        "categories": ["cs.AI", "cs.CL", "cs.LG"],
+        "queries": [
+            "multi-LLM agent orchestration autonomous",
+            "retrieval augmented generation hallucination",
+            "self-evolving AI agent framework",
         ],
     },
 }

@@ -16,9 +16,9 @@ except Exception:  # pragma: no cover
     DocxDocument = None  # type: ignore
 
 try:
-    import PyPDF2  # type: ignore
-except Exception:  # pragma: no cover
-    PyPDF2 = None  # type: ignore
+    import pypdf  # type: ignore
+except Exception:
+    pypdf = None  # type: ignore
 
 
 class Template(BaseModel):
@@ -71,9 +71,9 @@ class FormatDiscovery:
 
     def _extract_text(self, path: str, fmt: str) -> Optional[str]:
         try:
-            if fmt == "PDF" and PyPDF2 is not None:
+            if fmt == "PDF" and pypdf is not None:
                 with open(path, "rb") as f:
-                    reader = PyPDF2.PdfReader(f)  # type: ignore
+                    reader = pypdf.PdfReader(f)  # type: ignore
                     pages = [p.extract_text() or "" for p in reader.pages]
                     return "\n".join(pages)
             if fmt == "DOCX" and DocxDocument is not None:

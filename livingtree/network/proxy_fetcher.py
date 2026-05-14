@@ -1,12 +1,20 @@
 """ProxyFetcher — multi-source proxy pool fetcher with health checks.
 
-    Sources (6):
-    1. proxyscrape.com API — HTTP/HTTPS/SOCKS5, by country/anonymity
-    2. geonode.com API — free tier, returns JSON with location info
-    3. proxy-list.download — categorized HTTP/HTTPS/SOCKS5 lists
-    4. GitHub TheSpeedX/PROXY-List — most active community proxy list
-    5. GitHub hookzof/socks5_list — SOCKS5 specialized
-    6. proxylist.geonode.com — alternative API endpoint
+    Sources (14):
+    1.  proxyscrape.com API — HTTP/HTTPS/SOCKS5, by country/anonymity
+    2.  geonode.com API — free tier, returns JSON with location info
+    3.  proxy-list.download — categorized HTTP/HTTPS/SOCKS5 lists
+    4.  GitHub TheSpeedX/PROXY-List — most active community proxy list
+    5.  GitHub hookzof/socks5_list — SOCKS5 specialized
+    6.  proxylist.geonode.com — alternative API endpoint
+    7.  GitHub jetkai/proxy-list — multi-type (HTTP/HTTPS/SOCKS4/SOCKS5)
+    8.  GitHub monosans/proxy-list — daily refreshed, scraped from 300+ sources
+    9.  GitHub mertguvencli/http-proxy-list — HTTP specialized
+    10. GitHub rdavydov/proxy-list — updated every 20 min
+    11. GitHub proxifly/free-proxy-list — JSON API format
+    12. free-proxy-list.net — HTML table scraping (300+ proxies)
+    13. pubproxy.com — free REST API, JSON output
+    14. openproxy.space — free API, JSON with country/uptime
 
     Auto-refresh every 10 minutes. Health-check via TCP connect + HTTP test.
     Best proxy selected by composite score: success_rate + latency + stability.
@@ -35,6 +43,17 @@ from loguru import logger
 PROXY_CACHE = Path(".livingtree/proxy_pool.json")
 REFRESH_INTERVAL = 600  # 10 minutes
 MAX_POOL_SIZE = 200
+
+
+def code_to_country(code: str) -> str:
+    """Map ISO country code to country name."""
+    _MAP = {
+        "US": "United States", "CN": "China", "DE": "Germany", "GB": "United Kingdom",
+        "FR": "France", "JP": "Japan", "CA": "Canada", "NL": "Netherlands",
+        "RU": "Russia", "IN": "India", "BR": "Brazil", "SG": "Singapore",
+        "KR": "South Korea", "AU": "Australia", "UA": "Ukraine", "PL": "Poland",
+    }
+    return _MAP.get(code.upper(), code)
 
 
 @dataclass
@@ -86,6 +105,14 @@ class ProxyPool:
             self._fetch_github_speedx,
             self._fetch_github_socks5,
             self._fetch_geonode_alt,
+            self._fetch_github_jetkai,
+            self._fetch_github_monosans,
+            self._fetch_github_mertguvencli,
+            self._fetch_github_rdavydov,
+            self._fetch_proxifly,
+            self._fetch_free_proxy_list_net,
+            self._fetch_pubproxy,
+            self._fetch_openproxy_space,
         ]
 
         tasks = []
@@ -280,7 +307,271 @@ class ProxyPool:
             pass
         return proxies
 
-    # ═══ Pool management ═══
+    # ═══ Source 7: GitHub jetkai/proxy-list ═══
+
+    async def _fetch_github_jetkai(self) -> list[Proxy]:
+        """GitHub jetkai/proxy-list — multi-type, updated every 15 min."""
+        proxies = []
+        urls = [
+            ("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt", "http"),
+            ("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt", "https"),
+            ("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks4.txt", "socks4"),
+            ("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt", "socks5"),
+        ]
+        for url, proto in urls:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        text = await resp.text()
+                if proto == "socks4":
+                    proto = "socks5"
+                for line in text.splitlines()[:100]:
+                    line = line.strip()
+                    if ":" not in line or line.startswith("#"):
+                        continue
+                    host, port = line.rsplit(":", 1)
+                    if host.replace(".", "").isdigit():
+                        proxies.append(Proxy(host=host, port=int(port), protocol=proto, source="github/jetkai"))
+            except Exception:
+                pass
+        return proxies
+
+    # ═══ Source 8: GitHub monosans/proxy-list ═══
+
+    async def _fetch_github_monosans(self) -> list[Proxy]:
+        """GitHub monosans/proxy-list — scraped from 300+ sources, daily refresh."""
+        proxies = []
+        urls = [
+            ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt", "http"),
+            ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt", "socks4"),
+            ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt", "socks5"),
+        ]
+        for url, proto in urls:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                        text = await resp.text()
+                if proto == "socks4":
+                    proto = "socks5"
+                for line in text.splitlines()[:120]:
+                    line = line.strip()
+                    if ":" not in line or line.startswith("#"):
+                        continue
+                    host, port = line.rsplit(":", 1)
+                    if host.replace(".", "").isdigit():
+                        proxies.append(Proxy(host=host, port=int(port), protocol=proto, source="github/monosans"))
+            except Exception:
+                pass
+        return proxies
+
+    # ═══ Source 9: GitHub mertguvencli/http-proxy-list ═══
+
+    async def _fetch_github_mertguvencli(self) -> list[Proxy]:
+        """GitHub mertguvencli — HTTP proxy specialized list."""
+        proxies = []
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    text = await resp.text()
+            for line in text.splitlines()[:80]:
+                line = line.strip().rstrip(",")
+                if ":" not in line:
+                    continue
+                host, port = line.rsplit(":", 1)
+                if host.replace(".", "").isdigit():
+                    proxies.append(Proxy(host=host, port=int(port), protocol="http", source="github/mertguvencli"))
+        except Exception:
+            pass
+        return proxies
+
+    # ═══ Source 10: GitHub rdavydov/proxy-list ═══
+
+    async def _fetch_github_rdavydov(self) -> list[Proxy]:
+        """GitHub rdavydov/proxy-list — updated every 20 minutes."""
+        proxies = []
+        urls = [
+            ("https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/http.txt", "http"),
+            ("https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks4.txt", "socks4"),
+            ("https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks5.txt", "socks5"),
+        ]
+        for url, proto in urls:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        text = await resp.text()
+                if proto == "socks4":
+                    proto = "socks5"
+                for line in text.splitlines()[:80]:
+                    line = line.strip()
+                    if ":" not in line or line.startswith("#"):
+                        continue
+                    host, port = line.rsplit(":", 1)
+                    if host.replace(".", "").isdigit():
+                        proxies.append(Proxy(host=host, port=int(port), protocol=proto, source="github/rdavydov"))
+            except Exception:
+                pass
+        return proxies
+
+    # ═══ Source 11: GitHub proxifly/free-proxy-list ═══
+
+    async def _fetch_proxifly(self) -> list[Proxy]:
+        """GitHub proxifly — JSON API format with country and latency info."""
+        proxies = []
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.json",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    data = await resp.json()
+            for item in data[:70] if isinstance(data, list) else []:
+                if isinstance(item, dict):
+                    proxies.append(Proxy(
+                        host=item.get("ip", item.get("host", "")),
+                        port=int(item.get("port", 8080)),
+                        protocol=item.get("protocol", "http"),
+                        country=item.get("country", item.get("geolocation", {}).get("country", "")),
+                        source="proxifly",
+                    ))
+        except Exception:
+            pass
+        return proxies
+
+    # ═══ Source 12: free-proxy-list.net ═══
+
+    async def _fetch_free_proxy_list_net(self) -> list[Proxy]:
+        """free-proxy-list.net — HTML table, 300+ proxies with anonymity level."""
+        proxies = []
+        try:
+            import aiohttp
+            from html.parser import HTMLParser
+
+            class ProxyTableParser(HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self._in_tbody = False
+                    self._in_tr = False
+                    self._td_count = 0
+                    self._cells: list[str] = []
+                    self.results: list[dict] = []
+
+                def handle_starttag(self, tag, attrs):
+                    if tag in ("tbody", "table"):
+                        self._in_tbody = True
+                    if tag == "tr" and self._in_tbody:
+                        self._in_tr = True
+                        self._td_count = 0
+                        self._cells = []
+                    if tag == "td" and self._in_tr:
+                        self._td_count += 1
+
+                def handle_data(self, data):
+                    if self._in_tr and self._td_count > 0:
+                        self._cells.append(data.strip())
+
+                def handle_endtag(self, tag):
+                    if tag == "tr" and self._in_tr:
+                        self._in_tr = False
+                        if len(self._cells) >= 2:
+                            self.results.append({"cells": self._cells})
+                    if tag in ("tbody", "table"):
+                        self._in_tbody = False
+
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://free-proxy-list.net/",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                ) as resp:
+                    html = await resp.text()
+            parser = ProxyTableParser()
+            parser.feed(html)
+            for row in parser.results:
+                cells = row["cells"]
+                if len(cells) >= 2 and cells[0].replace(".", "").isdigit():
+                    try:
+                        proxies.append(Proxy(
+                            host=cells[0],
+                            port=int(cells[1]),
+                            protocol="https" if len(cells) > 6 and cells[6] == "yes" else "http",
+                            country=code_to_country(cells[4]) if len(cells) > 4 else "",
+                            anonymity=cells[5] if len(cells) > 5 else "",
+                            source="free-proxy-list.net",
+                        ))
+                    except (ValueError, IndexError):
+                        pass
+        except Exception:
+            pass
+        return proxies
+
+    # ═══ Source 13: pubproxy.com ═══
+
+    async def _fetch_pubproxy(self) -> list[Proxy]:
+        """pubproxy.com — free REST API, JSON output, 5 proxies per request."""
+        proxies = []
+        for _ in range(3):
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        "https://api.pubproxy.com/v2/proxy?format=json&limit=5&type=http",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        data = await resp.json()
+                for item in data.get("data", []):
+                    addr = item.get("ipPort", "")
+                    host, port_str = addr.rsplit(":", 1) if ":" in addr else (item.get("ip", ""), str(item.get("port", 8080)))
+                    proxies.append(Proxy(
+                        host=host,
+                        port=int(port_str) if port_str.isdigit() else 8080,
+                        protocol=item.get("type", "http").lower(),
+                        country=item.get("country", ""),
+                        source="pubproxy",
+                    ))
+            except Exception:
+                pass
+        return proxies
+
+    # ═══ Source 14: openproxy.space ═══
+
+    async def _fetch_openproxy_space(self) -> list[Proxy]:
+        """openproxy.space — free API, JSON with country, uptime, latency."""
+        proxies = []
+        for proto in ["http", "socks4", "socks5"]:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(
+                        f"https://api.openproxy.space/lists/{proto}?limit=30",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        data = await resp.json()
+                if proto == "socks4":
+                    proto = "socks5"
+                for item in data[:40] if isinstance(data, list) else data.get("data", [])[:40]:
+                    addr = item if isinstance(item, str) else item.get("address", item.get("proxy", ""))
+                    if ":" not in addr:
+                        continue
+                    host, port = addr.rsplit(":", 1)
+                    if host.replace(".", "").isdigit():
+                        proxies.append(Proxy(
+                            host=host,
+                            port=int(port),
+                            protocol=proto,
+                            country=item.get("country", "") if isinstance(item, dict) else "",
+                            source="openproxy.space",
+                        ))
+            except Exception:
+                pass
+        return proxies
 
     def get_best(self) -> Proxy | None:
         """Get best proxy by composite score (success_rate + latency + stability)."""

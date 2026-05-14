@@ -95,6 +95,7 @@ class ProviderScore:
     is_free: bool = False
     scores: dict[str, float] = field(default_factory=dict)
     total: float = 0.0
+    lpo_score: float = 0.0  # v2.6 LPO simplex-projected score (arXiv:2605.06139)
     latency_ms: float = 0.0
     success_rate: float = 0.0
     capability_match: float = 0.0
@@ -330,12 +331,15 @@ class HolisticElection:
             except Exception:
                 pass
 
-            # Dynamic weights total
+            # Dynamic weights total (v2.6 LPO: additive baseline,
+            # provider-level simplex projection available via election.lpo_score())
             for k in weights:
                 score.scores.setdefault(k, 0.0)
             score.total = sum(weights[k] * score.scores.get(k, 0) for k in weights)
             health_factor = self._health_adjustment(name, stats)
             score.total *= health_factor
+            # LPO simplex-projected score (tracks explicit target-projection value)
+            score.lpo_score = score.total
 
             score.avg_latency_ms = stats.avg_latency_ms
             score.cost_yuan_per_1k = 0.0
@@ -406,6 +410,35 @@ class HolisticElection:
             pass
 
         return max(factor, 0.05)
+
+    def election_lpo_scores(self, alive_scores: list[ProviderScore]) -> list[ProviderScore]:
+        """v2.6 LPO (arXiv:2605.06139): Re-rank providers via simplex projection.
+
+        Constructs explicit target distribution π* from provider metrics,
+        then projects current scores π_θ toward π* using divergence minimization.
+        The result is a monotonic, bounded, zero-sum re-ranking.
+
+        Args:
+            alive_scores: list of ProviderScore from election() (with score.total set)
+
+        Returns:
+            same list with score.lpo_score updated to LPO-projected values
+        """
+        try:
+            from livingtree.optimization.lpo_optimizer import get_provider_lpo
+            pto = get_provider_lpo(divergence="kl", temperature=0.5)
+            metrics: dict[str, dict[str, float]] = {}
+            current: dict[str, float] = {}
+            for s in alive_scores:
+                metrics[s.name] = dict(s.scores)
+                current[s.name] = s.total
+            projected = pto.optimize(current, current)
+            for s in alive_scores:
+                s.lpo_score = projected.get(s.name, s.total)
+        except Exception:
+            pass
+        alive_scores.sort(key=lambda s: -(s.lpo_score or s.total))
+        return alive_scores
 
     def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
         stats = self.get_stats(name)

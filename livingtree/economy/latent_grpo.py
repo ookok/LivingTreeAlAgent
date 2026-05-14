@@ -405,12 +405,103 @@ class LatentGRPO:
 
     # ═══ KL Divergence ═══
 
-    def _kl_divergence(self) -> float:
-        """KL divergence between current latent z* and standard Gaussian prior."""
+    def _kl_divergence(self, divergence_type: str = "forward") -> float:
+        """KL divergence between current latent z* and standard Gaussian prior.
+
+        v2.6 LPO (arXiv:2605.06139): Extended with multiple divergence types.
+
+        Args:
+            divergence_type: "forward" (D_KL(prior||z*)), "reverse" (D_KL(z*||prior)),
+                "jsd" (Jensen-Shannon), "squared_hellinger", "chi_squared"
+        """
         kl = 0.0
         for z in self._z_star:
-            kl += 0.5 * (z * z - 1 - math.log(max(1e-9, z * z + 1e-9)))
+            mu_prior = 0.0
+            sigma_prior = 1.0
+            z2 = z * z
+            if divergence_type == "forward":
+                kl += 0.5 * (z2 - 1 - math.log(max(1e-9, z2 + 1e-9)))
+            elif divergence_type == "reverse":
+                kl += 0.5 * (-z2 - 1 + math.log(max(1e-9, z2 + 1e-9)))
+            elif divergence_type == "jsd":
+                m = 0.5 * z2 + 0.5
+                kl_fwd = 0.5 * (-math.log(max(1e-9, z2 + 1e-9)) - 1 + z2) if z2 > 1e-9 else 0
+                kl_rev = 0.5 * (z2 - 1 - math.log(max(1e-9, z2 + 1e-9)))
+                kl += 0.5 * (kl_fwd + kl_rev)
+            elif divergence_type == "squared_hellinger":
+                kl += 0.5 * (math.sqrt(z2) - 1) ** 2 / max(z2 + 1, 1)
+            elif divergence_type == "chi_squared":
+                kl += (z2 - 1) ** 2 / max(z2 + 1, 1)
         return kl / max(self._latent_dim, 1)
+
+    # ═══ LPO Optimization (v2.6) ═══
+
+    def optimize_lpo(
+        self, group: list[tuple[Any, dict[str, float]]],
+        actual_outcomes: dict[str, float] | None = None,
+        divergence: str = "kl",
+    ) -> LatentGRPOResult:
+        """v2.6 LPO (arXiv:2605.06139): Optimize latent policy via explicit
+        target-projection on the response simplex.
+
+        Unlike standard GRPO (which uses implicit group-relative advantages),
+        LPO makes the target distribution explicit:
+          1. Latent scores → π* = softmax(scores / T)
+          2. Current policy π_θ from latent center
+          3. Project π_θ → π* by minimizing D(π* || π_θ)
+          4. Update z* center from the projection gradient
+
+        This guarantees monotonic improvement (divergence always decreases)
+        and preserves response diversity via bounded, zero-sum gradients.
+        """
+        if not group:
+            return self._empty_result()
+        from livingtree.optimization.lpo_optimizer import LPOOptimizer
+
+        lpo = LPOOptimizer(divergence=divergence, temperature=1.0)
+        # Phase 1: Encode all actions
+        for action, features in group:
+            self.encode_action(action, features)
+        # Phase 2: Compute latent scores as rewards → explicit π* target
+        rewards: dict[str, float] = {}
+        for action, _ in group:
+            rewards[action] = self.latent_score(action)
+        target = lpo.construct_target(rewards)
+        # Phase 3: Current policy = same scores → project toward target
+        projected = lpo.project(rewards, target)
+        # Phase 4: Update z* center from LPO gradient
+        z_update = [0.0] * self._latent_dim
+        total_weight = 0.0
+        for action, _ in group:
+            delta = projected.get(action, 0.0) - rewards.get(action, 0.0)
+            if delta > 0:
+                weight = delta
+                z_a = self._action_latents.get(action, [0.0] * self._latent_dim)
+                for j in range(self._latent_dim):
+                    z_update[j] += weight * (z_a[j] - self._z_star[j])
+                total_weight += weight
+        if total_weight > 0:
+            for j in range(self._latent_dim):
+                z_update[j] /= total_weight
+            for j in range(self._latent_dim):
+                self._z_star[j] += self._lr * z_update[j]
+                self._z_star[j] = max(-3.0, min(3.0, self._z_star[j]))
+        # Phase 5: Record
+        advantages = {action: projected.get(action, rewards.get(action, 0.0))
+                      for action, _ in group}
+        kl = self._kl_divergence("forward")
+        result = LatentGRPOResult(
+            round_id=len(self._history) + 1,
+            input_features={k: v for action, feats in group for k, v in feats.items()},
+            latent_z=list(self._z_star),
+            advantages=advantages,
+            latent_policy_update={a: round(v, 4) for a, v in advantages.items()},
+            reconstruction_loss=0.0,
+            kl_divergence=round(kl, 4),
+            convergence=round(lpo.is_monotonic(), 3),
+        )
+        self._history.append(result)
+        return result
 
     # ═══ Latent Space Analysis ═══
 

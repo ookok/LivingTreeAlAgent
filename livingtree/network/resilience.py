@@ -13,6 +13,7 @@ modules that make HTTP requests or run shell install commands.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
 import subprocess
@@ -20,7 +21,7 @@ import time
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from loguru import logger
 
@@ -42,6 +43,15 @@ MIRROR_REWRITE: dict[str, str] = {
     "https://nodejs.org/dist": "https://npmmirror.com/mirrors/node",
     # ModelScope (already Chinese, but add fallback)
     "https://modelscope.cn": "https://modelscope.cn",
+    # Learning resources
+    "https://arxiv.org": "https://xxx.itp.ac.cn",
+    "https://export.arxiv.org": "https://xxx.itp.ac.cn",
+    "https://arxiv.org/pdf": "https://xxx.itp.ac.cn/pdf",
+    "https://api.semanticscholar.org": "https://api.semanticscholar.org",
+    "https://archive.org": "https://archive.org",
+    "https://ipfs.io": "https://cloudflare-ipfs.com",
+    "https://wikipedia.org": "https://wikipedia.org",
+    "https://en.wikipedia.org": "https://en.wikipedia.org",
 }
 
 # Alternative mirrors for when the primary fails
@@ -64,16 +74,40 @@ FALLBACK_MIRRORS: dict[str, list[str]] = {
         "https://hf-mirror.com",
         "https://hf.xeduapi.com",
     ],
+    "arxiv": [
+        "https://xxx.itp.ac.cn",
+        "https://cn.arxiv.org",
+        "https://export.arxiv.org",
+    ],
+    "scihub": [
+        "https://sci-hub.se",
+        "https://sci-hub.ru",
+        "https://sci-hub.st",
+    ],
+    "ipfs": [
+        "https://ipfs.io/ipfs",
+        "https://cloudflare-ipfs.com/ipfs",
+        "https://dweb.link/ipfs",
+    ],
+    "archive": [
+        "https://archive.org",
+        "https://web.archive.org",
+    ],
 }
 
 # ═══ Proxy detection ═══
 
 def _get_proxy() -> str | None:
-    """Detect user-configured proxy from env vars + auto-discover from proxy pool."""
+    """Detect user-configured proxy from env vars + auto-discover from proxy pool + scinet."""
     for var in ("LIVINGTREE_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY"):
         val = os.environ.get(var, "")
         if val and "://" in val:
             return val
+
+    # Try scinet local proxy (auto-started on hub boot, port 7890)
+    proxy = _get_scinet_proxy()
+    if proxy:
+        return proxy
 
     # Try to load from proxy pool (client-side proxy infrastructure)
     try:
@@ -83,6 +117,21 @@ def _get_proxy() -> str | None:
     except Exception:
         pass
 
+    return None
+
+
+def _get_scinet_proxy() -> str | None:
+    """Detect if scinet local proxy is running on port 7890."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.3)
+        result = s.connect_ex(("127.0.0.1", 7890))
+        s.close()
+        if result == 0:
+            return "http://127.0.0.1:7890"
+    except Exception:
+        pass
     return None
 
 
@@ -345,6 +394,51 @@ def resilient_fetch_sync(
                 time.sleep(2 ** attempt + random.uniform(0, 1))
 
     return 0, last_error
+
+
+async def resilient_fetch_text(
+    url: str,
+    method: str = "GET",
+    headers: dict | None = None,
+    timeout: float = 15.0,
+    max_retries: int = 3,
+    use_mirror: bool = False,
+    use_proxy: bool = True,
+    use_accelerator: bool = True,
+) -> str:
+    """Fetch a URL with automatic accelerator/mirror/proxy/retry, return text body."""
+    status, body, final_url = await resilient_fetch(
+        url=url, method=method, headers=headers, timeout=timeout,
+        max_retries=max_retries, use_mirror=use_mirror, use_proxy=use_proxy,
+        use_accelerator=use_accelerator,
+    )
+    if status == 0:
+        raise ConnectionError(f"resilient_fetch_text failed: {body.decode(errors='replace')[:200]}")
+    return body.decode("utf-8", errors="replace")
+
+
+async def resilient_fetch_json(
+    url: str,
+    method: str = "GET",
+    headers: dict | None = None,
+    params: dict | None = None,
+    timeout: float = 15.0,
+    max_retries: int = 3,
+    use_mirror: bool = False,
+    use_proxy: bool = True,
+    use_accelerator: bool = True,
+) -> dict:
+    """Fetch a URL with automatic accelerator/mirror/proxy/retry, return parsed JSON."""
+    if params:
+        url = url + "?" + "&".join(f"{k}={quote(str(v), safe='')}" for k, v in params.items())
+    status, body, final_url = await resilient_fetch(
+        url=url, method=method, headers=headers, timeout=timeout,
+        max_retries=max_retries, use_mirror=use_mirror, use_proxy=use_proxy,
+        use_accelerator=use_accelerator,
+    )
+    if status == 0:
+        raise ConnectionError(f"resilient_fetch_json failed: {body.decode(errors='replace')[:200]}")
+    return json.loads(body.decode("utf-8", errors="replace"))
 
 
 # ═══ Subprocess runner with mirror env ═══

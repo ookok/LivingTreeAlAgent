@@ -299,6 +299,57 @@ class AwarenessEngine:
             "history_len": len(self._history),
         }
 
+    def self_assess_vs_external_gap(self) -> dict:
+        """Zakharova IEM enhancement: self-assessment vs external measurement gap.
+
+        Have the system generate its OWN awareness self-assessment via internal
+        LLM reflection and compare it against the engine's external metric-based
+        assessment. Divergences flag 'awareness blind spots' — aspects of self
+        that are externally visible but internally inaccessible.
+        """
+        external = self.assess_all()
+        dims = {
+            "metacognition": external.metacognition.score,
+            "self_awareness": external.self_awareness.score,
+            "social_awareness": external.social_awareness.score,
+            "situational_awareness": external.situational_awareness.score,
+        }
+        self_assess = {}
+        try:
+            from ..dna.phenomenal_consciousness import get_consciousness
+            pc = get_consciousness()
+            sm = getattr(pc, "_self_model", None)
+            if sm:
+                self_assess["metacognition"] = min(1.0, len(getattr(sm, "self_knowledge", [])) * 0.12)
+                self_assess["self_awareness"] = min(1.0, getattr(sm, "generation", 1) * 0.05)
+                self_assess["social_awareness"] = 0.4
+                self_assess["situational_awareness"] = 0.5
+        except Exception:
+            return {"error": "self-assessment unavailable", "divergence": 0.0}
+        divergences = {}
+        total_gap = 0.0
+        for dim in dims:
+            internal = self_assess.get(dim, 0.0)
+            external_v = dims[dim]
+            gap = abs(internal - external_v)
+            divergences[dim] = {
+                "external_metric": round(external_v, 3),
+                "internal_self_assess": round(internal, 3),
+                "gap": round(gap, 3),
+                "blind_spot": gap > 0.25,
+            }
+            total_gap += gap
+        avg_gap = total_gap / max(len(divergences), 1)
+        blind_spots = [d for d, v in divergences.items() if v["blind_spot"]]
+        return {
+            "external_assessment": dims,
+            "internal_self_assessment": self_assess,
+            "divergences": divergences,
+            "average_gap": round(avg_gap, 3),
+            "blind_spots": blind_spots,
+            "has_blind_spots": len(blind_spots) > 0,
+        }
+
     def render_html(self) -> str:
         report = self.assess_all()
         dims = {

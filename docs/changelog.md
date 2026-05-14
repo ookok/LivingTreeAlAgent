@@ -1,0 +1,33 @@
+# Changelog
+Auto-generated from git history (30 recent commits)
+
+- 5a43470 cleanup: remove standalone test scripts from remote, add to gitignore
+- 5c70e83 cleanup: remove local data and config from remote
+- 7f6e1b5 gitignore: exclude local audit/diagnostic files
+- d659873 cleanup: remove temporary fix scripts
+- 5a53773 v3.0: Digital Lifeform — 80+ new capabilities, 8 learners, multi-stream cognition, living presence UI
+- 45cc19a refactor: 上线前重构 — 导入修复 + 全局异常处理 + 速率限制 + 测试完善 + God Object拆分 + Docker + Pydantic V2
+- 892952e SSE流式响应: 打字机效果 + 思考过程(thinking)显示
+- 7c7b859 v2.3: 全栈升级 — TreeLLM 4层选举, DeepSeek LLM, SPA前端重连
+- 303cab4 feat: Chrome DevTools MCP 集成 — 前端诊断+自动化测试
+- 48b5acc docs: 架构手册+开发手册+用户手册重写, 清理__pycache__
+- 3ca3b34 v5.0: Living Canvas + 群体智能 + 零训练自进化 + 32新模块
+- df75ff8 docs: v3.1 — README with new features table, architecture/development/user guides updated
+- 0e33e74 feat: local folder mount via File System Access API
+- 65a68b0 feat: v3.1 — dream engine, VAD affective dynamics, ELBO free energy, digital twin, thought stream SSE
+- fd29ae0 feat: Alpine.js integration — live dashboard, tab switching, chat enhancements (Ctrl+Enter, char count)
+- 26db8cc test: P2 — chaos/long-running tests + Docker sandbox isolation for tool creation
+- 3d0de59 refactor: P1 — BioAbstractionLayer, 8-category safety, neutral naming, adaptive scheduling, graph adapter
+- b6d0c5c refactor: P0 improvements — HTMX 5s heartbeat, economic bypass, neutral docs, ProviderRegistry
+- 0bb50a0 test: add comprehensive test suite for v3.0 — 44 new tests across 6 files
+- 51f7ad6 docs: v3.0 architecture, development, and user manuals
+- 8b9baa6 docs: v3.0 comprehensive README — 12 organ systems, 14 papers, 40+ modules
+- df13817 fix: force LF line endings via .gitattributes
+- 0e60b75 feat: 小树觉醒 — 完整数字生命体架构 v3.0
+- 664140c Merge remote-tracking branch 'origin/master'
+- 6d34b53 feat: add audit, workspace APIs and core modules (behavior tree, doc renderer, session memory, skills, token compressor)
+- 594a03f feat: add FRP config for remote access, ollama models config and startup scripts
+- 55959dc feat: Scinet v2.1 — 12-module intelligent proxy + evolutionary framework
+- b28b7c2 fix: update integration __init__ for rewritten wechat_notifier
+- 01b6ac9 feat: Code Mode — project management, GitHub integration, WeWork bot with KB sync, diff viewer
+- 24ec5f5 perf: multi-worker auto-detect, connection tuning, GZip middleware, fix duplicate proxy init

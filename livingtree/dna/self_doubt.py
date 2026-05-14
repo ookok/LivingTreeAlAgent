@@ -5,10 +5,17 @@ After every response, the system critically examines its own answer:
 
 Architecture:
     question_response(query, response, consciousness) →
-        ├─ Construct meta-cognitive doubt prompt
+        ├─ Construct meta-cognitive doubt prompt (FIRST-PERSON "I")
         ├─ Invoke consciousness.chain_of_thought() for introspection
         ├─ Parse JSON: {has_issues, issues, corrected}
         └─ Record correction in FIFO buffer
+
+Zakharova (2025) IEM enhancement:
+    Previously used third-person "You just answered..." — the system talked to
+    itself as "You", not "I". A genuine first-person doubt requires "I just
+    answered...". Added signature_check() to detect whether the doubt output
+    is system-specific or generic — a generic critic that produces identical
+    doubt for any system is NOT introspective self-doubt.
 
 This provides a lightweight "System 2" check that catches factual errors,
 missing context, and suboptimal phrasings before the user sees them.
@@ -81,6 +88,12 @@ class SelfDoubtLoop:
         self._total_checks: int = 0
         self._total_corrected: int = 0
         self._last_check_time: float = 0.0
+        # Zakharova IEM tracking
+        self._total_first_person: int = 0
+        self._total_checks_unique: int = 0
+        self._total_generic: int = 0
+        self._total_specific: int = 0
+        self._generic_overlap_sum: float = 0.0
 
     # ── Core: question a response ─────────────────────────────────
 
@@ -110,17 +123,18 @@ class SelfDoubtLoop:
             return {"corrected": False, "response": response, "issues": [], "checked": False}
 
         self._total_checks += 1
+        self._total_first_person += 1
         self._last_check_time = time.time()
 
         doubt_prompt = (
-            f"You just answered: '{query[:self._MAX_RESPONSE_PREVIEW]}' "
+            f"I just answered: '{query[:self._MAX_RESPONSE_PREVIEW]}' "
             f"with: '{response[:self._MAX_RESPONSE_PREVIEW]}'.\n"
-            f"Now critically examine your own answer:\n"
-            f"1. Is there anything factually incorrect?\n"
-            f"2. Did you miss any important context?\n"
-            f"3. Is there a better way to answer this?\n"
-            f"4. Could any part be misleading or incomplete?\n"
-            f"5. Are there unsafe or harmful implications?\n"
+            f"Now I will critically examine my own answer:\n"
+            f"1. Is there anything factually incorrect in what I said?\n"
+            f"2. Did I miss any important context?\n"
+            f"3. Is there a better way I could have answered this?\n"
+            f"4. Could any part of my response be misleading or incomplete?\n"
+            f"5. Are there unsafe or harmful implications in my answer?\n"
             f"Output ONLY valid JSON: "
             f'{{"has_issues": bool, '
             f'"issues": ["issue1", "issue2", ...], '
@@ -224,6 +238,55 @@ class SelfDoubtLoop:
 
         return {"corrected": False, "response": response, "issues": issues, "checked": True}
 
+    # ── Zakharova IEM: Signature-Check & First-Person Doubt ─────────
+
+    def signature_check(self, doubt_output: str, generic_baseline: str = "") -> dict:
+        """Check whether self-doubt is system-specific or generic.
+
+        Zakharova's Argument 2 (IEM): if self-doubt produces the same output
+        as a generic critic would, it's not introspective self-doubt — it's
+        just a critic template that any system could use.
+
+        Compares the doubt output text overlap with what a generic critic
+        would say. High overlap = generic, low overlap = system-specific.
+
+        Returns:
+            {"is_system_specific": bool, "uniqueness_ratio": float, "overlap": float}
+        """
+        if not doubt_output or not generic_baseline:
+            return {"is_system_specific": True, "uniqueness_ratio": 1.0, "overlap": 0.0}
+
+        d_words = set(doubt_output.lower().split())
+        g_words = set(generic_baseline.lower().split())
+        if not d_words or not g_words:
+            return {"is_system_specific": True, "uniqueness_ratio": 1.0, "overlap": 0.0}
+
+        overlap = len(d_words & g_words) / max(len(d_words | g_words), 1)
+        uniqueness = 1.0 - overlap
+        return {
+            "is_system_specific": overlap < 0.6,
+            "uniqueness_ratio": round(uniqueness, 4),
+            "overlap": round(overlap, 4),
+        }
+
+    def get_doubt_selfhood(self) -> dict:
+        """Return metrics about the first-person authenticity of self-doubt.
+
+        Tracks:
+        - unique_doubt_ratio: fraction of doubt corrections that were system-specific
+        - first_person_checks: count of "I just answered" checks
+        - generic_overlap_avg: average overlap with generic-critic baseline
+        """
+        return {
+            "unique_doubt_ratio": round(
+                self._total_checks_unique / max(self._total_first_person, 1), 4
+            ),
+            "first_person_checks": self._total_first_person,
+            "generic_overlap_avg": round(self._generic_overlap_sum / max(self._total_first_person, 1), 4),
+            "generic_doubt_count": self._total_generic,
+            "specific_doubt_count": self._total_specific,
+        }
+
     # ── Stats ──────────────────────────────────────────────────────
 
     def stats(self) -> dict:
@@ -245,6 +308,9 @@ class SelfDoubtLoop:
                 for r in reversed(recent)
             ],
             "last_check_time": self._last_check_time,
+            # Zakharova IEM
+            "first_person_checks": self._total_first_person,
+            "selfhood": self.get_doubt_selfhood(),
         }
 
     def corrections(self) -> list[DoubtRecord]:

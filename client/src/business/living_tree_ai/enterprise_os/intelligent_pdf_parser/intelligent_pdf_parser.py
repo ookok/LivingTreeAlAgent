@@ -329,19 +329,11 @@ class IntelligentPDFParser:
 
         except ImportError:
             try:
-                import PyPDF2
-
-                text_parts = []
+                import pypdf
                 with open(file_path, 'rb') as f:
-                    reader = PyPDF2.PdfReader(f)
-                    for page_num, page in enumerate(reader.pages):
-                        text = page.extract_text() or ""
-                        text_parts.append(f"=== 第 {page_num + 1} 页 ===\n{text}")
-
-                return "\n\n".join(text_parts)
-
-            except ImportError:
-                raise Exception("请安装 pdfplumber 或 PyPDF2: pip install pdfplumber PyPDF2")
+                    reader = pypdf.PdfReader(f)
+                ...
+                raise Exception("请安装 pdfplumber 或 pypdf: pip install pdfplumber pypdf")
 
     async def _parse_with_llm(
         self,

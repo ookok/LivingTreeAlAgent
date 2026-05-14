@@ -409,6 +409,48 @@ class EntropyDrive:
 _entropy_drive: EntropyDrive | None = None
 
 
+    # ═══ Discovery Machine: Proactive Annealing ═══
+
+    def proactive_annealing_schedule(self, step: int, max_steps: int = 100, t_init: float = 1.0,
+                                     t_min: float = 0.01, reheat_interval: int = 20) -> dict:
+        t = t_init / math.log(math.e + step)
+        T = max(t_min, t)
+        if step > 0 and step % reheat_interval == 0 and step < max_steps:
+            T = min(t_init, T * 2.0)
+        return {"temperature": T, "step": step, "reheat": (step % reheat_interval == 0 and step > 0)}
+
+    def fowler_nordheim_perturbation(self, diversity_gradient: dict[str, float],
+                                     T: float) -> list[str]:
+        dimensions = list(diversity_gradient.keys())
+        injection_sites = []
+        for dim in dimensions:
+            dE = abs(diversity_gradient.get(dim, 0.0))
+            prob = math.exp(-dE / max(T, 0.001))
+            if dE < 0.01 or _random.random() < prob:
+                injection_sites.append(dim)
+        return injection_sites
+
+    def ising_entropy_model(self, outputs: list[str], couplings: list[list[float]] | None = None) -> dict:
+        n = len(outputs)
+        if n < 2:
+            return {"energy": 0.0, "magnetization": 0.0, "phase": "paramagnetic", "diversity": 1.0}
+        spins = [1 if _random.random() > 0.5 else -1 for _ in range(n)]
+        if couplings is None:
+            couplings = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+        energy = -sum(couplings[i][j] * spins[i] * spins[j] for i in range(n) for j in range(n))
+        magnetization = abs(sum(spins) / n)
+        if magnetization > 0.7:
+            phase = "ferromagnetic"
+        elif magnetization < 0.3:
+            phase = "paramagnetic"
+        else:
+            phase = "critical"
+        diversity = 1.0 - magnetization
+        return {"energy": energy, "magnetization": magnetization, "phase": phase, "diversity": diversity}
+
+
+import random as _random
+
 def get_entropy_drive() -> EntropyDrive:
     """Get or create the global EntropyDrive singleton instance.
 

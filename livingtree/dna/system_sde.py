@@ -469,6 +469,92 @@ class SystemSDE:
             "interpretation": interp,
         }
 
+    # ── Discovery Machine (Nature Communications, 2026) Integration ──
+
+    def energy_landscape(self) -> dict[str, float]:
+        """Compute the Ising-style energy landscape over organ states.
+
+        H(organ_config) = -sum_{i} coupling_ij * state_i * state_j
+
+        The "energy" here represents how coherent the organ ensemble is.
+        Low energy = well-aligned organs (ferromagnetic order).
+        High energy = conflicting organ states (frustrated system).
+
+        Returns energy and per-organ field contributions.
+        """
+        state = self.get_state()
+        organs = list(state.organs.values())
+        if len(organs) < 2:
+            return {"total_energy": 0.0, "per_organ": {}}
+
+        total_E = 0.0
+        per_organ: dict[str, float] = {}
+
+        for i, o_i in enumerate(organs):
+            field_sum = 0.0
+            for j, o_j in enumerate(organs):
+                if i != j:
+                    coupling = state.organ_couplings.get(
+                        f"{o_i.organ_name}_{o_j.organ_name}", 0.0
+                    )
+                    field_sum -= coupling * o_i.current_value * o_j.current_value
+            per_organ[o_i.organ_name] = field_sum
+            total_E += field_sum
+
+        return {
+            "total_energy": round(total_E, 4),
+            "per_organ": {k: round(v, 4) for k, v in per_organ.items()},
+        }
+
+    def quantum_tunnel_probability(self, dE: float, T: float) -> float:
+        """Fowler-Nordheim quantum tunneling probability.
+
+        P(tunnel) = exp(-dE / T)  where dE is the energy barrier and
+        T = total_diffusion_magnitude (system-level noise temperature).
+
+        When the system is stuck at a local minimum (dE > 0), this computes
+        the probability of tunneling through to a better configuration.
+        """
+        state = self.get_state()
+        diffusion_temp = max(state.total_diffusion_magnitude, 0.001)
+        effective_T = diffusion_temp * T if T > 0 else diffusion_temp
+
+        if dE <= 0:
+            return 1.0  # downhill — always descend
+        if effective_T < 0.001:
+            return 0.0
+
+        return math.exp(-dE / effective_T)
+
+    def convergence_certificate(self) -> dict[str, float | bool]:
+        """Check if the SDE system has converged to a stable attractor.
+
+        Converged when:
+          - total_drift < 0.01 (system not moving)
+          - total_diffusion < 0.01 (noise minimal)
+          - coupling_strength stable (organ relationships settled)
+
+        This provides the Discovery Machine's convergence guarantee at
+        the multi-organ system level.
+        """
+        state = self.get_state()
+        drift_ok = state.total_drift_magnitude < 0.01
+        diffusion_ok = state.total_diffusion_magnitude < 0.01
+        coupling_stable = state.coupling_strength < 0.3
+
+        converged = drift_ok and diffusion_ok and coupling_stable
+
+        return {
+            "drift_small": drift_ok,
+            "diffusion_small": diffusion_ok,
+            "coupling_stable": coupling_stable,
+            "converged": converged,
+            "regime": state.system_regime,
+            "drift_magnitude": round(state.total_drift_magnitude, 4),
+            "diffusion_magnitude": round(state.total_diffusion_magnitude, 4),
+            "coupling_strength": round(state.coupling_strength, 4),
+        }
+
     # ── Stats ──
 
     def stats(self) -> dict[str, Any]:

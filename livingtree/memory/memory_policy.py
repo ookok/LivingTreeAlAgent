@@ -169,6 +169,22 @@ class CreditAssigner:
         self._lock = threading.RLock()
         self._total_credits_assigned: float = 0.0
         self._total_assignments: int = 0
+        self._force_retrieve_mode: set[str] = set()
+        self._force_retrieve_bonus: float = 0.15
+
+    def set_force_retrieve(self, memory_id: str, enable: bool = True) -> None:
+        with self._lock:
+            if enable:
+                self._force_retrieve_mode.add(memory_id)
+            else:
+                self._force_retrieve_mode.discard(memory_id)
+
+    def clear_force_retrieve(self) -> None:
+        with self._lock:
+            self._force_retrieve_mode.clear()
+
+    def _is_forced(self, memory_id: str) -> bool:
+        return memory_id in self._force_retrieve_mode
 
     def log_access(self, memory_id: str, task_id: str = "default") -> None:
         with self._lock:
@@ -203,6 +219,9 @@ class CreditAssigner:
                 contribution = self._compute_contribution(
                     memory.content, task_output,
                 ) if task_output else 0.3
+
+                if self._is_forced(mem_id):
+                    contribution = min(1.0, contribution + self._force_retrieve_bonus)
 
                 credit = self.alpha * contribution * success
                 memory.add_credit(credit, task_id)
@@ -418,6 +437,48 @@ class RetentionPolicy:
 
 # ═══ Token Budget ═══
 
+MEMORY_TYPE_WEIGHTS: dict[str, float] = {
+    "core_identity": 2.0,
+    "semantic": 1.5,
+    "episodic": 1.0,
+    "procedural": 0.5,
+}
+
+
+class RetrievalUrgency:
+    """PersonaVLM-inspired retrieval urgency scoring.
+
+    Combines 4 factors to determine whether to force-retrieve
+    long-term memories for the current conversation turn.
+
+    Usage:
+        urgency = RetrievalUrgency()
+        score = urgency.compute(context_switches=2, query_complexity=0.7,
+                               topic_novelty=0.6, user_emotion="frustrated",
+                               session_depth=15)
+        if score > 0.6:
+            should_force_retrieve = True
+    """
+
+    HIGH_THRESHOLD = 0.6
+    MEDIUM_THRESHOLD = 0.4
+
+    def compute(
+        self,
+        context_switches: int = 0,
+        query_complexity: float = 0.5,
+        topic_novelty: float = 0.5,
+        user_emotion: str = "neutral",
+        session_depth: int = 0,
+    ) -> float:
+        cx_weight = min(context_switches * 0.15, 0.30)
+        qc_weight = query_complexity * 0.25
+        tn_weight = topic_novelty * 0.25
+        em_weight = 0.10 if user_emotion in ("frustrated", "confused", "urgent") else 0.05
+        sd_weight = min(session_depth * 0.01, 0.15)
+        return max(0.0, min(1.0, cx_weight + qc_weight + tn_weight + em_weight + sd_weight))
+
+
 class TokenBudget:
     """动态 Token 预算分配 — 任务复杂度 → 记忆配额。
 
@@ -425,6 +486,7 @@ class TokenBudget:
       budget = base_tokens + complexity_bonus × complexity_factor
       per_memory = budget / n_retained_memories
 
+    支持 PersonaVLM 记忆类型权重: Core Identity 2×, Procedural 0.5×
     对接现有 ContextAssembler 的字符预算系统。
     """
 
@@ -433,26 +495,30 @@ class TokenBudget:
         base_tokens: int = 2048,
         max_tokens: int = 8192,
         complexity_bonus: int = 4096,
+        use_type_weights: bool = True,
     ):
         self.base_tokens = base_tokens
         self.max_tokens = max_tokens
         self.complexity_bonus = complexity_bonus
+        self.use_type_weights = use_type_weights
+        self.type_weights = dict(MEMORY_TYPE_WEIGHTS)
 
     def allocate(
         self,
         task_complexity: float = 0.5,
         num_memories: int = 10,
+        memory_types: list[str] = None,
     ) -> tuple[int, int]:
-        """Allocate token budget based on task complexity.
-
-        Args:
-            task_complexity: 0.0 (simple) to 1.0 (very complex)
-            num_memories: number of candidate memories
-
-        Returns: (total_budget_tokens, per_memory_tokens)
-        """
         budget = int(self.base_tokens + self.complexity_bonus * task_complexity)
         budget = min(budget, self.max_tokens)
+
+        if memory_types and self.use_type_weights and num_memories > 0:
+            total_weight = sum(self.type_weights.get(t, 1.0) for t in memory_types)
+            if total_weight > 0:
+                base_per = budget // max(num_memories, 1)
+                weighted_per = max(64, int(base_per * total_weight / num_memories))
+                per_memory = min(weighted_per, budget)
+                return budget, per_memory
 
         per_memory = budget // max(num_memories, 1) if num_memories > 0 else budget
         return budget, per_memory

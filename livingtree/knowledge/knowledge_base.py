@@ -1010,4 +1010,52 @@ class KnowledgeBase:
         return domain_map.get(doc.domain, True)
 
 
+    # ── World Knowledge (arXiv:2604.18131) ──
+
+    def store_world_knowledge(self, wk: Any) -> str:
+        """Store World Knowledge as a domain-tagged knowledge document.
+
+        Phase 1 (Native Evolution): after exploration, persist the compact
+        Markdown for Phase 2 pre-task injection.
+        """
+        from .world_knowledge import WorldKnowledge
+        if not isinstance(wk, WorldKnowledge):
+            raise TypeError(f"Expected WorldKnowledge, got {type(wk)}")
+        doc = Document(
+            domain="world_knowledge",
+            title=f"World Knowledge: {wk.domain}",
+            content=wk.to_markdown(),
+            source="native_evolution",
+            metadata={
+                "domain": wk.domain, "version": wk.version,
+                "url_count": wk.page_count, "crawl_time_ms": wk.crawl_time_ms,
+            },
+        )
+        return self.add_knowledge(doc, skip_dedup=True)
+
+    def get_world_knowledge(self, domain: str) -> str | None:
+        """Retrieve cached World Knowledge for pre-task injection."""
+        results = self.search(domain, top_k=5, domain="world_knowledge")
+        if results:
+            for c in results:
+                if hasattr(c, 'content') and getattr(c, 'content', ''):
+                    return c.content
+                if hasattr(c, 'text') and getattr(c, 'text', ''):
+                    return c.text
+        return None
+
+    def has_world_knowledge(self, domain: str) -> bool:
+        return self.get_world_knowledge(domain) is not None
+
+    def list_explored_domains(self) -> list[str]:
+        results = self.search("world_knowledge", top_k=50, domain="world_knowledge")
+        domains = set()
+        for c in (results or []):
+            text = getattr(c, 'content', '') or getattr(c, 'text', '') or ''
+            if "World Knowledge: " in text:
+                d = text.split("World Knowledge: ")[1].split("\n")[0].strip()
+                domains.add(d)
+        return sorted(domains)
+
+
 __all__ = ["Document", "StorageBackend", "SQLiteBackend", "FileBackend", "KnowledgeBase"]

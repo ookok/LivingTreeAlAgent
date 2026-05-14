@@ -145,6 +145,27 @@ class LifeEngine(BranchMixin, StageMixin):
         except Exception as e:
             logger.debug(f"PII redaction failed: {e}")
 
+        # ── Mental Time Travel (v2.7): episodic memory → future projection ──
+        try:
+            from .mental_time_travel import get_time_traveler
+            traveler = get_time_traveler()
+            travel_result = await traveler.travel(user_input, depth=2)
+            travel_ctx = travel_result.inject_into_context()
+            if travel_ctx:
+                ctx.metadata["mental_time_travel"] = travel_ctx
+                ctx.metadata["grounding_examples"] = travel_result.grounding_examples[:5]
+        except Exception as e:
+            logger.debug(f"Mental time travel failed: {e}")
+
+        # ── Theory of Mind (v2.7): inject empathy-aware context ──
+        try:
+            from ..memory.user_model import get_user_model
+            empathy_ctx = get_user_model().get_empathy_context()
+            if empathy_ctx:
+                ctx.metadata["empathy_context"] = empathy_ctx
+        except Exception as e:
+            logger.debug(f"Empathy context injection failed: {e}")
+
         # Pre-turn side-git snapshot
         turn_id = None
         side_git = getattr(self.world, 'side_git', None)
@@ -170,6 +191,8 @@ class LifeEngine(BranchMixin, StageMixin):
             await self._run_stage("perceive", self._perceive, ctx, crv_gating, fold_max_chars)
             await self._run_stage("cognize", self._cognize, ctx, crv_gating, fold_max_chars)
             await self._run_stage("ontogrow", self._grow_ontology, ctx, crv_gating, fold_max_chars)
+            # ── Pre-Task World Knowledge Injection (arXiv:2604.18131 Phase 2) ──
+            await self._run_stage("pre_task_explore", self._pre_task_explore, ctx, crv_gating, fold_max_chars)
             await self._run_stage("plan", self._plan, ctx, crv_gating, fold_max_chars)
             # ── WorldModel → Plan feedback: validate plan for high-risk steps ──
             try:
@@ -708,6 +731,16 @@ class LifeEngine(BranchMixin, StageMixin):
                 except Exception as e:
                     logger.debug(f"SideGit post_turn: {e}")
 
+            # ── Dream Consolidation trigger (v2.7): idle memory replay ──
+            try:
+                from .dream_consolidation import get_dream_consolidator
+                consolidator = get_dream_consolidator()
+                consolidator.notify_activity()
+                if consolidator.should_consolidate():
+                    asyncio.ensure_future(consolidator.consolidate())
+            except Exception as e:
+                logger.debug(f"Dream consolidation check failed: {e}")
+
     # ── Economic Helpers ──
 
     @staticmethod
@@ -777,6 +810,47 @@ class LifeEngine(BranchMixin, StageMixin):
                        "research", "analyze", "compare", "synthesize", "review"]
         multi_source = len(ctx.retrieved_knowledge) >= 3 or len(ctx.plan) >= 4
         return any(k in text for k in research_kw) or multi_source
+
+    async def _pre_task_explore(self, ctx: LifeContext) -> None:
+        """arXiv:2604.18131 Phase 2: inject World Knowledge before tasks.
+
+        Checks if the current domain has cached World Knowledge and injects
+        it as context for downstream planning and execution stages. If not
+        cached, marks the domain for idle-time exploration.
+        """
+        try:
+            from ..knowledge.knowledge_base import KnowledgeBase
+            text = ctx.user_input or ""
+            domain = self._guess_domain_from_query(text)
+            if not domain:
+                return
+            kb = KnowledgeBase()
+            wk_content = kb.get_world_knowledge(domain)
+            if wk_content:
+                ctx.metadata["world_knowledge_context"] = wk_content
+                logger.info(f"LifeEngine: injected WK for domain '{domain}' "
+                            f"({len(wk_content)} chars)")
+            else:
+                ctx.metadata["pending_exploration_domain"] = domain
+                logger.debug(f"LifeEngine: WK not found for domain '{domain}', "
+                             f"marked for idle exploration")
+        except Exception as e:
+            logger.debug(f"LifeEngine: pre_task_wk failed (non-fatal): {e}")
+
+    @staticmethod
+    def _guess_domain_from_query(query: str) -> str | None:
+        import re
+        m = re.search(r"https?://([^\s/]+)", query)
+        if m:
+            return m.group(1)
+        for kw, dom in [("python", "docs.python.org"), ("rust", "docs.rs"),
+                         ("javascript", "developer.mozilla.org"),
+                         ("arxiv", "arxiv.org"), ("论文", "arxiv.org"),
+                         ("npm", "www.npmjs.com"), ("pip", "pypi.org"),
+                         ("cargo", "crates.io"), ("github", "github.com")]:
+            if kw in query.lower():
+                return dom
+        return None
 
     async def _evolve(self, ctx: LifeContext) -> None:
         rate = ctx.metadata.get("success_rate", 0)

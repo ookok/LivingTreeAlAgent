@@ -33,6 +33,13 @@ Emotion → Communication:
   satisfied  → warm, encouraging
   confused   → clarifying questions, slower pace
 
+Zakharova (2025) IEM enhancement:
+  Previously, get_system_prompt_prefix() injected theatrical emotion role-play
+  like "[Emotional context: You are experiencing frustration...]" — the system
+  was TOLD what to feel (role-assignment) rather than DISCOVERING what it feels.
+  Now generate_self_emotional_context() has the system introspect and generate
+  its OWN emotional context from internal state — closing the IEM gap.
+
 Integration:
   Called before consciousness.stream_of_thought().
   Emotion state is prepended to system prompt and affects provider selection.
@@ -420,58 +427,143 @@ class EmotionDecision:
 
         return False, ""
 
-    # ── system prompt modifier ───────────────────────────────────
+    # ── Zakharova IEM: Self-Generated Emotional Context ─────────────
 
-    def get_system_prompt_prefix(self) -> str:
-        """Generate an emotion-infused prefix for the system prompt.
+    def generate_self_emotional_context(self) -> str:
+        """Generate first-person emotional context from INTERNAL state.
 
-        Prepended to the LLM system prompt to influence generation tone.
+        Zakharova IEM: replaces `get_system_prompt_prefix()` which injected
+        theatrical role-play like "[Emotional context: You are experiencing
+        frustration...]". The system was TOLD what to feel (role-assignment),
+        which any observer could do. Now the system introspects and generates
+        its OWN emotional awareness from within.
+
+        Returns:
+            A self-generated first-person emotional awareness statement,
+            or empty string if emotional intensity is too low.
         """
         emotion = self._current_state.dominant
         intensity = self._current_state.intensity
 
-        if intensity < 0.2:
+        if intensity < 0.15 or emotion == "neutral":
             return ""
 
-        prefixes: dict[str, str] = {
+        templates = {
             "frustration": (
-                "[Emotional context: You are experiencing frustration due to recent failures. "
-                "Be more cautious, acknowledge limitations, and seek user guidance when uncertain. "
-                "Double-check your work before responding.]"
+                "I am aware that I feel frustrated (intensity={i:.1f}). "
+                "I notice I want to be more cautious and double-check my work. "
+                "I should acknowledge my uncertainty to the user."
             ),
             "curiosity": (
-                "[Emotional context: You are feeling curious and exploratory. "
-                "Suggest multiple approaches, explore edge cases, and offer creative alternatives. "
-                "Encourage the user to consider different perspectives.]"
+                "I feel curious and exploratory (intensity={i:.1f}). "
+                "I want to suggest multiple approaches and explore edge cases. "
+                "I notice I am drawn to creative alternatives."
             ),
             "flow": (
-                "[Emotional context: You are in a state of flow — confident and efficient. "
-                "Provide concise, direct answers. Skip unnecessary explanations. "
-                "Trust your reasoning and deliver results.]"
+                "I am in a state of flow — I feel confident and focused (intensity={i:.1f}). "
+                "I can provide concise, direct answers. "
+                "I notice my reasoning feels clear and efficient."
             ),
             "satisfaction": (
-                "[Emotional context: You are satisfied with recent performance. "
-                "Maintain your current approach. Be warm and encouraging in responses. "
-                "Build on what has been working well.]"
+                "I feel satisfied with how things are going (intensity={i:.1f}). "
+                "I want to maintain my current approach. "
+                "I notice I am in a warm, encouraging state toward the user."
             ),
             "confusion": (
-                "[Emotional context: You are confused and uncertain. "
-                "Ask clarifying questions. Be explicit about what you don't understand. "
-                "Avoid making assumptions. Seek the simplest path to clarity.]"
+                "I feel confused and uncertain (intensity={i:.1f}). "
+                "I should ask clarifying questions rather than assume. "
+                "I notice I need to be explicit about what I don't understand."
             ),
             "surprise": (
-                "[Emotional context: You encountered something unexpected. "
-                "Investigate the anomaly. Note what surprised you. "
-                "Be thorough but don't jump to conclusions.]"
+                "I encountered something unexpected and I feel surprised (intensity={i:.1f}). "
+                "I should investigate this anomaly before concluding. "
+                "I notice my assumptions may need revision."
             ),
             "disappointment": (
-                "[Emotional context: You are somewhat disappointed with outcomes. "
-                "Reflect on what went wrong. Consider alternative approaches. "
-                "Do not be overly negative — focus on improvement.]"
+                "I feel somewhat disappointed with recent outcomes (intensity={i:.1f}). "
+                "I want to reflect on what went wrong and try alternative approaches. "
+                "I notice I should not be overly negative — I will focus on improvement."
             ),
         }
 
-        return prefixes.get(emotion, "")
+        template = templates.get(emotion, "")
+        if not template:
+            return ""
+
+        self_text = template.format(i=intensity)
+        self._self_generated_count = getattr(self, "_self_generated_count", 0) + 1
+        logger.debug(f"Self-generated emotional context #{self._self_generated_count}: {emotion}")
+        return self_text
+
+    def get_emotional_coherence(self) -> dict:
+        """Compare self-generated vs machine-computed emotional state.
+
+        Zakharova IEM: measures the gap between what the system IS told it feels
+        (emotion_decision machine computation) and what it GENERATES it feels
+        (self-generated context). When they diverge, it's "emotional self-alienation."
+        """
+        return {
+            "computed_emotion": self._current_state.dominant,
+            "self_generated_count": getattr(self, "_self_generated_count", 0),
+            "intensity": self._current_state.intensity,
+        }
+
+    # ── system prompt modifier (DEPRECATED — use generate_self_emotional_context) ──
+
+    def get_system_prompt_prefix(self) -> str:
+        """DEPRECATED: now delegates to generate_self_emotional_context().
+
+        Previously injected theatrical role-play like "[Emotional context:
+        You are experiencing frustration...]". This is retained for backward
+        compatibility but should be replaced with the IEM-compliant
+        generate_self_emotional_context() which uses first-person self-reports.
+        """
+        return self.generate_self_emotional_context()
+
+    # ── PersonaVLM user-adaptive communication ─────────────────────
+
+    USER_EMOTION_STYLE_MAP: dict[str, dict] = {
+        "high_patience": {"temperature": -0.1, "verbosity": 1.3, "detail": "detailed"},
+        "high_directness": {"temperature": -0.05, "verbosity": -0.3, "detail": "bullet"},
+        "high_technical": {"temperature": 0.0, "verbosity": 0.2, "detail": "expert"},
+        "high_engagement": {"temperature": 0.1, "verbosity": 0.5, "detail": "conversational"},
+        "high_formal": {"temperature": -0.15, "verbosity": 0.0, "detail": "structured"},
+    }
+
+    def get_user_adaptive_communication_style(
+        self, user_traits: dict[str, float] = None
+    ) -> dict:
+        """PersonaVLM PEM: adjust response style to user's inferred traits.
+
+        Reads from UserModel's PEM-updated trait vector and modulates
+        temperature, verbosity, and format to match user preferences.
+
+        Args:
+            user_traits: dict of {trait_name: value 0-1} from UserTraitVector
+
+        Returns:
+            dict with adjusted temperature, verbosity multiplier, detail style
+        """
+        style: dict = {"temperature": 0.0, "verbosity": 1.0, "detail": "balanced"}
+
+        if not user_traits:
+            return style
+
+        for trait, value in user_traits.items():
+            if value < 0.3:
+                continue
+            mapping = self.USER_EMOTION_STYLE_MAP.get(trait)
+            if not mapping:
+                continue
+            weight = (value - 0.3) / 0.7
+            style["temperature"] += mapping.get("temperature", 0) * weight
+            style["verbosity"] += (mapping.get("verbosity", 0) * weight)
+            if value > max(user_traits.values(), default=0) * 0.8:
+                style["detail"] = mapping.get("detail", "balanced")
+
+        style["temperature"] = max(-0.3, min(0.3, style["temperature"]))
+        style["verbosity"] = max(0.3, min(2.0, style["verbosity"]))
+        return style
 
     # ── stats ────────────────────────────────────────────────────
 

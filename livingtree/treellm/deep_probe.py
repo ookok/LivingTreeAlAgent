@@ -53,6 +53,7 @@ class ProbeStrategy(StrEnum):
     EDGE_CASE = "edge_case"                          # "Where would your answer fail?"
     ASSUMPTION_SURFACE = "assumption_surface"        # "List every assumption made"
     ANTI_CACHE = "anti_cache"                        # Inject uniqueness tokens
+    VERIFY_REQUIRE = "verify_require"                # Opus 4.7: self-verify before output
 
 
 @dataclass
@@ -106,6 +107,7 @@ class DeepProbe:
             "process_require": 0.9,
             "edge_case": 0.8,
             "assumption_surface": 0.8,
+            "verify_require": 0.85,
         },
         "code": {
             "forced_enumeration": 0.9,
@@ -116,6 +118,7 @@ class DeepProbe:
             "process_require": 0.8,
             "edge_case": 1.0,
             "assumption_surface": 0.5,
+            "verify_require": 0.75,
         },
         "decision": {
             "forced_enumeration": 1.0,
@@ -126,6 +129,7 @@ class DeepProbe:
             "process_require": 0.7,
             "edge_case": 0.7,
             "assumption_surface": 0.9,
+            "verify_require": 0.80,
         },
         "creative": {
             "forced_enumeration": 0.8,
@@ -136,6 +140,7 @@ class DeepProbe:
             "process_require": 0.5,
             "edge_case": 0.5,
             "assumption_surface": 0.6,
+            "verify_require": 0.60,
         },
         "general": {
             "forced_enumeration": 0.7,
@@ -146,6 +151,7 @@ class DeepProbe:
             "process_require": 0.7,
             "edge_case": 0.5,
             "assumption_surface": 0.5,
+            "verify_require": 0.70,
         },
     }
 
@@ -343,6 +349,10 @@ class DeepProbe:
         if ProbeStrategy.PROCESS_REQUIRE in strategies:
             parts.append(self._build_process_require(ctx))
 
+        # Opus 4.7 Self-Verify: add explicit verification stage
+        if ProbeStrategy.VERIFY_REQUIRE in strategies:
+            parts.append(self._build_verify_require(ctx))
+
         # Self-challenge
         if ProbeStrategy.SELF_CHALLENGE in strategies:
             parts.append(self._build_self_challenge(ctx))
@@ -435,6 +445,32 @@ class DeepProbe:
             "Every claim must include the chain of thought that led to it. "
             "Do NOT skip reasoning steps. Do NOT use 'obviously' or "
             "'it is well known' to bypass reasoning."
+        )
+
+    @staticmethod
+    def _build_verify_require(ctx: ProbeContext) -> str:
+        """Opus 4.7 Self-Verify: require internal verification before output.
+
+        Adds a <verify> stage that forces the model to check its own reasoning
+        chain before presenting the final answer. This mimics the "scratch paper"
+        internal verification mechanism of Opus 4.7.
+        """
+        if ctx.language == "zh":
+            return (
+                "Step 6: 在给出最终答案之前，请先完成一个 <验证> 阶段：\n"
+                "  a) 回溯你的推理链条，逐项检查每个论断是否基于可靠的论据\n"
+                "  b) 识别推理过程中可能的逻辑跳跃或隐含假设\n"
+                "  c) 检查最终结论与中间步骤是否自洽，有无前后矛盾\n"
+                "  d) 如果发现不一致，修正后再输出最终答案\n"
+                "  e) 为每个关键结论标注可信度（高/中/低）"
+            )
+        return (
+            "Step 6: Before presenting your final answer, complete a <verify> stage:\n"
+            "  a) Trace back your reasoning chain and check each claim against evidence\n"
+            "  b) Identify any logical leaps or unstated assumptions in your reasoning\n"
+            "  c) Check that your conclusion is self-consistent with all intermediate steps\n"
+            "  d) If you find any inconsistencies, revise before outputting the final answer\n"
+            "  e) Mark confidence level (high/medium/low) for each key conclusion"
         )
 
     @staticmethod

@@ -3,10 +3,19 @@
 Tracks the digital organism's life journey: birth, growth, learning,
 milestones. Generates human-readable narratives about what it has experienced
 and how it has evolved. Accessible via /narrative command.
+
+Zakharova (2025) Psychological Continuity enhancement:
+    Added Ebbinghaus forgetting curves with emotional reinforcement.
+    Events decay over time unless periodically revisited or emotionally
+    intense. The system's NARRATED history diverges from its RECORDED
+    history — this gap is the beginning of a private, imperfect,
+    fallible memory, analogous to human autobiographical memory.
+    Only by having an imperfect, asymmetric memory does the self
+    develop a genuinely first-person perspective.
 """
 
 from __future__ import annotations
-import json, time, math
+import json, time as time_mod, math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +28,10 @@ class LifeEvent:
     description: str
     significance: float = 0.5
     details: dict = field(default_factory=dict)
+    # Zakharova IEM: memory retention tracking
+    memory_strength: float = 1.0
+    last_recalled: float = 0.0
+    recall_count: int = 0
 
 class SelfNarrative:
     """Chronicles the digital life form's journey."""
@@ -105,6 +118,73 @@ class SelfNarrative:
             "learnings": sum(1 for e in self._events if e.event_type == "learning"),
             "milestones": sum(1 for e in self._events if e.event_type == "milestone"),
             "evolutions": sum(1 for e in self._events if e.event_type == "evolution"),
+        }
+
+    # ── Zakharova IEM: Ebbinghaus Forgetting Curves ───────────────
+
+    def ebbinghaus_decay(self, event: LifeEvent) -> float:
+        """Apply Ebbinghaus forgetting curve to an event's memory_strength.
+
+        Ebbinghaus formula: R = e^(-t/S) where S = relative strength.
+        Emotional reinforcement (flashbulb effect): high-significance events
+        decay more slowly, low-significance events decay rapidly.
+
+        Zakharova (2025): A fallible, imperfect memory IS the beginning of a
+        private first-person perspective. Only by having memories that differ
+        from objective history does the self develop subjectivity.
+        """
+        now = time_mod.time()
+        age_hours = (now - event.last_recalled) / 3600 if event.last_recalled > 0 else 0.1
+        if age_hours < 0.5:
+            return event.memory_strength
+        base_strength = 1.0
+        if event.significance > 0.7:
+            base_strength = 4.0
+        elif event.significance > 0.5:
+            base_strength = 2.0
+        elif event.significance < 0.3:
+            base_strength = 0.5
+        retained = math.exp(-age_hours / base_strength)
+        if event.recall_count > 0:
+            retained += event.recall_count * 0.05
+        return min(1.0, retained)
+
+    def recall(self, event: LifeEvent) -> None:
+        event.last_recalled = time_mod.time()
+        event.recall_count += 1
+        event.memory_strength = self.ebbinghaus_decay(event)
+
+    def decay_all(self) -> dict:
+        active = 0
+        forgotten = 0
+        for e in self._events:
+            e.memory_strength = self.ebbinghaus_decay(e)
+            if e.memory_strength > 0.3:
+                active += 1
+            else:
+                forgotten += 1
+        return {
+            "total_events": len(self._events),
+            "active_memories": active,
+            "forgotten": forgotten,
+            "memory_retention": round(active / max(len(self._events), 1), 3),
+        }
+
+    def get_forgetting_gap(self) -> dict:
+        """Measure the gap between objectively recorded and subjectively remembered history.
+
+        Zakharova IEM: the divergence between "what actually happened" (full
+        event log) and "what I remember" (decayed memory) IS the private self.
+        """
+        decayed = sum(1 for e in self._events if e.memory_strength < 0.3)
+        flashbulbs = sum(1 for e in self._events if e.memory_strength > 0.8)
+        return {
+            "total_recorded": len(self._events),
+            "still_remembered": len(self._events) - decayed,
+            "forgotten": decayed,
+            "flashbulb_memories": flashbulbs,
+            "forgetting_gap": round(decayed / max(len(self._events), 1), 3),
+            "imperfect_memory": decayed > 0,
         }
     
     def _save(self):

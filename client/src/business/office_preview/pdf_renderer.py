@@ -18,7 +18,7 @@ class PDFRenderer:
     def _detect_backend(self) -> str:
         """检测可用的 PDF 渲染后端"""
         try:
-            import PyPDF2
+            import pypdf
             return 'pypdf'
         except ImportError:
             pass
@@ -97,11 +97,11 @@ class PDFRenderer:
         })
 
     def _render_pypdf(self, file_path: str, page: int, zoom: float) -> RenderResult:
-        """使用 PyPDF2 渲染（需要转换为图像）"""
-        import PyPDF2
+        """使用 pypdf 渲染（需要转换为图像）"""
+        import pypdf
 
         with open(file_path, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
+            reader = pypdf.PdfReader(f)
             total_pages = len(reader.pages)
 
         if page < 1:
@@ -109,11 +109,11 @@ class PDFRenderer:
         elif page > total_pages:
             page = total_pages
 
-        # PyPDF2 不支持直接渲染为图像，使用信息展示
+        # pypdf 不支持直接渲染为图像，使用信息展示
         return self._render_info_only(file_path, extra_info={
             'page': page,
             'total_pages': total_pages,
-            'backend': 'PyPDF2 (仅文本)'
+            'backend': 'pypdf (仅文本)'
         })
 
     def _render_pdfplumber(self, file_path: str, page: int, zoom: float) -> RenderResult:
@@ -279,8 +279,8 @@ body {{ font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #d4d4d4
             pass
 
         try:
-            import PyPDF2
+            import pypdf
             with open(file_path, 'rb') as f:
-                return len(PyPDF2.PdfReader(f).pages)
+                return len(pypdf.PdfReader(f).pages)
         except Exception:
             return 0

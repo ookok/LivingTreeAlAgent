@@ -640,6 +640,27 @@ def get_endocrine() -> HormoneNetwork:
     return _endocrine
 
 
+    # ═══ Discovery Machine: Neuromorphic & Ising ═══
+
+    def neuromorphic_organ_computation(self) -> dict:
+        organ_states = {}
+        for name, receptor in self._organs.items():
+            signal_sum = sum(h.level * receptor.sensitivity.get(h, 0.0) for h in HormoneType)
+            spike = 1.0 if signal_sum > receptor.threshold * 0.5 else 0.0
+            organ_states[name] = {"signal_sum": signal_sum, "spike": spike, "threshold": receptor.threshold}
+        return organ_states
+
+    def ising_hormone_states(self) -> dict:
+        spins = {}
+        for h in HormoneType:
+            level = self._hormones.get(h, HormoneSignal(hormone_type=h)).level
+            spins[h.value] = 1 if level > 0.5 else (-1 if level < 0.3 else 0)
+        n_coupled = sum(1 for s in spins.values() if s != 0)
+        energy = -sum(spins[h1] * spins[h2] * 0.5 for h1 in spins for h2 in spins if h1 < h2)
+        return {"spins": spins, "energy": energy, "active_hormones": n_coupled,
+                "magnetization": sum(spins.values()) / max(len(spins), 1)}
+
+
 __all__ = [
     "HormoneType",
     "HormoneSignal",

@@ -36,6 +36,7 @@ class ProviderResult:
     latency_ms: float = 0.0
     error: str = ""
     rate_limited: bool = False
+    logprobs: list[dict] | None = None
 
     @staticmethod
     def empty(error: str = "") -> "ProviderResult":
@@ -114,6 +115,8 @@ class Provider:
                     choice = body["choices"][0]
                     msg = choice.get("message", {})
                     usage = body.get("usage", {})
+                    logprobs_data = choice.get("logprobs", {})
+                    content_logprobs = logprobs_data.get("content") if logprobs_data else None
                     return ProviderResult(
                         text=msg.get("content", ""),
                         reasoning=msg.get("reasoning_content", ""),
@@ -123,6 +126,7 @@ class Provider:
                             or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
                         model=body.get("model", payload.get("model", self.default_model)),
                         latency_ms=(time.monotonic() - t0) * 1000,
+                        logprobs=content_logprobs,
                     )
                 elif status == 429:
                     self._rate_limit_count += 1
@@ -151,7 +155,8 @@ class Provider:
 
     async def chat(self, messages: list[dict], temperature: float = 0.7,
                    max_tokens: int = 4096, timeout: int = 120,
-                   model: str = "", **kwargs) -> ProviderResult:
+                   model: str = "", request_logprobs: bool = False,
+                   top_logprobs: int = 10, **kwargs) -> ProviderResult:
         t0 = time.monotonic()
         payload = {
             "model": model or self.default_model,
@@ -160,6 +165,9 @@ class Provider:
             "max_tokens": max_tokens,
             **kwargs,
         }
+        if request_logprobs:
+            payload["logprobs"] = True
+            payload["top_logprobs"] = top_logprobs
         result = await self._request_with_retry(payload, timeout, t0)
         # Circuit breaker: report success or failure
         try:

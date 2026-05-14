@@ -716,6 +716,8 @@ class TreeLLM:
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
                     "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
+                    "- explore_domain: spontaneously explore an unfamiliar website domain to build World Knowledge. Args: domain_or_url|optional_max_pages (default 15). Use this BEFORE answering if the query involves a domain you don't know well.\n"
+                    "- get_world_knowledge: retrieve previously cached World Knowledge for a domain. Args: domain string.\n"
                     "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n"
                     "After tool results, continue your reasoning. You may call multiple tools."
                 ),
@@ -775,6 +777,10 @@ class TreeLLM:
                                 tool_result_text = await self._tool_read_vfs(tool_args.strip())
                             elif tool_name in ("write_file", "file_write"):
                                 tool_result_text = await self._tool_write_vfs(tool_args.strip())
+                            elif tool_name == "explore_domain":
+                                tool_result_text = await rex._tool_explore_domain(tool_args.strip())
+                            elif tool_name == "get_world_knowledge":
+                                tool_result_text = await rex._tool_get_world_knowledge(tool_args.strip())
                             else:
                                 tool_result_text = f"[tool:{tool_name}] not available"
                         else:

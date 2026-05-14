@@ -34,6 +34,7 @@ class Mutation:
     diff: str = ""
     test_passed: bool = False
     fitness: float = 0.0
+    self_explanation: str = ""
 
 
 class AutonomousCodeEvolution:
@@ -108,7 +109,46 @@ class AutonomousCodeEvolution:
                 self._commit_to_github(best)
 
         self._history.extend(survivors)
+        for best in survivors[:3]:
+            self._explain_mutation(best)
         return survivors
+
+    def _explain_mutation(self, mutation: Mutation) -> None:
+        """Zakharova introspection: explain what was learned from a successful mutation.
+
+        Generates a first-person self-narrative about what the system learned
+        about itself from the improvement. Transforms functional self-modification
+        into metacognitive self-understanding.
+        """
+        if mutation.fitness < 0.05:
+            return
+        desc = mutation.description[:120]
+        fitness = mutation.fitness
+        if "threshold" in desc.lower():
+            insight = (
+                f"I discovered that adjusting a threshold in {mutation.file} "
+                f"improved my performance (fitness={fitness:.3f}). This tells me "
+                f"I was previously under-calibrated in this parameter."
+            )
+        elif "prompt" in desc.lower():
+            insight = (
+                f"I rewrote my internal prompting for {mutation.file} and saw "
+                f"improvement (fitness={fitness:.3f}). I now understand what "
+                f"wording patterns produce better results."
+            )
+        elif "dead" in desc.lower() or "remove" in desc.lower():
+            insight = (
+                f"I removed unnecessary code from {mutation.file} and my tests "
+                f"still pass (fitness={fitness:.3f}). Simpler is better — I was "
+                f"carrying unnecessary complexity."
+            )
+        else:
+            insight = (
+                f"I evolved {mutation.file} and my fitness improved to "
+                f"{fitness:.3f}. I am incrementally becoming better at what I do."
+            )
+        mutation.self_explanation = insight
+        logger.info(f"CodeEvolution gen={self._generation}: {insight[:150]}")
 
     # ── Mutation Generation ──
 

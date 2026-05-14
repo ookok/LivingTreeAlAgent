@@ -470,6 +470,8 @@ class EventEntry:
     rel_perspective: str = ""
     embedding: list[float] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    persona_domain: str = ""
+    emotional_valence: float = 0.0
 
     def text_for_retrieval(self) -> str:
         parts = [self.fact_perspective]
@@ -904,6 +906,8 @@ class StructMemory:
         query: str,
         top_k: int = 60,
         n_synthesis: int = 5,
+        user_only: bool = False,
+        persona_domain: str = "",
     ) -> tuple[list[EventEntry], list[SynthesisBlock]]:
         """Retrieve entries and synthesis blocks for context injection.
 
@@ -919,6 +923,10 @@ class StructMemory:
 
         scored_entries = []
         for entry in self._entries.values():
+            if user_only and entry.role != "user":
+                continue
+            if persona_domain and entry.persona_domain != persona_domain:
+                continue
             score = self._cosine_similarity(query_embedding, entry.embedding)
             scored_entries.append((score, entry))
         scored_entries.sort(key=lambda x: x[0], reverse=True)
@@ -1230,6 +1238,85 @@ class StructMemory:
         except Exception as e:
             logger.warning(f"db query: {e}")
             return []
+
+    async def proactive_episodic_extract(
+        self,
+        messages: list[dict],
+        session_id: str = "",
+        persona_domains: list[str] = None,
+    ) -> list[EventEntry]:
+        """PersonaVLM proactive episodic extraction trigger.
+
+        Scans full conversation context (not single utterances) to extract
+        user episodic memories tagged with persona domains. Triggered on
+        conversation milestones (topic shifts, 5+ turns, session boundaries).
+
+        Args:
+            messages: Full conversation history [{role, content}, ...]
+            session_id: Session identifier for tagging
+            persona_domains: Specific domains to target (core_identity, episodic, etc.)
+
+        Returns:
+            Newly extracted episodic EventEntry objects tagged with persona_domain.
+        """
+        if persona_domains is None:
+            persona_domains = ["episodic", "core_identity", "procedural"]
+
+        new_entries: list[EventEntry] = []
+        usr_msgs = [m for m in messages if m.get("role") == "user"]
+        if len(usr_msgs) < 3:
+            return new_entries
+
+        for i, msg in enumerate(usr_msgs):
+            content = msg.get("content", "")
+            pos_score = min(1.0, (i + 1) / len(usr_msgs))
+
+            for domain in persona_domains:
+                signal = persona_domain_signal(content, domain)
+                if signal < 0.3:
+                    continue
+
+                import uuid
+                entry = EventEntry(
+                    id=str(uuid.uuid4())[:12],
+                    session_id=session_id,
+                    timestamp=msg.get("timestamp", ""),
+                    role="user",
+                    content=content[:500],
+                    fact_perspective=extract_fact_perspective(content) if "extract_fact_perspective" in dir() else content[:200],
+                    persona_domain=domain,
+                    emotional_valence=pos_score,
+                )
+                if content:
+                    entry.embedding = await self._compute_embedding(content[:500])
+                new_entries.append(entry)
+                self._entries[entry.id] = entry
+
+        return new_entries
+
+
+def persona_domain_signal(content: str, domain: str) -> float:
+    """Heuristic signal scoring for persona domain classification."""
+    signals = {
+        "core_identity": ["i am", "my name", "i work", "i live", "my role", "我叫", "我是", "我做"],
+        "episodic": ["happened", "yesterday", "last week", "just now", "i did", "i went", "发生", "昨天", "上次"],
+        "procedural": ["always", "usually", "i tend", "my workflow", "i prefer to", "习惯", "通常", "一般"],
+        "semantic": ["i know", "i learned", "i studied", "my understanding", "我知道", "我学过", "我认为"],
+    }
+    markers = signals.get(domain, [])
+    if not markers:
+        return 0.0
+    lower = content.lower()
+    hits = sum(1 for m in markers if m.lower() in lower)
+    return min(1.0, hits * 0.3 + 0.1)
+
+
+def extract_fact_perspective(content: str) -> str:
+    parts = [s.strip() for s in content.replace("!", ".").replace("？", "。").replace("?", ".").split(".") if s.strip()]
+    relevant = [p for p in parts if any(kw in p.lower() for kw in
+        ["i am", "i work", "i did", "i know", "i need", "i want", "i prefer",
+         "我是", "我在", "我做", "我需要", "我想要"])]
+    return "; ".join(relevant[:3]) if relevant else content[:200]
 
 
 # ═══ LightMem-compatible summarize() API ═══

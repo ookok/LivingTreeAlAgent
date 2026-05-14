@@ -211,6 +211,44 @@ class CompetitiveEliminator:
         """Get full ranking data for a provider."""
         return self._rankings.get(provider)
 
+    def listwise_rank(
+        self, providers: list[str] | None = None,
+        temperature: float = 1.0,
+    ) -> list[tuple[str, float]]:
+        """v2.6 LPO (arXiv:2605.06139): Listwise provider ranking via simplex projection.
+
+        Replaces pairwise Elo comparison with explicit Plackett-Luce target
+        distribution and projects provider Elo scores toward it.
+
+        Args:
+            providers: list of provider names to rank (default: all)
+            temperature: softmax temperature for π* construction
+
+        Returns:
+            list of (provider_name, listwise_score) sorted descending
+        """
+        names = providers or list(self._rankings.keys())
+        if not names:
+            return []
+        try:
+            from livingtree.optimization.lpo_optimizer import ProviderLPO
+            pto = ProviderLPO(divergence="kl", temperature=temperature)
+            elo_scores: dict[str, float] = {}
+            for n in names:
+                r = self._rankings.get(n)
+                elo_scores[n] = r.elo_rating if r else 1200.0
+            projected = pto.optimize(elo_scores, elo_scores)
+            result = [(n, projected.get(n, elo_scores.get(n, 0.0))) for n in names]
+            result.sort(key=lambda x: -x[1])
+            return result
+        except Exception:
+            pass
+        # Fallback: Elo-based ranking
+        result = [(n, self._rankings.get(n).elo_rating if n in self._rankings else 1200.0)
+                   for n in names]
+        result.sort(key=lambda x: -x[1])
+        return result
+
     def get_top_ranked(self, n: int = 10, tier_filter: str = "") -> list[ModelRanking]:
         """Get top N models by Elo rating, optionally filtered by tier."""
         rankings = list(self._rankings.values())

@@ -98,6 +98,35 @@ class HealthPredictor:
             "predictions": self._predictions,
         }
 
+    def first_person_health_narrative(self, provider: str) -> str:
+        factor = self.health_factor(provider)
+        lats = self._latencies.get(provider, [])
+        recent_lats = [(t, l) for t, l in lats if t > time.time() - 300]
+        avg_latency = sum(l for _, l in recent_lats) / max(len(recent_lats), 1)
+        if factor >= 0.9:
+            return f"I sense {provider} is healthy — responding in {avg_latency:.0f}ms. I trust it."
+        elif factor >= 0.6:
+            return f"I notice {provider} has been slowing slightly ({avg_latency:.0f}ms avg). I am watching it."
+        elif factor >= 0.3:
+            return f"I feel {provider} is degrading — {avg_latency:.0f}ms avg. I am reducing my reliance on it."
+        elif factor > 0.0:
+            recent_errs = [e for _, e in lats[-5:] if len(lats) >= 5]
+            return f"I sense {provider} may fail soon — {avg_latency:.0f}ms. I am avoiding it for now."
+        else:
+            return f"I have stopped trusting {provider} — it has failed. I will re-evaluate when it stabilizes."
+
+    def introspective_provider_assessment(self) -> dict:
+        assessments = {}
+        for provider in self._latencies:
+            if self.health_factor(provider) < 0.6:
+                assessments[provider] = self.first_person_health_narrative(provider)
+        return {
+            "healthy_count": sum(1 for p in self._latencies if self.health_factor(p) >= 0.6),
+            "unhealthy_count": sum(1 for p in self._latencies if self.health_factor(p) < 0.6),
+            "narratives": assessments,
+            "self_awareness": bool(assessments),
+        }
+
 
 _predictor: Optional[HealthPredictor] = None
 

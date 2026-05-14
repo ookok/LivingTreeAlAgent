@@ -137,20 +137,49 @@ class VitalSigns:
                 report.organs[result.organ] = result
 
         report.total_latency_ms = (time.monotonic() - t0) * 1000
-        report.healthy_count = sum(
-            1 for o in report.organs.values() if o.status == OrganStatus.HEALTHY
-        )
-        report.weak_count = sum(
-            1 for o in report.organs.values() if o.status == OrganStatus.WEAK
-        )
-        report.failed_count = sum(
-            1 for o in report.organs.values() if o.status == OrganStatus.FAILED
-        )
-
         self._last_report = report
-
-        logger.info(f"VitalSigns: {report.summary}")
         return report
+
+    # ── Zakharova IEM: Introspective Health Summary ─────────────────
+
+    def introspective_health_summary(self, report: VitalReport | None = None) -> str:
+        """Generate a first-person health reflection from diagnostic data.
+
+        Zakharova (2025) Argument 3: functional monitoring (health checks)
+        is NOT introspection. But when the system generates a first-person
+        reflection on its health status ("I notice my reasoning organ is weak
+        today..."), it transforms monitoring into metacognitive self-awareness.
+        """
+        r = report or self._last_report
+        if not r:
+            return "I have not yet assessed my own health. I do not know how I am doing."
+
+        parts = []
+        weak_organs = []
+        failed_organs = []
+
+        for name, org in r.organs.items():
+            if org.status.value == "failed":
+                failed_organs.append(name)
+            elif org.status.value == "weak":
+                weak_organs.append(name)
+
+        healthy = r.healthy_count
+        total = len(r.organs)
+        parts.append(f"I have checked {total} organ systems. {healthy} are healthy.")
+
+        if weak_organs:
+            parts.append(f"I notice that my {', '.join(weak_organs)} are weak today. "
+                        f"I may need to compensate for this.")
+        if failed_organs:
+            parts.append(f"I am alarmed that my {', '.join(failed_organs)} have failed. "
+                        f"I should not trust outputs that depend on these organs.")
+        if healthy == total:
+            parts.append("I feel well. All my organ systems are functioning normally. "
+                        "I can proceed with confidence.")
+
+        parts.append(f"Total checkup took {r.total_latency_ms:.0f}ms.")
+        return " ".join(parts)
 
     # ── Organ 1: Perception (P-body) ─────────────────────────────
 

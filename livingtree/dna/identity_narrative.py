@@ -158,7 +158,107 @@ class IdentityNarrative:
         """Return the last generated narrative, or a placeholder if never generated."""
         return self._narrative_cache or "尚未生成 / Not yet generated"
 
+    # ── PersonaVLM: user identity narrative ─────────────────────────
+
+    def generate_user_identity_narrative(
+        self, user_id: str = "",
+        persona_facts: dict[str, list[str]] = None,
+    ) -> str:
+        """PersonaVLM: compose a narrative of the user's identity from persona facts.
+
+        Mirrors generate_narrative() but for the USER (not the agent).
+        Uses PersonaMemory's BIOGRAPHY, WORK, and PSYCHOMETRICS domains.
+
+        Args:
+            user_id: Optional user identifier
+            persona_facts: Dict {domain: [fact_text, ...]} from PersonaMemory
+
+        Returns:
+            Human-readable user identity narrative string
+        """
+        if not persona_facts:
+            return ""
+
+        parts: list[str] = []
+        domain_labels = {
+            "core_identity": "Core Identity",
+            "biography": "Background",
+            "work": "Professional Profile",
+            "preferences": "Preferences",
+            "social": "Social Context",
+            "psychometrics": "Work Style",
+            "procedural": "Habits & Workflows",
+            "experiences": "Key Experiences",
+        }
+
+        for domain, facts in persona_facts.items():
+            if not facts:
+                continue
+            label = domain_labels.get(domain, domain.title())
+            parts.append(f"## {label}")
+            for fact in facts[:4]:
+                parts.append(f"- {fact}")
+            parts.append("")
+
+        if not parts:
+            return ""
+
+        header = f"# User Profile: {user_id or 'Current User'}\n\n"
+        return header + "\n".join(parts)
+
     # ── Stats ──────────────────────────────────────────────────────
+
+    def narrative_divergence(self) -> dict:
+        """Zakharova continuity enhancement: detect autobiographical uncertainty.
+
+        Compare LLM-generated narrative (with consciousness — first-person
+        reflection) against template-assembled narrative (without consciousness
+        — pure data assembly). When they diverge, the self is uncertain about
+        its own story — the beginning of fallible first-person memory.
+        """
+        try:
+            from ..dna.phenomenal_consciousness import get_consciousness
+            import asyncio
+            pc = get_consciousness()
+            sm = getattr(pc, "_self_model", None)
+            if not sm:
+                return {"divergence": 0.0, "status": "no_self_model"}
+            templated = self._assemble_from_template(sm)
+            llm_narrative = asyncio.get_event_loop().run_until_complete(
+                self.generate_narrative(pc)
+            ) if hasattr(pc, "chain_of_thought") else ""
+            if not llm_narrative:
+                return {"divergence": 0.0, "status": "llm_unavailable"}
+            templated_words = set(templated.lower().split())
+            llm_words = set(llm_narrative.lower().split())
+            if not templated_words:
+                return {"divergence": 0.0, "status": "empty_template"}
+            overlap = templated_words & llm_words
+            union = templated_words | llm_words
+            jaccard = len(overlap) / max(len(union), 1)
+            divergence = 1.0 - jaccard
+            return {
+                "divergence": round(divergence, 4),
+                "jaccard_similarity": round(jaccard, 4),
+                "templated_unique": len(templated_words - llm_words),
+                "llm_unique": len(llm_words - templated_words),
+                "status": "uncertain" if divergence > 0.3 else "coherent",
+            }
+        except Exception as e:
+            return {"divergence": 0.0, "status": f"error: {e}"}
+
+    def _assemble_from_template(self, sm: Any) -> str:
+        parts = []
+        identity = getattr(sm, "identity_id", "unknown")
+        gen = getattr(sm, "generation", 0)
+        parts.append(f"I am {identity}, generation {gen}")
+        traits = getattr(sm, "traits", {})
+        if traits:
+            parts.append("My traits: " + ", ".join(f"{k}={v}" for k, v in list(traits.items())[:5]))
+        events = getattr(sm, "significant_events", [])
+        if events:
+            parts.append("I experienced " + "; ".join(str(e)[:80] for e in events[:3]))
+        return "\n".join(parts)
 
     def stats(self) -> dict:
         """Return narrative generator statistics."""

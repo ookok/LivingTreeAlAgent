@@ -527,6 +527,44 @@ def get_surprise_gate(surprise_threshold: float = 0.4) -> SurpriseGatedMemory:
     return _surprise_gate
 
 
+    # ═══ Iterative Reconsolidation (Neuro Autoencoder loop) ═══
+
+    def iterative_reconsolidation(self, content: str, target_accuracy: float = 0.90, max_iterations: int = 10) -> dict:
+        scores = []
+        for iteration in range(max_iterations):
+            signal = self.evaluate(content)
+            compressed = hashlib.md5(content.encode()).hexdigest()[:16]
+            diversity = signal.surprise_score
+            error = 1.0 - signal.utility_score
+            reconsolidated = error < (1.0 - target_accuracy)
+            scores.append({"iteration": iteration, "compressed": compressed, "diversity": diversity,
+                           "error": error, "reconsolidated": reconsolidated})
+            if error < (1.0 - target_accuracy):
+                break
+            content = content + f"\n[refine {iteration}: error={error:.3f}]"
+        return {"iterations": len(scores), "final_error": scores[-1]["error"] if scores else 1.0,
+                "converged": scores[-1]["reconsolidated"] if scores else False, "trajectory": scores}
+
+    def neuromorphic_encoding(self, content: str, dim: int = 128) -> list[int]:
+        words = re.findall(r"[a-z0-9\u4e00-\u9fff]+", content.lower())
+        if not words:
+            return [0] * dim
+        neurons = [0] * dim
+        for j, w in enumerate(words):
+            idx = abs(hash(w)) % dim
+            neurons[idx] = 1 if neurons[idx] == 0 else neurons[idx]
+        return neurons
+
+    def ising_memory_neurons(self, states: list[int], couplings: list[list[float]] | None = None) -> dict:
+        n = len(states)
+        spins = [1 if s > 0 else -1 for s in states]
+        if couplings is None:
+            couplings = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+        energy = -sum(couplings[i][j] * spins[i] * spins[j] for i in range(n) for j in range(n))
+        magnetization = sum(spins) / n if n > 0 else 0.0
+        return {"energy": energy, "magnetization": magnetization, "spins": spins, "n_neurons": n}
+
+
 __all__ = [
     "SurpriseSignal",
     "CriticRouter",

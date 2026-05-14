@@ -8,10 +8,19 @@ vector evolves through the pipeline, updated incrementally at each stage.
 CORE INSIGHT: LLM inputs are token embeddings. Passing text between stages
 forces unnecessary round-trips. A shared vector eliminates this overhead.
 
+v2.4 — MoDA-Enhanced (arXiv:2603.15619):
+    Added cross-depth attention, depth-aware embedding with positional encoding,
+    preservation fidelity tracking, and skip-connection-style recovery.
+    VectorContext now integrates with ModaCore for joint sequence+depth
+    attention across pipeline stages.
+
 Architecture:
     Text → [embed] → v0 → perceive → v1 → cognize → v2 → ... → v8 → [decode] → Text
                        ↑ 1 stage ↑       ↑ 1 stage ↑            ↑ 1 stage ↑
                       vector update     vector update          vector update
+
+    NOW with MoDA: each stage attends to all prior stage vectors via
+    joint softmax, recovering diluted information from early stages.
 
 The vector IS the living context — it accumulates information from each stage
 without ever being converted back to text.
@@ -158,6 +167,139 @@ class VectorContext:
             created_at=data.get("created_at", time.time()),
             updated_at=data.get("updated_at", time.time()),
         )
+
+    def attend_to_depth(
+        self, query_vector: list[float] | None = None,
+        stage_index: int | None = None,
+    ) -> dict[str, Any]:
+        """MoDA joint sequence+depth attention over all prior stage vectors.
+
+        Computes joint softmax attention where the query (current stage's
+        content or the current vector) attends to historical depth vectors
+        stored in metadata['_stage_vectors'], recovering diluted information
+        from early pipeline stages.
+
+        Args:
+            query_vector: Query to attend with (defaults to self.vector).
+            stage_index: Current pipeline stage index for filtering prior stages.
+
+        Returns:
+            Dict with fused_vector, attention_weights, top_depth_stages,
+            preservation_score, fidelity_delta.
+        """
+        q = query_vector if query_vector is not None else list(self.vector)
+        stage_vecs = self.metadata.get("_stage_vectors", {})
+        prior_stages = [
+            s for s in VECTOR_CONTEXT_STAGE_ORDER
+            if s in stage_vecs
+            and (stage_index is None or STAGE_INDEX_MAP.get(s, 99) < stage_index)
+        ]
+        if not prior_stages:
+            return {
+                "fused_vector": list(q),
+                "attention_weights": {"sequence": 1.0},
+                "top_depth_stages": [],
+                "preservation_score": 0.0,
+                "fidelity_delta": 0.0,
+            }
+        depth_vecs = [stage_vecs[s] for s in prior_stages]
+        seq_sim = 1.0
+        depth_sims = [_cosine_similarity(q, dv) for dv in depth_vecs]
+        all_logits = [seq_sim / 1.0] + [
+            sim / 1.0 * (0.95 ** (len(prior_stages) - 1 - i))
+            for i, sim in enumerate(depth_sims)
+        ]
+        max_logit = max(all_logits)
+        exps = [math.exp(z - max_logit) for z in all_logits]
+        total = sum(exps)
+        weights = [e / total for e in exps] if total > 0 else [1.0 / len(all_logits)] * len(all_logits)
+        seq_weight = weights[0]
+        depth_weights = weights[1:]
+        dim = len(q)
+        fused = [0.0] * dim
+        for j in range(dim):
+            fused[j] += seq_weight * q[j]
+            for k, dv in enumerate(depth_vecs):
+                if k < len(depth_weights):
+                    fused[j] += depth_weights[k] * dv[j]
+        fused = _l2_normalize(fused)
+        depth_sim_dict = dict(zip(prior_stages, depth_sims))
+        attn_dict = {"sequence": seq_weight}
+        attn_dict.update(dict(zip(prior_stages, depth_weights)))
+        indexed = sorted(enumerate(depth_weights), key=lambda x: -x[1])
+        top_depth = [prior_stages[i] for i, _ in indexed[:3]]
+        pres = (
+            sum(s * w for s, w in zip(depth_sims, depth_weights)) / max(sum(depth_weights), 1e-12)
+            if depth_weights else 0.0
+        )
+        fid_delta = _cosine_similarity(q, fused) - 1.0
+        return {
+            "fused_vector": fused,
+            "attention_weights": attn_dict,
+            "top_depth_stages": top_depth,
+            "preservation_score": pres,
+            "fidelity_delta": fid_delta,
+            "sequence_weight": seq_weight,
+            "depth_total_weight": sum(depth_weights),
+        }
+
+    def update_with_moda(
+        self, stage_name: str, delta_vector: list[float],
+        weight: float = 1.0, stage_index: int | None = None,
+    ) -> tuple[float, dict[str, Any]]:
+        """Update with MoDA joint attention, recovering diluted info from prior stages.
+
+        Unlike plain update(), this method computes joint attention over
+        the new delta AND all prior stage vectors, producing a fused output
+        that preserves information from early pipeline stages.
+
+        Args:
+            stage_name: Current pipeline stage name.
+            delta_vector: New delta contributed by this stage.
+            weight: Contribution weight (1.0 = full).
+            stage_index: Optional stage index override.
+
+        Returns:
+            Tuple of (cosine_similarity, moda_attention_result_dict).
+        """
+        prev_snapshot = self.snapshot()
+        plain_result = self.update(stage_name, delta_vector, weight)
+        moda_result = self.attend_to_depth(
+            query_vector=prev_snapshot.vector,
+            stage_index=stage_index,
+        )
+        if moda_result.get("top_depth_stages"):
+            combined = [0.7 * v + 0.3 * m for v, m in zip(
+                self.vector, moda_result["fused_vector"])]
+            self.vector = _l2_normalize(combined)
+            self.metadata.setdefault("_moda_enhanced", []).append(stage_name)
+        return plain_result, moda_result
+
+    def preservation_fidelity(self) -> dict[str, Any]:
+        """Compute information preservation metrics across all prior stages.
+
+        Returns a dict with cumulative_degradation, degrading_stages,
+        and per-stage preservation scores.
+        """
+        stage_vecs = self.metadata.get("_stage_vectors", {})
+        if len(stage_vecs) < 2:
+            return {"cumulative_degradation": 0.0, "degrading_stages": [], "scores": {}}
+        stages_in_order = [s for s in VECTOR_CONTEXT_STAGE_ORDER if s in stage_vecs]
+        scores: dict[str, float] = {}
+        for i, stage in enumerate(stages_in_order):
+            if i == 0:
+                scores[stage] = 1.0
+            else:
+                scores[stage] = _cosine_similarity(
+                    stage_vecs[stages_in_order[0]], stage_vecs[stage]
+                )
+        degrading = [s for s, v in scores.items() if v < 0.3] if scores else []
+        cumulative = 1.0 - (sum(scores.values()) / max(len(scores), 1))
+        return {
+            "cumulative_degradation": cumulative,
+            "degrading_stages": degrading,
+            "scores": scores,
+        }
 
     def _l2_normalize_inplace(self) -> None:
         norm = _l2_norm(self.vector)
@@ -416,6 +558,12 @@ class VectorPipeline:
         if vctx.updates:
             last = vctx.updates[-1]
             latest_trend = f"; {last['stage']} trending"
+
+        fidelity = vctx.preservation_fidelity()
+        fidelity_str = ""
+        if fidelity["cumulative_degradation"] > 0.1:
+            fidelity_str = f" degrade={fidelity['cumulative_degradation']:.2f}"
+
         total_weight = sum(vctx.stage_weights.values()) or 1.0
         weight_parts = []
         for s in VECTOR_CONTEXT_STAGE_ORDER:
@@ -425,14 +573,32 @@ class VectorPipeline:
         weight_str = ",".join(weight_parts[:5])
         result = (
             f"[[vector_ctx: stages={n_stages} depth={magnitude:.2f} "
-            f"dominate={dominant}{latest_trend}]][[hot:{hot_dims}]][[w:{weight_str}]]"
+            f"dominate={dominant}{latest_trend}{fidelity_str}]][[hot:{hot_dims}]][[w:{weight_str}]]"
         )
         if len(result) > max_chars:
             return (
                 f"[[vector_ctx: s={n_stages} d={magnitude:.2f} "
-                f"dom={dominant}{latest_trend}]]"
+                f"dom={dominant}{latest_trend}{fidelity_str}]]"
             )
         return result
+
+    def cross_depth_attend(
+        self, vctx: VectorContext, target_stage: str | None = None,
+    ) -> dict[str, Any]:
+        """MoDA cross-depth attention: recover information from prior stages.
+
+        Uses the current vector as query to attend to all prior stage
+        snapshots, producing a fused vector that preserves diluted features.
+
+        Args:
+            vctx: The accumulated VectorContext.
+            target_stage: Optional stage to recover from (if None, attends to all).
+
+        Returns:
+            MoDA attention result dict with fused_vector and diagnostics.
+        """
+        tgt_idx = STAGE_INDEX_MAP.get(target_stage, len(VECTOR_CONTEXT_STAGE_ORDER)) if target_stage else None
+        return vctx.attend_to_depth(stage_index=tgt_idx)
 
 # ═══ StageVectorizer — Stage Output to Vector Delta ═══
 

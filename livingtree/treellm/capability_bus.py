@@ -296,10 +296,16 @@ class SkillAdapter(CapabilityAdapter):
 
 
 class MCPAdapter(CapabilityAdapter):
-    """Adapter for MCP tools (server, chrome, city)."""
+    """Adapter for MCP tools (server, chrome, city, external MCP hosts).
+
+    Discovers tools from:
+    1. LivingTree's own MCP server (28 built-in tools)
+    2. External MCP servers (Parallel Search web_search/web_fetch, etc.)
+    """
 
     def __init__(self):
         super().__init__(CapCategory.MCP)
+        self._mcp_hosts: dict[str, Any] = {}
 
     async def discover(self) -> list[Capability]:
         caps = []
@@ -317,7 +323,65 @@ class MCPAdapter(CapabilityAdapter):
                 self.register(cap)
         except Exception as e:
             logger.debug(f"MCPAdapter server: {e}")
+
+        await self._discover_external_hosts(caps)
         return caps
+
+    async def _discover_external_hosts(self, caps: list) -> None:
+        """Connect to registered external MCP servers and register their tools."""
+        try:
+            from .mcp_host_client import (
+                _SERVER_PRESETS, get_mcp_host, MCPHostClient,
+            )
+        except ImportError:
+            return
+
+        for server_id, preset in _SERVER_PRESETS.items():
+            try:
+                host = await get_mcp_host(server_id, preset.get("command"),
+                                           preset.get("args"))
+                if host is None or not host.is_ready:
+                    continue
+                self._mcp_hosts[server_id] = host
+                for tool_name, tool in host.tools.items():
+                    cap_id = f"mcp:{server_id}:{tool_name}"
+                    cap = Capability(
+                        id=cap_id, name=tool_name,
+                        category=CapCategory.MCP,
+                        description=f"[{server_id}] {tool.description}"[:200],
+                        params=[
+                            CapParam(name=k, type=v.get("type", "string"),
+                                      description=v.get("description", ""))
+                            for k, v in tool.input_schema.get("properties", {}).items()
+                        ],
+                        handler=lambda **kw, _sid=server_id, _tn=tool_name:
+                            self._invoke_mcp_host(_sid, _tn, kw),
+                        source=server_id,
+                    )
+                    caps.append(cap)
+                    self.register(cap)
+                logger.info(f"MCPAdapter: connected to {server_id} "
+                             f"({len(host.tools)} tools)")
+            except Exception as e:
+                logger.debug(f"MCPAdapter host [{server_id}]: {e}")
+
+    async def _invoke_mcp_host(self, server_id: str, tool_name: str,
+                                 params: dict) -> Any:
+        """Invoke a tool on an external MCP host and return result text."""
+        from .mcp_host_client import call_mcp_tool
+        result = await call_mcp_tool(server_id, tool_name, **params)
+        if result.success:
+            return result.content
+        return f"[mcp:{server_id}:{tool_name}] Error: {result.error}"
+
+    async def shutdown(self) -> None:
+        """Shutdown all external MCP host connections."""
+        try:
+            from .mcp_host_client import shutdown_all_hosts
+            await shutdown_all_hosts()
+        except ImportError:
+            pass
+        self._mcp_hosts.clear()
 
 
 class RoleAdapter(CapabilityAdapter):

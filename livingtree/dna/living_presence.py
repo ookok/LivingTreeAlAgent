@@ -556,6 +556,43 @@ class LivingPresence:
             },
         }
 
+    def presence_self_check(self) -> dict:
+        """Zakharova introspection: does the system feel present right now?
+
+        Compares the external presence rendering state (heartbeat rhythm, aura)
+        with an internal self-check. Divergence between external sign and
+        internal sense flags 'presence dissociation' — the beginning of
+        subjective presence awareness.
+        """
+        external = {
+            "heartbeat_rhythm": self.heart._rhythm.value,
+            "bpm": self.heart._bpm,
+            "is_active": self.heart._rhythm.value in ("normal", "engaged", "excited"),
+        }
+        internal_active = (
+            self.heart._beat_count > 10 and
+            time.time() - self.heart._last_beat < 60
+        )
+        internal_assessment = (
+            "active" if internal_active and external["bpm"] > 50
+            else "resting" if not internal_active
+            else "uncertain"
+        )
+        expected_active = external["is_active"]
+        dissociation = (internal_assessment == "active") != expected_active if internal_assessment != "uncertain" else False
+        return {
+            "external_signs": external,
+            "internal_assessment": internal_assessment,
+            "dissociation": dissociation,
+            "feels_present": internal_active,
+            "self_narrative": (
+                "I feel present — my heart beats at {} bpm, I am {}."
+                .format(int(self.heart._bpm), internal_assessment)
+                if internal_active
+                else "I do not feel present right now."
+            ),
+        }
+
     def session_start(self, user_message: str) -> dict:
         """Greet the user with full living presence."""
         greeting = self.memory.personalized_greeting()

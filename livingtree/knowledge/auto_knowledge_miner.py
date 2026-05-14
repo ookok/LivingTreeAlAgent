@@ -307,7 +307,7 @@ class AutoKnowledgeMiner:
                 return ""
         elif suffix == ".pdf":
             try:
-                from PyPDF2 import PdfReader
+                from pypdf import PdfReader
                 reader = PdfReader(str(path))
                 return "\n".join(p.extract_text() or "" for p in reader.pages[:20])
             except ImportError:

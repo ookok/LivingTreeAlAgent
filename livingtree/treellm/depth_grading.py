@@ -50,6 +50,7 @@ class DepthDimension(StrEnum):
     COUNTERFACTUAL = "counterfactual"             # Alternative scenarios
     STRUCTURAL_DEPTH = "structural_depth"         # Multi-level organization
     CERTAINTY = "certainty"                       # Faithful uncertainty (metacognition)
+    SELF_CONSISTENCY = "self_consistency"         # Opus 4.7: internal contradiction detection
 
 
 @dataclass
@@ -88,13 +89,14 @@ class DepthGrader:
     """
 
     DIMENSION_WEIGHTS = {
-        DepthDimension.REASONING_STEPS: 0.22,
-        DepthDimension.ASSUMPTION_EXPLICIT: 0.15,
-        DepthDimension.EDGE_CASE_COVERAGE: 0.15,
-        DepthDimension.SELF_CRITIQUE: 0.15,
-        DepthDimension.COUNTERFACTUAL: 0.15,
-        DepthDimension.STRUCTURAL_DEPTH: 0.18,
-        DepthDimension.CERTAINTY: 0.12,  # Metacognitive uncertainty honesty
+        DepthDimension.REASONING_STEPS: 0.18,
+        DepthDimension.ASSUMPTION_EXPLICIT: 0.13,
+        DepthDimension.EDGE_CASE_COVERAGE: 0.13,
+        DepthDimension.SELF_CRITIQUE: 0.13,
+        DepthDimension.COUNTERFACTUAL: 0.12,
+        DepthDimension.STRUCTURAL_DEPTH: 0.08,
+        DepthDimension.CERTAINTY: 0.11,
+        DepthDimension.SELF_CONSISTENCY: 0.12,
     }
 
     TIER_THRESHOLDS = {
@@ -213,15 +215,20 @@ class DepthGrader:
         certainty = self._score_certainty(output)
         dims["certainty"] = certainty
 
+        # ── Opus 4.7 Self-Verify: internal consistency ──
+        consistency = self._score_consistency(output)
+        dims["self_consistency"] = consistency
+
         # Weighted sum (use full dimension keys)
         weight_map = {
-            "reasoning_steps": 0.22,
-            "assumption_explicit": 0.15,
-            "edge_case_coverage": 0.15,
-            "self_critique": 0.15,
+            "reasoning_steps": 0.18,
+            "assumption_explicit": 0.13,
+            "edge_case_coverage": 0.13,
+            "self_critique": 0.13,
             "counterfactual": 0.10,
-            "structural_depth": 0.10,
+            "structural_depth": 0.08,
             "certainty": 0.13,
+            "self_consistency": 0.12,
         }
         depth = sum(weight_map.get(k, 0.1) * v for k, v in dims.items())
 
@@ -435,6 +442,58 @@ class DepthGrader:
             score += 0.15
 
         return min(1.0, score)
+
+    # ── Opus 4.7 Self-Verify: Internal Consistency Scoring ─────────
+
+    @staticmethod
+    def _score_consistency(output: str) -> float:
+        """Opus 4.7 SELF_CONSISTENCY: detect internal contradictions.
+
+        Extracts claim-level assertions and checks for contradictory
+        pairs using negation asymmetry and semantic opposition markers.
+        High score → claims are internally coherent.
+        Low score → potential logical breaks within the output.
+        """
+        sentences = re.split(r'(?<=[.!?。！？])\s+', output)
+        claims = [s.strip().lower() for s in sentences if len(s.strip()) > 20]
+        if len(claims) < 2:
+            return 0.5
+
+        neg_words = {"not", "no", "never", "don't", "doesn't", "isn't", "aren't",
+                      "won't", "can't", "cannot", "不", "没有", "不是", "无", "非"}
+        opposition_markers = {
+            ("increase", "decrease"), ("high", "low"), ("fast", "slow"),
+            ("success", "failure"), ("correct", "wrong"), ("true", "false"),
+            ("支持", "反对"), ("上升", "下降"), ("成功", "失败"),
+        }
+
+        contradiction_count = 0
+        for i in range(len(claims)):
+            for j in range(i + 1, min(i + 6, len(claims))):
+                a_words = set(claims[i].split())
+                b_words = set(claims[j].split())
+                overlap = len(a_words & b_words) / max(len(a_words | b_words), 1)
+                if overlap < 0.35:
+                    continue
+
+                has_neg_a = bool(a_words & neg_words)
+                has_neg_b = bool(b_words & neg_words)
+                if has_neg_a != has_neg_b:
+                    contradiction_count += 1
+                    continue
+
+                for op_a, op_b in opposition_markers:
+                    if op_a in a_words and op_b in b_words:
+                        contradiction_count += 1
+                        break
+
+        if contradiction_count == 0:
+            return 1.0
+        if contradiction_count <= 2:
+            return 0.7
+        if contradiction_count <= 4:
+            return 0.4
+        return 0.1
 
     # ── Batch & Comparison ────────────────────────────────────────
 

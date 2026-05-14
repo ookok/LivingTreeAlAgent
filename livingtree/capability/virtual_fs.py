@@ -185,6 +185,18 @@ class DiskResource(Resource):
         real = self._to_real(path)
         if not real.is_dir():
             raise NotADirectoryError(f"Disk: {path} is not a directory")
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            fast_entries = ffs.list_dir(str(real))
+            if fast_entries:
+                return [VFSEntry(
+                    name=e.name, path=self._normalize_vpath(Path(e.full_path)),
+                    is_dir=e.is_dir, size=e.size, modified=e.mtime,
+                    resource_type="disk",
+                ) for e in fast_entries]
+        except Exception:
+            pass
         entries = []
         try:
             with os.scandir(str(real)) as it:
@@ -206,6 +218,14 @@ class DiskResource(Resource):
         real = self._to_real(path)
         if not real.is_file():
             raise FileNotFoundError(f"Disk: {path} not found")
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            text = ffs.read_text(str(real))
+            if text:
+                return text
+        except Exception:
+            pass
         return real.read_text(encoding="utf-8", errors="replace")
 
     async def write_file(self, path: str, content: str) -> None:
@@ -231,10 +251,25 @@ class DiskResource(Resource):
         return "/disk/" + str(rel).replace("\\", "/")
 
     def walk_files(self, vpath: str, pattern: str = "*") -> list[VFSEntry]:
-        """Recursively walk a directory, returning entries matching pattern."""
         real = self._to_real(vpath)
         if not real.is_dir():
             return []
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            fast_entries = ffs.scan_tree(str(real), max_depth=5)
+            if fast_entries:
+                results = []
+                for e in fast_entries:
+                    if not e.is_dir and fnmatch.fnmatch(e.name, pattern):
+                        results.append(VFSEntry(
+                            name=e.name, path=self._normalize_vpath(Path(e.full_path)),
+                            is_dir=False, size=e.size, modified=e.mtime,
+                            resource_type="disk",
+                        ))
+                return results
+        except Exception:
+            pass
         results = []
         for root, dirs, files in os.walk(str(real)):
             for name in files:
@@ -818,6 +853,30 @@ class VirtualFS:
 
         if not pattern and stdin:
             return stdin
+
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            if ffs.rg_available and not stdin:
+                search_dir = positional[0] if positional else "."
+                from pathlib import Path as _P
+                search_dir = str(self._to_real(search_dir))
+                matches = ffs.grep(
+                    search_dir, pattern, file_glob="*",
+                    max_results=200, ignore_case=ignore_case,
+                )
+                if matches:
+                    lines = []
+                    for m in matches:
+                        if count_only:
+                            lines.append(f"{m.file_path}:1")
+                        elif show_numbers:
+                            lines.append(f"{m.file_path}:{m.line_number}:{m.line_text}")
+                        else:
+                            lines.append(f"{m.file_path}:{m.line_text}")
+                    return "\n".join(lines)
+        except Exception:
+            pass
 
         lines_out = []
 

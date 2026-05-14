@@ -79,7 +79,8 @@ class EngramStore:
         Args:
             key: The retrieval key (e.g. "GB3095-2012 颗粒物限值")
             value: The knowledge content
-            category: Domain category (regulation, standard, formula, etc.)
+            category: Domain category (regulation, standard, formula,
+                      template, user_fact, etc.)
             hot: Whether to place in hot tier immediately
         """
         entry = EngramEntry(
@@ -180,6 +181,30 @@ class EngramStore:
         """Batch insert multiple knowledge items."""
         for item in items:
             self.insert(item["key"], item["value"], category)
+
+    def import_user_facts(self, persona_facts: list[dict[str, str]]) -> int:
+        """PersonaVLM: import stable user facts for fast O(1) retrieval.
+
+        Called after PersonaMemory proactive extraction to seed EngramStore
+        with user identity facts (name, role, preferences, etc.) that rarely
+        change and benefit from hot-tier caching.
+
+        Args:
+            persona_facts: List of {key, value} dicts from PersonaMemory
+
+        Returns:
+            Number of facts imported
+        """
+        count = 0
+        for fact in persona_facts:
+            key = fact.get("key", "")
+            value = fact.get("value", "")
+            if key and value:
+                self.insert(key, value, category="user_fact", hot=True)
+                count += 1
+        if count:
+            logger.info("EngramStore: imported %d user facts (user_fact category)", count)
+        return count
 
     def _promote_to_hot(self, key: str):
         """Promote a cold entry to hot tier."""

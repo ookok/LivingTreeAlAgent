@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 PRESET_HOT_LIBRARIES = {
     "pdf_parser": [
         LibraryInfo(
-            name="PyPDF2",
+            name="pypdf",
             version="3.0.1",
             source=ScanSource.PRESET_HOT,
             url="https://github.com/py-pdf/pypdf",

@@ -285,38 +285,11 @@ class InlineParser:
         text = ""
         try:
             from io import BytesIO
-            import PyPDF2
-            reader = PyPDF2.PdfReader(BytesIO(data))
-            pages = []
-            for page in reader.pages:
-                t = page.extract_text()
-                if t:
-                    pages.append(t)
-            text = "\n\n".join(pages)
-        except ImportError:
-            pass
+            import pypdf
+            reader = pypdf.PdfReader(BytesIO(data))
 
-        if not text:
-            try:
-                import pdfplumber
-                with pdfplumber.open(io.BytesIO(data)) as pdf:
-                    pages = [p.extract_text() or "" for p in pdf.pages]
-                    text = "\n\n".join(pages)
-            except ImportError:
-                pass
-
-        if not text:
-            try:
-                import fitz   # pymupdf
-                doc = fitz.open(stream=data, filetype="pdf")
-                pages = [page.get_text() for page in doc]
-                text = "\n\n".join(pages)
-                doc.close()
-            except ImportError:
-                pass
-
-        if not text:
-            return ParseResult(ok=False, error="PDF parsing requires: pip install PyPDF2 (or pdfplumber/pymupdf)")
+            ...
+            return ParseResult(ok=False, error="PDF parsing requires: pip install pypdf (or pdfplumber/pymupdf)")
         return self._build_result(text, filename, "pdf")
 
     # ═══ DOCX Parser (in-memory) ═══

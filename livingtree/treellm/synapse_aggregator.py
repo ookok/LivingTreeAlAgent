@@ -46,19 +46,55 @@ from loguru import logger
 
 @dataclass
 class ModelOutput:
-    """Output from a single model in the aggregation set."""
+    """Output from a single model in the aggregation set.
+
+    v2.4 — MoDA-Enhanced (arXiv:2603.15619): depth_score measures how much
+    foundational/early-pipeline information the model preserved. Higher
+    depth scores get more contribution weight in aggregation.
+
+    v2.5 — Opus 4.7 SelfVerify (arXiv:2603.15619): self_verify_score rates
+    the model's internal reasoning coherence. reasoning_chain stores the
+    model's explicit chain-of-thought steps. logical_gaps lists identified
+    breaks in reasoning BEFORE output reaches cross-validation.
+
+    v2.6 — Zakharova IEM (2025): first_person_assessment stores the model's
+    own first-person self-assessment (privileged access). overconfidence_gap
+    = first_person_score - cross_validation_score — when positive, the model
+    was overconfident relative to external verification.
+
+    v2.7 — φ_first (arXiv:2605.05166): first_token_entropy captures the
+    model's intrinsic generation-time uncertainty from the first content
+    token's top-K logit distribution. logit_confidence = 1.0 - entropy.
+    High entropy → model was uncertain at generation time → potential
+    hallucination regardless of surface-level plausibility.
+    """
     provider: str
     text: str
     tokens: int = 0
     latency_ms: float = 0.0
     cost_yuan: float = 0.0
-    self_assessment: float = 0.5    # Self-evaluated confidence
-    election_score: float = 0.5     # From HolisticElection
+    self_assessment: float = 0.5
+    election_score: float = 0.5
+    depth_score: float = 0.5
+    self_verify_score: float = 0.5
+    reasoning_chain: list[str] = field(default_factory=list)
+    logical_gaps: list[str] = field(default_factory=list)
+    scratch_pad: str = ""
+    first_person_assessment: dict = field(default_factory=dict)
+    overconfidence_gap: float = 0.0
+    first_token_entropy: float = 0.0
+    logit_confidence: float = 0.5
 
 
 @dataclass
 class CrossValidation:
-    """Pairwise semantic comparison between two model outputs."""
+    """Pairwise semantic comparison between two model outputs.
+
+    v2.7 — PALE (AAAI-26): cm_score uses CM Score for activation-space
+    hallucination detection. When CM Scorer is fitted, the cross-validation
+    includes distribution-level comparison between the two model outputs.
+    A high cm_score difference suggests one output may contain fabricated claims.
+    """
     model_a: str
     model_b: str
     semantic_similarity: float       # Jaccard word-level overlap
@@ -67,6 +103,7 @@ class CrossValidation:
     contradiction_points: list[str] = field(default_factory=list)
     shared_insights: list[str] = field(default_factory=list)
     judge_confidence: float = 0.5
+    cm_score: float = 0.0            # PALE: activation-space distance
 
 
 @dataclass
@@ -117,7 +154,178 @@ class SynapseAggregator:
         self._judge_fn = judge_fn
         self._stats: dict[str, dict[str, float]] = {}  # provider → agg stats
 
-    # ── Main Aggregation Pipeline ──────────────────────────────────
+    # ── Opus 4.7 SelfVerify: Pre-Aggregation Internal Coherence ────
+
+    def self_verify(self, output: ModelOutput, query: str = "",
+                    task_type: str = "general") -> ModelOutput:
+        """Pre-aggregation self-verification pass (Opus 4.7 inspired).
+
+        Before cross-validation between models, each model's output gets
+        an internal coherence check. The output is scored on:
+        1. Reasoning chain completeness: can we follow the logic step by step?
+        2. Internal consistency: do any claims contradict each other?
+        3. Assumption traceability: are unstated assumptions flagged?
+        4. Logical gap detection: where do reasoning leaps occur?
+
+        This is a fast heuristic pass — no LLM call required. The full
+        LLM-based self-verification is handled by AdversarialSelfPlay's
+        self_verify_before_output() for critical outputs.
+        """
+        text = output.text
+        if not text or len(text) < 30:
+            output.self_verify_score = 0.3
+            output.logical_gaps = ["Output too short for verification"]
+            return output
+
+        score = 0.3
+
+        # 1. Reasoning chain detection: explicit step markers
+        steps = re.findall(
+            r'(?:Step\s*\d|第\s*\d+\s*步|^\d+[\.\)]\s|'
+            r'首先|然后|接着|最后|First|Then|Next|Finally|Phase\s*\d|'
+            r'Therefore|Thus|Hence|Because|因此|所以|因为)',
+            text, re.IGNORECASE | re.MULTILINE,
+        )
+        chain_score = min(1.0, len(steps) * 0.2)
+        output.reasoning_chain = [f"Step {i}: {s.strip()}" for i, s in enumerate(steps[:8])]
+        score += chain_score * 0.35
+
+        # 2. Internal consistency: check for contradictory statements
+        claims = self._extract_claims(text)
+        gaps: list[str] = []
+        for i in range(len(claims)):
+            for j in range(i + 1, len(claims)):
+                if self._are_contradictory(claims[i], claims[j]):
+                    gaps.append(f"Potential contradiction: '{claims[i][:60]}' ↔ '{claims[j][:60]}'")
+        output.logical_gaps = gaps[:3]
+        consistency_score = max(0.0, 1.0 - len(gaps) * 0.3)
+        score += consistency_score * 0.30
+
+        # 3. Assumption traceability
+        assumptions = len(re.findall(
+            r'(?:assum|假设|前提|假定|预设|we assume|assuming that)',
+            text, re.IGNORECASE,
+        ))
+        score += min(0.2, assumptions * 0.05)
+
+        # 4. Logical completeness: has conclusion markers
+        has_conclusion = bool(re.search(
+            r'(?:综上所述|in conclusion|to summarize|therefore|hence|thus|'
+            r'因此|所以|总结|结论|in summary)',
+            text, re.IGNORECASE,
+        ))
+        score += 0.15 if has_conclusion else 0.0
+
+        output.self_verify_score = round(min(1.0, score), 4)
+
+        # Record scratch-pad style verification trace
+        output.scratch_pad = (
+            f"SelfVerify: score={output.self_verify_score:.2f} "
+            f"chain_steps={len(steps)} gaps={len(gaps)} "
+            f"assumptions={assumptions} conclusion={'yes' if has_conclusion else 'no'}"
+        )
+
+        return output
+
+    @staticmethod
+    def _extract_claims(text: str) -> list[str]:
+        """Extract individual claims/assertions from output text."""
+        sentences = re.split(r'(?<=[.!?。！？])\s+', text)
+        return [s.strip() for s in sentences if len(s.strip()) > 20]
+
+    @staticmethod
+    def _are_contradictory(claim_a: str, claim_b: str) -> bool:
+        """Fast heuristic check for contradictory claim pairs."""
+        a_lower = claim_a.lower()
+        b_lower = claim_b.lower()
+        a_words = set(a_lower.split())
+        b_words = set(b_lower.split())
+        overlap = len(a_words & b_words) / max(len(a_words | b_words), 1)
+        if overlap < 0.4:
+            return False
+        neg_a = {"not", "no", "never", "don't", "doesn't", "isn't", "aren't",
+                  "不", "没有", "不是", "无", "non"}
+        neg_b = {"not", "no", "never", "don't", "doesn't", "isn't", "aren't",
+                  "不", "没有", "不是", "无", "non"}
+        has_neg_a = bool(a_words & neg_a)
+        has_neg_b = bool(b_words & neg_b)
+        return has_neg_a != has_neg_b
+
+    async def first_person_self_assessment(
+        self, output: ModelOutput, query: str,
+    ) -> ModelOutput:
+        """LLM-based first-person self-assessment (Zakharova IEM enhancement).
+
+        Unlike the regex-based self_verify() which is text-heuristic analysis
+        (public information that any external observer could check), this method
+        has the SAME model that produced the output re-read and assess it from
+        within, providing a first-person certainty judgment.
+
+        Zakharova's Argument 2 (IEM): self-reports must come from privileged
+        access, not from public text patterns. A regex check on output text
+        is accessible to any observer. Only the model itself can judge its
+        own confidence in what it meant to say.
+
+        This also tracks `overconfidence_gap`: when the model's self-assessment
+        exceeds the cross-validation score, the model is overconfident —
+        a form of introspective error detection.
+        """
+        if not self._judge_fn:
+            output.self_verify_score = output.self_verify_score or 0.5
+            return output
+
+        assessment_prompt = (
+            f"I just produced the following answer to the query '{query[:200]}':\n\n"
+            f"MY ANSWER: {output.text[:800]}\n\n"
+            f"I will now assess my own answer from a first-person perspective:\n"
+            f"1. Logical coherence: can I follow my own reasoning step by step?\n"
+            f"2. Factual confidence: how certain am I that each claim is correct?\n"
+            f"3. Completeness: did I fully address the query?\n"
+            f"4. Self-contradiction: do any of my claims conflict with each other?\n\n"
+            f"Respond ONLY with JSON: "
+            f'{{"first_person_score": 0.0-1.0, '
+            f'"my_strongest_point": "...", '
+            f'"my_weakest_point": "...", '
+            f'"i_am_confident_about": true/false, '
+            f'"i_notice_i_may_be_wrong_about": "..."}}'
+        )
+
+        try:
+            result_text = await self._judge_fn(assessment_prompt)
+            parsed = json.loads(result_text) if isinstance(result_text, str) else result_text
+            fp_score = float(parsed.get("first_person_score", 0.5))
+            output.self_verify_score = round(fp_score, 4)
+            output.scratch_pad = (
+                f"FirstPerson: score={fp_score:.2f} "
+                f"confident={parsed.get('i_am_confident_about')} "
+                f"strongest='{str(parsed.get('my_strongest_point',''))[:60]}' "
+                f"weakest='{str(parsed.get('my_weakest_point',''))[:60]}' "
+                f"maybe_wrong='{str(parsed.get('i_notice_i_may_be_wrong_about',''))[:60]}'"
+            )
+            output.first_person_assessment = {
+                "score": fp_score,
+                "confident": parsed.get("i_am_confident_about"),
+                "strongest": parsed.get("my_strongest_point", ""),
+                "weakest": parsed.get("my_weakest_point", ""),
+                "maybe_wrong": parsed.get("i_notice_i_may_be_wrong_about", ""),
+            }
+        except Exception:
+            output.self_verify_score = output.self_verify_score or 0.5
+
+        return output
+
+    def compute_overconfidence_gap(
+        self, output: ModelOutput, cross_validation_score: float,
+    ) -> float:
+        """Measure the gap between first-person confidence and cross-validation reality.
+
+        Zakharova IEM: when self_assessment > cross_validation, the model is
+        overconfident — it believes its own reasoning is better than external
+        verification confirms. This is a form of introspective error.
+        """
+        fp_score = output.first_person_assessment.get("score", 0.5) if output.first_person_assessment else output.self_verify_score
+        gap = fp_score - cross_validation_score
+        return round(gap, 4)
 
     async def aggregate(
         self,
@@ -160,6 +368,9 @@ class SynapseAggregator:
                 total_tokens_spent=sum(o.tokens for o in outputs),
                 total_cost_yuan=sum(o.cost_yuan for o in outputs),
             )
+
+        # Step 0: Self-verify each model output before cross-validation
+        outputs = [self.self_verify(o, query, task_type) for o in outputs]
 
         # Step 1: Cross-validate all pairs
         cross_validations = self._cross_validate_all(outputs, query, task_type)
@@ -473,28 +684,49 @@ class SynapseAggregator:
         validations: list[CrossValidation],
         consensus: float,
     ) -> dict[str, float]:
-        """Compute per-model contribution weight based on quality, uniqueness,
-        and how well it agreed with consensus.
+        """Compute per-model contribution weight using LPO target-projection.
+
+        v2.6 LPO (arXiv:2605.06139): replaces fixed linear-weighted sum with
+        explicit simplex projection — constructs π* from model rewards
+        and projects contributions via divergence minimization.
+
+        Falls back to legacy additive weights if LPO fails.
         """
+        try:
+            from livingtree.optimization.lpo_optimizer import get_synapse_lpo
+            sto = get_synapse_lpo(divergence="kl")
+            sto.set_temperature(max(0.1, 1.0 - consensus * 0.9))
+            rewards: dict[str, float] = {}
+            current: dict[str, float] = {}
+            for o in outputs:
+                r = (o.election_score * 0.25 + o.self_assessment * 0.12
+                     + o.depth_score * 0.12 + o.self_verify_score * 0.12)
+                rewards[o.provider] = r
+                current[o.provider] = r
+            if not rewards:
+                return {}
+            return sto.optimize(current, rewards)
+        except Exception:
+            pass
+
+        # Legacy fallback: additive weighted linear combination
         contribs: dict[str, float] = {}
         for o in outputs:
-            base = o.election_score * 0.4 + o.self_assessment * 0.2
+            base = (o.election_score * 0.25 + o.self_assessment * 0.12
+                    + o.depth_score * 0.12 + o.self_verify_score * 0.12)
 
-            # Agreement bonus: models that agree with the consensus contribute more
             agree_count = 0
             for cv in validations:
                 if cv.model_a == o.provider and cv.factual_agreement:
                     agree_count += 1
                 elif cv.model_b == o.provider and cv.factual_agreement:
                     agree_count += 1
-            agree_bonus = (agree_count / max(len(validations), 1)) * 0.2
+            agree_bonus = (agree_count / max(len(validations), 1)) * 0.20
 
-            # Uniqueness bonus: longer, more detailed output contributes more
-            length_score = min(1.0, len(o.text) / 2000) * 0.2
+            length_score = min(1.0, len(o.text) / 2000) * 0.20
 
             contribs[o.provider] = round(base + agree_bonus + length_score, 4)
 
-        # Normalize to sum ~1.0
         total = sum(contribs.values()) or 1.0
         return {k: round(v / total, 4) for k, v in contribs.items()}
 
@@ -828,6 +1060,46 @@ class SynapseAggregator:
                 for k, v in self._stats.items()
             },
         }
+
+    # ── PALE CM Score Cross-Validation ──────────────────────────────
+
+    def cross_validate_with_pale(
+        self,
+        outputs: list[ModelOutput],
+        query: str = "",
+        task_type: str = "general",
+    ) -> list[CrossValidation]:
+        """Cross-validation enhanced with PALE CM Score.
+
+        In addition to standard semantic/structural comparison, computes
+        activation-space CM Score distance between each model pair. This
+        catches fabricated claims that pass surface-level similarity checks
+        but diverge in activation-space distribution.
+
+        Requires PALECMScorer to be fitted (via DreamPretrainer PALE cycle
+        or manual training on contrastive pairs).
+        """
+        from .pale_detector import extract_text_activation, get_pale_scorer
+
+        validations = self._cross_validate_all(outputs, query, task_type)
+        pale = get_pale_scorer()
+
+        if not pale.is_fitted():
+            return validations
+
+        for v in validations:
+            try:
+                text_a = next((o.text for o in outputs if o.provider == v.model_a), "")
+                text_b = next((o.text for o in outputs if o.provider == v.model_b), "")
+                sig_a = extract_text_activation(text_a)
+                sig_b = extract_text_activation(text_b)
+                score_a = pale.cm_score(sig_a)
+                score_b = pale.cm_score(sig_b)
+                v.cm_score = abs(score_a - score_b)
+            except Exception:
+                v.cm_score = 0.0
+
+        return validations
 
 
 # ═══ Singleton ═════════════════════════════════════════════════════

@@ -676,3 +676,25 @@ class SwiftDrillTrainer:
         except ImportError:
             pass
         return True
+
+    @staticmethod
+    def neftune_annealing_schedule(step: int, max_steps: int = 100,
+                                   alpha_max: float = 5.0,
+                                   t_init: float = 1.0) -> dict:
+        import math as _math
+        progress = step / max(max_steps, 1)
+        T = t_init / _math.log(_math.e + step)
+        alpha = alpha_max * max(0.01, 1.0 - progress) * (T + 0.1)
+        return {"alpha": alpha, "temperature": T, "progress": progress,
+                "step": step, "cooling_phase": "early" if progress < 0.3 else ("mid" if progress < 0.7 else "late")}
+
+    def convergence_tracker(self, losses: list[float], patience: int = 5,
+                            epsilon: float = 1e-4) -> dict:
+        if len(losses) < patience + 1:
+            return {"converged": False, "reason": "insufficient_data", "loss_std": 0.0}
+        recent = losses[-patience:]
+        loss_std = sum((l - sum(recent)/len(recent))**2 for l in recent) / len(recent)
+        converged = loss_std < epsilon
+        trend = "decreasing" if len(losses) >= 2 and losses[-1] < losses[-2] else "flat_or_increasing"
+        return {"converged": converged, "loss_std": loss_std, "trend": trend,
+                "status": "convergent" if converged else "still_optimizing"}

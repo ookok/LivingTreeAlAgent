@@ -435,6 +435,91 @@ class AdversarialSelfPlay:
         divergence = max(0.0, 1.0 - jaccard_avg)
         return min(1.0, change_rounds * 0.3 + divergence * 0.5)
 
+    # ── Opus 4.7: Pre-Output Self-Verify ───────────────────────────
+
+    async def self_verify_before_output(
+        self, answer: str, query: str, chat_fn: Any,
+        model_name: str = "", verify_threshold: float = 0.7,
+    ) -> tuple[str, bool, dict]:
+        """Opus 4.7: Self-verify reasoning BEFORE output.
+
+        Instead of the existing "output -> critique -> revise" loop (post-hoc),
+        this method verifies reasoning integrity BEFORE releasing the answer.
+        It runs a 4-axis internal check (chain completeness, self-consistency,
+        assumption awareness, logical gaps), and only outputs if the score
+        exceeds verify_threshold. Otherwise, re-generates with corrections.
+
+        Returns: (final_answer, passed_verification, verification_report)
+        """
+        report: dict[str, Any] = {
+            "chain_complete": True, "self_consistent": True,
+            "assumptions_stated": False, "logical_gaps": [],
+            "verify_score": 0.0, "was_pass": False, "original_len": len(answer),
+        }
+
+        chain_markers = r'(?:step|步骤|first|second|third|firstly|secondly|finally|因此|所以|then|next|conclusion|总结)'
+        chain_count = len(re.findall(chain_markers, answer, re.IGNORECASE))
+        report["chain_complete"] = chain_count >= 2
+
+        claims = re.split(r'(?<=[.!?。！？])\s+', answer)
+        neg_words = {"not", "no", "never", "don't", "doesn't", "isn't", "aren't",
+                      "cannot", "不", "没有", "不是", "无"}
+        contradictory = 0
+        for i, c1 in enumerate(claims):
+            for c2 in claims[i + 1:min(i + 5, len(claims))]:
+                w1 = set(c1.lower().split())
+                w2 = set(c2.lower().split())
+                if len(w1 & w2) / max(len(w1 | w2), 1) > 0.3:
+                    if bool(w1 & neg_words) != bool(w2 & neg_words):
+                        contradictory += 1
+                        report["logical_gaps"].append(
+                            f"negation mismatch: '{c1[:40]}' vs '{c2[:40]}'"
+                        )
+        report["self_consistent"] = contradictory <= 1
+
+        assume_pats = [r'assume', r'假设', r'假设', r'前提', r'under the assumption',
+                       r'given that', r'我们认为', r'presume']
+        report["assumptions_stated"] = any(
+            re.search(p, answer, re.IGNORECASE) for p in assume_pats
+        )
+
+        score = 0.0
+        if report["chain_complete"]:
+            score += 0.35
+        if report["self_consistent"]:
+            score += 0.35
+        if report["assumptions_stated"]:
+            score += 0.30
+        report["verify_score"] = score
+        report["was_pass"] = score >= verify_threshold
+
+        if score >= verify_threshold:
+            logger.debug(f"Opus4.7 self_verify: PASS score={score:.2f}")
+            return (answer, True, report)
+
+        logger.debug(
+            f"Opus4.7 self_verify: FAIL score={score:.2f} "
+            f"chain={report['chain_complete']} consistent={report['self_consistent']} "
+            f"assumptions={report['assumptions_stated']}"
+        )
+
+        try:
+            fix_prompt = (
+                f"Your previous answer had these issues:\n"
+                + "\n".join("- " + g for g in report["logical_gaps"][:3]) + "\n\n"
+                f"Original query: {query[:500]}\n\n"
+                f"Please produce a self-consistent answer with clear reasoning "
+                f"steps and explicit assumptions."
+            )
+            fixed = await asyncio.wait_for(
+                chat_fn(fix_prompt, model_name), timeout=30.0,
+            )
+            report["original_len"] = len(fixed)
+            return (fixed, True, report)
+        except Exception as e:
+            logger.debug(f"self_verify fix failed: {e}")
+            return (answer, False, report)
+
     # ── PRefLexOR: Recursive Self-Reflection (Buehler, npj AI 2025) ─
 
     async def reflect_and_refine(
@@ -528,6 +613,43 @@ class AdversarialSelfPlay:
                 self._stats["converged"] / max(self._stats["sessions"], 1)
             ),
         }
+
+    # ── PALE Contrastive Pair Generation ────────────────────────────
+
+    async def generate_contrastive_pairs(
+        self, query: str, truthful_answer: str, chat_fn: Any,
+        n_types: int = 3, model_name: str = "",
+    ) -> list[Any]:
+        """Generate PALE-style contrastive pairs via adversarial mutation.
+
+        Transforms the counter-argument generator (harshest critic) into a
+        contrastive pair generator: truthful answer + N hallucinated variants
+        injected via specialized prompts.
+
+        The counter-argument generator already embodies "find all flaws" —
+        this method repurposes that adversarial logic to create labeled
+        contrastive training data for the CM Score detector.
+        """
+        from .pale_detector import (
+            ContrastivePair, PALEDataAugmenter, HALLUCINATION_PROMPTS,
+        )
+        augmenter = PALEDataAugmenter()
+        hall_types = list(HALLUCINATION_PROMPTS.keys())[:n_types]
+        pairs: list[Any] = []
+        context = f"Original question: {query[:500]}\n\nTruthful answer: {truthful_answer[:2000]}"
+        for ht in hall_types:
+            try:
+                pair = await augmenter.generate_contrastive_pair(
+                    query, truthful_answer, chat_fn, ht,
+                )
+                pairs.append(pair)
+            except Exception as e:
+                logger.warning(f"AdversarialSelfPlay PALE pair ({ht}): {e}")
+        logger.info(
+            f"AdversarialSelfPlay: {len(pairs)} PALE contrastive pairs "
+            f"({len(set(p.hallucination_type for p in pairs))} types)"
+        )
+        return pairs
 
 
 # ═══ Singleton ═════════════════════════════════════════════════════

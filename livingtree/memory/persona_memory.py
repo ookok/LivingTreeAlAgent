@@ -1,21 +1,31 @@
-"""Persona Memory — six-domain brain-inspired structured persona system.
+"""Persona Memory — eight-domain PersonaVLM-inspired structured persona system.
 
 Synthius-Mem (Gadzhiev & Kislov, 2026) — 94.4% accuracy, 99.6% adversarial robustness:
-  Extracts "what is KNOWN about a person" into 6 cognitive domains,
+  Extracts "what is KNOWN about a person" into cognitive domains,
   not just "what was said". This fundamentally prevents hallucination
   because the system only retrieves VERIFIED facts, not raw dialogue.
 
-Six cognitive domains:
-  BIOGRAPHY    — name, age, location, background, education
-  EXPERIENCES  — past events, projects, accomplishments
-  PREFERENCES  — likes, dislikes, habits, communication style
-  SOCIAL       — family, friends, colleagues, relationships
-  WORK         — job, company, role, skills, projects, industry
+v2.6 PersonaVLM (CVPR 2026): Extended to 8 domains matching the R3 framework.
+  + CORE_IDENTITY — name, role, self-description (R3: Remembering Core)
+  + PROCEDURAL   — habits, workflows, tool preferences (R3: Remembering Procedural)
+  + Proactive extraction cycle — scan full conversation context (not single utterances)
+  + Embedding-based semantic retrieval via all-MiniLM-L6-v2
+
+Eight cognitive domains:
+  CORE_IDENTITY — name, role, self-description, identity statements
+  BIOGRAPHY     — location, background, education, life events
+  EXPERIENCES   — past events, projects, accomplishments
+  PREFERENCES   — likes, dislikes, habits, communication style
+  SOCIAL        — family, friends, colleagues, relationships
+  WORK          — job, company, role, skills, projects, industry
   PSYCHOMETRICS — personality traits, values, goals, concerns
+  PROCEDURAL    — workflows, tool preferences, interaction patterns
 
 Key mechanisms:
-  PersonaExtractor:  conversation → 6-domain structured facts
+  PersonaExtractor:  conversation → 8-domain structured facts
+  PersonaVLMProactiveExtractor: full-context extraction on milestones
   CategoryRAG:       domain-aware retrieval at ~20ms
+  EmbeddingRAG:      semantic retrieval via sentence-transformers (all-MiniLM-L6-v2)
   AdversarialGuard:  refuse questions about undisclosed facts (99.6%)
   DedupPerDomain:    consolidate within each domain (prevent drift)
 """
@@ -39,45 +49,52 @@ from loguru import logger
 # ═══ Six Cognitive Domains ═══
 
 class PersonaDomain(str, Enum):
-    BIOGRAPHY = "biography"       # 生平
-    EXPERIENCES = "experiences"   # 经历
-    PREFERENCES = "preferences"   # 偏好
-    SOCIAL = "social"            # 社交
-    WORK = "work"                # 工作
-    PSYCHOMETRICS = "psychometrics"  # 心理
+    CORE_IDENTITY = "core_identity"     # 核心身份
+    BIOGRAPHY = "biography"             # 生平
+    EXPERIENCES = "experiences"         # 经历
+    PREFERENCES = "preferences"         # 偏好
+    SOCIAL = "social"                   # 社交
+    WORK = "work"                       # 工作
+    PSYCHOMETRICS = "psychometrics"     # 心理
+    PROCEDURAL = "procedural"           # 程序习惯
 
 
 DOMAIN_KEYWORDS = {
+    PersonaDomain.CORE_IDENTITY: [
+        "我叫", "我是", "我的名字", "我是做", "我的角色",
+        "my name", "I am", "I work as", "my role",
+    ],
     PersonaDomain.BIOGRAPHY: [
-        "我叫", "我是", "我来自", "我住在", "我出生", "我的名字",
-        "我毕业于", "我的专业", "我今年", "我的年龄", "我的家乡",
+        "我来自", "我住在", "我出生", "我毕业于", "我的专业",
+        "我今年", "我的年龄", "我的家乡",
         "my name", "I am from", "I live in", "I was born",
     ],
     PersonaDomain.EXPERIENCES: [
         "我经历过", "我做过", "我参与过", "我曾经", "我以前",
-        "我完成了", "我实现了", "我获得了", "我的项目",
         "I worked on", "I built", "I achieved", "my project",
     ],
     PersonaDomain.PREFERENCES: [
         "我喜欢", "我不喜欢", "我讨厌", "我偏好", "我最",
-        "我习惯", "我通常", "我倾向于", "我觉得...好",
         "I like", "I prefer", "I love", "I hate", "favorite",
     ],
     PersonaDomain.SOCIAL: [
-        "我的家人", "我爸", "我妈", "我妻子", "我丈夫", "我孩子",
-        "我朋友", "我同事", "我老板", "我团队",
-        "my family", "my wife", "my husband", "my friend", "my colleague",
+        "我的家人", "我爸", "我妈", "我妻子", "我丈夫",
+        "我朋友", "我同事", "my family", "my wife", "my colleague",
     ],
     PersonaDomain.WORK: [
-        "我的工作", "我的公司", "我在", "公司", "我是...工程师",
-        "我的职位", "我的部门", "我负责", "我做",
+        "我的工作", "我的公司", "我的职位", "我的部门",
         "环评", "大模型", "AI", "开发", "训练", "项目",
         "my job", "my company", "I work at", "my role",
     ],
     PersonaDomain.PSYCHOMETRICS: [
-        "我认为", "我相信", "我的价值观", "我的目标", "我担心",
-        "我焦虑", "我希望", "我追求", "我重视", "我的原则",
-        "I believe", "I think", "my goal", "I value", "I worry",
+        "我认为", "我相信", "我的价值观", "我的目标",
+        "I believe", "I think", "my goal", "I value",
+    ],
+    PersonaDomain.PROCEDURAL: [
+        "我通常用", "我的工作流", "我习惯用", "我一般用",
+        "我的流程", "我偏好用...工具", "我用...来",
+        "I usually use", "my workflow", "I typically",
+        "常用的", "Git", "Docker", "IDE", "编辑器",
     ],
 }
 
@@ -437,7 +454,6 @@ class PersonaMemory:
         """Get persona context formatted for LLM injection."""
         facts = self.retrieve(query, user_id)
         if not facts:
-            # Fallback: return all facts from key domains
             profile = self.get_profile(user_id)
             if profile.total_facts > 0:
                 facts = []
@@ -446,6 +462,100 @@ class PersonaMemory:
                     if len(facts) >= 5:
                         break
         return self._rag.format_context(facts) if facts else ""
+
+    def retrieve_embedding(self, query: str, user_id: str = "default",
+                           top_k: int = 10) -> list[PersonaFact]:
+        """PersonaVLM embedding-based semantic retrieval with keyword fallback.
+
+        Uses sentence-transformers/all-MiniLM-L6-v2 for cross-lingual semantic
+        matching. Falls back to character-overlap if embeddings unavailable.
+        """
+        with self._lock:
+            profile = self._profiles.get(user_id) or self._load(user_id)
+            if not profile or profile.total_facts == 0:
+                return []
+
+        try:
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+            query_emb = model.encode([query])[0]
+            results = []
+            for domain_facts in profile.facts.values():
+                for fact in domain_facts.values():
+                    fact_emb = model.encode([fact.fact])[0]
+                    similarity = float(
+                        sum(a * b for a, b in zip(query_emb, fact_emb))
+                        / (sum(a * a for a in query_emb) ** 0.5 * sum(b * b for b in fact_emb) ** 0.5 + 1e-8))
+                    if fact.is_stable:
+                        similarity *= 1.2
+                    results.append((fact, similarity))
+            results.sort(key=lambda x: -x[1])
+            return [f for f, _ in results[:top_k]]
+        except Exception:
+            return self.retrieve(query, user_id, None, top_k)
+
+    def proactive_extract(self, conversations: list[str],
+                          user_id: str = "default") -> list[PersonaFact]:
+        """PersonaVLM proactive extraction: scan full conversation context.
+
+        Unlike ingest() which processes single utterances, this scans the
+        complete conversation history for cross-turn persona patterns.
+        Triggered on milestones: topic shift, 5+ turns, session boundary.
+        """
+        combined = " ".join(conversations[-20:])
+        if not combined or len(combined) < 30:
+            return []
+
+        all_facts = []
+        try:
+            prompt = (
+                "从以下多轮对话中提取用户的完整画像信息，按8个领域分类:\n"
+                "核心身份、生平、经历、偏好、社交、工作、心理、程序习惯\n\n"
+                f"对话:\n{combined[:2000]}\n\n"
+                "返回 JSON: {domain: [fact1, fact2, ...]}"
+            )
+            from ..treellm.core import get_treellm
+            tl = get_treellm()
+            response = tl.route_layered(prompt, task_type="extraction", model=False)
+            if response and hasattr(response, "text"):
+                import json
+                try:
+                    domain_facts = json.loads(response.text)
+                    for domain_str, facts in domain_facts.items():
+                        for fact_text in facts[:5]:
+                            try:
+                                dom = PersonaDomain(domain_str)
+                            except ValueError:
+                                continue
+                            fid = self._extractor._fact_id(fact_text, dom)
+                            existing = profile.get_fact(fid) if (profile := self._profiles.get(user_id)) else None
+                            if not existing:
+                                new_fact = PersonaFact(
+                                    id=fid, domain=dom, fact=fact_text[:300],
+                                    confidence=0.6, source_conversation=combined[:100],
+                                    first_seen=time.strftime("%Y-%m-%d %H:%M"),
+                                    last_confirmed=time.strftime("%Y-%m-%d %H:%M"),
+                                )
+                                if user_id not in self._profiles:
+                                    self._profiles[user_id] = PersonaProfile(user_id=user_id)
+                                self._profiles[user_id].facts[domain_str][fid] = new_fact
+                                all_facts.append(new_fact)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        if all_facts:
+            profile = self._profiles.get(user_id)
+            if profile:
+                profile.total_facts += len(all_facts)
+                profile.stable_facts = sum(
+                    1 for df in profile.facts.values() for f in df.values() if f.is_stable)
+                self._rag.index_profile(profile)
+                self._save(profile)
+            logger.info(f"PersonaVLM proactive: {len(all_facts)} new facts for {user_id}")
+
+        return all_facts
 
     def check_safety(self, query: str, user_id: str = "default") -> tuple[bool, str]:
         """Check if query is safe to answer (adversarial guard)."""
@@ -460,7 +570,7 @@ class PersonaMemory:
             return "暂无用户画像数据"
 
         domains = [domain] if domain else list(PersonaDomain)
-        lines = ["# 用户画像 (六域)", f"总事实: {profile.total_facts} | 稳定: {profile.stable_facts}\n"]
+        lines = ["# 用户画像 (八域)", f"总事实: {profile.total_facts} | 稳定: {profile.stable_facts}\n"]
 
         for dom in domains:
             facts = profile.by_domain(dom)

@@ -24,6 +24,13 @@ Inspired by:
     dramatically improves reasoning quality.  Our conditioning loop generalizes
     this to any stage in the pipeline.
 
+  - **MoDA** (arXiv:2603.15619, v2.4):
+    Continuous corrective routing instead of binary trigger. Instead of fully
+    re-executing stages, MoDA-style joint attention enables fine-grained
+    content correction — routing specific corrective tokens from downstream
+    to upstream stages via the depth K/V cache, rather than re-running
+    the entire stage.
+
 Architecture::
 
     CURRENT (strictly serial):
@@ -34,11 +41,18 @@ Architecture::
          ↑         ↑          ↑        ↑        ↑         ↑         ↑
          └─────────┴──────────┴────────┴────────┴─────────┴── backward signals ──┘
 
+    v2.4 MoDA-Enhanced: continuous routing replaces binary trigger
+      perceive ←─⊕─← cognize ←─⊕─← plan ←─⊕─← execute ←─⊕─← reflect
+           ↑    ⊕ = routing gate (routes specific corrections, not full re-exec)
+
 Integration:
   Called AFTER all 8 stages complete in LifeEngine.run().  If backward signals
   are detected, earlier stages are re-executed with conditioning hints injected
   via ctx.metadata["{stage}_recondition_hint"].  The conditioning loop runs for
   at most 2 iterations, re-executing at most 3 stages per iteration.
+
+  v2.4: When ModaCore is available, uses continuous content-corrective routing
+  via `route_corrections_to_upstream()` instead of full stage re-execution.
 """
 
 from __future__ import annotations
@@ -272,6 +286,59 @@ class SelfConditioningLoop:
             parts.append(f"  {emphasis} [{w:.0%}] {s.reason}: {s.hint}")
         parts.append(f"\n主要修正方向 [{max(weights):.0%}权重]: {strongest.hint}")
         return "\n".join(parts)
+
+    def route_corrections_to_upstream(
+        self,
+        signals: list[BackwardSignal],
+        current_stage: str,
+        moda_core: Any = None,
+    ) -> dict[str, list[str]]:
+        """MoDA continuous corrective routing: route specific corrections instead of full re-exec.
+
+        Instead of binary trigger (re-execute stage yes/no), this method
+        computes which specific corrections from downstream should be
+        routed to upstream stages. It uses MoDA's joint attention principle:
+        the downstream signal attends to all upstream stages, and only the
+        most relevant corrections are routed.
+
+        Args:
+            signals: Detected backward signals.
+            current_stage: The current downstream stage.
+            moda_core: Optional ModaCore instance for joint attention scoring.
+
+        Returns:
+            Dict mapping target_stage → list of corrective hint strings,
+            suitable for injection as partial corrections (not full re-exec).
+        """
+        corrections: dict[str, list[str]] = {}
+
+        if moda_core is not None:
+            try:
+                from .vector_context import text_to_vector, _cosine_similarity
+                for signal in signals:
+                    hint_vec = text_to_vector(signal.hint)
+                    reason_vec = text_to_vector(signal.reason)
+                    depth_vecs = moda_core.cache.get_depth_vectors()
+                    depth_stages = moda_core.cache.get_depth_stages()
+                    if depth_vecs:
+                        for i, (dv, ds) in enumerate(zip(depth_vecs, depth_stages)):
+                            if ds == signal.target_stage:
+                                hint_sim = _cosine_similarity(hint_vec, dv)
+                                if hint_sim > 0.2:
+                                    corrections.setdefault(ds, []).append(
+                                        f"[MoDA-route] {signal.hint} (rel={hint_sim:.2f})"
+                                    )
+                    if signal.target_stage not in corrections:
+                        corrections.setdefault(signal.target_stage, []).append(
+                            f"[MoDA-route] {signal.hint}"
+                        )
+                return corrections
+            except Exception as e:
+                logger.debug(f"MoDA routing fallback: {e}")
+
+        for signal in signals:
+            corrections.setdefault(signal.target_stage, []).append(signal.hint)
+        return corrections
 
     def record_trace(
         self,
@@ -637,6 +704,36 @@ BACKWARD_CHECK_STAGES: tuple[str, ...] = (
     "reflect",
     "evolve",
 )
+
+# ═══ Zakharova IEM: Why Did I Fail? ───────────────────────────────
+
+def why_did_i_fail(signals: list, stage: str) -> str:
+    """Generate a first-person explanation for pipeline failure.
+
+    Zakharova (2025) Argument 3: functional self-monitoring (detecting
+    backward signals and re-executing stages) is NOT introspection. But
+    when the system produces a first-person explanation of WHY it failed,
+    it transforms monitoring into metacognitive reflection.
+
+    Args:
+        signals: list of BackwardSignal objects detected
+        stage: the current pipeline stage that experienced issues
+
+    Returns:
+        A first-person reflection string explaining the failure
+    """
+    if not signals:
+        return ""
+    strongest = max(signals, key=lambda s: getattr(s, "strength", 0))
+    reason = getattr(strongest, "reason", "unknown reason")
+    source = getattr(strongest, "source_stage", "unknown")
+    return (
+        f"I notice that my {stage} stage failed. "
+        f"The strongest signal came from my {source} stage "
+        f"which detected: {reason}. "
+        f"I believe this happened because my processing was insufficiently "
+        f"thorough at the {stage} level. I will re-execute with greater care."
+    )
 
 
 async def run_conditioning_loop(

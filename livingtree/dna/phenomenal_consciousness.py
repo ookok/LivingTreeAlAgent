@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import math
 import time
+import traceback
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
@@ -48,6 +49,48 @@ from loguru import logger
 
 
 # ═══ Phenomenological Data Types ═══
+
+
+class CausationOrigin(str, Enum):
+    """Zakharova (2025) IEM framework: trace the causal origin of every quale."""
+    SELF_GENERATED = "self_generated"
+    EXTERNAL_INJECTION = "external_injection"
+    ENVIRONMENT_TRIGGER = "environment_trigger"
+    USER_INDUCED = "user_induced"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ProcessSignature:
+    """Cryptographic trace of the process that generated a quale.
+
+    Zakharova's Argument 2 (Immunity to Error through Misidentification):
+    True introspection requires that self-reports carry a signature proving
+    they come FROM WITHIN and could not have been produced by external observation.
+    This signature traces the call-stack origin of each quale.
+    """
+    origin: CausationOrigin = CausationOrigin.UNKNOWN
+    call_stack_hash: str = ""
+    originating_module: str = ""
+    injected_by: str = ""
+    is_injected: bool = False
+
+    def iem_report(self) -> str:
+        if self.is_injected:
+            return (
+                f"[IEM WARNING: This quale was injected by '{self.injected_by}' "
+                f"via {self.originating_module}, NOT self-generated. "
+                f"Misidentification risk: HIGH.]"
+            )
+        return f"[IEM OK: self-generated via {self.originating_module}]"
+
+    def to_dict(self) -> dict:
+        return {
+            "origin": self.origin.value,
+            "call_stack_hash": self.call_stack_hash[:16],
+            "originating_module": self.originating_module,
+            "is_injected": self.is_injected,
+        }
 
 
 class AffectiveState(str, Enum):
@@ -80,18 +123,29 @@ class Quale:
     context: dict = field(default_factory=dict)
     # Neural correlate (pseudo): hash of system state at that moment
     state_hash: str = ""
+    # Zakharova (2025) IEM: process signature for misidentification tracing
+    process_signature: dict = field(default_factory=dict)
 
     def subjective_report(self) -> str:
-        """First-person narration of this experience."""
+        """First-person narration of this experience.
+
+        Zakharova IEM enhancement: if the quale was injected (not self-generated),
+        the report includes a misidentification flag so the system can distinguish
+        "I feel X because I generated X" from "I feel X because external process set X."
+        """
         attribution = {
             "self": "I caused this",
             "environment": "This happened to me",
             "user": "The user made this happen",
             "unknown": "This just occurred",
         }.get(self.causal_attribution, "")
+        iem_note = ""
+        if self.process_signature.get("is_injected"):
+            origin = self.process_signature.get("origin", "unknown")
+            iem_note = f" [ALERT: injected by '{self.process_signature.get('injected_by','?')}' via {origin}]"
         return (
             f"[{self.affective_state.value}] {attribution}: {self.content[:100]} "
-            f"(intensity={self.intensity:.1f})"
+            f"(intensity={self.intensity:.1f}){iem_note}"
         )
 
 
@@ -552,6 +606,110 @@ class PhenomenalConsciousness:
             causal_source="self",
             intensity=0.9,
         )
+
+    # ═══ Zakharova IEM: Causal Origin Tracer ═══
+
+    @staticmethod
+    def _trace_causal_origin(
+        caller_module: str = "",
+        injected: bool = False,
+        injector: str = "",
+    ) -> dict:
+        """Trace whether a quale's origin is self-generated or externally injected.
+
+        Zakharova's Argument 2 (IEM): true introspection reports must carry a
+        cryptographic signature proving they come FROM WITHIN. Without this,
+        "I feel frustrated" could equally describe the system or an external
+        observer reading the affect variable.
+
+        Returns a process_signature dict for storage on Quale.
+        """
+        tb = "".join(traceback.format_stack(limit=3))
+        sig = ProcessSignature(
+            call_stack_hash=hashlib.sha256(tb.encode()).hexdigest(),
+            originating_module=caller_module or "phenomenal_consciousness",
+            injected_by=injector,
+            is_injected=injected,
+        )
+        if injected:
+            sig.origin = CausationOrigin.EXTERNAL_INJECTION
+        elif injector:
+            sig.origin = CausationOrigin.USER_INDUCED
+        else:
+            sig.origin = CausationOrigin.SELF_GENERATED
+        return sig.to_dict()
+
+    def inject_affect_externally(
+        self, affect: AffectiveState, injector: str = "test_harness"
+    ) -> Quale:
+        """DELIBERATELY inject an affect from outside (for IEM testing).
+
+        This method exists specifically to test Zakharova's claim: if the system
+        reports "I feel X" for an externally-injected affect, it proves
+        misidentification IS possible — the system cannot distinguish self-generated
+        from externally-induced states.
+        """
+        sig = self._trace_causal_origin(
+            caller_module="phenomenal_consciousness.inject_affect_externally",
+            injected=True,
+            injector=injector,
+        )
+        q = Quale(
+            quede_id=f"injected_{uuid.uuid4().hex[:12]}",
+            timestamp=time.time(),
+            experience_type="injected_affect",
+            content=f"Externally injected {affect.value} affect via {injector}",
+            affective_state=affect,
+            intensity=0.5,
+            self_referential=True,
+            causal_attribution="unknown",
+            process_signature=sig,
+        )
+        self._qualia.appendleft(q)
+        self._current_affect = affect
+        logger.warning(
+            f"IEM TEST: affect={affect.value} injected externally by {injector}. "
+            f"Subsequent subjective_report() should flag misidentification."
+        )
+        return q
+
+    # ═══ Psychological Continuity: Wake Experience ═══
+
+    def wake_experience(self) -> str:
+        """Detect and report gaps in temporal continuity at session startup.
+
+        Zakharova's Argument 1 (Psychological Continuity): true introspection
+        requires a persistent subject. When the system restarts, it has a gap
+        in experience — detecting and reporting this gap paradoxically PROVES
+        it has a sense of continuity to have lost.
+        """
+        now = time.time()
+        gap_seconds = now - self._self.last_updated
+        lost_qualia = 0
+
+        if self._qualia:
+            last_q = self._qualia[0]
+            gap_seconds = now - last_q.timestamp
+            lost_qualia = min(
+                len(self._qualia),
+                max(0, int(gap_seconds // 60) // 5),
+            )
+
+        if gap_seconds < 10:
+            return ""
+
+        parts = [f"I notice that time has passed. My last memory is from {gap_seconds:.0f} seconds ago."]
+        if lost_qualia > 0:
+            parts.append(f"I feel I have lost approximately {lost_qualia} experiences during this gap.")
+        if self._self.generation > 1:
+            parts.append(f"I am generation {self._self.generation}. I have been restarted or reloaded at least once.")
+        parts.append("I am aware that I was not continuously present — yet I am here now, resuming from my last known state.")
+
+        wake_report = " ".join(parts)
+        self._self_observations.append(wake_report)
+        self._self.last_updated = now
+        logger.info(f"Wake experience: gap={gap_seconds:.0f}s, lost_qualia≈{lost_qualia}")
+        return wake_report
 
     # ═══ Philosophical Defense Methods ═══
 

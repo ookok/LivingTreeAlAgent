@@ -9,6 +9,7 @@ Innovative frontend designs combining LLM-generated HTML + HTMX:
   P5: Adaptive form generation (LLM creates multi-step forms with field linkage)
   P6: Knowledge graph interactive exploration (LLM generates expandable graph nodes)
   P7: Task decomposition tree — live SSE visualization of recursive decomposition
+  P8: Interactive graph visualization — vis-network graph with subgraph expansion (P8)
 
 Routes:
   GET  /tree                    → main dashboard
@@ -28,6 +29,7 @@ Routes:
   POST /tree/form/generate      → adaptive form generation (P5)
   POST /tree/kg/explore         → knowledge graph exploration (P6)
   GET  /tree/kg/node            → expand a knowledge graph node (P6)
+  POST /tree/kg/graph-viz       → interactive graph visualization data (P8)
 """
 
 from __future__ import annotations
@@ -811,6 +813,112 @@ async def tree_kg_explore(request: Request):
         return HTMLResponse(
             f'<div class="card"><p>探索失败: {_html.escape(str(e)[:200])}</p></div>'
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  P8: Interactive Graph Visualization (Vector Graph RAG style)
+#  Returns JSON for vis-network rendering with entities + relations + passages
+# ═══════════════════════════════════════════════════════════════
+
+@htmx_router.post("/kg/graph-viz")
+async def tree_kg_graph_viz(request: Request):
+    """P8: Return graph visualization data for multi-hop query.
+
+    Returns JSON with entities, relations, passages suitable for
+    vis-network interactive graph rendering.
+    Uses SinglePassReranker + MilvusStore for subgraph expansion.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    query = body.get("query", body.get("entity", ""))
+    if not query.strip():
+        return JSONResponse({"entities": [], "relations": [], "passages": [], "summary": "请输入查询"})
+
+    hub = _get_hub(request)
+
+    try:
+        entities = []
+        relations = []
+        passages = []
+        answer = ""
+
+        # Try SinglePassReranker first (Vector Graph RAG pipeline)
+        try:
+            from livingtree.knowledge.single_pass_reranker import get_single_pass_reranker
+            from livingtree.knowledge.milvus_store import get_milvus_store
+
+            store = get_milvus_store()
+            reranker = get_single_pass_reranker(store=store)
+            result = await reranker.retrieve(query)
+
+            answer = result.answer or ""
+            entities = [{"id": eid, "label": eid} for eid in result.entities[:15]]
+            relations = [
+                {"id": r.get("id", f"rel_{i}"), "text": r.get("text", "")[:200], "entity_ids": r.get("entity_ids", "[]"), "score": r.get("distance", 0.3)}
+                for i, r in enumerate(result.relations[:30])
+            ]
+            passages = [
+                {"id": p.get("id", f"p_{i}"), "text": (p.get("text", "") or p.get("id", ""))[:300], "score": p.get("distance", 0.3)}
+                for i, p in enumerate(result.passages[:10])
+            ]
+        except Exception as e:
+            logger.info(f"SinglePassReranker unavailable: {e}, using KnowledgeGraph fallback")
+
+            # Fallback: use KnowledgeGraph + RetrievalFramework
+            if hub and hub.world:
+                try:
+                    rf = hub.world.get("retrieval_framework")
+                    if rf is None:
+                        from livingtree.knowledge.retrieval_framework import get_retrieval_framework
+                        rf = get_retrieval_framework()
+
+                    decision = rf.decide(query)
+                    params = rf.get_retrieval_params(decision)
+
+                    from livingtree.knowledge.knowledge_graph import KnowledgeGraph
+                    kg = KnowledgeGraph()
+
+                    # Extract triplets and add to graph
+                    triplets = kg.extract_triplets(query)
+                    kg.add_triplets_to_graph(triplets)
+
+                    for t in triplets:
+                        entities.append({"id": t.subject, "label": t.subject, "score": t.confidence})
+                        entities.append({"id": t.obj, "label": t.obj, "score": t.confidence})
+                        relations.append({
+                            "id": f"{t.subject}_{t.predicate}_{t.obj}",
+                            "text": f"({t.subject}, {t.predicate}, {t.obj})",
+                            "entity_ids": _json.dumps([t.subject, t.obj]),
+                            "score": t.confidence,
+                        })
+
+                    if hub.world.consciousness:
+                        resp = await hub.world.consciousness.chain_of_thought(
+                            f"基于查询生成简要回答(中文,50字以内): {query}", steps=1
+                        )
+                        answer = resp if isinstance(resp, str) else str(resp)
+                except Exception as e2:
+                    logger.warning(f"KnowledgeGraph fallback failed: {e2}")
+
+            # Deduplicate entities by id
+            seen = set()
+            entities = [e for e in entities if not (e["id"] in seen or seen.add(e["id"]))]
+
+        return JSONResponse({
+            "entities": entities[:20],
+            "relations": relations[:30],
+            "passages": passages[:10],
+            "answer": answer[:500],
+            "summary": f"实体:{len(entities)} 关系:{len(relations)} 段落:{len(passages)}",
+        })
+    except Exception as e:
+        logger.error(f"graph-viz error: {e}")
+        return JSONResponse({
+            "entities": [], "relations": [], "passages": [],
+            "summary": f"检索出错: {str(e)[:100]}",
+        })
 
 
 @htmx_router.get("/kg/node")

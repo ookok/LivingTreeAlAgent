@@ -389,6 +389,43 @@ class OrthogonalityGuard:
 
     # ── Stats ──
 
+    def first_person_confusion_report(self) -> dict:
+        """Zakharova introspection: first-person account of capability confusion."""
+        interfering = sum(1 for r in self._reports[-20:] if not r.is_orthogonal) if self._reports else 0
+        total = len(self._reports[-20:]) if self._reports else 0
+        if interfering == 0:
+            return {
+                "status": "clear",
+                "narrative": "I feel clear about my capabilities — my skills are well-separated and I understand what each one does.",
+                "interfering_count": 0,
+            }
+        reports = [r for r in self._reports[-20:] if not r.is_orthogonal][:5]
+        conflict_pairs = [f"{c.vector_id} (overlaps {c.overlapping_with})" for c in reports]
+        if len(conflict_pairs) == 1:
+            narrative = (
+                f"I notice that my '{conflict_pairs[0]}' capability is confused. "
+                f"I may be mixing up these two functions."
+            )
+        elif len(conflict_pairs) <= 3:
+            narrative = (
+                f"I notice that some of my capabilities are blurring together: "
+                f"{', '.join(conflict_pairs)}. I should work on keeping them distinct."
+            )
+        else:
+            narrative = (
+                f"I feel somewhat confused — {interfering}/{total} of my recent "
+                f"capability checks show interference. My internal boundaries need clarification."
+            )
+        return {
+            "status": "confused" if interfering > 2 else "blurring",
+            "narrative": narrative,
+            "interfering_count": interfering,
+            "conflict_examples": conflict_pairs,
+            "ortho_health": round(max(0.0, 1.0 - (interfering / max(total, 1))), 3),
+        }
+
+    # ── Helpers ──
+
     def stats(self) -> dict[str, Any]:
         return {
             "threshold": self._threshold,

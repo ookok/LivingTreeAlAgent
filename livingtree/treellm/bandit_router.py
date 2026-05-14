@@ -270,11 +270,50 @@ class ThompsonRouter:
         scored.sort(key=lambda x: -x[1])
         self._total_selections += 1
 
+        # v2.6 LPO post-processing: simplex-projected ranking
+        scored = self._lpo_post_process(scored)
+
         # Periodic decay
         if self._total_selections % 100 == 0:
             self._decay_all()
 
         return scored[:top_n]
+
+    def _lpo_post_process(
+        self, scored: list[tuple[str, float]],
+    ) -> list[tuple[str, float]]:
+        """v2.6 LPO (arXiv:2605.06139): Post-process Thompson scores with
+        simplex target-projection before final ranking.
+
+        This replaces the simple score sort with LPO's geometric projection:
+        Thompson scores → explicit π* target → project → re-rank.
+
+        The projected ranking preserves response diversity (LPO property)
+        while ensuring monotonic score refinement.
+        """
+        if len(scored) < 3:
+            return scored
+        try:
+            from livingtree.optimization.lpo_optimizer import get_lpo_optimizer
+            lpo = get_lpo_optimizer(divergence="kl", temperature=0.3)
+            scores_dict = {name: score for name, score in scored}
+            projected = lpo.optimize(scores_dict, scores_dict)
+            # Update Beta beliefs from projection gradient:
+            # providers that LPO up-weighted get quality credit,
+            # providers that LPO down-weighted get quality penalty
+            for name, lpo_val in projected.items():
+                arm = self.get_arm(name)
+                original = scores_dict.get(name, 0.5)
+                delta = lpo_val - original
+                if delta > 0.01:
+                    arm.quality.observe_success(weight=abs(delta) * 2.0)
+                elif delta < -0.01:
+                    arm.quality.observe_failure(weight=abs(delta) * 2.0)
+            result = [(n, projected.get(n, s)) for n, s in scored]
+            result.sort(key=lambda x: -x[1])
+            return result
+        except Exception:
+            return scored
 
     def select_best(self, candidates: list[str], task_type: str = "general") -> str:
         """Select the single best provider (most common use case)."""
@@ -286,6 +325,90 @@ class ThompsonRouter:
         arms = [(self.get_arm(c), c) for c in candidates]
         arms.sort(key=lambda x: -x[0].exploration_bonus)
         return [name for _, name in arms[:top_n]]
+
+    def tunnel_provider_selection(
+        self, candidates: list[str], T: float = 1.0,
+    ) -> list[str]:
+        """Discovery Machine: Fowler-Nordheim tunneling for provider selection.
+
+        Occasionally samples from low-EV, high-variance providers with
+        P ∝ exp(-dEV / T) — tunneling through the quality barrier to
+        discover unexpectedly good providers that Thompson sampling would miss.
+
+        This is the provider-space analog of quantum tunneling: at moderate
+        temperatures, the router can "jump" to providers that look poor on
+        average but have high variance (potential hidden quality).
+
+        Usage:
+            tunnel_candidates = router.tunnel_provider_selection(
+                ["deepseek", "longcat", "zhipu"], T=0.3
+            )
+        """
+        if len(candidates) < 2 or T <= 0.001:
+            return self.select_best(candidates, "general")
+
+        arms_info = []
+        for c in candidates:
+            arm = self.get_arm(c)
+            ev = arm.quality.mean  # expected value
+            var = arm.quality.alpha * arm.quality.beta / (
+                (arm.quality.alpha + arm.quality.beta) ** 2 *
+                (arm.quality.alpha + arm.quality.beta + 1)
+            ) if arm.quality.alpha + arm.quality.beta > 1 else 0.5
+            arms_info.append((c, ev, var))
+
+        best_ev = max(a[1] for a in arms_info)
+        selected = []
+
+        for name, ev, var in arms_info:
+            dEV = best_ev - ev  # positive = this provider is worse
+            if dEV <= 0:
+                selected.append(name)  # best provider always selected
+            elif T > 0:
+                p_tunnel = math.exp(-dEV / T)
+                if random.random() < p_tunnel * var:  # variance bonus
+                    selected.append(name)
+                    logger.debug(
+                        f"Bandit F-N tunnel: provider={name}, "
+                        f"EV={ev:.3f}, var={var:.3f}, p_tunnel={p_tunnel:.3f}"
+                    )
+
+        return selected if selected else [arms_info[0][0]]
+
+    def ising_arm_interaction(self, candidates: list[str]) -> dict[str, Any]:
+        """Discovery Machine: model cross-provider couplings as Ising spins.
+
+        Returns coupling matrix and energy for the current provider configuration,
+        where each provider = one Ising spin, and J_ij = affinity/compatibility.
+        """
+        if len(candidates) < 2:
+            return {"energy": 0.0, "couplings": {}, "phase": "paramagnetic"}
+
+        couplings = {}
+        H = 0.0
+        for i, a in enumerate(candidates):
+            for j, b in enumerate(candidates):
+                if i < j:
+                    arm_a = self.get_arm(a)
+                    arm_b = self.get_arm(b)
+                    # Coupling from quality correlation
+                    q_a = arm_a.quality.mean
+                    q_b = arm_b.quality.mean
+                    coupling = (0.5 - abs(q_a - q_b)) * 2.0  # -1 to +1
+                    couplings[f"{a}_{b}"] = round(coupling, 3)
+                    s_a = 1 if q_a > 0.5 else -1
+                    s_b = 1 if q_b > 0.5 else -1
+                    H -= coupling * s_a * s_b
+
+        return {
+            "energy": round(H, 4),
+            "couplings": couplings,
+            "num_spins": len(candidates),
+            "magnetization": round(
+                sum(1 if self.get_arm(c).quality.mean > 0.5 else -1 for c in candidates)
+                / len(candidates), 3
+            ),
+        }
 
     def set_mode(self, mode: str) -> None:
         """Set the current routing mode for logging purposes."""

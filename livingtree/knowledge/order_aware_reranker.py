@@ -73,6 +73,20 @@ class OrderAwareReranker:
         "conclusion": ["总结", "结论", "建议", "conclusion", "summary", "recommendation"],
     }
 
+    ALIBI_SLOPES: dict[str, float] = {
+        "definition": 0.5,
+        "background": 0.25,
+        "threshold": 0.125,
+        "requirement": 0.125,
+        "procedure": 0.0625,
+        "mitigation": 0.0625,
+        "regulation": 0.03125,
+        "data_observation": 0.015625,
+        "analysis_result": 0.015625,
+        "conclusion": 0.0078125,
+        "general": 0.0625,
+    }
+
     def __init__(self, model: PrecedenceModel | None = None):
         self._model = model or get_precedence_model()
 
@@ -182,7 +196,8 @@ class OrderAwareReranker:
                 # Position penalty: penalty grows with distance from expected
                 max_pos = max(len(candidates), 1)
                 pos_dist = abs(actual_pos - expected_pos) / max_pos
-                position_penalty = pos_dist * 0.5
+                slope = self.ALIBI_SLOPES.get(doc_type, 0.125)
+                position_penalty = pos_dist * slope * 4.0
                 order_score = 1.0 - position_penalty
             else:
                 expected_pos = i

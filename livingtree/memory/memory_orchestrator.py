@@ -139,6 +139,75 @@ class MemoryOrchestrator:
             pass
         return base
 
+    # ── PersonaVLM force-retrieve ───────────────────────────────────
+
+    def force_retrieve_context(self, user_id: str = "", query: str = "") -> str:
+        """PersonaVLM: bypass SurpriseGate and retrieve all user memory types.
+
+        Used when RetrievalUrgency exceeds threshold (context shift, high
+        complexity, topic novelty). Forces retrieval of: Core Identity,
+        Episodic, Semantic, and Procedural memories from PersonaMemory
+        and EmotionalMemory subsystems.
+
+        Args:
+            user_id: User identifier ("" for current session user)
+            query: Current query to filter relevant memories
+
+        Returns:
+            Context string with all relevant user memories, prioritized
+        """
+        parts: list[str] = []
+        priority_order = ["core_identity", "semantic", "episodic", "procedural"]
+
+        try:
+            from .persona_memory import get_persona_memory
+            pm = get_persona_memory()
+            for mem_type in priority_order:
+                facts = pm._storage.get(mem_type, [])
+                if not facts:
+                    continue
+                if query:
+                    scored = [(self._score_persona_fact(f, query), f) for f in facts]
+                    scored.sort(key=lambda x: x[0], reverse=True)
+                    relevant = [f for s, f in scored[:5] if s > 0.1]
+                else:
+                    relevant = facts[:3]
+                if relevant:
+                    label = mem_type.replace("_", " ").title()
+                    parts.append(f"[{label}]")
+                    for f in relevant:
+                        text = f.get("fact", "")
+                        if isinstance(f, str):
+                            text = str(f)
+                        parts.append(f"- {text[:300]}")
+                    parts.append("")
+        except Exception as e:
+            logger.debug(f"force_retrieve_context persona skip: {e}")
+
+        try:
+            from .emotional_memory import get_emotional_memory
+            em = get_emotional_memory()
+            episodes = em.get_all_flashbulbs()
+            if episodes:
+                parts.append("[Episodic Flashbulbs]")
+                for ep in episodes[:5]:
+                    parts.append(f"- {str(ep)[:200]}")
+                parts.append("")
+        except Exception as e:
+            logger.debug(f"force_retrieve_context emotion skip: {e}")
+
+        return "\n".join(parts) if parts else ""
+
+    def _score_persona_fact(self, fact, query: str) -> float:
+        if isinstance(fact, dict):
+            text = str(fact.get("fact", str(fact))).lower()
+        else:
+            text = str(fact).lower()
+        ql = query.lower()
+        words = [w for w in ql.split() if len(w) > 1] or [ql]
+        hits = sum(1 for w in words if w in text)
+        return hits / max(len(words), 1)
+
 
 # ═══ Singleton ═══
 

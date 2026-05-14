@@ -99,8 +99,8 @@ REACT_SYSTEM_PROMPT = """You are a LivingTree ReAct agent with 45 tools across 1
 
 You have MEMORY — you can remember results, recall past experiences, and build mental models. Use this to avoid repeating mistakes and to carry context across calls.
 
-[Web] web_search(query) — Web search via UnifiedSearch (SparkSearch + DDG)
-[Web] visit_page(url) — Fetch and extract web page content via WebReach
+[Web] web_search(query) — Web search via Parallel MCP (free) → UnifiedSearch fallback
+[Web] visit_page(url) — Fetch and extract web page content via Parallel MCP → WebReach fallback
 [Web] url_fetch(url) — Raw URL fetch with auto proxy + mirror failover
 [Web] api_call(url|method=GET|headers={}|body=) — Call external API
 
@@ -238,8 +238,9 @@ class ReactExecutor:
         self._compressor = None
         self._evolving_rules = None
         # Lazy-init tool singletons — wired from existing system infrastructure
-        self._unified_search = None   # web_search
-        self._web_reach = None         # visit_page
+        self._unified_search = None   # web_search (fallback)
+        self._web_reach = None         # visit_page (fallback)
+        self._parallel_mcp = None      # MCP host client (primary web_search/web_fetch)
         self._tool_executor = None     # 14 tools (url_fetch, db_query, git_diff, ...)
         self._shell_executor = None    # 5 tools (execute, execute_python, execute_git, read_file, list_files)
         self._file_tool = None         # unified search (6 backends)
@@ -362,11 +363,31 @@ class ReactExecutor:
             self._debate_engine = MultiAgentDebate(consciousness=self._consciousness)
         return self._debate_engine
 
+    async def _ensure_parallel_mcp(self):
+        """Lazy-init Parallel Search MCP host client."""
+        if self._parallel_mcp is None:
+            try:
+                from ..treellm.mcp_host_client import get_mcp_host
+                self._parallel_mcp = await get_mcp_host("parallel-search")
+            except Exception:
+                self._parallel_mcp = False
+        return self._parallel_mcp if self._parallel_mcp and self._parallel_mcp is not False else None
+
     # ── Web Tools ──
 
     async def _tool_web_search(self, query: str) -> str:
         if not query or not query.strip():
             return "[web_search] Error: empty query"
+        # Try Parallel MCP first (free, professional search)
+        mcp = await self._ensure_parallel_mcp()
+        if mcp and mcp.is_ready:
+            try:
+                result = await mcp.call_tool("web_search", query=query.strip())
+                if result.success and result.content:
+                    return f"[web_search via Parallel MCP] {result.content[:3000]}"
+            except Exception:
+                pass
+        # Fallback: existing UnifiedSearch (SparkSearch + DDG)
         search = await self._ensure_search()
         try:
             results = await search.query(query.strip(), limit=5)
@@ -388,6 +409,17 @@ class ReactExecutor:
             return "[visit_page] Error: empty URL"
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
+        # Try Parallel MCP web_fetch first (handles JS rendering, CAPTCHA, PDF)
+        mcp = await self._ensure_parallel_mcp()
+        if mcp and mcp.is_ready:
+            try:
+                result = await mcp.call_tool("web_fetch", url=url)
+                if result.success and result.content:
+                    content = str(result.content)
+                    return f"[visit_page via Parallel MCP] {content[:5000]}"
+            except Exception:
+                pass
+        # Fallback: existing WebReach
         reach = await self._ensure_reach()
         try:
             page = await reach.fetch(url)
@@ -545,6 +577,64 @@ class ReactExecutor:
         import json
         return f"[list_files] {mount}/{subpath}:\n" + json.dumps(entries, indent=2, ensure_ascii=False)[:3000]
 
+    async def _tool_write_file(self, input_str: str) -> str:
+        """Write text to file. Input: file_path|content. Overwrites existing file.
+        Supports newline-separated multi-line content (\\n in input is real newlines)."""
+        parts = input_str.strip().split("|", 1)
+        file_path = parts[0].strip()
+        content = parts[1] if len(parts) > 1 else ""
+        content = content.replace("\\n", "\n") if "\\n" in content else content
+        if not file_path:
+            return "[write_file] Error: file path required"
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            ffs.write_text(file_path, content, atomic=True)
+            return f"[write_file] OK: {file_path} ({len(content)} chars)"
+        except Exception as e:
+            return f"[write_file] Error: {e}"
+
+    async def _tool_append_file(self, input_str: str) -> str:
+        """Append text to file end. Input: file_path|content. Creates file if not exists."""
+        parts = input_str.strip().split("|", 1)
+        file_path = parts[0].strip()
+        content = parts[1] if len(parts) > 1 else ""
+        content = content.replace("\\n", "\n") if "\\n" in content else content
+        if not file_path:
+            return "[append_file] Error: file path required"
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            ffs.append_text(file_path, content)
+            return f"[append_file] OK: {file_path} (+{len(content)} chars)"
+        except Exception as e:
+            return f"[append_file] Error: {e}"
+
+    async def _tool_ripgrep_search(self, input_str: str) -> str:
+        """Fast content search using ripgrep (rg). Input: directory|pattern|file_glob|max_results.
+        Falls back to Python substring matching if rg not installed.
+        Example: D:/project|class TreeLLM|*.py|50"""
+        parts = input_str.strip().split("|")
+        directory = parts[0].strip() if len(parts) > 0 else "."
+        pattern = parts[1].strip() if len(parts) > 1 else ""
+        file_glob = parts[2].strip() if len(parts) > 2 else "*"
+        max_results = min(int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 100, 500)
+        if not pattern:
+            return "[ripgrep_search] Error: search pattern required"
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            matches = ffs.grep(directory, pattern, file_glob=file_glob,
+                               max_results=max_results)
+            if not matches:
+                return f"[ripgrep_search] No matches for '{pattern}' in {directory}"
+            lines = [f"[ripgrep_search] {len(matches)} matches for '{pattern}' in {directory}"]
+            for m in matches:
+                lines.append(f"  {m.file_path}:{m.line_number}: {m.line_text[:200]}")
+            return "\n".join(lines)[:5000]
+        except Exception as e:
+            return f"[ripgrep_search] Error: {e}"
+
     # ── File & Search Tools ──
 
     async def _tool_find_files(self, query: str) -> str:
@@ -564,6 +654,46 @@ class ReactExecutor:
             return "\n".join(lines)
         except Exception as e:
             return f"[find_files] Error: {e}"
+
+    async def _tool_explore_domain(self, input_str: str) -> str:
+        """Spontaneously explore a domain and build World Knowledge.
+        Input: domain_or_url|optional_max_pages (default 15)
+        LLM autonomously decides to explore unfamiliar domains before answering queries."""
+        parts = input_str.strip().split("|")
+        domain = parts[0].strip()
+        if not domain:
+            return "[explore_domain] Error: domain or URL required"
+        max_pages = 15
+        if len(parts) > 1 and parts[1].strip().isdigit():
+            max_pages = min(int(parts[1].strip()), 50)
+        try:
+            from ..capability.world_explorer import get_world_explorer
+            explorer = get_world_explorer()
+            wk = await explorer.explore(domain, max_pages=max_pages)
+            if wk and wk.page_count > 0:
+                md = wk.to_markdown()
+                return (
+                    f"[explore_domain] Explored {domain}: {wk.page_count} pages, "
+                    f"{len(wk.url_prefixes)} prefixes, {len(wk.actionable_items)} actionable items.\n"
+                    f"World Knowledge (injected as context):\n{md[:4000]}"
+                )
+            return f"[explore_domain] No pages found for {domain}"
+        except Exception as e:
+            return f"[explore_domain] Error exploring {domain}: {e}"
+
+    async def _tool_get_world_knowledge(self, domain: str) -> str:
+        """Retrieve cached World Knowledge for a domain. Input: domain string"""
+        if not domain or not domain.strip():
+            return "[get_world_knowledge] Error: domain required"
+        try:
+            from ..knowledge.knowledge_base import get_knowledge_base
+            kb = get_knowledge_base()
+            wk_text = kb.get_world_knowledge(domain.strip())
+            if wk_text:
+                return f"[get_world_knowledge] Cached World Knowledge for {domain}:\n{wk_text[:5000]}"
+            return f"[get_world_knowledge] No cached World Knowledge for {domain}. Use explore_domain to build it."
+        except Exception as e:
+            return f"[get_world_knowledge] Error: {e}"
 
     async def _tool_kb_search(self, query: str) -> str:
         """Semantic knowledge base search. Input: query string"""
@@ -1088,10 +1218,13 @@ class ReactExecutor:
             "execute": self._tool_execute,
             "execute_python": self._tool_execute_python,
             "execute_git": self._tool_execute_git,
+            # File tools (6)
             "read_file": self._tool_read_file,
+            "write_file": self._tool_write_file,
+            "append_file": self._tool_append_file,
             "list_files": self._tool_list_files,
-            # File & Search (5)
             "find_files": self._tool_find_files,
+            "ripgrep_search": self._tool_ripgrep_search,
             "kb_search": self._tool_kb_search,
             "kb_keyword": self._tool_kb_keyword,
             "kb_retrieve": self._tool_kb_retrieve,
@@ -1132,6 +1265,9 @@ class ReactExecutor:
             "kb_delete": self._tool_kb_delete,
             # ═══ P2: MCP (1) ═══
             "list_mcp": self._tool_list_mcp,
+            # ═══ P2: World Knowledge (2) ═══
+            "explore_domain": self._tool_explore_domain,
+            "get_world_knowledge": self._tool_get_world_knowledge,
         }
 
     async def run(

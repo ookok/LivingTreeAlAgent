@@ -29,6 +29,32 @@
   </div>
 </div>
 
+<!-- P7: Interactive Graph Visualization (vis-network) -->
+<div class="card" style="margin-top:16px">
+  <h2>🌐 交互式图谱可视化</h2>
+  <p style="color:var(--dim);font-size:12px;margin-bottom:12px">
+    矢量-图谱混合检索结果的可视化展示。点击节点展开关联，拖拽平移缩放。</p>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input id="graph-viz-q" placeholder="输入多跳查询..."
+           style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:6px"
+           @keydown.enter="startGraphViz()">
+    <button @click="startGraphViz()" style="font-size:12px;padding:10px 16px">🔎 检索</button>
+    <button @click="resetGraphViz()" style="font-size:12px;padding:10px 16px;background:var(--dim)">重置</button>
+  </div>
+  <div id="graph-viz-canvas" style="width:100%;height:50vh;border:1px solid var(--border);border-radius:6px;background:#0d1117">
+    <div style="color:var(--dim);font-size:12px;padding:20px;text-align:center">
+      加载 vis-network... 或输入查询开始探索
+      <br><small>提示: "Einstein如何影响现代物理学" "量子力学与相对论的关系"</small>
+    </div>
+  </div>
+  <div id="graph-viz-legend" style="margin-top:8px;font-size:11px;color:var(--dim);display:flex;gap:16px">
+    <span>🟡 实体节点</span>
+    <span>🟢 关系边</span>
+    <span>🔴 高相关性</span>
+    <span id="graph-viz-stats"></span>
+  </div>
+</div>
+
 <!-- P3: CoT visualization -->
 <div class="card" style="margin-top:16px">
   <h2>🧠 思维链推理</h2>
@@ -111,4 +137,213 @@ function startKBCot() {
 .kg-preset { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .kg-preset:hover { color: #6af; }
 </style>
+
+<!-- vis-network CDN for interactive graph visualization -->
+<script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
+        onerror="document.getElementById('graph-viz-canvas').innerHTML='<div style=color:var(--dim);padding:20px>vis-network CDN 未加载，请检查网络</div>'">
+</script>
+
+<script>
+let _graphNetwork = null;
+let _graphNodes = new vis.DataSet([]);
+let _graphEdges = new vis.DataSet([]);
+let _graphData = {nodes: [], edges: [], entities: [], relations: []};
+
+function initGraphViz() {
+  if (typeof vis === 'undefined') return;
+  const container = document.getElementById('graph-viz-canvas');
+  if (!container) return;
+  const options = {
+    nodes: {
+      shape: 'dot', size: 20,
+      font: { size: 12, color: '#c9d1d9', face: 'monospace' },
+      borderWidth: 2,
+      shadow: { enabled: true, size: 8 },
+      color: {
+        background: '#1f6feb', border: '#58a6ff',
+        highlight: { background: '#3fb950', border: '#2ea043' }
+      }
+    },
+    edges: {
+      width: 2,
+      color: { color: '#30363d', highlight: '#58a6ff', hover: '#58a6ff' },
+      arrows: { to: { enabled: true, scaleFactor: 0.8 } },
+      font: { size: 10, color: '#8b949e', background: '#161b22', strokeWidth: 0 },
+      smooth: { type: 'curvedCW', roundness: 0.2 }
+    },
+    physics: {
+      enabled: true,
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: { gravitationalConstant: -40, centralGravity: 0.005, springLength: 150, springConstant: 0.08 },
+      stabilization: { iterations: 100 }
+    },
+    interaction: {
+      hover: true, tooltipDelay: 200,
+      zoomView: true, dragView: true,
+      navigationButtons: true
+    },
+    layout: { improvedLayout: true }
+  };
+  _graphNetwork = new vis.Network(container, {nodes: _graphNodes, edges: _graphEdges}, options);
+
+  _graphNetwork.on('click', function(params) {
+    if (params.nodes.length > 0) {
+      const nodeId = params.nodes[0];
+      expandNode(nodeId);
+    }
+  });
+
+  _graphNetwork.on('stabilized', function() {
+    updateGraphStats();
+  });
+}
+
+function resetGraphViz() {
+  _graphNodes.clear();
+  _graphEdges.clear();
+  _graphData = {nodes: [], edges: [], entities: [], relations: []};
+  if (_graphNetwork) {
+    _graphNetwork.setData({nodes: _graphNodes, edges: _graphEdges});
+  }
+  updateGraphStats();
+}
+
+function addGraphNode(id, label, group, score) {
+  const colors = {
+    entity: { bg: '#d2991d', border: '#e3b341' },
+    relation: { bg: '#1f6feb', border: '#58a6ff' },
+    passage: { bg: '#6e40c9', border: '#8b5cf6' },
+    high_relevance: { bg: '#f85149', border: '#ff7b72' }
+  };
+  const colorKey = score > 0.7 ? 'high_relevance' : group;
+  const color = colors[colorKey] || colors.entity;
+  try {
+    _graphNodes.add({
+      id: id, label: label,
+      group: group, score: score,
+      color: { background: color.bg, border: color.border },
+      size: Math.max(12, Math.min(35, (score || 0.3) * 30)),
+      title: `<b>${label}</b><br>类型: ${group}<br>相关性: ${(score||0).toFixed(2)}`
+    });
+  } catch(e) { /* duplicate node */ }
+}
+
+function addGraphEdge(from, to, label, weight) {
+  try {
+    _graphEdges.add({
+      id: `${from}_${to}_${label || ''}`,
+      from: from, to: to,
+      label: label || '',
+      width: Math.max(1, Math.min(5, (weight || 0.3) * 5)),
+      color: { color: weight > 0.5 ? '#58a6ff' : '#30363d' }
+    });
+  } catch(e) { /* duplicate edge */ }
+}
+
+function expandNode(nodeId) {
+  const data = _graphData;
+  const related = (data.relations || []).filter(r => {
+    try {
+      const eids = JSON.parse(r.entity_ids || '[]');
+      return eids.includes(nodeId);
+    } catch(e) { return false; }
+  });
+  for (const rel of related) {
+    addGraphNode(rel.id, rel.text || rel.id, 'relation', rel.distance || 0.3);
+    try {
+      const eids = JSON.parse(rel.entity_ids || '[]');
+      for (const eid of eids) {
+        if (eid !== nodeId) {
+          addGraphNode(eid, eid, 'entity', 0.5);
+          addGraphEdge(nodeId, eid, rel.text || 'related', 0.5);
+        }
+      }
+    } catch(e) {}
+  }
+  if (_graphNetwork) {
+    _graphNetwork.setData({nodes: _graphNodes, edges: _graphEdges});
+    _graphNetwork.stabilize(50);
+  }
+  updateGraphStats();
+}
+
+function updateGraphStats() {
+  const st = document.getElementById('graph-viz-stats');
+  if (st) {
+    st.textContent = `节点: ${_graphNodes.length} | 边: ${_graphEdges.length}`;
+  }
+}
+
+async function startGraphViz() {
+  const query = document.getElementById('graph-viz-q').value.trim();
+  if (!query) return;
+  const canvas = document.getElementById('graph-viz-canvas');
+  canvas.innerHTML = '<div style="color:var(--accent);font-size:12px;padding:20px">🔎 检索中...</div>';
+
+  if (!_graphNetwork && typeof vis !== 'undefined') {
+    initGraphViz();
+  }
+
+  try {
+    const resp = await fetch('/tree/kg/graph-viz', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: query}),
+    });
+    const data = await resp.json();
+    _graphData = data;
+    resetGraphViz();
+
+    if (data.entities) {
+      for (const e of data.entities.slice(0, 20)) {
+        addGraphNode(e.id || e, e.label || e.id || e, 'entity', e.score || 0.5);
+      }
+    }
+    if (data.relations) {
+      for (const r of data.relations.slice(0, 30)) {
+        addGraphNode(r.id, r.text || r.id, 'relation', r.score || r.distance || 0.3);
+        try {
+          const eids = JSON.parse(r.entity_ids || '[]');
+          if (eids.length >= 2) {
+            for (let i = 0; i < eids.length - 1; i++) {
+              addGraphEdge(eids[i], eids[i+1], r.text || '', r.score || 0.3);
+            }
+          }
+        } catch(e) {}
+      }
+    }
+    if (data.passages) {
+      for (const p of data.passages.slice(0, 10)) {
+        const title = (p.text || p.id || '').substring(0, 30);
+        addGraphNode(p.id, title, 'passage', p.score || p.distance || 0.4);
+      }
+    }
+    if (_graphNetwork) {
+      _graphNetwork.setData({nodes: _graphNodes, edges: _graphEdges});
+      _graphNetwork.stabilize(50);
+    }
+    updateGraphStats();
+
+    if (typeof vis === 'undefined') {
+      const summary = (data.answer || data.summary || `找到 ${_graphNodes.length} 节点`);
+      canvas.innerHTML = `<div style="color:var(--text);padding:20px;overflow-y:auto;max-height:50vh">
+        <div style="margin-bottom:8px;color:var(--accent)">检索结果:</div>
+        <div style="margin-bottom:16px;color:var(--dim)">${summary}</div>
+        <div style="font-size:12px;color:var(--dim)">
+          ${(data.entities||[]).slice(0,10).map(e => '🟡 '+ (e.label||e.id||e)).join('<br>')}
+          ${(data.relations||[]).slice(0,10).map(r => '🟢 '+ (r.text||r.id||'').substring(0,60)).join('<br>')}
+        </div>
+      </div>`;
+    }
+  } catch(e) {
+    canvas.innerHTML = '<div style="color:var(--err);padding:20px">检索失败: ' + e.message + '</div>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof vis !== 'undefined') {
+    initGraphViz();
+  }
+});
+</script>
 {% endblock %}

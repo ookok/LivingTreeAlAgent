@@ -18,6 +18,7 @@ Folding strategies:
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -218,12 +219,26 @@ def fold_with_codex(content: str, max_chars: int = 500) -> tuple[str, str]:
 
 @dataclass
 class BudgetSegment:
-    """A context segment with computed relevance and allocated budget."""
+    """A context segment with computed relevance, depth score, and allocated budget.
+
+    v2.4 — MoDA-Enhanced (arXiv:2603.15619): depth_score controls how aggressively
+    a segment is compressed. Deep segments (from early pipeline stages that carry
+    foundational information) get more budget; shallow segments get compressed
+    more aggressively.
+
+    v2.5 — Opus 4.7 KV Cache Weighting: position_index tracks the conversation turn
+    index (0=earliest, N-1=latest). kv_preservation_score combines relevance x depth
+    x position_decay to model mid-section information decay and allocate token budget
+    accordingly. Mid-section segments with high task_criticality get boosted.
+    """
     name: str
     content: str
     relevance_score: float = 0.0
     allocated_chars: int = 0
     folded_content: str = ""
+    depth_score: float = 0.5
+    position_index: int = -1
+    kv_preservation_score: float = 0.5
 
     @property
     def original_chars(self) -> int:
@@ -283,47 +298,101 @@ def score_segment_relevance(segment: str, query: str) -> float:
     return min(score, 1.0)
 
 
+def rope_relative_score(pos_a: int, pos_b: int, num_scales: int = 8) -> float:
+    """RoPE-style multi-scale relative position scoring.
+
+    Maps the classical RoPE frequency design (θ_i = 10000^{-2i/d}) to
+    position-aware context weighting. For each pair of positions (i, j),
+    computes cosine oscillation at multiple frequency scales. Different
+    frequency scales respond to different distance ranges:
+    - Scale 0 (θ ≈ 1.0): sensitive to short-range (±1-2 position)
+    - Scale 4 (θ ≈ 0.1): sensitive to mid-range (±5-10 positions)
+    - Scale 7 (θ ≈ 0.01): sensitive to long-range (±20-50 positions)
+
+    Returns a normalized score in [0, 1] where higher = closer relative
+    position (shorter effective distance).
+    """
+    rel_dist = abs(pos_a - pos_b)
+    total = 0.0
+    for k in range(num_scales):
+        theta = 10000.0 ** (-2.0 * k / num_scales)
+        total += math.cos(rel_dist * theta * 0.1)
+    return (total / num_scales + 1.0) / 2.0
+
+
 def route_attention_budget(segments: dict[str, str], query: str,
-                           total_budget: int = 8000) -> BudgetAllocation:
-    """SSA-style token budget routing across context segments.
+                           total_budget: int = 8000,
+                           depth_scores: dict[str, float] | None = None,
+                           position_indices: dict[str, int] | None = None,
+                           task_criticalities: dict[str, float] | None = None,
+                           ) -> BudgetAllocation:
+    """SSA + MoDA + Opus 4.7 depth-aware token budget routing across context segments.
 
-    The core SSA principle applied to context: instead of equal-length
-    folding for all segments, rank by relevance to current query and
-    allocate token budget proportionally.
-
-    High relevance → more tokens, less compression
-    Low relevance → fewer tokens, more compression
-    Zero relevance → minimal context
+    v2.5 Opus 4.7 KV Cache Weighting:
+    - position_indices: {name: turn_index} — 0=earliest, N-1=latest
+    - task_criticalities: {name: 0-1 score} — how task-critical each segment is
+    - position_decay: mid-section segments (indices 5-15) with criticality > 0.6
+      get a 1.5x mid_section_boost to combat the mid-section information decay
+    - kv_preservation_score: composite score stored per BudgetSegment
 
     Args:
         segments: {name: content} dict of context segments
         query: The current user query/intent
         total_budget: Total character budget for all segments
+        depth_scores: Optional {name: depth_score} dict
+        position_indices: Optional {name: turn_index} dict
+        task_criticalities: Optional {name: 0-1 criticality} dict
 
     Returns:
         BudgetAllocation with scored, budgeted, folded segments
     """
     budget_segments = []
     total_original = 0
+    ds = depth_scores or {}
+    pi = position_indices or {}
+    tc = task_criticalities or {}
+
+    n_segments = len(segments)
+    center_pos = n_segments // 2
 
     scored = []
-    for name, content in segments.items():
-        score = score_segment_relevance(content, query)
-        scored.append((name, content, score))
+    for idx, (name, content) in enumerate(segments.items()):
+        base_score = score_segment_relevance(content, query)
+        depth_bonus = ds.get(name, 0.5)
+        pos_idx = pi.get(name, idx)
+        criticality = tc.get(name, 0.3)
+
+        position_score = rope_relative_score(pos_idx, center_pos)
+        mid_boost = 1.0
+        if n_segments > 10 and n_segments // 3 <= idx <= n_segments * 2 // 3 and criticality > 0.6:
+            mid_boost = 1.3
+
+        kv_preservation = round(
+            base_score * 0.30 + depth_bonus * 0.20 + criticality * 0.25 + position_score * 0.25,
+            3,
+        )
+        combined_score = round(base_score * 0.35 + depth_bonus * 0.15 + kv_preservation * 0.50, 3)
+
+        scored.append((name, content, combined_score, depth_bonus, pos_idx, kv_preservation, mid_boost))
         total_original += len(content)
 
     scored.sort(key=lambda x: x[2], reverse=True)
-
-    total_score = sum(s for _, _, s in scored)
+    total_score = sum(s for _, _, s, _, _, _, _ in scored)
     if total_score == 0:
         total_score = len(scored)
 
-    for name, content, score in scored:
-        budget = int(total_budget * (score / total_score))
+    for name, content, score, depth_val, pos_idx, kv_pres, boost in scored:
+        raw_budget = int(total_budget * (score / total_score))
+        boosted_budget = int(raw_budget * boost)
+        budget = min(boosted_budget, total_budget // 2)
+
         seg = BudgetSegment(
             name=name, content=content,
             relevance_score=round(score, 3),
             allocated_chars=budget,
+            depth_score=round(depth_val, 3),
+            position_index=pos_idx,
+            kv_preservation_score=round(kv_pres * boost, 3),
         )
         budget_segments.append(seg)
 

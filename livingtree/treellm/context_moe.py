@@ -13,6 +13,7 @@ Key innovations:
   3. Consolidation Pipeline: Warm→Cold→Deep with usage-based promotion
   4. Forgetting Curve: Ebbinghaus-inspired decay with access refresh
   5. Reference Pointers: OpenWiki-style linked memory with file/concept/relationship refs
+  6. KV Allocation (Opus 4.7-inspired): per-block token budget allocation + mid-section boost
 
 Integration:
   moe = get_context_moe()
@@ -66,7 +67,13 @@ class ReferencePointer:
 
 @dataclass
 class MemoryBlock:
-    """A compressed memory unit stored in the MoE system."""
+    """A compressed memory unit stored in the MoE system.
+
+    v2.5 Opus 4.7 KV-Allocation: kv_allocation_weight controls how many
+    context tokens this block receives when injected. Higher weight = more
+    tokens preserved (less compression). position_index tracks where in the
+    conversation this block originated, enabling mid-section decay compensation.
+    """
     id: str
     content: str            # Compressed summary
     original_length: int    # Chars before compression
@@ -82,6 +89,9 @@ class MemoryBlock:
     consolidation_count: int = 0  # How many times consolidated deeper
     prominence: float = 0.5       # Overall importance score
     decay_factor: float = 1.0     # Ebbinghaus decay: starts at 1.0, decays over time
+    kv_allocation_weight: float = 0.5   # Token budget allocation (0=suppress, 1=preserve fully)
+    position_index: int = -1            # Turn index in conversation (-1=unknown)
+    task_criticality: float = 0.5       # How critical this block is to current task (0-1)
 
 
 @dataclass
@@ -392,42 +402,37 @@ class ContextMoE:
 
         return enriched
 
-    def build_enriched_message(self, query: str, result: MoEQueryResult) -> str:
-        """Build human-readable enriched context from MoE result."""
-        parts = []
-        now = time.time()
+    def build_enriched_message(self, query: str, result: MoEQueryResult,
+                                total_budget: int = 3000, current_turn: int = 0) -> str:
+        """Build human-readable enriched context from MoE result.
 
-        # Flash: only if directly relevant
-        for b in result.flash:
-            age = int((now - b.timestamp) / 60)
-            parts.append(f"[刚才·{b.task_type}] {b.content[:200]}")
-
-        # Hot: current conversation context
-        if result.hot:
-            hot_strs = [b.content[:200] for b in result.hot[-3:]]
-            if hot_strs:
-                parts.append("[当前对话]\n" + "\n".join(hot_strs))
-
-        # Warm: recent same-day memories
-        for b in result.warm[:2]:
-            age = int((now - b.timestamp) / 3600)
-            parts.append(f"[{age}h前·{b.task_type}] {b.content[:250]}")
-
-        # Cold: long-term knowledge
-        for b in result.cold[:2]:
-            age_days = int((now - b.timestamp) / 86400)
-            parts.append(f"[{age_days}d前·{b.task_type}] {b.content[:250]}")
-
-        # Deep: persistent preferences/facts
-        if result.deep:
-            for b in result.deep[:2]:
-                parts.append(f"[已知] {b.content[:200]}")
-
-        if not parts:
+        v2.5 Opus 4.7 KV-Allocation: uses allocate_context_budget() to
+        dynamically distribute token budget across memory blocks instead
+        of uniform truncation.
+        """
+        if not result.hot and not result.warm and not result.cold and not result.deep:
             return query
 
-        memory_context = "[相关记忆]\n" + "\n".join(parts)
-        return f"{memory_context}\n\n---\n当前问题: {query}"
+        query_terms = set(query.lower().split())
+
+        # Score task-criticality for all blocks
+        all_candidates: list[MemoryBlock] = []
+        for b in result.hot:
+            self.score_task_criticality(b, query_terms)
+            b.position_index = current_turn
+            all_candidates.append(b)
+        for b in result.warm + result.cold + result.deep:
+            self.score_task_criticality(b, query_terms)
+            all_candidates.append(b)
+
+        memory_context = self.allocate_context_budget(
+            all_candidates, total_budget=total_budget, current_turn=current_turn,
+        )
+
+        if not memory_context:
+            return query
+
+        return f"[相关记忆]\n{memory_context}\n\n---\n当前问题: {query}"
 
     # ── Expert Queries ────────────────────────────────────────────
 
@@ -671,6 +676,110 @@ class ContextMoE:
     def get_deep(self, key: str) -> Optional[str]:
         entry = self._deep.get(key)
         return entry["value"] if entry else None
+
+    # ── Opus 4.7 KV Allocation ──────────────────────────────────────
+
+    def allocate_context_budget(
+        self, blocks: list[MemoryBlock], total_budget: int = 3000,
+        current_turn: int = 0,
+    ) -> str:
+        """Dynamically allocate token budget across blocks per Opus 4.7 KV weighting.
+
+        Each block gets tokens proportional to:
+        kv_allocation_score = relevance × 0.35 + layer_weight × 0.25
+                            + task_criticality × 0.25 + mid_section_boost × 0.15
+
+        Mid-section boost: blocks from conversation turns 5-15 that have high
+        task-criticality get a 1.5x multiplier to combat the natural decay of
+        middle-conversation information (Claude Opus 4.7's key innovation).
+
+        v2.6 ALiBi Slopes: pos_decay now uses per-expert geometric slopes.
+        FLASH (1/2) rapidly discounts position for transient blocks → favors recency.
+        DEEP (1/256) barely decays position → permanent knowledge is always relevant.
+        This mirrors ALiBi's per-head slope distribution across memory layers.
+        """
+        if not blocks:
+            return ""
+
+        layer_weight_map = {
+            ExpertLayer.FLASH: 0.5, ExpertLayer.HOT: 0.9,
+            ExpertLayer.WARM: 0.6, ExpertLayer.COLD: 0.4, ExpertLayer.DEEP: 0.7,
+        }
+        alibi_slopes = {
+            ExpertLayer.FLASH: 0.5, ExpertLayer.HOT: 0.25,
+            ExpertLayer.WARM: 0.125, ExpertLayer.COLD: 0.0625, ExpertLayer.DEEP: 0.015625,
+        }
+
+        scored_blocks: list[tuple[MemoryBlock, float]] = []
+        for b in blocks:
+            lw = layer_weight_map.get(b.layer, 0.3)
+
+            mid_boost = 1.0
+            if b.position_index >= 0:
+                recency_gap = current_turn - b.position_index if current_turn > 0 else 0
+                slope = alibi_slopes.get(b.layer, 0.1)
+                pos_decay = max(0.3, 1.0 - recency_gap * slope)
+                if 5 <= b.position_index <= 15 and b.task_criticality > 0.6:
+                    mid_boost = 1.5
+            else:
+                pos_decay = 0.6
+
+            allocation_score = (
+                b.relevance_score * 0.35
+                + lw * 0.25
+                + b.task_criticality * 0.25
+                + mid_boost * 0.15
+            ) * pos_decay
+            b.kv_allocation_weight = round(allocation_score, 4)
+            scored_blocks.append((b, allocation_score))
+
+        total_score = sum(s for _, s in scored_blocks) or 1.0
+
+        parts: list[str] = []
+        for b, score in scored_blocks:
+            budget = max(50, int(total_budget * score / total_score))
+            now = time.time()
+            age_text = ""
+            if b.timestamp > 0:
+                age_days = int((now - b.timestamp) / 86400)
+                if age_days > 0:
+                    age_text = f"[{age_days}d前] "
+            content = b.content[:budget]
+            parts.append(f"{age_text}{content}")
+
+        return "\n".join(parts)
+
+    def score_task_criticality(self, block: MemoryBlock,
+                                query_terms: set[str]) -> float:
+        """Score how critical a memory block is to the current task.
+
+        High task_criticality when:
+        - Block contains decision markers (决定, decided, selected)
+        - Block shares many terms with the query
+        - Block was accessed multiple times (indicates persistent relevance)
+        - Block has high prominence score
+        """
+        score = 0.3
+        content_lower = block.content.lower()
+        decision_markers = [
+            "决定", "选择", "最终", "采用", "确认",
+            "decided", "chose", "final", "confirmed", "selected",
+            "结论", "conclusion", "方案", "设计", "architecture",
+        ]
+        for m in decision_markers:
+            if m in content_lower:
+                score += 0.1
+                break
+
+        if block.topics and query_terms:
+            shared = len(set(block.topics) & query_terms)
+            score += min(0.3, shared * 0.08)
+
+        score += min(0.2, block.access_count * 0.05)
+        score += block.prominence * 0.2
+
+        block.task_criticality = round(min(1.0, score), 4)
+        return block.task_criticality
 
     # ── Persistence ────────────────────────────────────────────────
 

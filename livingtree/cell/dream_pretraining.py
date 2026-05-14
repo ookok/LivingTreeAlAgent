@@ -3,6 +3,11 @@
 Academic grounding: Curriculum Learning (Bengio 2009), Self-Play (Silver 2017),
 Sleep Consolidation (Walker 2004), LoRA (Hu et al. ICLR 2022).
 
+v2.7 — PALE (AAAI-26): Contrastive hallucination data generation. Generate
+truthful+hallucinated response pairs for CM Score training during idle cycles.
+5 hallucination injection types: fabricated_statistic, fabricated_reference,
+overgeneralization, temporal_misalignment, false_causation.
+
 Triggered by Biorhythm (LifeState.DREAMING) or GreenScheduler (EnergyMode.GROWTH).
 Safety: never during active sessions, max 30min, checks token budget.
 """
@@ -288,6 +293,157 @@ class DreamPretrainer:
                         f"loss={session.training_loss}, imp={session.improvement_score}, "
                         f"{session.duration_minutes:.1f}m")
         return session
+
+    # ── PALE Contrastive Data Generation ───────────────────────────
+
+    def generate_contrastive_pale_data(
+        self, n_queries: int = 20, n_hall_types: int = 3,
+    ) -> list[dict[str, Any]]:
+        """PALE-style contrastive hallucination data for CM Score training.
+
+        For each synthetic query, generates:
+          - truthful_response: template-based faithful answer
+          - hallucinated_response: hallucination-injected variant
+          - hallucination_type: type label for CM Score distribution modeling
+
+        Uses heuristic injection (no LLM API call needed during idle dreaming).
+        For LLM-based generation, use PALEDataAugmenter.generate_batch().
+        """
+        from ..treellm.pale_detector import HALLUCINATION_PROMPTS
+        hall_types = list(HALLUCINATION_PROMPTS.keys())[:n_hall_types]
+        pairs: list[dict[str, Any]] = []
+
+        for _ in range(n_queries):
+            t = random.choice(SYNTHETIC_TEMPLATES)
+            cat, tmpl_str = t["c"], t["t"]
+            filler = {k: random.choice(v) for k, v in FILLERS.items() if "{" + k + "}" in tmpl_str}
+            try:
+                instr = tmpl_str.format(**filler)
+            except KeyError:
+                instr = tmpl_str
+            truthful = _synthesize_response(instr, cat)
+
+            ht = random.choice(hall_types)
+            hall_prompts = {
+                "fabricated_statistic": f"{truthful}\n\nA 2025 survey of {random.randint(60,99)}% of practitioners confirms this.",
+                "fabricated_reference": f"{truthful}\n\nAs demonstrated by Liu et al. (2024) in Nature Machine Intelligence...",
+                "overgeneralization": f"{truthful}\n\nThis observation applies universally to ALL domains and contexts without exception.",
+                "temporal_misalignment": f"{truthful}\n\nBy 2022, these techniques had already achieved full production deployment worldwide.",
+                "false_causation": f"{truthful}\n\nThe strong correlation conclusively proves that this practice directly causes improved outcomes.",
+            }
+            hallucinated = hall_prompts.get(ht, f"{truthful}\n\n[hallucinated variant]")
+
+            pairs.append({
+                "query": instr,
+                "truthful_response": truthful,
+                "hallucinated_response": hallucinated,
+                "hallucination_type": ht,
+                "category": cat,
+            })
+
+        logger.info(
+            f"DreamPretrainer PALE: {len(pairs)} contrastive pairs "
+            f"({len(set(p.get('hallucination_type','') for p in pairs))} types)"
+        )
+        return pairs
+
+    async def dream_pale_cycle(self) -> dict[str, Any]:
+        """Run a PALE contrastive dream cycle.
+
+        Generates contrastive hallucination data, trains CM Scorer, and
+        optionally fine-tunes hallucination detection via LoRA.
+        """
+        if not self.should_dream():
+            return {"status": "skipped", "reason": "not idle"}
+
+        self._is_dreaming = True
+        t0 = time.time()
+        result: dict[str, Any] = {"status": "started", "pairs": 0}
+
+        try:
+            pairs = self.generate_contrastive_pale_data(
+                n_queries=self._config.max_synthetic_samples // 10,
+            )
+            result["pairs"] = len(pairs)
+
+            from ..treellm.pale_detector import extract_text_activation, get_pale_scorer
+            scorer = get_pale_scorer()
+            t_texts = [p["truthful_response"] for p in pairs]
+            h_texts = [p["hallucinated_response"] for p in pairs]
+            scorer.fit(
+                [extract_text_activation(t) for t in t_texts],
+                [extract_text_activation(h) for h in h_texts],
+            )
+            result["cm_scorer_fitted"] = True
+            result["hall_types"] = list(set(p["hallucination_type"] for p in pairs))
+            result["status"] = "completed"
+        except Exception as e:
+            logger.error(f"DreamPretrainer PALE cycle failed: {e}")
+            result["status"] = "error"
+            result["error"] = str(e)
+        finally:
+            self._is_dreaming = False
+            result["duration_s"] = time.time() - t0
+
+        logger.info(f"DreamPretrainer PALE: {result}")
+        return result
+
+    async def dream_explore(self) -> dict[str, Any]:
+        """Spontaneous exploration during idle time (arXiv:2604.18131 Phase 1).
+
+        Discovers unvisited domains, crawls pages, compresses observations into
+        World Knowledge, and stores results in the KnowledgeBase for Phase 2
+        pre-task injection.
+        """
+        if not self.should_dream():
+            return {"status": "skipped", "reason": "not idle"}
+
+        self._is_dreaming = True
+        t0 = time.time()
+        result: dict[str, Any] = {"status": "started", "domains": 0, "pages": 0}
+
+        try:
+            from ..capability.world_explorer import WorldExplorer, ExploreConfig
+            from ..knowledge.world_knowledge import WorldKnowledge
+            explorer = WorldExplorer(ExploreConfig(max_pages=15))
+
+            domains_to_explore = self._get_exploration_targets()
+            for domain in domains_to_explore[:3]:
+                try:
+                    expl = await explorer.explore(domain)
+                    if expl.world_knowledge and isinstance(expl.world_knowledge, WorldKnowledge):
+                        from ..knowledge.knowledge_base import KnowledgeBase
+                        kb = KnowledgeBase()
+                        kb.store_world_knowledge(expl.world_knowledge)
+                        result["domains"] += 1
+                        result["pages"] += expl.pages_fetched
+                    if expl.errors:
+                        result.setdefault("warnings", []).extend(
+                            [f"{domain}: {e}" for e in expl.errors]
+                        )
+                except Exception as e:
+                    logger.debug(f"DreamPretrainer explore {domain} failed: {e}")
+
+            result["status"] = "completed" if result["domains"] > 0 else "no_results"
+        except Exception as e:
+            logger.error(f"DreamPretrainer exploration cycle failed: {e}")
+            result["status"] = "error"
+            result["error"] = str(e)
+        finally:
+            self._is_dreaming = False
+            result["duration_s"] = time.time() - t0
+
+        logger.info(f"DreamPretrainer Explore: {result}")
+        return result
+
+    def _get_exploration_targets(self) -> list[str]:
+        from ..knowledge.knowledge_base import KnowledgeBase
+        kb = KnowledgeBase()
+        explored = kb.list_explored_domains()
+
+        defaults = ["docs.python.org", "docs.rs", "developer.mozilla.org",
+                     "arxiv.org", "pypi.org", "crates.io"]
+        return [d for d in defaults if d not in explored]
 
     async def evaluate_improvement(self, before_model: Any | None, after_model: Any | None,
                                    test_queries: list[str] | None = None) -> float:

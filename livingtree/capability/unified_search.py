@@ -4,7 +4,14 @@ LDR-inspired: parallel multi-engine search with Reciprocal Rank Fusion (RRF)
 meta-ranking. Searches all available engines simultaneously, merges results
 via RRF, and deduplicates by URL.
 
-Priority: SparkSearch → DDGSearch (fallback, parallel mode disabled).
+Fallback chain (7 engines, all free):
+  1. SparkSearch (iFlytek ONE Search API — paid, structured results)
+  2. DuckDuckGo (DDGSearch — free, privacy-friendly)
+  3. BingSearch (HTML scraping — free, no API key)
+  4. SearXNGSearcher (public instances — free, meta-engine)
+  5. Wikipedia (REST API — free, factual knowledge)
+  6. LLMWebSearch (星火Lite/智谱GLM — free but unreliable)
+
 Parallel mode: runs all engines concurrently, merges via RRF.
 
 Usage:
@@ -39,11 +46,25 @@ class UnifiedResult:
 
 
 class UnifiedSearch:
-    """Multi-engine search dispatcher with automatic failover."""
+    """Multi-engine search dispatcher with automatic failover.
 
-    def __init__(self, spark_search=None, ddg_search=None):
+    Engine priority (sequential fallback):
+      1. SparkSearch (ONE Search API — paid, structured results)
+      2. DuckDuckGo (free, privacy-friendly)
+      3. BingSearch (free, HTML scraping)
+      4. SearXNGSearcher (free, public meta-search instances)
+      5. WikipediaSearch (free, factual knowledge API)
+      6. LLMWebSearch (free LLM 联网搜索 — 星火Lite/智谱GLM)
+    """
+
+    def __init__(self, spark_search=None, ddg_search=None, llm_search=None,
+                 bing_search=None, searxng_search=None, wiki_search=None):
         self._spark = spark_search
         self._ddg = ddg_search
+        self._llm = llm_search
+        self._bing = bing_search
+        self._searxng = searxng_search
+        self._wiki = wiki_search
         self._initialized = False
 
     def _ensure_engines(self):
@@ -54,67 +75,107 @@ class UnifiedSearch:
                 from .spark_search import create_spark_search
                 self._spark = create_spark_search()
             except Exception:
-                self._spark = False  # mark as unavailable
+                self._spark = False
         if self._ddg is None:
             try:
                 from .ddg_search import DDGSearch
                 self._ddg = DDGSearch()
             except Exception:
                 self._ddg = False
+        if self._bing is None:
+            try:
+                from .bing_search import BingSearch
+                self._bing = BingSearch()
+            except Exception:
+                self._bing = False
+        if self._searxng is None:
+            try:
+                from .searxng_search import SearXNGSearcher
+                self._searxng = SearXNGSearcher()
+            except Exception:
+                self._searxng = False
+        if self._wiki is None:
+            try:
+                from .wikipedia_search import WikipediaSearch
+                self._wiki = WikipediaSearch()
+            except Exception:
+                self._wiki = False
+        if self._llm is None:
+            try:
+                from .llm_web_search import get_llm_web_search
+                self._llm = get_llm_web_search()
+            except Exception:
+                self._llm = False
         self._initialized = True
+
+    async def _try_engine(self, engine, engine_name: str, q: str,
+                          limit: int, result_cls=None) -> list[UnifiedResult] | None:
+        """Try one engine, return UnifiedResults on success, None on failure."""
+        try:
+            raw = await engine.query(q, limit=limit)
+            if not raw:
+                return None
+            results = []
+            for r in raw:
+                if result_cls and isinstance(r, result_cls):
+                    results.append(UnifiedResult(
+                        title=r.title, url=r.url,
+                        summary=getattr(r, 'snippet', '') or getattr(r, 'summary', ''),
+                        source=engine_name,
+                    ))
+                elif hasattr(r, 'title'):
+                    results.append(UnifiedResult(
+                        title=r.title, url=r.url,
+                        summary=getattr(r, 'snippet', '') or getattr(r, 'summary', ''),
+                        source=engine_name,
+                    ))
+            if results:
+                logger.info(f"{engine_name}: {len(results)} results for '{q[:50]}'")
+                return self._filter_by_credibility(results)
+        except Exception as e:
+            logger.debug(f"{engine_name} failed: {e}")
+        return None
 
     @with_resilience(max_retries=2)
     async def query(self, q: str, limit: int = 10) -> list[UnifiedResult]:
         """Search across engines with automatic fallback."""
         self._ensure_engines()
 
-        # Engine 1: SparkSearch
+        # Engine 1: SparkSearch (paid, best quality)
         if self._spark and self._spark is not False:
-            try:
-                from .spark_search import SearchResult
-                raw = await self._spark.query(q, limit=limit)
-                if raw:
-                    results = []
-                    for r in raw:
-                        if isinstance(r, SearchResult):
-                            results.append(UnifiedResult(
-                                title=r.title, url=r.url,
-                                summary=r.summary, source="spark",
-                            ))
-                        elif hasattr(r, 'title'):
-                            results.append(UnifiedResult(
-                                title=r.title, url=r.url,
-                                summary=getattr(r, 'summary', ''), source="spark",
-                            ))
-                    if results:
-                        logger.info(f"SparkSearch: {len(results)} results for '{q[:50]}'")
-                        return self._filter_by_credibility(results)
-            except Exception as e:
-                logger.debug(f"SparkSearch failed: {e}")
+            result = await self._try_engine(self._spark, "spark", q, limit)
+            if result:
+                return result
 
-        # Engine 2: DDGSearch (fallback)
+        # Engine 2: DuckDuckGo (free, reliable)
         if self._ddg and self._ddg is not False:
-            try:
-                from .ddg_search import DDGResult
-                raw = await self._ddg.query(q, limit=limit)
-                if raw:
-                    results = []
-                    for r in raw:
-                        if isinstance(r, DDGResult):
-                            results.append(UnifiedResult(
-                                title=r.title, url=r.url,
-                                summary=r.summary, source="ddg",
-                            ))
-                        elif hasattr(r, 'title'):
-                            results.append(UnifiedResult(
-                                title=r.title, url=r.url,
-                                summary=getattr(r, 'summary', ''), source="ddg",
-                            ))
-                    if results:
-                        logger.info(f"DDGSearch: {len(results)} results for '{q[:50]}'")
-                        return self._filter_by_credibility(results)
-            except Exception as e:
-                logger.debug(f"DDGSearch failed: {e}")
+            result = await self._try_engine(self._ddg, "ddg", q, limit)
+            if result:
+                return result
+
+        # Engine 3: BingSearch (free, HTML scraping)
+        if self._bing and self._bing is not False:
+            result = await self._try_engine(self._bing, "bing", q, limit)
+            if result:
+                return result
+
+        # Engine 4: SearXNGSearcher (free, meta-engine via public instances)
+        if self._searxng and self._searxng is not False:
+            result = await self._try_engine(self._searxng, "searxng", q, limit)
+            if result:
+                return result
+
+        # Engine 5: WikipediaSearch (free, best for factual/knowledge queries)
+        if self._wiki and self._wiki is not False:
+            result = await self._try_engine(self._wiki, "wiki", q, limit)
+            if result:
+                return result
+
+        # Engine 6: LLMWebSearch (free but unreliable — last resort)
+        if self._llm and self._llm is not False:
+            result = await self._try_engine(self._llm, "llm", q, limit)
+            if result:
+                return result
 
         return []
 
@@ -145,12 +206,16 @@ class UnifiedSearch:
         Falls back to sequential search on error.
         """
         self._ensure_engines()
-        engines = []
+        engine_specs = [
+            ("spark", self._spark, None),
+            ("ddg", self._ddg, None),
+            ("bing", self._bing, None),
+            ("searxng", self._searxng, None),
+            ("wiki", self._wiki, None),
+            ("llm", self._llm, None),
+        ]
 
-        if self._spark and self._spark is not False:
-            engines.append(("spark", self._spark))
-        if self._ddg and self._ddg is not False:
-            engines.append(("ddg", self._ddg))
+        engines = [(n, e) for n, e, _ in engine_specs if e and e is not False]
 
         if not engines:
             return []

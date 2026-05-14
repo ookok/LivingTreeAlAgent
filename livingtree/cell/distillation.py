@@ -98,6 +98,42 @@ class Distillation:
         return result
 
 
+    @staticmethod
+    async def iterative_distillation(prompts: list[str], config: ExpertConfig | None = None,
+                                     cell: Any = None, target_quality: float = 0.80,
+                                     max_rounds: int = 3) -> DistillationResult:
+        cfg = config or ExpertConfig()
+        result = DistillationResult(expert_model=cfg.name)
+        current_prompts = list(prompts)
+        for rnd in range(max_rounds):
+            outputs = []
+            for batch in [current_prompts[i:i+cfg.max_tokens//500] for i in range(0, len(current_prompts), cfg.max_tokens//500)]:
+                if not batch:
+                    continue
+                tasks = [Distillation.query_expert(p, cfg) for p in batch]
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                for r in batch_results:
+                    if not isinstance(r, Exception):
+                        outputs.append(str(r))
+                        result.tokens_generated += len(str(r))
+            if outputs:
+                q = min(1.0, sum(len(str(o)) for o in outputs) / max(len(outputs), 1) / 800)
+                result.quality_score = q
+                result.topics = _extract_topics(outputs)
+            if result.quality_score >= target_quality:
+                break
+            current_prompts = [f"[round {rnd+1} refine] {p}" for p in prompts if p]
+        result.prompts_processed = len(outputs)
+        return result
+
+    @staticmethod
+    def compression_ratio(original_tokens: int, distilled_model_params: int,
+                          expert_model_params: int | None = None) -> dict:
+        return {"token_compression": 1.0 - (distilled_model_params / max(original_tokens, 1)),
+                "model_ratio": distilled_model_params / max(expert_model_params or 1, 1),
+                "ratio": round(distilled_model_params / max(original_tokens, 1), 4)}
+
+
 def _simulated_response(prompt: str, model: str) -> str:
     import hashlib
     h = hashlib.md5(prompt.encode()).hexdigest()[:8]

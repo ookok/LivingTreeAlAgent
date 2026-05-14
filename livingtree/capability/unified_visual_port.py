@@ -508,16 +508,9 @@ class DocumentAdapter(VisualAdapter):
 
     def _extract_pdf(self, path: Path) -> str:
         try:
-            from PyPDF2 import PdfReader
-            reader = PdfReader(str(path))
-            parts = [f"📄 {path.name} ({len(reader.pages)} 页)"]
-            for i, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text:
-                    parts.append(f"--- 第 {i+1} 页 ---\n{text}")
-            return "\n\n".join(parts)
-        except ImportError:
-            return f"[需要 PyPDF2: {path.name}]"
+            from pypdf import PdfReader
+            ...
+            return f"[需要 pypdf: {path.name}]"
         except Exception as e:
             return f"[PDF 错误] {e}"
 

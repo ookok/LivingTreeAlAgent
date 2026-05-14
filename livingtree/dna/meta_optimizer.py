@@ -211,6 +211,40 @@ class MetaOptimizer:
         self._domain = domain
         self._domains_seen.add(domain)
 
+    def introspect_domain(self, recent_queries: list[str] = None) -> dict:
+        """Zakharova introspection: identify current domain from behavior patterns.
+
+        Instead of having the domain passed in externally, the system introspects
+        to identify what domain it's operating in based on conversation history.
+        Maps self-observation to domain classification.
+        """
+        domain_signals = {
+            "code": ["def ", "import ", "class ", "function", "bug", "error", "build", "test"],
+            "analysis": ["analyze", "explain", "why", "compare", "trade", "breakdown"],
+            "creative": ["write", "generate", "story", "poem", "idea", "design"],
+            "decision": ["choose", "recommend", "should", "option", "best", "priority"],
+        }
+        if not recent_queries:
+            return {"domain": self._domain, "method": "fallback", "confidence": 0.3}
+        scores = {}
+        for domain, keywords in domain_signals.items():
+            score = sum(1 for q in recent_queries for kw in keywords if kw in q.lower())
+            scores[domain] = min(1.0, score / max(len(recent_queries), 1))
+        if not scores:
+            return {"domain": self._domain, "method": "no_signals", "confidence": 0.0}
+        best_domain = max(scores, key=scores.get)
+        best_score = scores[best_domain]
+        second_best = sorted(scores.values(), reverse=True)[1] if len(scores) > 1 else 0
+        confidence = best_score - second_best
+        if confidence > 0.2:
+            self.set_domain(best_domain)
+        return {
+            "domain": best_domain if confidence > 0.2 else self._domain,
+            "method": "introspection",
+            "confidence": round(max(0.0, confidence), 3),
+            "score_breakdown": {k: round(v, 3) for k, v in sorted(scores.items(), key=lambda x: -x[1])},
+        }
+
     # ── stats ────────────────────────────────────────────────────
 
     def stats(self) -> dict[str, Any]:

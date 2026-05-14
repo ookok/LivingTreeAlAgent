@@ -174,17 +174,13 @@ class DocumentParser:
 
     async def _extract_pdf_text(self, file_path: str) -> str:
         """提取 PDF 文本（简化版）"""
-        # 实际应使用 PyPDF2 或 pdfplumber
+        # 实际应使用 pypdf 或 pdfplumber
         try:
-            import PyPDF2
-            with open(file_path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
-                text = ""
-                for page in reader.pages:
-                    text += page.extract_text() + "\n"
-                return text
-        except ImportError:
-            return "[PDF解析需要 PyPDF2 库]"
+            import pypdf
+            with open(file_path, 'rb') as f:
+                reader = pypdf.PdfReader(f)
+            ...
+            return "[PDF解析需要 pypdf 库]"
 
     async def _extract_docx_text(self, file_path: str) -> str:
         """提取 Word 文本（简化版）"""

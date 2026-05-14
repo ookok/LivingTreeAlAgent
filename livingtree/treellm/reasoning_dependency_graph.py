@@ -72,27 +72,29 @@ class StepNode:
 
     Analogous to a GPU kernel in Tessera's DDG — has specific resource
     requirements and data dependencies on other nodes.
+
+    v2.4 — MoDA-Enhanced (arXiv:2603.15619): soft_depends_on enables
+    content-dependent routing where a step can partially proceed without
+    all upstream steps fully completing. soft_similarity_threshold
+    controls how similar an upstream result must be to trigger routing.
     """
     step_id: str
     description: str
     resource_type: ResourceType = ResourceType.REASONING
-    estimated_tokens: int = 1000         # Output token estimate
-    estimated_latency_ms: float = 2000.0 # Expected compute time
-    priority: int = 0                    # Higher = more urgent
-    # Dependencies: which step_ids must complete before this one
+    estimated_tokens: int = 1000
+    estimated_latency_ms: float = 2000.0
+    priority: int = 0
     depends_on: list[str] = field(default_factory=list)
-    # Which step_ids depend on this one (reverse edges, auto-computed)
     depended_by: list[str] = field(default_factory=list)
-    # Communication cost: tokens needed from upstream steps
+    soft_depends_on: list[str] = field(default_factory=list)
+    soft_similarity_threshold: float = 0.3
     input_context_tokens: int = 0
-    # Execution state
     status: str = "pending"
     assigned_model: str = ""
     actual_result: str = ""
 
     @property
     def criticality(self) -> float:
-        """How critical is this node to the overall task? (0-1)"""
         return min(1.0, (self.priority * 0.3 + self.estimated_tokens / 5000 * 0.4 +
                          len(self.depended_by) * 0.1 + 0.2))
 
@@ -679,6 +681,98 @@ class ReasoningDependencyGraph:
             return list(PROVIDER_CAPABILITIES.keys())
         except ImportError:
             return ["deepseek-pro", "deepseek-flash", "longcat-flash"]
+
+    # ── MoDA Content-Dependent Routing ────────────────────────────
+
+    def compute_soft_dependencies(
+        self, graph: ReasoningGraph, similarity_threshold: float = 0.3,
+    ) -> dict[str, list[str]]:
+        """MoDA soft dependency detection via content similarity.
+
+        Instead of hard depends_on edges, use content similarity to
+        discover which upstream steps are likely relevant to each
+        downstream step. Steps with similar descriptions are presumed
+        to share information flow even without explicit edges.
+
+        Args:
+            graph: The ReasoningGraph to analyze.
+            similarity_threshold: Minimum word overlap to create a soft edge.
+
+        Returns:
+            Dict mapping step_id → list of soft-dependency step_ids.
+        """
+        soft_edges: dict[str, list[str]] = {}
+        node_list = list(graph.nodes.values())
+        for node in node_list:
+            soft_deps: list[str] = []
+            n_words = set(node.description.lower().split())
+            for other in node_list:
+                if other.step_id == node.step_id:
+                    continue
+                o_words = set(other.description.lower().split())
+                if not n_words or not o_words:
+                    continue
+                intersect = len(n_words & o_words)
+                union = len(n_words | o_words)
+                sim = intersect / max(union, 1)
+                if sim > similarity_threshold:
+                    soft_deps.append(other.step_id)
+            if soft_deps:
+                soft_edges[node.step_id] = soft_deps
+                node.soft_depends_on = soft_deps
+                node.soft_similarity_threshold = similarity_threshold
+        return soft_edges
+
+    def get_depth_routed_context(
+        self, graph: ReasoningGraph, step_id: str, max_tokens: int = 4000,
+    ) -> str:
+        """MoDA depth-aware context routing for a reasoning step.
+
+        Routes upstream results to the current step based on dependency
+        depth: hard dependencies (depends_on) are routed at full weight,
+        soft dependencies (similar content) at reduced weight, leveraging
+        MoDA's principle of content-aware information preservation.
+
+        Args:
+            graph: The ReasoningGraph.
+            step_id: Current step to route context to.
+            max_tokens: Maximum context tokens to include.
+
+        Returns:
+            Routed context string with depth-weighted upstream results.
+        """
+        node = graph.nodes.get(step_id)
+        if not node:
+            return ""
+
+        parts: list[str] = []
+        token_budget = max_tokens
+
+        hard_deps = [graph.nodes[d] for d in node.depends_on if d in graph.nodes]
+        hard_deps.sort(key=lambda n: n.criticality, reverse=True)
+
+        hard_budget = int(token_budget * 0.7)
+        for dep in hard_deps:
+            if hard_budget <= 0:
+                break
+            txt = dep.actual_result or dep.description
+            allocation = min(hard_budget, min(800, len(txt)))
+            parts.append(f"[depth:hard|{dep.step_id}|crit={dep.criticality:.1f}] {txt[:allocation]}")
+            hard_budget -= allocation
+
+        soft_deps = [graph.nodes[d] for d in node.soft_depends_on if d in graph.nodes]
+        soft_deps.sort(key=lambda n: n.criticality, reverse=True)
+
+        soft_budget = int(token_budget * 0.3)
+        for dep in soft_deps:
+            if soft_budget <= 0:
+                break
+            txt = dep.actual_result or dep.description
+            allocation = min(soft_budget, min(400, len(txt)))
+            parts.append(f"[depth:soft|{dep.step_id}] {txt[:allocation]}")
+            soft_budget -= allocation
+
+        return "\n---\n".join(parts) if parts else ""
 
     # ── Query Methods ─────────────────────────────────────────────
 

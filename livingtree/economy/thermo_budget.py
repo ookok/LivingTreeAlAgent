@@ -17,6 +17,12 @@ Intentional PG KL budget cascade (Sharifnassab et al., arXiv:2604.19033):
   This creates a self-regulating cascade: high uncertainty builds exploration
   budget, which gets spent to resolve uncertainty, which reduces entropy.
 
+Discovery Machine (Nature Communications, 2026) integration:
+  - Fowler-Nordheim tunneling escape from frozen budget phases
+  - Active cooling schedule: T(t) = T0 / log(e + t)
+  - Energy barrier estimation: dF = dU - T*dS
+  - Convergence certificate: entropy + temperature + pressure stability
+
 Core analogy:
   - Temperature T → system urgency (how fast we need responses)
   - Entropy S → budget uncertainty (how unpredictable spending is)
@@ -29,11 +35,15 @@ Integration:
     thermo = ThermodynamicBudget(orchestrator)
     decision = thermo.evaluate(task)  # replaces static budget check
     thermo.record_spending(cost)       # update thermal state
+    if thermo.detect_phase_transition() == "frozen":
+        thermo.fowler_nordheim_escape()  # tunnel out of local minimum
+    thermo.active_cooling_schedule()     # drive toward ordered phase
 """
 
 from __future__ import annotations
 
 import math
+import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -125,6 +135,7 @@ class ThermodynamicBudget:
         self._kl_budget_max: float = kl_budget_max
         self._kl_budget_decay: float = kl_budget_decay
         self._kl_budget_history: deque[float] = deque(maxlen=100)
+        self._temp_history: deque[float] = deque(maxlen=20)
 
     # ── Thermal State Update ──
 
@@ -153,6 +164,7 @@ class ThermodynamicBudget:
             # Temperature rises with spending rate
             max_expected = self._daily_budget / 24.0  # hourly expected
             self._state.temperature = min(1.0, avg_spend / max(max_expected, 0.01))
+            self._temp_history.append(self._state.temperature)
 
         # Entropy: spending volatility
         if len(self._spending_velocity) >= 5:
@@ -380,6 +392,103 @@ class ThermodynamicBudget:
             return "critical"
         return "chaotic"
 
+    # ── Active Annealing (Discovery Machine — Fowler-Nordheim) ──
+
+    def fowler_nordheim_escape(self) -> bool:
+        """Fowler-Nordheim tunneling escape when budget phase is frozen.
+
+        When detect_phase_transition() returns "frozen", the system is stuck
+        in a local minimum (no spending, no exploration). F-N tunneling injects
+        controlled thermal energy to escape.
+
+        P(escape) = exp(-dS / T_budget) where dS = 0.3 - entropy (the "energy barrier").
+        Higher entropy deficit = higher barrier = lower escape probability.
+        Higher temperature = more escape attempts.
+
+        Returns True if tunneling occurred (escape from frozen phase).
+        """
+        phase = self.detect_phase_transition()
+        if phase != "frozen":
+            return False
+
+        dS = 0.3 - self._state.entropy  # entropy deficit = barrier height
+        if dS <= 0:
+            return False
+
+        T_budget = max(self._state.temperature, 0.01)
+        p_tunnel = math.exp(-dS / T_budget)
+        if random.random() < p_tunnel:
+            self._state.entropy = 0.35  # jump past barrier
+            self._state.temperature = 0.4  # warm up
+            self._state.pressure = 0.3
+            logger.info(
+                f"Fowler-Nordheim escape: budget phase 'frozen' → tunneled "
+                f"(entropy {self._state.entropy:.3f}, dS={dS:.3f}, "
+                f"p_tunnel={p_tunnel:.3f})"
+            )
+            return True
+        return False
+
+    def active_cooling_schedule(self, target_phase: str = "ordered") -> float:
+        """Actively drive temperature from critical→ordered→stable phases.
+
+        Returns current temperature after applying cooling step.
+        Uses log-decay: T(t) = T0 * cooling_factor / log(e + step_count).
+        """
+        self._cooling_step = getattr(self, '_cooling_step', 0) + 1
+        T = self._state.equilibrium_temp / math.log(math.e + self._cooling_step)
+
+        if target_phase == "ordered" and self._state.temperature > T:
+            self._state.temperature = T
+
+        return self._state.temperature
+
+    def energy_barrier_estimate(self) -> float:
+        """Estimate the free energy barrier to the ordered phase.
+
+        dF = dU - T*dS where dU = pressure change, dS = entropy change.
+        Returns the estimated barrier height.
+        """
+        U_current = self._state.pressure
+        S_current = self._state.entropy
+        T_current = self._state.temperature
+
+        U_ordered = 0.3  # target: stable, moderate pressure
+        S_ordered = 0.2  # target: low uncertainty
+
+        dU = U_ordered - U_current
+        dS = S_ordered - S_current
+        dF = dU - T_current * dS
+        return dF
+
+    def convergence_certificate(self) -> dict[str, bool]:
+        """Check if budget has converged to a stable optimal configuration.
+
+        Converged when:
+          - entropy < 0.1 (low uncertainty — ordered state)
+          - temperature is stable (|dT| < 0.01 over 5 steps)
+          - free energy is near maximum (optimal budget utilization)
+
+        Returns dict with convergence status per criterion.
+        """
+        s = self._state
+        temp_stable = True
+        if len(self._temp_history) >= 5:
+            recent = list(self._temp_history)[-5:]
+            temp_stable = max(recent) - min(recent) < 0.01
+
+        return {
+            "entropy_low": s.entropy < 0.1,
+            "temperature_stable": temp_stable,
+            "pressure_moderate": 0.2 < s.pressure < 0.6,
+            "budget_healthy": s.remaining_budget > 0.0,
+            "phase_ordered": self.detect_phase_transition() in ("ordered", "frozen"),
+            "all_converged": (
+                s.entropy < 0.1 and temp_stable and
+                0.2 < s.pressure < 0.6 and s.remaining_budget > 0.0
+            ),
+        }
+
     # ── Daily Reset ──
 
     def reset_daily(self) -> None:
@@ -435,4 +544,5 @@ def get_thermo_budget(daily_budget: float = 50.0) -> ThermodynamicBudget:
 __all__ = [
     "ThermodynamicBudget", "ThermalState", "ThermoDecision",
     "get_thermo_budget",
+    "AnnealingScheduler", "EnergyLandscape", "TunnelGate",  # re-exported for convenience
 ]

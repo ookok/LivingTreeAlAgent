@@ -8,6 +8,11 @@ Core techniques:
   Real-time dashboard:     幻觉率趋势、按来源分布、高频幻觉模式
   Auto-correction loop:    检测到幻觉 → 触发重新检索 → 重新生成
 
+v2.7 — PALE (AAAI-26): CM Score integration for activation-space detection.
+  PALECMScore provides distribution-level hallucination detection,
+  complementing the n-gram/keyword surface-level approach. When activation
+  signatures are available, CM Score is used as a primary detection gate.
+
 升级现有:
   - detect_hallucination(): 词重叠 → 语义蕴含判定
   - fact_check(): 声明级 → 逐句级
@@ -44,6 +49,7 @@ class SentenceCheck:
     contradicting_evidence: str = ""
     is_hallucination: bool = False
     correction_suggestion: str = ""
+    phi_first_score: float = 0.0
 
 
 @dataclass
@@ -175,22 +181,84 @@ class HallucinationGuard:
     def on_alert(self, callback: callable) -> None:
         self._alert_callbacks.append(callback)
 
+    def check_with_logits(
+        self,
+        generated_text: str,
+        context: str = "",
+        source: str = "",
+        logprobs: list[dict] | None = None,
+    ) -> HallucinationReport:
+        """φ_first增强幻觉检测 — Gate 0 前置 logit 熵门控。
+
+        Gate 0: 计算第一个内容承载 token 的 φ_first 归一化熵。
+        φ_first > 0.7 → 直接标记整句为幻觉（模型生成时已不确定）。
+
+        Args:
+            generated_text: 模型生成的完整文本
+            context: 验证用的上下文/来源文本
+            source: 来源标识
+            logprobs: API 响应中的 logprobs 列表，每项为
+                      {"token": str, "logprob": float, "top_logprobs": [...]}
+        """
+        from ..treellm.logit_confidence import compute_phi_first
+
+        report = HallucinationReport(query="", generated_text=generated_text)
+        sentences = self._split_sentences(generated_text)
+        report.total_sentences = len(sentences)
+        if not sentences:
+            return report
+
+        phi_first = 0.0
+        if logprobs:
+            result = compute_phi_first(logprobs)
+            phi_first = result.phi_first
+
+        context_ngrams = self._extract_ngrams(context) if context else set()
+        context_keywords = self._extract_keywords(context) if context else set()
+
+        for i, sentence in enumerate(sentences):
+            check = self._verify_sentence(
+                sentence, i, context, context_ngrams, context_keywords,
+                phi_first_score=phi_first if i == 0 else 0.0,
+            )
+            report.sentence_checks.append(check)
+            if check.is_hallucination:
+                report.hallucinated_sentences += 1
+
+        if report.total_sentences > 0:
+            report.hallucination_rate = report.hallucinated_sentences / report.total_sentences
+        report.context_coverage = self._compute_coverage(generated_text, context)
+        self._update_stats(report, source)
+        self._check_alerts(report, source)
+        return report
+
     def _verify_sentence(
         self, sentence: str, index: int, context: str,
         context_ngrams: set, context_keywords: set,
+        phi_first_score: float = 0.0,
     ) -> SentenceCheck:
         """单句验证引擎。
 
         判定逻辑:
+          0. φ_first 先验 (Gate 0): 如有logits，首token熵>0.7→直接标幻觉
           1. N-gram 精确匹配 ≥30% → SUPPORTED
           2. 关键词重叠 ≥50% → SUPPORTED
           3. 无可重叠 → UNSUPPORTED (幻觉)
           4. 存在矛盾数字/名称 → CONTRADICTED (幻觉)
         """
-        check = SentenceCheck(sentence=sentence, index=index)
+        check = SentenceCheck(sentence=sentence, index=index,
+                              phi_first_score=phi_first_score)
 
         if not sentence.strip() or len(sentence) < 10:
             check.verdict = HallucinationVerdict.AMBIGUOUS
+            return check
+
+        # Gate 0: φ_first — first-token logit entropy early warning
+        if phi_first_score > 0.7:
+            check.verdict = HallucinationVerdict.UNSUPPORTED
+            check.is_hallucination = True
+            check.confidence = phi_first_score
+            check.correction_suggestion = f"[φ_first={phi_first_score:.3f} — high first-token entropy]"
             return check
 
         sent_ngrams = self._extract_ngrams(sentence)
@@ -321,3 +389,94 @@ class HallucinationGuard:
         if not re.search(r'[\u4e00-\u9fff]', sentence):
             return "non_chinese_output"
         return "unsupported_claim"
+
+    # ── PALE CM Score Integration ──────────────────────────────────
+
+    def check_with_cm_score(
+        self,
+        generated_text: str,
+        context: str = "",
+        source: str = "",
+        cm_scorer: Any = None,
+    ) -> HallucinationReport:
+        """Enhanced hallucination check with PALE CM Score detection.
+
+        Two-layer detection:
+          1. CM Score (activation-space): when cm_scorer is fitted, use
+             Mahalanobis distance to truthful/hallucinated distributions
+             as the primary detection mechanism.
+          2. Text heuristic (surface-level): traditional n-gram/keyword
+             overlap as fallback when activation signatures unavailable.
+
+        Args:
+            cm_scorer: PALECMScorer instance (optional). If fitted, CM
+                       Score becomes the primary gate before text heuristics.
+        """
+        if cm_scorer is not None and cm_scorer.is_fitted():
+            return self._check_with_cm_score(
+                generated_text, context, source, cm_scorer
+            )
+        return self.check_generation(generated_text, context, source)
+
+    def _check_with_cm_score(
+        self, generated_text: str, context: str,
+        source: str, cm_scorer: Any,
+    ) -> HallucinationReport:
+        from ..treellm.pale_detector import extract_text_activation
+
+        report = HallucinationReport(query="", generated_text=generated_text)
+        sentences = self._split_sentences(generated_text)
+        report.total_sentences = len(sentences)
+        if not sentences:
+            return report
+
+        context_ngrams = self._extract_ngrams(context) if context else set()
+        context_keywords = self._extract_keywords(context) if context else set()
+
+        for i, sentence in enumerate(sentences):
+            sig = extract_text_activation(sentence)
+            cm_result = cm_scorer.classify(sig)
+            if cm_result.is_hallucination and cm_result.confidence > 0.3:
+                check = SentenceCheck(
+                    sentence=sentence, index=i,
+                    verdict=HallucinationVerdict.UNSUPPORTED,
+                    confidence=cm_result.confidence,
+                    is_hallucination=True,
+                    correction_suggestion=f"[CM Score={cm_result.cm_score:.3f}]",
+                )
+            else:
+                check = self._verify_sentence(
+                    sentence, i, context, context_ngrams, context_keywords,
+                )
+            report.sentence_checks.append(check)
+            if check.is_hallucination:
+                report.hallucinated_sentences += 1
+
+        if report.total_sentences > 0:
+            report.hallucination_rate = report.hallucinated_sentences / report.total_sentences
+        report.context_coverage = self._compute_coverage(generated_text, context)
+        self._update_stats(report, source)
+        self._check_alerts(report, source)
+        return report
+
+    def train_cm_scorer(
+        self,
+        truthful_texts: list[str],
+        hallucinated_texts: list[str],
+        cm_scorer: Any,
+    ) -> Any:
+        """Fit CM Scorer on contrastive pairs for enhanced detection.
+
+        Extracts activation signatures from both truthful and hallucinated
+        text samples, then fits the shrinkage covariance estimator.
+        """
+        from ..treellm.pale_detector import extract_text_activation
+
+        t_sigs = [extract_text_activation(t) for t in truthful_texts]
+        h_sigs = [extract_text_activation(h) for h in hallucinated_texts]
+        cm_scorer.fit(t_sigs, h_sigs)
+        logger.info(
+            f"HallucinationGuard: CM Scorer trained on "
+            f"{len(t_sigs)} truthful + {len(h_sigs)} hallucinated"
+        )
+        return cm_scorer

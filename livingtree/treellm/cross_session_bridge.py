@@ -4,12 +4,17 @@ When a session ends, durable memories (preferences, pending tasks, key decisions
 are extracted and stored. Next session, relevant memories are injected into the
 initial context so the system "remembers" across sessions.
 
+v2.5 Opus 4.7: Added relevance-weighted injection — memories scored against current
+query by semantic overlap. High-relevance memories get more context budget (higher
+kv_weight), low-relevance memories are suppressed. Replaces uniform prefix injection.
+
 Memories decay with time: older memories fade out after 7 days.
 
 Integration:
     bridge = get_cross_session_bridge()
     await bridge.extract_memories(session_id, messages)  # on session end
-    context = bridge.inject_context(user_id, query)       # on session start
+    context = bridge.inject_weighted_context(user_id, query)       # Opus 4.7 weighted
+    context = bridge.inject_context(user_id, query)               # legacy uniform
 """
 
 from __future__ import annotations
@@ -76,16 +81,48 @@ class CrossSessionBridge:
         return extracted
 
     def inject_context(self, user_id: str, current_query: str) -> str:
-        """Inject relevant past memories into the current query context."""
-        past = self._get_recent(user_id, limit=5)
+        """Inject relevant past memories into the current query context (legacy)."""
+        return self.inject_weighted_context(user_id, current_query)
+
+    def inject_weighted_context(self, user_id: str, current_query: str,
+                                max_budget_chars: int = 400) -> str:
+        """Opus 4.7: Relevance-weighted memory injection.
+
+        Scores each memory against the current query for semantic relevance.
+        High-relevance memories (>0.5) get full text; medium (0.25-0.5) get
+        half budget; low (<0.25) are suppressed.
+        Returns formatted context string with memories + current query.
+        """
+        past = self._get_recent(user_id, limit=8)
         if not past:
             return current_query
 
-        lines = []
+        scored = []
+        q_words = set(current_query.lower().split())
         for days_ago, mtype, text, ts in past:
+            m_words = set(text.lower().split())
+            overlap = len(q_words & m_words) / max(len(q_words | m_words), 1)
+            recency_decay = max(0.0, 1.0 - days_ago / MEMORY_TTL_DAYS)
+            kv_weight = overlap * 0.6 + recency_decay * 0.4
+            scored.append((kv_weight, days_ago, mtype, text, ts))
+
+        scored.sort(key=lambda x: -x[0])
+
+        lines = []
+        budget_used = 0
+        for kv_weight, days_ago, mtype, text, ts in scored:
+            if kv_weight < 0.15 or budget_used >= max_budget_chars:
+                break
             icon = {"decision": "决定", "preference": "偏好", "pending": "待处理",
                     "user_preference": "用户偏好"}.get(mtype, "记忆")
-            lines.append(f"- [{days_ago}天前] [{icon}] {text[:100]}")
+            if kv_weight > 0.5:
+                snippet = text[:120]
+            elif kv_weight > 0.25:
+                snippet = text[:60]
+            else:
+                snippet = text[:30]
+            lines.append(f"- [{days_ago}天前] [{icon}] w={kv_weight:.2f} {snippet}")
+            budget_used += len(snippet)
 
         if lines:
             context = "之前的对话记忆:\n" + "\n".join(lines)

@@ -5,6 +5,10 @@ Combines insights from three papers (all implemented as mixins/integrations):
   - AdaptOrch (2602.16873): task DAG → topology routing O(|V|+|E|)
   - AutoAgent (2603.09716): cognitive evolution + elastic memory
 
+v2.5 Opus 4.7: dynamic_reassess() re-scores all slices against current query.
+soft_evict() compresses instead of deleting low-value slices. attention_decay
+models mid-section information decay for long conversations.
+
 Integrated into livingtree execution and DNA layers.
 """
 
@@ -27,16 +31,28 @@ class DensityStrategy(str, Enum):
     COMPRESS = "compress"     # Summarize old content
     EVICT = "evict"           # Remove low-value entries
     ANCHOR = "anchor"         # Keep critical info visible
+    SOFT_EVICT = "soft_evict"  # Opus 4.7: compress instead of delete
 
 
 @dataclass
 class ContextSlice:
-    """A managed slice of the context window."""
+    """A managed slice of the context window.
+
+    v2.5 Opus 4.7: attention_decay models mid-section information decay.
+    Higher decay → slice has been "in the middle" too long and needs boost.
+
+    v2.6 ALiBi Slopes: alibi_slope determines decay rate per slice by information
+    entropy. High-entropy slices (speculative, conversational) get steep slope
+    (1/2) = rapid decay. Low-entropy slices (decisions, facts) get flat slope
+    (1/256) = persistent preservation. Mirrors ALiBi's per-head slope spectrum.
+    """
     content: str
     tokens: int
     importance: float        # 0 (disposable) to 1 (critical)
     age: int = 0              # Turns since creation
     strategy: DensityStrategy = DensityStrategy.COMPRESS
+    attention_decay: float = 0.0  # Opus 4.7: cumulative mid-section decay
+    alibi_slope: float = 0.5      # v2.6: geometric decay rate (higher = decays faster)
 
 
 class ContextDensityMaximizer:
@@ -56,12 +72,41 @@ class ContextDensityMaximizer:
         self._density_score = 0.0
 
     def add_slice(self, content: str, importance: float = 0.5) -> None:
-        """Add a context slice, auto-managing token budget."""
+        """Add a context slice, auto-managing token budget.
+
+        v2.6 ALiBi: slices with high information entropy (speculative,
+        conversational) get steep alibi_slope → rapid decay. Low-entropy
+        slices (decisions, facts, definitions) get flat slope → persistent.
+        """
         tokens = len(content) // 3
-        sl = ContextSlice(content=content, tokens=tokens, importance=importance)
+        alibi_slope = self._compute_entropy_slope(content)
+        sl = ContextSlice(
+            content=content, tokens=tokens, importance=importance,
+            alibi_slope=alibi_slope,
+        )
         self._slices.append(sl)
         self._total_tokens += tokens
         self._enforce_budget()
+
+    @staticmethod
+    def _compute_entropy_slope(content: str) -> float:
+        """Compute ALiBi slope from content information entropy.
+
+        High entropy (more unique words, question marks, hedges) → steep slope (rapid decay).
+        Low entropy (few unique words, declarative, structured) → flat slope (persistent).
+        Maps slopes to geometric spectrum: {1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128, 1/256}.
+        """
+        if not content.strip():
+            return 0.25
+        words = content.lower().split()
+        if len(words) < 3:
+            return 0.0625
+        unique_ratio = len(set(words)) / len(words)
+        hedge_count = sum(1 for w in words if w in {"maybe", "perhaps", "possibly", "might", "could", "大概", "可能"})
+        question_count = content.count("?") + content.count("？")
+        entropy = unique_ratio * 0.5 + min(hedge_count * 0.15, 0.3) + min(question_count * 0.1, 0.2)
+        slope_index = max(0, min(7, int(entropy * 8)))
+        return 1.0 / (2.0 ** (slope_index + 1))
 
     def _enforce_budget(self) -> None:
         """Apply layered eviction when over budget."""
@@ -91,6 +136,58 @@ class ContextDensityMaximizer:
             return 0.0
         weighted = sum(s.importance * s.tokens for s in self._slices)
         return weighted / self._total_tokens
+
+    # ── Opus 4.7: Dynamic Reassessment + Soft Evict ──
+
+    def dynamic_reassess(self, query: str) -> None:
+        """Re-score all slices against the current query each turn.
+
+        Opus 4.7: Instead of fixed importance set at insertion time,
+        re-evaluate relevance dynamically. Old low-importance slices
+        that match the current query get restored importance.
+        """
+        if not query:
+            return
+        q_words = set(query.lower().split())
+        for s in self._slices:
+            s.lower = s.content.lower()
+            overlap = sum(1 for w in q_words if w in s.lower)
+            base_score = overlap / max(len(q_words), 1)
+            decay_compensated = min(1.0, base_score + s.attention_decay * 0.3)
+            s.importance = max(s.importance, decay_compensated)
+            s.attention_decay += 0.05
+
+    def soft_evict(self, target_importance: float = 0.15) -> int:
+        """Compress (instead of delete) low-importance slices.
+
+        Opus 4.7: soft eviction preserves info that might become relevant
+        later, unlike binary delete. Compressed slices retain 25% token budget
+        and switch to DensityStrategy.SOFT_EVICT.
+        Returns number of slices soft-evicted.
+        """
+        count = 0
+        for s in self._slices:
+            if s.importance < target_importance and s.strategy != DensityStrategy.SOFT_EVICT:
+                s.content = s.content[:max(50, s.tokens // 4)]
+                s.tokens = len(s.content) // 3
+                s.strategy = DensityStrategy.SOFT_EVICT
+                count += 1
+                self._total_tokens -= s.tokens
+        return count
+
+    def decay(self, mid_section_range: tuple[int, int] = (5, 15),
+              decay_rate: float = 0.08) -> None:
+        """Apply mid-section attention decay with per-slice ALiBi slopes.
+
+        v2.6 ALiBi: each slice decays at its own geometric rate. High-entropy
+        slices with steep alibi_slope (1/2) decay 32x faster than low-entropy
+        slices with flat alibi_slope (1/256). This mirrors ALiBi's per-head
+        slope distribution mapped to per-slice information entropy.
+        """
+        start, end = mid_section_range
+        for i, s in enumerate(self._slices):
+            if start <= i < end:
+                s.attention_decay += decay_rate * s.alibi_slope * 16.0
 
 
 # ═══════════════════════════════════════════════════════

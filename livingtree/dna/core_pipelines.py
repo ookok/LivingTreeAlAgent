@@ -14,9 +14,9 @@ Both pipelines leverage ALL existing organs:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
-import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from ..treellm.unified_exec import run, git, gh
 
 
 # ═══════════════════════════════════════════════════════
@@ -111,15 +112,15 @@ class CodePipeline:
         # Step 5: TEST — run test suite
         if task.test_command:
             result.tests_ran = True
-            result.tests_passed = self._run_tests(task.test_command)
+            result.tests_passed = await self._run_tests(task.test_command)
 
         # Step 6: COMMIT — git commit if tests pass
         if result.tests_passed and task.auto_commit and result.files_changed:
-            result.committed = self._git_commit(task)
+            result.committed = await self._git_commit(task)
 
         # Step 7: PR — create pull request
         if result.committed and task.create_pr:
-            result.pr_url = self._create_pr(task)
+            result.pr_url = await self._create_pr(task)
 
         result.duration_ms = (time.time() - t0) * 1000
         self._history.append(result)
@@ -214,39 +215,32 @@ class CodePipeline:
             logger.warning(f"CodePipeline: failed to apply change: {e}")
             return False
 
-    def _run_tests(self, command: str) -> bool:
+    async def _run_tests(self, command: str) -> bool:
         """Run test suite."""
         try:
-            result = subprocess.run(
-                command.split(), capture_output=True, text=True, timeout=120,
-                cwd=str(self.root),
-            )
-            return "failed" not in result.stdout and result.returncode == 0
+            result = await run(
+                command, timeout=120, cwd=str(self.root))
+            return "failed" not in result.stdout and result.exit_code == 0
         except Exception:
             return False
 
-    def _git_commit(self, task: CodeTask) -> bool:
+    async def _git_commit(self, task: CodeTask) -> bool:
         """Commit changes to git."""
         try:
-            subprocess.run(["git", "add", "-A"], cwd=str(self.root), timeout=10)
-            result = subprocess.run(
-                ["git", "commit", "-m", task.description[:72]],
-                cwd=str(self.root), capture_output=True, text=True, timeout=10,
-            )
-            return result.returncode == 0
+            await git("add -A")
+            result = await git(
+                f"commit -m \"{task.description[:72]}\"")
+            return result.exit_code == 0
         except Exception:
             return False
 
-    def _create_pr(self, task: CodeTask) -> str:
+    async def _create_pr(self, task: CodeTask) -> str:
         """Create a pull request via GitHub CLI."""
         try:
-            result = subprocess.run(
-                ["gh", "pr", "create", "--title", task.pr_title or task.description[:72],
-                 "--body", task.pr_body or "Automated PR by LivingTree CodePipeline"],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                # Extract PR URL from output
+            result = await gh(
+                f"pr create --title \"{task.pr_title or task.description[:72]}\" "
+                f"--body \"{task.pr_body or 'Automated PR by LivingTree CodePipeline'}\"")
+            if result.exit_code == 0:
                 for line in result.stdout.split("\n"):
                     if "github.com" in line and "/pull/" in line:
                         return line.strip()
@@ -354,7 +348,7 @@ class DocPipeline:
 
         # Step 5: CHANGELOG — auto-generate from git log
         if task.include_changelog:
-            changelog = self._generate_changelog()
+            changelog = await self._generate_changelog()
             if changelog:
                 for fmt in task.output_formats:
                     artifact = self._render_and_export("changelog", fmt, changelog)
@@ -456,14 +450,10 @@ class DocPipeline:
         lines.append("```")
         return "\n".join(lines)
 
-    def _generate_changelog(self) -> str:
+    async def _generate_changelog(self) -> str:
         """Auto-generate changelog from git log."""
         try:
-            result = subprocess.run(
-                ["git", "log", "--oneline", "-30"],
-                capture_output=True, text=True, timeout=10,
-                cwd=str(self.root),
-            )
+            result = await git("log --oneline -30")
             commits = result.stdout.strip().split("\n")
             lines = [
                 "# Changelog",

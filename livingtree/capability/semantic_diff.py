@@ -105,19 +105,33 @@ class SemanticDiff:
 
     def _get_diff(self, target: str = "", max_lines: int = 500, filepath: str = "") -> str:
         """Run git diff and return output."""
-        cmd = ["git", "diff"]
+        import asyncio
+        cmd_parts = ["diff"]
         if target:
-            cmd.append(target)
+            cmd_parts.append(target)
         if filepath:
-            cmd.extend(["--", filepath])
+            cmd_parts.extend(["--", filepath])
+        args = " ".join(cmd_parts)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
-                                    encoding="utf-8", errors="replace")
-            lines = result.stdout.splitlines()
+            try:
+                from ..treellm.unified_exec import git
+                result = asyncio.run(git(args, timeout=15))
+                diff_output = result.stdout
+            except ImportError:
+                cmd = ["git", "diff"]
+                if target:
+                    cmd.append(target)
+                if filepath:
+                    cmd.extend(["--", filepath])
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
+                                        encoding="utf-8", errors="replace")
+                diff_output = result.stdout
+
+            lines = diff_output.splitlines()
             if len(lines) > max_lines:
                 return "\n".join(lines[:max_lines]) + f"\n... ({len(lines) - max_lines} more lines)"
-            return result.stdout
+            return diff_output
         except Exception as e:
             return str(e)
 

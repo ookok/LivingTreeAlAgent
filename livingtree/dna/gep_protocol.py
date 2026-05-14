@@ -6,10 +6,10 @@ Provides Genes, Capsules, and EvolutionEvents for reproducible self-evolution.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
-import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+from ..treellm.unified_exec import run
 
 
 _VALID_COMMAND_PREFIXES = {"node", "npm", "npx"}
@@ -235,24 +236,14 @@ class GEPProtocol:
         logger.info(f"GEP: validating gene {getattr(gene, 'gene_id', '?')}: {cmd[:100]}")
 
         try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=str(wd),
-                capture_output=True,
-                text=True,
-                timeout=180,
-                env={**os.environ, "GEP_VALIDATING": "1"},
-            )
-            passed = result.returncode == 0
+            result = asyncio.run(run(cmd, timeout=180, cwd=str(wd)))
+            passed = result.exit_code == 0
             output = (
                 result.stdout.strip()[:2000]
                 or result.stderr.strip()[:2000]
                 or "(no output)"
             )
             return passed, output
-        except subprocess.TimeoutExpired:
-            return False, "timeout: validation exceeded 180s"
         except Exception as e:
             return False, f"exception: {e}"
 

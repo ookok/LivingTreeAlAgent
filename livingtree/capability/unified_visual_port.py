@@ -716,19 +716,26 @@ class DiagramAdapter(VisualAdapter):
 
     def _render_mermaid(self, source: str) -> Optional[bytes]:
         """Render via mmdc CLI if available, else no image."""
+        import asyncio
         try:
-            import subprocess
             import tempfile
             with tempfile.NamedTemporaryFile(suffix=".mmd", mode="w", delete=False,
                                              encoding="utf-8") as f:
                 f.write(source)
                 tmp_in = f.name
             tmp_out = tmp_in.replace(".mmd", ".png")
-            result = subprocess.run(
-                ["mmdc", "-i", tmp_in, "-o", tmp_out, "-b", "transparent"],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode == 0 and os.path.exists(tmp_out):
+            try:
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run(f"mmdc -i {tmp_in} -o {tmp_out} -b transparent", timeout=15))
+                exit_code = result.exit_code
+            except ImportError:
+                import subprocess
+                result = subprocess.run(
+                    ["mmdc", "-i", tmp_in, "-o", tmp_out, "-b", "transparent"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                exit_code = result.returncode
+            if exit_code == 0 and os.path.exists(tmp_out):
                 data = Path(tmp_out).read_bytes()
                 Path(tmp_in).unlink(missing_ok=True)
                 Path(tmp_out).unlink(missing_ok=True)

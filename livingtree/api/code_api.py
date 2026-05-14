@@ -457,11 +457,19 @@ def setup_code_routes(app: FastAPI) -> None:
         if (proj_dir / ".git").exists():
             # Git pull
             try:
-                result = subprocess.run(
-                    ["git", "pull", "origin", proj.get("github_branch", "main")],
-                    cwd=str(proj_dir), capture_output=True, text=True, timeout=60,
-                )
-                logger.info(f"Git pull {name}: {result.stdout[:200]}")
+                try:
+                    from livingtree.treellm.unified_exec import git
+                    result = await git(f"pull origin {proj.get('github_branch', 'main')}", timeout=60)
+                    stdout = result.stdout
+                    exit_code = result.exit_code
+                except ImportError:
+                    result = subprocess.run(
+                        ["git", "pull", "origin", proj.get("github_branch", "main")],
+                        cwd=str(proj_dir), capture_output=True, text=True, timeout=60,
+                    )
+                    stdout = result.stdout
+                    exit_code = result.returncode
+                logger.info(f"Git pull {name}: {stdout[:200]}")
                 projects = _load_projects()
                 for p in projects:
                     if p["name"] == name and p["owner"] == proj["owner"]:
@@ -471,7 +479,7 @@ def setup_code_routes(app: FastAPI) -> None:
                 log_operation(user_id, user.get("name", ""), "project.sync",
                               project=name, details=f"Git 同步项目 '{name}'")
                 _remember_bg(user_id, f"Git 同步了项目 '{name}'，拉取了最新代码", name)
-                return {"ok": True, "output": result.stdout}
+                return {"ok": True, "output": stdout}
             except subprocess.TimeoutExpired:
                 raise HTTPException(status_code=504, detail="Git 同步超时")
             except Exception as e:

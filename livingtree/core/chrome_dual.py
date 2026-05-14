@@ -15,7 +15,7 @@ import asyncio
 import json as _json
 import os
 import shutil
-import subprocess
+import subprocess  # Popen for long-running Node.js MCP subprocess (unified_exec.run doesn't support pipes/lifecycle)
 from pathlib import Path
 from typing import Any, Optional
 

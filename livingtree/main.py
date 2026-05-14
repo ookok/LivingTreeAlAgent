@@ -146,11 +146,18 @@ def _svc_start():
 
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     log = open(LOG_FILE, "a")
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "livingtree", "web"],
-        stdout=log, stderr=log,
-        start_new_session=True,
-    )
+    try:
+        from livingtree.treellm.unified_exec import run
+        import asyncio
+        # unified_exec.run doesn't support Popen semantics for daemon start,
+        # fall back to subprocess.Popen for detached long-running processes
+        raise ImportError("Force Popen for daemon")
+    except ImportError:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "livingtree", "web"],
+            stdout=log, stderr=log,
+            start_new_session=True,
+        )
     Path(PID_FILE).write_text(str(proc.pid))
     print(f"LivingTree started (PID: {proc.pid})")
     print(f"  Web UI: http://localhost:8100/tree/living")
@@ -168,7 +175,12 @@ def _svc_stop():
         if os.name == "posix":
             os.kill(pid, 15)
         else:
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            import asyncio
+            try:
+                from livingtree.treellm.unified_exec import run
+                asyncio.run(run(f"taskkill /PID {pid} /F", timeout=5))
+            except ImportError:
+                subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
         print(f"LivingTree stopped (PID: {pid})")
     except Exception as e:
         print(f"Failed to stop: {e}")
@@ -226,8 +238,14 @@ def _is_running(pid: int) -> bool:
         if os.name == "posix":
             os.kill(pid, 0)
         else:
-            result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True)
-            return str(pid) in result.stdout
+            import asyncio
+            try:
+                from livingtree.treellm.unified_exec import run
+                result = asyncio.run(run(f"tasklist /FI \"PID eq {pid}\"", timeout=5))
+                return str(pid) in result.stdout
+            except ImportError:
+                result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True)
+                return str(pid) in result.stdout
         return True
     except Exception:
         return False

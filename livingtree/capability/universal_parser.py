@@ -297,9 +297,15 @@ class UniversalFileParser:
         return self._parse_dxf(path)
 
     def _parse_dwg_cli(self, path: str) -> dict:
+        import asyncio
         try:
-            r = subprocess.run(["dwgread", path], capture_output=True, text=True, timeout=30)
-            return {"text": r.stdout[:10000]} if r.returncode == 0 else {}
+            try:
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run(f"dwgread {path}", timeout=30))
+                return {"text": result.stdout[:10000]} if result.success else {}
+            except ImportError:
+                r = subprocess.run(["dwgread", path], capture_output=True, text=True, timeout=30)
+                return {"text": r.stdout[:10000]} if r.returncode == 0 else {}
         except Exception:
             return {}
 
@@ -474,17 +480,28 @@ class UniversalFileParser:
 
     def _parse_mdb(self, path: str) -> dict:
         # Use mdbtools CLI if available
+        import asyncio
         try:
-            tables_out = subprocess.run(["mdb-tables", "-1", path], capture_output=True, text=True, timeout=10)
-            tables = [t.strip() for t in tables_out.stdout.splitlines() if t.strip()]
+            try:
+                from ..treellm.unified_exec import run
+                tables_result = asyncio.run(run(f"mdb-tables -1 {path}", timeout=10))
+                tables = [t.strip() for t in tables_result.stdout.splitlines() if t.strip()]
+            except ImportError:
+                tables_out = subprocess.run(["mdb-tables", "-1", path], capture_output=True, text=True, timeout=10)
+                tables = [t.strip() for t in tables_out.stdout.splitlines() if t.strip()]
             tables_data = []
             for t in tables[:10]:
                 try:
-                    r = subprocess.run(["mdb-export", path, t], capture_output=True, text=True, timeout=10)
-                    lines = r.stdout.splitlines()
-                    if lines:
-                        headers = lines[0].split(",") if lines else []
-                        rows = [l.split(",") for l in lines[1:50]]
+                    try:
+                        from ..treellm.unified_exec import run
+                        export_result = asyncio.run(run(f"mdb-export {path} {t}", timeout=10))
+                        export_lines = export_result.stdout.splitlines()
+                    except ImportError:
+                        r = subprocess.run(["mdb-export", path, t], capture_output=True, text=True, timeout=10)
+                        export_lines = r.stdout.splitlines()
+                    if export_lines:
+                        headers = export_lines[0].split(",") if export_lines else []
+                        rows = [l.split(",") for l in export_lines[1:50]]
                         tables_data.append({"table": t, "headers": headers, "rows": rows})
                 except Exception:
                     pass
@@ -643,19 +660,28 @@ class UniversalFileParser:
         try:
             parts = parser_def.install_cmd.split()
             if parts[0] == "pip":
-                proc = await asyncio.create_subprocess_exec(
-                    sys.executable, "-m", "pip", "install", *parts[2:],
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                )
-                await asyncio.wait_for(proc.communicate(), timeout=60)
-                return proc.returncode == 0
+                try:
+                    from ..treellm.unified_exec import pip_install
+                    return await pip_install(" ".join(parts[2:]), timeout=60)
+                except ImportError:
+                    proc = await asyncio.create_subprocess_exec(
+                        sys.executable, "-m", "pip", "install", *parts[2:],
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    )
+                    await asyncio.wait_for(proc.communicate(), timeout=60)
+                    return proc.returncode == 0
             elif parts[0] == "apt-get":
-                proc = await asyncio.create_subprocess_exec(
-                    "sudo", *parts,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                )
-                await asyncio.wait_for(proc.communicate(), timeout=120)
-                return proc.returncode == 0
+                try:
+                    from ..treellm.unified_exec import run
+                    result = await run(" ".join(parts), timeout=120)
+                    return result.success
+                except ImportError:
+                    proc = await asyncio.create_subprocess_exec(
+                        "sudo", *parts,
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    )
+                    await asyncio.wait_for(proc.communicate(), timeout=120)
+                    return proc.returncode == 0
         except Exception:
             pass
         return False

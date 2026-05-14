@@ -217,14 +217,23 @@ class ServiceDiscovery:
 
     def _generate_ca_openssl(self) -> bool:
         """Fallback CA generation via OpenSSL CLI."""
+        import asyncio
         try:
             subj = f"/C=CN/O=LivingTree/CN=LivingTree {TLD}"
-            subprocess.run([
-                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-                "-keyout", str(CA_KEY), "-out", str(CA_CERT),
-                "-days", "3650", "-subj", subj,
-            ], check=True, capture_output=True, timeout=30)
-            return True
+            try:
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run(
+                    f"openssl req -x509 -newkey rsa:2048 -nodes "
+                    f"-keyout {CA_KEY} -out {CA_CERT} -days 3650 -subj \"{subj}\"",
+                    timeout=30))
+                return result.success
+            except ImportError:
+                subprocess.run([
+                    "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                    "-keyout", str(CA_KEY), "-out", str(CA_CERT),
+                    "-days", "3650", "-subj", subj,
+                ], check=True, capture_output=True, timeout=30)
+                return True
         except Exception as e:
             logger.warning(f"CA generation failed: {e}")
             return False
@@ -287,26 +296,44 @@ class ServiceDiscovery:
     def _trust_ca(self):
         """Add CA to system trust store."""
         system = platform.system()
+        import asyncio
 
         try:
             if system == "Windows":
-                subprocess.run([
-                    "certutil", "-addstore", "-f", "Root", str(CA_CERT),
-                ], check=True, capture_output=True, timeout=10)
-                logger.info("CA trusted (Windows certutil)")
+                try:
+                    from ..treellm.unified_exec import run
+                    result = asyncio.run(run(
+                        f"certutil -addstore -f Root \"{CA_CERT}\"", timeout=10))
+                    if result.success:
+                        logger.info("CA trusted (Windows certutil)")
+                except ImportError:
+                    subprocess.run([
+                        "certutil", "-addstore", "-f", "Root", str(CA_CERT),
+                    ], check=True, capture_output=True, timeout=10)
+                    logger.info("CA trusted (Windows certutil)")
 
             elif system == "Darwin":
-                subprocess.run([
-                    "security", "add-trusted-cert", "-d", "-p", "ssl",
-                    "-k", "/Library/Keychains/System.keychain", str(CA_CERT),
-                ], check=True, capture_output=True, timeout=10)
+                try:
+                    from ..treellm.unified_exec import run
+                    result = asyncio.run(run(
+                        f"security add-trusted-cert -d -p ssl "
+                        f"-k /Library/Keychains/System.keychain \"{CA_CERT}\"", timeout=10))
+                except ImportError:
+                    subprocess.run([
+                        "security", "add-trusted-cert", "-d", "-p", "ssl",
+                        "-k", "/Library/Keychains/System.keychain", str(CA_CERT),
+                    ], check=True, capture_output=True, timeout=10)
                 logger.info("CA trusted (macOS)")
 
             elif system == "Linux":
                 dest = Path("/usr/local/share/ca-certificates/livingtree-ca.crt")
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                CA_CERT.copy(dest)
-                subprocess.run(["update-ca-certificates"], capture_output=True, timeout=10)
+                shutil.copy2(CA_CERT, dest)
+                try:
+                    from ..treellm.unified_exec import run
+                    asyncio.run(run("update-ca-certificates", timeout=10))
+                except ImportError:
+                    subprocess.run(["update-ca-certificates"], capture_output=True, timeout=10)
                 # Also try distro-specific paths
                 for distro_path in [
                     "/etc/pki/ca-trust/source/anchors/",
@@ -315,7 +342,11 @@ class ServiceDiscovery:
                     dp = Path(distro_path)
                     if dp.exists():
                         shutil.copy2(CA_CERT, dp / "livingtree-ca.crt")
-                        subprocess.run(["update-ca-trust"], capture_output=True, timeout=10)
+                        try:
+                            from ..treellm.unified_exec import run
+                            asyncio.run(run("update-ca-trust", timeout=10))
+                        except ImportError:
+                            subprocess.run(["update-ca-trust"], capture_output=True, timeout=10)
                         break
                 logger.info("CA trusted (Linux)")
 

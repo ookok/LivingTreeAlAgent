@@ -86,18 +86,28 @@ if __name__ == '__main__':
             input_file.write_text(json.dumps(input_data))
 
             # Execute runner in a fresh Python process for isolation
-            result = subprocess.run(
-                [sys.executable, str(runner_file)],
-                cwd=tmp_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                logger.error("Skill execution failed: %s", result.stderr)
-                return {"error": result.stderr.strip()}
-            output = result.stdout.strip()
+            try:
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run(f"{sys.executable} {runner_file}", timeout=30, cwd=tmp_dir))
+                exit_code = result.exit_code
+                stdout = result.stdout
+                stderr = result.stderr
+            except ImportError:
+                result = subprocess.run(
+                    [sys.executable, str(runner_file)],
+                    cwd=tmp_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=30,
+                )
+                exit_code = result.returncode
+                stdout = result.stdout.strip()
+                stderr = result.stderr.strip()
+            if exit_code != 0:
+                logger.error("Skill execution failed: %s", stderr)
+                return {"error": stderr[:500]}
+            output = stdout.strip() if isinstance(stdout, str) else stdout
             try:
                 return json.loads(output) if output else None
             except json.JSONDecodeError:

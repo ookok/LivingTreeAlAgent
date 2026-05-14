@@ -281,17 +281,25 @@ class MossTTSEngine:
 
     async def _synth_binary(self, text: str, voice: str) -> bytes:
         try:
-            cmd = [
-                self._binary_path, "--model", str(self._gguf_path.resolve()),
-                "--text", text, "--voice", voice, "--output", "-",
-            ]
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-            if proc.returncode == 0 and stdout:
-                return stdout
-            logger.debug(f"TTS binary: {stderr.decode()[:200]}")
+            try:
+                from ..treellm.unified_exec import run
+                cmd = f"{self._binary_path} --model {str(self._gguf_path.resolve())} --text '{text}' --voice {voice} --output -"
+                result = await run(cmd, timeout=30)
+                if result.success and result.stdout:
+                    return result.stdout.encode()
+                logger.debug(f"TTS binary: {result.stderr[:200]}")
+            except ImportError:
+                cmd = [
+                    self._binary_path, "--model", str(self._gguf_path.resolve()),
+                    "--text", text, "--voice", voice, "--output", "-",
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+                if proc.returncode == 0 and stdout:
+                    return stdout
+                logger.debug(f"TTS binary: {stderr.decode()[:200]}")
         except asyncio.TimeoutError:
             logger.warning("TTS binary timeout")
         except Exception as e:

@@ -119,13 +119,22 @@ class HardwareAccelerator:
             pass
 
         # 3. Try nvidia-smi (even without torch)
+        import asyncio
         try:
-            import subprocess
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.total",
-                 "--format=csv,noheader"],
-                capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
+            try:
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader", timeout=5))
+                stdout = result.stdout
+                exit_code = result.exit_code
+            except ImportError:
+                import subprocess
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=name,memory.total",
+                     "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=5)
+                stdout = result.stdout
+                exit_code = result.returncode
+            if exit_code == 0 and stdout.strip():
                 line = result.stdout.strip().split("\n")[0]
                 parts = line.split(",")
                 name = parts[0].strip() if parts else "NVIDIA GPU"
@@ -133,7 +142,7 @@ class HardwareAccelerator:
                 return GPUInfo(
                     available=True, backend="cuda",
                     device_name=name,
-                    device_count=len(result.stdout.strip().split("\n")),
+                    device_count=len(stdout.strip().split("\n")),
                     memory_mb=int(mem_str) if mem_str.isdigit() else 0,
                 )
         except Exception:

@@ -419,10 +419,14 @@ class SelfImprover:
         try:
             # Create safety branch
             branch_name = f"improve/{innovation.id[:12]}"
-            subprocess.run(
-                ["git", "checkout", "-b", branch_name],
-                capture_output=True, check=False,
-            )
+            try:
+                from .unified_exec import git
+                await git(f"checkout -b {branch_name}", timeout=10)
+            except ImportError:
+                subprocess.run(
+                    ["git", "checkout", "-b", branch_name],
+                    capture_output=True, check=False,
+                )
 
             # Generate implementation via LLM
             from .core import TreeLLM
@@ -462,22 +466,31 @@ class SelfImprover:
         """Validate an improvement by running tests."""
         try:
             # Run pytest
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "pytest", "tests/", "-x", "-q",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-            passed = proc.returncode == 0
+            try:
+                from .unified_exec import pytest
+                result = await pytest("tests/ -x -q", timeout=120)
+                passed = result.success
+            except ImportError:
+                proc = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "pytest", "tests/", "-x", "-q",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+                passed = proc.returncode == 0
             innovation.test_passed = passed
             innovation.validated = True
 
             if not passed:
                 # Revert to main
-                subprocess.run(
-                    ["git", "checkout", "master"],
-                    capture_output=True, check=False,
-                )
+                try:
+                    from .unified_exec import git
+                    await git("checkout master", timeout=10)
+                except ImportError:
+                    subprocess.run(
+                        ["git", "checkout", "master"],
+                        capture_output=True, check=False,
+                    )
 
             logger.info(
                 f"SelfImprover: {'✅' if passed else '❌'} validation "

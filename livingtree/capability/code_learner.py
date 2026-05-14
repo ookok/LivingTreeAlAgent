@@ -184,28 +184,35 @@ class CodeLearner:
         """Analyze git history for project evolution insights."""
         import subprocess
         try:
-            # Most active files
-            result = subprocess.run(
-                ["git", "log", "--pretty=format:", "--name-only"],
-                capture_output=True, text=True, timeout=10,
-                cwd=str(folder),
-            )
-            files = [f for f in result.stdout.split("\n") if f.strip()]
+            try:
+                from ..treellm.unified_exec import git as ue_git
+                files_result = await ue_git("log --pretty=format: --name-only", timeout=10)
+                files_out = files_result.stdout
+                log_result = await ue_git("log --oneline -10", timeout=10)
+                log_out = log_result.stdout
+            except ImportError:
+                files_result = subprocess.run(
+                    ["git", "log", "--pretty=format:", "--name-only"],
+                    capture_output=True, text=True, timeout=10,
+                    cwd=str(folder),
+                )
+                files_out = files_result.stdout
+                log_result = subprocess.run(
+                    ["git", "log", "--oneline", "-10"],
+                    capture_output=True, text=True, timeout=10,
+                    cwd=str(folder),
+                )
+                log_out = log_result.stdout
+
+            files = [f for f in files_out.split("\n") if f.strip()]
             from collections import Counter
             top_files = Counter(files).most_common(10)
-
-            # Recent commits
-            log = subprocess.run(
-                ["git", "log", "--oneline", "-10"],
-                capture_output=True, text=True, timeout=10,
-                cwd=str(folder),
-            )
 
             return {
                 "most_changed_files": [
                     {"file": f, "changes": c} for f, c in top_files
                 ],
-                "recent_commits": log.stdout.strip().split("\n")[:10],
+                "recent_commits": log_out.strip().split("\n")[:10],
             }
         except Exception:
             return {"note": "No git history available"}

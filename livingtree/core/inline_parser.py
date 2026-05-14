@@ -287,9 +287,12 @@ class InlineParser:
             from io import BytesIO
             import pypdf
             reader = pypdf.PdfReader(BytesIO(data))
-
             ...
             return ParseResult(ok=False, error="PDF parsing requires: pip install pypdf (or pdfplumber/pymupdf)")
+        except ImportError:
+            return ParseResult(ok=False, error="PDF parsing requires: pip install pypdf (or pdfplumber/pymupdf)")
+        except Exception as e:
+            return ParseResult(ok=False, error=f"PDF parse error: {e}")
         return self._build_result(text, filename, "pdf")
 
     # ═══ DOCX Parser (in-memory) ═══
@@ -347,7 +350,11 @@ class InlineParser:
         return await self._parse_audio(audio, filename)
 
     async def _extract_audio_from_video(self, data: bytes) -> bytes:
-        """Extract audio track using subprocess ffmpeg (stdin→stdout, no disk)."""
+        """Extract audio track using subprocess ffmpeg (stdin→stdout, no disk).
+        
+        Uses asyncio.create_subprocess_exec for pipe I/O — unified_exec.run
+        does not support stdin/stdout pipes needed for ffmpeg streaming.
+        """
         try:
             proc = await asyncio.create_subprocess_exec(
                 "ffmpeg", "-i", "pipe:0", "-vn", "-acodec", "pcm_s16le",

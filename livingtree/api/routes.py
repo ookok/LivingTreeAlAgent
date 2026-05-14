@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import secrets
+import subprocess
 import time as _time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -589,14 +590,21 @@ def setup_routes(app: FastAPI) -> None:
             try:
                 import shlex
                 cmd_parts = shlex.split(req.content.strip())
-                result = subprocess.run(
-                    cmd_parts,
-                    capture_output=True, text=True, timeout=30,
-                    cwd=work_dir,
-                )
-                return {"ok": True,
-                        "output": result.stdout[:5000] or result.stderr[:5000],
-                        "exit_code": result.returncode}
+                try:
+                    from ..treellm.unified_exec import run
+                    result = await run(req.content.strip(), timeout=30, cwd=work_dir)
+                    return {"ok": result.success,
+                            "output": result.stdout[:5000] or result.stderr[:5000],
+                            "exit_code": result.exit_code}
+                except ImportError:
+                    result = subprocess.run(
+                        cmd_parts,
+                        capture_output=True, text=True, timeout=30,
+                        cwd=work_dir,
+                    )
+                    return {"ok": True,
+                            "output": result.stdout[:5000] or result.stderr[:5000],
+                            "exit_code": result.returncode}
             except subprocess.TimeoutExpired:
                 return {"ok": False, "error": "Command timed out (30s)"}
             except Exception as e:

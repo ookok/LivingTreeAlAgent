@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -26,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from ..treellm.unified_exec import run, git
 
 SWARM_DATA_DIR = Path(".livingtree")
 SWARM_MUTATIONS_FILE = SWARM_DATA_DIR / "swarm_mutations.json"
@@ -338,16 +338,17 @@ class SwarmEvolution:
                 tmp.write(original)
                 tmp_path = tmp.name
 
-            result = subprocess.run(
-                ["patch", "--dry-run", "-p0", tmp_path],
-                input=mutation.original_diff,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(self.project_root),
-            )
-            Path(tmp_path).unlink(missing_ok=True)
-            return result.returncode == 0
+            import tempfile
+            diff_tmp = Path(tempfile.mktemp(suffix=".diff"))
+            try:
+                diff_tmp.write_text(mutation.original_diff, "utf-8")
+                result = asyncio.run(run(
+                    f"patch --dry-run -p0 -i {diff_tmp} {tmp_path}",
+                    timeout=30, cwd=str(self.project_root)))
+                Path(tmp_path).unlink(missing_ok=True)
+                return result.exit_code == 0
+            finally:
+                diff_tmp.unlink(missing_ok=True)
         except FileNotFoundError:
             return True
         except Exception:
@@ -381,30 +382,27 @@ class SwarmEvolution:
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".livingtree"),
             )
 
-            result = subprocess.run(
-                ["patch", "-p0"],
-                input=mutation.original_diff,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(sandbox_dir),
-            )
-            if result.returncode != 0:
+            import tempfile
+            diff_tmp = Path(tempfile.mktemp(suffix=".diff"))
+            try:
+                diff_tmp.write_text(mutation.original_diff, "utf-8")
+                result = asyncio.run(run(
+                    f"patch -p0 -i {diff_tmp}",
+                    timeout=30, cwd=str(sandbox_dir)))
+            finally:
+                diff_tmp.unlink(missing_ok=True)
+            if result.exit_code != 0:
                 return False, {"patch_failed": result.stderr[:200]}
 
             start = time.time()
-            test_result = subprocess.run(
-                [sys.executable, "-m", "pytest", "tests/", "--tb=no", "-q"],
-                capture_output=True,
-                text=True,
-                timeout=180,
-                cwd=str(sandbox_dir),
-            )
+            test_result = asyncio.run(run(
+                f"{sys.executable} -m pytest tests/ --tb=no -q",
+                timeout=180, cwd=str(sandbox_dir)))
             duration = time.time() - start
-            passed = test_result.returncode == 0
+            passed = test_result.exit_code == 0
 
             return passed, {
-                "returncode": test_result.returncode,
+                "returncode": test_result.exit_code,
                 "stdout_tail": test_result.stdout.splitlines()[-5:] if test_result.stdout else [],
                 "duration": round(duration, 2),
             }
@@ -418,15 +416,16 @@ class SwarmEvolution:
     def apply_mutation(self, mutation: SharedMutation) -> bool:
         """Apply a validated mutation to the local codebase."""
         try:
-            result = subprocess.run(
-                ["patch", "-p0"],
-                input=mutation.original_diff,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(self.project_root),
-            )
-            ok = result.returncode == 0
+            import tempfile
+            diff_tmp = Path(tempfile.mktemp(suffix=".diff"))
+            try:
+                diff_tmp.write_text(mutation.original_diff, "utf-8")
+                result = asyncio.run(run(
+                    f"patch -p0 -i {diff_tmp}",
+                    timeout=30, cwd=str(self.project_root)))
+            finally:
+                diff_tmp.unlink(missing_ok=True)
+            ok = result.exit_code == 0
             if not ok:
                 logger.warning(f"Swarm: patch apply failed: {result.stderr[:120]}")
             return ok

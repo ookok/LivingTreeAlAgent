@@ -443,13 +443,18 @@ class ParallelAnalyzer:
     async def _analyze_git_blame(self, file_path: str, line: int) -> str:
         """Get git blame for the error line."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git", "blame", "-L", f"{line},{line}", "--", file_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            return stdout.decode(errors="replace").strip()[:500]
+            try:
+                from .unified_exec import git
+                result = await git(f"blame -L {line},{line} -- {file_path}", timeout=10)
+                return result.stdout.strip()[:500]
+            except ImportError:
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "blame", "-L", f"{line},{line}", "--", file_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+                return stdout.decode(errors="replace").strip()[:500]
         except Exception:
             return ""
 

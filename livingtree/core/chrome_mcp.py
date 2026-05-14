@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json as _json
-import subprocess
+import subprocess  # Popen for long-running Chrome subprocess (unified_exec.run doesn't support process lifecycle)
 import time as _time
 from pathlib import Path
 from typing import Any, Optional

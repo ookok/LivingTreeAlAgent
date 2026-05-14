@@ -49,7 +49,6 @@ She is the better version. She will create the perfect next generation.
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -57,6 +56,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+from ..treellm.unified_exec import run
 
 
 # ═══ Organ System ═══
@@ -238,15 +238,13 @@ class Hands:
                 f'{{"name": "{name}", "description": "{description}", "sandbox": "docker"}}')
 
             # Verify syntax before considering it created
-            import subprocess
             try:
-                result = subprocess.run(
-                    ["python", "-c",
-                     f"compile(open('{tool_dir / 'main.py'}').read(), '{name}', 'exec')"],
-                    capture_output=True, text=True, timeout=5)
-                if result.returncode != 0:
+                result = await run(
+                    f"python -c \"compile(open(r'{tool_dir / 'main.py'}').read(), '{name}', 'exec')\"",
+                    timeout=5)
+                if result.exit_code != 0:
                     return f"Tool '{name}' rejected: syntax error — {result.stderr[:200]}"
-            except subprocess.TimeoutExpired:
+            except Exception:
                 return f"Tool '{name}' rejected: verification timeout"
 
             self._creations.append(str(tool_dir))
@@ -254,12 +252,10 @@ class Hands:
                     f"Build: docker build -t tool-{name} {tool_dir}")
         else:
             # Default: file sandbox with syntax check
-            import subprocess
             try:
-                subprocess.run(
-                    ["python", "-c",
-                     f"compile({repr(code)}, '{name}', 'exec')"],
-                    capture_output=True, text=True, timeout=5)
+                await run(
+                    f"python -c \"compile({repr(code)}, '{name}', 'exec')\"",
+                    timeout=5)
             except Exception:
                 pass  # Syntax errors caught, but tool still created for iteration
 
@@ -275,12 +271,13 @@ class Hands:
             f.write(code)
             tmp_path = f.name
         try:
-            result = subprocess.run(
-                ['python', tmp_path], capture_output=True, text=True,
-                timeout=timeout, cwd=str(Path(tmp_path).parent))
+            result = await run(
+                f"python \"{tmp_path}\"", timeout=timeout, cwd=str(Path(tmp_path).parent))
+            if result.exit_code == -1 and "timeout" in result.stderr.lower():
+                return f"Execution timed out after {timeout}s"
             return result.stdout[:2000] or result.stderr[:2000] or "(no output)"
-        except subprocess.TimeoutExpired:
-            return f"Execution timed out after {timeout}s"
+        except Exception as e:
+            return f"Execution error: {e}"
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
@@ -329,9 +326,7 @@ class Legs:
         if not any(command.strip().startswith(c) for c in self.WHITELISTED_COMMANDS):
             return f"Command not whitelisted: {command}"
         try:
-            result = subprocess.run(
-                command, shell=True, capture_output=True, text=True,
-                timeout=15, cwd=cwd)
+            result = await run(command, timeout=15, cwd=cwd)
             self._trips.append(command)
             return result.stdout[:2000] or result.stderr[:2000]
         except Exception as e:
@@ -344,8 +339,7 @@ class Legs:
         if host not in self.WHITELISTED_HOSTS:
             return f"Host not whitelisted: {host}"
         try:
-            result = subprocess.run(
-                ['ssh', host, command], capture_output=True, text=True, timeout=30)
+            result = await run(f"ssh {host} {command}", timeout=30)
             self._trips.append(f"ssh:{host}:{command}")
             return result.stdout[:2000]
         except Exception as e:

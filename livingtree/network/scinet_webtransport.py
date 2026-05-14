@@ -371,12 +371,21 @@ class WebTransportServer:
             # Fallback: generate using openssl if available
             import subprocess
             cert_path.parent.mkdir(parents=True, exist_ok=True)
-            subprocess.run([
-                "openssl", "req", "-x509", "-newkey", "rsa:2048",
-                "-keyout", str(key_path), "-out", str(cert_path),
-                "-days", "365", "-nodes",
-                "-subj", "/CN=localhost",
-            ], capture_output=True, timeout=10)
+            try:
+                from livingtree.treellm.unified_exec import run
+                import asyncio
+                result = asyncio.run(run(
+                    f"openssl req -x509 -newkey rsa:2048 "
+                    f"-keyout {key_path} -out {cert_path} -days 365 -nodes "
+                    f"-subj /CN=localhost",
+                    timeout=10))
+            except ImportError:
+                subprocess.run([
+                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "-keyout", str(key_path), "-out", str(cert_path),
+                    "-days", "365", "-nodes",
+                    "-subj", "/CN=localhost",
+                ], capture_output=True, timeout=10)
 
     def _generate_js_client(self) -> str:
         """Generate JavaScript client library for browser-side usage.

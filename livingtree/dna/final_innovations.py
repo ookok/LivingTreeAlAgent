@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from ..treellm.unified_exec import run, git
 
 
 # ═══════════════════════════════════════════════════════
@@ -90,18 +91,15 @@ class CodeAutobiography:
 
     def generate(self, project_path: str) -> str:
         """Generate the codebase's life story from git history."""
-        import subprocess
 
         story = ["# 📖 代码自传 — LivingTree 的生命故事\n"]
         story.append("*由小树从 Git 历史中自动生成*\n")
 
         try:
             # Get commit history with dates
-            result = subprocess.run(
-                ["git", "log", "--reverse", "--pretty=format:%h|%ai|%s", "--name-only"],
-                capture_output=True, text=True, timeout=15,
-                cwd=project_path,
-            )
+            result = asyncio.run(git(
+                "log --reverse --pretty=format:%h|%ai|%s --name-only",
+                timeout=15))
             lines = result.stdout.strip().split("\n")
 
             chapters = defaultdict(list)
@@ -374,12 +372,11 @@ class GitNativeEverything:
 
     def commit_action(self, action: str, detail: str, files: list[str] = None) -> bool:
         """Commit an action to git memory."""
-        import subprocess
         try:
             msg = f"[小树] {action}: {detail[:60]}"
             if files:
-                subprocess.run(["git", "add"] + files, timeout=10)
-            subprocess.run(["git", "commit", "-m", msg, "--allow-empty"], timeout=10)
+                asyncio.run(git(f"add {' '.join(files)}"))
+            asyncio.run(git(f"commit -m \"{msg}\" --allow-empty"))
             logger.info(f"GitNative: committed '{msg}'")
             return True
         except Exception:
@@ -387,12 +384,10 @@ class GitNativeEverything:
 
     def annotate_blame(self, file_path: str, line: int) -> str:
         """Git blame with AI annotation — explain WHY a line exists."""
-        import subprocess
         try:
-            result = subprocess.run(
-                ["git", "blame", "-L", f"{line},{line}", file_path],
-                capture_output=True, text=True, timeout=10,
-            )
+            result = asyncio.run(git(
+                f"blame -L {line},{line} {file_path}",
+                timeout=10))
             if result.stdout:
                 return f"This line was born in commit {result.stdout[:8]}..."
         except Exception:

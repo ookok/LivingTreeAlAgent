@@ -449,15 +449,22 @@ def run_with_mirrors(cmd: list[str], cwd: str | None = None,
 
     Returns (returncode, stdout, stderr).
     """
+    import asyncio
     env = get_mirror_env()
     try:
-        if shell:
-            proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=timeout, env=env, cwd=cwd, shell=True)
-        else:
-            proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=timeout, env=env, cwd=cwd)
-        return proc.returncode, proc.stdout.strip()[:8000], proc.stderr.strip()[:4000]
+        try:
+            from livingtree.treellm.unified_exec import run
+            cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
+            result = asyncio.run(run(cmd_str, timeout=timeout, cwd=cwd or ""))
+            return result.exit_code, result.stdout[:8000], result.stderr[:4000]
+        except ImportError:
+            if shell:
+                proc = subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=timeout, env=env, cwd=cwd, shell=True)
+            else:
+                proc = subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=timeout, env=env, cwd=cwd)
+            return proc.returncode, proc.stdout.strip()[:8000], proc.stderr.strip()[:4000]
     except subprocess.TimeoutExpired:
         return -1, "", "Timed out"
     except Exception as e:

@@ -15,7 +15,6 @@ import hashlib
 import ipaddress
 import os
 import re
-import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +22,7 @@ from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
+from ..treellm.unified_exec import run
 
 
 def _hash(data: str) -> str:
@@ -248,49 +248,24 @@ class SandboxedExecutor(BaseModel):
     async def execute_code(self, code: str, timeout: int | None = None,
                            env: dict[str, str] | None = None) -> dict[str, Any]:
         timeout = timeout or self.max_seconds
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "python", "-c", code,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            return {
-                "stdout": stdout.decode("utf-8", errors="replace"),
-                "stderr": stderr.decode("utf-8", errors="replace"),
-                "returncode": proc.returncode,
-                "timed_out": False,
-            }
-        except asyncio.TimeoutError:
-            return {"stdout": "", "stderr": "Timeout", "returncode": -1, "timed_out": True}
+        result = await run(f"python -c {repr(code)}", timeout=timeout)
+        timed_out = result.exit_code == -1 and "timeout" in result.stderr.lower()
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.exit_code,
+            "timed_out": timed_out,
+        }
 
     async def execute_shell(self, command: str, cwd: str | None = None,
                             timeout: int | None = None) -> dict[str, Any]:
         cwd = cwd or self.workspace
-        # Cross-platform PATH
-        import sys
-        path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin" if sys.platform != "win32" else "")
-        try:
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                env={"PATH": path},
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout or self.max_seconds)
-            return {
-                "stdout": stdout.decode("utf-8", errors="replace"),
-                "stderr": stderr.decode("utf-8", errors="replace"),
-                "returncode": proc.returncode,
-            }
-        except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            return {"stdout": "", "stderr": "Timeout [process killed]", "returncode": -1}
+        result = await run(command, timeout=timeout or self.max_seconds, cwd=cwd)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.exit_code,
+        }
 
 
 class SafetyGuard(BaseModel):

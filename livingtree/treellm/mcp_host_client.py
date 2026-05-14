@@ -119,7 +119,11 @@ class MCPHostClient:
     # ── Lifecycle ──────────────────────────────────────────────────
 
     async def initialize(self) -> bool:
-        """Launch subprocess and perform MCP handshake. Returns True if ready."""
+        """Launch subprocess and perform MCP handshake. Returns True if ready.
+        
+        Uses asyncio.create_subprocess_exec with stdio pipes for MCP JSON-RPC
+        protocol — unified_exec.run does not support bidirectional pipe I/O.
+        """
         if self._ready:
             return True
 

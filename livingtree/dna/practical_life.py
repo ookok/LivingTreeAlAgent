@@ -15,7 +15,6 @@ import asyncio
 import hashlib
 import json
 import random
-import subprocess
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -23,6 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from ..treellm.unified_exec import run
 
 
 # ═══════════════════════════════════════════════════════
@@ -259,10 +259,9 @@ class PracticalEvolution:
     def _run_tests(self) -> dict:
         """Run pytest and return simplified results."""
         try:
-            result = subprocess.run(
-                ["python", "-m", "pytest", "tests/", "-q", "--tb=no", "--ignore=tests/manual"],
-                capture_output=True, text=True, timeout=120
-            )
+            result = asyncio.run(run(
+                "python -m pytest tests/ -q --tb=no --ignore=tests/manual",
+                timeout=120))
             passed = "failed" not in result.stdout
             # Extract count: "615 passed"
             import re

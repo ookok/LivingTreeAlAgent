@@ -140,17 +140,29 @@ class JsBridge:
 
     def exec_command(self, command: str, cwd: str = "") -> dict:
         """Execute a shell command locally."""
+        import asyncio
         try:
-            result = subprocess.run(
-                command, shell=True, capture_output=True,
-                text=True, timeout=60,
-                cwd=cwd or None,
-            )
-            return {
-                "ok": result.returncode == 0,
-                "output": (result.stdout + result.stderr)[:10000],
-                "exit_code": result.returncode,
-            }
+            try:
+                from livingtree.treellm.unified_exec import run
+                result = asyncio.run(run(command, timeout=60, cwd=cwd or ""))
+                return {
+                    "ok": result.success,
+                    "output": (result.stdout + result.stderr)[:10000],
+                    "exit_code": result.exit_code,
+                }
+            except ImportError:
+                result = subprocess.run(
+                    command, shell=True, capture_output=True,
+                    text=True, timeout=60,
+                    cwd=cwd or None,
+                )
+                return {
+                    "ok": result.returncode == 0,
+                    "output": (result.stdout + result.stderr)[:10000],
+                    "exit_code": result.returncode,
+                }
+        except asyncio.TimeoutError:
+            return {"ok": False, "error": "Command timed out (60s)"}
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "Command timed out (60s)"}
         except Exception as e:
@@ -225,12 +237,22 @@ class JsBridge:
                 toaster = ToastNotifier()
                 toaster.show_toast(title, message, duration=5)
             elif sys.platform == "darwin":
-                subprocess.run([
-                    "osascript", "-e",
-                    f'display notification "{message}" with title "{title}"'
-                ])
+                import asyncio
+                try:
+                    from livingtree.treellm.unified_exec import run
+                    asyncio.run(run(f"osascript -e 'display notification \"{message}\" with title \"{title}\"'", timeout=5))
+                except ImportError:
+                    subprocess.run([
+                        "osascript", "-e",
+                        f'display notification "{message}" with title "{title}"'
+                    ])
             else:
-                subprocess.run(["notify-send", title, message])
+                import asyncio
+                try:
+                    from livingtree.treellm.unified_exec import run
+                    asyncio.run(run(f"notify-send \"{title}\" \"{message}\"", timeout=5))
+                except ImportError:
+                    subprocess.run(["notify-send", title, message])
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

@@ -641,7 +641,7 @@ class CapabilityBus:
         """Generate a system prompt fragment listing available capabilities."""
         await self._ensure_discovered()
         cats = [CapCategory(c) for c in categories] if categories else list(self._adapters.keys())
-        lines = ["可用能力:"]
+        lines = ["Discovered dynamic tools:"]
         for cat in cats:
             adapter = self._adapters.get(cat)
             if not adapter:
@@ -649,6 +649,22 @@ class CapabilityBus:
             for cap in adapter.list_all()[:10]:
                 lines.append(f"  {cap.prompt_fragment()}")
         return "\n".join(lines)
+
+    def prompt_fragment_sync(self, categories: list[str] = None) -> str:
+        """Synchronous version for use in core.py chat() prompt injection."""
+        cats = [CapCategory(c) for c in categories] if categories else list(self._adapters.keys())
+        lines = []
+        for cat in cats:
+            adapter = self._adapters.get(cat)
+            if not adapter:
+                continue
+            count = 0
+            for cap in adapter.list_all():
+                if count >= 8:
+                    break
+                lines.append(f"  {cap.prompt_fragment()}")
+                count += 1
+        return "\n".join(lines) if lines else ""
 
     async def invoke_all(self, cap_id: str, params_list: list[dict]) -> list[Any]:
         """Batch invoke the same capability with multiple param sets."""

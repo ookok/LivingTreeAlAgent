@@ -718,25 +718,32 @@ class TreeLLM:
         if not tools and kwargs.get("available_tools"):
             tools = True
         if tools and messages:
+            # Dynamic tool prompt from CapabilityBus + hardcoded essentials
+            dynamic_tools = ""
+            try:
+                from .capability_bus import get_capability_bus
+                bus = get_capability_bus()
+                dynamic_tools = bus.prompt_fragment_sync(["tool", "skill", "mcp"])
+            except Exception:
+                pass
+
             messages = [{
                 "role": "system",
                 "content": (
                     "You have access to tools. Use XML format: <tool_call name=\"tool_name\">arguments</tool_call>\n"
-                    "Available tools:\n"
+                    f"{dynamic_tools}\n"
+                    "Core tools always available:\n"
                     "- web_search: search the internet. Args: query text.\n"
                     "- kb_search: search internal knowledge base. Args: query text.\n"
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
                     "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
-                    "- explore_domain: spontaneously explore an unfamiliar website domain to build World Knowledge.\n"
-                    "- get_world_knowledge: retrieve previously cached World Knowledge for a domain.\n"
                     "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n\n"
                     "When the user asks for a chart, diagram, or visualization, output in A2UI JSON format:\n"
-                    '  Chart:  {"type":"chart","chart":{"type":"bar|line|pie|scatter","data":{"labels":[...],"datasets":[{"label":"...","data":[...]}]},"options":{"title":"..."}}}\n'
-                    '  Diagram: {"type":"diagram","diagram":{"engine":"mermaid","code":"graph LR\\n  A-->B\\n  B-->C"}}\n'
+                    '  Chart:  {"type":"chart","chart":{"type":"bar|line|pie|scatter","data":{"labels":[...],"datasets":[{"data":[...]}]}}}\n'
+                    '  Diagram: {"type":"diagram","diagram":{"engine":"mermaid","code":"graph LR\\n  A-->B"}}\n'
                     '  SVG:    {"type":"svg","svg":"<svg>...</svg>"}\n'
-                    '  Table:  {"type":"table","columns":["Name","Value"],"rows":[["A",1],["B",2]]}\n'
-                    '  Map:    {"type":"map","lat":31.2,"lon":118.8,"zoom":12,"markers":[{"lat":31.2,"lon":118.8,"label":"Point"}]}\n'
+                    '  Table:  {"type":"table","columns":["A","B"],"rows":[[1,2]]}\n'
                     "After tool results, continue your reasoning. You may call multiple tools."
                 ),
             }] + messages

@@ -1103,6 +1103,43 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"PromptEngine: {e}")
 
+        # ── Auto-register domain models as CapabilityBus tools ──
+        try:
+            from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+            bus = get_capability_bus()
+
+            # Register CLI pipeline + API call tools
+            bus.register(Capability(
+                id="tool:cli_pipe", name="cli_pipe", category=CapCategory.TOOL,
+                description="Pipe CLI commands: ls | grep | wc",
+                params=[CapParam(name="commands", type="string")],
+                source="cli_engine"))
+            bus.register(Capability(
+                id="tool:api_call", name="api_call", category=CapCategory.TOOL,
+                description="Call any web API by name (1400+ available)",
+                params=[CapParam(name="name", type="string"), CapParam(name="params", type="object")],
+                source="api_map"))
+            bus.register(Capability(
+                id="tool:search_apis", name="search_apis", category=CapCategory.TOOL,
+                description="Search 1400+ free web APIs by keyword",
+                params=[CapParam(name="query", type="string")],
+                source="api_map"))
+            # Spatial engine
+            bus.register(Capability(
+                id="tool:buffer_query", name="buffer_query", category=CapCategory.TOOL,
+                description="Create a circular buffer polygon around a point",
+                params=[CapParam(name="lon", type="number"), CapParam(name="lat", type="number"), CapParam(name="radius_m", type="number")],
+                source="spatial_analysis"))
+            bus.register(Capability(
+                id="tool:distance_calc", name="distance_calc", category=CapCategory.TOOL,
+                description="Calculate Haversine distance between two coordinates",
+                params=[CapParam(name="lon1", type="number"), CapParam(name="lat1", type="number"), CapParam(name="lon2", type="number"), CapParam(name="lat2", type="number")],
+                source="spatial_analysis"))
+
+            logger.info("Domain models registered in CapabilityBus")
+        except Exception as e:
+            logger.debug(f"Domain model registration: {e}")
+
         self._ready_event.set()
 
     async def _brain_loop(self):

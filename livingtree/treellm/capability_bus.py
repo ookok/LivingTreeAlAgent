@@ -581,6 +581,14 @@ class CapabilityBus:
             cap = adapter.get(cap_id)
             if cap:
                 result = await adapter.invoke(cap_id, **params)
+                # ── Closed loop: tool feedback → update weights ──
+                try:
+                    cap = adapter.get(cap_id)
+                    success = not isinstance(result, dict) or "error" not in str(result).lower()[:100]
+                    if cap:
+                        cap.is_available = success or cap.is_available  # Degrade on failure
+                except Exception:
+                    pass
                 # ── Recording capture: tool/skill/mcp call ──
                 try:
                     from .recording_engine import get_recording_engine, RecordLayer

@@ -39,6 +39,10 @@ from .holistic_election import get_election, RouterStats
 
 # Pre-compiled regex for hot paths
 TOOL_CALL_RE = re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL)
+# JSON tool call: {"tool": "name", "params": {...}}
+JSON_TOOL_RE = re.compile(r'\{\s*"tool"\s*:\s*"(\w+)"\s*,\s*"params"\s*:\s*(\{[^}]+\})\s*\}')
+# OpenAI function calling: name + arguments JSON
+OPENAI_TOOL_RE = re.compile(r'"name":\s*"(\w+)".*?"arguments":\s*"([^"]*)"', re.DOTALL)
 
 
 
@@ -260,6 +264,19 @@ class TreeLLM:
                 )
             except Exception as e:
                 logger.debug(f"DeepProbe skipped: {e}")
+
+        # ── SurvivalMode: inject resource-aware routing hint ──
+        try:
+            from .survival_mode import get_survival_mode
+            survival = get_survival_mode()
+            hint = survival.routing_hint()
+            if survival.current_level() > survival.FULL:
+                top_k_per_layer = hint["top_k"]
+                aggregate = hint["aggregate"]
+                max_tokens_override = hint["max_tokens"]
+                logger.debug(f"SurvivalMode: L{survival.current_level().name} → top_k={top_k_per_layer}")
+        except Exception:
+            pass
 
         # ── AdaptiveTopK: dynamically adjust candidates per query complexity ──
         if probing_result:
@@ -771,12 +788,28 @@ class TreeLLM:
             if result and not result.text and result.reasoning:
                 result.text = result.reasoning
 
-            # ── Multi-turn tool-calling loop ──
+            # ── Multi-turn tool-calling loop (XML + JSON + OpenAI formats) ──
             MAX_TOOL_TURNS = 5
             tool_turn = 0
             while result and result.text and tool_turn < MAX_TOOL_TURNS:
+                # Parse all three tool call formats
                 tool_calls = TOOL_CALL_RE.findall(result.text)
                 if not tool_calls:
+                    tool_calls = JSON_TOOL_RE.findall(result.text)
+                if not tool_calls:
+                    tool_calls = [(m.group(1), m.group(2)) for m in OPENAI_TOOL_RE.finditer(result.text)]
+                if not tool_calls:
+                    # Tool search instruction: LLM can search before calling
+                    if tool_turn == 0 and any(k in result.text.lower() for k in ["搜索工具", "search_tool", "list_tools"]):
+                        try:
+                            from .capability_bus import get_capability_bus
+                            bus = get_capability_bus()
+                            caps = bus.prompt_fragment_sync(["tool"])
+                            result.text = f"[Available tools]\n{caps}\n\nChoose a tool and call it."
+                            tool_turn += 1
+                            continue
+                        except Exception:
+                            pass
                     break
                 tool_turn += 1
                 tool_results = []

@@ -457,6 +457,9 @@ class MCPServer:
             "search_code": self._search_code,
             "find_hubs": self._find_hubs,
             "find_uncovered": self._find_uncovered,
+            "code_incremental": self._code_incremental,
+            "code_diff": self._code_diff,
+            "code_impact": self._code_impact,
             # Chat
             "chat": self._chat,
             "analyze": self._analyze,
@@ -557,6 +560,31 @@ class MCPServer:
             return {"error": "No code graph built."}
         uncovered = self._code_graph.find_uncovered()
         return {"uncovered": [{"name": e.name, "file": e.file} for e in uncovered[:20]]}
+
+    async def _code_incremental(self, params: dict) -> dict:
+        """Self-calling: update CodeGraph from git diff — only re-parse changed files."""
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        result = self._code_graph.incremental_update_from_git(
+            params.get("base", "HEAD~1"), params.get("current", "HEAD"),
+        )
+        return result
+
+    async def _code_diff(self, params: dict) -> dict:
+        """Self-calling: show entity-level changes since last snapshot."""
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        return self._code_graph.diff_export(
+            params.get("base_snapshot", {}),
+        )
+
+    async def _code_impact(self, params: dict) -> dict:
+        """Self-calling: compute numeric impact scores for changed files."""
+        if not self._code_graph:
+            return {"error": "No code graph built."}
+        return {"scores": self._code_graph.impact_score(
+            params.get("files", []), params.get("max_depth", 3),
+        )}
 
     # ── Chat handlers ──
 

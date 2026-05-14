@@ -1137,6 +1137,15 @@ class IntegrationHub:
                 source="spatial_analysis"))
 
             logger.info("Domain models registered in CapabilityBus")
+
+            # Auto-register discovered APIs
+            try:
+                from ..treellm.api_map import get_api_map
+                api_registered = await get_api_map().register_all(bus)
+                if api_registered > 0:
+                    logger.info(f"APIMap: {api_registered} APIs registered in CapabilityBus")
+            except Exception as e:
+                logger.debug(f"APIMap registration: {e}")
         except Exception as e:
             logger.debug(f"Domain model registration: {e}")
 

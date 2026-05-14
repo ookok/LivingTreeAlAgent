@@ -365,3 +365,126 @@ class CodeGraph:
 
     def _compute_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+    # ═══ Entity-Level Incremental Tracking ═══
+
+    def diff_entities(self, other: "CodeGraph") -> dict:
+        """Compare two graph states. Returns {added, removed, modified} entities.
+
+        Uses entity-level hashing (per function/class) instead of file-level.
+        This is the core of "code-review-graph": precise change tracking.
+        """
+        added = []
+        removed = []
+        modified = []
+
+        for eid, ent in self._entities.items():
+            other_ent = other._entities.get(eid)
+            if other_ent is None:
+                removed.append({"id": eid, "name": ent.name, "file": ent.file,
+                               "kind": ent.kind, "line": ent.line})
+            elif ent.end_line != other_ent.end_line or ent.dependencies != other_ent.dependencies:
+                modified.append({"id": eid, "name": ent.name, "file": ent.file,
+                                "kind": ent.kind, "change": "signature_or_deps"})
+
+        for eid, ent in other._entities.items():
+            if eid not in self._entities:
+                added.append({"id": eid, "name": ent.name, "file": ent.file,
+                             "kind": ent.kind, "line": ent.line})
+
+        return {"added": added, "removed": removed, "modified": modified,
+                "total_changes": len(added) + len(removed) + len(modified)}
+
+    def snapshot(self) -> dict:
+        """Return a snapshot of the current graph state for comparison."""
+        return {
+            eid: {"name": ent.name, "file": ent.file, "kind": ent.kind,
+                  "deps": sorted(ent.dependencies), "line": ent.line,
+                  "end_line": ent.end_line}
+            for eid, ent in self._entities.items()
+        }
+
+    def incremental_update_from_git(self, base_branch: str = "HEAD~1",
+                                     current_branch: str = "HEAD") -> dict:
+        """Detect changed files from git diff and only re-parse those.
+
+        Uses `git diff --name-only` to find changed files, then
+        re-parses only those files instead of the whole codebase.
+        """
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--name-only", base_branch, current_branch],
+                capture_output=True, text=True, timeout=10,
+            )
+            changed_files = [
+                f.strip() for f in result.stdout.split("\n")
+                if f.strip() and f.strip().endswith((".py", ".js", ".ts", ".go", ".rs"))
+            ]
+            if not changed_files:
+                return {"changed_files": 0, "entities_updated": 0}
+
+            # Only re-parse changed files
+            updated = 0
+            for filepath in changed_files:
+                if Path(filepath).exists():
+                    self.update_file(filepath)
+                    updated += 1
+
+            return {"changed_files": len(changed_files),
+                    "entities_updated": updated}
+        except Exception as e:
+            logger.debug(f"CodeGraph git incremental: {e}")
+            return {"changed_files": 0, "entities_updated": 0, "error": str(e)[:200]}
+
+    def impact_score(self, changed_files: list[str], max_depth: int = 3) -> list[dict]:
+        """Compute numeric impact scores (0-100) for blast radius results.
+
+        Enhancement over binary blast_radius(): assigns risk scores based on:
+        - Number of dependents (popularity)
+        - Call depth (distance from change)
+        - Test coverage (uncovered = higher risk)
+        """
+        results = self.blast_radius(changed_files, max_depth)
+        scored = []
+        for r in results:
+            entity = self._entities.get(r.entity_id) if hasattr(r, 'entity_id') and r.entity_id else None
+            deps_count = len(entity.dependencies) if entity else 0
+            depth_penalty = max(30 - r.distance * 10, 0) if hasattr(r, 'distance') else 20
+            coverage_penalty = 20 if entity and entity.test_coverage is False else 0
+            score = min(100, 40 + deps_count * 5 + depth_penalty + coverage_penalty)
+
+            scored.append({
+                "file": r.file, "reason": r.reason,
+                "risk": r.risk if hasattr(r, 'risk') else "unknown",
+                "distance": r.distance if hasattr(r, 'distance') else 1,
+                "impact_score": score,
+                "affected_entities": r.affected_entities if hasattr(r, 'affected_entities') else [],
+            })
+        scored.sort(key=lambda x: -x["impact_score"])
+        return scored
+
+    def diff_export(self, base_snapshot: dict) -> dict:
+        """Export changes since a previous snapshot as structured JSON.
+
+        Perfect for MCP tools: AI assistants get precise, minimal context.
+        """
+        current = self.snapshot()
+        added, removed, modified = [], [], []
+
+        for eid, ent in current.items():
+            if eid not in base_snapshot:
+                added.append({"id": eid, **ent})
+            elif ent != base_snapshot[eid]:
+                modified.append({"id": eid, "before": base_snapshot[eid], "after": ent})
+
+        for eid in base_snapshot:
+            if eid not in current:
+                removed.append({"id": eid, **base_snapshot[eid]})
+
+        return {
+            "snapshot_time": time.time(),
+            "total_entities": len(current),
+            "changes": {"added": len(added), "removed": len(removed), "modified": len(modified)},
+            "added": added[:50], "removed": removed[:50], "modified": modified[:50],
+        }

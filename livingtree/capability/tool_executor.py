@@ -255,25 +255,16 @@ class ToolExecutor:
             return ToolResult("run_command", False, error=f"BLOCKED: {danger}", elapsed_ms=0)
         t0 = time.monotonic()
         try:
-            shell = self._preferred_shell()
-            if shell:
-                command = f"{shell} -c {_quote(command)}"
-            p = await asyncio.create_subprocess_shell(
-                command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                cwd=workdir,
-            )
-            stdout, stderr = await asyncio.wait_for(p.communicate(), timeout=timeout)
-            out = stdout.decode("utf-8", errors="replace")[:50000]
-            err = stderr.decode("utf-8", errors="replace")[:10000]
-            if err:
-                out = out + "\n\n[stderr]\n" + err
-            return ToolResult("run_command", p.returncode == 0, out, error=err if p.returncode else "",
+            # Route through unified ShellExecutor for safety + cross-platform
+            from ..core.shell_env import get_shell
+            shell_exec = get_shell()
+            result = await shell_exec.execute(command, timeout=timeout, cwd=workdir)
+            return ToolResult("run_command", result.exit_code == 0,
+                            result.stdout + ("\n\n[stderr]\n" + result.stderr if result.stderr else ""),
+                            error=result.stderr if result.exit_code else "",
                             elapsed_ms=(time.monotonic()-t0)*1000)
-        except asyncio.TimeoutError:
-            self._kill_on_timeout(command)
-            return ToolResult("run_command", False, error=f"Timeout after {timeout}s", elapsed_ms=timeout*1000)
-        except Exception as e:
-            return ToolResult("run_command", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
+        except ImportError:
+            pass  # Fallback below
 
     @staticmethod
     def _check_dangerous(command: str) -> str:

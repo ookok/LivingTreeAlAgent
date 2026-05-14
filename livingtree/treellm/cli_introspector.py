@@ -322,7 +322,22 @@ class CLIIntrospector:
     async def execute(self, name: str, args: str = "",
                       timeout: float = 30.0,
                       cwd: str = "") -> dict:
-        """Execute a CLI program and return structured result."""
+        """Execute a CLI program through unified ShellExecutor with safety gates."""
+        # Use unified ShellExecutor when available
+        try:
+            from ..core.shell_env import get_shell
+            shell = get_shell()
+            result = await shell.execute(f"{name} {args}", timeout=timeout, cwd=cwd or os.getcwd())
+            return {
+                "stdout": result.stdout[:50000],
+                "stderr": result.stderr[:10000],
+                "exit_code": result.exit_code,
+                "command": f"{name} {args}"[:200],
+            }
+        except Exception:
+            pass
+
+        # Fallback: raw subprocess
         path = shutil.which(name) or name
         if not os.path.exists(path):
             return {"error": f"Binary not found: {name}", "exit_code": -1}

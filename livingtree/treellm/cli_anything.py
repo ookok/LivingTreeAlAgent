@@ -271,11 +271,16 @@ class ProjectToCLI:
         repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
         local_path = output_dir / repo_name
 
-        # Clone
+        # Clone — use unified ShellExecutor
         if local_path.exists():
             shutil.rmtree(local_path)
-        subprocess.run(["git", "clone", "--depth", "1", repo_url, str(local_path)],
-                      capture_output=True, check=False)
+        try:
+            from ..core.shell_env import get_shell
+            shell = get_shell()
+            result = await shell.execute("git clone --depth 1 " + repo_url + " " + str(local_path))
+        except Exception:
+            subprocess.run(["git", "clone", "--depth", "1", repo_url, str(local_path)],
+                          capture_output=True, check=False)
 
         project = CLIProject(repo_url=repo_url, local_path=local_path)
 

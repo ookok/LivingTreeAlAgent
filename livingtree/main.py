@@ -446,12 +446,21 @@ def _svc_canary(args: list):
 
 
 def _svc_debug(args: list):
-    """AI-driven autonomous debug loop. usage: livingtree debug <target> [--level L1|L2|L3] [--trace] [--max-attempts N] [--args ...]"""
+    """AI-driven autonomous debug loop.
+    
+    File debug (default):    livingtree debug main.py --level L2 --trace
+    Pipeline debug (chat):   livingtree debug chat "帮我分析代码" --trace
+    """
     import asyncio
 
     async def _run():
         from .treellm.debug_pro import install as debug_install
         from .treellm.debug_loop import DebugLoop, DebugLevel
+
+        # Detect mode
+        if args and args[0] == "chat":
+            await _debug_chat(args[1:])
+            return
 
         # Install global error interception
         interceptor = debug_install(trace_memory="--trace" in args)
@@ -498,13 +507,124 @@ def _svc_debug(args: list):
         for a in session.attempts:
             print(f"    #{a.attempt_number}: {a.result.value} ({a.duration_ms/1000:.1f}s) {a.llm_provider}")
 
-        # Show intercepted errors
         if interceptor:
             stats = interceptor.stats()
             if stats["total_captured"] > 0:
                 print(f"\n  Errors intercepted: {stats['total_captured']} ({stats['unique_types']} types)")
                 for err_type, count in stats["top_errors"]:
                     print(f"    {err_type}: {count}")
+
+    async def _debug_chat(chat_args: list):
+        """Debug the full chat pipeline end-to-end."""
+        from .treellm.debug_pro import install as debug_install
+        from .treellm.debug_pro import ErrorInterceptor
+        import time as _time
+
+        debug_install()
+        message = " ".join(a for a in chat_args if not a.startswith("--"))
+        trace = "--trace" in chat_args
+
+        if not message:
+            print("Usage: livingtree debug chat \"your message\" [--trace]")
+            return
+
+        print(f"\n{'='*60}")
+        print(f"  Pipeline Debug: \"{message[:80]}\"")
+        print(f"{'='*60}")
+
+        # Phase 1: Input normalization
+        t0 = _time.time()
+        print("\n[1/6] Input Normalization...")
+        try:
+            from .treellm.living_input_bus import get_living_input_bus, InputSource
+            bus = get_living_input_bus()
+            inp = bus._normalizer.from_cli([message])
+            print(f"  ✅ kind={inp.kind.value} source={inp.source.value} text_len={len(inp.text)}")
+        except Exception as e:
+            print(f"  ❌ Input normalization failed: {e}")
+
+        # Phase 2: ContextMoE memory
+        print("\n[2/6] ContextMoE Memory Retrieval...")
+        t1 = _time.time()
+        try:
+            from .treellm.context_moe import get_context_moe
+            moe = await get_context_moe("debug_chat")
+            result = await moe.query(message, "general")
+            enriched = moe.build_enriched_message(message, result)
+            has_memory = enriched != message
+            print(f"  ✅ memory_injected={has_memory} blocks(hot={len(result.hot)} warm={len(result.warm)} cold={len(result.cold)})")
+            print(f"  ⏱️  {(_time.time()-t1)*1000:.0f}ms")
+        except Exception as e:
+            print(f"  ❌ ContextMoE failed: {e}")
+            has_memory = False
+            enriched = message
+
+        # Phase 3: LLM Election
+        print("\n[3/6] Provider Election...")
+        t2 = _time.time()
+        try:
+            from .treellm.core import TreeLLM
+            llm = TreeLLM()
+            provider = await llm.smart_route(message, task_type="general")
+            print(f"  ✅ elected={provider}")
+            print(f"  ⏱️  {(_time.time()-t2)*1000:.0f}ms")
+        except Exception as e:
+            print(f"  ❌ Election failed: {e}")
+            provider = ""
+            llm = None
+
+        # Phase 4: LLM Chat
+        print("\n[4/6] LLM Chat...")
+        t3 = _time.time()
+        chat_result = None
+        try:
+            if llm is None:
+                raise RuntimeError("No LLM available (election failed)")
+            result = await llm.chat(
+                [{"role": "user", "content": enriched if has_memory else message}],
+                provider=provider, tools=True, max_tokens=1024,
+            )
+            chat_result = getattr(result, 'text', '') or str(result)
+            tokens = getattr(result, 'tokens', 0)
+            print(f"  ✅ response_len={len(chat_result)} tokens={tokens}")
+            print(f"  ⏱️  {(_time.time()-t3)*1000:.0f}ms")
+        except Exception as e:
+            print(f"  ❌ Chat failed: {e}")
+
+        # Phase 5: Tool calls (if any)
+        print("\n[5/6] Tool Call Analysis...")
+        tool_count = 0
+        try:
+            import re
+            TOOL_RE = re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL)
+            if chat_result:
+                tools = TOOL_RE.findall(chat_result)
+                tool_count = len(tools)
+                for name, args in tools:
+                    print(f"  🔧 {name}: {args[:100]}")
+            if not tool_count:
+                print(f"  ℹ️  No tool calls in response")
+        except Exception as e:
+            print(f"  ❌ Tool analysis failed: {e}")
+
+        # Phase 6: Errors & Stats
+        print("\n[6/6] Error Summary...")
+        interceptor = ErrorInterceptor.instance()
+        if interceptor:
+            stats = interceptor.stats()
+            if stats["total_captured"] > 0:
+                print(f"  ⚠️  {stats['total_captured']} errors intercepted ({stats['unique_types']} types)")
+                for err_type, count in stats["top_errors"]:
+                    print(f"     {err_type}: {count}")
+            else:
+                print(f"  ✅ No errors intercepted")
+
+        total_ms = (_time.time() - t0) * 1000
+        print(f"\n{'='*60}")
+        print(f"  Total: {total_ms:.0f}ms | Provider: {provider} | Tools: {tool_count}")
+        if chat_result:
+            print(f"  Response preview: {chat_result[:200]}...")
+        print(f"{'='*60}")
 
     asyncio.run(_run())
 

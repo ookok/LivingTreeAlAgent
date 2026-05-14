@@ -670,11 +670,23 @@ class TreeLLM:
             except Exception:
                 pass
 
-        # ── AutoPrompt: inject optimized system prompt ──
+        # ── AutoPrompt + PromptEngine: inject optimized system prompt ──
         task_type = kwargs.get("task_type", "general")
         try:
             from .auto_prompt import get_auto_prompt
             prompt_text, _ = get_auto_prompt().select(task_type)
+
+            # Override with DSPy-style compiled prompt if available for this capability
+            capability_id = kwargs.get("capability_id", "")
+            if capability_id:
+                try:
+                    from .prompt_engine import get_prompt_compiler
+                    compiled = get_prompt_compiler().compile(capability_id)
+                    if compiled:
+                        prompt_text = compiled
+                except Exception:
+                    pass
+
             if prompt_text and not any(m.get("role") == "system" for m in messages):
                 messages = [{"role": "system", "content": prompt_text}] + messages
         except Exception:

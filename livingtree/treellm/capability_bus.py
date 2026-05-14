@@ -354,7 +354,7 @@ class MCPAdapter(CapabilityAdapter):
                                       description=v.get("description", ""))
                             for k, v in tool.input_schema.get("properties", {}).items()
                         ],
-                        handler=lambda **kw, _sid=server_id, _tn=tool_name:
+                        handler=lambda _sid=server_id, _tn=tool_name, **kw:
                             self._invoke_mcp_host(_sid, _tn, kw),
                         source=server_id,
                     )
@@ -590,6 +590,18 @@ class CapabilityBus:
                         result=result, render="table" if isinstance(result, (list, dict)) else "card",
                         duration_ms=(__import__('time').time() - t0) * 1000,
                     )
+                except Exception:
+                    pass
+                # ── PromptEngine feedback ──
+                try:
+                    from .prompt_engine import get_prompt_engine, get_prompt_compiler
+                    engine = get_prompt_engine()
+                    success = not isinstance(result, dict) or "error" not in str(result)
+                    engine.feedback(cap_id, params, result, success)
+                    # Also update compiler
+                    compiler = get_prompt_compiler()
+                    quality = 0.8 if success else 0.3
+                    compiler.feedback(cap_id, quality)
                 except Exception:
                     pass
                 return result

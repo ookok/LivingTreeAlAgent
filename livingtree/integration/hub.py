@@ -1090,6 +1090,19 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"CapabilityBus warm: {e}")
 
+        # ── PromptEngine: DSPy-style prompt optimization ──
+        try:
+            from ..treellm.prompt_engine import get_prompt_engine
+            engine = get_prompt_engine()
+            discovered = await engine.discover_from_capabilities()
+            bootstrapped = await engine.bootstrap_from_recordings()
+            logger.info(
+                f"PromptEngine: {discovered} signatures + {bootstrapped} "
+                f"few-shot examples compiled"
+            )
+        except Exception as e:
+            logger.debug(f"PromptEngine: {e}")
+
         self._ready_event.set()
 
     async def _brain_loop(self):

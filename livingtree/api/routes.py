@@ -2787,3 +2787,31 @@ def _get_user_id_from_request(request: Request) -> str:
             return {"ok": True, "deleted": deleted}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # ═══ Debug Loop API (AI自动调试) ═══
+
+    @app.post("/api/debug/start")
+    async def debug_start(request: Request):
+        body = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+        try:
+            from ..treellm.debug_loop import DebugLoop, DebugLevel
+            loop = DebugLoop.instance()
+            target = body.get("target", "main.py")
+            level = DebugLevel(body.get("level", "semi_auto"))
+            max_attempts = body.get("max_attempts", 5)
+            session = await loop.debug(target, body.get("args", []), level, max_attempts)
+            return {"ok": True, "session_id": session.id, "fixed": session.fixed,
+                    "escalated": session.escalated, "attempts": len(session.attempts),
+                    "duration_ms": session.total_duration_ms,
+                    "details": [{"attempt": a.attempt_number, "result": a.result.value,
+                                 "duration_ms": a.duration_ms} for a in session.attempts]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.get("/api/debug/stats")
+    async def debug_stats(request: Request):
+        try:
+            from ..treellm.debug_loop import get_debug_loop
+            return {"ok": True, "stats": get_debug_loop().stats()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

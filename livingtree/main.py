@@ -115,6 +115,8 @@ def main():
         _svc_canary(sys.argv[2:])
     elif command == "recording" or command == "record":
         _svc_recording(sys.argv[2:])
+    elif command == "debug":
+        _svc_debug(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -437,6 +439,42 @@ def _svc_canary(args: list):
 
         print(f"  Canary queries: .livingtree/canary_queries.json")
         print(f"  Baseline:       .livingtree/canary_baseline.json")
+
+    asyncio.run(_run())
+
+
+def _svc_debug(args: list):
+    """AI-driven autonomous debug loop. usage: livingtree debug <target> [--level L1|L2|L3] [--max-attempts N] [--args ...]"""
+    import asyncio
+
+    async def _run():
+        from .treellm.debug_loop import DebugLoop, DebugLevel
+        loop = DebugLoop.instance()
+        target = args[0] if args else "main.py"
+        level = DebugLevel.SEMI_AUTO
+        max_attempts = 5
+        target_args = []
+        i = 0
+        while i < len(args):
+            if args[i] == "--level" and i + 1 < len(args):
+                level = DebugLevel(args[i+1]) if args[i+1] in [d.value for d in DebugLevel] else DebugLevel.SEMI_AUTO
+                i += 2
+            elif args[i] == "--max-attempts" and i + 1 < len(args):
+                max_attempts = int(args[i+1])
+                i += 2
+            elif args[i] == "--args" and i + 1 < len(args):
+                target_args = args[i+1:]
+                break
+            else:
+                i += 1
+
+        print(f"\n  Debug Loop: {target} (level={level.value}, max_attempts={max_attempts})")
+        session = await loop.debug(target, target_args, level, max_attempts)
+        print(f"\n  Result: {'✅ FIXED' if session.fixed else '❌ ESCALATED' if session.escalated else '⚠️ UNRESOLVED'}")
+        print(f"  Attempts: {len(session.attempts)}")
+        print(f"  Duration: {session.total_duration_ms/1000:.1f}s")
+        for a in session.attempts:
+            print(f"    #{a.attempt_number}: {a.result.value} ({a.duration_ms/1000:.1f}s) {a.llm_provider}")
 
     asyncio.run(_run())
 

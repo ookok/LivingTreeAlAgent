@@ -117,6 +117,8 @@ def main():
         _svc_recording(sys.argv[2:])
     elif command == "debug":
         _svc_debug(sys.argv[2:])
+    elif command == "improve":
+        _svc_improve(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -503,6 +505,56 @@ def _svc_debug(args: list):
                 print(f"\n  Errors intercepted: {stats['total_captured']} ({stats['unique_types']} types)")
                 for err_type, count in stats["top_errors"]:
                     print(f"    {err_type}: {count}")
+
+    asyncio.run(_run())
+
+
+def _svc_improve(args: list):
+    """Self-improvement: scan defects + propose innovations. usage: livingtree improve [--scan|--propose|--auto|--report]"""
+    import asyncio
+
+    async def _run():
+        from .treellm.self_improver import get_self_improver, Severity
+        improver = get_self_improver()
+
+        sub = args[0].lower() if args else "report"
+
+        if sub == "--scan":
+            print("  Scanning codebase for defects...")
+            defects = await improver._scanner.scan(use_llm="--llm" in args)
+            report = improver._scanner.report()
+            print(f"  Found {report['total']} defects")
+            for cat, n in report["by_category"].items():
+                print(f"    {cat}: {n}")
+            for sv, n in report["by_severity"].items():
+                print(f"    [{sv}] {n}")
+            print("\n  Top defects:")
+            for d in report["top5"]:
+                print(f"    [{d['severity']}] {d['category']}: {d['title'][:80]} ({d['file'][:60]})")
+
+        elif sub == "--propose":
+            print("  Proposing innovations...")
+            defects = await improver._scanner.scan()
+            innovations = await improver._proposer.propose(defects, use_llm="--llm" in args)
+            for inn in innovations:
+                print(f"  💡 [{inn.category}] {inn.title}")
+                print(f"     {inn.description[:120]}")
+                print(f"     复杂度: {inn.complexity}")
+
+        elif sub == "--auto":
+            print("  Running full auto-improve cycle...")
+            result = await improver.improve(use_llm="--llm" in args, auto_apply="--apply" in args)
+            print(f"  Defects: {result['defects']}")
+            print(f"  Innovations: {result['innovations']}")
+            print(f"  Implemented: {result['implemented']}")
+            print(f"  Validated: {result['validated']}")
+
+        elif sub == "--report":
+            stats = improver.stats()
+            print(f"  Improvement cycles: {stats['cycles']}")
+            print(f"  Innovations proposed: {stats['improvements_proposed']}")
+            report = stats["scanner_report"]
+            print(f"  Total defects: {report['total']}")
 
     asyncio.run(_run())
 

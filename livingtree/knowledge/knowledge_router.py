@@ -183,8 +183,7 @@ class KnowledgeRouter:
             "total_classifications": total,
             "by_source": {k: {"count": v, "pct": round(v / max(total, 1) * 100, 1)}
                           for k, v in self._route_stats.items()},
-            "avg_sources_per_query": round(
-                sum(self._route_stats.values()) / max(total, 1), 1),
+            "active_layers": sum(1 for v in self._route_stats.values() if v > 0),
         }
 
 

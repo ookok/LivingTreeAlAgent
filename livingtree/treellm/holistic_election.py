@@ -278,7 +278,7 @@ class HolisticElection:
 
             # Score dimensions
             lat = float(stats.avg_latency_ms) if stats.avg_latency_ms else 200
-            score.scores["latency"] = 1.0 - min(lat / max(200, lat), 0.95)
+            score.scores["latency"] = 1.0 - min(lat / 5000.0, 0.95)
             score.scores["quality"] = stats.recent_quality
             score.scores["cost"] = 1.0 if score.is_free else 0.3
             score.scores["capability"] = self._capability_match(name, query)
@@ -427,12 +427,14 @@ class HolisticElection:
         try:
             from livingtree.optimization.lpo_optimizer import get_provider_lpo
             pto = get_provider_lpo(divergence="kl", temperature=0.5)
-            metrics: dict[str, dict[str, float]] = {}
             current: dict[str, float] = {}
+            targets: dict[str, float] = {}
             for s in alive_scores:
-                metrics[s.name] = dict(s.scores)
                 current[s.name] = s.total
-            projected = pto.optimize(current, current)
+                # Compute target from per-dimension scores for π*
+                dims = dict(s.scores)
+                targets[s.name] = sum(v for v in dims.values()) / max(len(dims), 1)
+            projected = pto.optimize(current, targets)
             for s in alive_scores:
                 s.lpo_score = projected.get(s.name, s.total)
         except Exception:
@@ -495,7 +497,7 @@ class HolisticElection:
         for name in candidates:
             stats = self.get_stats(name)
             # rough cost estimate: try to use a small default, allow override if internal list exists
-            cost = 0.003 if getattr(self, "_free_set", None) and name in self._free_set else 0.02
+            cost = 0.003 if name in free_models else 0.02
             proj = stats.project_future(cost_per_1k=cost, task_complexity=task_complexity)
             projections[name] = proj
         # Sort by recommendation priority then by higher expected quality
@@ -692,48 +694,28 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
     base = {
         "elo": 0.08,
         "long_term_reward": 0.06,
-        "thompson": 0.10,  # Thompson Sampling — Bayesian prior weight
-        "exploration": 0.04,  # Exploration bonus
+        "thompson": 0.10,
+        "exploration": 0.04,
     }
     if t == "code":
         w = {
-            "latency": 0.10,
-            "quality": 0.35,
-            "cost": 0.10,
-            "capability": 0.15,
-            "freshness": 0.05,
-            "rate_limit": 0.05,
-            "cache": 0.10,
-            "sticky": 0.10,
+            "latency": 0.08, "quality": 0.28, "cost": 0.08, "capability": 0.12,
+            "freshness": 0.04, "rate_limit": 0.04, "cache": 0.08, "sticky": 0.08,
+            "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.02,
         }
-        return {**base, **w}
-    if t == "long_context":
+    elif t == "long_context":
         w = {
-            "latency": 0.10,
-            "quality": 0.20,
-            "cost": 0.08,
-            "capability": 0.15,
-            "freshness": 0.05,
-            "rate_limit": 0.05,
-            "cache": 0.05,
-            "sticky": 0.05,
-            "hifloat8": 0.27,  # HiFloat8 gives 2.60x boost at 128K
+            "latency": 0.07, "quality": 0.14, "cost": 0.06, "capability": 0.11,
+            "freshness": 0.04, "rate_limit": 0.04, "cache": 0.04, "sticky": 0.04,
+            "hifloat8": 0.20, "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.08,
         }
-        return {**base, **w}
-    if t == "reasoning":
+    elif t == "reasoning":
         w = {
-            "latency": 0.05,
-            "quality": 0.38,
-            "cost": 0.08,
-            "capability": 0.17,
-            "freshness": 0.05,
-            "rate_limit": 0.05,
-            "cache": 0.10,
-            "sticky": 0.10,
-            "hifloat8": 0.02,
+            "latency": 0.04, "quality": 0.28, "cost": 0.06, "capability": 0.13,
+            "freshness": 0.04, "rate_limit": 0.04, "cache": 0.08, "sticky": 0.08,
+            "hifloat8": 0.02, "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.05,
         }
-        return {**base, **w}
-    if t == "chat":
+    elif t == "chat":
         w = {
             "latency": 0.25,
             "quality": 0.20,
@@ -744,33 +726,30 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
             "cache": 0.10,
             "sticky": 0.10,
         }
-        return {**base, **w}
-    if t == "search":
+    elif t == "chat":
         w = {
-            "latency": 0.15,
-            "quality": 0.18,
-            "cost": 0.10,
-            "capability": 0.20,
-            "freshness": 0.12,
-            "rate_limit": 0.05,
-            "cache": 0.10,
-            "sticky": 0.10,
+            "latency": 0.20, "quality": 0.16, "cost": 0.10, "capability": 0.08,
+            "freshness": 0.06, "rate_limit": 0.04, "cache": 0.08, "sticky": 0.08,
+            "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.02,
         }
-        return {**base, **w}
-    if t == "multimodal":
+    elif t == "search":
         w = {
-            "latency": 0.08,
-            "quality": 0.30,
-            "cost": 0.15,
-            "capability": 0.20,
-            "freshness": 0.05,
-            "rate_limit": 0.05,
-            "cache": 0.07,
-            "sticky": 0.10,
+            "latency": 0.12, "quality": 0.14, "cost": 0.08, "capability": 0.16,
+            "freshness": 0.10, "rate_limit": 0.04, "cache": 0.08, "sticky": 0.08,
+            "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.02,
         }
-        return {**base, **w}
-    # general/default — apply complexity + adaptive weight adjustment
-    w = {**WEIGHTS, **base}
+    elif t == "multimodal":
+        w = {
+            "latency": 0.06, "quality": 0.24, "cost": 0.12, "capability": 0.16,
+            "freshness": 0.04, "rate_limit": 0.04, "cache": 0.06, "sticky": 0.08,
+            "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.02,
+        }
+    else:
+        w = {**WEIGHTS, **base}
+    # Normalize to ensure sum = 1.0
+    total = sum(w.values())
+    if total > 0:
+        w = {k: round(v / total, 4) for k, v in w.items()}
 
     # Complexity-aware adjustment: shift quality↑ latency↓ for complex tasks
     if complexity != 0.5:
@@ -933,14 +912,8 @@ class CausalEffectTracker:
         }
 
 
-_causal_tracker: CausalEffectTracker | None = None
-
-
 def get_causal_tracker() -> CausalEffectTracker:
-    global _causal_tracker
-    if _causal_tracker is None:
-        _causal_tracker = CausalEffectTracker()
-    return _causal_tracker
+    return CausalEffectTracker.instance()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1035,14 +1008,8 @@ class ABTestManager:
         return {"active_experiments": len(self._experiments)}
 
 
-_ab_manager: ABTestManager | None = None
-
-
 def get_ab_manager() -> ABTestManager:
-    global _ab_manager
-    if _ab_manager is None:
-        _ab_manager = ABTestManager()
-    return _ab_manager
+    return ABTestManager.instance()
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -41,7 +41,7 @@ async def run(command: str, timeout: float = 30.0,
     try:
         from ..core.shell_env import get_shell
         shell = get_shell()
-        result = await shell.execute(command, timeout=timeout, cwd=cwd)
+        result = await shell.execute(command, timeout=timeout, workdir=cwd)
         if result.blocked:
             return ExecResult(stderr=f"BLOCKED: dangerous command", exit_code=-1)
         return ExecResult(

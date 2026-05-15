@@ -96,7 +96,7 @@ class CellTrainer(BaseModel):
             else:
                 drill_cfg.dataset_path = self.drill._prepare_dataset(dataset if isinstance(dataset, list) else [], "cell_data")
 
-            result = asyncio.get_event_loop().run_until_complete(self.drill._run_drill(drill_cfg))
+            result = asyncio.run(self.drill._run_drill(drill_cfg))
 
             return {
                 "status": "completed" if result.success else "failed",
@@ -121,7 +121,7 @@ class CellTrainer(BaseModel):
         if self.config.use_swift and self.drill.is_available():
             import asyncio
             model_path = getattr(model, "checkpoint_dir", "./data/cells/output")
-            eval_results = asyncio.get_event_loop().run_until_complete(
+            eval_results = asyncio.run(
                 self.drill.evaluate(str(model_path))
             )
             if "error" not in eval_results:
@@ -152,7 +152,7 @@ class CellTrainer(BaseModel):
                 [{"query": "distill", "response": o} for o in expert_outputs],
                 "distill_data",
             )
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 self.drill._run_drill(drill_cfg)
             )
             return {
@@ -178,7 +178,7 @@ class PersonaRewardScores:
     trait_alignment: float = 0.0
     composite: float = 0.0
 
-    def weighted_score(self, weights: dict[str, float] = None) -> float:
+    def weighted_score(self, weights: dict[str, float] | None = None) -> float:
         w = weights or {"preservation": 0.40, "reference": 0.30, "trait_alignment": 0.30}
         return (
             self.preservation * w.get("preservation", 0.40)

@@ -408,28 +408,28 @@ class ConvergenceCertificate:
         self._energy_stability_delta = energy_stability_delta
         self._consecutive_certification = consecutive_certification
         self._consecutive_pass: int = 0
-        self._energy_window: deque[float] = deque(maxlen=20)
+        self._grad_window: deque[float] = deque(maxlen=20)
         self.converged = False
         self.reason = ""
 
     def update(self, gradient_norm: float, T: float, tunnel_count: int = 0) -> bool:
         """Check convergence conditions for current step."""
-        self._energy_window.append(gradient_norm)
+        self._grad_window.append(gradient_norm)
 
         temp_ok = T <= self._T_min
         grad_ok = gradient_norm < self._gradient_eps
         no_tunnels = tunnel_count == 0
 
-        if self._energy_window:
-            avg_energy = sum(self._energy_window) / len(self._energy_window)
-            energy_stable = all(
-                abs(e - avg_energy) < self._energy_stability_delta
-                for e in self._energy_window
+        if self._grad_window:
+            avg_grad = sum(self._grad_window) / len(self._grad_window)
+            grad_stable = all(
+                abs(e - avg_grad) < self._energy_stability_delta
+                for e in self._grad_window
             )
         else:
-            energy_stable = False
+            grad_stable = False
 
-        if temp_ok and grad_ok and energy_stable and no_tunnels:
+        if temp_ok and grad_ok and grad_stable and no_tunnels:
             self._consecutive_pass += 1
         else:
             self._consecutive_pass = 0
@@ -518,6 +518,7 @@ def run_annealing(
             improved = landscape.accept(neighbor)
             if improved:
                 stagnation = 0
+                landscape.compute_gradient(neighbor)
             else:
                 stagnation += 1
         else:

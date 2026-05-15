@@ -18,9 +18,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import pickle
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from collections import defaultdict
 from typing import Any, Optional
 
 from loguru import logger
@@ -78,7 +82,7 @@ class CodeGraph:
         self._file_hash: dict[str, str] = {}
         self._file_entities: dict[str, list[str]] = {}  # file -> entity IDs
         self._parser = ASTParser()
-        self._db_path = Path(db_path) if db_path else Path("./data/code_graph.json")
+        self._db_path = Path(db_path) if db_path else Path("./data/code_graph.pickle")
         self._stats = GraphStats()
 
     @property
@@ -136,11 +140,18 @@ class CodeGraph:
                     self._update_file(sut, nodes, edges)
                     lang_counts[ext] = lang_counts.get(ext, 0) + 1
                     total_entities += len(nodes)
-                except Exception:
-                    pass
+                except Exception as e:
+                    if total_entities == 0 and lang_counts == {}:
+                        logger.warning(f"CodeGraph parse failed for {sut}: {e}")
 
         total_edges = sum(len(e.dependents) for e in self._entities.values())
         elapsed = (time.time() - t0) * 1000
+
+        # Build O(1) name index once after all files are loaded
+        self._build_name_index()
+
+        # Heuristic call detection (runs once, not per-file)
+        self._detect_heuristic_calls_all()
 
         self._stats = GraphStats(
             total_files=len(files),
@@ -182,18 +193,41 @@ class CodeGraph:
             self._file_entities.setdefault(filepath, []).append(eid)
             count += 1
 
-        # Wire edges: calls, contains, inherits
+        # Build import → qualified name map for this file
+        import_map = self._build_import_map(filepath, nodes)
+
+        # Wire edges: calls, contains, inherits (O(1) via name index)
+        GENERIC_NAMES = {"get", "set", "run", "main", "init", "start", "stop",
+                         "read", "write", "open", "close", "load", "save",
+                         "create", "update", "delete", "list", "find", "search"}
+
         for edge in edges:
-            # Find matching entities and add dependency links
-            for eid, entity in list(self._entities.items()):
-                if entity.name == edge.target and entity.file != filepath:
-                    source_id = f"{filepath}:{edge.source}"
-                    source_entities = [e for e in self._file_entities.get(filepath, [])
-                                       if edge.source in e]
-                    for se in source_entities:
-                        if se in self._entities:
-                            self._entities[se].dependencies.append(eid)
-                            self._entities[eid].dependents.append(se)
+            if edge.target in GENERIC_NAMES:
+                continue
+            target_qualified = import_map.get(edge.target, edge.target)
+            candidates = self._name_index.get(target_qualified, [])
+            if not candidates:
+                candidates = self._name_index.get(edge.target, [])
+
+            source_id = f"{filepath}:{edge.source}"
+            for se in self._file_entities.get(filepath, []):
+                if edge.source in se and se in self._entities:
+                    for target_id in candidates:
+                        if target_id in self._entities and target_id != se:
+                            if target_id not in self._entities[se].dependencies:
+                                self._entities[se].dependencies.append(target_id)
+                                self._entities[target_id].dependents.append(se)
+                    # If no import-resolved match, try same-file call
+                    if not candidates:
+                        for eid in self._file_entities.get(filepath, []):
+                            entity = self._entities.get(eid)
+                            if entity and entity.name == edge.target and eid != se:
+                                if eid not in self._entities[se].dependencies:
+                                    self._entities[se].dependencies.append(eid)
+                                    self._entities[eid].dependents.append(se)
+
+        # Heuristic: detect string-based calls (e.g., bus.invoke("vfs:read"))
+        self._detect_heuristic_calls(filepath)
 
         # Update file hash
         try:
@@ -203,6 +237,63 @@ class CodeGraph:
             pass
 
         return count
+
+    def _build_name_index(self) -> None:
+        """Build O(1) name → [entity_ids] index. Called once lazily."""
+        if not hasattr(self, '_name_index') or len(self._name_index) < len(self._entities) * 0.5:
+            self._name_index: dict[str, list[str]] = defaultdict(list)
+            for eid, entity in self._entities.items():
+                self._name_index[entity.name].append(eid)
+                # Also index by qualified name: file_basename.funcname
+                base = Path(entity.file).stem
+                self._name_index[f"{base}.{entity.name}"].append(eid)
+
+    @staticmethod
+    def _build_import_map(filepath: str, nodes: list) -> dict[str, str]:
+        """Build a map from short names to qualified names using AST import analysis."""
+        import_map: dict[str, str] = {}
+        try:
+            import ast as py_ast
+            source = Path(filepath).read_text(encoding="utf-8", errors="replace")
+            tree = py_ast.parse(source)
+        except Exception:
+            return import_map
+
+        for node in py_ast.walk(tree):
+            if isinstance(node, py_ast.ImportFrom):
+                module = node.module or ""
+                for alias in node.names:
+                    name = alias.asname or alias.name
+                    import_map[name] = f"{module}.{alias.name}"
+            elif isinstance(node, py_ast.Import):
+                for alias in node.names:
+                    name = alias.asname or alias.name
+                    import_map[name] = name
+
+        return import_map
+
+    def _detect_heuristic_calls_all(self) -> None:
+        """Batch-detect string-based calls across all indexed files (runs once)."""
+        for fpath in list(self._file_entities.keys())[:200]:  # Cap at 200 files
+            try:
+                source = Path(fpath).read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            patterns = [
+                (r'\.invoke\s*\(\s*["\']([^"\']+)["\']', "invoke"),
+                (r'\.register\s*\(\s*["\']([^"\']+)["\']', "register"),
+            ]
+            for pattern, kind in patterns:
+                for m in re.finditer(pattern, source):
+                    target_name = m.group(1)
+                    for eid in self._file_entities.get(fpath, []):
+                        entity = self._entities.get(eid)
+                        if entity:
+                            for tid in self._name_index.get(target_name, []):
+                                if tid in self._entities and tid != eid:
+                                    if tid not in self._entities[eid].dependencies:
+                                        self._entities[eid].dependencies.append(tid)
+                                        self._entities[tid].dependents.append(eid)
 
     def _is_changed(self, filepath: str) -> bool:
         """Check if a file has changed since last index."""
@@ -328,40 +419,126 @@ class CodeGraph:
     # ── Persistence ──
 
     def save(self, path: str | None = None) -> None:
-        p = Path(path) if path else self._db_path
+        p = Path(path) if path else self._db_path.with_suffix(".pickle")
         p.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "entities": {k: {
-                "id": e.id, "name": e.name, "file": e.file, "kind": e.kind,
-                "line": e.line, "deps": e.dependencies, "dependents": e.dependents,
-            } for k, e in self._entities.items()},
+
+        # Build integer ID mapping for compact storage
+        id_to_int: dict[str, int] = {}
+        int_to_id: list[str] = []
+        entities_compact: dict[int, tuple] = {}
+        for eid, entity in self._entities.items():
+            if eid not in id_to_int:
+                id_to_int[eid] = len(int_to_id)
+                int_to_id.append(eid)
+            ei = id_to_int[eid]
+            for dep in entity.dependencies:
+                if dep not in id_to_int:
+                    id_to_int[dep] = len(int_to_id)
+                    int_to_id.append(dep)
+            for dep in entity.dependents:
+                if dep not in id_to_int:
+                    id_to_int[dep] = len(int_to_id)
+                    int_to_id.append(dep)
+        for eid, entity in self._entities.items():
+            ei = id_to_int[eid]
+            entities_compact[ei] = (
+                entity.name, entity.file, entity.kind,
+                entity.line, entity.end_line, entity.parent_class,
+                entity.test_coverage, entity.complexity, entity.hash,
+                tuple(id_to_int[d] for d in entity.dependencies),
+                tuple(id_to_int[d] for d in entity.dependents),
+            )
+
+        state = {
+            "v": 2,
+            "id_map": int_to_id,
+            "entities": entities_compact,
+            "file_entities": {f: [id_to_int[eid] for eid in eids]
+                            for f, eids in self._file_entities.items()},
             "file_hash": self._file_hash,
+            "file_mtimes": {f: os.path.getmtime(f) if os.path.exists(f) else 0
+                           for f in self._file_hash},
         }
-        p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        logger.info(f"CodeGraph saved to {p} ({len(self._entities)} entities)")
+        with open(p, "wb") as fh:
+            pickle.dump(state, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        size_mb = p.stat().st_size / (1024 * 1024)
+        logger.info(f"CodeGraph saved ({len(self._entities)} entities, {size_mb:.1f}MB)")
 
     def load(self, path: str | None = None) -> bool:
-        p = Path(path) if path else self._db_path
+        p = Path(path) if path else self._db_path.with_suffix(".pickle")
         if not p.exists():
             return False
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            self._entities = {}
-            for eid, edata in data.get("entities", {}).items():
-                self._entities[eid] = CodeEntity(
-                    id=edata["id"], name=edata["name"], file=edata["file"],
-                    kind=edata.get("kind", "function"), line=edata.get("line", 0),
-                    end_line=edata.get("line", 0),
-                    dependencies=edata.get("deps", []),
-                    dependents=edata.get("dependents", []),
-                )
-                self._file_entities.setdefault(edata["file"], []).append(eid)
-            self._file_hash = data.get("file_hash", {})
-            logger.info(f"CodeGraph loaded from {p} ({len(self._entities)} entities)")
+            with open(p, "rb") as fh:
+                state = pickle.load(fh)
+
+            if state.get("v", 1) >= 2:
+                int_to_id: list[str] = state["id_map"]
+                entities_c: dict[int, tuple] = state["entities"]
+                self._entities = {}
+                for ei, tup in entities_c.items():
+                    self._entities[int_to_id[ei]] = CodeEntity(
+                        id=int_to_id[ei], name=tup[0], file=tup[1], kind=tup[2],
+                        line=tup[3], end_line=tup[4], parent_class=tup[5],
+                        test_coverage=tup[6], complexity=tup[7], hash=tup[8],
+                        dependencies=[int_to_id[d] for d in tup[9]],
+                        dependents=[int_to_id[d] for d in tup[10]],
+                    )
+                self._file_entities = defaultdict(list, {
+                    f: [int_to_id[ei] for ei in eis]
+                    for f, eis in state.get("file_entities", {}).items()
+                })
+            else:
+                # Legacy v1 format: entities as dicts
+                for eid, edata in state.get("entities", {}).items():
+                    self._entities[eid] = CodeEntity(
+                        id=edata["id"], name=edata["name"], file=edata["file"],
+                        kind=edata.get("kind", "function"), line=edata.get("line", 0),
+                        end_line=edata.get("line", 0),
+                        dependencies=edata.get("deps", []),
+                        dependents=edata.get("dependents", []),
+                    )
+                self._file_entities = defaultdict(list, state.get("file_entities", {}))
+            self._file_hash = state.get("file_hash", {})
+            cached_mtimes = state.get("file_mtimes", {})
+
+            # Check which files changed since last index
+            changed = [f for f, ts in cached_mtimes.items()
+                       if (not os.path.exists(f)) or (os.path.getmtime(f) != ts)]
+
+            # Rebuild dependents from dependencies (ensure consistency)
+            for eid, entity in self._entities.items():
+                entity.dependents = []
+            for eid, entity in self._entities.items():
+                for dep_id in entity.dependencies:
+                    if dep_id in self._entities:
+                        self._entities[dep_id].dependents.append(eid)
+
+            logger.info(
+                f"CodeGraph loaded ({len(self._entities)} entities, "
+                f"{len(changed)}/{len(cached_mtimes)} files changed)"
+            )
+            if changed and len(changed) < len(cached_mtimes) * 0.3:
+                logger.info(f"CodeGraph: {len(changed)} files changed — incremental re-index")
+                self._file_hash = {k: v for k, v in self._file_hash.items()
+                                   if k not in changed}
+                self._reindex_files(changed)
+                self.save(str(p))  # Persist incremental update
             return True
         except Exception as e:
             logger.warning(f"CodeGraph load failed: {e}")
             return False
+
+    def _reindex_files(self, files: list[str]) -> None:
+        """Incrementally re-index changed files without rebuilding entire graph."""
+        for fpath in files:
+            if not os.path.exists(fpath) or not fpath.endswith(".py"):
+                continue
+            nodes, edges = self._parser.parse_file(fpath)
+            if nodes:
+                self._update_file(fpath, nodes, edges)
+            content = Path(fpath).read_text(errors="replace")
+            self._file_hash[fpath] = self._compute_hash(content)
 
     def _compute_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()[:16]

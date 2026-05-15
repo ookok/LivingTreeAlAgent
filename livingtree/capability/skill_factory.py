@@ -130,19 +130,6 @@ class SkillFactory:
         self._tmp_root: Path = Path(tempfile.gettempdir()) / "livingtree_skills"
         self._tmp_root.mkdir(parents=True, exist_ok=True)
 
-
-_skill_factory: Optional[SkillFactory] = None
-_skill_factory_lock = threading.Lock()
-
-
-def get_skill_factory() -> SkillFactory:
-    global _skill_factory
-    if _skill_factory is None:
-        with _skill_factory_lock:
-            if _skill_factory is None:
-                _skill_factory = SkillFactory()
-    return _skill_factory
-
     def discover_skills(self) -> List[str]:
         return list(self._skills.keys())
 
@@ -229,3 +216,16 @@ def get_skill_factory() -> SkillFactory:
         if not spec:
             return [{"error": "skill not found"}]
         return spec.test_cases
+
+
+_skill_factory: Optional[SkillFactory] = None
+_skill_factory_lock = threading.Lock()
+
+
+def get_skill_factory() -> SkillFactory:
+    global _skill_factory
+    if _skill_factory is None:
+        with _skill_factory_lock:
+            if _skill_factory is None:
+                _skill_factory = SkillFactory()
+    return _skill_factory

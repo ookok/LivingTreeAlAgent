@@ -227,7 +227,7 @@ class AgentEval:
             )
             if result and result.text:
                 import re
-                m = re.search(r'\{[\s\S]*\}', result.text)
+                m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result.text)
                 if m:
                     d = json.loads(m.group())
                     ev = OutputEval(

@@ -139,8 +139,9 @@ class ContradictionTracker:
 
             if c.intensity >= intensity_threshold and c.is_escalating:
                 old_state = c.state
+                if old_state != ContradictionState.STRUGGLE:
+                    c.resolution_count += 1
                 c.state = ContradictionState.STRUGGLE
-                c.resolution_count += 1
                 desc = (
                     f"PHASE TRANSITION [{name}]: {c.thesis.name}({c.thesis.value:.2f}) "
                     f"↔ {c.antithesis.name}({c.antithesis.value:.2f}) | "

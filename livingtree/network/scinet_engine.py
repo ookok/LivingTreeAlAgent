@@ -117,7 +117,7 @@ class ScinetEngine:
         self.port = port
         self.node_id = node_id or f"scinet-{port}"
         self._status = ScinetEngineStatus(port=port)
-        self._lock = threading.RLock()
+        self._lock = asyncio.Lock()
         self._running = False
         self._start_time: float = 0.0
 
@@ -152,7 +152,7 @@ class ScinetEngine:
         # Phase 2: Background (async, non-blocking)
         asyncio.create_task(self._init_background(enable_wt))
 
-        with self._lock:
+        async with self._lock:
             self._status.running = True
 
         logger.info("ScinetEngine v2.0 started on port %d", self.port)
@@ -162,13 +162,13 @@ class ScinetEngine:
         """Phase 1: Instant initialization."""
         # Bandit router (fast, just loads state)
         self._bandit = get_bandit_router()
-        with self._lock:
+        async with self._lock:
             self._status.bandit_ready = True
 
         # Cache (fast, just opens SQLite)
         self._cache = get_semantic_cache()
         await self._cache.initialize()
-        with self._lock:
+        async with self._lock:
             self._status.cache_ready = True
 
         logger.debug("ScinetEngine: fast init complete (bandit + cache)")
@@ -179,7 +179,7 @@ class ScinetEngine:
         try:
             self._quic = get_quic_tunnel()
             await self._quic.initialize()
-            with self._lock:
+            async with self._lock:
                 self._status.quic_active = self._quic._quic_active
         except Exception as e:
             logger.debug("QUIC init: %s", e)
@@ -188,7 +188,7 @@ class ScinetEngine:
         try:
             self._topology = get_topology()
             await self._topology.initialize()
-            with self._lock:
+            async with self._lock:
                 self._status.topology_ready = True
                 self._status.topology_nodes = len(self._topology._nodes)
         except Exception as e:
@@ -197,7 +197,7 @@ class ScinetEngine:
         # Federated learner
         try:
             self._federated = get_federated_learner(node_id=self.node_id)
-            with self._lock:
+            async with self._lock:
                 self._status.federated_ready = True
         except Exception as e:
             logger.debug("Federated init: %s", e)
@@ -206,7 +206,7 @@ class ScinetEngine:
         try:
             self._vllm = get_vllm_engine()
             await self._vllm.initialize()
-            with self._lock:
+            async with self._lock:
                 self._status.cache_ready = True  # reuse cache flag for vllm
         except Exception as e:
             logger.debug("VLLM init: %s", e)
@@ -215,7 +215,7 @@ class ScinetEngine:
         try:
             self._swarm = get_swarm_network(node_id=self.node_id)
             await self._swarm.initialize(p2p_node=self._p2p_node)
-            with self._lock:
+            async with self._lock:
                 self._status.federated_ready = True
         except Exception as e:
             logger.debug("Swarm init: %s", e)
@@ -227,7 +227,7 @@ class ScinetEngine:
             # Create initial session pool
             for domain in ["github.com", "google.com"]:
                 await self._morph.create_session(domain)
-            with self._lock:
+            async with self._lock:
                 self._status.cache_ready = True
         except Exception as e:
             logger.debug("Morph init: %s", e)
@@ -235,7 +235,7 @@ class ScinetEngine:
         # DSSA Sparse Attention Router
         try:
             self._dssa = get_dssa_router()
-            with self._lock:
+            async with self._lock:
                 self._status.cache_ready = True
         except Exception as e:
             logger.debug("DSSA init: %s", e)
@@ -243,7 +243,7 @@ class ScinetEngine:
         # LASER Superposition Router
         try:
             self._laser = get_laser_router()
-            with self._lock:
+            async with self._lock:
                 self._status.cache_ready = True
         except Exception as e:
             logger.debug("LASER init: %s", e)
@@ -253,7 +253,7 @@ class ScinetEngine:
             try:
                 self._wt = get_webtransport_server(port=self.port + 1)
                 await self._wt.start()
-                with self._lock:
+                async with self._lock:
                     self._status.wt_active = True
             except Exception as e:
                 logger.debug("WebTransport init: %s", e)
@@ -280,7 +280,7 @@ class ScinetEngine:
         if self._wt:
             await self._wt.stop()
 
-        with self._lock:
+        async with self._lock:
             self._status.uptime_seconds = time.time() - self._start_time
             self._status.running = False
 
@@ -303,7 +303,7 @@ class ScinetEngine:
 
         Returns: (status_code, content_bytes, response_headers)
         """
-        with self._lock:
+        async with self._lock:
             self._status.total_requests += 1
 
         start_time = time.perf_counter()
@@ -356,7 +356,7 @@ class ScinetEngine:
         if self._cache and method == "GET":
             hit, cached_content, cached_headers = await self._cache.get(url, headers)
             if hit and cached_content:
-                with self._lock:
+                async with self._lock:
                     self._status.success_requests += 1
                     self._status.cache_hit_rate = self._compute_cache_hit_rate()
                 return 200, cached_content, cached_headers or {}
@@ -409,7 +409,7 @@ class ScinetEngine:
                         status = resp.status
                         resp_headers = dict(resp.headers)
         except Exception as e:
-            with self._lock:
+            async with self._lock:
                 self._status.failed_requests += 1
             raise
 
@@ -472,7 +472,7 @@ class ScinetEngine:
             except Exception:
                 pass
 
-        with self._lock:
+        async with self._lock:
             self._status.success_requests += 1
             self._status.bandwidth_bytes += len(content)
             self._status.avg_latency_ms = (
@@ -488,7 +488,7 @@ class ScinetEngine:
         features[1] = 0.0 if status >= 500 else 1.0
         features[2] = min(1.0, latency / 5000.0)
         features[3] = self._status.cache_hit_rate
-        with self._lock:
+        async with self._lock:
             total = max(self._status.total_requests, 1)
             features[4] = self._status.success_requests / total
             features[5] = self._status.failed_requests / total
@@ -544,7 +544,7 @@ class ScinetEngine:
             self._p2p_sync_task = asyncio.create_task(_periodic_sync())
 
     def get_status(self) -> ScinetEngineStatus:
-        with self._lock:
+        async with self._lock:
             if self._running:
                 self._status.uptime_seconds = time.time() - self._start_time
                 self._status.bandit_arms = (

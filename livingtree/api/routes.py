@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Requ
 from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 from loguru import logger
+from .. import __version__
 
 
 class LocalFolderRequest(BaseModel):
@@ -102,15 +103,13 @@ def setup_routes(app: FastAPI) -> None:
 
     # ═══ Web API (SPA chat) ═══
 
-        return {"stage": "starting", "pct": 50, "detail": "正在初始化..."}
-
     @app.get("/api/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
         """Health check endpoint."""
         try:
             hub = request.app.state.hub
         except Exception:
-            return HealthResponse(status="ok", version="2.3", components={"server": "running"})
+            return HealthResponse(status="ok", version=__version__, components={"server": "running"})
         components = {}
         if hub:
             if getattr(hub, '_started', False):
@@ -122,12 +121,12 @@ def setup_routes(app: FastAPI) -> None:
                     "network": status.get("network", {}).get("status", "unknown"),
                     "orchestrator": f"{status.get('orchestrator', {}).get('total_agents', 0)} agents",
                 }
-                return HealthResponse(status="healthy", version="2.1.0", components=components)
+                return HealthResponse(status="healthy", version=__version__, components=components)
             else:
                 bp = getattr(hub, '_boot_progress', {})
-                return HealthResponse(status="starting", version="2.1.0",
+                return HealthResponse(status="starting", version=__version__,
                     components={"boot": bp.get("detail", "initializing...")})
-        return HealthResponse(status="starting", version="2.1.0",
+        return HealthResponse(status="starting", version=__version__,
             components={"boot": "waiting for hub..."})
 
     @app.post("/api/cache/flush")
@@ -162,6 +161,11 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post("/api/admin/config")
     async def save_admin_config(request: Request):
+        from ..core.admin_manager import get_admin
+        a = get_admin()
+        t = (request.headers.get("Authorization", "")).replace("Bearer ", "")
+        if not a.verify_admin_token(t):
+            raise HTTPException(status_code=401)
         data = await request.json()
         provider = data.get("provider", "")
         key = data.get("key", "")
@@ -184,7 +188,12 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.get("/api/admin/export")
     async def export_config(request: Request):
-        """Export all admin configuration as encrypted file."""
+        """Export all admin configuration as encrypted file (admin auth required)."""
+        from ..core.admin_manager import get_admin
+        a = get_admin()
+        t = (request.headers.get("Authorization", "")).replace("Bearer ", "")
+        if not a.verify_admin_token(t):
+            raise HTTPException(status_code=401)
         cfg = get_config()
         data = {
             "api_keys": {
@@ -218,7 +227,12 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post("/api/admin/import")
     async def import_config(request: Request):
-        """Import encrypted configuration file."""
+        """Import encrypted configuration file (admin auth required)."""
+        from ..core.admin_manager import get_admin
+        a = get_admin()
+        t = (request.headers.get("Authorization", "")).replace("Bearer ", "")
+        if not a.verify_admin_token(t):
+            raise HTTPException(status_code=401)
         body = await request.body()
         from hashlib import sha256
         enc_key = sha256(b"livingtree_admin_export").digest()
@@ -638,9 +652,9 @@ def setup_routes(app: FastAPI) -> None:
         try:
             if hasattr(hub, 'status'):
                 return hub.status()
-            return hub.get_status() if hasattr(hub, 'get_status') else {"version": "2.1.0", "online": True}
+            return hub.get_status() if hasattr(hub, 'get_status') else {"version": __version__, "online": True}
         except Exception as e:
-            return {"error": str(e), "version": "2.1.0", "status": "initializing"}
+            return {"error": str(e), "version": __version__, "status": "initializing"}
 
     @app.get("/api/config/tianditu_key")
     async def tianditu_key(request: Request) -> dict[str, str]:
@@ -1016,7 +1030,7 @@ def setup_routes(app: FastAPI) -> None:
         await websocket.send_json({
             "type": "connected",
             "node_id": hub.node.info.id if hub.node else "unknown",
-            "version": "2.0.0",
+            "version": __version__,
         })
 
         try:

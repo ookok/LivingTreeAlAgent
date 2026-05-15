@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 class ModelConfig(BaseModel):
     """LLM model configuration — uses TreeLLM for multi-provider routing."""
 
-    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
     deepseek_api_key: str = ""
 
     flash_model: str = "deepseek/deepseek-v4-flash"
@@ -480,8 +480,8 @@ class LTAIConfig(BaseModel):
         """Compute optimal parameters based on task complexity."""
         return {
             "depth": min(depth, 20),
-            "temperature": max(0.1, self.model.temperature - depth * 0.05),
-            "max_tokens": min(self.model.max_tokens + depth * 256, 32768),
+            "temperature": max(0.1, self.model.flash_temperature - depth * 0.05),
+            "max_tokens": min(self.model.flash_max_tokens + depth * 256, 32768),
             "retries": min(self.execution.max_retries + depth, 10),
             "plan_depth": min(self.execution.plan_depth + depth, 30),
         }
@@ -520,30 +520,23 @@ class LTAIConfig(BaseModel):
             "LT_LOG_LEVEL": ("observability.log_level", str),
             "LT_API_HOST": ("api.host", str),
             "LT_API_PORT": ("api.port", int),
+            "LT_LONGCAT_API_KEY": ("model.longcat_api_key", str),
+            "LT_XIAOMI_API_KEY": ("model.xiaomi_api_key", str),
+            "LT_ALIYUN_API_KEY": ("model.aliyun_api_key", str),
+            "LT_ZHIPU_API_KEY": ("model.zhipu_api_key", str),
+            "LT_DMXAPI_API_KEY": ("model.dmxapi_api_key", str),
+            "LT_SPARK_API_KEY": ("model.spark_api_key", str),
+            "LT_SILICONFLOW_API_KEY": ("model.siliconflow_api_key", str),
+            "LT_MOFANG_API_KEY": ("model.mofang_api_key", str),
+            "LT_NVIDIA_API_KEY": ("model.nvidia_api_key", str),
             "LT_MODELSCOPE_API_KEY": ("model.modelscope_api_key", str),
-            "LT_MODELSCOPE_FLASH_MODEL": ("model.modelscope_flash_model", str),
-            "LT_MODELSCOPE_CHAT_MODEL": ("model.modelscope_chat_model", str),
-            "LT_MODELSCOPE_PRO_MODEL": ("model.modelscope_pro_model", str),
-            "LT_MODELSCOPE_BASE_URL": ("model.modelscope_base_url", str),
             "LT_BAILING_API_KEY": ("model.bailing_api_key", str),
-            "LT_BAILING_FLASH_MODEL": ("model.bailing_flash_model", str),
-            "LT_BAILING_CHAT_MODEL": ("model.bailing_chat_model", str),
-            "LT_BAILING_PRO_MODEL": ("model.bailing_pro_model", str),
-            "LT_BAILING_BASE_URL": ("model.bailing_base_url", str),
             "LT_STEPFUN_API_KEY": ("model.stepfun_api_key", str),
-            "LT_STEPFUN_FLASH_MODEL": ("model.stepfun_flash_model", str),
-            "LT_STEPFUN_CHAT_MODEL": ("model.stepfun_chat_model", str),
-            "LT_STEPFUN_PRO_MODEL": ("model.stepfun_pro_model", str),
-            "LT_STEPFUN_BASE_URL": ("model.stepfun_base_url", str),
             "LT_INTERNLM_API_KEY": ("model.internlm_api_key", str),
-            "LT_INTERNLM_FLASH_MODEL": ("model.internlm_flash_model", str),
-            "LT_INTERNLM_CHAT_MODEL": ("model.internlm_chat_model", str),
-            "LT_INTERNLM_PRO_MODEL": ("model.internlm_pro_model", str),
-            "LT_INTERNLM_BASE_URL": ("model.internlm_base_url", str),
             "LT_SENSETIME_API_KEY": ("model.sensetime_api_key", str),
-            "LT_SENSETIME_FLASH_MODEL": ("model.sensetime_flash_model", str),
-            "LT_SENSETIME_PRO_MODEL": ("model.sensetime_pro_model", str),
-            "LT_SENSETIME_BASE_URL": ("model.sensetime_base_url", str),
+            "LT_OPENROUTER_API_KEY": ("model.openrouter_api_key", str),
+            "LT_HUNYUAN_API_KEY": ("model.hunyuan_api_key", str),
+            "LT_BAIDU_API_KEY": ("model.baidu_api_key", str),
         }
         for env_key, (config_path, converter) in env_map.items():
             value = os.environ.get(env_key)
@@ -581,101 +574,25 @@ def _load_config() -> LTAIConfig:
         config = LTAIConfig()
         logger.info("Using default configuration")
 
-    # Load API keys from encrypted secret vault
+    # Load API keys from encrypted secret vault (unified loop over _all_providers)
     try:
         from .secrets import get_secret_vault
         vault = get_secret_vault()
-        api_key = vault.get("deepseek_api_key", "")
-        if api_key:
-            config.model.deepseek_api_key = api_key
-            logger.info("Loaded deepseek_api_key from encrypted vault")
-        longcat_key = vault.get("longcat_api_key", "")
-        if longcat_key:
-            config.model.longcat_api_key = longcat_key
-            logger.info("Loaded longcat_api_key from encrypted vault")
-        xiaomi_key = vault.get("xiaomi_api_key", "")
-        if xiaomi_key:
-            config.model.xiaomi_api_key = xiaomi_key
-            logger.info("Loaded xiaomi_api_key from encrypted vault")
-        aliyun_key = vault.get("aliyun_api_key", "")
-        if aliyun_key:
-            config.model.aliyun_api_key = aliyun_key
-            logger.info("Loaded aliyun_api_key from encrypted vault")
-        zhipu_key = vault.get("zhipu_api_key", "")
-        if zhipu_key:
-            config.model.zhipu_api_key = zhipu_key
-            logger.info("Loaded zhipu_api_key from encrypted vault")
-        dmxapi_key = vault.get("dmxapi_api_key", "")
-        if dmxapi_key:
-            config.model.dmxapi_api_key = dmxapi_key
-            logger.info("Loaded dmxapi_api_key from encrypted vault")
-        spark_key = vault.get("spark_api_key", "")
-        if spark_key:
-            config.model.spark_api_key = spark_key
-            spark_url = vault.get("spark_base_url", "")
-            if spark_url:
-                config.model.spark_base_url = spark_url
-            logger.info("Loaded spark_api_key from encrypted vault")
-
-        siliconflow_key = vault.get("siliconflow_api_key", "")
-        if siliconflow_key:
-            config.model.siliconflow_api_key = siliconflow_key
-            logger.info("Loaded siliconflow_api_key from encrypted vault")
-
-        mofang_key = vault.get("mofang_api_key", "")
-        if mofang_key:
-            config.model.mofang_api_key = mofang_key
-            logger.info("Loaded mofang_api_key from encrypted vault")
-
-        nvidia_key = vault.get("nvidia_api_key", "")
-        if nvidia_key:
-            config.model.nvidia_api_key = nvidia_key
-            config.model.nvidia_base_url = vault.get("nvidia_base_url", "https://integrate.api.nvidia.com/v1")
-            config.model.nvidia_default_model = vault.get("nvidia_default_model", "deepseek-ai/deepseek-r1")
-            logger.info("Loaded nvidia_api_key from encrypted vault")
-
-        modelscope_key = vault.get("modelscope_api_key", "")
-        if modelscope_key:
-            config.model.modelscope_api_key = modelscope_key
-            logger.info("Loaded modelscope_api_key from encrypted vault")
-        bailing_key = vault.get("bailing_api_key", "")
-        if bailing_key:
-            config.model.bailing_api_key = bailing_key
-            logger.info("Loaded bailing_api_key from encrypted vault")
-        stepfun_key = vault.get("stepfun_api_key", "")
-        if stepfun_key:
-            config.model.stepfun_api_key = stepfun_key
-            logger.info("Loaded stepfun_api_key from encrypted vault")
-        internlm_key = vault.get("internlm_api_key", "")
-        if internlm_key:
-            config.model.internlm_api_key = internlm_key
-            logger.info("Loaded internlm_api_key from encrypted vault")
-
-        # Load SenseTime key from vault
-        sensetime_key = vault.get("sensetime_api_key", "")
-        if sensetime_key:
-            config.model.sensetime_api_key = sensetime_key
-            logger.info("Loaded sensetime_api_key from encrypted vault")
-
-        # Load OpenRouter key from vault (free tier — stored encrypted)
-        openrouter_key = vault.get("openrouter_api_key", "")
-        if openrouter_key:
-            config.model.openrouter_api_key = openrouter_key
-            logger.info("Loaded openrouter_api_key from encrypted vault")
-        else:
-            logger.debug("openrouter_api_key not in vault — free tier models still work without key")
-
-        # Load Hunyuan key from vault
-        hunyuan_key = vault.get("hunyuan_api_key", "")
-        if hunyuan_key:
-            config.model.hunyuan_api_key = hunyuan_key
-            logger.info("Loaded hunyuan_api_key from encrypted vault")
-
-        # Load Baidu key from vault
-        baidu_key = vault.get("baidu_api_key", "")
-        if baidu_key:
-            config.model.baidu_api_key = baidu_key
-            logger.info("Loaded baidu_api_key from encrypted vault")
+        for prefix in ModelConfig._all_providers():
+            key = vault.get(f"{prefix}_api_key", "")
+            if key:
+                setattr(config.model, f"{prefix}_api_key", key)
+                logger.info(f"Loaded {prefix}_api_key from encrypted vault")
+        # Extra per-provider settings (base_url / model overrides)
+        nvidia_base = vault.get("nvidia_base_url", "")
+        if nvidia_base:
+            config.model.nvidia_base_url = nvidia_base
+        nvidia_model = vault.get("nvidia_default_model", "")
+        if nvidia_model:
+            config.model.nvidia_default_model = nvidia_model
+        spark_base = vault.get("spark_base_url", "")
+        if spark_base:
+            config.model.spark_base_url = spark_base
 
         # ── Non-provider secrets ──
         tdt_key = vault.get("tianditu_key", "")
@@ -690,6 +607,10 @@ def _load_config() -> LTAIConfig:
         if bd_key:
             config.model.baidu_map_key = bd_key
             logger.info("Loaded baidu_map_key from encrypted vault")
+        jwt_key = vault.get("jwt_secret", "")
+        if jwt_key:
+            config.model.jwt_secret = jwt_key
+            logger.info("Loaded jwt_secret from encrypted vault")
         smtp_pw = vault.get("smtp_password", "")
         if smtp_pw and hasattr(config, 'email'):
             config.email.smtp_password = smtp_pw

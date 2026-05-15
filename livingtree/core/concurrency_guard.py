@@ -76,10 +76,7 @@ class ConcurrencyGuard:
 
         task: asyncio.Task[Any]
 
-        if self._supports_taskgroup:
-            task = asyncio.create_task(self._run_with_tracking(bt, coro))
-        else:
-            task = asyncio.create_task(self._run_with_tracking(bt, coro))
+        task = asyncio.create_task(self._run_with_tracking(bt, coro))
 
         async with self._lock:
             bt.task = task
@@ -124,7 +121,8 @@ class ConcurrencyGuard:
     def stats(self) -> dict[str, int]:
         """Return counts by task status."""
         counts: dict[str, int] = {}
-        for bt in self._tasks.values():
+        # Snapshot to avoid mutation during iteration
+        for bt in list(self._tasks.values()):
             counts[bt.status] = counts.get(bt.status, 0) + 1
         return counts
 

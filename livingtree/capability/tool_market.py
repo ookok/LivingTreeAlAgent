@@ -116,7 +116,6 @@ def _generate_diagram(params: dict, world: Any = None) -> dict:
 
     try:
         import asyncio, json, aiohttp
-        loop = asyncio.get_event_loop()
         async def _gen():
             if hasattr(world, 'config'):
                 api_key = world.config.model.deepseek_api_key
@@ -134,13 +133,13 @@ def _generate_diagram(params: dict, world: Any = None) -> dict:
                     "temperature":0.3,"max_tokens":2048,
                 }
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(f"{base_url}/v1/chat/completions",
+                    async with session.post(f"{base_url}/chat/completions",
                         headers=headers,json=payload,timeout=aiohttp.ClientTimeout(total=60),
                     ) as resp:
                         data = await resp.json()
                         return data["choices"][0]["message"]["content"]
             return _basic_diagram(description)
-        diagram = loop.run_until_complete(_gen())
+        diagram = asyncio.run(_gen())
         diagram_type = _detect_diagram_type(description)
         return {"diagram": diagram, "source": "llm", "type": diagram_type}
     except Exception as e:

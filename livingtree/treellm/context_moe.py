@@ -340,7 +340,7 @@ class ContextMoE:
 
         # 1. Detect task boundary
         is_boundary, reason, confidence = self._detector.detect(
-        message, time_since_last, self._recent_topics,
+            message, time_since_last, self._recent_topics,
         )
         if is_boundary and confidence > 0.5:
             await self._archive_to_warm(reason)
@@ -362,7 +362,8 @@ class ContextMoE:
         flash_lat = (time.time() - t0) * 1000
 
         t0 = time.time()
-        hot_result = self._query_hot()
+        async with self._lock:
+            hot_result = self._query_hot()
         hot_lat = (time.time() - t0) * 1000
 
         t0 = time.time()
@@ -402,9 +403,7 @@ class ContextMoE:
         )
 
         # 8. Build enriched context string
-        enriched = result
-
-        return enriched
+        return result
 
     def build_enriched_message(self, query: str, result: MoEQueryResult,
                                 total_budget: int = 3000, current_turn: int = 0) -> str:
@@ -470,8 +469,7 @@ class ContextMoE:
             # TriAttention: topic center similarity — topics are semantic centers
             topic_overlap = 0.0
             if b.topics and query_topics:
-                shared = len(set(t.name if hasattr(t, 'name') else str(t)
-                                 for t in b.topics) & query_topics)
+                shared = len(set(str(t) for t in b.topics) & query_topics)
                 topic_overlap = shared / max(len(b.topics), 1)
 
             task_match = 1.0 if b.task_type == task_type else 0.3
@@ -828,6 +826,12 @@ class ContextMoE:
                 "task_count": self._task_count,
                 "total_messages": self._total_messages,
                 "last_consolidation": self._last_consolidation,
+                "hot": [{
+                    "content": b.content, "original_length": b.original_length,
+                    "timestamp": b.timestamp, "task_type": b.task_type,
+                    "prominence": b.prominence,
+                } for b in self._hot],
+                "recent_topics": list(self._recent_topics),
                 "warm": {
                     bid: {
                         "content": b.content, "original_length": b.original_length,
@@ -865,6 +869,18 @@ class ContextMoE:
                 self._last_consolidation = data.get("last_consolidation", 0)
                 self._deep = data.get("deep", {})
                 self._flash = data.get("flash", {})
+                self._recent_topics = set(data.get("recent_topics", []))
+                for bd in data.get("hot", []):
+                    self._hot.append(MemoryBlock(
+                        id=f"hot_restored_{bd.get('timestamp',0)}",
+                        layer=ExpertLayer.HOT,
+                        content=bd.get("content",""),
+                        original_length=bd.get("original_length",0),
+                        timestamp=bd.get("timestamp",0),
+                        task_type=bd.get("task_type","general"),
+                        prominence=bd.get("prominence",0.5),
+                        last_accessed=time.time(),
+                    ))
                 self._activation_graph = defaultdict(list, data.get("activation_graph", {}))
                 for bid, bd in data.get("warm", {}).items():
                     self._warm[bid] = MemoryBlock(

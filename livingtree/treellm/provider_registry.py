@@ -21,6 +21,28 @@ if TYPE_CHECKING:
     from .core import TreeLLM
 
 
+PROVIDER_BASE_URLS = {
+    "deepseek": "https://api.deepseek.com/v1",
+    "longcat": "https://api.longcat.chat/v1",
+    "xiaomi": "https://api.xiaomimimo.com/v1",
+    "aliyun": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+    "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1",
+    "baidu": "https://qianfan.baidubce.com/v2",
+    "spark": "https://maas-api.cn-huabei-1.xf-yun.com/v2",
+    "siliconflow": "https://api.siliconflow.cn/v1",
+    "mofang": "https://ai.gitee.com/v1",
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+    "modelscope": "https://api-inference.modelscope.cn/v1",
+    "bailing": "https://api.baichuan.com/v1",
+    "stepfun": "https://api.stepfun.com/v1",
+    "internlm": "https://internlm-chat.intern-ai.org.cn/api/twlp/v1",
+    "sensetime": "https://api.sensetime.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "dmxapi": "https://www.dmxapi.cn/v1",
+}
+
+
 def register_all_providers(llm: "TreeLLM") -> int:
     """Register all configured providers into the given TreeLLM instance.
 

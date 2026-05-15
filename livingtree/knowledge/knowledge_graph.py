@@ -15,14 +15,14 @@ import re
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-import networkx as nx
 from loguru import logger
 from pydantic import BaseModel, Field
 
 try:
-    import networkx as nx  # ensure optional availability
-except Exception:  # pragma: no cover
+    import networkx as nx
+except ImportError:
     nx = None  # type: ignore
+    logger.debug("networkx not installed — graph features disabled")
 
 
 class Entity(BaseModel):

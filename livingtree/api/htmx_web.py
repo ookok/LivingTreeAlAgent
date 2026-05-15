@@ -79,9 +79,15 @@ def _sanitize_html(text: str) -> str:
     """
     if not text:
         return ""
-    # Strip <script>...</script> blocks and event handlers
     clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'<iframe[^>]*>.*?</iframe>', '', clean, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'<object[^>]*>.*?</object>', '', clean, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'<embed[^>]*>', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'<meta[^>]*>', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<svg[^>]*on\w+\s*=[^>]*>', '', clean, flags=re.IGNORECASE)
     clean = re.sub(r'\bon\w+\s*=\s*["\'][^"\']*["\']', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\bon\w+\s*=\s*\S+', '', clean, flags=re.IGNORECASE)
     # If no HTML tags at all, treat as plain text (escape it)
     if not re.search(r'<[a-zA-Z/][^>]*>', clean):
         clean = _html.escape(clean)

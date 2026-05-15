@@ -28,9 +28,6 @@ from typing import Any, Callable
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from .genome import Genome
-from .consciousness import Consciousness
-from .safety import SafetyGuard
 from .life_context import (
     StageGate, StageGateResult, LifeStage, LifeContext,
     Branch, ComparisonReport, BranchDecision,
@@ -95,12 +92,12 @@ class LifeEngine(BranchMixin, StageMixin):
         ctx = LifeContext(user_input=user_input, **kwargs)
         async with self._run_lock:
             self.is_running = True
-        self._fold_enabled = fold
-        self._wiki_enabled = use_wiki
-        self._vector_mode = vector_mode
-        self._folded_stages = {}
-        cycle_start = time.time()
-        self.stages.clear()
+            self._fold_enabled = fold
+            self._wiki_enabled = use_wiki
+            self._vector_mode = vector_mode
+            self._folded_stages = {}
+            cycle_start = time.time()
+            self.stages.clear()
 
         # Forward unknown kwargs into metadata (tool_market, available_tools, etc.)
         for k, v in kwargs.items():
@@ -141,6 +138,7 @@ class LifeEngine(BranchMixin, StageMixin):
                 cleaned, _ = get_pii_redactor().redact(user_input)
                 ctx.metadata["original_input"] = user_input
                 user_input = cleaned
+                ctx.user_input = cleaned
             ctx.metadata["pii_checked"] = True
         except Exception as e:
             logger.debug(f"PII redaction failed: {e}")
@@ -737,7 +735,11 @@ class LifeEngine(BranchMixin, StageMixin):
                 consolidator = get_dream_consolidator()
                 consolidator.notify_activity()
                 if consolidator.should_consolidate():
-                    asyncio.ensure_future(consolidator.consolidate())
+                    task = asyncio.ensure_future(consolidator.consolidate())
+                    if not hasattr(self, '_bg_tasks'):
+                        self._bg_tasks = set()
+                    self._bg_tasks.add(task)
+                    task.add_done_callback(lambda t: self._bg_tasks.discard(t))
             except Exception as e:
                 logger.debug(f"Dream consolidation check failed: {e}")
 

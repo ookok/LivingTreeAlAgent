@@ -26,7 +26,10 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
+import tempfile
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -37,6 +40,36 @@ from typing import Any, Optional
 from loguru import logger
 
 IMPROVEMENTS_DIR = Path(".livingtree/improvements")
+
+
+def _extract_json(text: str) -> str | None:
+    """Extract balanced JSON object from text. Returns None if not found."""
+    start = text.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == '\\':
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
 
 
 # ═══ Data Types ════════════════════════════════════════════════════
@@ -112,22 +145,247 @@ class DefectScanner:
             return []
 
         self._defects = []
-        py_files = list(root.rglob(file_pattern))
+
+        # Fast file discovery via FastFileSystem (MFT/mtime cached) or fallback
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            fast_entries = ffs.scan_tree(str(root), max_depth=10, extensions=[".py"])
+            py_files = [Path(e.full_path) for e in fast_entries
+                       if not any(p in e.full_path for p in ("__pycache__", ".venv", "venv"))]
+            if len(py_files) < 50:  # Fallback: scan_tree may not be available
+                py_files = list(root.rglob("*.py"))
+        except Exception:
+            py_files = list(root.rglob("*.py"))
         logger.info(f"DefectScanner: scanning {len(py_files)} files")
 
+        # Fast regex pass (parallel)
         tasks = [self._scan_file(f) for f in py_files[:200]]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        if use_llm:
-            await self._llm_deep_analysis()
+        # Ripgrep-accelerated pattern search (targeted, 100x faster)
+        await self._scan_with_ripgrep(root)
+
+        # Deep analysis via CodeGraph + ASTParser
+        await self._code_graph_analysis(root)
+
+        # LLM-powered deep architectural analysis (mandatory when defects found)
+        await self._llm_deep_analysis()
 
         logger.info(f"DefectScanner: found {len(self._defects)} defects")
         return self._defects
 
+    async def _scan_with_ripgrep(self, root: Path):
+        """Use FastFileSystem.grep() for pattern search (rg if available, otherwise mmap+regex).
+
+        Falls back to Python-native mmap + compiled regex + ThreadPoolExecutor when rg unavailable.
+        """
+        try:
+            from ..infrastructure.fast_fs import get_fast_fs
+            ffs = get_fast_fs()
+            root_str = str(root)
+            for pattern, category, severity, title_fmt in [
+                (r"except\s+Exception\s*:\s*\n\s+pass", "safety", Severity.HIGH,
+                 "bare except:pass in {}"),
+                (r"except\s*:\s*\n\s+pass", "safety", Severity.HIGH,
+                 "bare except:pass in {}"),
+                (r"TODO|FIXME|HACK|XXX", "coverage", Severity.LOW,
+                 "Unresolved marker in {}"),
+                (r"pass\s*$", "architecture", Severity.LOW,
+                 "Empty block in {}"),
+            ]:
+                matches = ffs.grep(root_str, pattern, file_glob="*.py",
+                                   max_results=100, ignore_case=False)
+                for m in matches[:30]:
+                    self._defects.append(Defect(
+                        category=category, severity=severity,
+                        title=title_fmt.format(Path(m.file_path).name),
+                        description=f"Line {m.line_number}: {m.line_text[:100]}",
+                        file_path=m.file_path, line_number=m.line_number,
+                        evidence=m.line_text[:200],
+                    ))
+        except Exception as e:
+            logger.debug(f"ripgrep scan: {e}")
+
+    async def _code_graph_analysis(self, root: Path):
+        """Deep analysis using CodeGraph (call graph, deps) + ASTParser (tree-sitter)
+        + CodeAnalyzer (complexity, dead code, impact scores)."""
+        try:
+            from ..capability.code_graph import CodeGraph
+            from ..capability.ast_parser import ASTParser
+            from .code_analyzer import CodeAnalyzer
+
+            cg = CodeGraph()
+            ast = ASTParser()
+            analyzer = CodeAnalyzer()
+
+            # Load cached graph if available, else full index
+            cache_path = root / "../.livingtree/code_graph.pickle"
+            if cache_path.exists():
+                try:
+                    cg.load(str(cache_path))
+                    logger.info("CodeGraph: loaded from cache")
+                except Exception:
+                    pass
+
+            if cg.stats().total_entities < 1000:
+                stats = cg.index(str(root), patterns=["**/*.py"])
+                try:
+                    cg.save(str(cache_path))
+                except Exception:
+                    pass
+            else:
+                stats = cg.stats()
+
+            # Circular dependency detection via graph traversal
+            cycles = self._find_dependency_cycles(cg)
+            for cycle in cycles[:10]:
+                self._defects.append(Defect(
+                    category="architecture", severity=Severity.HIGH,
+                    title=f"Circular dependency: {cycle[0]}",
+                    description=f"Module cycle ({len(cycle)} nodes): {' → '.join(cycle[:4])}",
+                    file_path=cycle[0],
+                    evidence=f"Cycle length: {len(cycle)}",
+                ))
+
+            # Uncovered functions (no callers = potential dead code)
+            uncovered = cg.find_uncovered()
+            for entity in uncovered[:20]:
+                self._defects.append(Defect(
+                    category="coverage", severity=Severity.MEDIUM,
+                    title=f"Unreferenced function: {entity.name}",
+                    description=f"No callers in codebase — potential dead code in {entity.file}",
+                    file_path=entity.file,
+                    line_number=entity.line,
+                ))
+
+            # Hub detection (architectural bottlenecks)
+            hubs = cg.find_hubs(10)
+            for entity in hubs[:5]:
+                total_conn = len(entity.dependents) + len(entity.dependencies)
+                self._defects.append(Defect(
+                    category="architecture", severity=Severity.MEDIUM,
+                    title=f"Architectural hub: {entity.name}",
+                    description=f"{entity.file} — {len(entity.dependents)} dependents + {len(entity.dependencies)} deps (total {total_conn})",
+                    file_path=entity.file,
+                ))
+
+            # CodeAnalyzer: complexity + dead code on top risk files only
+            # Target hub files (>20 connections) + files flagged by regex scanner
+            hub_files = {e.file for e in hubs if (len(e.dependents) + len(e.dependencies)) > 20}
+            flagged_files = {d.file_path for d in self._defects
+                           if d.category == "architecture"}
+            target_files = list(hub_files | flagged_files)[:20]
+
+            for fpath in target_files:
+                if not Path(fpath).exists():
+                    continue
+                try:
+                    result = analyzer.analyze_file(fpath, call_graph=cg)
+                    # Complexity: only report high/critical
+                    for r in result.complexity:
+                        if r.risk in ("high", "critical"):
+                            self._defects.append(Defect(
+                                category="architecture", severity=Severity.MEDIUM,
+                                title=f"Complex function: {r.name} (CC={r.cyclomatic}, Cog={r.cognitive})",
+                                description=f"{r.file}:{r.line} — {r.lines} lines, {r.param_count} params",
+                                file_path=r.file, line_number=r.line,
+                                evidence=f"cyclomatic={r.cyclomatic} cognitive={r.cognitive}",
+                            ))
+                    # Dead code
+                    for dc in result.dead_code[:10]:
+                        self._defects.append(Defect(
+                            category="coverage", severity=Severity.LOW,
+                            title=f"Dead code: {dc.name} ({dc.reason})",
+                            description=f"{dc.file}:{dc.line}",
+                            file_path=dc.file, line_number=dc.line,
+                        ))
+                    for go in result.god_objects[:3]:
+                        self._defects.append(Defect(
+                            category="architecture", severity=Severity.HIGH,
+                            title=go, description="Too many methods — split into smaller classes",
+                            file_path=fpath,
+                        ))
+                except Exception:
+                    pass
+
+            logger.info(
+                f"CodeAnalyzer: {len(target_files)} target files analyzed, "
+                f"{len(self._defects)} total defects"
+            )
+
+            # AST-based: unused imports in top 100 files
+            for py_file in list(root.rglob("**/*.py"))[:100]:
+                try:
+                    imports = ast.extract_imports(str(py_file), "python")
+                    functions = ast.extract_functions(str(py_file), "python")
+                    imported_names = {i.name.split(".")[0] for i in imports}
+                    used_names = set()
+                    for f in functions:
+                        for edge in f.get("edges", []):
+                            if edge.type == "calls":
+                                used_names.add(edge.target.split(".")[0])
+                    unused = imported_names - used_names - {"__future__", "sys", "os", "typing", "logging", "json", "time", "re", "asyncio"}
+                    for name in unused:
+                        self._defects.append(Defect(
+                            category="architecture", severity=Severity.LOW,
+                            title=f"Unused import: {name}",
+                            description=f"Imported but never referenced in {py_file.name}",
+                            file_path=str(py_file),
+                        ))
+                except Exception:
+                    pass
+
+            gs = cg.stats()
+            logger.info(
+                f"CodeGraph+ASTParser: {len(cycles)} cycles, {len(uncovered)} dead, "
+                f"{len(hubs)} hubs (entities={gs.total_entities}, edges={gs.total_edges})"
+            )
+
+        except ImportError as e:
+            logger.debug(f"CodeGraph/ASTParser skipped: {e}")
+        except Exception as e:
+            logger.debug(f"CodeGraph analysis: {e}")
+
+    @staticmethod
+    def _find_dependency_cycles(cg) -> list[list[str]]:
+        """Detect cycles in the CodeGraph entity dependency graph via DFS."""
+        visited: set[str] = set()
+        stack: set[str] = set()
+        cycles: list[list[str]] = []
+
+        def dfs(node: str, path: list[str]):
+            if node in stack:
+                cycle_start = path.index(node)
+                cycles.append(path[cycle_start:])
+                return
+            if node in visited:
+                return
+            visited.add(node)
+            stack.add(node)
+            path.append(node)
+            entity = cg._entities.get(node)
+            if entity:
+                for dep_id in entity.dependencies:
+                    dfs(dep_id, list(path))
+            stack.discard(node)
+
+        for eid in list(cg._entities.keys())[:500]:
+            if eid not in visited:
+                dfs(eid, [])
+        return [c for c in cycles if 2 <= len(c) <= 10]
+
     async def _scan_file(self, file_path: Path):
         """Scan a single file for defects."""
         try:
-            content = file_path.read_text(errors="replace")
+            # Fast read via FastFileSystem, fallback to direct I/O
+            try:
+                from ..infrastructure.fast_fs import get_fast_fs
+                content = get_fast_fs().read_text(str(file_path))
+            except Exception:
+                content = file_path.read_text(errors="replace")
+            if not content:
+                return
             lines = content.split("\n")
             line_count = len(lines)
 
@@ -195,38 +453,116 @@ class DefectScanner:
             logger.debug(f"DefectScanner: {file_path}: {e}")
 
     async def _llm_deep_analysis(self):
-        """Use LLM to analyze patterns across all defects for deeper insights."""
-        if len(self._defects) < 5:
+        """LLM-powered architectural analysis (mandatory when defects found).
+
+        Uses TreeLLM + ContextMoE for context-aware deep analysis:
+          1. ContextMoE: enrich defect list with project memory
+          2. TreeLLM: multi-provider reasoning across defect patterns
+          3. HolisticElection: pick best provider for analysis task
+
+        Produces: architectural insights, cross-defect patterns, fix priorities.
+        """
+        if len(self._defects) < 3:
             return
 
         try:
             from .core import TreeLLM
-            llm = TreeLLM()
-            defect_summary = "\n".join(
-                f"- [{d.severity.value}] {d.category}: {d.title}"
-                for d in self._defects[:30]
+            from .context_moe import get_context_moe
+            from .holistic_election import get_election
+
+            llm = TreeLLM.from_config()
+            moe = await get_context_moe("improve_scanner")
+
+            # Build defect summary for LLM
+            by_category: dict[str, list[Defect]] = {}
+            for d in self._defects:
+                by_category.setdefault(d.category, []).append(d)
+
+            # Enrich with ContextMoE project memory
+            summary_parts = []
+            for cat, defs in sorted(by_category.items(), key=lambda x: -len(x[1])):
+                top = defs[:5]
+                summary_parts.append(
+                    f"**{cat}** ({len(defs)} total):\n" +
+                    "\n".join(f"  - [{d.severity.value}] {d.title[:100]}" for d in top)
+                )
+            defect_summary = "\n".join(summary_parts)
+            enriched = moe.build_enriched_message(
+                f"代码质量分析：{len(self._defects)} 个缺陷", 
+                await moe.query(defect_summary, "code_analysis"),
             )
+
+            # Elect best provider for analysis
+            provider = await llm.smart_route(defect_summary, task_type="code")
+
             prompt = (
-                f"分析以下系统缺陷列表,识别深层架构问题并提出改进优先级:\n\n"
-                f"{defect_summary}\n\n"
-                f"请给出:\n"
-                f"1. 最严重的3个架构问题\n"
-                f"2. 修复优先级排序(按影响范围)\n"
-                f"3. 如果有可自动修复的,标注 (auto-fixable)"
+                f"你是一个资深代码审查架构师。分析以下 LivingTree 项目的缺陷扫描结果，"
+                f"提供深度架构分析和可执行的修复方案。\n\n"
+                f"## 缺陷汇总 ({len(self._defects)} total)\n{defect_summary[:3000]}\n\n"
+                f"{enriched}\n\n"
+                f"请输出 JSON 格式的分析报告:\n"
+                f'{{"top_issues": [{{"title": "", "impact": "", "files": [], "fix": ""}}],'
+                f'"patterns": [{{"name": "", "affected_count": 0, "root_cause": ""}}],'
+                f'"priority_order": ["file1.py", "file2.py"],'
+                f'"architecture_score": 1-10,'
+                f'"auto_fixable": ["defect_id1", "defect_id2"]}}'
             )
             result = await llm.chat(
                 [{"role": "user", "content": prompt}],
-                max_tokens=1000, temperature=0.3,
+                provider=provider, max_tokens=2000, temperature=0.3,
+                task_type="code",
             )
-            analysis = getattr(result, 'text', '') or str(result)
+            analysis_text = getattr(result, 'text', '') or str(result)
+
+            # Parse JSON response
+            analysis_text_clean = analysis_text
+            code_block_m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', analysis_text_clean, re.DOTALL)
+            if code_block_m:
+                analysis_text_clean = code_block_m.group(1)
+            json_obj = _extract_json(analysis_text_clean)
+            try:
+                analysis = json.loads(json_obj or "{}")
+            except json.JSONDecodeError:
+                analysis = {}
+
+            # Add architectural insights as defects
+            for issue in analysis.get("top_issues", [])[:3]:
+                self._defects.append(Defect(
+                    category="architecture", severity=Severity.HIGH,
+                    title=f"[LLM] {issue.get('title', '')[:100]}",
+                    description=issue.get("impact", "")[:500],
+                    file_path=", ".join(issue.get("files", [])),
+                    suggested_fix=issue.get("fix", ""),
+                    confidence=0.8,
+                ))
+
+            # Add pattern insights
+            for pattern in analysis.get("patterns", [])[:3]:
+                self._defects.append(Defect(
+                    category="architecture", severity=Severity.MEDIUM,
+                    title=f"[Pattern] {pattern.get('name', '')}: {pattern.get('root_cause', '')}",
+                    description=f"Affects {pattern.get('affected_count', 0)} files",
+                    confidence=0.7,
+                ))
+
+            # Cross-defect correlation
+            patterns = analysis.get("patterns", [])
+            score = analysis.get("architecture_score", 0)
             self._defects.append(Defect(
                 category="architecture", severity=Severity.HIGH,
-                title="LLM Architectural Analysis",
-                description=analysis[:2000],
-                confidence=0.7,
+                title=f"Architecture Score: {score}/10",
+                description=f"LLM identified {len(patterns)} cross-cutting patterns across {len(self._defects)} defects",
+                confidence=0.75,
             ))
-        except Exception:
-            pass
+
+            logger.info(
+                f"LLM Deep Analysis: architecture={score}/10, "
+                f"{len(patterns)} patterns, "
+                f"provider={provider}"
+            )
+
+        except Exception as e:
+            logger.warning(f"LLM deep analysis: {e}")
 
     def report(self) -> dict:
         by_cat = defaultdict(int)
@@ -358,6 +694,34 @@ class InnovationProposer:
             except Exception:
                 pass
 
+        # External learning patterns (from GitHub/arXiv/Nature → livingtree learn)
+        self._ingest_external_patterns()
+
+        logger.info(f"InnovationProposer: {len(self._innovations)} proposals")
+        return self._innovations
+
+    def _ingest_external_patterns(self):
+        """Ingest patterns from ExternalLearningDriver (livingtree learn → persisted proposals)."""
+        try:
+            proposals_file = Path(".livingtree/learned_proposals.json")
+            if not proposals_file.exists():
+                return
+            data = json.loads(proposals_file.read_text(encoding="utf-8"))
+            for entry in data:
+                if entry.get("confidence", 0) < 0.5:
+                    continue
+                self._innovations.append(Innovation(
+                    title=f"[external:{entry.get('source','?')}] {entry.get('title','')[:80]}",
+                    description=entry.get("description", "") or entry.get("suggested_change", ""),
+                    category=entry.get("category", "pattern"),
+                    inspired_by=entry.get("source_url", ""),
+                    complexity="low",
+                ))
+            if data:
+                logger.info(f"InnovationProposer: ingested {len(data)} external patterns")
+        except Exception as e:
+            logger.debug(f"InnovationProposer external: {e}")
+
         logger.info(f"InnovationProposer: {len(self._innovations)} proposals")
         return self._innovations
 
@@ -415,36 +779,50 @@ class SelfImprover:
         return result
 
     async def _implement(self, innovation: Innovation) -> bool:
-        """Implement an innovation by generating code via LLM."""
-        try:
-            # Create safety branch
-            branch_name = f"improve/{innovation.id[:12]}"
-            try:
-                from .unified_exec import git
-                await git(f"checkout -b {branch_name}", timeout=10)
-            except ImportError:
-                subprocess.run(
-                    ["git", "checkout", "-b", branch_name],
-                    capture_output=True, check=False,
-                )
+        """Implement an innovation by generating code via LLM.
 
-            # Generate implementation via LLM
+        Atomic modification protocol:
+          1. Create git safety branch
+          2. LLM generates code → write to temp file
+          3. Atomic rename temp → target (OS-level atomic)
+          4. git add + commit on safety branch
+          5. On validation failure → git checkout master (automatic rollback)
+        """
+        try:
+            from .unified_exec import git
+            branch_name = f"improve/{innovation.id[:12]}"
+            await git(f"checkout -b {branch_name}", timeout=10)
+
+            # Build context-aware prompt using CodeContext (sliding window + compressed)
             from .core import TreeLLM
+            from .code_context import get_code_context
             llm = TreeLLM()
-            prompt = f"""实现以下系统改进(用Python代码):
-            改进: {innovation.title}
-            描述: {innovation.description}
-            类别: {innovation.category}
-            复杂度: {innovation.complexity}
-            
-            输出: 可执行的Python代码和修改说明。使用```python代码块。"""
+            code_ctx = get_code_context()
+
+            context = code_ctx.build(
+                task_description=f"{innovation.title}\n{innovation.description}",
+                max_tokens=6000,
+            )
+            prompt = (
+                f"根据以下代码上下文,实现系统改进:\n\n"
+                f"{context}\n\n"
+                f"## 改进要求\n"
+                f"标题: {innovation.title}\n"
+                f"描述: {innovation.description}\n"
+                f"类别: {innovation.category}\n"
+                f"复杂度: {innovation.complexity}\n\n"
+                f"输出: 具体可执行的Python代码修改。标注修改的文件路径。使用```python代码块。"
+            )
             result = await llm.chat(
-                [{"role": "user", "content": prompt}],
-                max_tokens=2000, temperature=0.2, task_type="code",
+                [{"role": "user", "content": prompt[:8000]}],
+                max_tokens=3000, temperature=0.2, task_type="code",
             )
             code = getattr(result, 'text', '') or str(result)
             innovation.code_patch = code[:5000]
             innovation.git_branch = branch_name
+
+            # Atomic write to target file(s) via temp + rename
+            applied = await self._atomic_apply(innovation)
 
             # Save proposal for human review
             IMPROVEMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -454,13 +832,88 @@ class SelfImprover:
                 "description": innovation.description,
                 "code_patch": innovation.code_patch,
                 "category": innovation.category,
+                "applied": applied,
             }, indent=2, ensure_ascii=False), encoding="utf-8")
 
-            logger.info(f"SelfImprover: implemented '{innovation.title}' → {branch_name}")
+            if applied:
+                await git("add -A", timeout=10)
+                await git(f'commit -m "improve: {innovation.title[:72]}"', timeout=10)
+
+            logger.info(
+                f"SelfImprover: {'applied' if applied else 'generated'} "
+                f"'{innovation.title}' → {branch_name}"
+            )
             return True
         except Exception as e:
             logger.debug(f"SelfImprover implement: {e}")
+            try:
+                await git("checkout master", timeout=10)
+            except Exception:
+                pass
             return False
+
+    async def _atomic_apply(self, innovation: Innovation) -> bool:
+        """Atomically write LLM-generated code to target files.
+        
+        Protocol: write to {file}.tmp → os.rename(tmp, file) → atomic on same filesystem.
+        Backup preserved as {file}.bak for manual recovery.
+        """
+        applied = False
+        code = innovation.code_patch
+        if not code:
+            return False
+
+        targets = re.findall(r'#\s*(?:file|target|modify):\s*(\S+\.py)', code, re.IGNORECASE)
+        if not targets:
+            # Try extracting file path from markdown code blocks
+            targets = re.findall(r'```python.*?\n.*?(?:#|//)\s*(?:in|file|path):\s*(\S+\.py)', code, re.DOTALL)
+
+        for target in targets[:3]:
+            try:
+                tpath = Path(target)
+                # Skip if target doesn't exist (new file)
+                if not tpath.exists():
+                    continue
+
+                # Backup original
+                bak = tpath.with_suffix(tpath.suffix + ".bak")
+                shutil.copy2(str(tpath), str(bak))
+
+                # Extract the specific code block for this file
+                file_code = self._extract_code_for_file(code, target)
+                if not file_code:
+                    continue
+
+                # Atomic write: temp → rename
+                fd, tmp = tempfile.mkstemp(
+                    dir=str(tpath.parent), prefix="." + tpath.name + ".",
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                        fh.write(file_code)
+                    os.replace(tmp, str(tpath))  # Atomic on same filesystem
+                    applied = True
+                    logger.info(f"Atomic write: {target} ({len(file_code)} bytes)")
+                except Exception:
+                    os.unlink(tmp)
+                    raise
+            except Exception as e:
+                logger.debug(f"Atomic apply {target}: {e}")
+
+        return applied
+
+    @staticmethod
+    def _extract_code_for_file(code: str, target: str) -> str:
+        """Extract the code section intended for a specific target file from LLM output."""
+        fname = Path(target).name
+        # Look for ```python blocks mentioning the file
+        pattern = rf'```python.*?(?:#.*?{re.escape(fname)}.*?\n)(.*?)```'
+        m = re.search(pattern, code, re.DOTALL)
+        if m:
+            return m.group(1).strip()
+        # Fallback: first ```python block
+        m = re.search(r'```python\n(.*?)```', code, re.DOTALL)
+        return m.group(1).strip() if m else code[:5000]
 
     async def _validate(self, innovation: Innovation) -> bool:
         """Validate an improvement by running tests."""

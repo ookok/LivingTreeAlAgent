@@ -272,6 +272,9 @@ class DiskResource(Resource):
             pass
         results = []
         for root, dirs, files in os.walk(str(real)):
+            depth = Path(root).relative_to(real).parts if real != Path(root) else []
+            if len(depth) >= 5:
+                dirs.clear()
             for name in files:
                 if fnmatch.fnmatch(name, pattern):
                     fp = Path(root) / name
@@ -297,6 +300,12 @@ class HTTPResource(Resource):
 
     def __init__(self, base_url: str = "https://httpbin.org/get"):
         self._base = base_url.rstrip("/")
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     async def list_dir(self, path: str) -> list[VFSEntry]:
         return []
@@ -304,8 +313,8 @@ class HTTPResource(Resource):
     async def read_file(self, path: str) -> str:
         rel = self._to_rel(path)
         url = f"{self._base}/{rel}" if rel else self._base
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+        session = await self._get_session()
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status >= 400:
                     raise FileNotFoundError(f"HTTP {resp.status}: {url}")
                 text = await resp.text()
@@ -359,6 +368,12 @@ class GitHubResource(Resource):
                 pass
         self._owner = owner
         self._repo = repo
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     async def list_dir(self, path: str) -> list[VFSEntry]:
         owner, repo, subpath = self._parse_path(path)
@@ -368,15 +383,15 @@ class GitHubResource(Resource):
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers,
-                                   timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status == 404:
-                    return []
-                if resp.status >= 400:
-                    logger.warning(f"GitHub API {resp.status}: {url}")
-                    return []
-                data = await resp.json()
+        session = await self._get_session()
+        async with session.get(url, headers=headers,
+                               timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status == 404:
+                return []
+            if resp.status >= 400:
+                logger.warning(f"GitHub API {resp.status}: {url}")
+                return []
+            data = await resp.json()
 
         entries = []
         if isinstance(data, list):
@@ -402,14 +417,14 @@ class GitHubResource(Resource):
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers,
-                                   timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status >= 400:
-                    raise FileNotFoundError(
-                        f"GitHub {resp.status}: {owner}/{repo}/{subpath}"
-                    )
-                data = await resp.json()
+        session = await self._get_session()
+        async with session.get(url, headers=headers,
+                               timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status >= 400:
+                raise FileNotFoundError(
+                    f"GitHub {resp.status}: {owner}/{repo}/{subpath}"
+                )
+            data = await resp.json()
 
         if isinstance(data, dict) and data.get("content"):
             try:
@@ -667,12 +682,34 @@ class VirtualFS:
 
     # ── Public API ──
 
+    @staticmethod
+    def _split_pipes(command: str) -> list[str]:
+        """Split command on | only outside of quotes and double quotes."""
+        parts: list[str] = []
+        current: list[str] = []
+        in_single = False
+        in_double = False
+        for ch in command:
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                current.append(ch)
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+                current.append(ch)
+            elif ch == '|' and not in_single and not in_double:
+                parts.append(''.join(current).strip())
+                current = []
+            else:
+                current.append(ch)
+        parts.append(''.join(current).strip())
+        return parts
+
     async def execute(self, command: str) -> str:
         """Parse and execute a bash-like command across mounted resources.
 
         Supports pipes: `grep error /disk/log.txt | wc -l`
         """
-        pipelines = [p.strip() for p in command.split("|")]
+        pipelines = VirtualFS._split_pipes(command)
         stdin = ""
         for i, cmd_str in enumerate(pipelines):
             args = shlex.split(cmd_str) if cmd_str else []
@@ -1129,20 +1166,22 @@ class VirtualFS:
 # ══════════════════════════════════════════════════════════════════════
 
 _vfs: VirtualFS | None = None
+_vfs_lock = __import__('threading').Lock()
 
 
 def get_virtual_fs() -> VirtualFS:
     """Get or create the global VirtualFS singleton."""
     global _vfs
     if _vfs is None:
-        _vfs = VirtualFS()
-        # Mount public-apis on demand (lazy, no disk)
-        try:
-            from .public_apis_resource import get_public_apis
-            _vfs.mount("/public-apis", get_public_apis())
-        except Exception:
-            pass
-        logger.info("VirtualFS singleton created")
+        with _vfs_lock:
+            if _vfs is None:
+                _vfs = VirtualFS()
+                try:
+                    from .public_apis_resource import get_public_apis
+                    _vfs.mount("/public-apis", get_public_apis())
+                except Exception:
+                    pass
+                logger.info("VirtualFS singleton created")
     return _vfs
 
 

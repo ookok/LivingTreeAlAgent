@@ -984,7 +984,31 @@ class ExternalEvolutionDriver:
         results["total_patterns"] = len(self._all_patterns)
         results["proposals"] = self.arxiv.propose_changes(self._all_patterns)
 
+        # Persist proposals for cross-process consumption by improve --auto
+        self._save_proposals()
+
         return results
+
+    def _save_proposals(self):
+        try:
+            proposals_file = Path(".livingtree/learned_proposals.json")
+            proposals_file.parent.mkdir(parents=True, exist_ok=True)
+            data = [
+                {
+                    "source": p.source, "source_url": p.source_url,
+                    "category": p.category, "title": p.title,
+                    "description": p.description,
+                    "applicable_files": p.applicable_files,
+                    "suggested_change": p.suggested_change,
+                    "confidence": p.confidence,
+                    "timestamp": p.timestamp,
+                }
+                for p in self._all_patterns[-50:]
+            ]
+            proposals_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            logger.debug(f"ExternalEvolutionDriver: saved {len(data)} proposals")
+        except Exception as e:
+            logger.debug(f"ExternalEvolutionDriver save proposals: {e}")
 
     def feed_to_evolution(self) -> list[dict]:
         """Feed learned patterns into the self-evolution mutation pipeline.

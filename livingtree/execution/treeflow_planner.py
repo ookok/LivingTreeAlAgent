@@ -145,12 +145,13 @@ class TreeFlowPlanner:
 
         if not skeleton.steps:
             # Tree failed → fall back to pure flow
+            t2 = time.time()
             flow_traj = await self._gtsm._plan_flow(task, domain, max_steps, ctx)
             return TreeFlowResult(
                 task=task, mode=GTSMMode.FLOW,
                 steps=flow_traj.steps, total_score=flow_traj.total_score,
                 skeleton_time_ms=skeleton_time,
-                flow_time_ms=(time.time() - t1) * 1000,
+                flow_time_ms=(time.time() - t2) * 1000,
                 speedup_vs_flow=1.0, quality_preserved=1.0,
                 flow_strategy="fallback",
                 metadata={"fallback": "skeleton_empty"},
@@ -177,16 +178,15 @@ class TreeFlowPlanner:
         total_score = self._gtsm._compute_gtsm_score(merged_steps, task)
         total_time = (time.time() - t0) * 1000
 
-        # Estimate pure flow time for comparison
-        estimated_pure_flow_time = total_time * config.speedup_target
-        speedup = estimated_pure_flow_time / max(total_time, 1)
+        # Skeleton-to-flow ratio: how much skeleton ordering dominates the plan
+        skeleton_ratio = skeleton_time / max(total_time, 1)
 
         result = TreeFlowResult(
             task=task, mode=GTSMMode.HYBRID,
             steps=merged_steps, total_score=round(total_score, 4),
             skeleton_time_ms=skeleton_time,
             flow_time_ms=flow_time,
-            speedup_vs_flow=round(speedup, 2),
+            skeleton_ratio=round(skeleton_ratio, 2),
             quality_preserved=round(total_score / max(skeleton.total_score, 0.01), 2),
             flow_strategy=strategy.value if hasattr(strategy, 'value') else "balanced",
             metadata={

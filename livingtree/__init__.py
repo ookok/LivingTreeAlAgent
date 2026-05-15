@@ -1,4 +1,4 @@
-"""LivingTree AI Agent — Digital Lifeform Platform v2.1.0
+"""LivingTree AI Agent — Digital Lifeform Platform
 
 A self-learning, self-evolving, self-healing digital life form for:
 - Autonomous chat and task execution
@@ -14,7 +14,7 @@ import os
 
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "2.0.0"
+__version__ = "2.4.0"
 __author__ = "LivingTree Team"
 
 # Lightweight imports — always available immediately

@@ -331,6 +331,8 @@ class MetabolismEngine:
         """Reset daily budgets at midnight."""
         self._state.budget_day_start = time.time()
         self._state.daily_cost_yuan = 0.0
+        if self._last_total_tokens and self._last_total_cost:
+            self.allocate_daily_budget(self._last_total_tokens, self._last_total_cost)
         logger.info("MetabolismEngine: daily budget reset")
 
     # ── Core API ──
@@ -517,6 +519,8 @@ class MetabolismEngine:
             total_tokens: Total token budget for the day (e.g. 1M).
             total_cost_yuan: Maximum daily cost in yuan (e.g. 50.0).
         """
+        self._last_total_tokens = total_tokens
+        self._last_total_cost = total_cost_yuan
         state = self._state
         state.total_glucose = total_tokens
         # ATP estimate: 1 ATP per 1000 tokens at baseline
@@ -640,23 +644,15 @@ class MetabolismEngine:
 # ═══════════════════════════════════════════════════════════════════
 
 _metabolism_engine: MetabolismEngine | None = None
+_metabolism_lock = __import__('threading').Lock()
 
 
 def get_metabolism() -> MetabolismEngine:
-    """Get or create the singleton MetabolismEngine.
-
-    Usage:
-        from livingtree.economy.metabolism import get_metabolism
-
-        engine = get_metabolism()
-        engine.allocate_daily_budget(total_tokens=1_000_000, total_cost_yuan=50.0)
-        allowed, cost = engine.consume("cerebrum", OperationType.ACTIVE)
-        if engine.get_starvation_level() > 0.7:
-            engine.enter_ketosis()
-    """
     global _metabolism_engine
     if _metabolism_engine is None:
-        _metabolism_engine = MetabolismEngine()
+        with _metabolism_lock:
+            if _metabolism_engine is None:
+                _metabolism_engine = MetabolismEngine()
     return _metabolism_engine
 
 

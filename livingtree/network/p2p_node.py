@@ -94,8 +94,8 @@ class P2PNode:
             if NODE_ID_FILE.exists():
                 data = json.loads(NODE_ID_FILE.read_text())
                 return data["node_id"]
-        except Exception:
-            pass
+        except (json.JSONDecodeError, KeyError, OSError):
+            logger.warning("Node ID file corrupted, regenerating identity")
 
         node_id = f"lt-{platform.node()[:8]}-{secrets.token_hex(4)}"
         NODE_ID_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -130,11 +130,12 @@ class P2PNode:
     async def _heartbeat_loop(self):
         await asyncio.sleep(2)
         fail_count = 0
-        while self._running:
-            try:
-                caps = self._collect_capabilities()
-                relay_url = self._get_active_relay()
-                async with aiohttp.ClientSession() as session:
+        session = aiohttp.ClientSession()
+        try:
+            while self._running:
+                try:
+                    caps = self._collect_capabilities()
+                    relay_url = self._get_active_relay()
                     async with session.post(
                         f"{relay_url}/peers/register",
                         json={"peer_id": self.node_id, "port": 0, "nat_type": "client", "metadata": {
@@ -155,14 +156,16 @@ class P2PNode:
                         timeout=10,
                     ) as resp:
                         if resp.status == 200:
-                            fail_count = 0
-                await asyncio.sleep(HEARTBEAT_INTERVAL)
-            except Exception:
-                fail_count += 1
-                if fail_count >= 3:
-                    self._switch_relay()
-                    fail_count = 0
-                await asyncio.sleep(5)
+                                fail_count = 0
+                    await asyncio.sleep(HEARTBEAT_INTERVAL)
+                except Exception:
+                    fail_count += 1
+                    if fail_count >= 3:
+                        self._switch_relay()
+                        fail_count = 0
+                    await asyncio.sleep(5)
+        finally:
+            await session.close()
 
     async def report_cost(self, provider: str, tokens_in: int, tokens_out: int):
         """Report token usage to relay server for cost tracking."""
@@ -172,7 +175,7 @@ class P2PNode:
                 if hasattr(self, '_auth_token') and self._auth_token:
                     headers["Authorization"] = f"Bearer {self._auth_token}"
                 await session.post(
-                    f"{RELAY_URL}/cost/report",
+                    f"{self._get_active_relay()}/cost/report",
                     json={"provider": provider, "tokens_in": tokens_in, "tokens_out": tokens_out},
                     headers=headers,
                     timeout=5,

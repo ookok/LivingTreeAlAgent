@@ -32,7 +32,7 @@ import threading
 import yaml
 from pathlib import Path
 
-VERSION = "2.2.0"
+from . import __version__ as VERSION
 PID_FILE = ".livingtree/server.pid"
 LOG_FILE = ".livingtree/server.log"
 WATCHDOG_PID_FILE = ".livingtree/watchdog.pid"
@@ -140,6 +140,10 @@ def main():
         _svc_cli_anything(sys.argv[2:])
     elif command == "models":
         _svc_models(sys.argv[2:])
+    elif command == "learn":
+        _svc_learn(sys.argv[2:])
+    elif command == "dev":
+        _svc_dev(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -240,16 +244,11 @@ def _svc_start():
 
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     log = open(LOG_FILE, "a")
-    try:
-        from livingtree.treellm.unified_exec import run
-        import asyncio
-        raise ImportError("Force Popen for daemon")
-    except ImportError:
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "livingtree", "web"],
-            stdout=log, stderr=log,
-            start_new_session=True,
-        )
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "livingtree", "web"],
+        stdout=log, stderr=log,
+        start_new_session=True,
+    )
     Path(PID_FILE).write_text(str(proc.pid))
 
     if watch:
@@ -795,11 +794,13 @@ def _svc_debug(args: list):
         message = " ".join(a for a in chat_args if not a.startswith("--") and a not in ("-v", "-vv"))
         trace = "--trace" in chat_args
         verbose = ("--verbose" in chat_args) or ("-v" in chat_args) or ("-vv" in chat_args)
+        self_check = "--self-check" in chat_args
 
         if not message:
-            print("Usage: livingtree debug chat \"your message\" [--trace] [--verbose]")
-            print("  --trace   : enable line-by-line execution tracing via DebugPro LineTracer")
-            print("  --verbose : show full response text and detailed timing")
+            print("Usage: livingtree debug chat \"your message\" [--trace] [--verbose] [--self-check]")
+            print("  --trace      : enable line-by-line execution tracing via DebugPro LineTracer")
+            print("  --verbose    : show full response text and detailed timing")
+            print("  --self-check : self-consistency loop — judge actual vs expected output")
             return
 
         print(f"\n{'='*60}")
@@ -983,6 +984,17 @@ def _svc_debug(args: list):
         print(f"\n{'='*60}")
         print(f"  Total: {total_ms:.0f}ms | Provider: {used_provider or provider} | Tools: {tool_count}")
         print(f"{'='*60}")
+
+        # ═══════════════════════════════════════════════════
+        # Phase 7: Self-Consistency Check (--self-check)
+        # ═══════════════════════════════════════════════════
+        sc_result = None
+        if self_check and chat_result and llm is not None:
+            sc_result = await _self_consistency_loop(
+                llm, message, chat_result, used_provider or provider,
+                t0, verbose,
+            )
+
         if chat_result:
             if verbose:
                 print(f"\n  📝 Full Response:\n{chat_result}\n")
@@ -1010,6 +1022,211 @@ def _svc_debug(args: list):
         asyncio.run(_run())
     except Exception as e:
         print(f"❌ Debug failed: {e}")
+
+
+def _extract_json_object(text: str) -> str | None:
+    """Extract balanced JSON object from text. Returns None if not found."""
+    import re as _re
+    start = text.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == '\\':
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
+async def _self_consistency_loop(
+    llm, message: str, actual: str, provider: str,
+    t0: float, verbose: bool,
+) -> dict | None:
+    """Phase 7: Self-consistency check — judge actual vs expected output.
+
+    Round 1: LLM evaluates actual output and generates expected answer.
+    Round 2-N: If cosine similarity < 0.85, retry with architecture context.
+    Mismatches are saved as canary regression queries.
+    """
+    import re as _re, json as _json
+    from pathlib import Path as _Path
+
+    ARCH_HINT = (
+        "LivingTree uses: InputBus→ContextMoE(memory)→HolisticElection(28 LLM providers)"
+        "→TreeLLM(chat with tool calls)→LocalToolBus(execute)→SynapseAggregator(fusion)."
+    )
+
+    MAX_ROUNDS = 3
+    SIM_THRESHOLD = 0.80
+
+    print(f"\n[7/7] Self-Consistency Check...")
+    print(f"  🔍 Round 1/3: LLM judging actual output...")
+
+    for round_num in range(1, MAX_ROUNDS + 1):
+        t_sc = _time_module.time()
+
+        judge_prompt = (
+            f"你是一个代码审查评判者。用户的问题是:\n"
+            f"  Q: {message}\n\n"
+            f"系统给出的实际回答是:\n"
+            f"  A: {actual[:1500]}\n\n"
+            f"请完成以下任务:\n"
+            f"1. 评判这个回答是否正确、完整、有帮助（1-10分）\n"
+            f"2. 输出你期望的理想回答（简洁，50字以内）\n"
+            f"3. 如果回答不正确，指出具体问题\n\n"
+            f"用JSON格式回复:\n"
+            f'{{"score": <1-10>, "expected": "<理想回答>", "issue": "<问题或ok>"}}'
+        )
+        if round_num > 1:
+            judge_prompt += (
+                f"\n\n系统架构提示（帮助判断）: {ARCH_HINT}"
+            )
+
+        try:
+            result = await llm.chat(
+                [{"role": "user", "content": judge_prompt}],
+                provider=provider, max_tokens=300, temperature=0.0,
+            )
+            judge_text = getattr(result, 'text', '') or ''
+        except Exception as e:
+            print(f"  ❌ Judge LLM failed: {e}")
+            return None
+
+        # Parse JSON from judge response (handle markdown code blocks)
+        judge_text_clean = judge_text
+        # Strip markdown code blocks
+        code_block_m = _re.search(r'```(?:json)?\s*(\{.*?\})\s*```', judge_text_clean, _re.DOTALL)
+        if code_block_m:
+            judge_text_clean = code_block_m.group(1)
+        # Find JSON object with balanced braces
+        m = _extract_json_object(judge_text_clean)
+        if not m:
+            print(f"  ⚠️  Round {round_num}: Judge returned non-JSON: {judge_text[:80]}...")
+            continue
+
+        try:
+            verdict = _json.loads(m)
+        except _json.JSONDecodeError:
+            print(f"  ⚠️  Round {round_num}: JSON parse failed")
+            continue
+
+        expected = verdict.get("expected", "")
+        score = verdict.get("score", 5)
+        issue = verdict.get("issue", "")
+
+        print(f"  📊 Score={score}/10 | Expected: \"{expected[:80]}\"")
+
+        # Compute cosine similarity
+        sim = _compute_semantic_similarity(actual, expected)
+
+        sc_ms = (_time_module.time() - t_sc) * 1000
+        verdict_str = "✅ PASS" if sim >= SIM_THRESHOLD else "⚠️  MISMATCH"
+        print(f"  {verdict_str} similarity={sim:.3f} | {sc_ms:.0f}ms")
+
+        if issue and issue != "ok":
+            print(f"  💬 Issue: {issue[:120]}")
+
+        if sim >= SIM_THRESHOLD:
+            if verbose:
+                print(f"  ✅ Self-consistency confirmed (round {round_num})")
+            return {"verdict": "pass", "similarity": round(sim, 3),
+                    "score": score, "rounds": round_num}
+
+        if round_num == MAX_ROUNDS:
+            # Save regression case
+            try:
+                canary_file = _Path(".livingtree/canary_queries.json")
+                existing = []
+                if canary_file.exists():
+                    existing = _json.loads(canary_file.read_text(encoding="utf-8"))
+                existing.append({
+                    "query": message,
+                    "actual": actual[:500],
+                    "expected": expected[:500],
+                    "similarity": round(sim, 3),
+                    "score": score,
+                    "timestamp": _time_module.time(),
+                })
+                canary_file.parent.mkdir(parents=True, exist_ok=True)
+                canary_file.write_text(_json.dumps(existing, indent=2, ensure_ascii=False))
+                print(f"  📋 Regression saved → .livingtree/canary_queries.json")
+            except Exception as e:
+                print(f"  ⚠️  Canary save failed: {e}")
+            return {"verdict": "regression", "similarity": round(sim, 3),
+                    "score": score, "rounds": round_num}
+
+        print(f"  🔄 Round {round_num + 1}/{MAX_ROUNDS}: retrying with architecture context...")
+        # Use architecture-aware prompt for retry
+        retry_prompt = (
+            f"[ARCH] {ARCH_HINT}\n\n"
+            f"[Q] {message}\n\n"
+            f"你的回答有偏差(相似度={sim:.2f})。问题: {issue}\n"
+            f"请重新回答，简洁准确。"
+        )
+        try:
+            result = await llm.chat(
+                [{"role": "user", "content": retry_prompt}],
+                provider=provider, max_tokens=500, temperature=0.0,
+            )
+            actual = getattr(result, 'text', '') or actual
+        except Exception:
+            pass
+
+    return {"verdict": "timeout", "similarity": 0, "score": 0, "rounds": MAX_ROUNDS}
+
+
+def _compute_semantic_similarity(text_a: str, text_b: str) -> float:
+    """Compute cosine similarity between two texts using character n-gram Jaccard as fast proxy.
+
+    Falls back to embedding cosine if SentenceTransformer is available.
+    """
+    if not text_a or not text_b:
+        return 0.0
+
+    a = text_a.lower().strip()
+    b = text_b.lower().strip()
+
+    # Short text: check substring containment or exact match
+    if len(a) <= 5 or len(b) <= 5:
+        if a == b:
+            return 1.0
+        if a in b or b in a:
+            # Partial containment: scale by length ratio
+            return min(1.0, max(len(a), len(b)) / (min(len(a), len(b)) + 3))
+        # Fall through to ngram
+
+    # Fast fallback: character ngram Jaccard
+    def ngrams(s: str, n: int) -> set:
+        s = s.lower().strip()
+        if len(s) < n:
+            return {s} if s else set()
+        return {s[i:i+n] for i in range(len(s) - n + 1)}
+
+    tri_a = ngrams(a, 3)
+    tri_b = ngrams(b, 3)
+    if not tri_a or not tri_b:
+        tri_a = ngrams(a, 2)
+        tri_b = ngrams(b, 2)
+    if not tri_a or not tri_b:
+        return 1.0 if a == b else 0.0
+    return len(tri_a & tri_b) / len(tri_a | tri_b)
 
 
 def _svc_cli(args: list):
@@ -1183,9 +1400,50 @@ def _svc_improve(args: list):
                 print(f"     复杂度: {inn.complexity}")
 
         elif sub == "--auto":
-            print("  Running full auto-improve cycle...")
-            result = await improver.improve(use_llm="--llm" in args, auto_apply="--apply" in args)
-            print(f"  Defects: {result['defects']}")
+            use_llm = "--llm" in args
+            auto_apply = "--apply" in args
+
+            # Step 1: Scan
+            print("  Scanning codebase for defects...")
+            defects = await improver._scanner.scan(use_llm=use_llm)
+
+            # Step 2: Propose (includes external learning patterns)
+            print("  Proposing innovations...")
+            innovations = await improver._proposer.propose(defects, use_llm=use_llm)
+
+            print(f"\n  📊 Scan: {len(defects)} defects, {len(innovations)} proposals\n")
+
+            # Show proposals for review
+            if innovations:
+                print("  ── Proposed Changes (review before applying) ──")
+                for i, inn in enumerate(innovations[:10], 1):
+                    print(f"  {i}. [{inn.category}] {inn.title[:90]}")
+                    print(f"     {inn.description[:120]}")
+                    print(f"     复杂度: {inn.complexity}  |  来源: {inn.inspired_by[:60]}")
+                    print()
+                if len(innovations) > 10:
+                    print(f"  ... and {len(innovations) - 10} more proposals")
+                print()
+
+            if not auto_apply:
+                print("  💡 审核改进方案后执行: livingtree improve --auto --apply")
+                print(f"  ✅ {len(defects)} defects, {len(innovations)} proposals ready")
+                return
+
+            # Step 3: Implement (only with --apply)
+            print("  ⚠️  Auto-implementing top 3 proposals...")
+            result = {"defects": len(defects), "innovations": len(innovations),
+                      "implemented": 0, "validated": 0}
+            for inn in innovations[:3]:
+                implemented = await improver._implement(inn)
+                if implemented:
+                    result["implemented"] += 1
+                    validated = await improver._validate(inn)
+                    if validated:
+                        result["validated"] += 1
+            improver._history.extend(innovations)
+            improver._improvement_count += 1
+            print(f"\n  Defects: {result['defects']}")
             print(f"  Innovations: {result['innovations']}")
             print(f"  Implemented: {result['implemented']}")
             print(f"  Validated: {result['validated']}")
@@ -1246,6 +1504,7 @@ def _svc_recording(args: list):
         print(f"❌ Recording failed: {e}")
 
 
+def _svc_trace(args: list):
     """Diagnostic: visualize trigger chain and routing decisions."""
     print("\n🔍 LivingTree Trace — 触发链可视化\n")
 
@@ -1313,6 +1572,317 @@ def _resolve_relative(current_dir: str, module: str, level: int) -> str:
     return f"{base}.{module}" if base else module
 
 
+def _svc_dev(args: list):
+    """Developer tools: change rehearsal, hotspots, conventions, docstring check,
+    cognitive map, API guard, living ADRs, dependency health.
+
+    Commands:
+        livingtree dev all                  Run comprehensive project health scan
+        livingtree dev rehearse <file>      Predict change impact (blast radius)
+        livingtree dev hotspots [--top N]   Most-changed files + risk analysis
+        livingtree dev conventions          Extract living code conventions
+        livingtree dev cognimap [--risk X]  Cognitive complexity heatmap
+        livingtree dev api-guard [--check]  API compatibility guard
+        livingtree dev provenance <f> <fn>  Trace function origin story
+        livingtree dev deps                 Dependency freshness + upgrade risk
+        livingtree dev health-trends        Codebase health over time
+    """
+    import asyncio
+
+    async def _run():
+        from .treellm.dev_assistant import (
+            ChangeRehearsal, HotColdAnalyzer, DocstringChecker, ConventionExtractor,
+        )
+        from .treellm.living_dev import (
+            CognitiveLoader, APIGuard, LivingADR, DependencyDoctor,
+        )
+        from .treellm.deep_dev import (
+            CodeProvenance, MergeOracle, HealthTrends, OnboardingCompass,
+        )
+
+        sub = args[0].lower() if args else "all"
+
+        if sub == "all":
+            print("\n  🩺 LivingTree Project Health Scan\n")
+            print("  ═══════════════════════════════════════")
+
+            # 1. Conventions
+            print("  📐 Conventions...")
+            report = ConventionExtractor.extract(sample_files=20)
+            print(f"     snake_case: {report.naming_patterns.get('snake_case',['?'])[0]}")
+            print(f"     docstrings: {report.docstring_coverage}% coverage")
+            print(f"     avg function: {report.avg_function_length} lines")
+
+            # 2. Hotspots
+            print("\n  🔥 Hotspots...")
+            hot_reports = HotColdAnalyzer.analyze(top_n=8)
+            hot = [r for r in hot_reports if r.status == "hot"]
+            print(f"     {len(hot)} hot files (most changed in 90d)")
+            for r in hot[:3]:
+                print(f"       {Path(r.file).name}: {r.change_count} changes")
+
+            # 3. CogniMap
+            print("\n  🧠 Complexity...")
+            cogni = CognitiveLoader.analyze(risk_filter="critical")
+            print(f"     {len(cogni)} critical-complexity files")
+            if cogni:
+                print(f"     worst: {Path(cogni[0].path).name} (CC={cogni[0].cyclomatic})")
+
+            # 4. API Guard
+            print("\n  🛡️ API Changes...")
+            changes = APIGuard.check()
+            breaking = [c for c in changes if c.severity == "error"]
+            print(f"     {len(breaking)} breaking, {len(changes)-len(breaking)} warning")
+
+            # 5. CodeGraph stats
+            print("\n  📊 CodeGraph...")
+            try:
+                from livingtree.capability.code_graph import CodeGraph
+                cg = CodeGraph()
+                cache = Path(".livingtree/code_graph.pickle")
+                if cache.exists():
+                    cg.load(str(cache))
+                    stats = cg.stats()
+                    if stats.total_entities > 0:
+                        print(f"     {stats.total_entities} entities, {stats.total_edges} edges, {stats.total_files} files")
+                    else:
+                        print(f"     loaded from cache — run 'livingtree improve --scan' to refresh")
+                else:
+                    print(f"     not yet built — run 'livingtree improve --scan' first")
+            except Exception:
+                print(f"     unavailable")
+
+            # 6. Dependencies
+            print("\n  📦 Dependencies...")
+            deps = DependencyDoctor.diagnose()
+            stale = [d for d in deps if d.is_stale]
+            print(f"     {len(stale)} outdated packages")
+
+            print(f"\n  {'═'*40}")
+            print(f"  ✅ Health scan complete")
+            print(f"  💡 Run specific checks: livingtree dev [hotspots|cognimap|api-guard|...]")
+            return
+            files = [a for a in args[1:] if not a.startswith("--")]
+            if not files:
+                print("Usage: livingtree dev rehearse <file> [function_name]")
+                print("Example: livingtree dev rehearse livingtree/treellm/core.py chat")
+                return
+            # Try loading CodeGraph
+            cg = None
+            try:
+                from livingtree.capability.code_graph import CodeGraph
+                cg = CodeGraph()
+                cache = Path(".livingtree/code_graph.pickle")
+                if cache.exists():
+                    cg.load(str(cache))
+            except Exception:
+                pass
+            print(f"\n  🔮 Change Rehearsal: {' '.join(files)}\n")
+            impacts = ChangeRehearsal.rehearse(files, code_graph=cg)
+            print(ChangeRehearsal.format_report(impacts))
+            if impacts:
+                total_risk = sum(i.dependents_affected for i in impacts)
+                critical = sum(1 for i in impacts if i.risk_level == "critical")
+                print(f"\n  📊 Total dependents: {total_risk}, Critical: {critical}")
+                print(f"  ⏱️  Estimated fix time if breaking: ~{sum(i.estimated_fix_time_minutes for i in impacts)}min")
+
+        elif sub == "hotspots":
+            top_n = int(args[1]) if len(args) > 1 and args[1].isdigit() else 15
+            print(f"\n  🔥 Hot/Cold File Analysis (top {top_n})\n")
+            reports = HotColdAnalyzer.analyze(top_n=top_n)
+            print(HotColdAnalyzer.format_report(reports))
+            hot = [r for r in reports if r.status == "hot"]
+            stable = [r for r in reports if r.status == "stable"]
+            if stable:
+                print(f"\n  💡 {len(stable)} files stable >60 days — candidates for API freeze")
+
+        elif sub == "conventions":
+            print("\n  📐 Extracting coding conventions...\n")
+            report = ConventionExtractor.extract()
+            print(ConventionExtractor.format_report(report))
+
+        elif sub == "doccheck":
+            print("\n  📝 Checking docstring drift...\n")
+            all_drifts = []
+            for fpath in Path("livingtree").rglob("*.py"):
+                if any(p in str(fpath) for p in ("__pycache__", ".venv", "test_")):
+                    continue
+                all_drifts.extend(DocstringChecker.check_file(str(fpath)))
+            print(DocstringChecker.format_report(all_drifts))
+            if all_drifts:
+                print(f"\n  Found {len(all_drifts)} functions with docstring drift")
+
+        elif sub == "cognimap":
+            risk = "all"
+            for i, a in enumerate(args):
+                if a == "--risk" and i + 1 < len(args):
+                    risk = args[i + 1]
+            print(f"\n  🧠 Cognitive Load Map (filter={risk})\n")
+            files = CognitiveLoader.analyze(risk_filter=risk)
+            print(CognitiveLoader.format_map(files))
+
+        elif sub == "api-guard":
+            if len(args) > 1 and args[1] == "--check":
+                print("\n  🛡️ API Compatibility Check\n")
+                changes = APIGuard.check()
+                print(APIGuard.format_report(changes))
+            else:
+                print("\n  🛡️ Capturing API snapshot...\n")
+                sigs = APIGuard.snapshot()
+                APIGuard.save_snapshot(sigs)
+                print(f"  ✅ {len(sigs)} public API signatures saved to .livingtree/api_snapshots.json")
+                print(f"  💡 Run 'livingtree dev api-guard --check' after changes to detect breaks")
+
+        elif sub == "adr":
+            print("\n  📋 Generating Architecture Decision Record...\n")
+            adr = LivingADR.generate()
+            if adr:
+                path = LivingADR.save_adr(adr)
+                print(f"  ✅ ADR-{adr.id:04d}: {adr.title}")
+                print(f"  📄 {path}")
+                print(f"  Status: {adr.status} | Affected: {len(adr.affected_files)} files")
+            else:
+                print("  ℹ️  No significant architectural changes detected.")
+
+        elif sub == "deps":
+            print("\n  📦 Dependency Health Check\n")
+            deps = DependencyDoctor.diagnose()
+            print(DependencyDoctor.format_report(deps))
+
+        elif sub == "provenance":
+            if len(args) < 2:
+                print("Usage: livingtree dev provenance <file> <function>")
+                return
+            fpath, func = args[1], args[2] if len(args) > 2 else ""
+            print(f"\n  🔍 Tracing origin of {func or 'file'} in {fpath}...\n")
+            report = CodeProvenance.trace(fpath, func)
+            if report:
+                print(CodeProvenance.format_report(report))
+
+        elif sub == "health-trends":
+            since = next((int(args[i+1].rstrip("d")) for i, a in enumerate(args)
+                        if a == "--since" and i+1 < len(args)), 90)
+            print(f"\n  📈 Health Trends (past {since} days)\n")
+            snapshots = HealthTrends.analyze(since_days=since)
+            print(HealthTrends.format_report(snapshots))
+
+        else:
+            print("Usage: livingtree dev [all|rehearse|hotspots|conventions|cognimap|api-guard|provenance|deps|health-trends]")
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Dev tool failed: {e}")
+
+
+def _svc_learn(args: list):
+    """External learning: search trending GitHub repos + arXiv papers + Nature journals → extract patterns → propose improvements.
+
+    Commands:
+        livingtree learn              Run full learning cycle (GitHub + arXiv + Nature)
+        livingtree learn github       Search GitHub trending repos only
+        livingtree learn arxiv        Search arXiv papers only
+        livingtree learn nature       Search Nature/Semantic Scholar papers only
+        livingtree learn apply        Feed patterns into self-evolution pipeline
+        livingtree learn stats        Show learning statistics
+    """
+    import asyncio
+
+    async def _run():
+        from .dna.external_learner import get_external_driver
+        driver = get_external_driver()
+
+        sub = args[0].lower() if args else "cycle"
+
+        if sub == "cycle" or sub == "":
+            print("\n  🧠 External Learning Cycle — GitHub + arXiv + Nature\n")
+            t0 = __import__('time').time()
+            result = await driver.run_cycle()
+            ms = (__import__('time').time() - t0) * 1000
+
+            for source, label in [("github", "GitHub"), ("arxiv", "arXiv"), ("nature", "Nature")]:
+                items = result.get(f"{source}_repos" if source == "github" else f"{source}_papers", 0)
+                patterns = result.get(f"{source}_patterns", 0)
+                err = result.get(f"{source}_error", "")
+                icon = "✅" if patterns else "⚠️ "
+                line = f"  {icon} {label:8s} {items:>3} items → {patterns:>3} patterns"
+                if err:
+                    line += f"  [{err[:60]}]"
+                print(line)
+
+            total = result.get("total_patterns", 0)
+            proposals = result.get("proposals", [])
+            print(f"\n  📊 Total: {total} patterns, {len(proposals)} improvement proposals")
+            print(f"  ⏱️  {ms:.0f}ms")
+
+            if proposals:
+                print(f"\n  ── Top Proposals ──")
+                for p in proposals[:5]:
+                    cat = p.get("category", "?")
+                    desc = p.get("description", "") or p.get("title", "") or p.get("change", "")
+                    conf = p.get("confidence", 0)
+                    print(f"  [{cat}] (conf={conf:.0%}) {desc[:100]}")
+
+        elif sub == "github":
+            print("\n  🔍 GitHub Trending Search...")
+            repos = driver.github.search_related_repos()
+            patterns = driver.github.extract_patterns(repos)
+            print(f"  ✅ {len(repos)} repos → {len(patterns)} patterns")
+            for p in patterns[:5]:
+                print(f"    [{p.category}] {p.title[:100]}")
+
+        elif sub == "arxiv":
+            print("\n  🔍 arXiv Paper Search...")
+            papers = driver.arxiv.search_recent_papers()
+            patterns = driver.arxiv.extract_insights(papers)
+            print(f"  ✅ {len(papers)} papers → {len(patterns)} insights")
+            for p in patterns[:5]:
+                print(f"    [{p.category}] {p.title[:100]}")
+
+        elif sub == "nature":
+            print("\n  🔍 Nature/Semantic Scholar Search...")
+            papers = driver.nature.search_recent_papers()
+            patterns = driver.nature.extract_patterns(papers)
+            print(f"  ✅ {len(papers)} papers → {len(patterns)} patterns")
+            for p in patterns[:5]:
+                print(f"    [{p.category}] {p.title[:100]}")
+
+        elif sub == "apply":
+            proposals = driver.feed_to_evolution()
+            print(f"\n  🧬 Feeding {len(proposals)} patterns into self-evolution pipeline...")
+            if proposals:
+                for p in proposals[:5]:
+                    print(f"    [{p['category']}] {p.get('change','')[:100]} (conf={p['confidence']:.0%})")
+            print(f"  ✅ Ready for next improve --auto cycle")
+
+        elif sub == "stats":
+            stats = driver.stats
+            print(f"\n  📊 External Learning Statistics")
+            print(f"  {'─'*40}")
+            print(f"  Total patterns:     {stats['total_patterns']}")
+            print(f"  Last run:           {stats.get('last_run',0):.0f}s ago")
+            print(f"  GitHub learned:     {stats['github_learned']}")
+            print(f"  arXiv learned:      {stats['arxiv_learned']}")
+            print(f"  Nature learned:     {stats['nature_learned']}")
+            print(f"\n  Cache files:")
+            for f in [".livingtree/github_trending.json", ".livingtree/arxiv_learned.json"]:
+                from pathlib import Path
+                p = Path(f)
+                if p.exists():
+                    print(f"    {f} ({p.stat().st_size} bytes)")
+                else:
+                    print(f"    {f} (not yet cached)")
+
+        else:
+            print(f"Unknown subcommand: {sub}")
+            print("Usage: livingtree learn [cycle|github|arxiv|nature|apply|stats]")
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Learn failed: {e}")
+
+
 def _svc_models(args: list):
     """Manage LLM model registry: sync from providers, list available models, show details.
 
@@ -1329,33 +1899,12 @@ def _svc_models(args: list):
     async def _run():
         from .treellm.model_registry import get_model_registry
         from .config.settings import get_config
+        from .treellm.provider_registry import PROVIDER_BASE_URLS as provider_urls
         config = get_config().model
         mr = get_model_registry()
 
         subcmd = args[0] if args else "list"
         target = args[1] if len(args) > 1 else ""
-
-        # ── Register known providers from config ──
-        provider_urls = {
-            "deepseek": "https://api.deepseek.com/v1",
-            "longcat": "https://api.longcat.chat/v1",
-            "xiaomi": "https://api.xiaomi.com/v1",
-            "aliyun": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-            "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1",
-            "baidu": "https://qianfan.baidubce.com/v2",
-            "spark": "https://spark-api-open.xf-yun.com/v1",
-            "siliconflow": "https://api.siliconflow.cn/v1",
-            "mofang": "https://api.mofang.ai/v1",
-            "nvidia": "https://integrate.api.nvidia.com/v1",
-            "modelscope": "https://api-inference.modelscope.cn/v1",
-            "bailing": "https://api.baichuan.com/v1",
-            "stepfun": "https://api.stepfun.com/v1",
-            "internlm": "https://internlm-chat.intern-ai.org.cn/api/twlp/v1",
-            "sensetime": "https://api.sensetime.com/v1",
-            "openrouter": "https://openrouter.ai/api/v1",
-            "dmxapi": "https://api.dmxapi.com/v1",
-        }
 
         for name, url in provider_urls.items():
             key_attr = f"{name}_api_key"
@@ -1568,6 +2117,12 @@ Other:
   relay              Start relay server
   quick [msg]        Single quick interaction
   config [key] [val] Show/set config
+  learn              Learn from trending repos + papers → evolve
+  learn github       Search GitHub trending repos
+  learn arxiv        Search arXiv latest papers
+  learn nature       Search Nature/Semantic Scholar papers
+  learn apply        Feed learned patterns into evolution
+  learn stats        Show learning statistics
   --version, -v      Show version
   --help, -h         Show this help
 

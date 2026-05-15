@@ -235,21 +235,43 @@ class ToolAdapter(CapabilityAdapter):
         return {"error": f"Unknown tool: {name}"}
 
     def _read_file(self, path: str) -> str:
+        """Read file — VFS (LivingStore) is primary path, raw disk is sandboxed fallback."""
         try:
-            return Path(path).resolve().read_text(errors="replace")[:10000]
+            p = Path(path).resolve()
+            if not self._path_is_safe(p):
+                return "Error: path outside allowed sandbox"
+            return p.read_text(errors="replace")[:10000]
         except Exception as e:
             return f"Error: {e}"
 
     def _write_file(self, args: str) -> str:
+        """Write file — VFS (LivingStore) is primary path, raw disk is sandboxed fallback."""
+        parts = args.split("\n", 1)
         try:
-            parts = args.split("\n", 1)
             p = Path(parts[0].strip()).resolve()
+            if not self._path_is_safe(p):
+                return "Error: path outside allowed sandbox"
             content = parts[1] if len(parts) > 1 else ""
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content)
-            return f"Wrote {len(content)} bytes"
+            p.write_text(content, encoding="utf-8")
+            return f"Wrote {len(content)} bytes to {parts[0].strip()}"
         except Exception as e:
             return f"Error: {e}"
+
+    @staticmethod
+    def _path_is_safe(p: Path) -> bool:
+        cwd = Path.cwd().resolve()
+        sandbox = cwd / ".livingtree"
+        try:
+            p.relative_to(cwd)
+            return True
+        except ValueError:
+            pass
+        try:
+            p.relative_to(sandbox)
+            return True
+        except ValueError:
+            return False
 
 
 class SkillAdapter(CapabilityAdapter):
@@ -598,10 +620,9 @@ class CapabilityBus:
                 result = await adapter.invoke(cap_id, **params)
                 # ── Closed loop: tool feedback → update weights ──
                 try:
-                    cap = adapter.get(cap_id)
                     success = not isinstance(result, dict) or "error" not in str(result).lower()[:100]
                     if cap:
-                        cap.is_available = success or cap.is_available  # Degrade on failure
+                        cap.is_available = success and cap.is_available
                 except Exception:
                     pass
                 # ── Recording capture: tool/skill/mcp call ──
@@ -723,18 +744,9 @@ class CapabilityBus:
 
 # ═══ Singleton ════════════════════════════════════════════════════
 
-_bus: Optional[CapabilityBus] = None
-_bus_lock = threading.Lock()
-
 
 def get_capability_bus() -> CapabilityBus:
-    global _bus
-    if _bus is None:
-        with _bus_lock:
-            if _bus is None:
-                _bus = CapabilityBus()
-                CapabilityBus._instance = _bus
-    return _bus
+    return CapabilityBus.instance()
 
 
 __all__ = [

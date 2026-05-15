@@ -244,7 +244,9 @@ class LatentGRPO:
         advantages: dict[str, float] = {}
         for action, _ in group:
             action_key = str(action)
-            outcome = actual_outcomes.get(action_key, scores.get(action, 0.5))
+            outcome = actual_outcomes.get(action_key)
+            if outcome is None:
+                outcome = scores.get(action, group_mean)  # Use group mean as neutral fallback
             normalized_score = (scores[action] - group_mean) / group_std
             normalized_outcome = (outcome - group_mean) / group_std
             advantages[action] = 0.6 * normalized_score + 0.4 * normalized_outcome

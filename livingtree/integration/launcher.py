@@ -18,6 +18,7 @@ from loguru import logger
 
 from ..config import LTAIConfig, get_config
 from .hub import IntegrationHub
+from .. import __version__
 
 
 class LaunchMode(enum.Enum):
@@ -34,7 +35,7 @@ def launch(mode: LaunchMode, config: Optional[LTAIConfig] = None) -> int:
 
     Returns exit code (0 = success).
     """
-    logger.info(f"LivingTree v2.0.0 launching in {mode.value} mode")
+    logger.info(f"LivingTree v{__version__} launching in {mode.value} mode")
 
     try:
         if mode == LaunchMode.CLIENT:
@@ -64,7 +65,7 @@ async def _run_client(config: Optional[LTAIConfig] = None) -> None:
     await hub.start()
 
     print("\n" + "=" * 60)
-    print("  LivingTree Digital Life Form v2.0.0")
+    print("  LivingTree Digital Life Form v" + __version__)
     print("  Type 'help' for commands, 'quit' to exit")
     print("=" * 60 + "\n")
 
@@ -153,10 +154,13 @@ async def _run_server(config: Optional[LTAIConfig] = None) -> None:
     if cfg.api.workers > 1:
         config_kwargs["workers"] = cfg.api.workers
     else:
-        # Default to CPU count - 1 (min 1) for better concurrency
         import os as _os
         cpu_count = _os.cpu_count() or 4
-        config_kwargs["workers"] = max(1, cpu_count - 1)
+        default_workers = max(1, cpu_count - 1)
+        if os.name == "nt":
+            config_kwargs["workers"] = 1  # Windows: single worker only
+        else:
+            config_kwargs["workers"] = default_workers
 
     server = uvicorn.Server(uvicorn.Config(**config_kwargs))
     try:

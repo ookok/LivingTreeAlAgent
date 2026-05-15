@@ -405,14 +405,10 @@ class TreeLLM:
             except ImportError:
                 pass
 
-        # ── Fast path: preprocess only, no LLM ──
-        if not model:
             # Tool queries need LLM reasoning — force model=True if tools likely needed
             ql = query.lower()
             needs_tools = any(k in ql for k in ["搜索", "search", "查找", "计算", "文件", "画图"])
-            if needs_tools:
-                model = True  # Fall through to LLM pipeline (ReAct handles tools)
-            else:
+            if not needs_tools:
                 return {
                 "provider": "preprocess", "result": None, "mode": "preprocess",
                 "layers_used": 0,
@@ -709,7 +705,7 @@ class TreeLLM:
             "candidates_per_layer": {
                 "layer1": layer1_candidates_final,
                 "layer2": layer2_candidates,
-                "layer3": [original_provider] if original_provider else [],
+                "layer3": [final_provider] if final_provider else [],
                 "layer4": [l4_provider] if l4_provider else [],
             },
             "scores": {
@@ -726,12 +722,12 @@ class TreeLLM:
                 "cached_provider": tv_cached_provider,
             },
             "cost_saved": "Used layering providers (embedded scoring + alive ping)",
-                        "foresight": foresight_insights,
-                        "synapse": synapse_result,
-                        "deep_probe": probing_result,
-                        "micro_turn": micro_turn_state,
-                        "stigmergy": bool(stigmergy_ctx),
-            }
+            "foresight": foresight_insights,
+            "synapse": synapse_result,
+            "deep_probe": probing_result,
+            "micro_turn": micro_turn_state,
+            "stigmergy": bool(stigmergy_ctx),
+        }
 
     def route_layered_sync(self, query: str, **kwargs) -> dict[str, Any]:
         """Synchronous wrapper for route_layered."""
@@ -773,21 +769,7 @@ class TreeLLM:
         task_type = kwargs.get("task_type", "general")
         try:
             prompt_text, _ = get_auto_prompt().select(task_type)
-
-            # Override with DSPy-style compiled prompt if available for this capability
-            capability_id = kwargs.get("capability_id", "")
-            if capability_id:
-                try:
-                    from .prompt_engine import get_prompt_compiler
-                    compiled = get_prompt_compiler().compile(capability_id)
-                    if compiled:
-                        prompt_text = compiled
-                except Exception:
-                    pass
-
             if prompt_text:
-                # Append task-specific prompt to the identity system message
-                # rather than replacing it, so identity + constitution stays intact
                 sys_idx = next((i for i, m in enumerate(messages) if m.get("role") == "system"), None)
                 if sys_idx is not None:
                     messages[sys_idx]["content"] += "\n\n" + prompt_text
@@ -795,6 +777,15 @@ class TreeLLM:
                     messages = [{"role": "system", "content": prompt_text}] + messages
         except Exception:
             pass
+
+        # ── CodeContext: inject code file context for code-related tasks ──
+        if task_type == "code":
+            try:
+                from .code_context import get_code_context
+                code_ctx = get_code_context()
+                messages = code_ctx.inject_chat_context(messages)
+            except Exception:
+                pass
 
         # ── Disable thinking for short queries ──
         if max_tokens < 800 and hasattr(p, 'pro_thinking_enabled'):
@@ -1047,7 +1038,10 @@ class TreeLLM:
             self._url_host = re.compile(r'https?://([^/]+)')
             self._optimize_cache: dict[str, list[dict]] = {}
 
-        cache_key = str([m.get("content", "") for m in messages])
+        import hashlib, json
+        cache_key = hashlib.sha256(
+            json.dumps([m.get("content", "") for m in messages], sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest()
         if cache_key in self._optimize_cache:
             return self._optimize_cache[cache_key]
 
@@ -1092,13 +1086,13 @@ class TreeLLM:
             return
         with self._stats_lock:
             s.calls += 1; s.successes += 1
-        s.total_tokens += tokens; s.total_latency_ms += latency_ms
-        s.last_latency_ms = latency_ms
-        s.recent_successes.append(True)
-        s.recent_latencies.append(latency_ms)
-        if len(s.recent_successes) > 20:
-            s.recent_successes = s.recent_successes[-20:]
-            s.recent_latencies = s.recent_latencies[-20:]
+            s.total_tokens += tokens; s.total_latency_ms += latency_ms
+            s.last_latency_ms = latency_ms
+            s.recent_successes.append(True)
+            s.recent_latencies.append(latency_ms)
+            if len(s.recent_successes) > 20:
+                s.recent_successes = s.recent_successes[-20:]
+                s.recent_latencies = s.recent_latencies[-20:]
         from .holistic_election import get_election
         get_election().record_result(name, True, latency_ms, tokens)
         # ── Cost tracking ──

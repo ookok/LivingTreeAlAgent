@@ -76,6 +76,18 @@ class SignalType(Enum):
     PROTOCOL_SUCCESS_RATE = "protocol_success_rate"
 
 
+_HIGHER_IS_BETTER: set[SignalType] = {
+    SignalType.PROXY_SUCCESS_RATE,
+    SignalType.BANDWIDTH_BYTES,
+    SignalType.CACHE_HIT_RATE,
+    SignalType.DAILY_BUDGET_REMAINING,
+    SignalType.PROXY_POOL_HEALTH,
+    SignalType.PROTOCOL_SUCCESS_RATE,
+    SignalType.ACTIVE_PROXIES,
+    SignalType.QUIC_ACTIVE,
+}
+
+
 @dataclass
 class Signal:
     """A single performance/business timing signal."""
@@ -90,11 +102,17 @@ class Signal:
 
     @property
     def is_warning(self) -> bool:
-        return self.value > self.threshold_warn if self.threshold_warn else False
+        if not self.threshold_warn:
+            return False
+        thresh = self.threshold_warn
+        return self.value < thresh if self.type in _HIGHER_IS_BETTER else self.value > thresh
 
     @property
     def is_critical(self) -> bool:
-        return self.value > self.threshold_critical if self.threshold_critical else False
+        if not self.threshold_critical:
+            return False
+        thresh = self.threshold_critical
+        return self.value < thresh if self.type in _HIGHER_IS_BETTER else self.value > thresh
 
 
 @dataclass
@@ -188,8 +206,8 @@ class SignalBus:
         for callback in self._subscribers.get(signal_type, []):
             try:
                 callback(signal)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"SignalBus subscriber failed for {signal_type.value}: {e}")
 
     def get(self, signal_type: SignalType) -> float:
         """Get current value of a signal."""

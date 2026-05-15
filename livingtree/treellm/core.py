@@ -759,6 +759,16 @@ class TreeLLM:
             except Exception:
                 pass
 
+        # ── Identity: inject 小树 persona + constitution as FIRST system message ──
+        # This runs before AutoPrompt, tool injection, or any task-specific prompt.
+        # Ensures ALL providers get the same identity regardless of routing.
+        if not any(m.get("role") == "system" for m in messages):
+            try:
+                from ..dna.identity import get_identity_prompt
+                messages = [{"role": "system", "content": get_identity_prompt()}] + messages
+            except Exception:
+                pass
+
         # ── AutoPrompt + PromptEngine: inject optimized system prompt ──
         task_type = kwargs.get("task_type", "general")
         try:
@@ -775,8 +785,14 @@ class TreeLLM:
                 except Exception:
                     pass
 
-            if prompt_text and not any(m.get("role") == "system" for m in messages):
-                messages = [{"role": "system", "content": prompt_text}] + messages
+            if prompt_text:
+                # Append task-specific prompt to the identity system message
+                # rather than replacing it, so identity + constitution stays intact
+                sys_idx = next((i for i, m in enumerate(messages) if m.get("role") == "system"), None)
+                if sys_idx is not None:
+                    messages[sys_idx]["content"] += "\n\n" + prompt_text
+                else:
+                    messages = [{"role": "system", "content": prompt_text}] + messages
         except Exception:
             pass
 

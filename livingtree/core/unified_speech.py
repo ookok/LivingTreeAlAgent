@@ -16,6 +16,8 @@ Integration:
 
 from __future__ import annotations
 
+from ..dna.identity import get_identity_prompt
+
 import asyncio
 import base64
 import json as _json
@@ -271,7 +273,7 @@ class UnifiedSpeechPipeline:
                     json={
                         "model": self._text_model,
                         "messages": [
-                            {"role": "system", "content": "你是小树(LivingTree), 一个有生命的AI助手。用自然、温暖的口语回复, 不超过200字。"},
+                            {"role": "system", "content": get_identity_prompt()},
                             {"role": "user", "content": text},
                         ],
                         "stream": False,

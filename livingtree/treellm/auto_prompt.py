@@ -23,9 +23,9 @@ from typing import Any, Callable, Optional
 from loguru import logger
 
 DEFAULT_PROMPTS = {
-    "general": "You are a helpful AI assistant.",
-    "code": "You are an expert programmer. Write clean, well-documented code.",
-    "chat": "You are a friendly, conversational AI. Keep responses concise.",
+    "general": "",
+    "code": "Write clean, well-documented code with error handling.",
+    "chat": "Keep responses friendly and concise.",
     "reasoning": "Think step by step. Show your reasoning before concluding.",
 }
 

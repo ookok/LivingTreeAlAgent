@@ -270,6 +270,255 @@ class TailwindUI:
         html += '</nav></aside>'
         return html
 
+    # ═══ Primitives ═══════════════════════════════════════════════
+
+    @staticmethod
+    def Box(children: str = "", padding: str = "4", bg: str = "white",
+            rounded: str = "lg", shadow: str = "") -> str:
+        sh = f"shadow-{shadow}" if shadow else ""
+        return (f'<div class="bg-{bg} p-{padding} rounded-{rounded} {sh}">'
+                f'{children}</div>')
+
+    @staticmethod
+    def Flex(children: list[str] = None, direction: str = "row",
+             gap: str = "4", align: str = "center") -> str:
+        children = children or []
+        dirs = {"row": "flex-row", "col": "flex-col"}
+        return (f'<div class="flex {dirs.get(direction, "flex-row")} '
+                f'gap-{gap} items-{align}">{"".join(children)}</div>')
+
+    @staticmethod
+    def Stack(children: list[str] = None, gap: str = "3") -> str:
+        children = children or []
+        return f'<div class="flex flex-col gap-{gap}">{"".join(children)}</div>'
+
+    @staticmethod
+    def Container(children: str = "", max_w: str = "4xl") -> str:
+        return f'<div class="max-w-{max_w} mx-auto px-4">{children}</div>'
+
+    @staticmethod
+    def Text(content: str, size: str = "base", weight: str = "normal",
+             color: str = "gray-700") -> str:
+        sizes = {"xs": "text-xs", "sm": "text-sm", "base": "text-base",
+                 "lg": "text-lg", "xl": "text-xl", "2xl": "text-2xl"}
+        weights = {"normal": "font-normal", "medium": "font-medium",
+                   "semibold": "font-semibold", "bold": "font-bold"}
+        return (f'<span class="{sizes.get(size,"text-base")} '
+                f'{weights.get(weight,"font-normal")} text-{color}">'
+                f'{escape(content)}</span>')
+
+    @staticmethod
+    def Divider() -> str:
+        return '<hr class="border-t border-gray-200 my-4">'
+
+    # ═══ Inputs ════════════════════════════════════════════════════
+
+    @staticmethod
+    def Input(name: str, label: str = "", type_: str = "text",
+              placeholder: str = "", required: bool = False,
+              value: str = "") -> str:
+        req = " required" if required else ""
+        html = ""
+        if label:
+            html += (f'<label class="block text-sm font-medium text-gray-700 mb-1">'
+                    f'{escape(label)}</label>')
+        html += (f'<input name="{escape(name)}" type="{type_}" '
+                f'placeholder="{escape(placeholder)}" value="{escape(value)}"'
+                f' class="w-full px-3 py-2 border border-gray-300 rounded-lg '
+                f'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"'
+                f'{req}>')
+        return f'<div>{html}</div>'
+
+    @staticmethod
+    def Textarea(name: str, label: str = "", placeholder: str = "",
+                 rows: int = 4) -> str:
+        html = ""
+        if label:
+            html += (f'<label class="block text-sm font-medium text-gray-700 mb-1">'
+                    f'{escape(label)}</label>')
+        html += (f'<textarea name="{escape(name)}" rows="{rows}" '
+                f'placeholder="{escape(placeholder)}"'
+                f' class="w-full px-3 py-2 border border-gray-300 rounded-lg '
+                f'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">'
+                f'</textarea>')
+        return f'<div>{html}</div>'
+
+    @staticmethod
+    def Select(name: str, label: str = "", options: list[tuple[str, str]] = None) -> str:
+        """options: [(value, label)]"""
+        options = options or []
+        html = ""
+        if label:
+            html += (f'<label class="block text-sm font-medium text-gray-700 mb-1">'
+                    f'{escape(label)}</label>')
+        opts = "".join(
+            f'<option value="{escape(v)}">{escape(l)}</option>' for v, l in options
+        )
+        html += (f'<select name="{escape(name)}" class="w-full px-3 py-2 border '
+                f'border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">'
+                f'{opts}</select>')
+        return f'<div>{html}</div>'
+
+    @staticmethod
+    def Checkbox(name: str, label: str = "", checked: bool = False) -> str:
+        chk = " checked" if checked else ""
+        return (f'<label class="flex items-center space-x-2 text-sm text-gray-700">'
+                f'<input type="checkbox" name="{escape(name)}"'
+                f' class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"'
+                f'{chk}>'
+                f'<span>{escape(label)}</span></label>')
+
+    @staticmethod
+    def ToggleSwitch(name: str, label: str = "", checked: bool = False) -> str:
+        chk = " checked" if checked else ""
+        return (f'<label class="flex items-center space-x-2 cursor-pointer">'
+                f'<input type="checkbox" name="{escape(name)}"'
+                f' class="sr-only peer"{chk}>'
+                f'<div class="w-9 h-5 bg-gray-300 peer-checked:bg-blue-600 '
+                f'rounded-full relative after:content-[\'\'] after:absolute '
+                f'after:top-0.5 after:left-0.5 after:bg-white after:rounded-full '
+                f'after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4">'
+                f'</div>'
+                f'<span class="text-sm text-gray-700">{escape(label)}</span></label>')
+
+    # ═══ Display ═══════════════════════════════════════════════════
+
+    @staticmethod
+    def Image(src: str, alt: str = "", width: str = "full",
+              rounded: str = "lg") -> str:
+        return (f'<img src="{escape(src)}" alt="{escape(alt)}" '
+                f'class="w-{width} rounded-{rounded} object-cover">')
+
+    @staticmethod
+    def Avatar(name: str, src: str = "", size: str = "md") -> str:
+        sizes = {"sm": "w-8 h-8 text-xs", "md": "w-10 h-10 text-sm",
+                 "lg": "w-12 h-12 text-base"}
+        if src:
+            return (f'<img src="{escape(src)}" alt="{escape(name)}" '
+                    f'class="{sizes.get(size,sizes["md"])} rounded-full object-cover">')
+        initials = "".join(w[0] for w in name.split()[:2]).upper()
+        return (f'<span class="inline-flex items-center justify-center '
+                f'{sizes.get(size,sizes["md"])} rounded-full bg-blue-100 '
+                f'text-blue-700 font-medium">{initials}</span>')
+
+    @staticmethod
+    def Accordion(items: list[tuple[str, str]]) -> str:
+        """items: [(title, content)]"""
+        html = '<div class="divide-y divide-gray-200 border rounded-lg">'
+        for title, content in items:
+            html += (
+                f'<details class="group"><summary class="px-4 py-3 text-sm '
+                f'font-medium text-gray-700 cursor-pointer hover:bg-gray-50 '
+                f'group-open:bg-gray-50">{escape(title)}</summary>'
+                f'<div class="px-4 py-3 text-sm text-gray-600">{content}</div>'
+                f'</details>'
+            )
+        html += '</div>'
+        return html
+
+    # ═══ Feedback ══════════════════════════════════════════════════
+
+    @staticmethod
+    def Toast(message: str, level: str = "info", duration: int = 3000) -> str:
+        colors = {"info": "bg-blue-600", "success": "bg-green-600",
+                  "warning": "bg-yellow-500", "error": "bg-red-600"}
+        return (
+            f'<div class="fixed bottom-4 right-4 z-50 {colors.get(level,colors["info"])} '
+            f'text-white px-6 py-3 rounded-lg shadow-lg text-sm animate-slide-up '
+            f'onload="setTimeout(()=>this.remove(),{duration})">'
+            f'{escape(message)}</div>'
+        )
+
+    @staticmethod
+    def Skeleton(lines: int = 3, width: str = "full") -> str:
+        html = f'<div class="animate-pulse space-y-3 w-{width}">'
+        for _ in range(lines):
+            html += '<div class="h-4 bg-gray-200 rounded"></div>'
+        html += '</div>'
+        return html
+
+    # ═══ Composites ════════════════════════════════════════════════
+
+    @staticmethod
+    def StatGrid(stats: list[dict]) -> str:
+        """stats: [{label, value, change, trend}] trend: up|down|neutral"""
+        items = []
+        for s in stats:
+            trend_icon = {"up": "↑", "down": "↓", "neutral": "→"}.get(s.get("trend",""), "")
+            trend_color = {"up": "text-green-600", "down": "text-red-600",
+                          "neutral": "text-gray-500"}.get(s.get("trend",""), "")
+            items.append(
+                f'<div class="bg-white rounded-xl shadow-sm p-4 text-center">'
+                f'<div class="text-2xl font-bold text-gray-800">{escape(str(s.get("value","")))}</div>'
+                f'<div class="text-xs text-gray-500">{escape(s.get("label",""))}</div>'
+                f'{("<div class=\"text-sm mt-1 " + trend_color + "\">" + trend_icon + " " + escape(str(s.get("change",""))) + "</div>") if s.get("change") else ""}'
+                f'</div>'
+            )
+        return f'<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">{"".join(items)}</div>'
+
+    @staticmethod
+    def EmptyState(title: str, description: str = "",
+                   action_label: str = "", action_url: str = "") -> str:
+        html = (
+            f'<div class="text-center py-12">'
+            f'<div class="text-4xl mb-3">📭</div>'
+            f'<h3 class="text-lg font-semibold text-gray-700">{escape(title)}</h3>'
+        )
+        if description:
+            html += f'<p class="text-sm text-gray-500 mt-1">{escape(description)}</p>'
+        if action_label and action_url:
+            html += (
+                f'<a href="{escape(action_url)}" class="inline-block mt-4 px-4 py-2 '
+                f'bg-blue-600 text-white rounded-lg text-sm font-medium '
+                f'hover:bg-blue-700 transition-colors">{escape(action_label)}</a>'
+            )
+        html += '</div>'
+        return html
+
+    @staticmethod
+    def DataFeed(items: list[dict]) -> str:
+        """items: [{title, description, time, badge}] — activity feed"""
+        html = '<div class="space-y-3">'
+        for item in items:
+            badge_html = ""
+            if item.get("badge"):
+                badge_html = (f'<span class="inline-flex px-2 py-0.5 rounded-full '
+                             f'text-xs font-medium bg-blue-100 text-blue-700">'
+                             f'{escape(item["badge"])}</span>')
+            html += (
+                f'<div class="flex items-start space-x-3 p-3 bg-white rounded-lg '
+                f'shadow-sm">'
+                f'<div class="flex-1 min-w-0">'
+                f'<p class="text-sm font-medium text-gray-800">{escape(item.get("title",""))}</p>'
+                f'<p class="text-xs text-gray-500 mt-0.5">{escape(item.get("description","")[:120])}</p>'
+                f'</div>'
+                f'<div class="flex flex-col items-end space-y-1 flex-shrink-0">'
+                f'<span class="text-xs text-gray-400">{escape(item.get("time",""))}</span>'
+                f'{badge_html}'
+                f'</div></div>'
+            )
+        html += '</div>'
+        return html
+
+    @staticmethod
+    def Stepper(steps: list[str], current: int = 0) -> str:
+        html = '<div class="flex items-center">'
+        for i, step in enumerate(steps):
+            if i > 0:
+                color = "bg-blue-600" if i <= current else "bg-gray-300"
+                html += f'<div class="flex-1 h-0.5 {color}"></div>'
+            circle_color = ("bg-blue-600 text-white" if i <= current
+                           else "bg-gray-200 text-gray-500")
+            html += (
+                f'<div class="flex flex-col items-center flex-shrink-0">'
+                f'<div class="w-6 h-6 rounded-full {circle_color} flex items-center '
+                f'justify-center text-xs font-medium">{i+1}</div>'
+                f'<span class="text-xs mt-1 text-gray-500">{escape(step[:12])}</span>'
+                f'</div>'
+            )
+        html += '</div>'
+        return html
+
 
 # ═══ Singleton ════════════════════════════════════════════════════
 

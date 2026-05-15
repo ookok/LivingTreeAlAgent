@@ -676,6 +676,14 @@ class LivingRenderer:
             "Modal": lambda: ui.Modal(**(props if isinstance(props, dict) else {})),
             "Page": lambda: ui.Page(**(props if isinstance(props, dict) else {})),
             "Sidebar": lambda: ui.Sidebar(**(props if isinstance(props, dict) else {})),
+            "StatGrid": lambda: ui.StatGrid(props.get("stats", []) if isinstance(props, dict) else []),
+            "DataFeed": lambda: ui.DataFeed(props.get("items", []) if isinstance(props, dict) else []),
+            "EmptyState": lambda: ui.EmptyState(**(props if isinstance(props, dict) else {})),
+            "Stepper": lambda: ui.Stepper(**(props if isinstance(props, dict) else {})),
+            "Accordion": lambda: ui.Accordion(**(props if isinstance(props, dict) else {})),
+            "Toast": lambda: ui.Toast(**(props if isinstance(props, dict) else {})),
+            "Stack": lambda: ui.Stack(**(props if isinstance(props, dict) else {})),
+            "Container": lambda: ui.Container(**(props if isinstance(props, dict) else {})),
         }
         render_fn = component_map.get(comp)
         html = render_fn() if render_fn else f'<div>Unknown: {comp}</div>'

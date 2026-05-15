@@ -88,15 +88,24 @@
       const props = JSON.parse(el.dataset.a2uiProps || '{}');
       let html = '';
       try {
-        if (comp === 'Card') html = this._twCard(props);
-        else if (comp === 'Table') html = this._twTable(props);
-        else if (comp === 'Alert') html = this._twAlert(props);
-        else if (comp === 'Badge') html = this._twBadge(props);
-        else if (comp === 'Button') html = this._twButton(props);
-        else if (comp === 'Form') html = this._twForm(props);
-        else if (comp === 'Tabs') html = this._twTabs(props);
-        else if (comp === 'Spinner') html = '<div class="w-8 h-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 mx-auto"></div>';
-        else html = `<div class="text-gray-500 text-sm p-4">Unknown component: ${comp}</div>`;
+        const renderers = {
+          Card: p => this._twCard(p),
+          Table: p => this._twTable(p),
+          Alert: p => this._twAlert(p),
+          Badge: p => this._twBadge(p),
+          Button: p => this._twButton(p),
+          Form: p => this._twForm(p),
+          Tabs: p => this._twTabs(p),
+          Spinner: () => '<div class="w-8 h-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 mx-auto"></div>',
+          Skeleton: p => { const n = p.lines||3; let h='<div class="animate-pulse space-y-3">'; for(let i=0;i<n;i++)h+='<div class="h-4 bg-gray-200 rounded"></div>'; return h+'</div>'; },
+          Toast: p => `<div class="fixed bottom-4 right-4 z-50 ${p.level==='error'?'bg-red-600':p.level==='warning'?'bg-yellow-500':'bg-blue-600'} text-white px-6 py-3 rounded-lg shadow-lg text-sm">${this._esc(p.message||'')}</div>`,
+          EmptyState: p => `<div class="text-center py-12"><div class="text-4xl mb-3">📭</div><h3 class="text-lg font-semibold text-gray-700">${this._esc(p.title||'')}</h3>${p.description?`<p class="text-sm text-gray-500 mt-1">${this._esc(p.description)}</p>`:''}</div>`,
+          Stepper: p => { const steps=p.steps||[]; const cur=p.current||0; let h='<div class="flex items-center">'; steps.forEach((s,i)=>{ if(i>0)h+=`<div class="flex-1 h-0.5 ${i<=cur?'bg-blue-600':'bg-gray-300'}"></div>`; const cc=i<=cur?'bg-blue-600 text-white':'bg-gray-200 text-gray-500'; h+=`<div class="flex flex-col items-center flex-shrink-0"><div class="w-6 h-6 rounded-full ${cc} flex items-center justify-center text-xs font-medium">${i+1}</div><span class="text-xs mt-1 text-gray-500">${this._esc((s||'').slice(0,12))}</span></div>`; }); return h+'</div>'; },
+          StatGrid: p => { const stats=p.stats||[]; let h='<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">'; stats.forEach(s=>{ const trend={up:'↑',down:'↓',neutral:'→'}[s.trend]||''; const tc={up:'text-green-600',down:'text-red-600',neutral:'text-gray-500'}[s.trend]||''; h+=`<div class="bg-white rounded-xl shadow-sm p-4 text-center"><div class="text-2xl font-bold text-gray-800">${this._esc(String(s.value||''))}</div><div class="text-xs text-gray-500">${this._esc(s.label||'')}</div>${s.change?`<div class="text-sm mt-1 ${tc}">${trend} ${this._esc(String(s.change))}</div>`:''}</div>`; }); return h+'</div>'; },
+          DataFeed: p => { const items=p.items||[]; let h='<div class="space-y-3">'; items.forEach(it=>{ const badge=it.badge?`<span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">${this._esc(it.badge)}</span>`:''; h+=`<div class="flex items-start space-x-3 p-3 bg-white rounded-lg shadow-sm"><div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-800">${this._esc(it.title||'')}</p><p class="text-xs text-gray-500 mt-0.5">${this._esc((it.description||'').slice(0,120))}</p></div><div class="flex flex-col items-end space-y-1 flex-shrink-0"><span class="text-xs text-gray-400">${this._esc(it.time||'')}</span>${badge}</div></div>`; }); return h+'</div>'; },
+          Accordion: p => { const items=p.items||[]; let h='<div class="divide-y divide-gray-200 border rounded-lg">'; items.forEach(([t,c])=>{ h+=`<details class="group"><summary class="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50">${this._esc(t)}</summary><div class="px-4 py-3 text-sm text-gray-600">${c}</div></details>`; }); return h+'</div>'; },
+        };
+        html = (renderers[comp] || (() => `<div class="text-gray-500 text-sm p-4">Unknown component: ${comp}</div>`))(props);
       } catch(e) { html = `<div class="text-red-500 text-sm">Render error: ${e.message}</div>`; }
       el.innerHTML = html;
     },

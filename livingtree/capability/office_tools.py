@@ -50,8 +50,7 @@ class OfficeTools:
         """Rename files matching regex pattern to template format.
 
         template supports: {num}, {name}, {ext}, {date}, {num:03d}
-        Example: OfficeTools.batch_rename(".", r"img_(\d+)\.jpg", "photo_{num:03d}.jpg")
-        """
+        Example: OfficeTools.batch_rename(".", r"img_(\d+)\.jpg", "photo_{num:03d}.jpg")"""
         p = Path(directory)
         files = list(p.rglob("*") if recursive else p.glob("*"))
         compiled = re.compile(pattern)
@@ -522,3 +521,38 @@ class OfficeTools:
 
 
 __all__ = ["OfficeTools"]
+
+
+def register_office_tools(bus=None):
+    """Register all OfficeTools into CapabilityBus for LLM discovery."""
+    try:
+        from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+        bus = bus or get_capability_bus()
+        
+        tools = [
+            ("office:batch_rename", "Batch rename files matching pattern", "directory,pattern,template"),
+            ("office:file_deduplicate", "Find duplicate files by content hash", "directory,recursive"),
+            ("office:batch_compress", "Compress files into zip/tar archive", "sources,output,format"),
+            ("office:generate_report", "Generate report from template with data", "template,data,format"),
+            ("office:generate_table_xlsx", "Generate Excel spreadsheet", "data,headers,output"),
+            ("office:convert_file", "Convert file between formats", "source,target_format"),
+            ("office:pdf_merge", "Merge multiple PDFs into one", "sources,output"),
+            ("office:pdf_split", "Split PDF into individual pages", "source,output_dir"),
+            ("office:pdf_extract_text", "Extract text from PDF", "source,pages"),
+            ("office:csv_deduplicate", "Remove duplicate CSV rows", "source,columns"),
+            ("office:regex_extract", "Extract data using regex from file", "source,pattern"),
+            ("office:send_email", "Send email via SMTP", "to,subject,body"),
+            ("office:image_process", "Resize/compress/convert image", "source,operation,params"),
+            ("office:fill_template", "Fill template with variables", "template_path,variables"),
+        ]
+        for cap_id, desc, hint in tools:
+            bus.register(Capability(
+                id=cap_id, name=cap_id.split(":",1)[1], category=CapCategory.TOOL,
+                description=desc, params=[CapParam(name="input", type="string", description=hint)],
+                source="office_tools", tags=["office", "automation"],
+            ))
+        logger.info(f"OfficeTools: registered {len(tools)} tools")
+        return len(tools)
+    except Exception as e:
+        logger.debug(f"OfficeTools register: {e}")
+        return 0

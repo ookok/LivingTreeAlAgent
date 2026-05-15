@@ -144,6 +144,8 @@ def main():
         _svc_learn(sys.argv[2:])
     elif command == "dev":
         _svc_dev(sys.argv[2:])
+    elif command == "bootstrap":
+        _svc_bootstrap(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -1839,6 +1841,31 @@ def _svc_dev(args: list):
         asyncio.run(_run())
     except Exception as e:
         print(f"❌ Dev tool failed: {e}")
+
+
+def _svc_bootstrap(args: list):
+    """Two-stage self-initializing environment.
+
+    Commands:
+        livingtree bootstrap              Full two-stage bootstrap
+        livingtree bootstrap --quick      Stage 1 only (core deps check)
+        livingtree bootstrap --full       Stage 1 + 2 + LLM warm-up
+    """
+    import asyncio
+
+    async def _run():
+        from .treellm.bootstrap import Bootstrapper
+        quick = "--quick" in args
+        full = "--full" in args
+
+        print("\n  🌱 LivingTree Bootstrap\n")
+        report = await Bootstrapper.run(quick=quick, full=full)
+        print(Bootstrapper.format_report(report))
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Bootstrap failed: {e}")
 
 
 def _svc_learn(args: list):

@@ -425,114 +425,65 @@
       return container.querySelector('.task-list-block');
     },
 
-    /** Render or update a multi-step task plan */
+    /** Render or update a multi-step task plan — renders to fixed bar above input */
     taskList(container, tasks, isStreaming) {
-      // If streaming update, modify existing list in-place
-      const existing = this._existingTaskList(container);
-      if (existing && isStreaming) {
-        this._updateTaskList(existing, tasks);
-        return existing;
-      }
+      const bar = document.getElementById('task-bar');
+      if (!bar) return;
 
-      // New task list: replace any existing one
-      if (existing) existing.remove();
+      bar.classList.remove('hidden');
 
-      const div = document.createElement('div');
-      div.className = 'task-list-block bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm mb-2';
-      div.innerHTML = this._buildTaskList(tasks, isStreaming ? 'expanded' : 'collapsed');
-      container.appendChild(div);
-      return div;
-    },
-
-    _buildTaskList(tasks, defaultState) {
       const total = tasks.length;
       const done = tasks.filter(t => t.status === 'done').length;
       const progress = total > 0 ? Math.round(done/total*100) : 0;
       const allDone = done === total && total > 0;
-      const collapsed = defaultState === 'collapsed' || allDone;
+      const running = tasks.find(t => t.status === 'running');
 
-      // Header
-      let html = `<div class="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-100 cursor-pointer"
-          onclick="var d=this.parentElement.querySelector('.task-list-body');d.classList.toggle('hidden');this.querySelector('.task-arrow').classList.toggle('rotate-90')">
-          <div class="flex items-center gap-2">
-            <span class="text-sm">📋</span>
-            <span class="text-xs font-medium text-blue-700">执行计划</span>
-            <span class="text-xs text-blue-400">${done}/${total} 完成</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-20 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-              <div class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:${progress}%"></div>
-            </div>
-            <svg class="task-arrow w-3 h-3 text-blue-400 transition-transform ${collapsed?'':'rotate-90'}" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-          </div>
-        </div>`;
+      // Compact progress bar
+      let html = `<div class="max-w-3xl mx-auto">`;
 
-      // Body
-      html += `<div class="task-list-body ${collapsed?'hidden':''}">`;
+      // Header row: title + progress + collapse toggle
+      html += `<div class="flex items-center justify-between mb-1.5">`;
+      html += `<div class="flex items-center gap-2">`;
+      html += `<span class="text-xs font-medium text-gray-700">📋 ${done}/${total}</span>`;
+      if (running) {
+        html += `<span class="text-xs text-blue-500 animate-pulse">${LT.esc(running.label||running.name||'')}</span>`;
+      }
+      html += `</div>`;
+      html += `<div class="flex items-center gap-2">`;
+      html += `<div class="w-32 h-1 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full transition-all duration-700" style="width:${progress}%"></div></div>`;
+      html += `<button onclick="var b=document.getElementById('task-bar-detail');b.classList.toggle('hidden');this.classList.toggle('rotate-180')" class="text-gray-400 hover:text-gray-600 transition-transform text-xs">▼</button>`;
+      html += `</div></div>`;
 
+      // Expandable detail: full task list
+      html += `<div id="task-bar-detail" class="hidden border border-gray-100 rounded-lg bg-gray-50 overflow-hidden">`;
       for (let i = 0; i < tasks.length; i++) {
         const t = tasks[i];
         const statusIcons = {pending:'⏳', running:'🔄', done:'✅', failed:'❌', skipped:'⏭️'};
         const statusColors = {pending:'text-yellow-500', running:'text-blue-500 animate-pulse', done:'text-green-500', failed:'text-red-500', skipped:'text-gray-400'};
         const icon = statusIcons[t.status] || '⏳';
         const color = statusColors[t.status] || 'text-gray-400';
-        const strikethrough = t.status === 'done' ? 'line-through text-gray-400' : '';
+        const strikethrough = t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700';
+        const bg = t.status === 'running' ? 'bg-blue-50' : '';
 
-        html += `<div class="flex items-center gap-2 px-3 py-2 border-b border-gray-50 hover:bg-gray-50 transition-colors ${t.status==='running'?'bg-blue-50':''}">`;
-        html += `<span class="text-xs w-5 text-center ${color}">${icon}</span>`;
-        html += `<span class="text-xs ${strikethrough}">${i+1}. ${LT.esc(t.label||t.name||'')}</span>`;
+        html += `<div class="flex items-center gap-2 px-2 py-1 text-xs border-b border-gray-100 ${bg}">`;
+        html += `<span class="w-4 text-center ${color}">${icon}</span>`;
+        html += `<span class="flex-1 ${strikethrough}">${i+1}. ${LT.esc(t.label||t.name||'')}</span>`;
         if (t.result) {
-          html += `<span class="text-xs text-gray-400 ml-auto truncate max-w-[120px]">${LT.esc(String(t.result).slice(0,30))}</span>`;
+          html += `<span class="text-gray-400 ml-2 truncate max-w-[100px]">${LT.esc(String(t.result).slice(0,30))}</span>`;
         }
         html += `</div>`;
       }
+      html += `</div></div>`;
 
-      html += '</div>';
-      return html;
-    },
+      bar.innerHTML = html;
 
-    _updateTaskList(el, tasks) {
-      const body = el.querySelector('.task-list-body');
-      if (!body) return;
-
-      // Update progress bar
-      const total = tasks.length;
-      const done = tasks.filter(t => t.status === 'done').length;
-      const progress = total > 0 ? Math.round(done/total*100) : 0;
-      const allDone = done === total && total > 0;
-
-      const progressBar = el.querySelector('.h-full');
-      if (progressBar) progressBar.style.width = progress + '%';
-
-      const statusText = el.querySelector('.text-blue-400');
-      if (statusText) statusText.textContent = `${done}/${total} 完成`;
-
-      // Update individual task items
-      const items = body.querySelectorAll('.flex.items-center.gap-2');
-      for (let i = 0; i < Math.min(items.length, tasks.length); i++) {
-        const t = tasks[i];
-        const item = items[i];
-        const icon = item.querySelector('span:first-child');
-        const label = item.querySelector('span:nth-child(2)');
-
-        const statusIcons = {pending:'⏳', running:'🔄', done:'✅', failed:'❌', skipped:'⏭️'};
-        const statusColors = {pending:'text-yellow-500', running:'text-blue-500 animate-pulse', done:'text-green-500', failed:'text-red-500', skipped:'text-gray-400'};
-
-        if (icon) {
-          icon.textContent = statusIcons[t.status] || '⏳';
-          icon.className = 'text-xs w-5 text-center ' + (statusColors[t.status]||'text-gray-400');
-        }
-        if (label) {
-          label.className = 'text-xs ' + (t.status==='done'?'line-through text-gray-400':'');
-        }
-      }
-
-      // Auto-collapse when all done
+      // Auto-collapse when done
       if (allDone) {
-        const body = el.querySelector('.task-list-body');
-        if (body && !body.classList.contains('hidden')) {
-          setTimeout(() => body.classList.add('hidden'), 1000);
-        }
+        bar.innerHTML = `<div class="max-w-3xl mx-auto flex items-center gap-2">
+          <span class="text-xs text-green-600 font-medium">✅ ${done}/${total} 完成</span>
+          <div class="w-32 h-1 bg-green-100 rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:100%"></div></div>
+        </div>`;
+        setTimeout(() => { bar.classList.add('hidden'); bar.innerHTML = ''; }, 3000);
       }
     },
 

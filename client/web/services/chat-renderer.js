@@ -76,8 +76,8 @@
       container.appendChild(div);
     },
 
-    /** Tool call block — expandable with live status */
-    toolCall(container, name, args, status, result) {
+    /** Tool call block — expandable with live status + timing + iteration count */
+    toolCall(container, name, args, status, result, meta) {
       const icons = {pending:'⏳',running:'🔄',done:'✅',error:'❌'};
       const colors = {pending:'text-yellow-500',running:'text-blue-500',done:'text-green-500',error:'text-red-500'};
       const id = 'tc-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
@@ -91,19 +91,62 @@
         }
       }
 
+      const turnInfo = meta?.turn ? `<span class="text-gray-300">· 第${meta.turn}轮</span>` : '';
+      const timeInfo = meta?.elapsedMs ? `<span class="text-gray-300">· ${meta.elapsedMs}ms</span>` : '';
+
       const div = document.createElement('div');
-      div.className = `tool-block bg-gray-50 border border-gray-200 rounded-xl overflow-hidden ${status==='running'?'tool-running':''}`;
+      div.className = `tool-block bg-gray-50 border border-gray-200 rounded-xl overflow-hidden ${status==='running'?'tool-running':''} tool-${status}`;
       div.innerHTML = `<div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-100"
           onclick="this.querySelector('.tool-detail').classList.toggle('hidden')">
-          <span class="text-xs tool-status">${icons[status]} <span class="${colors[status]}">${LT.esc(name)}</span></span>
-          <span class="text-xs text-gray-400">${status==='running'?'执行中...':status==='pending'?'等待中':''}</span>
+          <span class="text-xs tool-status">${icons[status]} <span class="${colors[status]}">${LT.esc(name)}</span> ${turnInfo} ${timeInfo}</span>
+          <span class="text-xs text-gray-400">${status==='running'?'执行中...':status==='pending'?'等待中':status==='done'?'完成':'失败'}</span>
         </div>
         <div class="tool-detail hidden px-3 py-2 text-xs border-t border-gray-200">
-          ${args?`<div class="text-gray-400 mb-1">参数: ${LT.esc(args).slice(0,200)}</div>`:''}
-          ${result?`<div class="text-gray-600 bg-white rounded-lg p-2 mt-1 max-h-24 overflow-y-auto">${LT.esc(String(result)).slice(0,500)}</div>`:''}
+          ${args?`<div class="text-gray-400 mb-1"><span class="font-medium">参数:</span> ${LT.esc(args).slice(0,300)}</div>`:''}
+          ${result?`<div class="text-gray-600 bg-white rounded-lg p-2 mt-1 max-h-32 overflow-y-auto font-mono"><span class="font-medium text-gray-400">结果:</span><br>${LT.esc(String(result)).slice(0,800)}</div>`:''}
         </div>`;
       container.appendChild(div);
       return div;
+    },
+
+    /** Interactive ask — tabs, select, confirm, input */
+    ask(container, question, options, type) {
+      const div = document.createElement('div');
+      div.className = 'bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm';
+
+      if (type === 'tabs') {
+        // Tab-style selection
+        let tabHtml = `<p class="text-blue-800 mb-2 text-xs font-medium">${LT.esc(question)}</p><div class="flex gap-1 bg-blue-100 rounded-lg p-0.5">`;
+        (options||[]).forEach((opt, i) => {
+          const active = i === 0 ? 'bg-white shadow-sm text-blue-700' : 'text-blue-500 hover:text-blue-700';
+          tabHtml += `<button class="flex-1 px-3 py-1.5 text-xs rounded-md transition-colors ${active}"
+            onclick="LT.chat.sendMsg('${LT.esc(opt.value||opt)}')">${LT.esc(opt.label||opt)}</button>`;
+        });
+        tabHtml += '</div>';
+        div.innerHTML = tabHtml;
+      } else if (type === 'select') {
+        // Dropdown-style selection
+        let selHtml = `<p class="text-blue-800 mb-2 text-xs font-medium">${LT.esc(question)}</p>
+          <select class="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs bg-white mb-2"
+            onchange="LT.chat.sendMsg(this.value)">
+            <option value="">-- 请选择 --</option>`;
+        (options||[]).forEach(opt => {
+          selHtml += `<option value="${LT.esc(opt.value||opt)}">${LT.esc(opt.label||opt)}</option>`;
+        });
+        selHtml += '</select>';
+        div.innerHTML = selHtml;
+      } else {
+        // Default: button grid
+        let btnHtml = `<p class="text-blue-800 mb-2 text-xs font-medium">${LT.esc(question)}</p><div class="flex flex-wrap gap-2">`;
+        (options||[{value:'ok',label:'OK'}]).forEach(opt => {
+          const v = typeof opt === 'string' ? opt : opt.value;
+          const l = typeof opt === 'string' ? opt : (opt.label||v);
+          btnHtml += `<button onclick="LT.chat.sendMsg('${LT.esc(v)}')" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">${LT.esc(l)}</button>`;
+        });
+        btnHtml += '</div>';
+        div.innerHTML = btnHtml;
+      }
+      container.appendChild(div);
     },
 
     /** A2UI component block */
@@ -189,10 +232,10 @@
     /** Parse streaming content for segments */
     parseSegments(text) {
       const segments = [];
-      // Split by markers
-      const parts = text.split(/(<thinking>|<\/thinking>|<tool_call|<result>|<\/result>|{"type":)/g);
+      const parts = text.split(/(<thinking>|<\/thinking>|<tool_call|<result>|<\/result>|<ask[^>]*>|<\/ask>|{"type":)/g);
       let currentType = 'text';
       let buffer = '';
+      let askMeta = '';
 
       for (const part of parts) {
         if (part === '<thinking>') {
@@ -209,7 +252,18 @@
           currentType = 'tool_result';
           buffer = '';
         } else if (part === '</result>') {
-          segments.push({type:'tool_result', content:buffer.trim()}); buffer='';
+          if (buffer.trim()) { segments.push({type:'tool_result', content:buffer.trim()}); buffer=''; }
+          currentType = 'text';
+        } else if (part.startsWith('<ask')) {
+          if (buffer.trim()) { segments.push({type:currentType, content:buffer.trim()}); buffer=''; }
+          currentType = 'ask';
+          askMeta = part;  // e.g. <ask type="tabs" label="...">
+          buffer = '';
+        } else if (part === '</ask>') {
+          if (buffer.trim()) {
+            segments.push({type:'ask', content:buffer.trim(), meta:askMeta});
+          }
+          buffer = '';
           currentType = 'text';
         } else if (part === '{"type":') {
           if (buffer.trim()) { segments.push({type:currentType, content:buffer.trim()}); buffer=''; }
@@ -221,6 +275,53 @@
       }
       if (buffer.trim()) segments.push({type:currentType, content:buffer.trim()});
       return segments;
+    },
+
+    /** Render all segments into container */
+    renderSegments(container, segments) {
+      this.clear(container);
+      for (const seg of segments) {
+        if (!seg.content) continue;
+        if (seg.type === 'thinking') {
+          this.thinking(container, seg.content, false);
+        } else if (seg.type === 'text') {
+          this.text(container, seg.content, false);
+        } else if (seg.type === 'tool_call') {
+          const m = seg.content.match(/<tool_call\s+name="(\w+)"\s*>(.*?)<\/tool_call>/);
+          if (m) this.toolCall(container, m[1], m[2], 'done', null, {});
+        } else if (seg.type === 'tool_result') {
+          this.toolCall(container, '', '', 'done', seg.content, {});
+        } else if (seg.type === 'ask') {
+          this._renderAskSegment(container, seg.content, seg.meta);
+        } else if (seg.type === 'a2ui') {
+          try {
+            const data = JSON.parse(seg.content);
+            if (data.type) this.a2ui(container, data.type, data[data.type] || data);
+          } catch(e) {}
+        }
+      }
+    },
+
+    _renderAskSegment(container, content, meta) {
+      // Parse ask attributes
+      const typeMatch = meta?.match(/type="(\w+)"/);
+      const labelMatch = meta?.match(/label="([^"]+)"/);
+      const type = typeMatch?.[1] || 'confirm';
+      const label = labelMatch?.[1] || '请选择';
+
+      // Parse options/tabs
+      const options = [];
+      const optRe = /<(?:option|tab)\s+value="([^"]+)"\s+label="([^"]+)"(?:\s+selected)?\s*\/?>/g;
+      let m;
+      while ((m = optRe.exec(content)) !== null) {
+        options.push({value: m[1], label: m[2]});
+      }
+      // Fallback: parse comma-separated
+      if (!options.length && content.trim()) {
+        content.trim().split(',').forEach(v => options.push({value: v.trim(), label: v.trim()}));
+      }
+
+      this.ask(container, label, options, type);
     },
 
     /** Render all segments into container */

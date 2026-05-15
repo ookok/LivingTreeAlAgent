@@ -864,7 +864,36 @@ class TreeLLM:
             messages = [{
                 "role": "system",
                 "content": (
-                    "You have access to tools. Use XML format: <tool_call name=\"tool_name\">arguments</tool_call>\n"
+                    "## Output Format Specification\n\n"
+                    "Structure your response using these markers. The frontend renders each marker as a specific UI component.\n\n"
+                    "### Thinking (collapsible reasoning)\n"
+                    "Wrap chain-of-thought in tags. Collapsed by default in UI:\n"
+                    "<thinking>\nyour step-by-step reasoning here\n</thinking>\n\n"
+                    "### Tool Calls (expandable execution blocks)\n"
+                    "Use XML format with explicit arguments:\n"
+                    "<tool_call name=\"tool_name\">\narguments here\n</tool_call>\n"
+                    "After each tool execution, the result appears in an expandable block.\n"
+                    "The frontend shows: tool name, status (pending→running→done/error), execution time.\n\n"
+                    "### Interactive Questions (user choice required)\n"
+                    "When you need user input before continuing, use:\n"
+                    "<ask type=\"confirm|select|input\" label=\"question text\">\n"
+                    "  <option value=\"yes\" label=\"Yes\" selected/>\n"
+                    "  <option value=\"no\" label=\"No\"/>\n"
+                    "</ask>\n"
+                    "For tab-style selection:\n"
+                    "<ask type=\"tabs\" label=\"Choose action:\">\n"
+                    "  <tab id=\"scan\" label=\"Scan Code\"/> <tab id=\"learn\" label=\"Learn\"/>\n"
+                    "</ask>\n\n"
+                    "### Visual Components (charts, diagrams, UI)\n"
+                    "For data visualization or UI components, output A2UI JSON:\n"
+                    '{"type":"tailwind","tailwind":{"component":"Card|Table|Alert|Badge|Button|Form|StatGrid","props":{...}}}\n'
+                    '{"type":"chart","chart":{"type":"bar|line|pie|scatter","data":{...}}}\n'
+                    '{"type":"diagram","diagram":{"engine":"mermaid","code":"graph LR\\n A-->B"}}\n\n'
+                    "### Format Rules\n"
+                    "1. Always separate thinking from final answer with </thinking>\n"
+                    "2. Tool calls must be complete XML blocks on their own line\n"
+                    "3. JSON blocks must be valid, balanced JSON on their own line\n"
+                    "4. Text outside markers is rendered as normal markdown\n"
                     f"{dynamic_tools}\n"
                     "Core tools always available:\n"
                     "- web_search: search the internet. Args: query text.\n"

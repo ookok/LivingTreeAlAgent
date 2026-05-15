@@ -643,12 +643,16 @@ class ContextMoE:
         for bid in list(self._warm.keys()):
             b = self._warm[bid]
             age_hours = (time.time() - b.timestamp) / 3600
-            if age_hours > 24 and b.access_count < 3:
+            # Dynamic threshold: high-prominence blocks get longer retention
+            retention_hours = 24 + (b.prominence * 72)  # 24-96h range
+            if age_hours > retention_hours and b.access_count < 3:
                 b.layer = ExpertLayer.COLD
                 b.consolidation_count += 1
                 b.decay_factor = 0.8
-                # Summarize further
-                if len(b.content) > 600:
+                # LLM summarization for high-value blocks
+                if len(b.content) > 600 and b.prominence > 0.6:
+                    b.content = await self._llm_summarize(b.content)
+                elif len(b.content) > 600:
                     b.content = b.content[:600] + "..."
                     b.pointers.append(ReferencePointer(
                         ref_type="memory", target_id=bid,
@@ -704,6 +708,20 @@ class ContextMoE:
             )
 
         return moved + pruned
+
+    async def _llm_summarize(self, content: str) -> str:
+        """Use LLM to generate a concise summary for memory compression."""
+        try:
+            from .core import TreeLLM
+            llm = TreeLLM.from_config()
+            result = await llm.chat(
+                [{"role": "user", "content": f"将以下内容压缩为50字以内的核心要点:\n{content[:2000]}"}],
+                max_tokens=100, temperature=0.0,
+            )
+            text = getattr(result, 'text', '') or content[:300]
+            return text[:300]
+        except Exception:
+            return content[:300]
 
     def inject_deep(self, key: str, value: str, source: str = "auto") -> None:
         """Inject permanent knowledge into the Deep layer."""

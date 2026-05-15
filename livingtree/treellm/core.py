@@ -62,6 +62,47 @@ JSON_TOOL_RE = re.compile(r'\{\s*"tool"\s*:\s*"(\w+)"\s*,\s*"params"\s*:\s*(\{[^
 OPENAI_TOOL_RE = re.compile(r'"name":\s*"(\w+)".*?"arguments":\s*"([^"]*)"', re.DOTALL)
 
 
+def parse_tool_calls(text: str) -> list[tuple[str, str]]:
+    """Unified tool call parser — handles XML, JSON, and OpenAI formats.
+
+    Returns list of (tool_name, tool_args) tuples. Empty list if no tool calls.
+    """
+    calls = TOOL_CALL_RE.findall(text)
+    if calls:
+        return [(name, args.strip()) for name, args in calls]
+
+    # JSON format: try balanced extraction first, then regex
+    json_start = text.rfind('{"tool"')
+    if json_start >= 0:
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(json_start, len(text)):
+            ch = text[i]
+            if esc: esc = False; continue
+            if ch == '\\': esc = True; continue
+            if ch == '"' and not esc: in_str = not in_str; continue
+            if in_str: continue
+            if ch == '{': depth += 1
+            elif ch == '}': depth -= 1
+            if depth == 0:
+                json_block = text[json_start:i+1]
+                try:
+                    data = json.loads(json_block)
+                    if "tool" in data and "params" in data:
+                        return [(data["tool"], json.dumps(data["params"], ensure_ascii=False))]
+                except json.JSONDecodeError:
+                    pass
+                break
+
+    # OpenAI format
+    openai_matches = list(OPENAI_TOOL_RE.finditer(text))
+    if openai_matches:
+        return [(m.group(1), m.group(2)) for m in openai_matches]
+
+    return []
+
+
 
 class TreeLLM:
 
@@ -871,12 +912,8 @@ class TreeLLM:
             MAX_TOOL_TURNS = 5
             tool_turn = 0
             while result and result.text and tool_turn < MAX_TOOL_TURNS:
-                # Parse all three tool call formats
-                tool_calls = TOOL_CALL_RE.findall(result.text)
-                if not tool_calls:
-                    tool_calls = JSON_TOOL_RE.findall(result.text)
-                if not tool_calls:
-                    tool_calls = [(m.group(1), m.group(2)) for m in OPENAI_TOOL_RE.finditer(result.text)]
+                # Parse all three tool call formats with unified parser
+                tool_calls = parse_tool_calls(result.text)
                 if not tool_calls:
                     # Tool search instruction: LLM can search before calling
                     if tool_turn == 0 and any(k in result.text.lower() for k in ["搜索工具", "search_tool", "list_tools"]):

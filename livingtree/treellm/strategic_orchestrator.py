@@ -88,6 +88,42 @@ class TaskStep:
     latency_ms: float = 0.0
     actual_tokens: int = 0
     actual_cost_yuan: float = 0.0
+    completion_criteria: str = ""  # Concrete check: what confirms this step is done
+    max_retries: int = 3           # Auto-retry limit per step
+
+
+class TaskValidator:
+    """Validate decomposed sub-goals before execution — catches hallucinated/invalid plans."""
+
+    @staticmethod
+    def validate(steps: list[TaskStep]) -> tuple[bool, list[str]]:
+        """Check plan sanity. Returns (is_valid, [warnings])."""
+        warnings = []
+        if not steps:
+            return False, ["Empty plan"]
+        # Check for circular dependencies
+        deps = {s.id: set(s.depends_on) for s in steps}
+        ids = set(s.id for s in steps)
+        for s in steps:
+            for dep in s.depends_on:
+                if dep not in ids:
+                    warnings.append(f"Step {s.id} depends on unknown step {dep}")
+        for s in steps:
+            visited = set()
+            stack = [s.id]
+            while stack:
+                nid = stack.pop()
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                if s.id in deps.get(nid, set()):
+                    warnings.append(f"Circular dependency: {s.id} ↔ {nid}")
+                stack.extend(deps.get(nid, set()))
+        # Validate completion criteria
+        empty_criteria = [s.id for s in steps if not s.completion_criteria]
+        if empty_criteria:
+            warnings.append(f"Steps missing completion criteria: {empty_criteria}")
+        return len(warnings) == 0 or all("Circular" not in w for w in warnings), warnings
 
 
 @dataclass

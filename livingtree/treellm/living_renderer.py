@@ -558,6 +558,8 @@ class LivingRenderer:
             return self._render_a2ui_map(data["map"])
         if visual_type == "metric":
             return self._render_a2ui_metric(data)
+        if visual_type == "tailwind" and "tailwind" in data:
+            return self._render_tailwind_component(data["tailwind"])
 
         # Legacy fallback: embed JSON data with sparkline
         parts = [
@@ -655,6 +657,30 @@ class LivingRenderer:
         )
         return RenderResult(content=html, mime_type="text/html",
                            level=RenderLevel.STRUCT, byte_size=0, render_time_ms=0)
+
+    def _render_tailwind_component(self, tw_data: dict) -> RenderResult:
+        """Render TailwindUI components from LLM A2UI JSON declaration."""
+        from .tailwind_ui import TailwindUI
+        ui = TailwindUI()
+        comp = tw_data.get("component", "")
+        props = tw_data.get("props", {})
+        component_map = {
+            "Card": lambda: ui.Card(**(props if isinstance(props, dict) else {})),
+            "Table": lambda: ui.Table(**(props if isinstance(props, dict) else {})),
+            "Badge": lambda: ui.Badge(**(props if isinstance(props, dict) else {})),
+            "Alert": lambda: ui.Alert(**(props if isinstance(props, dict) else {})),
+            "Button": lambda: ui.Button(**(props if isinstance(props, dict) else {})),
+            "Form": lambda: ui.Form(**(props if isinstance(props, dict) else {})),
+            "Tabs": lambda: ui.Tabs(**(props if isinstance(props, dict) else {})),
+            "Navbar": lambda: ui.Navbar(**(props if isinstance(props, dict) else {})),
+            "Modal": lambda: ui.Modal(**(props if isinstance(props, dict) else {})),
+            "Page": lambda: ui.Page(**(props if isinstance(props, dict) else {})),
+            "Sidebar": lambda: ui.Sidebar(**(props if isinstance(props, dict) else {})),
+        }
+        render_fn = component_map.get(comp)
+        html = render_fn() if render_fn else f'<div>Unknown: {comp}</div>'
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
 
     def _render_svg_sparkline(self, data: dict) -> str:
         """Generate a tiny inline SVG sparkline for metric data."""

@@ -837,6 +837,10 @@ class TreeLLM:
                     '  Diagram: {"type":"diagram","diagram":{"engine":"mermaid","code":"graph LR\\n  A-->B"}}\n'
                     '  SVG:    {"type":"svg","svg":"<svg>...</svg>"}\n'
                     '  Table:  {"type":"table","columns":["A","B"],"rows":[[1,2]]}\n'
+                    '  UI:     {"type":"tailwind","tailwind":{"component":"Card|Table|Alert|Button|Form|Tabs|Page","props":{...}}}\n'
+                    '  Card:   {"component":"Card","props":{"title":"标题","children":["<p>内容</p>"],"accent":"blue|green|red"}}\n'
+                    '  Alert:  {"component":"Alert","props":{"message":"消息","level":"info|success|warning|error"}}\n'
+                    '  Page:   {"component":"Page","props":{"title":"页面标题","children":["..."],"navbar":"..."}}\n'
                     "After tool results, continue your reasoning. You may call multiple tools."
                 ),
             }] + messages

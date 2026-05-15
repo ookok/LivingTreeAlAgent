@@ -418,6 +418,124 @@
       container.appendChild(div);
     },
 
+    /* ═══ Task List — multi-step plan with status refresh ═══ */
+
+    /** Check if a task list already exists in this message */
+    _existingTaskList(container) {
+      return container.querySelector('.task-list-block');
+    },
+
+    /** Render or update a multi-step task plan */
+    taskList(container, tasks, isStreaming) {
+      // If streaming update, modify existing list in-place
+      const existing = this._existingTaskList(container);
+      if (existing && isStreaming) {
+        this._updateTaskList(existing, tasks);
+        return existing;
+      }
+
+      // New task list: replace any existing one
+      if (existing) existing.remove();
+
+      const div = document.createElement('div');
+      div.className = 'task-list-block bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm mb-2';
+      div.innerHTML = this._buildTaskList(tasks, isStreaming ? 'expanded' : 'collapsed');
+      container.appendChild(div);
+      return div;
+    },
+
+    _buildTaskList(tasks, defaultState) {
+      const total = tasks.length;
+      const done = tasks.filter(t => t.status === 'done').length;
+      const progress = total > 0 ? Math.round(done/total*100) : 0;
+      const allDone = done === total && total > 0;
+      const collapsed = defaultState === 'collapsed' || allDone;
+
+      // Header
+      let html = `<div class="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-100 cursor-pointer"
+          onclick="var d=this.parentElement.querySelector('.task-list-body');d.classList.toggle('hidden');this.querySelector('.task-arrow').classList.toggle('rotate-90')">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">📋</span>
+            <span class="text-xs font-medium text-blue-700">执行计划</span>
+            <span class="text-xs text-blue-400">${done}/${total} 完成</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-20 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+              <div class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:${progress}%"></div>
+            </div>
+            <svg class="task-arrow w-3 h-3 text-blue-400 transition-transform ${collapsed?'':'rotate-90'}" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          </div>
+        </div>`;
+
+      // Body
+      html += `<div class="task-list-body ${collapsed?'hidden':''}">`;
+
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        const statusIcons = {pending:'⏳', running:'🔄', done:'✅', failed:'❌', skipped:'⏭️'};
+        const statusColors = {pending:'text-yellow-500', running:'text-blue-500 animate-pulse', done:'text-green-500', failed:'text-red-500', skipped:'text-gray-400'};
+        const icon = statusIcons[t.status] || '⏳';
+        const color = statusColors[t.status] || 'text-gray-400';
+        const strikethrough = t.status === 'done' ? 'line-through text-gray-400' : '';
+
+        html += `<div class="flex items-center gap-2 px-3 py-2 border-b border-gray-50 hover:bg-gray-50 transition-colors ${t.status==='running'?'bg-blue-50':''}">`;
+        html += `<span class="text-xs w-5 text-center ${color}">${icon}</span>`;
+        html += `<span class="text-xs ${strikethrough}">${i+1}. ${LT.esc(t.label||t.name||'')}</span>`;
+        if (t.result) {
+          html += `<span class="text-xs text-gray-400 ml-auto truncate max-w-[120px]">${LT.esc(String(t.result).slice(0,30))}</span>`;
+        }
+        html += `</div>`;
+      }
+
+      html += '</div>';
+      return html;
+    },
+
+    _updateTaskList(el, tasks) {
+      const body = el.querySelector('.task-list-body');
+      if (!body) return;
+
+      // Update progress bar
+      const total = tasks.length;
+      const done = tasks.filter(t => t.status === 'done').length;
+      const progress = total > 0 ? Math.round(done/total*100) : 0;
+      const allDone = done === total && total > 0;
+
+      const progressBar = el.querySelector('.h-full');
+      if (progressBar) progressBar.style.width = progress + '%';
+
+      const statusText = el.querySelector('.text-blue-400');
+      if (statusText) statusText.textContent = `${done}/${total} 完成`;
+
+      // Update individual task items
+      const items = body.querySelectorAll('.flex.items-center.gap-2');
+      for (let i = 0; i < Math.min(items.length, tasks.length); i++) {
+        const t = tasks[i];
+        const item = items[i];
+        const icon = item.querySelector('span:first-child');
+        const label = item.querySelector('span:nth-child(2)');
+
+        const statusIcons = {pending:'⏳', running:'🔄', done:'✅', failed:'❌', skipped:'⏭️'};
+        const statusColors = {pending:'text-yellow-500', running:'text-blue-500 animate-pulse', done:'text-green-500', failed:'text-red-500', skipped:'text-gray-400'};
+
+        if (icon) {
+          icon.textContent = statusIcons[t.status] || '⏳';
+          icon.className = 'text-xs w-5 text-center ' + (statusColors[t.status]||'text-gray-400');
+        }
+        if (label) {
+          label.className = 'text-xs ' + (t.status==='done'?'line-through text-gray-400':'');
+        }
+      }
+
+      // Auto-collapse when all done
+      if (allDone) {
+        const body = el.querySelector('.task-list-body');
+        if (body && !body.classList.contains('hidden')) {
+          setTimeout(() => body.classList.add('hidden'), 1000);
+        }
+      }
+    },
+
     /** Clear all children */
     clear(container) {
       while (container.firstChild) container.removeChild(container.firstChild);
@@ -445,7 +563,7 @@
     /** Parse streaming content for segments */
     parseSegments(text) {
       const segments = [];
-      const parts = text.split(/(<thinking>|<\/thinking>|<tool_call|<result>|<\/result>|<ask[^>]*>|<\/ask>|{"type":)/g);
+      const parts = text.split(/(<thinking>|<\/thinking>|<tool_call|<result>|<\/result>|<ask[^>]*>|<\/ask>|<plan>|<\/plan>|{"type":)/g);
       let currentType = 'text';
       let buffer = '';
       let askMeta = '';
@@ -456,6 +574,14 @@
           currentType = 'thinking';
         } else if (part === '</thinking>') {
           if (buffer.trim()) { segments.push({type:'thinking', content:buffer.trim()}); buffer=''; }
+          currentType = 'text';
+        } else if (part === '<plan>') {
+          if (buffer.trim()) { segments.push({type:currentType, content:buffer.trim()}); buffer=''; }
+          currentType = 'plan';
+          buffer = '';
+        } else if (part === '</plan>') {
+          if (buffer.trim()) { segments.push({type:'plan', content:buffer.trim()}); }
+          buffer = '';
           currentType = 'text';
         } else if (part.startsWith('<tool_call')) {
           if (buffer.trim()) { segments.push({type:currentType, content:buffer.trim()}); buffer=''; }
@@ -506,12 +632,37 @@
           this.toolCall(container, '', '', 'done', seg.content, {});
         } else if (seg.type === 'ask') {
           this._renderAskSegment(container, seg.content, seg.meta);
+        } else if (seg.type === 'plan') {
+          this._renderPlanSegment(container, seg.content);
         } else if (seg.type === 'a2ui') {
           try {
             const data = JSON.parse(seg.content);
             if (data.type) this.a2ui(container, data.type, data[data.type] || data);
           } catch(e) {}
         }
+      }
+    },
+
+    _renderPlanSegment(container, content) {
+      // Parse <step id="..." label="..."> or numbered lines
+      const tasks = [];
+      const stepRe = /<step\s+id="([^"]+)"\s+label="([^"]+)"\s*\/?>/g;
+      let m;
+      while ((m = stepRe.exec(content)) !== null) {
+        tasks.push({id: m[1], label: m[2], name: m[2], status: 'pending'});
+      }
+      // Fallback: parse numbered lines like "1. do X" or "- [ ] do X"
+      if (!tasks.length) {
+        const lines = content.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          const match = line.match(/^[\d]+[.)]\s*(.+)/) || line.match(/^[-*]\s*\[.\]\s*(.+)/) || line.match(/^[-*]\s*(.+)/);
+          if (match) {
+            tasks.push({id: 't'+tasks.length, label: match[1], name: match[1], status: 'pending'});
+          }
+        }
+      }
+      if (tasks.length) {
+        this.taskList(container, tasks, false);
       }
     },
 

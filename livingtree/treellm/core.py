@@ -866,6 +866,11 @@ class TreeLLM:
                 "content": (
                     "## Output Format Specification\n\n"
                     "Structure your response using these markers. The frontend renders each marker as a specific UI component.\n\n"
+                    "### Task Plan (multi-step checklist with progress)\n"
+                    "When decomposing a task into multiple steps, output a plan:\n"
+                    "<plan>\n<step id=\"1\" label=\"Scan codebase\"/>\n<step id=\"2\" label=\"Analyze hotspots\"/>\n<step id=\"3\" label=\"Generate report\"/>\n</plan>\n"
+                    "The frontend shows: progress bar, step status (pending→running→done), auto-collapse on completion.\n"
+                    "Update step status by emitting <step id=\"N\" status=\"done\"/> after each step completes.\n\n"
                     "### Thinking (collapsible reasoning)\n"
                     "Wrap chain-of-thought in tags. Collapsed by default in UI:\n"
                     "<thinking>\nyour step-by-step reasoning here\n</thinking>\n\n"

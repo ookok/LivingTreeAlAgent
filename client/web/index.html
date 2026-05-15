@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>🌳 LivingTree AI Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <script type="importmap">
 {"imports": {"monaco-editor": "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/esm/vs/editor/editor.main.js"}}
 </script>
@@ -13,6 +14,7 @@
 <link rel="stylesheet" href="components/chat/chat.css">
 <link rel="stylesheet" href="components/input/input.css">
 <link rel="stylesheet" href="components/code-editor/code-editor.css">
+<script src="js/living-a2ui.js" defer></script>
 </head>
 <body>
 <div class="app">
@@ -100,12 +102,18 @@ document.addEventListener('paste',async function(e){
 });
 function handleDrop(file){
   if(!file)return;
+  if(file.size>50*1024*1024){alert('文件过大 (>50MB)');return;}
   var ov=document.getElementById('drop-overlay'); ov.style.display='flex';
   var r=new FileReader();
   r.onload=function(){
     fetch('/api/knowledge/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:r.result.split(',')[1]||r.result,filename:file.name,mime_type:file.type})})
     .then(function(r){return r.json()}).then(function(d){
-      var el=ov.querySelector('div'); el.innerHTML=d.ok?'<span style=font-size:36px>✅</span><span style=font-size:14px;color:var(--text)>已摄入: '+d.title+'</span><span style=font-size:11px;color:var(--text-secondary)>'+d.word_count+'词 · '+d.source_format+' · '+d.parse_time_ms+'ms</span>':'<span style=font-size:36px>❌</span><span>'+d.error+'</span>';
+      var el=ov.querySelector('div');
+      if(d.ok){
+        el.innerHTML='<span style=font-size:36px>✅</span><span style=font-size:14px;color:var(--text)>已摄入: '+LT.esc(d.title||'')+'</span><span style=font-size:11px;color:var(--text-secondary)>'+LT.esc(String(d.word_count||''))+'词 · '+LT.esc(d.source_format||'')+' · '+LT.esc(String(d.parse_time_ms||''))+'ms</span>';
+      }else{
+        el.textContent='❌ '+(d.error||'未知错误');
+      }
       setTimeout(function(){ov.style.display='none'},2500);
     });
   };

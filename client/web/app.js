@@ -44,14 +44,17 @@
   });
 
   /* ── Periodic shield status + presence + scheduler color update ── */
-  setInterval(async function() {
+  const _shieldTimer = setInterval(async function() {
     try { var r=await fetch('/api/shield/status');var d=await r.json();var el=document.getElementById('shield-indicator'); if(el) el.textContent = d.hitl_pending>0 ? '⚠️' : '🛡️'; } catch(e) {}
   }, 30000);
 
-  setInterval(async function() {
+  const _vitalsTimer = setInterval(async function() {
     try { var r=await fetch('/api/status/vitals');var d=await r.json();var el=document.getElementById('presence-text'); if(el) el.textContent = (d.leaf_display||{}).message || '🌿'; } catch(e) {}
     try { var r=await fetch('/api/scheduler/status');var d=await r.json();var dm=document.documentElement;var colors={growth:'#0fdc78',active:'#67c23a',torpor:'#e28a00',hibernation:'#f65a5a'};var c=colors[d.mode]||'#0fdc78';dm.style.setProperty('--brand-default',c); } catch(e) {}
   }, 8000);
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload',function(){clearInterval(_shieldTimer);clearInterval(_vitalsTimer);});
 
   /* ── Open Admin link ── */
   window.openAdmin = function() { window.open('/tree/admin','_blank'); };

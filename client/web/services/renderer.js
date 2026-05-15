@@ -57,12 +57,13 @@ const renderer = {
     const label = lang ? `<span class="code-lang">${this.esc(lang)}</span>` : '';
 
     const escCode = this.esc(code);
+    const escCodeSafe = escCode.replace(/`/g,'\\`').replace(/\$\{/g,'\\${');
     return [
       '<div class="code-block">',
       '  <div class="code-header">',
       `    ${label}`,
       '    <div class="code-header-actions">',
-      `      <button class="code-open-editor" onclick="LT.emit('editor:open-code',{code:\`${escCode}\`,lang:'${lang||'plaintext'}'});LT.emit('code-editor:toggle')" title="在编辑器中打开">`,
+      `      <button class="code-open-editor" data-code="${encodeURIComponent(escCode)}" data-lang="${lang||'plaintext'}" onclick="LT.emit('editor:open-code',{code:decodeURIComponent(this.dataset.code),lang:this.dataset.lang});LT.emit('code-editor:toggle')" title="在编辑器中打开">`,
       '        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg>',
       '        编辑',
       '      </button>',

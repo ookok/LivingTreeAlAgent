@@ -148,6 +148,8 @@ def main():
         _svc_bootstrap(sys.argv[2:])
     elif command == "autoinstall":
         _svc_autoinstall(sys.argv[2:])
+    elif command == "skills":
+        _svc_skills(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -1846,30 +1848,48 @@ def _svc_dev(args: list):
 
 
 def _svc_autoinstall(args: list):
-    """LLM-driven self-bootstrapping with tool calls, mock creation, verification loop.
-
-    Commands:
-        livingtree autoinstall              Full LLM-driven bootstrap (max 5 rounds)
-        livingtree autoinstall --rounds 3   Max 3 retry rounds
-    """
+    """LLM-driven self-bootstrapping with tool calls, mock creation, verification loop."""
     import asyncio
 
-    async def _run():
-        from .treellm.autoinstall import AutoInstaller
+def _svc_skills(args: list):
+    """Three-SKILL self-evolution: clean, refine, evolve.
 
-        max_rounds = 5
-        for i, a in enumerate(args):
-            if a == "--rounds" and i + 1 < len(args):
-                max_rounds = int(args[i + 1])
+    Commands:
+        livingtree skills run       Run all 3 SKILL cycles
+        livingtree skills clean     Self-cleaning (redundancy detection)
+        livingtree skills refine    Memory refinement (pattern extraction)
+        livingtree skills evolve    Self-evolution (review→optimize→update)
+        livingtree skills report    Show growth report
+    """
+    from .dna.living_skills import get_living_skills, LivingSkills
 
-        print("\n  🤖 LLM Autoinstall — exploring, installing, mocking, verifying...\n")
-        report = await AutoInstaller.run(max_rounds=max_rounds)
-        print(AutoInstaller.format_report(report))
+    ls = get_living_skills()
+    sub = args[0].lower() if args else "run"
 
-    try:
-        asyncio.run(_run())
-    except Exception as e:
-        print(f"❌ Autoinstall failed: {e}")
+    if sub == "run":
+        print("\n  🌱 Running Three-SKILL Evolution Cycle...\n")
+        report = ls.run_cycle()
+    elif sub == "clean":
+        print("\n  🧹 Self-Cleaning...\n")
+        result = ls.clean()
+        print(f"  Cleaned {result['cleaned_items']} items, "
+              f"saved {result['memory_saved_kb']:.1f}KB")
+        return
+    elif sub == "refine":
+        print("\n  📝 Memory Refinement...\n")
+        result = ls.refine()
+        print(f"  Extracted {result['patterns_extracted']} patterns, "
+              f"learned {result['rules_learned']} rules")
+        return
+    elif sub == "evolve":
+        print("\n  🧬 Self-Evolution...\n")
+        result = ls.evolve()
+        print(f"  Reviewed {result['errors_reviewed']} errors, "
+              f"updated {result['rules_updated']} rules")
+        return
+    else:
+        report = ls.report()
+    print(LivingSkills.format_report(report))
 
 
 def _svc_bootstrap(args: list):

@@ -1,75 +1,38 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" class="h-full">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>图表编辑器 — LivingTree</title>
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/@antv/x6@2.18.1/dist/x6.min.js"></script>
-<style>
-.dgm-page{height:100vh;display:flex;flex-direction:column;overflow:hidden}
-</style>
 </head>
-<body class="dgm-page">
-<div class="page-toolbar">
-  <div class="page-toolbar-left">
-    <span class="page-title">📊 报告图表编辑器</span>
-    <div class="app-tabs" id="dgm-tabs"></div>
+<body class="h-full bg-gray-50 flex flex-col">
+<header class="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200 flex-shrink-0">
+  <h1 class="text-sm font-semibold text-gray-700">📊 报告图表编辑器</h1>
+  <div class="flex gap-2">
+    <button onclick="addNode()" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">+ 节点</button>
+    <button onclick="exportJSON()" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">导出</button>
   </div>
-  <div class="page-toolbar-right">
-    <button class="app-btn app-btn-sm" onclick="exportDiagram('png')">📸 PNG</button>
-    <button class="app-btn app-btn-sm" onclick="exportDiagram('svg')">📐 SVG</button>
-    <button class="app-btn app-btn-sm app-btn-primary" onclick="window.close()">完成</button>
-  </div>
-</div>
-<div class="dgm-canvas-wrap" style="flex:1;overflow:hidden;background:#fafbfc">
-  <div id="diagram-canvas" style="width:100%;height:100%"></div>
-</div>
+</header>
+<div id="canvas" class="flex-1"></div>
 
-<script src="services/x6-diagram.js"></script>
 <script>
-const types = [
-  { id:'contour', name:'污染扩散' }, { id:'process-flow', name:'工艺流程' },
-  { id:'site-plan', name:'平面布置' }, { id:'noise', name:'噪声剖面' },
-  { id:'monitoring', name:'监测网络' }, { id:'causal', name:'因果链' },
-  { id:'risk', name:'风险矩阵' }, { id:'base-map', name:'底图标注' },
-];
-
-const tabs = document.getElementById('dgm-tabs');
-tabs.innerHTML = types.map((t,i) =>
-  `<span class="app-tab${i===0?' active':''}" data-type="${t.id}">${t.name}</span>`).join('');
-
-tabs.addEventListener('click', e => {
-  const tab = e.target.closest('.app-tab');
-  if (!tab) return;
-  tabs.querySelectorAll('.app-tab').forEach(t => t.classList.remove('active'));
-  tab.classList.add('active');
-  if (window._dgm) window._dgm.render(tab.dataset.type, null);
-});
-
-setTimeout(() => {
-  X6Diagram.init('diagram-canvas');
-  X6Diagram.render('contour', null);
-  window._dgm = X6Diagram;
-  window.addEventListener('resize', () => X6Diagram._graph && X6Diagram._graph.resize(
-    document.getElementById('diagram-canvas').clientWidth,
-    document.getElementById('diagram-canvas').clientHeight
-  ));
-}, 300);
-
-function exportDiagram(fmt) {
-  if (fmt === 'png') X6Diagram.exportPNG(uri => download(uri, 'png'));
-  else X6Diagram.exportSVG(svg => download(new Blob([svg],{type:'image/svg+xml'}), 'svg', true));
+let graph;
+function init() {
+  graph = new X6.Graph({
+    container: document.getElementById('canvas'),
+    width: document.getElementById('canvas').offsetWidth,
+    height: document.getElementById('canvas').offsetHeight,
+    grid: { size: 10, visible: true },
+    connecting: { router: 'manhattan', connector: 'rounded' },
+  });
 }
-function download(data, ext, isBlob) {
-  const a = document.createElement('a');
-  a.href = isBlob ? URL.createObjectURL(data) : data;
-  a.download = `diagram-${Date.now()}.${ext}`;
-  a.click();
-  if (isBlob) URL.revokeObjectURL(a.href);
+function addNode() {
+  graph.addNode({ x: 100+Math.random()*400, y: 100+Math.random()*300, width: 100, height: 40,
+    label: 'Node '+(graph.getNodes().length+1), attrs: { body: { fill: '#eff6ff', stroke: '#3b82f6', rx: 8, ry: 8 } } });
 }
+function exportJSON() { alert(JSON.stringify(graph.toJSON(), null, 2)); }
+window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>

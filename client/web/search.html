@@ -1,238 +1,70 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" class="h-full">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>🌳 LivingTree 搜索</title>
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/app.css">
-<style>
-.search-hero{text-align:center;padding:60px 20px 30px;transition:all .3s}
-.search-hero.searching{padding:15px 20px;text-align:left;display:flex;align-items:center;gap:16px}
-.search-logo{font-size:48px;margin-bottom:12px;transition:all .3s}
-.search-hero.searching .search-logo{font-size:28px;margin:0}
-.search-title{font-size:28px;font-weight:700;color:var(--brand-default);margin-bottom:4px}
-.search-hero.searching .search-title{font-size:18px;margin:0}
-.search-sub{font-size:14px;color:var(--text-tertiary);margin-bottom:24px}
-.search-hero.searching .search-sub{display:none}
-.search-box-wrap{display:flex;align-items:center;max-width:640px;margin:0 auto;background:var(--bg-overlay-l1);border:2px solid var(--border-l1);border-radius:12px;overflow:hidden;transition:border-color .2s}
-.search-box-wrap:focus-within{border-color:var(--brand-default);box-shadow:0 0 0 3px rgba(15,220,120,.15)}
-.search-hero.searching .search-box-wrap{max-width:100%}
-.search-input{flex:1;padding:14px 18px;font-size:16px;background:transparent;border:none;color:var(--text-default);outline:none;font-family:inherit}
-.search-input::placeholder{color:var(--text-tertiary)}
-.search-btn{padding:14px 24px;background:var(--brand-default);color:var(--brand-onbrand);font-size:15px;font-weight:600;border:none;cursor:pointer;white-space:nowrap;transition:background .15s;display:flex;align-items:center;gap:6px}
-.search-btn:hover{background:var(--brand-hover)}
-.search-btn.loading{opacity:.7;pointer-events:none}
-/* Source tabs */
-.src-tabs{display:flex;gap:8px;justify-content:center;margin:8px 0 0;flex-wrap:wrap}
-/* Results */
-.results{display:flex;flex-direction:column;gap:8px;padding-bottom:60px}
-/* Cards */
-.card-result{background:var(--bg-overlay-l1);border:1px solid var(--border-l1);border-radius:10px;padding:14px 18px;transition:all .15s;cursor:pointer;text-decoration:none;color:inherit;display:block}
-.card-result:hover{border-color:var(--brand-default);background:var(--bg-overlay-l2)}
-.card-url{font-size:11px;color:var(--accent-blue);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px}
-.card-url img{width:14px;height:14px}
-.card-summary{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-top:6px}
-.card-meta{font-size:11px;color:var(--text-tertiary);margin-top:4px;display:flex;gap:12px}
-.card-title-row{display:flex;align-items:center;gap:8px}
-.card-title{font-size:15px;font-weight:500;color:var(--text-default);line-height:1.4}
-.card-action-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;background:var(--brand-default);color:var(--brand-onbrand);cursor:pointer;border:none;margin-top:8px;transition:background .15s}
-.card-action-btn:hover{background:var(--brand-hover)}
-/* Suggest */
-.suggest-box{position:absolute;top:100%;left:0;right:0;background:var(--bg-menu);border:1px solid var(--border-l2);border-radius:0 0 12px 12px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;overflow:hidden;display:none}
-.suggest-box.show{display:block}
-.suggest-item{padding:10px 18px;font-size:14px;cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
-.suggest-item:hover{background:var(--bg-hover)}
-.suggest-item .suggest-icon{font-size:14px;color:var(--text-tertiary)}
-</style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>搜索 — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="app-page">
-<div class="search-page" style="max-width:860px;margin:0 auto;padding:20px">
-  <div class="search-hero" id="search-hero">
-    <div class="search-logo">🌳</div>
-    <div class="search-title">LivingTree 智能搜索</div>
-    <div class="search-sub">AI驱动 · 多源融合 · 卡片化结果</div>
-    <div style="position:relative;max-width:640px;margin:0 auto">
-      <div class="search-box-wrap">
-        <input class="search-input" id="search-input" placeholder="输入关键词搜索..." autocomplete="off" autofocus>
-        <button class="search-btn" id="search-btn" onclick="doSearch()">
-          <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <span>搜索</span>
-        </button>
-      </div>
-      <div class="suggest-box" id="suggest-box"></div>
-    </div>
-    <div class="app-tabs src-tabs" id="src-tabs" style="justify-content:center;margin-top:8px">
-      <span class="app-tab active" data-src="web">🌐 网页</span>
-      <span class="app-tab active" data-src="knowledge">🧠 知识库</span>
-      <span class="app-tab active" data-src="docs">📄 文档</span>
-      <span class="app-tab active" data-src="structured">📊 结构化</span>
-    </div>
+<body class="h-full bg-gray-50">
+<div class="max-w-2xl mx-auto px-4 py-12">
+  <div class="text-center mb-8">
+    <div class="text-4xl mb-2">🌳</div>
+    <h1 class="text-2xl font-bold text-gray-800">LivingTree 搜索</h1>
+    <p class="text-sm text-gray-400 mt-1">代码 · 文档 · 知识库 · 网络</p>
   </div>
 
-  <div class="page-toolbar" id="stats-bar" style="display:none;border:none;margin-bottom:4px"></div>
-  <div class="results" id="results"></div>
+  <!-- Search box -->
+  <div class="flex bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
+    <input id="search-input" placeholder="搜索代码、文档、知识..." class="flex-1 px-4 py-3 text-sm outline-none bg-transparent"
+      onkeydown="if(event.key==='Enter')doSearch()">
+    <button onclick="doSearch()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors flex items-center gap-2">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      搜索
+    </button>
+  </div>
+
+  <!-- Source tabs -->
+  <div class="flex gap-2 justify-center mt-4 flex-wrap">
+    <button onclick="setSource('all')" class="source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-blue-600 text-white">全部</button>
+    <button onclick="setSource('code')" class="source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">代码</button>
+    <button onclick="setSource('docs')" class="source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">文档</button>
+    <button onclick="setSource('kb')" class="source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">知识库</button>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="mt-6 space-y-3"></div>
 </div>
 
-<script src="core/framework.js"></script>
 <script>
-let currentQuery = '';
-const activeSources = new Set(['web', 'knowledge', 'docs', 'structured']);
-
-// Source tabs
-document.getElementById('src-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.app-tab');
-  if (!tab) return;
-  const src = tab.dataset.src;
-  if (activeSources.has(src)) { activeSources.delete(src); tab.classList.remove('active'); }
-  else { activeSources.add(src); tab.classList.add('active'); }
-  if (currentQuery) doSearch();
-});
-
-// Search
+let currentSource = 'all';
+function setSource(s) {
+  currentSource = s;
+  document.querySelectorAll('.source-btn').forEach(b => {
+    b.className = b.textContent.trim().toLowerCase().includes(s) || (s==='all' && b.textContent.trim()==='全部')
+      ? 'source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-blue-600 text-white'
+      : 'source-btn px-4 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200';
+  });
+}
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
-  currentQuery = q;
-
-  const hero = document.getElementById('search-hero');
-  hero.classList.add('searching');
-  document.getElementById('stats-bar').style.display = 'flex';
-
-  const btn = document.getElementById('search-btn');
-  btn.classList.add('loading');
-  btn.querySelector('span').textContent = '搜索中';
-
-  document.getElementById('results').innerHTML = '<div style="text-align:center;padding:40px"><div class="app-spinner"></div></div>';
-
+  const el = document.getElementById('results');
+  el.innerHTML = '<div class="text-center py-8"><div class="w-6 h-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 mx-auto"></div></div>';
   try {
-    const resp = await fetch('/api/search/unified', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: q, sources: [...activeSources], limit: 20 }),
-    });
-    const data = await resp.json();
-    renderResults(data);
-  } catch (e) {
-    document.getElementById('results').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div>搜索服务暂不可用</div>`;
-  }
-
-  btn.classList.remove('loading');
-  btn.querySelector('span').textContent = '搜索';
-}
-
-// Enter key
-document.getElementById('search-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { document.getElementById('suggest-box').classList.remove('show'); doSearch(); }
-});
-
-// Suggestions
-let suggestTimer;
-document.getElementById('search-input').addEventListener('input', function() {
-  clearTimeout(suggestTimer);
-  const q = this.value.trim();
-  if (q.length < 2) { document.getElementById('suggest-box').classList.remove('show'); return; }
-  suggestTimer = setTimeout(async () => {
-    try {
-      const r = await fetch(`/api/search/suggest?q=${encodeURIComponent(q)}`);
-      const items = await r.json();
-      const box = document.getElementById('suggest-box');
-      if (items.length) {
-        box.innerHTML = items.map(s => `<div class="suggest-item" onclick="selectSuggest('${s.replace(/'/g, '\\\'')}')"><span class="suggest-icon">🔍</span>${s}</div>`).join('');
-        box.classList.add('show');
-      }
-    } catch (e) {}
-  }, 200);
-});
-
-function selectSuggest(text) {
-  document.getElementById('search-input').value = text;
-  document.getElementById('suggest-box').classList.remove('show');
-  doSearch();
-}
-
-// Click outside to close suggest
-document.addEventListener('click', e => {
-  if (!e.target.closest('#suggest-box') && !e.target.closest('#search-input')) {
-    document.getElementById('suggest-box').classList.remove('show');
-  }
-});
-
-// Render
-function renderResults(data) {
-  const container = document.getElementById('results');
-  const stats = document.getElementById('stats-bar');
-  const sc = data.source_counts || {};
-
-  stats.innerHTML = `
-    <span style="font-size:12px;color:var(--text-tertiary)">找到约 <strong style="color:var(--brand-default)">${data.total}</strong> 个结果</span>
-    <div style="display:flex;gap:6px">
-      <span class="app-badge app-badge-blue">🌐 ${sc.web||0}</span>
-      <span class="app-badge app-badge-purple">🧠 ${sc.knowledge||0}</span>
-      <span class="app-badge app-badge-green">📄 ${sc.document||0}</span>
-      <span class="app-badge app-badge-orange">📊 ${sc.diagram||0}</span>
-    </div>`;
-
-  if (!data.results.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div>未找到相关结果<br><span style="font-size:12px;color:var(--text-tertiary)">尝试换个关键词，或启用更多数据源</span></div>`;
-    return;
-  }
-
-  container.innerHTML = data.results.map(r => renderCard(r)).join('');
-}
-
-function renderCard(r) {
-  const typeMap = { web: 'app-badge-blue', knowledge: 'app-badge-purple', document: 'app-badge-green', diagram: 'app-badge-orange', profile: 'app-badge-blue' };
-  const typeIcon = { web: '🌐', knowledge: '🧠', document: '📄', diagram: '📊', profile: '👤' };
-  const typeLabel = { web: '网页', knowledge: '知识库', document: '文档', diagram: '图表', profile: '模板' };
-  const bc = typeMap[r.type] || 'app-badge-blue';
-
-  let body = '';
-  switch (r.type) {
-    case 'web':
-      body = `
-        <div class="card-url">${r.favicon ? `<img src="${r.favicon}" alt="">` : ''}${r.url || ''}</div>
-        <div class="card-summary">${r.summary || ''}</div>
-        <div class="card-meta"><span>${r.source || 'web'}</span></div>`;
-      break;
-    case 'knowledge':
-      body = `
-        <div class="card-summary">${r.text || ''}</div>
-        <div class="card-meta"><span>相关度: ${Math.round((r.score || 0) * 100)}%</span><span>${r.source_type || ''}</span></div>`;
-      break;
-    case 'document':
-      body = `
-        <div class="card-meta"><span>${r.format || 'docx'}</span><span>${r.size ? (r.size/1024).toFixed(1) + 'KB' : ''}</span><span>${r.updated_at ? new Date(r.updated_at*1000).toLocaleString('zh-CN') : ''}</span></div>
-        <button class="card-action-btn" onclick="openDoc('${r.doc_id}')">在 LT-Office 中打开</button>`;
-      break;
-    case 'diagram':
-      body = `
-        <div class="card-summary">${r.description || '点击生成图表'}</div>
-        <button class="card-action-btn" onclick="LT.emit('doc:create',{content:'生成 ${r.diagram_type} 图表',title:'${r.title}'})">生成图表</button>`;
-      break;
-    case 'profile':
-      body = `
-        <div class="card-meta"><span>${r.fields || 0} 个字段</span></div>`;
-      break;
-  }
-
-  return `<div class="card-result" ${r.type === 'web' ? `onclick="window.open('${r.url}','_blank')"` : ''}>
-    <div class="card-title-row">
-      <span class="app-badge ${bc}">${typeIcon[r.type]||'📋'} ${typeLabel[r.type]||r.type}</span>
-      <span class="card-title">${r.title || 'Untitled'}</span>
-    </div>
-    ${body}
-  </div>`;
-}
-
-function openDoc(docId) {
-  if (window.opener && window.opener.OnlyOffice) {
-    window.opener.OnlyOffice.toggleSplit();
-    window.opener.LT.emit('doc:open', { docId });
-    window.close();
-  } else {
-    window.open(`/?doc=${docId}`, '_blank');
-  }
+    const r = await fetch('/api/search?q='+encodeURIComponent(q)+'&source='+currentSource);
+    const d = await r.json();
+    if (!d.results || !d.results.length) { el.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">未找到结果</div>'; return; }
+    el.innerHTML = d.results.map(item => `
+      <div class="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">${item.source||'?'}</span>
+          <span class="text-xs text-gray-400">${item.file||''}</span>
+        </div>
+        <h3 class="text-sm font-medium text-gray-800">${item.title||item.name||''}</h3>
+        <p class="text-xs text-gray-500 mt-1 line-clamp-2">${item.snippet||item.content||''}</p>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = '<div class="text-red-500 text-sm text-center py-4">搜索失败</div>'; }
 }
 </script>
 </body>

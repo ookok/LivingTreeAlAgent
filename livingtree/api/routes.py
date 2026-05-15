@@ -348,71 +348,123 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post("/api/chat/stream")
     async def chat_stream(req: ChatRequest, request: Request):
-        """Progressive streaming chat with Flash-First + Parallel Race + Skeleton.
+        """Split-architecture streaming chat (TML Interaction Models inspired).
 
-        Returns SSE stream: skeleton → phases → tokens → complete.
-        User sees first token at ~100ms (vs ~5s for blocking /api/chat).
+        Interaction Model (fast path):
+          1. ProactiveInterject → immediate response if triggered
+          2. Otherwise → start Background Model as async task
+
+        Background Model (async, streams back via SSE events):
+          - Runs TreeLLM + ConcurrentStream in background
+          - Pushes results through asyncio.Queue
+          - Frontend receives: thinking → tool_start → tool_done → content → done
+          - User can continue typing while background runs
         """
         hub = request.app.state.hub
         if not hub:
             raise HTTPException(status_code=503, detail="Hub not initialized")
 
         async def generate():
+            result_queue: asyncio.Queue = asyncio.Queue()
+            bg_started = False
+
             try:
-                from ..treellm.concurrent_stream import get_concurrent_stream, set_stream_chat_fn
-                cs = get_concurrent_stream()
-                llm = hub.world.consciousness._llm
+                # ── Interaction Model: check ProactiveInterject first ──
+                try:
+                    from ..treellm.proactive_interject import get_proactive_interject
+                    pi = get_proactive_interject()
+                    decision = pi.evaluate(req.message, task_type="chat")
+                    if decision.should_interject and decision.urgency > 0.5:
+                        yield f"event: interject\ndata: {json.dumps({'type':'interject','content':decision.interjection_text,'trigger':decision.trigger.value if decision.trigger else 'clarification','mode':'interject'},ensure_ascii=False)}\n\n"
+                        return
+                except Exception:
+                    pass
 
-                async def _chat_fn(messages, provider, stream=True):
-                    async for token in llm.stream(messages, provider=provider):
-                        yield token
+                # ── Interaction Model: start Background Model as async task ──
+                async def background_task():
+                    try:
+                        from ..treellm.concurrent_stream import get_concurrent_stream, set_stream_chat_fn
+                        cs = get_concurrent_stream()
+                        llm = hub.world.consciousness._llm
 
-                set_stream_chat_fn(_chat_fn)
-                flash_model = await llm.smart_route(req.message, task_type="chat")
-                tiers = await hub.world.consciousness._elect_tiers()
-                pro_model = tiers.get(2, flash_model) if tiers else flash_model
+                        async def _chat_fn(messages, provider, stream=True):
+                            async for token in llm.stream(messages, provider=provider):
+                                yield token
+                        set_stream_chat_fn(_chat_fn)
 
-                # Track tool state for real-time events
-                in_tool = False
-                tool_name = ""
-                tool_start = 0.0
+                        flash_model = await llm.smart_route(req.message, task_type="chat")
+                        tiers = await hub.world.consciousness._elect_tiers()
+                        pro_model = tiers.get(2, flash_model) if tiers else flash_model
 
-                async for event in cs.stream(
-                    query=req.message,
-                    flash_model=flash_model,
-                    pro_model=pro_model,
-                    system_prompt=req.context,
-                    task_type="chat",
-                ):
-                    text = event.text or ""
-
-                    # Detect tool call start
-                    tool_match = re.search(r'<tool_call\s+name="(\w+)"', text)
-                    if tool_match and not in_tool:
-                        in_tool = True
-                        tool_name = tool_match.group(1)
-                        tool_start = _time.time()
-                        yield f"event: tool_start\ndata: {json.dumps({'type':'tool_start','name':tool_name,'args':text[text.find('>')+1:text.rfind('<')].strip()[:200]},ensure_ascii=False)}\n\n"
-
-                    # Detect tool completion (result follows)
-                    result_match = re.search(r'\[tool_result:\s*(\w+)\]\n(.*?)(?=\n\n|\Z)', text, re.DOTALL)
-                    if result_match and in_tool:
                         in_tool = False
-                        elapsed = int((_time.time() - tool_start) * 1000)
-                        yield f"event: tool_done\ndata: {json.dumps({'type':'tool_done','name':tool_name,'result':result_match.group(2)[:500],'elapsed_ms':elapsed},ensure_ascii=False)}\n\n"
+                        tool_name = ""
+                        tool_start = 0.0
+                        full_text = ""
 
-                    event_data = json.dumps({
-                        "type": event.kind,
-                        "content": text,
-                        "phase": "stream",
-                        "model": event.provider,
-                        "ts": event.timestamp,
-                        "mode": getattr(event, 'mode', 'normal'),
-                    }, ensure_ascii=False)
-                    yield f"event: {event.kind}\ndata: {event_data}\n\n"
-                # NOTE: cognition_stream fallback removed — it redundantly called engine.run()
-                # which doubled LLM cost. ConcurrentStream already provides full output.
+                        async for event in cs.stream(
+                            query=req.message, flash_model=flash_model,
+                            pro_model=pro_model, system_prompt=req.context,
+                            task_type="chat",
+                        ):
+                            text = event.text or ""
+                            full_text += text
 
+                            # Tool lifecycle events
+                            tool_match = re.search(r'<tool_call\s+name="(\w+)"', text)
+                            if tool_match and not in_tool:
+                                in_tool = True
+                                tool_name = tool_match.group(1)
+                                tool_start = _time.time()
+                                await result_queue.put(("tool_start", {"type":"tool_start","name":tool_name,"args":text[text.find('>')+1:text.rfind('<')].strip()[:200]}))
+
+                            result_match = re.search(r'\[tool_result:\s*(\w+)\]\n(.*?)(?=\n\n|\Z)', text, re.DOTALL)
+                            if result_match and in_tool:
+                                in_tool = False
+                                elapsed = int((_time.time() - tool_start) * 1000)
+                                await result_queue.put(("tool_done", {"type":"tool_done","name":tool_name,"result":result_match.group(2)[:500],"elapsed_ms":elapsed}))
+
+                            await result_queue.put(("content", {
+                                "type": event.kind, "content": text,
+                                "phase": "stream", "model": event.provider,
+                                "ts": event.timestamp, "mode": "normal",
+                            }))
+
+                        await result_queue.put(("done", {"type":"done","full_text":full_text[:5000]}))
+                    except Exception as e:
+                        await result_queue.put(("error", {"error": str(e)[:200]}))
+                    # Signal completion
+                    await result_queue.put(("__end__", {}))
+
+                bg_task = asyncio.ensure_future(background_task())
+                bg_started = True
+
+                # Yield background_start event
+                yield f"event: background_start\ndata: {json.dumps({'type':'background_start','message':'Background model started'},ensure_ascii=False)}\n\n"
+
+                # ── Main loop: read from background task queue, yield SSE events ──
+                while True:
+                    try:
+                        event_type, event_data = await asyncio.wait_for(
+                            result_queue.get(), timeout=30.0
+                        )
+                    except asyncio.TimeoutError:
+                        # Heartbeat to keep connection alive
+                        yield f": heartbeat\n\n"
+                        continue
+
+                    if event_type == "__end__":
+                        break
+
+                    if event_type == "done":
+                        yield f"event: done\ndata: {json.dumps(event_data,ensure_ascii=False)}\n\n"
+                    elif event_type in ("tool_start", "tool_done", "content", "error"):
+                        yield f"event: {event_type}\ndata: {json.dumps(event_data,ensure_ascii=False)}\n\n"
+
+                if not bg_task.done():
+                    bg_task.cancel()
+
+            except asyncio.CancelledError:
+                pass
             except Exception as e:
                 error_data = json.dumps({"error": str(e)[:200]})
                 yield f"event: error\ndata: {error_data}\n\n"

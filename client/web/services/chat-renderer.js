@@ -799,6 +799,25 @@
 
             // ── Dead code: remove old tool_calls handling (now handled by SSE events) ──
 
+            // ── Background model events ──
+            if (eventType === 'background_start') {
+              loadingEl?.remove();
+              LT.chat.renderer.text(container, '🧠 后台思考中...', true);
+              continue;
+            }
+            if (eventType === 'interject') {
+              loadingEl?.remove();
+              LT.chat.renderer.interject(container, parsed.content || parsed.text, parsed.trigger);
+              return;
+            }
+            if (eventType === 'done') {
+              // Final render of accumulated text
+              const segments = LT.chat.renderer.parseSegments(fullText || parsed.full_text || '');
+              LT.chat.renderer.renderSegments(container, segments);
+              if (window.LivingA2UI) setTimeout(() => LivingA2UI.scan(), 100);
+              continue;
+            }
+
             // ── Interject detection ──
             if (parsed.mode === 'interject') {
               loadingEl?.remove();

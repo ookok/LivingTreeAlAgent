@@ -22,10 +22,12 @@ class ProjectSelector extends Component {
 
     const projectItems = hasProjects ? projects.map(p => {
       const active = p.name === selected ? ' active' : '';
+      const typeBadge = p.type === 'code' ? '<span style="font-size:10px;background:#1e40af;color:#bfdbfe;padding:1px 6px;border-radius:8px;margin-left:4px">代码</span>' :
+                        p.type === 'docs' ? '<span style="font-size:10px;background:#166534;color:#bbf7d0;padding:1px 6px;border-radius:8px;margin-left:4px">文档</span>' : '';
       return `<div class="proj-item${active}" onclick="LT.get('project-selector')._selectProject('${LT.esc(p.name)}')">
-        <span class="proj-icon">📁</span>
+        <span class="proj-icon">${p.type==='code'?'💻':p.type==='docs'?'📄':'📁'}</span>
         <div class="proj-info">
-          <span class="proj-name">${LT.esc(p.name)}${p.owner && p.owner !== store.userId ? ` <span class="proj-owner-tag" title="所有者: ${LT.esc(p.owner)}">👤 ${LT.esc(p.owner).slice(0,8)}</span>` : ''}</span>
+          <span class="proj-name">${LT.esc(p.name)}${typeBadge}</span>
           <span class="proj-meta">${p.file_count || 0} 文件${p.github_url ? ' · 🔗 GitHub' : ''}</span>
         </div>
         <div class="proj-actions">

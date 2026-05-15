@@ -124,6 +124,28 @@
   };
 
   // ═══ Render ═══
+  function classifyFolder(tree) {
+    const extensions = { py:0, js:0, ts:0, jsx:0, tsx:0, go:0, rs:0, java:0, cpp:0, c:0, cs:0, toml:0, yaml:0, yml:0, json:0, lock:0, cfg:0, ini:0,
+                         md:0, txt:0, pdf:0, docx:0, xlsx:0, pptx:0, html:0, css:0, svg:0 };
+    countExt(tree, extensions);
+    const codeFiles = extensions.py + extensions.js + extensions.ts + extensions.jsx + extensions.tsx + extensions.go + extensions.rs + extensions.java + extensions.cpp + extensions.c + extensions.cs;
+    const configFiles = extensions.toml + extensions.yaml + extensions.yml + extensions.json + extensions.lock + extensions.cfg + extensions.ini;
+    const docFiles = extensions.md + extensions.txt + extensions.pdf + extensions.docx + extensions.html;
+    const total = codeFiles + configFiles + docFiles || 1;
+    if (codeFiles > total * 0.4) return 'code';
+    if (docFiles > total * 0.6) return 'docs';
+    if (codeFiles > 0 && docFiles > 0) return 'mixed';
+    return 'unknown';
+  }
+
+  function countExt(node, ext) {
+    if (node.kind === 'file') {
+      const e = node.name.split('.').pop().toLowerCase();
+      if (e in ext) ext[e]++;
+    }
+    if (node.children) node.children.forEach(c => countExt(c, ext));
+  }
+
   function renderMounts() {
     const el = document.getElementById('local-mounts');
     if (!el) return;
@@ -135,7 +157,11 @@
     for (const [name, { tree, time }] of state.mounts) {
       html += `<div class="mount-root" style="margin-bottom:4px">`;
       html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">`;
-      html += `<span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">📁 ${name}</span>`;
+      const folderType = classifyFolder(tree);
+      const typeBadge = folderType === 'code' ? '<span style="font-size:10px;background:#1e40af;color:#bfdbfe;padding:1px 6px;border-radius:8px;margin-left:6px">💻 代码库</span>' :
+                        folderType === 'docs' ? '<span style="font-size:10px;background:#166534;color:#bbf7d0;padding:1px 6px;border-radius:8px;margin-left:6px">📄 文档库</span>' :
+                        folderType === 'mixed' ? '<span style="font-size:10px;background:#854d0e;color:#fde68a;padding:1px 6px;border-radius:8px;margin-left:6px">📦 混合</span>' : '';
+      html += `<span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">📁 ${name}${typeBadge}</span>`;
       html += `<button style="font-size:10px;padding:2px 6px;background:var(--border)" onclick="xiaoshu.unmount('${name}')">×</button>`;
       html += `</div>`;
       html += `<div style="display:none;padding-left:12px;font-size:11px;max-height:200px;overflow-y:auto">`;

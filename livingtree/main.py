@@ -146,6 +146,8 @@ def main():
         _svc_dev(sys.argv[2:])
     elif command == "bootstrap":
         _svc_bootstrap(sys.argv[2:])
+    elif command == "autoinstall":
+        _svc_autoinstall(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -1841,6 +1843,33 @@ def _svc_dev(args: list):
         asyncio.run(_run())
     except Exception as e:
         print(f"❌ Dev tool failed: {e}")
+
+
+def _svc_autoinstall(args: list):
+    """LLM-driven self-bootstrapping with tool calls, mock creation, verification loop.
+
+    Commands:
+        livingtree autoinstall              Full LLM-driven bootstrap (max 5 rounds)
+        livingtree autoinstall --rounds 3   Max 3 retry rounds
+    """
+    import asyncio
+
+    async def _run():
+        from .treellm.autoinstall import AutoInstaller
+
+        max_rounds = 5
+        for i, a in enumerate(args):
+            if a == "--rounds" and i + 1 < len(args):
+                max_rounds = int(args[i + 1])
+
+        print("\n  🤖 LLM Autoinstall — exploring, installing, mocking, verifying...\n")
+        report = await AutoInstaller.run(max_rounds=max_rounds)
+        print(AutoInstaller.format_report(report))
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Autoinstall failed: {e}")
 
 
 def _svc_bootstrap(args: list):

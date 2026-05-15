@@ -47,7 +47,7 @@ class OfficeTools:
     @staticmethod
     def batch_rename(directory: str, pattern: str, template: str,
                      dry_run: bool = False, recursive: bool = False) -> dict:
-        """Rename files matching regex pattern to template format.
+        r"""Rename files matching regex pattern to template format.
 
         template supports: {num}, {name}, {ext}, {date}, {num:03d}
         Example: OfficeTools.batch_rename(".", r"img_(\d+)\.jpg", "photo_{num:03d}.jpg")"""
@@ -539,8 +539,8 @@ def register_office_tools(bus=None):
             ("office:pdf_merge", "Merge multiple PDFs into one", "sources,output"),
             ("office:pdf_split", "Split PDF into individual pages", "source,output_dir"),
             ("office:pdf_extract_text", "Extract text from PDF", "source,pages"),
-            ("office:csv_deduplicate", "Remove duplicate CSV rows", "source,columns"),
             ("office:regex_extract", "Extract data using regex from file", "source,pattern"),
+            ("office:csv_deduplicate", "Remove duplicate CSV rows", "source,columns"),
             ("office:send_email", "Send email via SMTP", "to,subject,body"),
             ("office:image_process", "Resize/compress/convert image", "source,operation,params"),
             ("office:fill_template", "Fill template with variables", "template_path,variables"),

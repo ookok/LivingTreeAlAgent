@@ -422,7 +422,595 @@ class ReportEnhancer:
         }
 
 
+# ═══ 6. Data Validator — input sanity checks ═══
+
+class DataValidator:
+    """Validate report input data before generation."""
+
+    RULES = {
+        "eia_report": {
+            "project_name": {"required": True, "min_len": 2, "max_len": 200},
+            "source_params.emission_rate": {"type": "number", "min": 0},
+            "water_params.bod_initial": {"type": "number", "min": 0, "max": 1000},
+            "noise_params.source_level": {"type": "number", "min": 20, "max": 200},
+        },
+        "emergency_plan": {
+            "project_name": {"required": True},
+            "emergency_type": {"required": True, "enum": ["火灾", "爆炸", "泄漏", "中毒", "自然灾害"]},
+        },
+    }
+
+    @classmethod
+    def validate(cls, template_type: str, data: dict) -> dict:
+        """Validate data against template rules. Returns {valid, errors, warnings}."""
+        rules = cls.RULES.get(template_type, {})
+        errors = []
+        warnings = []
+
+        for path, rule in rules.items():
+            val = cls._get_nested(data, path)
+            if rule.get("required") and (val is None or val == ""):
+                errors.append(f"缺少必填字段: {path}")
+                continue
+            if val is None:
+                continue
+            if "type" in rule:
+                try:
+                    if rule["type"] == "number":
+                        val = float(val)
+                except (ValueError, TypeError):
+                    errors.append(f"{path}: 期望数字, 得到 {val}")
+            if "min" in rule and float(val) < rule["min"]:
+                errors.append(f"{path}: 值 {val} < 最小值 {rule['min']}")
+            if "max" in rule and float(val) > rule["max"]:
+                errors.append(f"{path}: 值 {val} > 最大值 {rule['max']}")
+            if "min_len" in rule and len(str(val)) < rule["min_len"]:
+                errors.append(f"{path}: 长度不足 (至少 {rule['min_len']} 字符)")
+            if "enum" in rule and val not in rule["enum"]:
+                warnings.append(f"{path}: 值 '{val}' 不在推荐选项 {rule['enum']} 中")
+
+        # Structural checks
+        if not data.get("sections") and not data.get("raw_text"):
+            warnings.append("未提供 sections 或 raw_text，报告可能为空")
+
+        return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
+
+    @staticmethod
+    def _get_nested(d: dict, path: str):
+        keys = path.split(".")
+        for k in keys:
+            if isinstance(d, dict):
+                d = d.get(k)
+            else:
+                return None
+        return d
+
+
+# ═══ 7. Watermark — draft/confidential/internal marks ═══
+
+class Watermark:
+    """Add watermarks to generated documents."""
+
+    @staticmethod
+    def apply_docx(doc_path: str, text: str, opacity: float = 0.15,
+                   font_size: int = 72, rotation: float = -45) -> str:
+        """Add diagonal watermark to .docx file."""
+        try:
+            from docx import Document
+            from docx.shared import Pt, Inches
+            from docx.oxml.ns import qn
+            from lxml import etree
+
+            doc = Document(doc_path)
+            for section in doc.sections:
+                header = section.header
+                paragraph = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+                paragraph.alignment = 1  # center
+                run = paragraph.add_run(text)
+                run.font.size = Pt(font_size)
+                run.font.color.rgb = None  # Will be set via XML
+
+                # Set opacity via XML
+                rPr = run._element.get_or_add_rPr()
+                color = etree.SubElement(rPr, qn('w:color'))
+                color.set(qn('w:val'), 'C0C0C0')
+
+            out_path = Path(doc_path).parent / f"watermarked_{Path(doc_path).name}"
+            doc.save(str(out_path))
+            return str(out_path)
+        except Exception as e:
+            logger.warning(f"Watermark docx: {e}")
+            return doc_path
+
+    @staticmethod
+    def apply_markdown(content: str, text: str) -> str:
+        """Add watermark comment to markdown."""
+        return f"<!-- {text} -->\n{content}"
+
+    @staticmethod
+    def status_stamp(status: str) -> str:
+        """Generate status stamp: 草稿 / 送审稿 / 报批稿 / 最终版"""
+        stamps = {
+            "draft": "【草  稿】",
+            "review": "【送 审 稿】",
+            "approval": "【报 批 稿】",
+            "final": "【最 终 版】",
+        }
+        return stamps.get(status, f"【{status}】")
+
+
+# ═══ 8. Chart Auto-Generation — matplotlib → docx inline ═══
+
+class ChartGenerator:
+    """Generate charts and embed in documents."""
+
+    @staticmethod
+    def generate_embedded(data: dict, chart_configs: list[dict],
+                          output_dir: str = "") -> list[str]:
+        """Generate chart images and return paths for document embedding.
+
+        chart_configs: [{type:'bar|line|pie|scatter', title:'', x:[], y:[], labels:[]}]
+        """
+        try:
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+        except ImportError:
+            return []
+
+        out_dir = Path(output_dir or ".livingtree/charts")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        paths = []
+
+        for i, cfg in enumerate(chart_configs):
+            try:
+                fig, ax = plt.subplots(figsize=(8, 4.5))
+                chart_type = cfg.get("type", "bar")
+
+                if chart_type == "bar":
+                    ax.bar(cfg.get("labels", []), cfg.get("values", []),
+                          color=cfg.get("colors", "#3b82f6"))
+                elif chart_type == "line":
+                    ax.plot(cfg.get("x", []), cfg.get("y", []),
+                           color=cfg.get("color", "#3b82f6"), linewidth=2)
+                    ax.fill_between(cfg.get("x", []), cfg.get("y", []), alpha=0.1)
+                elif chart_type == "pie":
+                    ax.pie(cfg.get("values", []), labels=cfg.get("labels", []),
+                          autopct='%1.1f%%')
+                elif chart_type == "scatter":
+                    ax.scatter(cfg.get("x", []), cfg.get("y", []),
+                              alpha=0.6, color=cfg.get("color", "#3b82f6"))
+
+                ax.set_title(cfg.get("title", ""), fontsize=12, fontweight='bold')
+                if cfg.get("xlabel"):
+                    ax.set_xlabel(cfg["xlabel"])
+                if cfg.get("ylabel"):
+                    ax.set_ylabel(cfg["ylabel"])
+                if cfg.get("grid", True):
+                    ax.grid(True, alpha=0.3)
+
+                path = out_dir / f"chart_{i+1}_{cfg.get('title','')[:20]}.png"
+                fig.savefig(path, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                paths.append(str(path))
+            except Exception:
+                continue
+
+        return paths
+
+    @staticmethod
+    def generate_distribution_map(params: dict, output: str = "") -> str:
+        """Generate concentration distribution contour map (for EIA reports)."""
+        try:
+            import matplotlib.pyplot as plt
+            import numpy as np
+        except ImportError:
+            return ""
+
+        x = np.linspace(-500, 500, 100)
+        y = np.linspace(-500, 500, 100)
+        X, Y = np.meshgrid(x, y)
+        sx = params.get("sigma_x", 100)
+        sy = params.get("sigma_y", 50)
+        Q = params.get("emission_rate", 1.0)
+        u = params.get("wind_speed", 2.5)
+        Z = (Q / (2 * np.pi * u * sx * sy)) * np.exp(
+            -0.5 * ((X / sx) ** 2 + (Y / sy) ** 2))
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        contour = ax.contourf(X, Y, Z * 1e6, levels=15, cmap='YlOrRd')
+        plt.colorbar(contour, label='浓度 (μg/m³)')
+        ax.set_title('大气污染物浓度分布图', fontsize=12, fontweight='bold')
+        ax.set_xlabel('距离 (m)')
+        ax.set_ylabel('距离 (m)')
+
+        out_path = Path(output or ".livingtree/charts/distribution.png")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        return str(out_path)
+
+
+# ═══ 9. Diff Tracker — version comparison with redline ═══
+
+class DiffTracker:
+    """Track document versions and generate redline comparisons."""
+
+    def __init__(self):
+        self._versions: list[dict] = []
+        self._storage = Path(".livingtree/report_versions")
+        self._storage.mkdir(parents=True, exist_ok=True)
+
+    def save_version(self, content: str, label: str = "") -> int:
+        """Save a document version. Returns version number."""
+        ver = len(self._versions) + 1
+        path = self._storage / f"v{ver:03d}_{label or 'report'}.md"
+        path.write_text(content, encoding="utf-8")
+        self._versions.append({"version": ver, "label": label, "path": str(path),
+                               "timestamp": datetime.now().isoformat(), "length": len(content)})
+        return ver
+
+    def diff(self, v1: int, v2: int) -> dict:
+        """Compare two versions. Returns {added_lines, removed_lines, unified_diff}."""
+        try:
+            import difflib
+        except ImportError:
+            return {"error": "difflib not available"}
+
+        c1 = self._get_version_content(v1)
+        c2 = self._get_version_content(v2)
+        if not c1 or not c2:
+            return {"error": "Version not found"}
+
+        diff = list(difflib.unified_diff(
+            c1.splitlines(keepends=True),
+            c2.splitlines(keepends=True),
+            fromfile=f"v{v1}", tofile=f"v{v2}",
+        ))
+
+        added = sum(1 for l in diff if l.startswith('+') and not l.startswith('+++'))
+        removed = sum(1 for l in diff if l.startswith('-') and not l.startswith('---'))
+
+        return {
+            "v1": v1, "v2": v2,
+            "added_lines": added,
+            "removed_lines": removed,
+            "total_changes": added + removed,
+            "unified_diff": "".join(diff),
+        }
+
+    def version_list(self) -> list[dict]:
+        return self._versions
+
+    def _get_version_content(self, ver: int) -> str:
+        for v in self._versions:
+            if v["version"] == ver:
+                try:
+                    return Path(v["path"]).read_text(encoding="utf-8")
+                except Exception:
+                    pass
+        return ""
+
+
+# ═══ 10. Audit Logger — who/when/what data trace ═══
+
+class AuditLogger:
+    """Track document generation audit trail for compliance."""
+
+    _log_file = Path(".livingtree/audit_log.jsonl")
+
+    @classmethod
+    def log(cls, event: str, details: dict) -> None:
+        """Record an audit event."""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event": event,
+            **details,
+        }
+        try:
+            cls._log_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cls._log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+    @classmethod
+    def query(cls, event_filter: str = "", limit: int = 50) -> list[dict]:
+        """Query audit log entries."""
+        results = []
+        try:
+            if not cls._log_file.exists():
+                return results
+            with open(cls._log_file, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        if not event_filter or event_filter in entry.get("event", ""):
+                            results.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+            return results[-limit:]
+        except Exception:
+            return results
+
+    @classmethod
+    def generate_trail(cls, template_type: str) -> str:
+        """Generate an audit trail section for the report."""
+        events = cls.query(template_type, 20)
+        if not events:
+            return "无审计记录"
+
+        lines = ["## 编制审计追踪", "", "| 时间 | 事件 | 详情 |", "|------|------|------|"]
+        for e in events[-15:]:
+            details = ", ".join(f"{k}={v}" for k, v in e.items()
+                              if k not in ("timestamp", "event"))[:80]
+            lines.append(f"| {e['timestamp'][:19]} | {e['event']} | {details} |")
+        return "\n".join(lines)
+
+
+# ═══ 11. OFD Format — GB/T 33190 Chinese standard document ═══
+
+class OFDExporter:
+    """Basic OFD (Open Fixed-layout Document) export for GB/T 33190 compliance."""
+
+    @staticmethod
+    def export(content: dict, output: str = "") -> str:
+        """Generate a basic OFD-compatible ZIP (structure only).
+
+        Full OFD rendering requires ofdpy library. This creates the standard
+        OFD package structure with metadata and content stub.
+        """
+        import zipfile
+
+        out_path = Path(output or f"/tmp/report_{int(datetime.now().timestamp())}.ofd")
+        with zipfile.ZipFile(out_path, "w") as zf:
+            # OFD package structure
+            zf.writestr("OFD.xml", '<?xml version="1.0" encoding="UTF-8"?>'
+                       '<OFD xmlns="http://www.ofdspec.org/2016" Version="1.0">'
+                       f'<DocBody><DocInfo><Title>{content.get("title","Report")}</Title>'
+                       f'<Author>LivingTree</Author>'
+                       f'<CreationDate>{datetime.now().isoformat()}</CreationDate>'
+                       '</DocInfo><DocRoot>Doc_0/Document.xml</DocRoot></DocBody></OFD>')
+            zf.writestr("Doc_0/Document.xml",
+                       '<?xml version="1.0" encoding="UTF-8"?>'
+                       '<Document xmlns="http://www.ofdspec.org/2016">'
+                       '<CommonData><PageArea><PhysicalBox>0 0 595 842</PhysicalBox>'
+                       '</PageArea></CommonData>'
+                       f'<Pages><Page ID="1"><Content><Text>{content.get("title","Report")}</Text></Content></Page></Pages>'
+                       '</Document>')
+
+        return str(out_path)
+
+
+# ═══ 12. Concurrent Section Generation ═══
+
+class ConcurrentGenerator:
+    """Generate report sections in parallel for speed."""
+
+    @staticmethod
+    async def generate_parallel(engine, template_type: str, sections_data: list[dict],
+                                max_concurrent: int = 5) -> list[dict]:
+        """Generate multiple sections concurrently with asyncio.gather."""
+        import asyncio
+
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def _gen_section(i: int, section_data: dict) -> dict:
+            async with sem:
+                try:
+                    result = await engine.generate_report(
+                        template_type, section_data, fold=False)
+                    return {"index": i, "heading": section_data.get("heading", f"Section {i+1}"),
+                            "body": result.get("content", ""), "status": "ok"}
+                except Exception as e:
+                    return {"index": i, "heading": section_data.get("heading", ""),
+                            "body": f"[生成失败: {e}]", "status": "error"}
+
+        tasks = [_gen_section(i, sd) for i, sd in enumerate(sections_data)]
+        results = await asyncio.gather(*tasks)
+        return sorted(results, key=lambda r: r["index"])
+
+
+# ═══ 13. Section Locker — immutable legal sections ═══
+
+class SectionLocker:
+    """Lock sections that should not be modified (legal disclaimers, certifications)."""
+
+    LOCKED_TEMPLATES = {
+        "eia_report": [
+            "声明", "编制单位和人员", "审批意见",
+        ],
+        "emergency_plan": [
+            "法律责任声明", "编制依据",
+        ],
+    }
+
+    _locks: dict[str, dict[str, str]] = {}
+
+    @classmethod
+    def load_locks(cls, template_type: str, source_dir: str = "config/templates/locked") -> dict:
+        """Load locked section content from files."""
+        if template_type in cls._locks:
+            return cls._locks[template_type]
+
+        locks = {}
+        for section_name in cls.LOCKED_TEMPLATES.get(template_type, []):
+            path = Path(source_dir) / template_type / f"{section_name}.md"
+            if path.exists():
+                locks[section_name] = path.read_text(encoding="utf-8")
+
+        cls._locks[template_type] = locks
+        return locks
+
+    @classmethod
+    def is_locked(cls, template_type: str, section_name: str) -> bool:
+        return section_name in cls.LOCKED_TEMPLATES.get(template_type, [])
+
+    @classmethod
+    def get_locked_content(cls, template_type: str, section_name: str) -> str:
+        locks = cls._locks.get(template_type, {})
+        return locks.get(section_name, f"[{section_name} — 锁定内容未找到]")
+
+    @classmethod
+    def inject_locked_sections(cls, template_type: str, sections: list[dict]) -> list[dict]:
+        """Replace LLM-generated locked sections with official content."""
+        locks = cls.load_locks(template_type)
+        for i, section in enumerate(sections):
+            name = section.get("heading", "")
+            for lock_name, lock_content in locks.items():
+                if lock_name in name:
+                    sections[i]["body"] = lock_content
+                    sections[i]["locked"] = True
+        return sections
+
+
+# ═══ 14. PDF Form Filler ═══
+
+class PDFFormFiller:
+    """Fill AcroForm fields in PDF templates."""
+
+    @staticmethod
+    def fill(template_path: str, fields: dict, output: str = "") -> str:
+        """Fill PDF form fields."""
+        try:
+            from pypdf import PdfReader, PdfWriter
+        except ImportError:
+            logger.warning("pypdf not available for form filling")
+            return ""
+
+        reader = PdfReader(template_path)
+        writer = PdfWriter()
+        writer.append(reader)
+
+        try:
+            writer.update_page_form_field_values(
+                writer.pages[0], fields, auto_regenerate=False)
+        except Exception:
+            # Manual field setting
+            for page in writer.pages:
+                for annot in page.get("/Annots", []):
+                    field_name = annot.get("/T")
+                    if field_name in fields:
+                        annot.update({"/V": fields[field_name]})
+
+        out_path = Path(output or Path(template_path).parent /
+                       f"filled_{Path(template_path).name}")
+        writer.write(str(out_path))
+        return str(out_path)
+
+
+# ═══ 15. GB/T 9704 Official Document Format ═══
+
+class OfficialDocFormat:
+    """党政机关公文格式 (GB/T 9704-2012) layout generator."""
+
+    @staticmethod
+    def generate(title: str, body: str, doc_number: str = "",
+                 issuing_org: str = "", date: str = "", output: str = "") -> str:
+        """Generate an official government document in GB/T 9704 format.
+
+        Spec: A4, top 37mm±1, bottom 35mm±1, left 28mm±1, right 26mm±1.
+        Title: 方正小标宋简体 22pt, centered.
+        Body: 仿宋 16pt, 28 chars per line, 22 lines per page.
+        """
+        try:
+            from docx import Document
+            from docx.shared import Pt, Cm, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+        except ImportError:
+            # Fallback: markdown with format notes
+            md = (f"# {title}\n\n"
+                  f"*发文字号: {doc_number}*\n\n"
+                  f"*签发机构: {issuing_org}*\n\n"
+                  f"{body}\n\n"
+                  f"*日期: {date}*\n\n"
+                  f"---\n*格式: GB/T 9704-2012 党政机关公文格式*")
+            out = Path(output or f"/tmp/ofd_{int(datetime.now().timestamp())}.md")
+            out.write_text(md, encoding="utf-8")
+            return str(out)
+
+        doc = Document()
+        section = doc.sections[0]
+        section.page_width = Cm(21.0)
+        section.page_height = Cm(29.7)
+        section.top_margin = Cm(3.7)
+        section.bottom_margin = Cm(3.5)
+        section.left_margin = Cm(2.8)
+        section.right_margin = Cm(2.6)
+
+        # Header: 发文字号 + 签发机关
+        if doc_number:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = p.add_run(f"发文字号: {doc_number}")
+            run.font.size = Pt(14)
+            run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+
+        # Title: 方正小标宋 22pt centered
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.space_before = Pt(20)
+        p.space_after = Pt(20)
+        run = p.add_run(title)
+        run.font.size = Pt(22)
+        run.bold = True
+        run.font.color.rgb = RGBColor(0x00, 0x00, 0x00)
+
+        # Body: 仿宋 16pt
+        for para_text in body.split("\n"):
+            p = doc.add_paragraph()
+            run = p.add_run(para_text)
+            run.font.size = Pt(16)
+            p.paragraph_format.first_line_indent = Pt(32)
+            p.paragraph_format.line_spacing = Pt(28)
+
+        # Footer: date + issuing org
+        if issuing_org:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            p.space_before = Pt(30)
+            run = p.add_run(issuing_org)
+            run.font.size = Pt(16)
+        if date:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            run = p.add_run(date)
+            run.font.size = Pt(16)
+
+        out_path = Path(output or f"/tmp/ofd_{int(datetime.now().timestamp())}.docx")
+        doc.save(str(out_path))
+        return str(out_path)
+
+
+# ═══ 16. Table/Figure Index Generator ═══
+
+class IndexGenerator:
+    """Auto-generate table of tables and table of figures."""
+
+    @staticmethod
+    def generate(tracker: CitationTracker) -> dict[str, str]:
+        """Generate table index and figure index from CitationTracker."""
+        table_index = ["## 表格索引", "", "| 编号 | 名称 | 页码 |", "|------|------|------|"]
+        for chapter_num, count in sorted(tracker._tables.items()):
+            for i in range(1, count + 1):
+                table_index.append(f"| 表{chapter_num}-{i} | 待填写 | — |")
+
+        figure_index = ["## 图形索引", "", "| 编号 | 名称 | 页码 |", "|------|------|------|"]
+        for chapter_num, count in sorted(tracker._figures.items()):
+            for i in range(1, count + 1):
+                figure_index.append(f"| 图{chapter_num}-{i} | 待填写 | — |")
+
+        return {
+            "table_index": "\n".join(table_index),
+            "figure_index": "\n".join(figure_index),
+        }
+
+
 __all__ = [
     "CitationTracker", "DataBinder", "FormatPipeline",
     "MultiLangSupport", "ReportEnhancer",
+    "DataValidator", "Watermark", "ChartGenerator",
+    "DiffTracker", "AuditLogger", "OFDExporter",
+    "ConcurrentGenerator", "SectionLocker",
+    "PDFFormFiller", "OfficialDocFormat", "IndexGenerator",
 ]

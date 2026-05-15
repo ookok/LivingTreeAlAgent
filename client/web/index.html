@@ -8,8 +8,7 @@
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 <script src="js/living-a2ui.js" defer></script>
 <script src="js/localfs.js" defer></script>
-<script src="services/renderer.js" defer></script>
-<script src="services/api.js" defer></script>
+<script src="services/chat-renderer.js" defer></script>
 <style>
   @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
   .msg-enter { animation:fadeIn .3s ease-out }
@@ -101,55 +100,13 @@
 window.LT = window.LT || {};
 LT.esc = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 
-/* Message sending */
-async function sendMsg(text) {
+/* Message sending via chat renderer */
+function sendMsg(text) {
   const input = document.getElementById('msg-input');
   const msg = text || input.value.trim();
   if (!msg) return;
-  if (!text) input.value = ''; input.style.height = 'auto';
-
-  const area = document.getElementById('chat-area');
-  const streamId = 's'+Date.now();
-
-  // User bubble
-  const userDiv = document.createElement('div');
-  userDiv.className = 'msg-enter flex gap-3 max-w-3xl mx-auto justify-end';
-  userDiv.innerHTML = `<div class="bg-blue-600 text-white rounded-2xl rounded-tr-none shadow-sm px-4 py-2.5 max-w-xl text-sm">${LT.esc(msg)}</div>`;
-  area.appendChild(userDiv);
-
-  // Agent bubble
-  const agentDiv = document.createElement('div');
-  agentDiv.className = 'msg-enter flex gap-3 max-w-3xl mx-auto';
-  agentDiv.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm flex-shrink-0">🌳</div><div id="${streamId}" class="bg-white rounded-2xl rounded-tl-none shadow-sm px-4 py-3 max-w-2xl"><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full mx-0.5"></span><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span></div>`;
-  area.appendChild(agentDiv);
-  area.scrollTop = area.scrollHeight;
-
-  // Call API
-  try {
-    const resp = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: msg, stream: false})
-    });
-    const data = await resp.json();
-    const bubble = document.getElementById(streamId);
-    let content = data.reply || data.text || data.content || '';
-
-    // A2UI detection
-    if (LT.renderer && LT.renderer.extractA2UI) {
-      content = LT.renderer.extractA2UI(content);
-    }
-
-    bubble.innerHTML = content || '（无响应）';
-
-    // Trigger A2UI scan
-    if (window.LivingA2UI) {
-      setTimeout(() => LivingA2UI.scan(), 100);
-    }
-  } catch(e) {
-    document.getElementById(streamId).innerHTML = '<span class="text-red-500 text-sm">请求失败: '+LT.esc(e.message)+'</span>';
-  }
-  area.scrollTop = area.scrollHeight;
+  if (!text) { input.value = ''; input.style.height = 'auto'; }
+  LT.chat.sendMsg(msg);
 }
 
 /* Folder mount callback */

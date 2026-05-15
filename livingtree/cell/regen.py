@@ -19,6 +19,6 @@ class Regen:
 
     @staticmethod
     async def validate(cell: CellAI) -> dict:
-        checks = {"genome_valid": cell.genome.version > "", "capabilities": len(cell.capabilities), "checkpoint_exists": cell.checkpoint_dir.exists()}
+        checks = {"genome_valid": bool(cell.genome.version), "capabilities": len(cell.capabilities), "checkpoint_exists": cell.checkpoint_dir.exists()}
         logger.info(f"Cell {cell.name} validation: {checks}")
         return checks

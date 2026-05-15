@@ -291,3 +291,213 @@ class RuleEngine:
                 "conflicts": len(self._rule_conflicts),
                 "inferences": self._inference_count,
             }
+
+
+# ──────────────────────────────────────────
+#  Syllogism Verifier (三段论推理验证)
+#  从 syllogism.py 合并入 rule_engine.py
+# ──────────────────────────────────────────
+
+class Quantifier(str, Enum):
+    ALL = "all"
+    SOME = "some"
+    NONE = "none"
+    SOME_NOT = "some_not"
+
+
+class SyllogismFigure(str, Enum):
+    FIGURE_1 = "1"
+    FIGURE_2 = "2"
+    FIGURE_3 = "3"
+    FIGURE_4 = "4"
+
+
+@dataclass
+class CategoricalProposition:
+    subject: str
+    predicate: str
+    quantifier: Quantifier
+    confidence: float = 1.0
+
+
+@dataclass
+class SyllogismResult:
+    conclusion: CategoricalProposition
+    figure: SyllogismFigure
+    mood: str = ""
+    valid: bool = True
+    confidence: float = 1.0
+    explanation: str = ""
+
+
+class SyllogismVerifier:
+    VALID_MOODS = {
+        ("all", "all", "all", "1"): ("BARBARA", SyllogismFigure.FIGURE_1),
+        ("none", "all", "none", "1"): ("CELARENT", SyllogismFigure.FIGURE_1),
+        ("all", "some", "some", "1"): ("DARII", SyllogismFigure.FIGURE_1),
+        ("none", "some", "some_not", "1"): ("FERIO", SyllogismFigure.FIGURE_1),
+        ("all", "all", "some", "1"): ("BARBARI", SyllogismFigure.FIGURE_1),
+        ("none", "all", "some_not", "1"): ("CELARONT", SyllogismFigure.FIGURE_1),
+        ("none", "all", "none", "2"): ("CESARE", SyllogismFigure.FIGURE_2),
+        ("all", "none", "none", "2"): ("CAMESTRES", SyllogismFigure.FIGURE_2),
+        ("none", "some", "some_not", "2"): ("FESTINO", SyllogismFigure.FIGURE_2),
+        ("all", "some_not", "some_not", "2"): ("BAROCO", SyllogismFigure.FIGURE_2),
+        ("all", "all", "some", "3"): ("DARAPTI", SyllogismFigure.FIGURE_3),
+        ("none", "all", "some_not", "3"): ("FELAPTON", SyllogismFigure.FIGURE_3),
+        ("all", "some", "some", "3"): ("DATISI", SyllogismFigure.FIGURE_3),
+        ("some", "all", "some", "3"): ("DISAMIS", SyllogismFigure.FIGURE_3),
+        ("some_not", "all", "some_not", "3"): ("BOCARDO", SyllogismFigure.FIGURE_3),
+        ("none", "some", "some_not", "3"): ("FERISON", SyllogismFigure.FIGURE_3),
+        ("all", "all", "some", "4"): ("BRAMANTIP", SyllogismFigure.FIGURE_4),
+        ("all", "none", "none", "4"): ("CAMENES", SyllogismFigure.FIGURE_4),
+        ("some", "none", "some_not", "4"): ("DIMARIS", SyllogismFigure.FIGURE_4),
+        ("none", "all", "some_not", "4"): ("FESAPO", SyllogismFigure.FIGURE_4),
+        ("none", "some", "some_not", "4"): ("FRESISON", SyllogismFigure.FIGURE_4),
+    }
+
+    def verify(
+        self,
+        major: CategoricalProposition,
+        minor: CategoricalProposition,
+        figure: SyllogismFigure,
+    ) -> SyllogismResult:
+        major_quant = major.quantifier.value
+        minor_quant = minor.quantifier.value
+
+        if figure == SyllogismFigure.FIGURE_1:
+            conclusion_quant, valid = self._figure1(major_quant, minor_quant)
+        elif figure == SyllogismFigure.FIGURE_2:
+            conclusion_quant, valid = self._figure2(major_quant, minor_quant)
+        elif figure == SyllogismFigure.FIGURE_3:
+            conclusion_quant, valid = self._figure3(major_quant, minor_quant)
+        elif figure == SyllogismFigure.FIGURE_4:
+            conclusion_quant, valid = self._figure4(major_quant, minor_quant)
+        else:
+            return SyllogismResult(
+                conclusion=CategoricalProposition(
+                    subject=minor.subject, predicate=major.predicate,
+                    quantifier=Quantifier.SOME,
+                ),
+                figure=figure,
+                valid=False,
+                explanation=f"Unknown figure: {figure}",
+            )
+
+        mood_key = (major_quant, minor_quant, conclusion_quant, figure.value)
+        mood_info = self.VALID_MOODS.get(mood_key)
+
+        if valid and mood_info:
+            mood_name = mood_info[0]
+            explanation = f"Valid syllogism: {mood_name} (Figure {figure.value})"
+        elif valid:
+            mood_name = "custom"
+            explanation = f"Valid custom syllogism (Figure {figure.value})"
+        else:
+            mood_name = "invalid"
+            explanation = f"Invalid syllogism: {major.subject}-{major.predicate} ∧ {minor.subject}-{minor.predicate}"
+
+        confidence = min(major.confidence, minor.confidence) if valid else 0.0
+
+        return SyllogismResult(
+            conclusion=CategoricalProposition(
+                subject=minor.subject,
+                predicate=major.predicate,
+                quantifier=Quantifier(conclusion_quant) if valid else Quantifier.SOME,
+                confidence=confidence,
+            ),
+            figure=figure,
+            mood=mood_name,
+            valid=valid,
+            confidence=confidence,
+            explanation=explanation,
+        )
+
+    def verify_simple(
+        self,
+        major_all: bool, major_affirmative: bool,
+        minor_all: bool, minor_affirmative: bool,
+        figure: SyllogismFigure = SyllogismFigure.FIGURE_1,
+    ) -> SyllogismResult:
+        major_quant = Quantifier.ALL if major_all else Quantifier.SOME
+        minor_quant = Quantifier.ALL if minor_all else Quantifier.SOME
+
+        major_pred = "P_" + ("is" if major_affirmative else "is_not")
+        minor_pred = "S_" + ("is" if minor_affirmative else "is_not")
+
+        if not major_affirmative:
+            major_quant = Quantifier.NONE if major_all else Quantifier.SOME_NOT
+        if not minor_affirmative:
+            minor_quant = Quantifier.NONE if minor_all else Quantifier.SOME_NOT
+
+        major = CategoricalProposition(subject="M", predicate=major_pred, quantifier=major_quant)
+        minor = CategoricalProposition(subject="S", predicate=minor_pred, quantifier=minor_quant)
+
+        return self.verify(major, minor, figure)
+
+    def explain(self, result: SyllogismResult) -> str:
+        if not result.valid:
+            return f"Invalid syllogism: {result.explanation}"
+
+        c = result.conclusion
+        quant_text = {
+            Quantifier.ALL: "所有",
+            Quantifier.SOME: "有些",
+            Quantifier.NONE: "没有",
+            Quantifier.SOME_NOT: "有些不",
+        }
+
+        return (
+            f"{result.mood}三段论 (Figure {result.figure.value}): "
+            f"前提 → {quant_text.get(c.quantifier, '')}{c.subject}是{c.predicate} "
+            f"(置信度: {c.confidence:.0%}). {result.explanation}"
+        )
+
+    def _figure1(self, major_q: str, minor_q: str) -> tuple[str, bool]:
+        if major_q == "all" and minor_q == "all":
+            return "all", True
+        if major_q == "none" and minor_q == "all":
+            return "none", True
+        if major_q == "all" and minor_q == "some":
+            return "some", True
+        if major_q == "none" and minor_q == "some":
+            return "some_not", True
+        return "some", False
+
+    def _figure2(self, major_q: str, minor_q: str) -> tuple[str, bool]:
+        if major_q == "none" and minor_q == "all":
+            return "none", True
+        if major_q == "all" and minor_q == "none":
+            return "none", True
+        if major_q == "none" and minor_q == "some":
+            return "some_not", True
+        if major_q == "all" and minor_q == "some_not":
+            return "some_not", True
+        return "some", False
+
+    def _figure3(self, major_q: str, minor_q: str) -> tuple[str, bool]:
+        if major_q == "all" and minor_q == "all":
+            return "some", True
+        if major_q == "none" and minor_q == "all":
+            return "some_not", True
+        if major_q == "all" and minor_q == "some":
+            return "some", True
+        if major_q == "some" and minor_q == "all":
+            return "some", True
+        if major_q == "some_not" and minor_q == "all":
+            return "some_not", True
+        if major_q == "none" and minor_q == "some":
+            return "some_not", True
+        return "some", False
+
+    def _figure4(self, major_q: str, minor_q: str) -> tuple[str, bool]:
+        if major_q == "all" and minor_q == "all":
+            return "some", True
+        if major_q == "all" and minor_q == "none":
+            return "none", True
+        if major_q == "some" and minor_q == "none":
+            return "some_not", True
+        if major_q == "none" and minor_q == "all":
+            return "some_not", True
+        if major_q == "none" and minor_q == "some":
+            return "some_not", True
+        return "some", False

@@ -16,15 +16,18 @@ from .formal import (
 from .mathematical import (
     KnowledgeRepresentation, Predicate, Individual, Axiom,
     BayesianReasoner, Hypothesis, Evidence,
+    get_knowledge_representation, get_bayesian_reasoner,
 )
 from .dialectical import (
     ContradictionTracker, Contradiction, ContradictionPole, ContradictionState,
     PhaseTransitionMonitor, PhaseTransition, Phase,
+    get_contradiction_tracker, get_phase_transition_monitor,
 )
 from .historical import (
     AttributionLoop, Attribution,
     LayeringTracker, Layer, EmergentCapability,
     ConsensusMeasure, ABComparison, TrialResult, DecisionOutcome,
+    get_layering_tracker, get_consensus_measure,
 )
 
 __all__ = [
@@ -37,8 +40,10 @@ __all__ = [
     # Dialectical Logic
     "ContradictionTracker", "Contradiction", "ContradictionPole", "ContradictionState",
     "PhaseTransitionMonitor", "PhaseTransition", "Phase",
+    "get_contradiction_tracker", "get_phase_transition_monitor",
     # Historical Logic
     "AttributionLoop", "Attribution",
     "LayeringTracker", "Layer", "EmergentCapability",
     "ConsensusMeasure", "ABComparison", "TrialResult", "DecisionOutcome",
+    "get_layering_tracker", "get_consensus_measure",
 ]

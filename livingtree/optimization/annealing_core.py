@@ -170,8 +170,8 @@ class AnnealingScheduler:
         self._T = min(self._T, self._T0)
         self._stagnation_counter = 0
         logger.debug(
-            f"Annealing reheat #{self._reheat_count}: T={self._T:.4f} "
-            f"(from {self._history[-1] if self._history else 'start':.4f})"
+            f"Annealing reheat #{self._reheat_count}: T={self._T:.4f}"
+            f"{f' (from {self._history[-1]:.4f})' if self._history else ' (start)'}"
         )
         return self._T
 

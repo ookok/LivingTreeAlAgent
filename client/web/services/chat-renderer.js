@@ -108,34 +108,135 @@
       return 'generic';
     },
 
-    /* ── File Operations: card with path + content preview ── */
+    /* ── File/Code Operations: code view with line numbers + diff detection ── */
     _renderFileCall(div, name, args, result) {
       const isWrite = name.includes('write');
+      const isRead = name.includes('read');
       const pathMatch = args?.match(/([\/\w.\\-]+\.?\w*)/);
       const filePath = pathMatch ? pathMatch[1] : '';
       const fileName = filePath.split(/[\/\\]/).pop() || 'unknown';
-      const sizeBytes = result ? result.length : 0;
-      const preview = result ? (result.length > 300 ? result.slice(0,300)+'...' : result) : '';
+      const lang = this._detectLang(fileName);
+      const content = result || '';
+      const sizeBytes = content.length;
 
-      div.className = `tool-block rounded-xl overflow-hidden border ${isWrite?'border-l-4 border-l-orange-400 bg-orange-50 border-orange-200':'border-l-4 border-l-green-400 bg-green-50 border-green-200'}`;
-      div.innerHTML = `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:opacity-80"
+      // Detect if content has diff markers (+/- lines)
+      const isDiff = /^[+-]/.test(content.trim()) && content.includes('\n');
+      const isCreate = isWrite && !isDiff && content.length > 0;
+      const isModify = isWrite && isDiff;
+
+      let modeIcon = '📖', modeLabel = '读取', accentColor = 'green';
+      if (isCreate) { modeIcon = '🆕'; modeLabel = '新建'; accentColor = 'emerald'; }
+      else if (isModify) { modeIcon = '✏️'; modeLabel = '修改'; accentColor = 'amber'; }
+
+      // Build line-numbered code view
+      const codeHtml = content ? this._buildCodeView(content, lang, isDiff) : '<span class="text-gray-400 text-xs italic">(empty)</span>';
+
+      div.className = `tool-block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm`;
+      div.innerHTML = `<div class="flex items-center gap-2 px-3 py-2 bg-${accentColor}-50 border-b border-${accentColor}-100 cursor-pointer"
           onclick="this.parentElement.querySelector('.file-detail').classList.toggle('hidden')">
-          <span class="text-lg">${isWrite?'📝':'📖'}</span>
+          <span class="text-base">${modeIcon}</span>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-xs font-medium text-gray-700">${LT.esc(name)}</span>
+              <span class="text-xs font-medium text-gray-700">${LT.esc(modeLabel)}</span>
               <span class="text-xs text-gray-400 font-mono truncate">${LT.esc(fileName)}</span>
             </div>
-            <div class="text-xs text-gray-400">${isWrite?'写入':'读取'} · ${sizeBytes} bytes</div>
           </div>
-          <svg class="w-3 h-3 text-gray-400" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">${lang}</span>
+            ${isRead?`<span class="text-xs text-gray-300">${sizeBytes}B</span>`:''}
+          </div>
+          <svg class="w-3 h-3 text-gray-300 expand-icon" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
         </div>
-        <div class="file-detail hidden px-3 pb-2">
-          <div class="text-xs text-gray-500 font-mono bg-white rounded-lg p-2 mt-1 max-h-32 overflow-y-auto border border-gray-100">
-            <div class="text-gray-400 mb-1">📁 ${LT.esc(filePath)}</div>
-            ${preview?`<pre class="whitespace-pre-wrap text-gray-600">${LT.esc(preview)}</pre>`:'<span class="text-gray-400">(empty)</span>'}
+        <div class="file-detail ${isCreate||isModify?'':'hidden'}">
+          <div class="text-xs text-gray-400 px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <span class="font-mono">📁 ${LT.esc(filePath)}</span>
+            <span class="text-gray-300">${content.split('\n').length} lines · ${sizeBytes}B · ${lang}</span>
           </div>
+          ${codeHtml}
         </div>`;
+    },
+
+    /* ── Code Execution: code view with line numbers ── */
+    _renderCodeCall(div, name, args, result, meta) {
+      const langMap = {python:'Python', node:'JavaScript', eval:'Python', exec:'Shell', run:'Shell'};
+      const lang = langMap[name] || 'Code';
+      const content = result || args || '';
+      const turn = meta?.turn || 0;
+      const isDiff = /^[+-]/.test(content.trim()) && content.includes('\n');
+      const codeHtml = content ? this._buildCodeView(content, lang.toLowerCase(), isDiff) : '';
+
+      div.className = 'tool-block rounded-xl overflow-hidden bg-white border border-purple-200 shadow-sm';
+      div.innerHTML = `<div class="flex items-center justify-between px-3 py-2 bg-purple-50 border-b border-purple-100 cursor-pointer"
+          onclick="this.parentElement.querySelector('.code-detail').classList.toggle('hidden')">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">${lang==='Python'?'🐍':lang==='JavaScript'?'🟢':'💻'}</span>
+            <span class="text-xs font-medium text-purple-700">${lang}</span>
+            ${turn?`<span class="text-xs text-purple-400">· 第${turn}次</span>`:''}
+          </div>
+          <div class="flex items-center gap-2">
+            ${content?`<span class="text-xs text-gray-400">${content.split('\\n').length} lines</span>`:''}
+            <svg class="w-3 h-3 text-purple-300" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          </div>
+        </div>
+        <div class="code-detail ${content?'':'hidden'}">
+          ${content?`<div class="text-xs text-gray-400 px-3 py-1.5 bg-gray-50 border-b border-gray-100">${isDiff?'📊 Diff 视图':'📄 代码视图'} · ${lang} · ${content.split('\\n').length} lines</div>`:''}
+          ${codeHtml}
+        </div>`;
+    },
+
+    /* ── Code View Builder: line numbers + syntax-aware + diff highlighting ── */
+    _buildCodeView(content, lang, isDiff) {
+      const lines = content.split('\n');
+      const maxLine = lines.length;
+      const gutterW = String(maxLine).length;
+
+      let html = '<div class="overflow-x-auto"><table class="w-full text-xs font-mono leading-relaxed border-collapse">';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineNum = i + 1;
+        const numStr = String(lineNum).padStart(gutterW, ' ');
+
+        let lineClass = 'text-gray-700';
+        let bgClass = '';
+        let prefix = '';
+
+        if (isDiff) {
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            lineClass = 'text-green-800';
+            bgClass = 'bg-green-50';
+            prefix = '+';
+          } else if (line.startsWith('-') && !line.startsWith('---')) {
+            lineClass = 'text-red-800';
+            bgClass = 'bg-red-50';
+            prefix = '-';
+          } else if (line.startsWith('@@')) {
+            lineClass = 'text-blue-600';
+            bgClass = 'bg-blue-50';
+          } else {
+            lineClass = 'text-gray-500';
+          }
+        }
+
+        const displayLine = prefix ? line.slice(1) : line;
+        html += `<tr class="${bgClass}">`;
+        html += `<td class="text-right text-gray-300 select-none pr-3 pl-2 py-0.5 ${bgClass} w-12 border-r border-gray-100">${numStr}</td>`;
+        html += `<td class="${lineClass} pl-3 py-0.5 whitespace-pre-wrap break-all">${LT.esc(displayLine)||' '}</td>`;
+        html += `</tr>`;
+      }
+
+      html += '</table></div>';
+      return html;
+    },
+
+    _detectLang(fileName) {
+      const ext = (fileName||'').split('.').pop().toLowerCase();
+      const map = {py:'Python',js:'JavaScript',ts:'TypeScript',jsx:'React',tsx:'React TS',
+                   go:'Go',rs:'Rust',java:'Java',cpp:'C++',c:'C',cs:'C#',sh:'Shell',
+                   bash:'Shell',ps1:'PowerShell',sql:'SQL',html:'HTML',css:'CSS',
+                   json:'JSON',xml:'XML',yaml:'YAML',yml:'YAML',md:'Markdown',
+                   toml:'TOML',cfg:'Config',ini:'INI',dockerfile:'Dockerfile'};
+      return map[ext] || ext.toUpperCase() || 'text';
     },
 
     /* ── Bash: terminal window simulation ── */

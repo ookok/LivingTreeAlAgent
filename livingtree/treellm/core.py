@@ -901,6 +901,8 @@ class TreeLLM:
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
                     "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
+                    "  For new files: output complete code with line structure.\n"
+                    "  For modifications: output unified diff format with +/- markers.\n"
                     "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n\n"
                     "When the user asks for a chart, diagram, or visualization, output in A2UI JSON format:\n"
                     '  Chart:  {"type":"chart","chart":{"type":"bar|line|pie|scatter","data":{"labels":[...],"datasets":[{"data":[...]}]}}}\n'

@@ -487,7 +487,26 @@
       }
     },
 
-    /** Clear all children */
+    /** Proactive interjection — LLM interrupts before routing */
+    interject(container, text, trigger) {
+      const triggerLabels = {
+        ambiguity: '🤔 需要澄清', error_detected: '⚠️ 发现错误', direction: '💡 换个角度',
+        scope_creep: '🎯 聚焦问题', repetition: '🔄 换个说法', missing_context: '❓ 缺少信息',
+        contradiction: '⚡ 前后矛盾', clarification: '📖 术语解释',
+      };
+      const label = triggerLabels[trigger] || '🤚 插话';
+
+      const div = document.createElement('div');
+      div.className = 'bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm animate-pulse';
+      div.innerHTML = `<div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-medium text-yellow-700">${label}</span>
+          <span class="text-xs text-yellow-400">· 主动插话</span>
+        </div>
+        <p class="text-yellow-800 text-sm leading-relaxed">${LT.esc(text)}</p>`;
+      container.appendChild(div);
+      // Stop pulse after 2s
+      setTimeout(() => div.classList.remove('animate-pulse'), 2000);
+    },
     clear(container) {
       while (container.firstChild) container.removeChild(container.firstChild);
     },
@@ -778,20 +797,13 @@
               LT.chat.renderer.thinking(container, thinkingText, false);
             }
 
-            // Handle tool calls
-            if (toolCalls) {
-              if (!inToolCall) {
-                inToolCall = true;
-                toolName = toolCalls[0]?.function?.name || 'tool';
-                LT.chat.renderer.toolCall(container, toolName, '', 'running');
-              }
-              const args = toolCalls[0]?.function?.arguments || '';
-              toolBuffer += args;
-              continue;
-            }
-            if (inToolCall && token) {
-              inToolCall = false;
-              LT.chat.renderer.toolCall(container, toolName, toolBuffer, 'done');
+            // ── Dead code: remove old tool_calls handling (now handled by SSE events) ──
+
+            // ── Interject detection ──
+            if (parsed.mode === 'interject') {
+              loadingEl?.remove();
+              LT.chat.renderer.interject(container, parsed.content, parsed.trigger || 'clarification');
+              return;
             }
 
             // Handle text output

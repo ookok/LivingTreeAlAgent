@@ -407,6 +407,7 @@ def setup_routes(app: FastAPI) -> None:
                         "phase": "stream",
                         "model": event.provider,
                         "ts": event.timestamp,
+                        "mode": getattr(event, 'mode', 'normal'),
                     }, ensure_ascii=False)
                     yield f"event: {event.kind}\ndata: {event_data}\n\n"
                 # NOTE: cognition_stream fallback removed — it redundantly called engine.run()

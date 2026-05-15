@@ -1599,6 +1599,10 @@ def _svc_dev(args: list):
         from .treellm.deep_dev import (
             CodeProvenance, MergeOracle, HealthTrends, OnboardingCompass,
         )
+        from .treellm.future_dev import (
+            CodeMigrator, DeadCodeAnalyzer, TestAmplifier,
+            LivingDiagram, BugRadar,
+        )
 
         sub = args[0].lower() if args else "all"
 
@@ -1766,8 +1770,50 @@ def _svc_dev(args: list):
             snapshots = HealthTrends.analyze(since_days=since)
             print(HealthTrends.format_report(snapshots))
 
+        elif sub == "migrate":
+            if len(args) < 3:
+                print("Usage: livingtree dev migrate <old_pattern> <new_pattern>")
+                print("Example: livingtree dev migrate 'subprocess.run(' 'shell.execute('")
+                return
+            print(f"\n  🔄 Migration: `{args[1]}` → `{args[2]}`\n")
+            plan = CodeMigrator.migrate(args[1], args[2])
+            print(CodeMigrator.format_plan(plan))
+
+        elif sub == "dead-impact":
+            if len(args) < 2:
+                print("Usage: livingtree dev dead-impact <file> [function]")
+                return
+            fpath = args[1]
+            func = args[2] if len(args) > 2 else ""
+            print(f"\n  💀 Dead Code Impact: {Path(fpath).name} {func}\n")
+            impact = DeadCodeAnalyzer.analyze(fpath, func)
+            if impact:
+                print(DeadCodeAnalyzer.format_report(impact))
+            else:
+                print("  CodeGraph not available. Run 'livingtree improve --scan' first.")
+
+        elif sub == "amplify":
+            if len(args) < 2:
+                print("Usage: livingtree dev amplify <test_file>")
+                return
+            print(f"\n  🧪 Amplifying tests in {args[1]}\n")
+            variants = TestAmplifier.amplify(args[1])
+            print(TestAmplifier.format_variants(variants))
+
+        elif sub == "diagram":
+            print("\n  📐 Generating architecture diagram...\n")
+            mermaid = LivingDiagram.generate()
+            print(mermaid)
+            path = LivingDiagram.save_diagram(mermaid)
+            print(f"\n  💾 Saved to {path}")
+
+        elif sub == "bug-radar":
+            print("\n  🐛 Bug Hotspot Radar\n")
+            hotspots = BugRadar.scan()
+            print(BugRadar.format_report(hotspots))
+
         else:
-            print("Usage: livingtree dev [all|rehearse|hotspots|conventions|cognimap|api-guard|provenance|deps|health-trends]")
+            print("Usage: livingtree dev [all|rehearse|hotspots|conventions|cognimap|api-guard|provenance|deps|health-trends|migrate|dead-impact|amplify|diagram|bug-radar]")
 
     try:
         asyncio.run(_run())

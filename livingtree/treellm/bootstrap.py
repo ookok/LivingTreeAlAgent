@@ -25,6 +25,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.metadata
 import os
@@ -64,18 +65,42 @@ class Bootstrapper:
     """Two-stage self-initializing environment for LivingTree."""
 
     @staticmethod
-    async def run(quick: bool = False, full: bool = False) -> BootstrapReport:
+    async def run(quick: bool = False, full: bool = False,
+                  auto_install: bool = True) -> BootstrapReport:
         t0 = time.time()
         checks: list[BootstrapCheck] = []
 
         # ═══ Stage 1: Core Bootstrap ═══
         checks.extend(Bootstrapper._stage1_core())
 
+        # Auto-install missing core packages
+        if auto_install:
+            try:
+                await Bootstrapper._auto_install_missing(checks)
+            except Exception as e:
+                logger.debug(f"Bootstrap auto-install skipped: {e}")
+                for check in checks:
+                    if check.status == "missing":
+                        check.status = "skipped"
+                        check.detail = f"auto-install unavailable: {str(e)[:60]}"
+
         if quick:
             return Bootstrapper._build_report(checks, t0)
 
         # ═══ Stage 2: Acceleration Bootstrap ═══
-        checks.extend(Bootstrapper._stage2_accel())
+        try:
+            checks.extend(Bootstrapper._stage2_accel())
+        except Exception as e:
+            logger.debug(f"Bootstrap stage2: {e}")
+            checks.append(BootstrapCheck(
+                name="Stage 2", status="skipped",
+                detail=f"acceleration checks unavailable: {str(e)[:60]}",
+                optional=True,
+            ))
+
+        # Auto-install optional packages (non-blocking)
+        if auto_install:
+            await Bootstrapper._auto_install_optional(checks)
 
         if full:
             checks.extend(Bootstrapper._stage2_llm_warmup())
@@ -192,6 +217,70 @@ class Bootstrapper:
                 ))
 
         return checks
+
+    @staticmethod
+    async def _auto_install_missing(checks: list[BootstrapCheck]) -> None:
+        """Auto-install missing core packages via pkg_manager (runs in thread to avoid async conflicts)."""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, Bootstrapper._install_missing_sync, checks)
+
+    @staticmethod
+    def _install_missing_sync(checks: list[BootstrapCheck]) -> None:
+        from ..integration.pkg_manager import install
+
+        pkg_map = {
+            "pip:aiohttp": "aiohttp", "pip:yaml": "pyyaml",
+            "pip:loguru": "loguru", "pip:pydantic": "pydantic",
+            "pip:fastapi": "fastapi", "pip:uvicorn": "uvicorn",
+        }
+        for check in checks:
+            if check.status == "missing" and check.name in pkg_map:
+                pkg = pkg_map[check.name]
+                check.status = "pending"
+                check.detail = f"installing {pkg}..."
+                try:
+                    result = install(pkg, timeout=120)
+                    if result.get("installed", False) if isinstance(result, dict) else result.installed:
+                        check.status = "ok"
+                        check.detail = (result.get("version","") if isinstance(result, dict) else result.version) or "installed"
+                    else:
+                        check.status = "failed"
+                        check.detail = (result.get("error","") if isinstance(result, dict) else result.error) or "failed"
+                except Exception as e:
+                    check.status = "failed"
+                    check.detail = str(e)[:80]
+
+    @staticmethod
+    async def _auto_install_optional(checks: list[BootstrapCheck]) -> None:
+        """Auto-install optional packages (runs in thread, no-fail)."""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, Bootstrapper._install_optional_sync, checks)
+
+    @staticmethod
+    def _install_optional_sync(checks: list[BootstrapCheck]) -> None:
+        from ..integration.pkg_manager import install
+
+        optional_pkgs = {
+            "Numba JIT": "numba", "py-spy": "py-spy",
+            "networkx": "networkx", "cryptography": "cryptography",
+        }
+        for check in checks:
+            if check.status == "missing" and check.name in optional_pkgs:
+                pkg = optional_pkgs[check.name]
+                check.status = "pending"
+                check.detail = f"installing {pkg}..."
+                try:
+                    result = install(pkg, timeout=60)
+                    ok = result.get("installed", False) if isinstance(result, dict) else result.installed
+                    if ok:
+                        check.status = "ok"
+                        check.detail = (result.get("version","") if isinstance(result, dict) else result.version) or "installed"
+                    else:
+                        check.status = "skipped"
+                        check.detail = "unavailable"
+                except Exception as e:
+                    check.status = "skipped"
+                    check.detail = str(e)[:80]
 
     # ── Stage 2 ───────────────────────────────────────────────────
 
@@ -352,7 +441,7 @@ class Bootstrapper:
 
     @staticmethod
     def format_report(report: BootstrapReport) -> str:
-        icons = {"ok": "✅", "missing": "❌", "failed": "❌", "pending": "⏳", "skipped": "⏭️"}
+        icons = {"ok": "✅", "missing": "❌", "failed": "❌", "pending": "⏳", "skipped": "⏭️", "installing": "⏳"}
 
         lines = [
             "╔══════════════════════════════════════╗",

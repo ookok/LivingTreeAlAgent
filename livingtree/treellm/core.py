@@ -1136,6 +1136,11 @@ class TreeLLM:
                 s.recent_latencies = s.recent_latencies[-20:]
         from .holistic_election import get_election
         get_election().record_result(name, True, latency_ms, tokens)
+        # Nested Learning: record election weights for EMA feedback
+        try:
+            from .holistic_election import record_election_feedback
+            record_election_feedback(kwargs.get("task_type", "general"), {}, True)
+        except Exception: pass
         # ── Cost tracking ──
         try:
             from ..capability.industrial_doc_engine import get_cost_dash

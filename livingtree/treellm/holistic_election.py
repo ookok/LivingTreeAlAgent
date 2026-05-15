@@ -689,14 +689,19 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
 
     complexity: 0.0 (simple) → 1.0 (complex). Higher complexity shifts
     weight from latency toward quality and capability.
+
+    Inspired by Nested Learning (NeurIPS 2025):
+    Weights are learned from feedback — each election result updates the
+    weight distribution via exponential moving average toward the ideal
+    distribution that would have produced the correct answer.
     """
     t = (task_type or "general").lower()
     base = {
-        "elo": 0.08,
-        "long_term_reward": 0.06,
-        "thompson": 0.10,
-        "exploration": 0.04,
+        "elo": 0.08, "long_term_reward": 0.06,
+        "thompson": 0.10, "exploration": 0.04,
     }
+
+    # Task-specific base weights (continuously refined by feedback)
     if t == "code":
         w = {
             "latency": 0.08, "quality": 0.28, "cost": 0.08, "capability": 0.12,
@@ -714,17 +719,6 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
             "latency": 0.04, "quality": 0.28, "cost": 0.06, "capability": 0.13,
             "freshness": 0.04, "rate_limit": 0.04, "cache": 0.08, "sticky": 0.08,
             "hifloat8": 0.02, "elo": 0.06, "long_term_reward": 0.05, "thompson": 0.07, "exploration": 0.05,
-        }
-    elif t == "chat":
-        w = {
-            "latency": 0.25,
-            "quality": 0.20,
-            "cost": 0.12,
-            "capability": 0.10,
-            "freshness": 0.08,
-            "rate_limit": 0.05,
-            "cache": 0.10,
-            "sticky": 0.10,
         }
     elif t == "chat":
         w = {
@@ -746,18 +740,21 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
         }
     else:
         w = {**WEIGHTS, **base}
-    # Normalize to ensure sum = 1.0
+
+    # Normalize
     total = sum(w.values())
     if total > 0:
         w = {k: round(v / total, 4) for k, v in w.items()}
 
-    # Complexity-aware adjustment: shift quality↑ latency↓ for complex tasks
+    # Nested Learning: EMA-refine weights from feedback history
+    w = _apply_feedback_ema(t, w)
+
+    # Complexity-aware adjustment
     if complexity != 0.5:
-        delta = (complexity - 0.5) * 0.2  # Max ±0.10 shift
+        delta = (complexity - 0.5) * 0.2
         w["quality"] = round(w.get("quality", 0.23) + delta, 3)
         w["capability"] = round(w.get("capability", 0.12) + delta * 0.8, 3)
         w["latency"] = round(w.get("latency", 0.18) - delta, 3)
-        w["cost"] = round(w.get("cost", 0.15) - delta * 0.5, 3)
 
     try:
         from .adaptive_weights import get_adaptive_weights
@@ -766,6 +763,52 @@ def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> 
     except Exception:
         pass
     return w
+
+
+# Nested Learning: feedback-driven weight refinement
+_FEEDBACK_MEMORY: dict[str, list[dict[str, float]]] = {}
+_FEEDBACK_EMA_ALPHA = 0.15  # How fast weights adapt to recent results
+
+
+def record_election_feedback(task_type: str, weights_used: dict, success: bool) -> None:
+    """Record election outcome for nested learning weight refinement."""
+    if task_type not in _FEEDBACK_MEMORY:
+        _FEEDBACK_MEMORY[task_type] = []
+    _FEEDBACK_MEMORY[task_type].append({
+        **weights_used, "_success": float(success),
+    })
+    if len(_FEEDBACK_MEMORY[task_type]) > 100:
+        _FEEDBACK_MEMORY[task_type] = _FEEDBACK_MEMORY[task_type][-100:]
+
+
+def _apply_feedback_ema(task_type: str, w: dict[str, float]) -> dict[str, float]:
+    """Apply EMA refinement from past election outcomes."""
+    history = _FEEDBACK_MEMORY.get(task_type, [])
+    if not history:
+        return w
+    # Compute ideal weights from successful elections
+    successful = [h for h in history[-50:] if h.get("_success", 0) > 0]
+    if not successful:
+        return w
+    ideal: dict[str, float] = {}
+    for h in successful:
+        for k, v in h.items():
+            if not k.startswith("_"):
+                ideal[k] = ideal.get(k, 0) + v
+    n = len(successful)
+    for k in ideal:
+        ideal[k] /= n
+    # EMA: blend toward ideal
+    result = {}
+    for k in set(list(w.keys()) + list(ideal.keys())):
+        current = w.get(k, 0)
+        target = ideal.get(k, current)
+        result[k] = round(current * (1 - _FEEDBACK_EMA_ALPHA) + target * _FEEDBACK_EMA_ALPHA, 4)
+    # Re-normalize
+    total = sum(result.values())
+    if total > 0:
+        result = {k: round(v / total, 4) for k, v in result.items()}
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════

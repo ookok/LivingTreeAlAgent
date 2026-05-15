@@ -711,14 +711,52 @@
         if (done) break;
 
         const chunk = decoder.decode(value, {stream: true});
-        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+        // Split by SSE event boundaries
+        const events = chunk.split('\n\n').filter(e => e.trim());
         
-        for (const line of lines) {
-          const data = line.slice(6);
-          if (data === '[DONE]') break;
-          
+        for (const eventBlock of events) {
+          const lines = eventBlock.split('\n');
+          let eventType = 'message';
+          let eventData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              eventData = line.slice(6);
+            }
+          }
+
+          if (!eventData || eventData === '[DONE]') continue;
+
           try {
-            const parsed = JSON.parse(data);
+            const parsed = JSON.parse(eventData);
+
+            // ── Tool lifecycle events (real-time progress) ──
+            if (eventType === 'tool_start') {
+              LT.chat.renderer.toolCall(container, parsed.name, parsed.args, 'running', null,
+                {turn: (container.querySelectorAll('.tool-block').length + 1)});
+              continue;
+            }
+            if (eventType === 'tool_done') {
+              // Update the last running tool to done
+              const running = container.querySelector('.tool-running');
+              if (running) {
+                running.classList.remove('tool-running', 'animate-pulse');
+                running.classList.add('tool-done');
+                const statusEl = running.querySelector('.tool-status span, [class*="text-blue"]');
+                if (statusEl) statusEl.textContent = parsed.name;
+                running.querySelector('.tool-status').innerHTML =
+                  '✅ <span class="text-green-500">' + LT.esc(parsed.name) + '</span>';
+                if (parsed.elapsed_ms) {
+                  running.querySelector('.text-gray-400').textContent = parsed.elapsed_ms + 'ms';
+                }
+              }
+              continue;
+            }
+
+            // ── Standard stream content ──
             const token = parsed.choices?.[0]?.delta?.content || parsed.content || parsed.text || '';
             const reasoning = parsed.choices?.[0]?.delta?.reasoning_content || parsed.reasoning || '';
             const toolCalls = parsed.choices?.[0]?.delta?.tool_calls || parsed.tool_calls;

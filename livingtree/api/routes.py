@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import subprocess
 import time as _time
@@ -368,9 +369,13 @@ def setup_routes(app: FastAPI) -> None:
 
                 set_stream_chat_fn(_chat_fn)
                 flash_model = await llm.smart_route(req.message, task_type="chat")
-                # Elect pro model via L2 tier
                 tiers = await hub.world.consciousness._elect_tiers()
                 pro_model = tiers.get(2, flash_model) if tiers else flash_model
+
+                # Track tool state for real-time events
+                in_tool = False
+                tool_name = ""
+                tool_start = 0.0
 
                 async for event in cs.stream(
                     query=req.message,
@@ -379,9 +384,26 @@ def setup_routes(app: FastAPI) -> None:
                     system_prompt=req.context,
                     task_type="chat",
                 ):
+                    text = event.text or ""
+
+                    # Detect tool call start
+                    tool_match = re.search(r'<tool_call\s+name="(\w+)"', text)
+                    if tool_match and not in_tool:
+                        in_tool = True
+                        tool_name = tool_match.group(1)
+                        tool_start = _time.time()
+                        yield f"event: tool_start\ndata: {json.dumps({'type':'tool_start','name':tool_name,'args':text[text.find('>')+1:text.rfind('<')].strip()[:200]},ensure_ascii=False)}\n\n"
+
+                    # Detect tool completion (result follows)
+                    result_match = re.search(r'\[tool_result:\s*(\w+)\]\n(.*?)(?=\n\n|\Z)', text, re.DOTALL)
+                    if result_match and in_tool:
+                        in_tool = False
+                        elapsed = int((_time.time() - tool_start) * 1000)
+                        yield f"event: tool_done\ndata: {json.dumps({'type':'tool_done','name':tool_name,'result':result_match.group(2)[:500],'elapsed_ms':elapsed},ensure_ascii=False)}\n\n"
+
                     event_data = json.dumps({
                         "type": event.kind,
-                        "content": event.text,
+                        "content": text,
                         "phase": "stream",
                         "model": event.provider,
                         "ts": event.timestamp,

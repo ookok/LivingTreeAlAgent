@@ -2876,6 +2876,42 @@ def _get_user_id_from_request(request: Request) -> str:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @app.get("/api/stream/vitals")
+    async def stream_vitals(request: Request):
+        """SSE stream of vitals + shield status (replaces polling)."""
+        async def generate():
+            while True:
+                try:
+                    hub = request.app.state.hub
+                    data = {"type": "vitals", "leaf_display": {"message": "🌿"}}
+                    if hub and getattr(hub, '_started', False):
+                        try:
+                            from ..core.vitals import get_vitals
+                            v = get_vitals().measure()
+                            data["leaf_display"] = v.get("leaf_display", {"message": "🌿"})
+                        except Exception:
+                            pass
+                    yield f"event: vitals\ndata: {json.dumps(data)}\n\n"
+
+                    # Shield status
+                    try:
+                        r = await fetch_shield_status()
+                        yield f"event: shield\ndata: {json.dumps(r)}\n\n"
+                    except Exception:
+                        pass
+
+                    await asyncio.sleep(15)
+                except asyncio.CancelledError:
+                    break
+        return StreamingResponse(generate(), media_type="text/event-stream")
+
+    async def fetch_shield_status():
+        try:
+            from ..core.admin_manager import get_admin
+            return {"hitl_pending": 0}
+        except Exception:
+            return {"hitl_pending": 0}
+
     @app.get("/api/debug/stats")
     async def debug_stats(request: Request):
         try:

@@ -9,6 +9,7 @@
 <script src="js/living-a2ui.js" defer></script>
 <script src="js/localfs.js" defer></script>
 <script src="services/chat-renderer.js" defer></script>
+<script src="services/sse-client.js" defer></script>
 <style>
   @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
   .msg-enter { animation:fadeIn .3s ease-out }
@@ -140,15 +141,29 @@ document.addEventListener('drop', async e => {
   }
 });
 
-/* Periodic vitals */
-setInterval(async () => {
-  try {
-    const r = await fetch('/api/status/vitals');
-    const d = await r.json();
-    const el = document.getElementById('presence-text');
-    if (el) el.textContent = (d.leaf_display||{}).message || '🌿';
-  } catch(e) {}
-}, 15000);
+/* Real-time: SSE connection for vitals + task updates (auto-reconnect, replaces polling) */
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.LT && LT.sse) {
+    LT.sse.connect('/api/stream/vitals', {
+      vitals: function(data) {
+        var el = document.getElementById('presence-text');
+        if (el) el.textContent = (data.leaf_display||{}).message || '🌿';
+      },
+      shield: function(data) {
+        var el = document.getElementById('shield-indicator');
+        if (el) el.textContent = data.hitl_pending > 0 ? '⚠️' : '🛡️';
+      },
+      task_update: function(data) {
+        if (window.LT && LT.chat && LT.chat.renderer) {
+          var tasks = (data.tasks||[]).map(function(t) {
+            return {id: t.id, label: t.label, name: t.label, status: t.status, result: t.result};
+          });
+          if (tasks.length) LT.chat.renderer.taskList(null, tasks, data.streaming);
+        }
+      }
+    });
+  }
+});
 </script>
 </body>
 </html>

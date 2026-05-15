@@ -76,37 +76,149 @@
       container.appendChild(div);
     },
 
-    /** Tool call block — expandable with live status + timing + iteration count */
+    /** Tool call block — category-specific visual design */
     toolCall(container, name, args, status, result, meta) {
-      const icons = {pending:'⏳',running:'🔄',done:'✅',error:'❌'};
-      const colors = {pending:'text-yellow-500',running:'text-blue-500',done:'text-green-500',error:'text-red-500'};
-      const id = 'tc-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
-
-      // Update existing if streaming
-      if (status === 'running') {
-        const existing = container.querySelector('.tool-block.tool-running');
-        if (existing) {
-          existing.querySelector('.tool-status').innerHTML = `${icons[status]} <span class="${colors[status]}">${LT.esc(name)}</span>`;
-          return existing;
-        }
-      }
-
-      const turnInfo = meta?.turn ? `<span class="text-gray-300">· 第${meta.turn}轮</span>` : '';
-      const timeInfo = meta?.elapsedMs ? `<span class="text-gray-300">· ${meta.elapsedMs}ms</span>` : '';
-
+      const category = this._toolCategory(name);
       const div = document.createElement('div');
-      div.className = `tool-block bg-gray-50 border border-gray-200 rounded-xl overflow-hidden ${status==='running'?'tool-running':''} tool-${status}`;
-      div.innerHTML = `<div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-100"
-          onclick="this.querySelector('.tool-detail').classList.toggle('hidden')">
-          <span class="text-xs tool-status">${icons[status]} <span class="${colors[status]}">${LT.esc(name)}</span> ${turnInfo} ${timeInfo}</span>
-          <span class="text-xs text-gray-400">${status==='running'?'执行中...':status==='pending'?'等待中':status==='done'?'完成':'失败'}</span>
-        </div>
-        <div class="tool-detail hidden px-3 py-2 text-xs border-t border-gray-200">
-          ${args?`<div class="text-gray-400 mb-1"><span class="font-medium">参数:</span> ${LT.esc(args).slice(0,300)}</div>`:''}
-          ${result?`<div class="text-gray-600 bg-white rounded-lg p-2 mt-1 max-h-32 overflow-y-auto font-mono"><span class="font-medium text-gray-400">结果:</span><br>${LT.esc(String(result)).slice(0,800)}</div>`:''}
-        </div>`;
+
+      if (category === 'file') {
+        this._renderFileCall(div, name, args, result);
+      } else if (category === 'bash') {
+        this._renderBashCall(div, name, args, result, status, meta);
+      } else if (category === 'code') {
+        this._renderCodeCall(div, name, args, result, meta);
+      } else if (category === 'search') {
+        this._renderSearchCall(div, name, args, result);
+      } else {
+        this._renderGenericCall(div, name, args, result, status, meta);
+      }
       container.appendChild(div);
       return div;
+    },
+
+    _toolCategory(name) {
+      const fileOps = ['read_file','write_file','file_read','file_write','vfs:read','vfs:write','cat','ls','cp','find'];
+      const bashOps = ['bash','shell','run_command','execute','sh','cmd','powershell'];
+      const codeOps = ['python','node','eval','exec','run','import','pip_install'];
+      const searchOps = ['web_search','kb_search','search','grep','find'];
+      if (fileOps.includes(name)) return 'file';
+      if (bashOps.includes(name)) return 'bash';
+      if (codeOps.includes(name)) return 'code';
+      if (searchOps.includes(name)) return 'search';
+      return 'generic';
+    },
+
+    /* ── File Operations: card with path + content preview ── */
+    _renderFileCall(div, name, args, result) {
+      const isWrite = name.includes('write');
+      const pathMatch = args?.match(/([\/\w.\\-]+\.?\w*)/);
+      const filePath = pathMatch ? pathMatch[1] : '';
+      const fileName = filePath.split(/[\/\\]/).pop() || 'unknown';
+      const sizeBytes = result ? result.length : 0;
+      const preview = result ? (result.length > 300 ? result.slice(0,300)+'...' : result) : '';
+
+      div.className = `tool-block rounded-xl overflow-hidden border ${isWrite?'border-l-4 border-l-orange-400 bg-orange-50 border-orange-200':'border-l-4 border-l-green-400 bg-green-50 border-green-200'}`;
+      div.innerHTML = `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:opacity-80"
+          onclick="this.parentElement.querySelector('.file-detail').classList.toggle('hidden')">
+          <span class="text-lg">${isWrite?'📝':'📖'}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-gray-700">${LT.esc(name)}</span>
+              <span class="text-xs text-gray-400 font-mono truncate">${LT.esc(fileName)}</span>
+            </div>
+            <div class="text-xs text-gray-400">${isWrite?'写入':'读取'} · ${sizeBytes} bytes</div>
+          </div>
+          <svg class="w-3 h-3 text-gray-400" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="file-detail hidden px-3 pb-2">
+          <div class="text-xs text-gray-500 font-mono bg-white rounded-lg p-2 mt-1 max-h-32 overflow-y-auto border border-gray-100">
+            <div class="text-gray-400 mb-1">📁 ${LT.esc(filePath)}</div>
+            ${preview?`<pre class="whitespace-pre-wrap text-gray-600">${LT.esc(preview)}</pre>`:'<span class="text-gray-400">(empty)</span>'}
+          </div>
+        </div>`;
+    },
+
+    /* ── Bash: terminal window simulation ── */
+    _renderBashCall(div, name, args, result, status, meta) {
+      const exitOk = result && !/(error|Error|fail|exception)/i.test(String(result));
+      const elapsed = meta?.elapsedMs || 0;
+
+      div.className = 'tool-block rounded-xl overflow-hidden border border-gray-700 bg-gray-900';
+      div.innerHTML = `<div class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 cursor-pointer"
+          onclick="this.parentElement.querySelector('.bash-detail').classList.toggle('hidden')">
+          <span class="flex gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+          </span>
+          <span class="text-xs text-gray-400 ml-2 flex-1 font-mono truncate">$ ${LT.esc(args).slice(0,70)}</span>
+          ${status==='running'?'<span class="text-xs text-blue-400 animate-pulse">running</span>':''}
+          ${elapsed?`<span class="text-xs text-gray-500 ml-2">${elapsed}ms</span>`:''}
+          <span class="text-xs ml-1 ${exitOk?'text-green-400':'text-red-400'}">${status==='done'?(exitOk?'exit 0':'exit 1'):''}</span>
+        </div>
+        <div class="bash-detail ${status==='running'?'':'hidden'}">
+          <div class="px-3 py-2 text-xs font-mono text-green-400 max-h-48 overflow-y-auto whitespace-pre-wrap bg-gray-950">${LT.esc(result||(status==='running'?'...':'')).slice(0,2000)}</div>
+        </div>`;
+    },
+
+    /* ── Code Execution: purple code card ── */
+    _renderCodeCall(div, name, args, result, meta) {
+      const langMap = {python:'🐍 Python', node:'🟢 Node.js', eval:'⚡ Eval', exec:'⚙️ Exec'};
+      const lang = langMap[name] || '💻 Code';
+      const turn = meta?.turn || 0;
+
+      div.className = 'tool-block rounded-xl overflow-hidden border border-purple-200 bg-purple-50';
+      div.innerHTML = `<div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-purple-100"
+          onclick="this.parentElement.querySelector('.code-detail').classList.toggle('hidden')">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">${lang.split(' ')[0]}</span>
+            <span class="text-xs font-medium text-purple-700">${lang}</span>
+            ${turn?`<span class="text-xs text-purple-400">· 第${turn}次</span>`:''}
+          </div>
+          <svg class="w-3 h-3 text-purple-400" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="code-detail hidden px-3 pb-2">
+          <div class="bg-gray-900 rounded-lg p-2 text-xs font-mono text-purple-300 max-h-48 overflow-y-auto whitespace-pre-wrap">${LT.esc(result||'').slice(0,2000)}</div>
+        </div>`;
+    },
+
+    /* ── Search: blue search card with hit count ── */
+    _renderSearchCall(div, name, args, result) {
+      const query = args?.slice(0,80) || '';
+      const lines = result ? String(result).split('\n').filter(l=>l.trim()).length : 0;
+
+      div.className = 'tool-block rounded-xl overflow-hidden border border-blue-200 bg-blue-50';
+      div.innerHTML = `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-100"
+          onclick="this.parentElement.querySelector('.search-detail').classList.toggle('hidden')">
+          <span class="text-lg">🔍</span>
+          <div class="flex-1 min-w-0">
+            <span class="text-xs font-medium text-blue-700">${LT.esc(name)}</span>
+            <span class="text-xs text-blue-400 ml-2 truncate">${LT.esc(query)}</span>
+          </div>
+          <span class="text-xs text-blue-500">${lines} 条</span>
+        </div>
+        <div class="search-detail hidden px-3 pb-2">
+          <div class="bg-white rounded-lg p-2 text-xs text-gray-600 max-h-48 overflow-y-auto whitespace-pre-wrap border border-blue-100">${LT.esc(result||'').slice(0,1000)}</div>
+        </div>`;
+    },
+
+    /* ── Generic fallback ── */
+    _renderGenericCall(div, name, args, result, status, meta) {
+      const icons = {pending:'⏳',running:'🔄',done:'✅',error:'❌'};
+      const colors = {pending:'text-yellow-500',running:'text-blue-500',done:'text-green-500',error:'text-red-500'};
+      const turnInfo = meta?.turn ? `· 第${meta.turn}轮` : '';
+      const timeInfo = meta?.elapsedMs ? `· ${meta.elapsedMs}ms` : '';
+
+      div.className = `tool-block bg-gray-50 border border-gray-200 rounded-xl overflow-hidden ${status==='running'?'tool-running':''}`;
+      div.innerHTML = `<div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-100"
+          onclick="this.querySelector('.generic-detail').classList.toggle('hidden')">
+          <span class="text-xs">${icons[status]||'🔧'} <span class="${colors[status]||'text-gray-700'}">${LT.esc(name)}</span> <span class="text-gray-400">${turnInfo} ${timeInfo}</span></span>
+          <svg class="w-3 h-3 text-gray-400" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="generic-detail hidden px-3 py-2 text-xs border-t border-gray-200">
+          ${args?`<div class="text-gray-400 mb-1"><span class="font-medium">参数:</span> ${LT.esc(args).slice(0,300)}</div>`:''}
+          ${result?`<div class="text-gray-600 bg-white rounded-lg p-2 mt-1 max-h-32 overflow-y-auto font-mono">${LT.esc(String(result)).slice(0,800)}</div>`:''}
+        </div>`;
     },
 
     /** Interactive ask — tabs, select, confirm, input */

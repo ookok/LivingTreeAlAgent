@@ -969,6 +969,67 @@ class MCPServer:
         return get_cli_anything().stats()
 
 
+def register_local_tools():
+    """Register locally-available MCP tools as direct tool:* capabilities.
+
+    Many MCP-defined tools are actually LOCAL (CodeGraph, knowledge, etc.)
+    and should be callable without requiring an external MCP host process.
+    This bridges the gap: local tools get both mcp:* AND tool:* registration.
+    """
+    try:
+        from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+
+        bus = get_capability_bus()
+        count = 0
+
+        # Local tool definitions — same as MCP TOOLS but registered as tool:*
+        local_tools = [
+            # Code Graph (local — uses livingtree.capability.code_graph)
+            ("tool:build_code_graph", "Build or rebuild the code knowledge graph", "path"),
+            ("tool:blast_radius", "Find all files affected by changed files", "files"),
+            ("tool:get_callers", "Find all callers of a function", "target"),
+            ("tool:get_callees", "Find all functions called by a function", "target"),
+            ("tool:search_code", "Search codebase by entity name or path", "query"),
+            ("tool:find_hubs", "Find architectural hubs (high-connectivity entities)", "top_n"),
+            ("tool:find_uncovered", "Find functions without test coverage", ""),
+            ("tool:code_diff", "Entity-level diff between two graph states", "base_snapshot"),
+            ("tool:code_impact", "Numeric impact scores for changed files", "files"),
+
+            # Knowledge (local — uses livingtree.knowledge)
+            ("tool:search_knowledge", "Search internal knowledge base", "query"),
+            ("tool:detect_knowledge_gaps", "Detect knowledge coverage gaps", "domain"),
+
+            # Cell (local — uses livingtree.cell)
+            ("tool:train_cell", "Train an AI cell model", "config"),
+            ("tool:absorb_codebase", "Absorb codebase knowledge into a cell", "root_dir"),
+
+            # CLI (local — uses livingtree.treellm.cli_anything)
+            ("tool:cli_wrap_function", "Wrap a Python function as CLI tool", "file,function_name"),
+            ("tool:cli_from_repo", "Convert Git repo to CLI", "repo_url"),
+            ("tool:cli_list_tools", "List generated CLI tools", ""),
+
+            # Analysis (local — uses livingtree.treellm)
+            ("tool:analyze", "Analyze a question with full pipeline", "query"),
+            ("tool:generate_report", "Generate a structured report", "template_type,data"),
+            ("tool:improve_code", "Propose code improvements", "file,description"),
+        ]
+
+        for cap_id, desc, hint in local_tools:
+            bus.register(Capability(
+                id=cap_id, name=cap_id.split(":", 1)[1], category=CapCategory.TOOL,
+                description=desc,
+                params=[CapParam(name="input", type="string", description=hint)],
+                source="local_bridge", tags=["local", "mcp_bridge"],
+            ))
+            count += 1
+
+        logger.info(f"MCP Local Bridge: registered {count} local tools as tool:* capabilities")
+        return count
+    except Exception as e:
+        logger.debug(f"MCP Local Bridge: {e}")
+        return 0
+
+
 async def serve_stdio(hub=None) -> None:
     """Run MCP server over stdio (JSON-RPC)."""
     server = MCPServer(hub)

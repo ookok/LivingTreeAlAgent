@@ -1072,6 +1072,18 @@ class IntegrationHub:
             from ..treellm.capability_bus import get_capability_bus
             await get_capability_bus()._ensure_discovered()
             logger.info("CapabilityBus: pre-warmed")
+            # Register MCP local tools as direct tool:* capabilities
+            try:
+                from ..mcp.server import register_local_tools
+                register_local_tools()
+            except Exception:
+                pass
+            # Register office automation tools
+            try:
+                from ..capability.office_tools import register_office_tools
+                register_office_tools()
+            except Exception:
+                pass
         except Exception as e:
             logger.debug(f"CapabilityBus warm: {e}")
 

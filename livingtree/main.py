@@ -1603,6 +1603,9 @@ def _svc_dev(args: list):
             CodeMigrator, DeadCodeAnalyzer, TestAmplifier,
             LivingDiagram, BugRadar,
         )
+        from .treellm.long_dev import (
+            RuntimePredictor, SemanticDiffer,
+        )
 
         sub = args[0].lower() if args else "all"
 
@@ -1812,8 +1815,25 @@ def _svc_dev(args: list):
             hotspots = BugRadar.scan()
             print(BugRadar.format_report(hotspots))
 
+        elif sub == "predict":
+            fpath = args[1] if len(args) > 1 else "livingtree/treellm/core.py"
+            func = args[2] if len(args) > 2 else ""
+            print(f"\n  ⏱️  Runtime Prediction: {Path(fpath).name} {func}\n")
+            pred = RuntimePredictor.predict(fpath, func)
+            if pred:
+                print(RuntimePredictor.format_report(pred))
+            else:
+                print(f"  Function not found: {func} in {fpath}")
+
+        elif sub == "semdiff":
+            base = args[1] if len(args) > 1 else "HEAD~1"
+            target = args[2] if len(args) > 2 else "HEAD"
+            print(f"\n  🔬 Semantic Diff: {base} → {target}\n")
+            report = SemanticDiffer.diff(base, target)
+            print(SemanticDiffer.format_report(report))
+
         else:
-            print("Usage: livingtree dev [all|rehearse|hotspots|conventions|cognimap|api-guard|provenance|deps|health-trends|migrate|dead-impact|amplify|diagram|bug-radar]")
+            print("Usage: livingtree dev [all|rehearse|hotspots|conventions|cognimap|api-guard|provenance|deps|health-trends|migrate|dead-impact|amplify|diagram|bug-radar|predict|semdiff]")
 
     try:
         asyncio.run(_run())

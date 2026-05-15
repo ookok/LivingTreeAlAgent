@@ -20,6 +20,8 @@ from livingtree.core.system_orchestrator import (
     SystemOrchestrator, SystemStatus, get_orchestrator,
 )
 
+pytestmark = pytest.mark.integration
+
 
 # ═══ AdaptivePipeline ═══
 

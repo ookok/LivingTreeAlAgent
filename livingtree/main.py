@@ -123,6 +123,8 @@ def main():
         _svc_cli(sys.argv[2:])
     elif command == "cli-anything":
         _svc_cli_anything(sys.argv[2:])
+    elif command == "models":
+        _svc_models(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -537,24 +539,46 @@ def _svc_debug(args: list):
                     print(f"    {err_type}: {count}")
 
     async def _debug_chat(chat_args: list):
-        """Debug the full chat pipeline end-to-end."""
+        """Debug the full chat pipeline end-to-end with line tracing and tool execution.
+
+        Phases:
+          1. Input Normalization (living_input_bus)
+          2. ContextMoE Memory Retrieval
+          3. Provider Election (smart_route, parallel ping all providers)
+          4. LLM Chat (with provider fallback on failure)
+          5. Tool Call Execution (auto-detect + invoke via LocalToolBus)
+          6. Error Summary (ErrorInterceptor stats)
+        """
         from .treellm.debug_pro import install as debug_install
-        from .treellm.debug_pro import ErrorInterceptor
-        import time as _time
+        from .treellm.debug_pro import ErrorInterceptor, LineTracer
+        import time as _time, traceback as _tb
 
         debug_install()
-        message = " ".join(a for a in chat_args if not a.startswith("--"))
+        message = " ".join(a for a in chat_args if not a.startswith("--") and a not in ("-v", "-vv"))
         trace = "--trace" in chat_args
+        verbose = ("--verbose" in chat_args) or ("-v" in chat_args) or ("-vv" in chat_args)
 
         if not message:
-            print("Usage: livingtree debug chat \"your message\" [--trace]")
+            print("Usage: livingtree debug chat \"your message\" [--trace] [--verbose]")
+            print("  --trace   : enable line-by-line execution tracing via DebugPro LineTracer")
+            print("  --verbose : show full response text and detailed timing")
             return
 
         print(f"\n{'='*60}")
         print(f"  Pipeline Debug: \"{message[:80]}\"")
+        if trace:
+            print(f"  Mode: LINE TRACING enabled (DebugPro)")
         print(f"{'='*60}")
 
-        # Phase 1: Input normalization
+        # ── Line Tracer (if --trace) ──
+        line_tracer = None
+        if trace:
+            line_tracer = LineTracer()
+            print(f"\n  [TRACE] Installing line tracer on debug pipeline...")
+            # Trace the core.py chat method
+            line_tracer.trace_module("livingtree.treellm.core", "chat")
+
+        # Phase 1: Input normalization ────────────────────────────
         t0 = _time.time()
         print("\n[1/6] Input Normalization...")
         try:
@@ -562,74 +586,147 @@ def _svc_debug(args: list):
             bus = get_living_input_bus()
             inp = bus._normalizer.from_cli([message])
             print(f"  ✅ kind={inp.kind.value} source={inp.source.value} text_len={len(inp.text)}")
+            if verbose:
+                tok = getattr(inp, 'tokens', 0)
+                lang = getattr(inp, 'language', '?')
+                cpx = getattr(inp, 'complexity', 0)
+                print(f"     tokens={tok} lang={lang} complexity={cpx}")
         except Exception as e:
             print(f"  ❌ Input normalization failed: {e}")
 
-        # Phase 2: ContextMoE memory
+        # Phase 2: ContextMoE memory ─────────────────────────────
         print("\n[2/6] ContextMoE Memory Retrieval...")
         t1 = _time.time()
+        has_memory = False
+        enriched = message
         try:
             from .treellm.context_moe import get_context_moe
             moe = await get_context_moe("debug_chat")
             result = await moe.query(message, "general")
             enriched = moe.build_enriched_message(message, result)
             has_memory = enriched != message
-            print(f"  ✅ memory_injected={has_memory} blocks(hot={len(result.hot)} warm={len(result.warm)} cold={len(result.cold)})")
-            print(f"  ⏱️  {(_time.time()-t1)*1000:.0f}ms")
+            mem_ms = (_time.time() - t1) * 1000
+            print(f"  ✅ memory_injected={has_memory} hot={len(result.hot)} warm={len(result.warm)} cold={len(result.cold)}")
+            print(f"  ⏱️  {mem_ms:.0f}ms")
         except Exception as e:
             print(f"  ❌ ContextMoE failed: {e}")
-            has_memory = False
-            enriched = message
 
-        # Phase 3: LLM Election
+        # Phase 3: LLM Election ──────────────────────────────────
         print("\n[3/6] Provider Election...")
         t2 = _time.time()
         try:
             from .treellm.core import TreeLLM
-            llm = TreeLLM()
+            llm = TreeLLM.from_config()
             provider = await llm.smart_route(message, task_type="general")
-            print(f"  ✅ elected={provider}")
-            print(f"  ⏱️  {(_time.time()-t2)*1000:.0f}ms")
+            alive = llm.provider_names
+            elect_ms = (_time.time() - t2) * 1000
+            if provider:
+                print(f"  ✅ elected={provider} (from {len(alive)} alive)")
+            else:
+                print(f"  ⚠️  No provider elected (0/{len(alive)} alive — check API keys)")
+            print(f"  ⏱️  {elect_ms:.0f}ms")
+            if verbose and alive:
+                print(f"     alive: {', '.join(alive[:5])}{'...' if len(alive)>5 else ''}")
         except Exception as e:
             print(f"  ❌ Election failed: {e}")
             provider = ""
             llm = None
 
-        # Phase 4: LLM Chat
+        # Phase 4: LLM Chat (with fallback) ──────────────────────
         print("\n[4/6] LLM Chat...")
         t3 = _time.time()
-        chat_result = None
+        chat_result = ""
+        used_provider = provider
+        llm_error = ""
         try:
             if llm is None:
                 raise RuntimeError("No LLM available (election failed)")
-            result = await llm.chat(
-                [{"role": "user", "content": enriched if has_memory else message}],
-                provider=provider, tools=True, max_tokens=1024,
-            )
-            chat_result = getattr(result, 'text', '') or str(result)
-            tokens = getattr(result, 'tokens', 0)
-            print(f"  ✅ response_len={len(chat_result)} tokens={tokens}")
-            print(f"  ⏱️  {(_time.time()-t3)*1000:.0f}ms")
+
+            # Try elected provider first, then fallback through all alive providers
+            candidates = [provider] if provider else []
+            if hasattr(llm, 'provider_names'):
+                all_providers = list(llm.provider_names)
+                for p in all_providers:
+                    if p not in candidates:
+                        candidates.append(p)
+            candidates = candidates[:5]  # Max 5 to avoid excessive retries
+
+            for attempt, cand in enumerate(candidates):
+                try:
+                    result = await llm.chat(
+                        [{"role": "user", "content": enriched if has_memory else message}],
+                        provider=cand, tools=True, max_tokens=2048,
+                    )
+                    result_text = getattr(result, 'text', '')
+                    result_error = getattr(result, 'error', '')
+                    if result_text and not result_error:
+                        chat_result = result_text
+                        used_provider = cand
+                        if verbose or attempt > 0:
+                            print(f"  ✅ {cand}: response {len(result_text)} chars")
+                        break
+                    elif result_error:
+                        if verbose or attempt == 0:
+                            print(f"  ⚠️  {cand}: {result_error[:100]}")
+                        if attempt < len(candidates) - 1:
+                            print(f"     ↳ retry with next provider...")
+                    else:
+                        if verbose:
+                            print(f"  ⚠️  {cand}: empty response")
+                except Exception as inner_e:
+                    if verbose:
+                        print(f"  ⚠️  {cand}: {inner_e}")
+
+            if chat_result:
+                tokens = getattr(result, 'tokens', 0)
+                chat_ms = (_time.time() - t3) * 1000
+                print(f"  ✅ response_len={len(chat_result)} tokens={tokens} provider={used_provider}")
+                print(f"  ⏱️  {chat_ms:.0f}ms")
+            else:
+                llm_error = "All providers failed — check API keys and network"
+                print(f"  ❌ {llm_error}")
         except Exception as e:
+            llm_error = str(e)
             print(f"  ❌ Chat failed: {e}")
 
-        # Phase 5: Tool calls (if any)
-        print("\n[5/6] Tool Call Analysis...")
+        # Phase 5: Tool calls — detect AND execute ───────────────
+        print("\n[5/6] Tool Call Detection & Execution...")
         tool_count = 0
+        tool_results = []
         try:
-            import re
-            TOOL_RE = re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL)
+            import re as _re
+            TOOL_RE = _re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', _re.DOTALL)
             if chat_result:
                 tools = TOOL_RE.findall(chat_result)
-                tool_count = len(tools)
-                for name, args in tools:
-                    print(f"  🔧 {name}: {args[:100]}")
-            if not tool_count:
-                print(f"  ℹ️  No tool calls in response")
+                if tools:
+                    from .treellm.local_tool_bus import get_local_tool_bus
+                    ltb = get_local_tool_bus()
+                    for name, args in tools:
+                        tool_count += 1
+                        print(f"  🔧 {name}: {args[:80]}")
+                        # Try to execute via LocalToolBus
+                        if ltb.has(name):
+                            try:
+                                from .treellm.core import TreeLLM
+                                kw = TreeLLM._unpack_tool_args(name, args)
+                                exec_result = await ltb.invoke(name, **kw)
+                                if exec_result.success:
+                                    result_preview = str(exec_result.data)[:120]
+                                    tool_results.append((name, result_preview))
+                                    print(f"     ✅ executed ({exec_result.elapsed_ms:.0f}ms): {result_preview}")
+                                else:
+                                    tool_results.append((name, f"Error: {exec_result.error}"))
+                                    print(f"     ❌ {exec_result.error[:100]}")
+                            except Exception as tool_e:
+                                print(f"     ⚠️  Tool execution error: {tool_e}")
+                        else:
+                            print(f"     ℹ️  Tool not in LocalToolBus — would need external execution")
+                if not tool_count:
+                    print(f"  ℹ️  No tool calls in response")
         except Exception as e:
             print(f"  ❌ Tool analysis failed: {e}")
 
-        # Phase 6: Errors & Stats
+        # Phase 6: Errors & Stats ─────────────────────────────────
         print("\n[6/6] Error Summary...")
         interceptor = ErrorInterceptor.instance()
         if interceptor:
@@ -643,9 +740,22 @@ def _svc_debug(args: list):
 
         total_ms = (_time.time() - t0) * 1000
         print(f"\n{'='*60}")
-        print(f"  Total: {total_ms:.0f}ms | Provider: {provider} | Tools: {tool_count}")
+        print(f"  Total: {total_ms:.0f}ms | Provider: {used_provider or provider} | Tools: {tool_count}")
+        print(f"{'='*60}")
         if chat_result:
-            print(f"  Response preview: {chat_result[:200]}...")
+            if verbose:
+                print(f"\n  📝 Full Response:\n{chat_result}\n")
+            else:
+                print(f"\n  📝 Response ({len(chat_result)} chars):")
+                print(f"  {'─'*56}")
+                for line in chat_result[:500].split("\n"):
+                    print(f"  {line[:110]}")
+                if len(chat_result) > 500:
+                    print(f"  ... (truncated, {len(chat_result)-500} more chars)")
+                print(f"  {'─'*56}")
+        elif llm_error:
+            print(f"\n  ❌ {llm_error}")
+            print(f"  💡 Tip: Check 'livingtree secrets list' and ensure at least one API key is valid")
         print(f"{'='*60}")
 
     asyncio.run(_run())
@@ -938,6 +1048,137 @@ def _resolve_relative(current_dir: str, module: str, level: int) -> str:
         return module
     base = ".".join(parts[:len(parts) - level + 1]) if level > 1 else current_dir
     return f"{base}.{module}" if base else module
+
+
+def _svc_models(args: list):
+    """Manage LLM model registry: sync from providers, list available models, show details.
+
+    Commands:
+      livingtree models sync              Sync models from all configured providers
+      livingtree models sync <provider>   Sync specific provider only
+      livingtree models list              List all cached models
+      livingtree models list <provider>   List models for one provider
+      livingtree models show <provider>   Show detailed model info + pricing
+      livingtree models auto              Auto-detect best model per provider (use in CI)
+    """
+    import asyncio, sys as _sys
+
+    async def _run():
+        from .treellm.model_registry import get_model_registry
+        from .config.settings import get_config
+        config = get_config().model
+        mr = get_model_registry()
+
+        subcmd = args[0] if args else "list"
+        target = args[1] if len(args) > 1 else ""
+
+        # ── Register known providers from config ──
+        provider_urls = {
+            "deepseek": "https://api.deepseek.com/v1",
+            "longcat": "https://api.longcat.chat/v1",
+            "xiaomi": "https://api.xiaomi.com/v1",
+            "aliyun": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+            "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1",
+            "baidu": "https://qianfan.baidubce.com/v2",
+            "spark": "https://spark-api-open.xf-yun.com/v1",
+            "siliconflow": "https://api.siliconflow.cn/v1",
+            "mofang": "https://api.mofang.ai/v1",
+            "nvidia": "https://integrate.api.nvidia.com/v1",
+            "modelscope": "https://api-inference.modelscope.cn/v1",
+            "bailing": "https://api.baichuan.com/v1",
+            "stepfun": "https://api.stepfun.com/v1",
+            "internlm": "https://internlm-chat.intern-ai.org.cn/api/twlp/v1",
+            "sensetime": "https://api.sensetime.com/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "dmxapi": "https://api.dmxapi.com/v1",
+        }
+
+        for name, url in provider_urls.items():
+            key_attr = f"{name}_api_key"
+            api_key = getattr(config, key_attr, "")
+            mr.register_provider(name, url, api_key)
+
+        if subcmd == "sync":
+            providers = [target] if target and target in provider_urls else list(provider_urls.keys())
+            ok, fail = 0, 0
+            for name in providers:
+                p = mr._providers.get(name)
+                if not p or not p.api_key:
+                    continue
+                print(f"  Syncing {name:15s} ...", end=" ", flush=True)
+                models = await mr.fetch_models(name)
+                if models:
+                    print(f"✅ {len(models)} models")
+                    ok += 1
+                else:
+                    print(f"❌ {p.error[:60] if p.error else 'no models'}")
+                    fail += 1
+            print(f"\n  Synced: {ok} OK, {fail} failed")
+            mr._save_cache()
+
+        elif subcmd in ("list", "ls"):
+            mr.load_cache()
+            if target and target in mr._providers:
+                models = mr._providers[target].models
+                print(f"\n  {target} ({len(models)} models):")
+                for m in models:
+                    print(f"    {m.pricing_label} {m.id:45s} {m.tier:10s} ctx={m.context_length}")
+            else:
+                total = 0
+                for name, pm in mr._providers.items():
+                    if pm.models:
+                        print(f"  {name:15s} {len(pm.models):4d} models  (last: {pm.last_fetched or 0:.0f}s ago)")
+                        total += len(pm.models)
+                print(f"\n  Total: {total} models across {sum(1 for pm in mr._providers.values() if pm.models)} providers")
+                if total == 0:
+                    print("  💡 Run 'livingtree models sync' to fetch from providers")
+
+        elif subcmd == "show":
+            if not target:
+                print("Usage: livingtree models show <provider>")
+                return
+            mr.load_cache()
+            pm = mr._providers.get(target)
+            if not pm or not pm.models:
+                print(f"  No models cached for {target}. Run 'livingtree models sync {target}' first.")
+                return
+            print(f"\n  {target} — {len(pm.models)} models — fetched {pm.last_fetched:.0f}s ago")
+            print(f"  {'─'*70}")
+            for m in pm.models:
+                print(f"  {m.pricing_label} {m.id:50s} {m.tier:10s} ctx={m.context_length:,}")
+
+        elif subcmd == "auto":
+            """Auto-detect: fetch models, pick best flash model per provider, update config."""
+            print("\n  Auto-detecting best models per provider...")
+            updated = {}
+            for name in list(provider_urls.keys()):
+                p = mr._providers.get(name)
+                if not p or not p.api_key:
+                    continue
+                if not p.models:
+                    await mr.fetch_models(name)
+                # Pick best flash model (< 32B params, fastest, free if possible)
+                flash_models = [m for m in (p.models or []) if m.tier in ("flash", "small")]
+                if not flash_models:
+                    flash_models = [m for m in (p.models or []) if m.tier != "embedding"]
+                if flash_models:
+                    best = flash_models[0]
+                    updated[name] = best.id
+                    print(f"  {name:15s} → {best.id} ({best.tier}, {best.pricing})")
+                else:
+                    print(f"  {name:15s} → no suitable model found")
+            if updated:
+                print(f"\n  ✅ Updated {len(updated)} providers")
+                print(f"  💡 These will be used for the next 'livingtree debug chat' session")
+            else:
+                print("  ❌ No models detected. Check API keys and network.")
+
+        else:
+            print(f"Unknown subcommand: {subcmd}")
+            print("Usage: livingtree models [sync|list|show|auto]")
+
+    asyncio.run(_run())
 
 
 def _svc_deps(args: list):

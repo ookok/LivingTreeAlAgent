@@ -28,13 +28,21 @@ import asyncio
 import hashlib
 import json
 import re
+import threading
 import time
 from loguru import logger
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
 from .classifier import TinyClassifier
-from .providers import Provider, ProviderResult, create_deepseek_provider, create_longcat_provider
+from .providers import (
+    Provider, ProviderResult, OpenAILikeProvider,
+    create_deepseek_provider, create_longcat_provider,
+    create_nvidia_provider, create_modelscope_provider,
+    create_bailing_provider, create_stepfun_provider,
+    create_internlm_provider, create_sensetime_provider,
+    create_openrouter_provider,
+)
 from .holistic_election import get_election, RouterStats
 
 # Pre-compiled regex for hot paths
@@ -51,7 +59,7 @@ class TreeLLM:
     def __init__(self):
         self._providers: dict[str, Provider] = {}
         self._stats: dict[str, RouterStats] = {}
-        self._stats_lock = asyncio.Lock()
+        self._stats_lock = threading.Lock()
         self._elected: str = ""
         self._classifier = TinyClassifier()
 
@@ -70,9 +78,30 @@ class TreeLLM:
             config = get_config().model
 
             # Map provider name → (api_key_attr, create_fn, thinking_disabled_for_chat)
+            # Only providers with dedicated create_ functions in providers.py are listed
             provider_specs = [
                 ("deepseek", "deepseek_api_key", create_deepseek_provider, False),
                 ("longcat", "longcat_api_key", create_longcat_provider, True),
+                ("nvidia", "nvidia_api_key", create_nvidia_provider, True),
+                ("modelscope", "modelscope_api_key", create_modelscope_provider, True),
+                ("bailing", "bailing_api_key", create_bailing_provider, False),
+                ("stepfun", "stepfun_api_key", create_stepfun_provider, True),
+                ("internlm", "internlm_api_key", create_internlm_provider, True),
+                ("sensetime", "sensetime_api_key", create_sensetime_provider, True),
+                ("openrouter", "openrouter_api_key", create_openrouter_provider, True),
+            ]
+            # Generic OpenAI-compatible providers (use OpenAILikeProvider with config URLs)
+            from .providers import OpenAILikeProvider
+            generic_providers = [
+                ("xiaomi", "xiaomi_api_key", "https://api.xiaomi.com/v1", "mixtral-8x7b"),
+                ("aliyun", "aliyun_api_key", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-turbo"),
+                ("zhipu", "zhipu_api_key", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),
+                ("hunyuan", "hunyuan_api_key", "https://api.hunyuan.cloud.tencent.com/v1", "hunyuan-lite"),
+                ("baidu", "baidu_api_key", "https://qianfan.baidubce.com/v2", "ernie-speed-128k"),
+                ("spark", "spark_api_key", "https://spark-api-open.xf-yun.com/v1", "lite"),
+                ("siliconflow", "siliconflow_api_key", "https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-7B-Instruct"),
+                ("mofang", "mofang_api_key", "https://api.mofang.ai/v1", "Qwen/Qwen2.5-7B-Instruct"),
+                ("dmxapi", "dmxapi_api_key", "https://api.dmxapi.com/v1", "gpt-3.5-turbo"),
             ]
 
             for name, key_attr, create_fn, _no_think in provider_specs:
@@ -84,18 +113,61 @@ class TreeLLM:
                     except Exception as e:
                         logger.debug(f"TreeLLM.from_config: {name} skipped ({e})")
 
+            # Generic OpenAI-compatible providers
+            for name, key_attr, base_url, default_model in generic_providers:
+                api_key = getattr(config, key_attr, "")
+                if api_key:
+                    try:
+                        provider = OpenAILikeProvider(
+                            name=name, api_key=api_key, base_url=base_url,
+                            default_model=default_model,
+                        )
+                        llm.add_provider(provider)
+                    except Exception as e:
+                        logger.debug(f"TreeLLM.from_config: {name} generic skipped ({e})")
+
             logger.info(
                 f"TreeLLM.from_config: bootstrapped with "
                 f"{len(llm._providers)} providers: {list(llm._providers.keys())}"
             )
+
+            # ── Model Registry: auto-discover latest model names ──
+            try:
+                from .model_registry import get_model_registry
+                mr = get_model_registry()
+                mr.load_cache()
+                updated = 0
+                for name, p in llm._providers.items():
+                    pm = mr._providers.get(name)
+                    if pm and pm.models:
+                        flash = [m for m in pm.models if m.tier in ("flash", "small")]
+                        candidates = flash or [m for m in pm.models if m.tier != "embedding"]
+                        if candidates:
+                            best = candidates[0]
+                            # Set fallback models (all non-embedding)
+                            p.fallback_models = [m.id for m in pm.models if m.tier != "embedding"]
+                            if hasattr(p, 'default_model'):
+                                old = p.default_model
+                                p.default_model = best.id
+                                if old != best.id:
+                                    updated += 1
+                                    logger.info(f"  {name}: model {old} → {best.id} ({best.tier})")
+                if updated:
+                    logger.info(f"ModelRegistry: updated {updated} provider models")
+            except Exception as e:
+                logger.debug(f"ModelRegistry: {e}")
             # Quick health check
             try:
                 from .vital_signs import get_vital_signs
                 vs = get_vital_signs()
                 import asyncio as _a
-                report = _a.get_event_loop().run_until_complete(
-                    _a.wait_for(vs.run_full_checkup(), timeout=10))
-                logger.info(f"VitalSigns: {report.summary}")
+                try:
+                    _loop = _a.get_running_loop()
+                except RuntimeError:
+                    _loop = _a.new_event_loop()
+                    report = _loop.run_until_complete(
+                        _a.wait_for(vs.run_full_checkup(), timeout=10))
+                    logger.info(f"VitalSigns: {report.summary}")
             except Exception:
                 pass
         except Exception as e:
@@ -816,31 +888,37 @@ class TreeLLM:
                 for tool_name, tool_args in tool_calls[:3]:
                     tool_result_text = ""
                     try:
-                        # Route ALL tool calls through unified CapabilityBus
+                        # Tier 1: Route through unified CapabilityBus (core tools)
                         from .capability_bus import get_capability_bus
                         bus = get_capability_bus()
                         cap_id = f"tool:{tool_name}"
                         result = await bus.invoke(cap_id, input=tool_args.strip())
                         if isinstance(result, dict) and "error" in result:
-                            # Fallback: try via ReactExecutor for legacy tools
-                            from ..execution.react_executor import ReactExecutor
-                            rex = ReactExecutor()
-                            if tool_name == "web_search":
-                                tool_result_text = await rex._tool_web_search(tool_args.strip())
-                            elif tool_name == "kb_search":
-                                tool_result_text = await rex._tool_kb_search(tool_args.strip())
-                            elif tool_name in ("bash", "shell", "run_command", "execute"):
-                                tool_result_text = await rex._tool_run_command(tool_args.strip())
-                            elif tool_name in ("read_file", "file_read"):
-                                tool_result_text = await self._tool_read_vfs(tool_args.strip())
-                            elif tool_name in ("write_file", "file_write"):
-                                tool_result_text = await self._tool_write_vfs(tool_args.strip())
-                            elif tool_name == "explore_domain":
-                                tool_result_text = await rex._tool_explore_domain(tool_args.strip())
-                            elif tool_name == "get_world_knowledge":
-                                tool_result_text = await rex._tool_get_world_knowledge(tool_args.strip())
+                            # Tier 2: Try MCP/local tools (LocalToolBus — zero overhead)
+                            mcp_id = f"mcp:{tool_name}"
+                            mcp_result = await bus.invoke(mcp_id, **self._unpack_tool_args(tool_name, tool_args))
+                            if isinstance(mcp_result, dict) and "error" in mcp_result:
+                                # Tier 3: Fallback to ReactExecutor legacy tools
+                                from ..execution.react_executor import ReactExecutor
+                                rex = ReactExecutor()
+                                if tool_name == "web_search":
+                                    tool_result_text = await rex._tool_web_search(tool_args.strip())
+                                elif tool_name == "kb_search":
+                                    tool_result_text = await rex._tool_kb_search(tool_args.strip())
+                                elif tool_name in ("bash", "shell", "run_command", "execute"):
+                                    tool_result_text = await rex._tool_run_command(tool_args.strip())
+                                elif tool_name in ("read_file", "file_read"):
+                                    tool_result_text = await self._tool_read_vfs(tool_args.strip())
+                                elif tool_name in ("write_file", "file_write"):
+                                    tool_result_text = await self._tool_write_vfs(tool_args.strip())
+                                elif tool_name == "explore_domain":
+                                    tool_result_text = await rex._tool_explore_domain(tool_args.strip())
+                                elif tool_name == "get_world_knowledge":
+                                    tool_result_text = await rex._tool_get_world_knowledge(tool_args.strip())
+                                else:
+                                    tool_result_text = f"[tool:{tool_name}] not available"
                             else:
-                                tool_result_text = f"[tool:{tool_name}] not available"
+                                tool_result_text = json.dumps(mcp_result, default=str, ensure_ascii=False)[:5000]
                         else:
                             tool_result_text = str(result)[:5000]
                     except Exception as e:
@@ -1041,7 +1119,44 @@ class TreeLLM:
         from .holistic_election import get_election
         get_election().record_result(name, False, 0, 0, error, rate_limited)
 
-    # ── Tool helpers (routed through VFS) ──
+    # ── Tool helpers (routed through VFS + MCP) ──
+
+    @staticmethod
+    def _unpack_tool_args(tool_name: str, tool_args: str) -> dict:
+        """Convert flat tool arguments string to keyword dict for MCP tools.
+
+        Supports formats:
+          - key=value pairs: "cod=30 bod=6 do=5" → {"cod":30.0, "bod":6.0, "do":5.0}
+          - JSON: '{"cod":30,"bod":6}' → {"cod":30, "bod":6}
+          - Plain text: "some query text" → {"query":"some query text"}
+        """
+        import re as _re
+        args = tool_args.strip()
+        if not args:
+            return {}
+        # JSON format
+        if args.startswith("{") and args.endswith("}"):
+            try:
+                import json as _json
+                return _json.loads(args)
+            except Exception:
+                pass
+        # key=value format
+        if _re.search(r'\w+\s*=', args):
+            result = {}
+            for part in _re.split(r'\s+', args):
+                if '=' in part:
+                    k, _, v = part.partition("=")
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    try:
+                        v = float(v) if '.' in v or 'e' in v.lower() else int(v)
+                    except ValueError:
+                        pass
+                    result[k] = v
+            return result
+        # Plain text → query parameter
+        return {"query": args[:500]}
 
     @staticmethod
     async def _tool_read_vfs(path: str) -> str:

@@ -299,25 +299,35 @@ class MCPAdapter(CapabilityAdapter):
     """Adapter for MCP tools (server, chrome, city, external MCP hosts).
 
     Discovers tools from:
-    1. LivingTree's own MCP server (28 built-in tools)
-    2. External MCP servers (Parallel Search web_search/web_fetch, etc.)
+    1. LivingTree's own MCP server (43 built-in tools) → **LocalToolBus direct invoke**
+    2. External MCP servers (Parallel Search web_search/web_fetch, etc.) → subprocess fallback
+
+    Local tools use LocalToolBus for zero-overhead direct Python invocation.
+    External MCP hosts use subprocess-based JSON-RPC (100ms+ overhead).
     """
 
     def __init__(self):
         super().__init__(CapCategory.MCP)
         self._mcp_hosts: dict[str, Any] = {}
+        self._local_bus = None
 
     async def discover(self) -> list[Capability]:
         caps = []
         try:
-            from ..mcp.server import MCPServer
-            for t in MCPServer.TOOLS:
+            from ..mcp.server import MCPServer, TOOLS as MCP_TOOLS
+            from .local_tool_bus import get_local_tool_bus
+            self._local_bus = get_local_tool_bus()
+            for t in MCP_TOOLS:
+                tool_name = t.get("name", "")
+                # Wire LocalToolBus handler for direct Python invocation
+                handler = self._local_bus._registry.get(tool_name)
                 cap = Capability(
-                    id=f"mcp:{t.get('name','')}", name=t.get('name', ''),
+                    id=f"mcp:{tool_name}", name=tool_name,
                     category=CapCategory.MCP,
-                    description=t.get('description', '')[:200],
-                    handler=t.get('handler'),
+                    description=t.get("description", "")[:200],
+                    handler=handler,  # ← Direct local handler, NOT None
                     source="mcp_server",
+                    cost_estimate={"seconds": 0.001, "tokens": 0},  # local = near-zero cost
                 )
                 caps.append(cap)
                 self.register(cap)

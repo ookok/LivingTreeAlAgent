@@ -85,6 +85,7 @@ class CapabilityProfile:
     device_type: str = "desktop"    # desktop|mobile|terminal|embedded
     connection_rtt_ms: float = 50.0 # Network latency
     source: str = "inferred"        # "inferred"|"explicit"|"default"
+    framework: str = "auto"          # "auto"|"react"|"vue"|"htmx"|"none" — SPA framework preference
 
 
 @dataclass
@@ -287,7 +288,14 @@ class LivingRenderer:
 
         # Determine target format
         if format == "auto":
-            format = LEVEL_NAMES.get(caps.max_level.value, "rich")
+            format = caps.framework if caps.framework not in ("auto", "none") else LEVEL_NAMES.get(caps.max_level.value, "rich")
+
+        # SPA framework formats: route to component renderers
+        if format in ("react", "vue", "htmx"):
+            result = self.render_component(data, format, "auto", caps, **meta)
+            result.render_time_ms = (time.time() - t0) * 1000
+            result.byte_size = len(result.content.encode("utf-8"))
+            return result
 
         # Data normalization: any input → structured dict
         if isinstance(data, str):
@@ -675,6 +683,113 @@ class LivingRenderer:
             f'r="3" fill="#2563eb"/>'
             f'</svg>'
         )
+
+    # ── SPA Component Adapters (React / Vue) ────────────────────────
+
+    FRAMEWORK_REGISTRY = {
+        "react": {"name": "React", "ext": ".jsx", "component_tag": "LivingCard"},
+        "vue":   {"name": "Vue",   "ext": ".vue", "component_tag": "living-card"},
+        "htmx":  {"name": "HTMX",  "ext": ".html", "component_tag": "div"},
+    }
+
+    def render_component(self, data: Any, framework: str = "react",
+                         component: str = "auto", caps: CapabilityProfile = None,
+                         **meta) -> RenderResult:
+        """Render data as a React/Vue/HTMX component declaration.
+
+        Returns framework-specific component markup that can be dropped
+        directly into a React JSX file, Vue SFC, or HTMX template.
+
+        Supported component types (auto-detected from data):
+          card, list, table, form, dashboard, chart, metric, timeline, status
+        """
+        caps = caps or CapabilityProfile()
+        t0 = time.time()
+
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, ValueError):
+                data = {"content": data}
+        elif not isinstance(data, dict):
+            data = {"content": str(data)[:5000]}
+
+        comp_type = component if component != "auto" else self._detect_component_type(data)
+
+        renderers = {
+            "react": self._render_react_component,
+            "vue": self._render_vue_component,
+            "htmx": self._render_htmx_component,
+        }
+        render_fn = renderers.get(framework, self._render_react_component)
+        result = render_fn(data, comp_type, caps, meta)
+        result.render_time_ms = (time.time() - t0) * 1000
+        result.byte_size = len(result.content.encode("utf-8"))
+        return result
+
+    def _detect_component_type(self, data: dict) -> str:
+        type_hint = data.get("type", data.get("component", ""))
+        if type_hint in ("card", "list", "table", "form", "dashboard",
+                         "chart", "metric", "timeline", "status"):
+            return type_hint
+        if "chart" in data or "data" in data and isinstance(data.get("data"), list) and \
+           all(isinstance(x, dict) and "x" in x for x in data.get("data", [])[:3]):
+            return "chart"
+        if "columns" in data and "rows" in data:
+            return "table"
+        if "nodes" in data or "children" in data:
+            return "tree"
+        if "items" in data or isinstance(data.get("data"), list):
+            return "list"
+        if "fields" in data:
+            return "form"
+        if "metrics" in data:
+            return "dashboard"
+        return "card"
+
+    def _render_react_component(self, data: dict, comp_type: str,
+                                 caps: CapabilityProfile, meta: dict) -> RenderResult:
+        title = meta.get("title", data.get("title", ""))
+        props = {
+            "title": title,
+            "type": comp_type,
+            "data": data,
+            "darkMode": caps.prefers_dark,
+        }
+        props_json = json.dumps(props, default=str, ensure_ascii=False)
+
+        html = (
+            f'<div class="living-spa" data-framework="react" '
+            f'data-component-type="{escape(comp_type)}" '
+            f'data-props=\'{escape(props_json)}\'>'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_vue_component(self, data: dict, comp_type: str,
+                               caps: CapabilityProfile, meta: dict) -> RenderResult:
+        title = meta.get("title", data.get("title", ""))
+        props = {
+            "title": title,
+            "type": comp_type,
+            "data": data,
+            "darkMode": caps.prefers_dark,
+        }
+        props_json = json.dumps(props, default=str, ensure_ascii=False)
+
+        html = (
+            f'<div class="living-spa" data-framework="vue" '
+            f'data-component-type="{escape(comp_type)}" '
+            f'data-props=\'{escape(props_json)}\'>'
+            f'</div>'
+        )
+        return RenderResult(content=html, mime_type="text/html",
+                           level=RenderLevel.VISUAL, byte_size=0, render_time_ms=0)
+
+    def _render_htmx_component(self, data: dict, comp_type: str,
+                                caps: CapabilityProfile, meta: dict) -> RenderResult:
+        return self._render_rich(data, caps, meta)
 
     # ── L4/L5: MEDIA + SPATIAL — Placeholder + data payload ───────
 

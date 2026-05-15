@@ -44,7 +44,7 @@ class ProviderResult:
 
 
 class Provider:
-    """Base class for all LLM providers with rate-limit resilience."""
+    """Base class for all LLM providers with rate-limit resilience and model auto-discovery."""
 
     def __init__(self, name: str, base_url: str, api_key: str = "",
                  default_model: str = ""):
@@ -52,6 +52,7 @@ class Provider:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.default_model = default_model
+        self.fallback_models: list[str] = []  # Alternate models to try on 404
         self._rate_limit_count = 0
         self._last_rate_limit = 0.0
         self._last_ping_time = 0.0
@@ -144,6 +145,37 @@ class Provider:
                         await asyncio.sleep(RATE_LIMIT_BASE_DELAY)
                         continue
                 else:
+                    # 404: model not found → try fallback models
+                    if status == 404 and self.fallback_models:
+                        for fb_model in self.fallback_models:
+                            if fb_model == payload.get("model"):
+                                continue
+                            try:
+                                fb_payload = {**payload, "model": fb_model}
+                                fb_status, fb_body, fb_latency = await pool.request(
+                                    self.name, "POST",
+                                    f"{self.base_url}/chat/completions",
+                                    headers=self._headers(),
+                                    json_payload=fb_payload,
+                                    timeout=timeout,
+                                )
+                                if fb_status == 200:
+                                    choice = fb_body["choices"][0]
+                                    msg = choice.get("message", {})
+                                    usage = fb_body.get("usage", {})
+                                    logger.info(f"{self.name}: model fallback {payload.get('model')}→{fb_model} OK")
+                                    return ProviderResult(
+                                        text=msg.get("content", ""),
+                                        reasoning=msg.get("reasoning_content", ""),
+                                        tokens=usage.get("total_tokens", 0),
+                                        prompt_tokens=usage.get("prompt_tokens", 0),
+                                        cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0)
+                                            or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
+                                        model=fb_model,
+                                        latency_ms=(time.monotonic() - t0) * 1000,
+                                    )
+                            except Exception:
+                                continue
                     return ProviderResult(error=f"HTTP {status}: {str(body)[:200]}",
                                            latency_ms=(time.monotonic() - t0) * 1000)
             except Exception as e:

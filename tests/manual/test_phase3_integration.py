@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 import pytest
 from fastapi.testclient import TestClient
 
+pytestmark = pytest.mark.integration
 
 # ── Fixtures ──
 

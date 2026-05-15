@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -76,7 +78,7 @@ def test_hub_election_status():
     # Check that election methods exist
     assert hasattr(con, "_paid_models") or hasattr(con, "provider_names"), \
         "No provider listing method found"
-    assert hasattr(con, "_elect") or hasattr(con, "elect"), \
+    assert hasattr(con, "_elect_tiers") or hasattr(con, "get_election_status"), \
         "No election method found"
 
 

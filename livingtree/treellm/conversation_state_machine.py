@@ -195,7 +195,7 @@ class ConversationStateMachine:
             results["episodes"] = [
                 {"event": e.content[:150], "timestamp": str(e.timestamp)}
                 for e in entries[:5]
-            ] if hasattr(entries[0], 'content') if entries else []
+            ] if entries and hasattr(entries[0], 'content') else []
         except Exception:
             pass
 

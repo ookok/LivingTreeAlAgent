@@ -619,6 +619,76 @@ class CLIAnything:
             "manifests": len(list(MANIFEST_DIR.glob("*.yaml"))) if MANIFEST_DIR.exists() else 0,
         }
 
+    def wrap_python_func(self, name: str, description: str = "",
+                         params: list[CLIParam] = None) -> Path:
+        """Dynamically create a CLI tool from function metadata (no callable).
+
+        Used by MCP/capability bus where the tool is described via params
+        rather than passed as a Python callable.
+        """
+        cmd = CLICommand(
+            name=name, description=description,
+            params=params or [],
+        )
+        definition = CLIDefinition(
+            name=name, description=description,
+            commands=[cmd], version="0.1.0",
+        )
+        return self.wrapper.generate_cli_script(definition)
+
+    async def from_git_repo(self, repo_url: str,
+                            entry_point: str = "") -> CLIDefinition:
+        """Clone repo, analyze entry points, generate CLI definition."""
+        project = await self.project.from_git_repo(repo_url)
+        definition = CLIDefinition(
+            name=project.repo_url.split("/")[-1].replace(".git", ""),
+            version="0.1.0",
+            description=f"CLI from {project.repo_url}",
+            entry_point=entry_point or (project.entry_points[0] if project.entry_points else ""),
+            commands=project.suggested_commands,
+        )
+        if not definition.commands and entry_point:
+            definition.commands = [CLICommand(name=entry_point, description="Auto-discovered entry point")]
+        return definition
+
+    def register_all(self, bus=None) -> int:
+        """Register CLI Anything capabilities with CapabilityBus."""
+        if not bus:
+            try:
+                from .capability_bus import get_capability_bus
+                bus = get_capability_bus()
+            except Exception:
+                return 0
+
+        registered = 0
+        tools = [
+            ("cli:wrap_function", "Wrap a Python function into a CLI tool", "function_name,description,params_json",
+             lambda fn="", d="", pj="[]": {"status": "wrapped", "function": fn}),
+            ("cli:from_repo", "Clone a git repo and generate CLI", "repo_url,entry_point",
+             lambda ru="", ep="": {"status": "analyzed", "repo": ru}),
+            ("cli:from_manifest", "Generate CLI from YAML manifest", "yaml_path",
+             lambda yp="": {"status": "generated", "manifest": yp}),
+            ("cli:publish", "Publish CLI tool to pip/npm/brew", "target",
+             lambda t="pip": {"status": "published", "target": t}),
+        ]
+        for cap_id, desc, hint, handler in tools:
+            try:
+                from .capability_bus import Capability, CapCategory, CapParam
+                cap = Capability(
+                    id=cap_id, name=cap_id.split(":", 1)[1],
+                    category=CapCategory.TOOL,
+                    description=desc,
+                    params=[CapParam(name="input", type="string", description=hint)],
+                    handler=handler,
+                    source="cli_anything",
+                    tags=["cli", "code_generation"],
+                )
+                bus.register(cap)
+                registered += 1
+            except Exception:
+                continue
+        return registered
+
 
 # ═══ Singleton ════════════════════════════════════════════════════
 

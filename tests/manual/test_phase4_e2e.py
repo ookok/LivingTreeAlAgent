@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
+
 # Skip chat tests that require real LLM API keys
 SKIP_CHAT = pytest.mark.skip(reason="Requires real LLM API keys configured")
 

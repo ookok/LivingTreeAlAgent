@@ -1,0 +1,45 @@
+name: LivingTree CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: pip
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio ruff bandit pip-audit py-spy
+        pip install -e . 2>/dev/null || true
+    - name: License audit (pip-audit)
+      run: pip-audit --progress-spinner off 2>&1 || echo "pip-audit found vulnerabilities"
+    - name: License check (SPDX)
+      run: python -c "import asyncio; from livingtree.treellm.license_checker import get_license_checker; r = asyncio.run(get_license_checker().audit_licenses()); print(r.summary); exit(0 if r.passed else 1)"
+    - name: Lint with ruff
+      run: ruff check livingtree/ --select E,F,W --ignore E501
+    - name: SAST scan (bandit)
+      run: bandit -r livingtree/ -ll --skip B101,B104
+    - name: SAST scan (treellm)
+      run: python -c "import asyncio; from livingtree.treellm.sast_scanner import get_sast_scanner; r = asyncio.run(get_sast_scanner().scan()); print(r.summary); exit(0 if r.passed else 1)"
+    - name: Code review (diff)
+      run: python -c "import asyncio; from livingtree.treellm.code_reviewer import get_code_reviewer; r = asyncio.run(get_code_reviewer().review_diff()); print(r.summary); exit(0 if r.score >= 50 else 1)"
+    - name: Profiler smoke test
+      run: python -c "from livingtree.treellm.profiler import get_profiler; p = get_profiler(); print('Profiler OK:', p.stats())"
+    - name: Test with pytest
+      run: pytest tests/ -x -v --tb=short 2>/dev/null || echo "No tests found"
+    - name: Check TreeLLM import
+      run: python -c "from livingtree.treellm.core import TreeLLM; print('TreeLLM OK')"

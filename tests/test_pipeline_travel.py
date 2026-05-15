@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 # Ensure the project root is on the path
 ROOT = Path(__file__).resolve().parent.parent  # tests/ → project root
 sys.path.insert(0, str(ROOT))

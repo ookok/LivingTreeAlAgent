@@ -15,6 +15,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from livingtree.dna.organ_dashboard import get_organ_dashboard, InstrumentedPipeline
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 async def main():
     dashboard = get_organ_dashboard()

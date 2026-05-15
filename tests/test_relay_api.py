@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
+pytestmark = pytest.mark.integration
+
 
 class TestRelayAPI(AioHTTPTestCase):
     async def get_application(self):

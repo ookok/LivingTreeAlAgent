@@ -410,6 +410,27 @@ TOOLS = [
         "description": "Call any discovered web API by name with parameters. Returns structured data.",
         "inputSchema": {"type":"object","properties":{"name":{"type":"string"},"params":{"type":"object"},"method":{"type":"string"}},"required":["name"]},
     },
+    # ═══ CLI Anything Tools ═══
+    {
+        "name": "cli_wrap_function",
+        "description": "Wrap a Python function into a CLI tool. Creates argparse-based CLI script.",
+        "inputSchema": {"type":"object","properties":{"function_name":{"type":"string"},"description":{"type":"string"},"params_json":{"type":"string","description":"JSON list of {name,type,description,default}"}},"required":["function_name"]},
+    },
+    {
+        "name": "cli_from_repo",
+        "description": "Clone a git repo, discover entrypoints, and generate a CLI tool from it.",
+        "inputSchema": {"type":"object","properties":{"repo_url":{"type":"string"},"entry_point":{"type":"string"}},"required":["repo_url"]},
+    },
+    {
+        "name": "cli_from_manifest",
+        "description": "Generate a CLI tool from a YAML manifest definition.",
+        "inputSchema": {"type":"object","properties":{"yaml_path":{"type":"string"}},"required":["yaml_path"]},
+    },
+    {
+        "name": "cli_list_tools",
+        "description": "List all generated CLI tools and their status.",
+        "inputSchema": {"type":"object","properties":{}},
+    },
 ]
 
 
@@ -419,37 +440,95 @@ class MCPServer:
     Implements the MCP JSON-RPC protocol over stdio.
     External AI tools connect via:
         {"mcpServers": {"livingtree": {"command": "python", "args": ["-m", "livingtree.mcp.server"]}}}
+
+    Lazy-loading architecture:
+      - Pure-computation tools (code graph, EIA, GIS, standards, API map, CLI):
+        load only the needed module — no LLM, no hub, <100ms startup
+      - LLM-dependent tools (chat, analyze, code gen, cell training):
+        lazily initialize IntegrationHub on first use (30s+ with all providers)
+      - System tools (status, metrics, peers):
+        lightweight — no external deps
     """
+
+    # Tool categories for lazy-load routing
+    PURE_TOOLS = {  # No hub needed — pure computation
+        "build_code_graph", "blast_radius", "get_callers", "get_callees",
+        "search_code", "find_hubs", "find_uncovered",
+        "code_incremental", "code_diff", "code_impact",
+        "lookup_standard", "classify_water_quality", "classify_air_quality",
+        "classify_noise_level", "redact_pii", "detect_outliers",
+        "geocode", "buffer_query", "spatial_search", "distance_calc",
+        "coordinate_transform",
+        "gaussian_plume", "streeter_phelps", "noise_iso9613",
+        "co2_equivalent", "hazard_quotient",
+        "search_apis", "call_api",
+        "cli_wrap_function", "cli_from_repo", "cli_from_manifest", "cli_list_tools",
+    }
+    HUB_TOOLS = {  # Need full IntegrationHub + LLM providers
+        "chat", "analyze", "generate_report",
+        "generate_code", "improve_code",
+        "search_knowledge", "detect_knowledge_gaps", "discover_formats",
+        "train_cell", "drill_train", "absorb_codebase",
+    }
+    LIGHT_TOOLS = {  # System — no heavy deps
+        "get_status", "get_metrics", "discover_peers",
+    }
 
     def __init__(self, hub=None):
         self._hub = hub
         self._code_graph = None
+        self._hub_init_attempted = False
+
+    async def _ensure_code_graph(self) -> bool:
+        if self._code_graph is not None:
+            return True
+        try:
+            from ..capability.code_graph import CodeGraph
+            self._code_graph = CodeGraph()
+            self._code_graph.load()
+            return True
+        except Exception:
+            return False
+
+    async def _ensure_hub(self) -> bool:
+        if self._hub is not None:
+            return True
+        if self._hub_init_attempted:
+            return False
+        self._hub_init_attempted = True
+        try:
+            from ..integration.hub import IntegrationHub
+            self._hub = IntegrationHub()
+            await self._hub.start()
+            return True
+        except Exception as e:
+            logger.error(f"MCP hub init failed: {e}")
+            return False
 
     async def handle_request(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        """Route an MCP method to the appropriate handler."""
+        """Route an MCP method to the appropriate handler with lazy loading.
+
+        Lazy-loading tiers:
+          - PURE_TOOLS: load only the needed module (<100ms)
+          - HUB_TOOLS: lazily init IntegrationHub on first use (30s+)
+          - LIGHT_TOOLS: no deps needed
+        """
         params = params or {}
 
-        # Initialize hub lazily
-        if self._hub is None and method != "initialize":
-            try:
-                from ..integration.hub import IntegrationHub
-                self._hub = IntegrationHub()
-                await self._hub.start()
-            except Exception as e:
-                logger.error(f"MCP hub init failed: {e}")
-                return {"error": str(e)}
+        # ═══ Lazy-load: Code Graph tools (pure computation) ═══
+        if method in {"build_code_graph", "blast_radius", "get_callers", "get_callees",
+                      "search_code", "find_hubs", "find_uncovered",
+                      "code_incremental", "code_diff", "code_impact"}:
+            if not self._code_graph:
+                await self._ensure_code_graph()
 
-        # Initialize code graph lazily
-        if self._code_graph is None and method.startswith(("build_", "blast_", "get_", "search_code", "find_")):
-            try:
-                from ..capability.code_graph import CodeGraph
-                self._code_graph = CodeGraph()
-                self._code_graph.load()
-            except Exception:
-                pass
+        # ═══ Lazy-load: Hub-dependent tools (LLM required) ═══
+        if method in self.HUB_TOOLS and self._hub is None:
+            if not await self._ensure_hub():
+                return {"error": "Hub initialization failed — check API keys and network"}
 
         handlers = {
-            # Code Graph
+            # Code Graph (pure computation)
             "build_code_graph": self._build_graph,
             "blast_radius": self._blast_radius,
             "get_callers": self._get_callers,
@@ -460,47 +539,52 @@ class MCPServer:
             "code_incremental": self._code_incremental,
             "code_diff": self._code_diff,
             "code_impact": self._code_impact,
-            # Chat
+            # Chat (requires hub)
             "chat": self._chat,
             "analyze": self._analyze,
             "generate_report": self._generate_report,
-            # Code Gen
+            # Code Gen (requires hub)
             "generate_code": self._gen_code,
             "improve_code": self._improve_code,
-            # Knowledge
+            # Knowledge (requires hub)
             "search_knowledge": self._search_knowledge,
             "detect_knowledge_gaps": self._detect_gaps,
             "discover_formats": self._discover_formats,
-            # Cell
+            # Cell (requires hub)
             "train_cell": self._train_cell,
             "drill_train": self._drill_train,
             "absorb_codebase": self._absorb_codebase,
-            # System
+            # System (lightweight)
             "get_status": self._get_status,
             "get_metrics": self._get_metrics,
             "discover_peers": self._discover_peers,
-            # LivingTree unique
+            # LivingTree unique (pure computation)
             "lookup_standard": self._lookup_standard,
             "classify_water_quality": self._classify_water,
             "classify_air_quality": self._classify_air,
             "classify_noise_level": self._classify_noise,
             "redact_pii": self._redact_pii,
             "detect_outliers": self._detect_outliers,
-            # Map/GIS tools
+            # Map/GIS (pure computation)
             "geocode": self._mcp_geocode,
             "buffer_query": self._mcp_buffer,
             "spatial_search": self._mcp_spatial_search,
             "distance_calc": self._mcp_distance,
             "coordinate_transform": self._mcp_coord_transform,
-            # EIA models
+            # EIA models (pure computation)
             "gaussian_plume": self._mcp_gaussian_plume,
             "streeter_phelps": self._mcp_streeter_phelps,
             "noise_iso9613": self._mcp_noise_iso9613,
             "co2_equivalent": self._mcp_co2_equivalent,
             "hazard_quotient": self._mcp_hazard_quotient,
-            # API Map
+            # API Map (pure computation)
             "search_apis": self._mcp_search_apis,
             "call_api": self._mcp_call_api,
+            # CLI Anything (pure computation)
+            "cli_wrap_function": self._mcp_cli_wrap,
+            "cli_from_repo": self._mcp_cli_from_repo,
+            "cli_from_manifest": self._mcp_cli_from_manifest,
+            "cli_list_tools": self._mcp_cli_list,
         }
 
         handler = handlers.get(method)
@@ -837,6 +921,52 @@ class MCPServer:
         return {"data": result.data, "status_code": result.status_code,
                 "elapsed_ms": round(result.elapsed_ms, 0),
                 "cached": result.cached, "error": result.error}
+
+    # ── CLI Anything handlers ──
+
+    async def _mcp_cli_wrap(self, params: dict) -> dict:
+        from ..treellm.cli_anything import get_cli_anything, CLIParam
+        import json as _json
+        cli = get_cli_anything()
+        func_name = params["function_name"]
+        desc = params.get("description", f"CLI tool: {func_name}")
+        try:
+            param_list = _json.loads(params.get("params_json", "[]"))
+        except Exception:
+            param_list = []
+        cli_params = [
+            CLIParam(name=p["name"], type=p.get("type", "str"),
+                      description=p.get("description", ""),
+                      required=p.get("required", False),
+                      default=p.get("default"))
+            for p in param_list
+        ]
+        path = cli.wrap_python_func(func_name, desc, cli_params)
+        return {"status": "created", "path": str(path), "function": func_name}
+
+    async def _mcp_cli_from_repo(self, params: dict) -> dict:
+        from ..treellm.cli_anything import get_cli_anything
+        cli = get_cli_anything()
+        definition = await cli.from_git_repo(
+            params["repo_url"],
+            params.get("entry_point", ""),
+        )
+        return {"name": definition.name, "version": definition.version,
+                "commands": [c.name for c in definition.commands],
+                "entry_point": definition.entry_point,
+                "description": definition.description}
+
+    async def _mcp_cli_from_manifest(self, params: dict) -> dict:
+        from ..treellm.cli_anything import get_cli_anything
+        cli = get_cli_anything()
+        definition = cli.from_manifest(params["yaml_path"])
+        return {"name": definition.name, "version": definition.version,
+                "commands": [c.name for c in definition.commands],
+                "description": definition.description}
+
+    async def _mcp_cli_list(self, params: dict) -> dict:  # noqa: ARG002 (unused params in interface)
+        from ..treellm.cli_anything import get_cli_anything
+        return get_cli_anything().stats()
 
 
 async def serve_stdio(hub=None) -> None:

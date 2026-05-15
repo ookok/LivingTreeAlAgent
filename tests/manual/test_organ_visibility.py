@@ -14,6 +14,10 @@ from livingtree.dna.organ_dashboard import (
     get_organ_dashboard, InstrumentedPipeline, OrganType,
 )
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 async def _run_query(idx: int, query: str):
     """Test one query with full organ visibility instrumentation."""

@@ -39,6 +39,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     session_id: str
+    reply: str = ""  # Primary text output for frontend display
     intent: Optional[str] = None
     plan: list[dict[str, Any]] = Field(default_factory=list)
     execution_results: list[dict[str, Any]] = Field(default_factory=list)
@@ -282,6 +283,8 @@ def setup_routes(app: FastAPI) -> None:
             result = await hub.chat(req.message, **req.context)
         return ChatResponse(
             session_id=result["session_id"],
+            reply=result.get("reply", "") or
+                  "\n".join(str(r.get("output","")) for r in result.get("execution_results",[])),
             intent=result.get("intent"),
             plan=result.get("plan", []),
             execution_results=result.get("execution_results", []),

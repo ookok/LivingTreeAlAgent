@@ -1,136 +1,194 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" class="h-full">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>🌳 LivingTree AI Agent</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🌳 LivingTree</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script type="importmap">
-{"imports": {"monaco-editor": "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/esm/vs/editor/editor.main.js"}}
-</script>
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="components/sidebar/sidebar.css">
-<link rel="stylesheet" href="components/chat/chat.css">
-<link rel="stylesheet" href="components/input/input.css">
-<link rel="stylesheet" href="components/code-editor/code-editor.css">
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 <script src="js/living-a2ui.js" defer></script>
+<script src="js/localfs.js" defer></script>
+<script src="services/renderer.js" defer></script>
+<script src="services/api.js" defer></script>
+<style>
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .msg-enter { animation:fadeIn .3s ease-out }
+  .typing-dot { animation:blink 1.4s infinite both }
+  .typing-dot:nth-child(2){animation-delay:.2s}
+  .typing-dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+  ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px}
+</style>
 </head>
-<body>
-<div class="app">
-  <aside class="sidebar" id="sidebar"></aside>
-  <div class="resizer" id="resizer"></div>
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="topbar-toggle" onclick="toggleSidebar()"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11" width="9" height="1.5" rx="0.75" fill="currentColor"/></svg></button>
-        <span class="topbar-title" id="topbar-title">LivingTree AI Agent</span>
-        <button onclick="pickFolder()" title="选择本地文件夹" style="background:none;border:1px solid var(--border-secondary);color:var(--text-secondary);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:8px">📁</button>
-        <span id="folder-path" style="font-size:10px;color:var(--text-secondary);margin-left:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      </div>
-      <div class="topbar-right">
-        <button onclick="clearPanel()" title="清空面板" style="background:none;border:1px solid var(--border-secondary);color:var(--text-secondary);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-right:8px">🗑</button>
-        <span id="presence-text" style="font-size:11px;color:var(--accent-coral);margin-right:8px;opacity:0.7"></span>
-        <span id="shield-indicator" style="font-size:11px;margin-right:8px;cursor:pointer" title="提示注入防护" onclick="fetch('/tree/admin/shield').then(r=>r.text()).then(h=>{var d=document.createElement('div');d.textContent='🛡️ '+h;d.style.cssText='position:fixed;top:40px;right:16px;z-index:500;max-width:400px;padding:8px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:4px;font-size:12px';document.body.appendChild(d);setTimeout(function(){d.remove()},8000)})">🛡️</span>
-        <button onclick="document.getElementById('evo-panel').classList.toggle('hidden')" title="自进化面板" style="background:none;border:1px solid var(--border-secondary);color:var(--text-secondary);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-right:8px">🧬</button>
-        <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>
-        <button onclick="toggleRightPanel()" title="上下文"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="8.5" y1="2.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="1.3"/></svg></button>
+<body class="h-full bg-gray-50 text-gray-900 antialiased">
+
+<!-- ═══ Layout ═══ -->
+<div class="flex h-full">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 flex-shrink-0 hidden lg:flex flex-col">
+    <div class="p-4 border-b border-gray-100">
+      <h1 class="text-lg font-bold text-gray-800">🌳 LivingTree</h1>
+      <p class="text-xs text-gray-400 mt-1">Digital Lifeform v2.5</p>
+    </div>
+
+    <!-- Folder Mount -->
+    <div class="p-3 border-b border-gray-100">
+      <button onclick="xiaoshu.mountFolder()" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+        <span>📂</span> 选择文件夹
+      </button>
+      <div id="mounts-list" class="mt-2 space-y-1 text-xs"></div>
+    </div>
+
+    <!-- Quick Actions -->
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+      <p class="text-xs font-medium text-gray-400 px-3 py-1">快捷操作</p>
+      <button onclick="sendMsg('扫描代码库')" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg">🔍 扫描代码</button>
+      <button onclick="sendMsg('分析热点文件')" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg">🔥 热点分析</button>
+      <button onclick="sendMsg('外部学习')" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg">📚 外部学习</button>
+      <button hx-get="/static/evolution.html" hx-target="#evo-inline" class="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg">🧬 自进化</button>
+      <div id="evo-inline" class="text-xs"></div>
+    </nav>
+  </aside>
+
+  <!-- Main Chat -->
+  <main class="flex-1 flex flex-col min-w-0">
+    <!-- Top bar -->
+    <header class="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white flex-shrink-0">
+      <button onclick="document.getElementById('sidebar').classList.toggle('hidden')" class="lg:hidden p-1 text-gray-500">☰</button>
+      <div class="flex items-center gap-3">
+        <span id="presence-text" class="text-xs text-gray-400">🌿</span>
+        <span id="shield-indicator" class="text-xs cursor-pointer" title="防护状态" onclick="fetch('/api/shield/status').then(r=>r.json()).then(d=>alert(d.hitl_pending>0?'⚠️ 待处理: '+d.hitl_pending:'🛡️ 安全'))">🛡️</span>
       </div>
     </header>
-    <div id="chat-area" class="chat-area"></div>
-    <div class="input-area"></div>
-    <div id="cognition-panel" style="display:none;padding:8px 16px;background:var(--bg-secondary);border-top:1px solid var(--border-secondary);font-size:11px;color:var(--text-secondary);max-height:150px;overflow-y:auto"></div>
+
+    <!-- Messages -->
+    <div id="chat-area" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+      <div class="msg-enter flex gap-3 max-w-3xl mx-auto">
+        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm flex-shrink-0">🌳</div>
+        <div class="bg-white rounded-2xl rounded-tl-none shadow-sm px-4 py-3 max-w-2xl">
+          <p class="text-sm text-gray-700">你好，我是小树 🌱<br>可以帮你分析代码、搜索论文、进化项目。<br>试试拖拽文件夹到此处，或者输入消息开始。</p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button onclick="sendMsg('扫描代码库')" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors">🔍 扫描代码</button>
+            <button onclick="sendMsg('分析项目热点')" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors">🔥 热点分析</button>
+            <button onclick="xiaoshu.mountFolder()" class="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full text-blue-600 transition-colors">📂 选择文件夹</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="border-t border-gray-200 bg-white px-4 py-3 flex-shrink-0">
+      <div class="max-w-3xl mx-auto flex items-end gap-2">
+        <button onclick="xiaoshu.mountFolder()" title="选择文件夹" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <textarea id="msg-input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+          class="flex-1 resize-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 max-h-32"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,128)+'px'"></textarea>
+        <button onclick="sendMsg()" class="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors flex-shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <p class="text-xs text-gray-400 text-center mt-1.5">TreeLLM 28 providers | 拖拽文件夹到此处直接挂载</p>
+    </div>
   </main>
-  <aside class="context-panel" id="context-panel"></aside>
-  <div id="evo-panel" class="hidden" style="position:fixed;top:40px;right:16px;z-index:400;max-width:480px;max-height:80vh;overflow-y:auto;background:var(--bg-primary);border:1px solid var(--border-secondary);border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.12)"></div>
 </div>
 
+<!-- ═══ Core Logic ═══ -->
 <script>
-// Load evolution panel on demand
-document.querySelector('button[onclick*="evo-panel"]').addEventListener('click',function(){
-  var el=document.getElementById('evo-panel');
-  if(!el.dataset.loaded){
-    fetch('/static/evolution.html').then(r=>r.text()).then(h=>{el.innerHTML=h;el.dataset.loaded='1';});
+window.LT = window.LT || {};
+LT.esc = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+/* Message sending */
+async function sendMsg(text) {
+  const input = document.getElementById('msg-input');
+  const msg = text || input.value.trim();
+  if (!msg) return;
+  if (!text) input.value = ''; input.style.height = 'auto';
+
+  const area = document.getElementById('chat-area');
+  const streamId = 's'+Date.now();
+
+  // User bubble
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-enter flex gap-3 max-w-3xl mx-auto justify-end';
+  userDiv.innerHTML = `<div class="bg-blue-600 text-white rounded-2xl rounded-tr-none shadow-sm px-4 py-2.5 max-w-xl text-sm">${LT.esc(msg)}</div>`;
+  area.appendChild(userDiv);
+
+  // Agent bubble
+  const agentDiv = document.createElement('div');
+  agentDiv.className = 'msg-enter flex gap-3 max-w-3xl mx-auto';
+  agentDiv.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm flex-shrink-0">🌳</div><div id="${streamId}" class="bg-white rounded-2xl rounded-tl-none shadow-sm px-4 py-3 max-w-2xl"><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full mx-0.5"></span><span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span></div>`;
+  area.appendChild(agentDiv);
+  area.scrollTop = area.scrollHeight;
+
+  // Call API
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg, stream: false})
+    });
+    const data = await resp.json();
+    const bubble = document.getElementById(streamId);
+    let content = data.reply || data.text || data.content || '';
+
+    // A2UI detection
+    if (LT.renderer && LT.renderer.extractA2UI) {
+      content = LT.renderer.extractA2UI(content);
+    }
+
+    bubble.innerHTML = content || '（无响应）';
+
+    // Trigger A2UI scan
+    if (window.LivingA2UI) {
+      setTimeout(() => LivingA2UI.scan(), 100);
+    }
+  } catch(e) {
+    document.getElementById(streamId).innerHTML = '<span class="text-red-500 text-sm">请求失败: '+LT.esc(e.message)+'</span>';
+  }
+  area.scrollTop = area.scrollHeight;
+}
+
+/* Folder mount callback */
+window.xiaoshu = window.xiaoshu || {};
+xiaoshu.emit = function(event, data) {
+  if (event === 'mount') {
+    document.getElementById('mounts-list').insertAdjacentHTML('beforeend',
+      `<div class="flex items-center justify-between px-2 py-1 bg-gray-50 rounded text-gray-600">
+        <span>📁 ${LT.esc(data.name)}</span>
+        <span class="text-gray-400">${data.fileCount||0} 文件</span>
+      </div>`);
+    sendMsg('分析文件夹: '+data.name);
+  }
+};
+
+/* Drag & drop folder */
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', async e => {
+  e.preventDefault();
+  const items = [...e.dataTransfer.items];
+  for (const item of items) {
+    if (item.kind === 'file') {
+      const handle = await item.getAsFileSystemHandle();
+      if (handle && handle.kind === 'directory') {
+        xiaoshu.emit('mount', {name: handle.name, fileCount: '?'});
+      }
+    }
   }
 });
-</script>
 
-<!-- Shell slots for non-main components -->
-<div id="dashboard" style="display:none"></div>
-<div id="settings-modal" class="modal-overlay" style="display:none"></div>
-<div id="models-modal" class="modal-overlay" style="display:none"></div>
-<div id="doc-reader-modal" class="modal-overlay" style="display:none"></div>
-<div id="notifications" class="notif-container"></div>
-<div id="user-dropdown" class="user-dropdown" style="display:none"></div>
-<div id="boot-overlay" class="boot-overlay"></div>
-<div id="ctx-menu" class="ctx-menu" style="display:none"></div>
-
-<!-- Code Editor Panel -->
-<div class="modal-overlay" id="editor-panel" style="display:none" onclick="if(event.target===this)LT.emit('code-editor:toggle')">
-  <div class="modal-panel" style="width:95vw;height:90vh;max-width:1200px">
-    <div class="modal-header">
-      <span class="modal-title">代码编辑器</span>
-      <button class="modal-close" onclick="LT.emit('code-editor:toggle')"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
-    </div>
-    <div class="modal-body" style="padding:0;overflow:hidden" id="editor-panel-body"></div>
-  </div>
-</div>
-
-<!-- Core -->
-<script src="core/framework.js?v=5"></script>
-<!-- Services -->
-<script src="services/store.js?v=5"></script>
-<script src="services/api.js?v=5"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0/marked.min.js"></script>
-<script src="services/renderer.js?v=5"></script>
-<script src="js/slash-commands.js?v=2"></script>
-<!-- Components -->
-<script src="components/boot-overlay/boot-overlay.js?v=4"></script>
-<script src="components/sidebar/sidebar.js?v=4"></script>
-<script src="components/dashboard/dashboard.js?v=4"></script>
-<script src="components/chat/chat.js?v=4"></script>
-<script src="components/input/input.js?v=4"></script>
-<script src="components/context-panel/context-panel.js?v=4"></script>
-<script src="components/settings/settings.js?v=4"></script>
-<script src="components/doc-reader/doc-reader.js?v=4"></script>
-<script src="components/notifications/notifications.js?v=4"></script>
-<script src="components/user-menu/user-menu.js?v=4"></script>
-<script src="components/code-editor/code-editor.js?v=4"></script>
-<script src="components/models/models.js?v=4"></script>
-<!-- Bootstrap -->
-<script src="app.js?v=4"></script>
-
-<!-- Pseudo-upload drop zone -->
-<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;flex-direction:column" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault();this.classList.remove('dragover');handleDrop(event.dataTransfer.files[0])" onclick="if(event.target===this)this.style.display='none'">
-  <div style="width:400px;height:200px;border:2px dashed var(--brand-default);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;pointer-events:none">
-    <span style="font-size:36px">📥</span>
-    <span style="font-size:14px;color:var(--text)">拖拽文件到此处</span>
-    <span style="font-size:11px;color:var(--text-secondary)">txt/md/pdf/docx/csv · 音频 · 视频 · 仅提取文字, 文件不保存</span>
-  </div>
-</div>
-<script>
-document.addEventListener('paste',async function(e){
-  var f=e.clipboardData.files[0]; if(!f)return; handleDrop(f);
-});
-function handleDrop(file){
-  if(!file)return;
-  if(file.size>50*1024*1024){alert('文件过大 (>50MB)');return;}
-  var ov=document.getElementById('drop-overlay'); ov.style.display='flex';
-  var r=new FileReader();
-  r.onload=function(){
-    fetch('/api/knowledge/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:r.result.split(',')[1]||r.result,filename:file.name,mime_type:file.type})})
-    .then(function(r){return r.json()}).then(function(d){
-      var el=ov.querySelector('div');
-      if(d.ok){
-        el.innerHTML='<span style=font-size:36px>✅</span><span style=font-size:14px;color:var(--text)>已摄入: '+LT.esc(d.title||'')+'</span><span style=font-size:11px;color:var(--text-secondary)>'+LT.esc(String(d.word_count||''))+'词 · '+LT.esc(d.source_format||'')+' · '+LT.esc(String(d.parse_time_ms||''))+'ms</span>';
-      }else{
-        el.textContent='❌ '+(d.error||'未知错误');
-      }
-      setTimeout(function(){ov.style.display='none'},2500);
-    });
-  };
-  r.readAsDataURL(file);
-}
+/* Periodic vitals */
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/status/vitals');
+    const d = await r.json();
+    const el = document.getElementById('presence-text');
+    if (el) el.textContent = (d.leaf_display||{}).message || '🌿';
+  } catch(e) {}
+}, 15000);
 </script>
 </body>
 </html>

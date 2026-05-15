@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -214,11 +215,14 @@ class RecordingEngine:
     """Task recording and replay engine."""
 
     _instance: Optional["RecordingEngine"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "RecordingEngine":
         if cls._instance is None:
-            cls._instance = RecordingEngine()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = RecordingEngine()
         return cls._instance
 
     def __init__(self):
@@ -472,12 +476,15 @@ class RecordingEngine:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _engine: Optional[RecordingEngine] = None
+_engine_lock = threading.Lock()
 
 
 def get_recording_engine() -> RecordingEngine:
     global _engine
     if _engine is None:
-        _engine = RecordingEngine()
+        with _engine_lock:
+            if _engine is None:
+                _engine = RecordingEngine()
     return _engine
 
 

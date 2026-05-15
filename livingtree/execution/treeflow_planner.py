@@ -32,7 +32,7 @@ from loguru import logger
 from .gtsm_planner import (
     GTSMPlanner, GTSMMode, GTSMStep, GTSMTrajectory, get_gtsm_planner,
 )
-from .dsmtree_distiller import DSMTreeDistiller, DistilledPolicy, get_dsmtree_distiller
+from ..cell.dsmtree_distiller import DSMTreeDistiller, DistilledPolicy, get_dsmtree_distiller
 
 
 # ═══ Data Types ═══

@@ -15,9 +15,7 @@ In hub.chat(): check at start, skip engine.run() on hit.
 
 from __future__ import annotations
 
-import hashlib
-import math
-import random
+import threading
 import time
 from typing import Optional
 
@@ -54,11 +52,14 @@ class SemanticDedupCache:
     """Semantic query deduplication using LSH."""
 
     _instance: Optional["SemanticDedupCache"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "SemanticDedupCache":
         if cls._instance is None:
-            cls._instance = SemanticDedupCache()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = SemanticDedupCache()
         return cls._instance
 
     def __init__(self, ttl_seconds: int = 3600, max_entries: int = 500):
@@ -116,12 +117,15 @@ class SemanticDedupCache:
 
 
 _semantic_cache: Optional[SemanticDedupCache] = None
+_semantic_cache_lock = threading.Lock()
 
 
 def get_semantic_cache() -> SemanticDedupCache:
     global _semantic_cache
     if _semantic_cache is None:
-        _semantic_cache = SemanticDedupCache()
+        with _semantic_cache_lock:
+            if _semantic_cache is None:
+                _semantic_cache = SemanticDedupCache()
     return _semantic_cache
 
 

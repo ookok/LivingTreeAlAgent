@@ -192,18 +192,11 @@ def register_seed_tools(market: ToolMarket) -> None:
     market.register("generate_diagram", "Generate ASCII diagram from description",
                     category="visualization", handler=_generate_diagram,
                     input_schema={"description": "string"})
-
-
-def _tabular_reason(inputs: dict) -> dict:
-    """In-context tabular reasoning: classify water/air quality, detect outliers."""
-
-    # ── Register after function definition ──
     market.register("tabular_reason", "In-context tabular data classification and analysis",
                     category="data", handler=_tabular_reason,
                     input_schema={"cod": "number", "bod": "number", "do": "number",
                                   "nh3n": "number", "task": "string"})
 
-    # ── Browser tools: LLM discovers and orchestrates autonomously ──
     try:
         from .browser_tools import register_browser_tools
         register_browser_tools(market)

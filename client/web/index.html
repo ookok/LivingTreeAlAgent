@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>🌳 LivingTree AI Agent</title>
+<script type="importmap">
+{"imports": {"monaco-editor": "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/esm/vs/editor/editor.main.js"}}
+</script>
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="components/sidebar/sidebar.css">
@@ -60,11 +63,13 @@
 </div>
 
 <!-- Core -->
-<script src="core/framework.js?v=4"></script>
+<script src="core/framework.js?v=5"></script>
 <!-- Services -->
-<script src="services/store.js?v=4"></script>
-<script src="services/api.js?v=4"></script>
-<script src="services/renderer.js?v=4"></script>
+<script src="services/store.js?v=5"></script>
+<script src="services/api.js?v=5"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0/marked.min.js"></script>
+<script src="services/renderer.js?v=5"></script>
+<script src="js/slash-commands.js?v=2"></script>
 <!-- Components -->
 <script src="components/boot-overlay/boot-overlay.js?v=4"></script>
 <script src="components/sidebar/sidebar.js?v=4"></script>

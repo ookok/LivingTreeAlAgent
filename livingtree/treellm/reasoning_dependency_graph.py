@@ -41,6 +41,7 @@ Usage:
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -793,12 +794,15 @@ class ReasoningDependencyGraph:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _rdg: Optional[ReasoningDependencyGraph] = None
+_rdg_lock = threading.Lock()
 
 
 def get_reasoning_graph() -> ReasoningDependencyGraph:
     global _rdg
     if _rdg is None:
-        _rdg = ReasoningDependencyGraph()
+        with _rdg_lock:
+            if _rdg is None:
+                _rdg = ReasoningDependencyGraph()
     return _rdg
 
 

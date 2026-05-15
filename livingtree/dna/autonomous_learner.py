@@ -92,7 +92,7 @@ class AutonomousLearner:
 
     async def _auto_mine(self):
         """Autonomously mine the project workspace for templates/patterns."""
-        from ..knowledge.auto_knowledge_miner import get_miner
+        from ..knowledge.learning_engine import get_miner
         from ..observability.system_monitor import get_monitor
         if get_monitor().can_run_task("AutoMiner", heavy=True):
             miner = get_miner()

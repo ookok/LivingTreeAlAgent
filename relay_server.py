@@ -90,8 +90,10 @@ def _ensure_accounts():
         except Exception:
             pass
     if not ACCOUNT_STORE:
+        import os as _os23
+        admin_default_pwd = _os23.environ.get("LT_RELAY_ADMIN_PWD", "")
         ACCOUNT_STORE["admin"] = {
-            "password_hash": hashlib.sha256("admin123".encode()).hexdigest(),
+            "password_hash": hashlib.sha256(admin_default_pwd.encode()).hexdigest() if admin_default_pwd else "",
             "created": time.time(), "cost_rmb": 0.0, "token_in": 0, "token_out": 0,
             "last_login": 0, "is_admin": True,
         }

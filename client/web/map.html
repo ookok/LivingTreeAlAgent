@@ -30,10 +30,10 @@
 <body>
 <div class="page-toolbar">
   <div class="page-toolbar-left">
-    <span class="page-title">🗺️ 天地图 · 环境监测GIS</span>
-    <button class="app-btn app-btn-sm" data-layer="vec">🗺️ 矢量</button>
-    <button class="app-btn app-btn-sm" data-layer="img">🛰️ 卫星</button>
-    <button class="app-btn app-btn-sm app-btn-primary" data-layer="vec_img">📍 混合</button>
+    <span class="page-title">🗺️ 环境监测GIS</span>
+    <button class="app-btn app-btn-sm app-btn-primary" data-layer="vec">🗺️ 天地图</button>
+    <button class="app-btn app-btn-sm" data-layer="tencent">🔄 腾讯</button>
+    <button class="app-btn app-btn-sm" data-layer="baidu">🔄 百度</button>
   </div>
   <div class="page-toolbar-right">
     <button class="app-btn app-btn-sm" data-action="locate">📍 定位</button>
@@ -62,8 +62,22 @@ window._LT_MAP = {
   monitors: [],
   sources: [],
   receptors: [],
+  _provider: 'tianditu',
+  _keys: {},
 
   async init() {
+    // Fetch map keys from backend (encrypted vault)
+    try {
+      const [tiandituR, tencentR, baiduR] = await Promise.all([
+        fetch('/api/config/tianditu_key'),
+        fetch('/api/config/tencent_map_key'),
+        fetch('/api/config/baidu_map_key'),
+      ]);
+      if (tiandituR.ok) this._keys.tianditu = (await tiandituR.json()).key || '';
+      if (tencentR.ok) this._keys.tencent = (await tencentR.json()).key || '';
+      if (baiduR.ok) this._keys.baidu = (await baiduR.json()).key || '';
+    } catch(e) { console.warn('Map key fetch failed', e); }
+
     // Load real data from backend
     try {
       const resp = await fetch('/api/status');
@@ -83,35 +97,77 @@ window._LT_MAP = {
       ];
     }
 
-    if (typeof T === 'undefined') {
-      // Load Tianditu JS API
-      const script = document.createElement('script');
-      script.src = 'https://api.tianditu.gov.cn/api?v=4.0&tk=2e0225658699ccabf223a2c376c535bb';
-      script.onload = () => this._initMap();
-      script.onerror = () => this._fallbackLeaflet();
-      document.head.appendChild(script);
-    } else {
-      this._initMap();
-    }
+    if (!this._keys.tianditu && !this._keys.tencent && !this._keys.baidu) {
+      console.warn('No map keys available — map will use fallback'); }
+    // Load default provider (Tianditu first, then Tencent, then Baidu)
+    if (this._keys.tianditu) { await this._loadTianditu(); }
+    else if (this._keys.tencent) { await this._loadTencent(); }
+    else if (this._keys.baidu) { await this._loadBaidu(); }
+    else { this._fallbackLeaflet(); }
   },
 
-  _initMap() {
-    try {
-      const T = window.T;
-      this.map = new T.Map('map', { center: new T.LngLat(116.404, 39.915), zoom: 14 });
-      // Vector + annotation base layer
-      const baseLayer = new T.TileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?tk=2e0225658699ccabf223a2c376c535bb',
-        { subdomains: ['0','1','2','3','4','5','6','7'] });
-      const annoLayer = new T.TileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?tk=2e0225658699ccabf223a2c376c535bb',
-        { subdomains: ['0','1','2','3','4','5','6','7'] });
-      this.map.addLayer(baseLayer);
-      this.map.addLayer(annoLayer);
+  async switchProvider(name) {
+    this._provider = name;
+    document.querySelectorAll('[data-layer]').forEach(b => b.classList.remove('app-btn-primary'));
+    const btn = document.querySelector(`[data-layer="${name}"]`);
+    if (btn) btn.classList.add('app-btn-primary');
+    // Clear map
+    const mapDiv = document.getElementById('map');
+    mapDiv.innerHTML = '';
+    this.map = null;
+    // Load provider
+    if (name === 'tianditu') await this._loadTianditu();
+    else if (name === 'tencent') await this._loadTencent();
+    else if (name === 'baidu') await this._loadBaidu();
+  },
 
-      this._addMarkers();
-      this._renderMonitorList();
-    } catch (e) {
-      this._fallbackLeaflet();
-    }
+  async _loadTianditu() {
+    const tk = this._keys.tianditu || '';
+    if (typeof T !== 'undefined') { this._initTianditu(tk); return; }
+    const script = document.createElement('script');
+    script.src = 'https://api.tianditu.gov.cn/api?v=4.0&tk=' + encodeURIComponent(tk);
+    script.onload = () => this._initTianditu(tk);
+    script.onerror = () => this._fallbackLeaflet();
+    document.head.appendChild(script);
+  },
+  _initTianditu(tk) {
+    this.map = new T.Map('map', { center: new T.LngLat(116.404, 39.915), zoom: 14 });
+    this.map.addLayer(new T.TileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?tk=' + encodeURIComponent(tk), { subdomains: ['0','1','2','3','4','5','6','7'] }));
+    this.map.addLayer(new T.TileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?tk=' + encodeURIComponent(tk), { subdomains: ['0','1','2','3','4','5','6','7'] }));
+    this._addMarkers(); this._renderMonitorList();
+  },
+
+  async _loadTencent() {
+    const key = this._keys.tencent || '';
+    if (typeof qq !== 'undefined' && qq.maps) { this._initTencent(key); return; }
+    const script = document.createElement('script');
+    script.src = 'https://map.qq.com/api/js?v=2.exp&key=' + encodeURIComponent(key) + '&callback=_LT_MAP._initTencentCB';
+    window._LT_MAP._initTencentCB = () => this._initTencent(key);
+    script.onerror = () => this._fallbackLeaflet();
+    document.head.appendChild(script);
+  },
+  _initTencent(key) {
+    this.map = new qq.maps.Map(document.getElementById('map'), { center: new qq.maps.LatLng(39.915, 116.404), zoom: 14 });
+    this._addMarkersQQ();
+    this._renderMonitorList();
+  },
+
+  async _loadBaidu() {
+    const key = this._keys.baidu || '';
+    if (typeof BMap !== 'undefined') { this._initBaidu(key); return; }
+    const script = document.createElement('script');
+    script.src = 'https://api.map.baidu.com/api?v=3.0&ak=' + encodeURIComponent(key) + '&callback=_LT_MAP._initBaiduCB';
+    window._LT_MAP._initBaiduCB = () => this._initBaidu(key);
+    script.onerror = () => this._fallbackLeaflet();
+
+    document.head.appendChild(script);
+  },
+  _initBaidu(key) {
+    this.map = new BMap.Map('map');
+    this.map.centerAndZoom(new BMap.Point(116.404, 39.915), 14);
+    this.map.enableScrollWheelZoom(true);
+    this._addMarkersBaidu();
+    this._renderMonitorList();
   },
 
   _fallbackLeaflet() {
@@ -128,31 +184,21 @@ window._LT_MAP = {
       </div>`;
   },
 
-  _addMarkers() {
+  _addMarkers() { this._addMarkersT(); },
+  _addMarkersT() {
     if (!this.map) return;
-    // Add sources (red)
-    this.sources.forEach(s => {
-      const marker = new T.Marker(new T.LngLat(s.lon, s.lat));
-      marker.addEventListener('click', () => alert(`${s.name}\n排放源坐标: ${s.lat}, ${s.lon}`));
-      this.map.addOverLay(marker);
-    });
-
-    // Add monitors (blue)
-    this.monitors.forEach(m => {
-      const marker = new T.Marker(new T.LngLat(m.lon, m.lat));
-      marker.addEventListener('click', () => {
-        const info = [m.name, `状态: ${m.status}`, m.pm25 ? `PM2.5: ${m.pm25}` : '', m.leq ? `噪声: ${m.leq}dB` : ''].filter(Boolean).join('\n');
-        alert(info);
-      });
-      this.map.addOverLay(marker);
-    });
-
-    // Add receptors (green)
-    this.receptors.forEach(r => {
-      const marker = new T.Marker(new T.LngLat(r.lon, r.lat));
-      marker.addEventListener('click', () => alert(`${r.name}\n敏感目标`));
-      this.map.addOverLay(marker);
-    });
+    const T = window.T;
+    this.sources.forEach(s => { const m = new T.Marker(new T.LngLat(s.lon, s.lat)); m.addEventListener('click', () => alert(`${s.name}\n排放源坐标: ${s.lat}, ${s.lon}`)); this.map.addOverLay(m); });
+    this.monitors.forEach(m => { const mk = new T.Marker(new T.LngLat(m.lon, m.lat)); mk.addEventListener('click', () => alert(`${m.name}\n状态: ${m.status}`)); this.map.addOverLay(mk); });
+    this.receptors.forEach(r => { const mk = new T.Marker(new T.LngLat(r.lon, r.lat)); mk.addEventListener('click', () => alert(`${r.name}\n敏感目标`)); this.map.addOverLay(mk); });
+  },
+  _addMarkersQQ() {
+    if (!this.map || !qq.maps) return;
+    this.monitors.forEach(m => { new qq.maps.Marker({ map: this.map, position: new qq.maps.LatLng(m.lat, m.lon), title: m.name }); });
+  },
+  _addMarkersBaidu() {
+    if (!this.map || !BMap) return;
+    this.monitors.forEach(m => { const mk = new BMap.Marker(new BMap.Point(m.lon, m.lat)); this.map.addOverlay(mk); mk.setTitle(m.name); });
   },
 
   _renderMonitorList() {
@@ -176,7 +222,7 @@ window._LT_MAP = {
       return;
     }
     // Geocode via Tianditu API
-    fetch(`https://api.tianditu.gov.cn/geocoder?ds={"keyWord":"${encodeURIComponent(q)}"}&tk=2e0225658699ccabf223a2c376c535bb`)
+    fetch(`https://api.tianditu.gov.cn/geocoder?ds={"keyWord":"${encodeURIComponent(q)}"}&tk=` + encodeURIComponent(window._LT_MAP.tiandituKey || ''))
       .then(r => r.json())
       .then(data => {
         if (data && data.location) {
@@ -191,36 +237,37 @@ window._LT_MAP = {
 
 window.onload = () => window._LT_MAP.init();
 
-// Toolbar
+// Toolbar: layer switch + actions
 document.querySelector('.page-toolbar').addEventListener('click', e => {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-  const action = btn.dataset.action;
+  const layerBtn = e.target.closest('[data-layer]');
+  const actionBtn = e.target.closest('[data-action]');
   const map = window._LT_MAP;
+
+  if (layerBtn) {
+    const provider = layerBtn.dataset.layer;
+    if (['tianditu','tencent','baidu'].includes(provider)) {
+      map.switchProvider(provider);
+    }
+    return;
+  }
+  if (!actionBtn) return;
+  const action = actionBtn.dataset.action;
 
   if (action === 'locate') {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(p => {
-        if (map.map) map.map.panTo(new T.LngLat(p.coords.longitude, p.coords.latitude));
+        if (!map.map) return;
+        const lat = p.coords.latitude, lon = p.coords.longitude;
+        if (map._provider === 'tianditu') map.map.panTo(new T.LngLat(lon, lat));
+        else if (map._provider === 'tencent' && qq && qq.maps) map.map.panTo(new qq.maps.LatLng(lat, lon));
+        else if (map._provider === 'baidu' && BMap) map.map.panTo(new BMap.Point(lon, lat));
       });
     }
   } else if (action === 'monitors') {
     document.getElementById('monitor-list').classList.toggle('show');
-  } else if (action === 'measure') {
-    alert('测距模式：点击地图设置起点');
   } else if (action === 'screenshot') {
-    // Capture map as image for report
     alert('截图功能：将地图当前视图保存为图片');
   }
-});
-
-// Layer switching
-document.querySelectorAll('[data-layer]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-layer]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    // Tianditu layer switching would go here with proper layer URLs
-  });
 });
 </script>
 </body>

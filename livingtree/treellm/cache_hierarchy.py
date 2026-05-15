@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import math
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -787,6 +788,7 @@ class CacheHierarchy:
 # ═══════════════════════════════════════════════════════════
 
 _cache_hierarchy: Optional[CacheHierarchy] = None
+_cache_hierarchy_lock = threading.Lock()
 
 
 def get_cache_hierarchy() -> CacheHierarchy:
@@ -800,5 +802,7 @@ def get_cache_hierarchy() -> CacheHierarchy:
     """
     global _cache_hierarchy
     if _cache_hierarchy is None:
-        _cache_hierarchy = CacheHierarchy()
+        with _cache_hierarchy_lock:
+            if _cache_hierarchy is None:
+                _cache_hierarchy = CacheHierarchy()
     return _cache_hierarchy

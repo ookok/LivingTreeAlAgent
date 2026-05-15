@@ -44,7 +44,7 @@ except ImportError:
 
 # Hardware accelerator support
 try:
-    from livingtree.core.hardware_accelerator import get_accelerator
+    from livingtree.core.hardware_acceleration import get_accelerator
     _HAS_ACCELERATOR = True
 except ImportError:
     _HAS_ACCELERATOR = False

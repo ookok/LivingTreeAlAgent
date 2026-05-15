@@ -6,15 +6,18 @@ from .file_resolver import *
 from .task_guard import *
 from .system_orchestrator import SystemOrchestrator, SystemStatus, get_orchestrator
 from .adaptive_pipeline import AdaptivePipeline, PipelineContext, PipelineStep, RequestType, ProtocolMode
-from .hardware_accelerator import HardwareAccelerator, HardwareInfo, get_accelerator
-from .hardware_acceleration import HardwareAccelerator as GPUAccelerator, GPUInfo, get_hardware_accelerator
+from .hardware_acceleration import HardwareAccelerator, GPUInfo, get_hardware_accelerator, get_accelerator
 from .jit_accel import cosine_similarity_batch, bm25_score, jit_status
 from .memory_optimizer import MemoryOptimizer, MemoryStats, get_memory_optimizer
+# Backward-compat: autonomic loop merged into daemon_doctor
+from ..treellm.daemon_doctor import AutonomicLoop, LoopCycle, FixAction, FixType, Phase, start_autonomic_loop, get_autonomic_loop
 
 __all__ = [
     "EntityRegistry", "EntityEntry", "ENTITY_REGISTRY", "get_entity_registry",
     "SystemOrchestrator", "SystemStatus", "get_orchestrator",
     "AdaptivePipeline", "PipelineContext", "PipelineStep", "RequestType", "ProtocolMode",
-    "HardwareAccelerator", "HardwareInfo", "get_accelerator",
+    "HardwareAccelerator", "GPUInfo", "get_hardware_accelerator", "get_accelerator",
     "MemoryOptimizer", "MemoryStats", "get_memory_optimizer",
+    "AutonomicLoop", "LoopCycle", "FixAction", "FixType", "Phase",
+    "start_autonomic_loop", "get_autonomic_loop",
 ]

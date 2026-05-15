@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -208,10 +209,13 @@ class SessionBinding:
 
 
 _sb: SessionBinding | None = None
+_sb_lock = threading.Lock()
 
 
 def get_session_binding() -> SessionBinding:
     global _sb
     if _sb is None:
-        _sb = SessionBinding()
+        with _sb_lock:
+            if _sb is None:
+                _sb = SessionBinding()
     return _sb

@@ -30,6 +30,7 @@ import asyncio
 import copy
 import json
 import random
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -475,20 +476,26 @@ class PromptCompiler:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _engine: Optional[PromptOptimizer] = None
+_engine_lock = threading.Lock()
 _compiler: Optional[PromptCompiler] = None
+_compiler_lock = threading.Lock()
 
 
 def get_prompt_engine() -> PromptOptimizer:
     global _engine
     if _engine is None:
-        _engine = PromptOptimizer()
+        with _engine_lock:
+            if _engine is None:
+                _engine = PromptOptimizer()
     return _engine
 
 
 def get_prompt_compiler() -> PromptCompiler:
     global _compiler
     if _compiler is None:
-        _compiler = PromptCompiler(get_prompt_engine())
+        with _compiler_lock:
+            if _compiler is None:
+                _compiler = PromptCompiler(get_prompt_engine())
     return _compiler
 
 

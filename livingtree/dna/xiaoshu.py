@@ -197,11 +197,23 @@ class IntrinsicDrive:
         if not pe:
             return []
 
+        signals = []
         stats = pe.stats()
         for name, score in stats.get("reports", {}).items():
-            if hasattr(score, 'predictability_score') and score < 0.4:
+            score_val = getattr(score, 'predictability_score', getattr(score, 'predictability', None))
+            try:
+                score_val = float(score_val) if score_val is not None else None
+            except (TypeError, ValueError):
+                score_val = None
+            if score_val is not None and score_val < 0.4:
                 self._completed.append(f"mastery:{name}")
-        return []
+                signals.append(CuriositySignal(
+                    type="mastery",
+                    source=name,
+                    priority=0.5,
+                    description=f"Predictability in {name} is low ({score_val:.2f}) — needs regeneration",
+                ))
+        return signals
 
     # ═══ Domain Interest Evolution ═══
 

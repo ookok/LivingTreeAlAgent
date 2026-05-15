@@ -38,6 +38,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -435,12 +436,15 @@ class ProactiveInterject:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _pi: Optional[ProactiveInterject] = None
+_pi_lock = threading.Lock()
 
 
 def get_proactive_interject() -> ProactiveInterject:
     global _pi
     if _pi is None:
-        _pi = ProactiveInterject()
+        with _pi_lock:
+            if _pi is None:
+                _pi = ProactiveInterject()
     return _pi
 
 

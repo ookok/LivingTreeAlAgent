@@ -11,7 +11,7 @@ from enum import Enum
 class EventType(str, Enum):
     MEMORY_CREATED = "memory_created"
     MEMORY_UPDATED = "memory_updated"
-    MEMORY_DELETED = "memory_retrieved"
+    MEMORY_DELETED = "memory_deleted"
     MEMORY_RETRIEVED = "memory_retrieved"
     LEARNING_STARTED = "learning_started"
     LEARNING_COMPLETED = "learning_completed"

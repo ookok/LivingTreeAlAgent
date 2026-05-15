@@ -59,10 +59,16 @@ from .scinet_vllm import (
     VLLMTrafficEngine, get_vllm_engine,
 )
 from .scinet_swarm import (
-    SwarmNetwork, get_swarm_network,
+    SwarmNetwork, get_swarm_network, INPUT_DIM,
 )
 from .scinet_morph import (
     ProtocolMorphEngine, get_morph_engine,
+)
+from .scinet_dssa import (
+    DSSARouter, get_dssa_router,
+)
+from .scinet_laser import (
+    LaserRouter, get_laser_router,
 )
 
 
@@ -125,6 +131,8 @@ class ScinetEngine:
         self._vllm: Optional[VLLMTrafficEngine] = None
         self._swarm: Optional[SwarmNetwork] = None
         self._morph: Optional[ProtocolMorphEngine] = None
+        self._dssa: Optional[DSSARouter] = None
+        self._laser: Optional[LaserRouter] = None
 
         # P2P bridge
         self._p2p_node: Any = None
@@ -223,6 +231,22 @@ class ScinetEngine:
                 self._status.cache_ready = True
         except Exception as e:
             logger.debug("Morph init: %s", e)
+
+        # DSSA Sparse Attention Router
+        try:
+            self._dssa = get_dssa_router()
+            with self._lock:
+                self._status.cache_ready = True
+        except Exception as e:
+            logger.debug("DSSA init: %s", e)
+
+        # LASER Superposition Router
+        try:
+            self._laser = get_laser_router()
+            with self._lock:
+                self._status.cache_ready = True
+        except Exception as e:
+            logger.debug("LASER init: %s", e)
 
         # WebTransport (optional)
         if enable_wt:
@@ -405,7 +429,7 @@ class ScinetEngine:
         if self._federated:
             from urllib.parse import urlparse
             domain = urlparse(url).hostname or ""
-            features = np.zeros(10)
+            features = self._compute_features(status, latency)
             await self._federated.update_local(
                 domain, features, success=(status < 500), latency_ms=latency,
             )
@@ -438,7 +462,7 @@ class ScinetEngine:
             try:
                 from urllib.parse import urlparse
                 domain = urlparse(url).hostname or ""
-                features = np.zeros(INPUT_DIM)
+                features = self._compute_features(status, latency)
                 target = np.array([
                     1.0 if status < 500 else 0.0,
                     min(1.0, latency / 5000.0),
@@ -456,6 +480,25 @@ class ScinetEngine:
             ) / max(self._status.success_requests, 1)
 
         return status, content, resp_headers
+
+    def _compute_features(self, status: int, latency: float) -> "np.ndarray":
+        import numpy as np
+        features = np.zeros(INPUT_DIM, dtype=np.float32)
+        features[0] = 1.0 if 200 <= status < 300 else 0.0
+        features[1] = 0.0 if status >= 500 else 1.0
+        features[2] = min(1.0, latency / 5000.0)
+        features[3] = self._status.cache_hit_rate
+        with self._lock:
+            total = max(self._status.total_requests, 1)
+            features[4] = self._status.success_requests / total
+            features[5] = self._status.failed_requests / total
+        features[6] = float(self._status.bandit_arms > 0)
+        features[7] = float(self._status.federated_peers > 0)
+        features[8] = float(self._status.topology_nodes > 0)
+        features[9] = float(self._status.quic_active)
+        features[10] = float(self._vllm is not None)
+        features[11] = float(self._morph is not None)
+        return features
 
     def attach_p2p(self, p2p_node: Any) -> None:
         """Attach P2P node for federated learning sync."""

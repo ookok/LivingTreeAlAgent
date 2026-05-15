@@ -348,3 +348,6 @@ def get_hardware_accelerator(force_cpu: bool = False) -> HardwareAccelerator:
     if _hardware_accelerator is None or force_cpu:
         _hardware_accelerator = HardwareAccelerator(force_cpu=force_cpu)
     return _hardware_accelerator
+
+
+get_accelerator = get_hardware_accelerator

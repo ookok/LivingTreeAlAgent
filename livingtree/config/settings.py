@@ -200,6 +200,11 @@ class ModelConfig(BaseModel):
     baidu_flash_model: str = "ernie-speed"
     baidu_pro_model: str = "ernie-4.0"
 
+    # Third-party service keys (stored in encrypted vault)
+    tianditu_key: str = ""
+    tencent_map_key: str = ""
+    baidu_map_key: str = ""
+
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
@@ -402,10 +407,59 @@ class APIConfig(BaseModel):
     docs_enabled: bool = True
 
 
-class LTAIConfig(BaseModel):
-    """Top-level configuration for the LivingTree digital life form."""
+class UserConfig(BaseModel):
+    """User preferences."""
+    theme: str = "light"
+    auto_update: bool = True
+    auto_heal: bool = True
 
-    version: str = "2.0.0"
+
+class MergeConfig(BaseModel):
+    """Gray-release merge feature flags."""
+    execution_pipeline: dict = Field(default_factory=lambda: {"enabled": False, "flow_pct": 0.0, "fallback_mode": True})
+    network_mesh: dict = Field(default_factory=lambda: {"enabled": False, "flow_pct": 0.0, "fallback_mode": True})
+    policy_guard: dict = Field(default_factory=lambda: {"enabled": True, "flow_pct": 1.0, "fallback_mode": False})
+    skill_hub: dict = Field(default_factory=lambda: {"enabled": True, "flow_pct": 1.0, "fallback_mode": False})
+    tts_unified: dict = Field(default_factory=lambda: {"enabled": True, "flow_pct": 1.0, "fallback_mode": False})
+
+
+class EmailConfig(BaseModel):
+    """Email notification configuration."""
+    enabled: bool = False
+    sender: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    recipients: list[str] = Field(default_factory=list)
+
+
+class PathsConfig(BaseModel):
+    """File system paths."""
+    data: str = "./data"
+    logs: str = "./logs"
+    cache: str = "./cache"
+    temp: str = "./tmp"
+    output: str = "./output"
+
+
+class EndpointsConfig(BaseModel):
+    """External service endpoints."""
+    relay_server: str = ""
+    stun_server: str = "stun.l.google.com:19302"
+    cloud_sync_url: str = ""
+    market_tools_url: str = ""
+
+
+class LTAIConfig(BaseModel):
+    """Top-level configuration for the LivingTree digital life form.
+
+    All config (except API keys in secrets.enc) lives in config/livingtree.yaml.
+    Modify via CLI: livingtree config set <key> <value>"""
+
+    model_config = {"extra": "allow"}
+
+    version: str = "2.4.0"
     model: ModelConfig = Field(default_factory=ModelConfig)
     cell: CellConfig = Field(default_factory=CellConfig)
     network: NetworkConfig = Field(default_factory=NetworkConfig)
@@ -416,6 +470,11 @@ class LTAIConfig(BaseModel):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     doc_engine: DocEngineConfig = Field(default_factory=DocEngineConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    user: UserConfig = Field(default_factory=UserConfig)
+    merges: MergeConfig = Field(default_factory=MergeConfig)
+    email: EmailConfig = Field(default_factory=EmailConfig)
+    paths: PathsConfig = Field(default_factory=PathsConfig)
+    endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
 
     def compute_optimal(self, depth: int = 5) -> dict[str, Any]:
         """Compute optimal parameters based on task complexity."""
@@ -503,9 +562,9 @@ _config_paths: list[Path] = []
 
 
 def _find_config_paths() -> list[Path]:
-    """Find config file in standard locations."""
+    """Find config file in standard locations (unified config)."""
     paths = [
-        Path("config/ltaiconfig.yaml"),
+        Path("config/livingtree.yaml"),
         Path("config/config.yaml"),
         Path.home() / ".livingtree" / "config.yaml",
     ]
@@ -617,6 +676,30 @@ def _load_config() -> LTAIConfig:
         if baidu_key:
             config.model.baidu_api_key = baidu_key
             logger.info("Loaded baidu_api_key from encrypted vault")
+
+        # ── Non-provider secrets ──
+        tdt_key = vault.get("tianditu_key", "")
+        if tdt_key:
+            config.model.tianditu_key = tdt_key
+            logger.info("Loaded tianditu_key from encrypted vault")
+        tx_key = vault.get("tencent_map_key", "")
+        if tx_key:
+            config.model.tencent_map_key = tx_key
+            logger.info("Loaded tencent_map_key from encrypted vault")
+        bd_key = vault.get("baidu_map_key", "")
+        if bd_key:
+            config.model.baidu_map_key = bd_key
+            logger.info("Loaded baidu_map_key from encrypted vault")
+        smtp_pw = vault.get("smtp_password", "")
+        if smtp_pw and hasattr(config, 'email'):
+            config.email.smtp_password = smtp_pw
+            logger.info("Loaded smtp_password from encrypted vault")
+    except Exception:
+        pass
+
+    # ── Seed built-in default keys on first run (encrypted) ──
+    try:
+        vault.seed_defaults()
     except Exception:
         pass
 
@@ -746,13 +829,11 @@ class ConfigWatcher:
             self._mtimes[p] = os.path.getmtime(p)
 
     def add_defaults(self) -> None:
-        """Watch the standard config files."""
+        """Watch the unified config files."""
         config_dir = Path(__file__).resolve().parent.parent.parent / "config"
         candidates = [
-            "unified.yaml", "livingtree.yaml", "config.yaml",
-            "ollama_models.yaml", "logging.yaml",
-            "security_policy.json", "email_config.json",
-            "tools_manifest.json", "user_config.json",
+            "livingtree.yaml",
+            "secrets.enc",
         ]
         for name in candidates:
             fpath = config_dir / name

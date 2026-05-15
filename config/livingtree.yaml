@@ -1,28 +1,336 @@
-# LivingTree — DeepSeek API 配置
-# API Key 已加密存储
-
-deepseek:
-  base_url: "https://api.deepseek.com"
-  api_key: "GVpfdR3wJDcJNgHFu3qC8znqFb6wnAl8n5GS8MwI87A4YgAV/yjO53i7SiBvCGUUSslc5y9QISbTgc52UDyV"
-  default_model: "deepseek-chat"
-  thinking_model: "deepseek-reasoner"
-  temperature: 0.7
-  max_tokens: 8192
-  enable_thinking: true
-
-# LivingTree — 核心配置
-ollama:
-  base_url: "http://localhost:11434"
-  default_model: "qwen2.5:1.5b"
-  num_ctx: 8192
-  num_gpu: 0
-  keep_alive: "5m"
-
 agent:
   max_iterations: 30
   max_tokens: 8192
-  temperature: 0.7
   stream_output: true
-
+  temperature: 0.7
+api:
+  cors_origins:
+  - '*'
+  docs_enabled: true
+  host: 0.0.0.0
+  port: 8100
+  workers: 1
+  ws_enabled: true
+cell:
+  auto_evolution: true
+  checkpoint_dir: ./data/cells/checkpoints
+  default_base_model: gpt2
+  distillation_enabled: true
+  enabled: true
+  learning_rate: 0.0002
+  lora_alpha: 16
+  lora_dropout: 0.1
+  lora_r: 8
+  max_cells: 50
+  mitosis_threshold: 5
+  regeneration_check_interval: 300.0
+deepseek:
+  base_url: https://api.deepseek.com
+  default_model: deepseek-chat
+  enable_thinking: true
+  max_tokens: 8192
+  temperature: 0.7
+  thinking_model: deepseek-reasoner
+doc_engine:
+  acceptance_template:
+  - 总论
+  - 工程调查
+  - 环境监测
+  - 环境影响调查
+  - 环境管理检查
+  - 公众意见调查
+  - 结论与建议
+  default_format: markdown
+  eia_template:
+  - 总论
+  - 工程分析
+  - 环境现状调查与评价
+  - 环境影响预测与评价
+  - 环境保护措施
+  - 环境风险评价
+  - 环境经济损益分析
+  - 环境管理与监测计划
+  - 结论与建议
+  emergency_plan_template:
+  - 总则
+  - 基本情况
+  - 环境风险识别
+  - 应急组织体系
+  - 应急响应
+  - 后期处置
+  - 应急保障
+  - 附则
+  enabled: true
+  feasibility_template:
+  - 总论
+  - 项目背景
+  - 市场分析
+  - 技术方案
+  - 建设条件
+  - 环境影响
+  - 投资估算
+  - 经济评价
+  - 结论
+  output_dir: ./data/output
+  template_dir: ./data/templates
+email:
+  enabled: false
+  recipients: []
+  sender: ''
+  smtp_host: ''
+  smtp_password: ''
+  smtp_port: 587
+  smtp_user: ''
+endpoints:
+  cloud_sync_url: ''
+  market_tools_url: ''
+  relay_server: ''
+  stun_server: stun.l.google.com:19302
+evolution:
+  auto_mutation: true
+  code_absorption_enabled: true
+  enabled: true
+  max_evolution_generations: 1000
+  mutation_rate: 0.1
+  reflection_depth: 3
+  skill_auto_discovery: true
+  tool_auto_registration: true
+execution:
+  auto_heal_enabled: true
+  heal_check_interval: 60.0
+  max_parallel_tasks: 10
+  max_retries: 3
+  orchestrator_max_agents: 20
+  plan_depth: 10
+  retry_delay: 1.0
+  task_timeout: 3600
+knowledge:
+  db_path: ./data/knowledge/kb.db
+  embedding_backend: local
+  format_discovery_enabled: true
+  gap_detection_interval: 3600.0
+  graph_enabled: true
+  max_documents: 100000
+  vector_dim: 128
+merges:
+  execution_pipeline:
+    enabled: false
+    fallback_mode: true
+    flow_pct: 0.0
+  network_mesh:
+    enabled: false
+    fallback_mode: true
+    flow_pct: 0.0
+  policy_guard:
+    enabled: true
+    fallback_mode: false
+    flow_pct: 1.0
+  skill_hub:
+    enabled: true
+    fallback_mode: false
+    flow_pct: 1.0
+  tts_unified:
+    enabled: true
+    fallback_mode: false
+    flow_pct: 1.0
+model:
+  aliyun_api_key: sk-b***ENCRYPTED***9ce3
+  aliyun_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  aliyun_flash_model: qwen-turbo
+  aliyun_pro_model: qwen-max
+  baidu_api_key: bce-***ENCRYPTED***572c
+  baidu_base_url: https://qianfan.baidubce.com/v2
+  baidu_flash_model: ernie-speed
+  baidu_pro_model: ernie-4.0
+  bailing_api_key: sk-s***ENCRYPTED***c9de
+  bailing_base_url: https://api.baichuan-ai.com/v1
+  bailing_chat_max_tokens: 4096
+  bailing_chat_model: Baichuan4
+  bailing_chat_temperature: 0.5
+  bailing_flash_max_tokens: 4096
+  bailing_flash_model: Baichuan4-Turbo
+  bailing_flash_temperature: 0.3
+  bailing_pro_model: Baichuan4
+  bailing_reasoning_model: Baichuan4
+  bailing_small_model: Baichuan4-Air
+  deepseek_api_key: sk-3***ENCRYPTED***557e
+  deepseek_base_url: https://api.deepseek.com
+  dmxapi_api_key: sk-A***ENCRYPTED***ikDU
+  dmxapi_base_url: https://www.dmxapi.cn/v1
+  dmxapi_default_model: gpt-5-mini
+  embedding_model: all-MiniLM-L6-v2
+  fallback_model: qwen2.5:1.5b
+  flash_max_tokens: 4096
+  flash_model: deepseek/deepseek-v4-flash
+  flash_temperature: 0.3
+  freebuff_enabled: true
+  freebuff_model: deepseek/deepseek-v4-flash:free
+  freebuff_openrouter_key: ''
+  hifloat8_enabled: false
+  hifloat8_min_context_for_boost: 4096
+  hunyuan_api_key: sk-i***ENCRYPTED***ReMU
+  hunyuan_base_url: https://api.hunyuan.cloud.tencent.com/v1
+  hunyuan_flash_model: hunyuan-lite
+  hunyuan_pro_model: hunyuan-pro
+  internlm_api_key: sk-6***ENCRYPTED***8zin
+  internlm_base_url: https://api.intern-ai.org.cn/v1
+  internlm_chat_max_tokens: 4096
+  internlm_chat_model: internlm2.5-20b-chat
+  internlm_chat_temperature: 0.5
+  internlm_flash_max_tokens: 4096
+  internlm_flash_model: internlm2.5-7b-chat
+  internlm_flash_temperature: 0.3
+  internlm_pro_model: internlm3-latest
+  internlm_reasoning_model: internlm3-latest
+  internlm_small_model: internlm2.5-7b-chat
+  llamacpp_base_url: http://localhost:8080
+  llamacpp_chat_model: qwen3.5-4b
+  llamacpp_max_tokens: 512
+  llamacpp_repeat_penalty: 1.1
+  llamacpp_temperature: 0.8
+  llamacpp_top_k: 40
+  llamacpp_top_p: 0.9
+  longcat_api_key: ak_2***ENCRYPTED***v33w
+  longcat_base_url: https://api.longcat.chat/openai/v1
+  longcat_chat_max_tokens: 4096
+  longcat_chat_model: openai/LongCat-Flash-Chat
+  longcat_chat_temperature: 0.5
+  longcat_flash_max_tokens: 4096
+  longcat_flash_model: openai/LongCat-Flash-Lite
+  longcat_flash_temperature: 0.3
+  longcat_models: openai/LongCat-Flash-Lite,openai/LongCat-Flash-Chat
+  max_tokens: 4096
+  modelscope_api_key: ms-3***ENCRYPTED***7b92
+  modelscope_base_url: https://api-inference.modelscope.cn/v1
+  modelscope_chat_max_tokens: 4096
+  modelscope_chat_model: Qwen/Qwen2.5-72B-Instruct
+  modelscope_chat_temperature: 0.5
+  modelscope_flash_max_tokens: 4096
+  modelscope_flash_model: Qwen/Qwen3-8B
+  modelscope_flash_temperature: 0.3
+  modelscope_pro_model: deepseek-ai/DeepSeek-V3
+  modelscope_reasoning_model: deepseek-ai/DeepSeek-R1
+  modelscope_small_model: Qwen/Qwen2.5-7B-Instruct
+  mofang_api_key: H5IG***ENCRYPTED***2O2U
+  mofang_base_url: https://ai.gitee.com/v1
+  mofang_default_model: Qwen/Qwen2.5-7B-Instruct
+  mofang_flash_model: Qwen/Qwen2.5-7B-Instruct
+  mofang_pro_model: deepseek-ai/DeepSeek-V3
+  mofang_reasoning_model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+  mofang_small_model: Qwen/Qwen2.5-1.5B-Instruct
+  moss_tts_enabled: true
+  moss_tts_gguf_path: models/moss-tts-nano-q4km.gguf
+  moss_tts_voice: xiaoshu
+  nvidia_api_key: nvap***ENCRYPTED***7tk6
+  nvidia_base_url: https://integrate.api.nvidia.com/v1
+  nvidia_default_model: deepseek-ai/deepseek-r1
+  ollama_base_url: http://localhost:11434/v1
+  ollama_chat_model: qwen3.5:4b
+  ollama_flash_model: qwen3.5:0.8b
+  ollama_moe_model: qwen3.6:35b-a3b
+  ollama_pro_model: qwen3.5:9b
+  ollama_small_model: qwen2.5:1.5b
+  openrouter_api_key: sk-o***ENCRYPTED***bd44
+  openrouter_base_url: https://openrouter.ai/api/v1
+  openrouter_default_model: nvidia/nemotron-3-super-120b-a12b:free
+  openrouter_enabled: true
+  pro_max_tokens: 8192
+  pro_model: deepseek/deepseek-v4-pro
+  pro_temperature: 0.7
+  pro_thinking_enabled: true
+  sensetime_api_key: sk-9***ENCRYPTED***kGkC
+  sensetime_base_url: https://api.sensetime.com/v1
+  sensetime_flash_max_tokens: 4096
+  sensetime_flash_model: SenseChat-Turbo
+  sensetime_flash_temperature: 0.3
+  sensetime_pro_max_tokens: 8192
+  sensetime_pro_model: SenseChat-Pro
+  sensetime_pro_temperature: 0.5
+  siliconflow_api_key: sk-w***ENCRYPTED***gaco
+  siliconflow_base_url: https://api.siliconflow.cn/v1
+  siliconflow_default_model: Qwen/Qwen2.5-7B-Instruct
+  siliconflow_flash_model: Qwen/Qwen2.5-7B-Instruct
+  siliconflow_pro_model: deepseek-ai/DeepSeek-V3
+  siliconflow_reasoning_model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+  siliconflow_small_model: Qwen/Qwen2.5-1.5B-Instruct
+  spark_api_key: Eeiw***ENCRYPTED***XhGo
+  spark_base_url: https://spark-api-open.xf-yun.com/v1/chat/completions
+  spark_default_model: xdeepseekv3
+  stepfun_api_key: 4GGP***ENCRYPTED***eoge
+  stepfun_base_url: https://api.stepfun.com/v1
+  stepfun_chat_max_tokens: 4096
+  stepfun_chat_model: step-1-8k
+  stepfun_chat_temperature: 0.5
+  stepfun_flash_max_tokens: 4096
+  stepfun_flash_model: step-1-flash
+  stepfun_flash_temperature: 0.3
+  stepfun_pro_model: step-2-16k
+  stepfun_reasoning_model: step-2-16k
+  stepfun_small_model: step-1-flash
+  temperature: 0.7
+  top_p: 0.9
+  vibevoice_base_url: http://localhost:8085
+  vibevoice_enabled: true
+  vibevoice_voice: xiaoshu
+  xiaomi_api_key: sk-c***ENCRYPTED***kqw3
+  xiaomi_base_url: https://api.xiaomimimo.com/v1
+  xiaomi_flash_model: mimo-v2-flash
+  xiaomi_pro_model: mimo-v2.5
+  zhipu_api_key: 9497***ENCRYPTED***r6ss
+  zhipu_base_url: https://open.bigmodel.cn/api/paas/v4
+  zhipu_flash_model: glm-4-flash
+  zhipu_pro_model: glm-4-plus
+  tianditu_key: ''
+  tencent_map_key: ''
+  baidu_map_key: ''
+network:
+  discovery_interval: 30.0
+  enabled: true
+  heartbeat_interval: 10.0
+  lan_port: 9999
+  max_peers: 100
+  nat_enabled: true
+  node_name: livingtree-node
+  relay_server: ''
+  reputation_decay: 10.0
+  shared_secret: ''
+  stun_server: stun.l.google.com:19302
+  trust_threshold: 1.0
 observability:
-  log_level: "INFO"
+  log_file: ./data/logs/livingtree.log
+  log_level: INFO
+  log_retention: 30 days
+  log_rotation: 100 MB
+  metrics_enabled: true
+  metrics_port: 9090
+  trace_sample_rate: 0.1
+  tracing_enabled: true
+ollama:
+  base_url: http://localhost:11434
+  default_model: qwen2.5:1.5b
+  keep_alive: 5m
+  num_ctx: 8192
+  num_gpu: 0
+paths:
+  cache: ./cache
+  data: ./data
+  logs: ./logs
+  output: ./output
+  temp: ./tmp
+safety:
+  allowed_domains: []
+  audit_enabled: true
+  blocked_patterns:
+  - delete_system
+  - modify_os
+  - execute_unsigned_code
+  - self_modify_core
+  default_policy: deny
+  kill_switch_enabled: true
+  sandbox_max_memory_mb: 512
+  sandbox_timeout: 30
+user:
+  auto_heal: true
+  auto_update: true
+  theme: light
+version: 2.4.0

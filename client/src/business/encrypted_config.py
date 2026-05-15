@@ -7,14 +7,14 @@
 3. 支持多个配置文件（按项目/环境隔离）
 4. 自动生成密钥（基于机器指纹 + 用户密码）
 
-使用：
+    使用：
     from business.encrypted_config import EncryptedConfig
     
     config_manager = EncryptedConfig()
     
-    # 保存配置
+    # 保存配置 (API key from environment or user input)
     config_manager.save_config("deepseek", {
-        "api_key": "sk-f05ded8271b74091a499831999d34437",
+        "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
         "base_url": "https://api.deepseek.com",
         "models": ["deepseek-v4-flash", "deepseek-v4-pro"]
     })
@@ -385,7 +385,7 @@ def setup_default_configs():
 
     # ── DeepSeek API 配置 ─────────────────────────────
     deepseek_config = {
-        "api_key": "sk-f05ded8271b74091a499831999d34437",
+        "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
         "base_url": "https://api.deepseek.com",
         "models": {
             "flash": {

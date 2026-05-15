@@ -463,18 +463,24 @@ def compute_shrunken_covariance(
 # ═══ Module Singleton ══════════════════════════════════════════════
 
 _pale_scorer: PALECMScorer | None = None
+_pale_scorer_lock = threading.Lock()
 _pale_augmenter: PALEDataAugmenter | None = None
+_pale_augmenter_lock = threading.Lock()
 
 
 def get_pale_scorer(shrinkage: float = 0.1) -> PALECMScorer:
     global _pale_scorer
     if _pale_scorer is None:
-        _pale_scorer = PALECMScorer(shrinkage=shrinkage)
+        with _pale_scorer_lock:
+            if _pale_scorer is None:
+                _pale_scorer = PALECMScorer(shrinkage=shrinkage)
     return _pale_scorer
 
 
 def get_pale_augmenter() -> PALEDataAugmenter:
     global _pale_augmenter
     if _pale_augmenter is None:
-        _pale_augmenter = PALEDataAugmenter()
+        with _pale_augmenter_lock:
+            if _pale_augmenter is None:
+                _pale_augmenter = PALEDataAugmenter()
     return _pale_augmenter

@@ -26,10 +26,25 @@ import sys
 import os
 import subprocess
 import json as _json
+import time as _time_module
+import logging
+import threading
+import yaml
+from pathlib import Path
 
 VERSION = "2.2.0"
 PID_FILE = ".livingtree/server.pid"
 LOG_FILE = ".livingtree/server.log"
+WATCHDOG_PID_FILE = ".livingtree/watchdog.pid"
+WATCHDOG_STATE_FILE = ".livingtree/watchdog.json"
+WATCHDOG_MAX_RESTARTS = 5
+WATCHDOG_COOLDOWN = 10
+WATCHDOG_POLL = 3
+
+_watchdog_lock = threading.Lock()
+_watchdog_running = False
+_watchdog_restart_count = 0
+_watchdog_child_pid = 0
 
 
 def main():
@@ -140,19 +155,94 @@ def _get_pid() -> int:
         return 0
 
 
+def _watchdog_loop(log_file: str):
+    """Background thread: monitor child process and auto-restart on crash."""
+    global _watchdog_running, _watchdog_restart_count, _watchdog_child_pid
+
+    while True:
+        _time_module.sleep(WATCHDOG_POLL)
+
+        with _watchdog_lock:
+            if not _watchdog_running:
+                break
+            pid = _watchdog_child_pid
+            if _watchdog_restart_count >= WATCHDOG_MAX_RESTARTS:
+                _watchdog_running = False
+                _write_watchdog_state()
+                print(f"[Watchdog] Max restarts ({WATCHDOG_MAX_RESTARTS}) reached — giving up")
+                break
+
+        if pid and not _is_running(pid):
+            with _watchdog_lock:
+                _watchdog_restart_count += 1
+                current_count = _watchdog_restart_count
+
+            if current_count > WATCHDOG_MAX_RESTARTS:
+                print(f"[Watchdog] Max restarts ({WATCHDOG_MAX_RESTARTS}) reached — giving up")
+                with _watchdog_lock:
+                    _watchdog_running = False
+                _write_watchdog_state()
+                break
+
+            print(f"[Watchdog] Child (PID {pid}) died — restarting ({current_count}/{WATCHDOG_MAX_RESTARTS})...")
+            _time_module.sleep(WATCHDOG_COOLDOWN)
+
+            try:
+                log = open(log_file, "a")
+                proc = subprocess.Popen(
+                    [sys.executable, "-m", "livingtree", "web"],
+                    stdout=log, stderr=log,
+                    start_new_session=True,
+                )
+                with _watchdog_lock:
+                    _watchdog_child_pid = proc.pid
+                Path(PID_FILE).write_text(str(proc.pid))
+                _write_watchdog_state()
+                print(f"[Watchdog] Restarted (PID: {proc.pid})")
+            except Exception as e:
+                print(f"[Watchdog] Restart failed: {e}")
+
+    with _watchdog_lock:
+        _watchdog_running = False
+    _write_watchdog_state()
+    Path(WATCHDOG_PID_FILE).unlink(missing_ok=True)
+    Path(WATCHDOG_STATE_FILE).unlink(missing_ok=True)
+
+
+def _write_watchdog_state():
+    """Persist watchdog state so `livingtree status` can read it cross-process."""
+    Path(WATCHDOG_STATE_FILE).write_text(
+        _json.dumps({
+            "running": _watchdog_running,
+            "restart_count": _watchdog_restart_count,
+            "max_restarts": WATCHDOG_MAX_RESTARTS,
+            "child_pid": _watchdog_child_pid,
+        }),
+        encoding="utf-8",
+    )
+
+
+def _read_watchdog_state():
+    """Read persisted watchdog state. Returns {} if file missing."""
+    try:
+        return _json.loads(Path(WATCHDOG_STATE_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def _svc_start():
     pid = _get_pid()
     if pid and _is_running(pid):
         print(f"LivingTree is already running (PID: {pid})")
         return
 
+    watch = "--watchdog" in sys.argv
+
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     log = open(LOG_FILE, "a")
     try:
         from livingtree.treellm.unified_exec import run
         import asyncio
-        # unified_exec.run doesn't support Popen semantics for daemon start,
-        # fall back to subprocess.Popen for detached long-running processes
         raise ImportError("Force Popen for daemon")
     except ImportError:
         proc = subprocess.Popen(
@@ -161,32 +251,47 @@ def _svc_start():
             start_new_session=True,
         )
     Path(PID_FILE).write_text(str(proc.pid))
-    print(f"LivingTree started (PID: {proc.pid})")
+
+    if watch:
+        global _watchdog_running, _watchdog_child_pid, _watchdog_restart_count
+        _watchdog_running = True
+        _watchdog_child_pid = proc.pid
+        _watchdog_restart_count = 0
+        t = threading.Thread(target=_watchdog_loop, args=(LOG_FILE,), daemon=True, name="lt-watchdog")
+        t.start()
+        Path(WATCHDOG_PID_FILE).write_text(str(os.getpid()))
+        _write_watchdog_state()
+        print(f"LivingTree started (PID: {proc.pid}) [Watchdog: ON, max restarts={WATCHDOG_MAX_RESTARTS}]")
+    else:
+        print(f"LivingTree started (PID: {proc.pid})")
     print(f"  Web UI: http://localhost:8100/tree/living")
     print(f"  Logs:   {LOG_FILE}")
 
 
 def _svc_stop():
+    global _watchdog_running
+    with _watchdog_lock:
+        _watchdog_running = False
+
     pid = _get_pid()
     if not pid or not _is_running(pid):
         print("LivingTree is not running")
         Path(PID_FILE).unlink(missing_ok=True)
+        Path(WATCHDOG_PID_FILE).unlink(missing_ok=True)
+        Path(WATCHDOG_STATE_FILE).unlink(missing_ok=True)
         return
 
     try:
         if os.name == "posix":
             os.kill(pid, 15)
         else:
-            import asyncio
-            try:
-                from livingtree.treellm.unified_exec import run
-                asyncio.run(run(f"taskkill /PID {pid} /F", timeout=5))
-            except ImportError:
-                subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
         print(f"LivingTree stopped (PID: {pid})")
     except Exception as e:
         print(f"Failed to stop: {e}")
     Path(PID_FILE).unlink(missing_ok=True)
+    Path(WATCHDOG_PID_FILE).unlink(missing_ok=True)
+    Path(WATCHDOG_STATE_FILE).unlink(missing_ok=True)
 
 
 def _svc_restart():
@@ -201,17 +306,25 @@ def _svc_status():
     if pid and _is_running(pid):
         from datetime import datetime
         try:
-            stat = Path(f"/proc/{pid}/stat") if os.name == "posix" else None
             created = Path(PID_FILE).stat().st_mtime if Path(PID_FILE).exists() else 0
-            uptime = _json.dumps(int(datetime.now().timestamp() - created)) + "s ago"
+            uptime = f"{int(datetime.now().timestamp() - created)}s ago"
         except Exception:
             uptime = "unknown"
         print(f"LivingTree: RUNNING (PID: {pid})")
         print(f"  Started: {uptime}")
         print(f"  Web UI:  http://localhost:8100/tree/living")
+        wd_state = _read_watchdog_state()
+        if wd_state:
+            running = wd_state.get("running", False)
+            count = wd_state.get("restart_count", 0)
+            max_r = wd_state.get("max_restarts", WATCHDOG_MAX_RESTARTS)
+            wd_status = f"ON, restarts={count}/{max_r}" if running else f"OFF (restarts={count}/{max_r})"
+            print(f"  Watchdog: {wd_status}")
     else:
         print("LivingTree: STOPPED")
         Path(PID_FILE).unlink(missing_ok=True)
+        Path(WATCHDOG_PID_FILE).unlink(missing_ok=True)
+        Path(WATCHDOG_STATE_FILE).unlink(missing_ok=True)
 
 
 def _svc_logs():
@@ -231,24 +344,36 @@ def _svc_logs():
 def _svc_update():
     import asyncio
     from .integration.self_updater import run_update
-    result = asyncio.run(run_update())
-    print(_json.dumps(result, indent=2, ensure_ascii=False))
+    try:
+        result = asyncio.run(run_update())
+        print(_json.dumps(result, indent=2, ensure_ascii=False))
+    except Exception as e:
+        print(f"❌ Update failed: {e}")
 
 
 def _is_running(pid: int) -> bool:
     try:
         if os.name == "posix":
             os.kill(pid, 0)
+            return True
         else:
-            import asyncio
-            try:
-                from livingtree.treellm.unified_exec import run
-                result = asyncio.run(run(f"tasklist /FI \"PID eq {pid}\"", timeout=5))
-                return str(pid) in result.stdout
-            except ImportError:
-                result = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True)
-                return str(pid) in result.stdout
-        return True
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.windll.kernel32
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            SYNCHRONIZE = 0x00100000
+            STILL_ACTIVE = 259
+
+            hProcess = kernel32.OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid
+            )
+            if not hProcess:
+                return False
+            exit_code = wintypes.DWORD()
+            kernel32.GetExitCodeProcess(hProcess, ctypes.byref(exit_code))
+            kernel32.CloseHandle(hProcess)
+            return exit_code.value == STILL_ACTIVE
     except Exception:
         return False
 
@@ -256,17 +381,120 @@ def _is_running(pid: int) -> bool:
 # ═══ Subcommands ═══
 
 def _svc_config(args: list):
+    """Unified config management: livingtree config [show|set|list] [key] [value]
+
+    Examples:
+        livingtree config                     # dump full config
+        livingtree config show model          # show model section
+        livingtree config set model.temperature 0.5  # set nested key
+        livingtree config set user.theme dark # set user preference
+        livingtree config list                # list top-level keys
+    """
     from .config import get_config
+    from .config.settings import reload_config
+    import yaml
     cfg = get_config()
+
     if not args:
-        print(_json.dumps(cfg.model_dump(), indent=2, ensure_ascii=False, default=str))
-    else:
-        key = args[0]
-        if len(args) > 1:
-            setattr(cfg, key, _json.loads(args[1]))
-            print(f"Set {key} = {args[1]}")
+        # Dump readable config (exclude API keys)
+        d = cfg.model_dump()
+        _mask_api_keys(d)
+        print(yaml.safe_dump(d, default_flow_style=False, allow_unicode=True, sort_keys=False))
+        return
+
+    sub = args[0].lower()
+
+    if sub == "list":
+        for k in cfg.model_fields:
+            v = getattr(cfg, k, None)
+            vtype = type(v).__name__
+            print(f"  {k:<20} ({vtype})")
+        print(f"\n  Use 'livingtree config show <section>' for details")
+        print(f"  Use 'livingtree config set <key> <value>' to modify")
+        return
+
+    if sub in ("show", "get"):
+        key = args[1] if len(args) > 1 else None
+        if not key:
+            d = cfg.model_dump()
+            _mask_api_keys(d)
+            print(yaml.safe_dump(d, default_flow_style=False, allow_unicode=True, sort_keys=False))
+            return
+        val = _config_get_nested(cfg, key)
+        if val is not None:
+            if isinstance(val, (dict, list)):
+                print(yaml.safe_dump(val, default_flow_style=False, allow_unicode=True))
+            else:
+                print(f"{key}: {val}")
         else:
-            print(f"{key}: {getattr(cfg, key, 'N/A')}")
+            print(f"  Key not found: {key}")
+        return
+
+    if sub in ("set", "edit"):
+        if len(args) < 3:
+            print("Usage: livingtree config set <key> <value>")
+            print("Example: livingtree config set model.temperature 0.5")
+            return
+        key = args[1]
+        raw_value = args[2]
+        try:
+            value = yaml.safe_load(raw_value) if raw_value not in ("true", "false", "null") else \
+                    {"true": True, "false": False, "null": None}.get(raw_value, raw_value)
+        except Exception:
+            value = raw_value
+        _config_set_nested(cfg, key, value)
+        try:
+            cfg.to_yaml(Path("config/livingtree.yaml"))
+            print(f"  {key} = {value} (saved to config/livingtree.yaml)")
+        except Exception as e:
+            print(f"  {key} = {value} (in-memory only, save failed: {e})")
+        return
+
+    if sub == "reload":
+        cfg = reload_config()
+        print("  Config reloaded from disk")
+        return
+
+    print("Usage: livingtree config [show|set|list|reload] [key] [value]")
+
+
+def _mask_api_keys(d: dict) -> None:
+    """Recursively mask api_key values in a dict."""
+    for k, v in d.items():
+        if isinstance(v, dict):
+            _mask_api_keys(v)
+        elif isinstance(k, str) and "api_key" in k.lower() and isinstance(v, str) and len(v) > 8:
+            d[k] = v[:4] + "***" + v[-4:]
+
+
+def _config_get_nested(cfg, key: str):
+    """Get nested config value by dot-notation key."""
+    parts = key.split(".")
+    obj = cfg
+    for p in parts:
+        if isinstance(obj, dict):
+            obj = obj.get(p)
+        elif hasattr(obj, p):
+            obj = getattr(obj, p)
+        else:
+            return None
+    return obj
+
+
+def _config_set_nested(cfg, key: str, value) -> None:
+    """Set nested config value by dot-notation key."""
+    parts = key.split(".")
+    obj = cfg
+    for p in parts[:-1]:
+        if isinstance(obj, dict):
+            obj = obj.get(p)
+        else:
+            obj = getattr(obj, p)
+    last = parts[-1]
+    if isinstance(obj, dict):
+        obj[last] = value
+    else:
+        setattr(obj, last, value)
 
 
 def _svc_skill(args: list):
@@ -294,7 +522,10 @@ def _svc_skill(args: list):
             for s in skills[:20]:
                 installed = "✅" if s.name in hub._installed else "📦"
                 print(f"  {installed} {s.name} [{s.category}] — {s.description[:60]}")
-        asyncio.run(_fetch())
+        try:
+            asyncio.run(_fetch())
+        except Exception as e:
+            print(f"❌ Skill hub fetch failed: {e}")
 
     elif sub in ("install", "i") and len(args) > 1:
         async def _install():
@@ -466,7 +697,10 @@ def _svc_canary(args: list):
         print(f"  Canary queries: .livingtree/canary_queries.json")
         print(f"  Baseline:       .livingtree/canary_baseline.json")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Canary failed: {e}")
 
 
 def _svc_debug(args: list):
@@ -549,8 +783,12 @@ def _svc_debug(args: list):
           5. Tool Call Execution (auto-detect + invoke via LocalToolBus)
           6. Error Summary (ErrorInterceptor stats)
         """
-        from .treellm.debug_pro import install as debug_install
-        from .treellm.debug_pro import ErrorInterceptor, LineTracer
+        try:
+            from .treellm.debug_pro import install as debug_install
+            from .treellm.debug_pro import ErrorInterceptor, LineTracer
+        except ImportError as e:
+            print(f"  ❌ Failed to import debug_pro: {e}")
+            return
         import time as _time, traceback as _tb
 
         debug_install()
@@ -623,7 +861,9 @@ def _svc_debug(args: list):
             if provider:
                 print(f"  ✅ elected={provider} (from {len(alive)} alive)")
             else:
-                print(f"  ⚠️  No provider elected (0/{len(alive)} alive — check API keys)")
+                print(f"  ⚠️  No provider elected (0/{len(alive)} alive)")
+                if not alive:
+                    print(f"     System comes with a built-in SenseTime key. Is sensetime_api_key available?")
             print(f"  ⏱️  {elect_ms:.0f}ms")
             if verbose and alive:
                 print(f"     alive: {', '.join(alive[:5])}{'...' if len(alive)>5 else ''}")
@@ -683,8 +923,9 @@ def _svc_debug(args: list):
                 print(f"  ✅ response_len={len(chat_result)} tokens={tokens} provider={used_provider}")
                 print(f"  ⏱️  {chat_ms:.0f}ms")
             else:
-                llm_error = "All providers failed — check API keys and network"
+                llm_error = "All providers failed — network issue or API keys not responding"
                 print(f"  ❌ {llm_error}")
+                print(f"     System has built-in keys. If they don't work, add your own: livingtree secrets set KEY VALUE")
         except Exception as e:
             llm_error = str(e)
             print(f"  ❌ Chat failed: {e}")
@@ -755,10 +996,20 @@ def _svc_debug(args: list):
                 print(f"  {'─'*56}")
         elif llm_error:
             print(f"\n  ❌ {llm_error}")
-            print(f"  💡 Tip: Check 'livingtree secrets list' and ensure at least one API key is valid")
+            from .config.secrets import get_secret_vault
+            vault_keys = get_secret_vault().keys() if get_secret_vault() else []
+            if vault_keys:
+                print(f"  💡 You have {len(vault_keys)} key(s) in vault, but none responded. Network issue or key expired?")
+                print(f"     Run 'livingtree secrets list' to check, or add new keys with 'livingtree secrets set KEY VALUE'")
+            else:
+                print(f"  💡 System has a built-in SenseTime API key loaded automatically.")
+                print(f"     If it's not working, add your own with: livingtree secrets set deepseek_api_key YOUR_KEY")
         print(f"{'='*60}")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Debug failed: {e}")
 
 
 def _svc_cli(args: list):
@@ -815,7 +1066,10 @@ def _svc_cli(args: list):
                 status = "✅" if t["registered"] else "📦"
                 print(f"  {status} [{t['category']}] {t['name']}")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ CLI introspection failed: {e}")
 
 
 def _svc_cli_anything(args: list):
@@ -890,7 +1144,10 @@ def _svc_cli_anything(args: list):
             print(f"  Generated tools: {s['generated_tools']}")
             print(f"  Manifests: {s['manifests']}")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ CLI-anything failed: {e}")
 
 
 def _svc_improve(args: list):
@@ -940,7 +1197,10 @@ def _svc_improve(args: list):
             report = stats["scanner_report"]
             print(f"  Total defects: {report['total']}")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Improve failed: {e}")
 
 
 def _svc_recording(args: list):
@@ -980,7 +1240,10 @@ def _svc_recording(args: list):
             view = args[2] if len(args) > 2 else "timeline"
             print(json.dumps(engine.render(args[1], view), indent=2, ensure_ascii=False)[:5000])
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Recording failed: {e}")
 
 
     """Diagnostic: visualize trigger chain and routing decisions."""
@@ -1178,7 +1441,10 @@ def _svc_models(args: list):
             print(f"Unknown subcommand: {subcmd}")
             print("Usage: livingtree models [sync|list|show|auto]")
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        print(f"❌ Models failed: {e}")
 
 
 def _svc_deps(args: list):

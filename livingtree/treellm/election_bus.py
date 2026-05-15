@@ -16,6 +16,7 @@ Integration:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
@@ -35,11 +36,14 @@ class ElectionBus:
     """Unified election result bus — single source of truth for provider rankings."""
 
     _instance: Optional["ElectionBus"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "ElectionBus":
         if cls._instance is None:
-            cls._instance = ElectionBus()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = ElectionBus()
         return cls._instance
 
     def __init__(self):
@@ -117,6 +121,20 @@ class ElectionBus:
             self._snapshots.clear()
             self._ttl = self._min_ttl
 
+    def invalidate_provider(self, name: str) -> None:
+        """Invalidate cached scores when a provider is added or removed."""
+        keys_to_drop = [k for k in self._snapshots if name in k.split(",")]
+        for k in keys_to_drop:
+            del self._snapshots[k]
+        if keys_to_drop:
+            logger.debug(f"ElectionBus: invalidated {len(keys_to_drop)} snapshots (provider change: {name})")
+
+    def invalidate_all(self) -> None:
+        """Invalidate all cached scores (e.g., after config change)."""
+        self._snapshots.clear()
+        self._ttl = self._min_ttl
+        logger.debug("ElectionBus: all snapshots invalidated")
+
     def on_refresh(self, callback: Callable) -> None:
         """Subscribe to election refresh events."""
         self._subscribers.append(callback)
@@ -139,12 +157,15 @@ class ElectionBus:
 
 
 _election_bus: Optional[ElectionBus] = None
+_election_bus_lock = threading.Lock()
 
 
 def get_election_bus() -> ElectionBus:
     global _election_bus
     if _election_bus is None:
-        _election_bus = ElectionBus()
+        with _election_bus_lock:
+            if _election_bus is None:
+                _election_bus = ElectionBus()
     return _election_bus
 
 

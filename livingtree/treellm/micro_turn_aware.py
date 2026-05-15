@@ -33,6 +33,7 @@ Usage:
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -362,12 +363,15 @@ class MicroTurnAware:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _mta: Optional[MicroTurnAware] = None
+_mta_lock = threading.Lock()
 
 
 def get_micro_turn_aware() -> MicroTurnAware:
     global _mta
     if _mta is None:
-        _mta = MicroTurnAware()
+        with _mta_lock:
+            if _mta is None:
+                _mta = MicroTurnAware()
     return _mta
 
 

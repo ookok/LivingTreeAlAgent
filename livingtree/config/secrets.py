@@ -105,6 +105,33 @@ class SecretVault:
         self._ensure_loaded()
         return list(self._cache.keys())
 
+    def seed_defaults(self) -> int:
+        """Seed built-in default API keys on first run (only if vault is empty).
+
+        Keys come from environment variables — no plaintext secrets in source.
+        Returns number of keys seeded."""
+        self._ensure_loaded()
+        if self._cache:
+            return 0  # User already has keys, don't overwrite
+        defaults = {}
+        # SenseTime: set LT_BUILTIN_SENSETIME_KEY=sk-xxx to auto-seed
+        st_key = os.environ.get("LT_BUILTIN_SENSETIME_KEY", "")
+        if st_key:
+            defaults["sensetime_api_key"] = st_key
+        # Tianditu map: set LT_BUILTIN_TIANDITU_KEY=xxx to auto-seed
+        tdt_key = os.environ.get("LT_BUILTIN_TIANDITU_KEY", "")
+        if tdt_key:
+            defaults["tianditu_key"] = tdt_key
+        count = 0
+        for k, v in defaults.items():
+            if k not in self._cache:
+                self._cache[k] = v
+                count += 1
+        if count:
+            self._save()
+            logger.info(f"Seeded {count} built-in default API key(s) into encrypted vault")
+        return count
+
     def export_env(self) -> dict[str, str]:
         """Export secrets as env-var compatible dict (for subprocess)."""
         self._ensure_loaded()

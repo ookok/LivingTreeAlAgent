@@ -104,135 +104,16 @@ class DualModelConsciousness(Consciousness):
         self._longcat_models = models
 
         self._llm = TreeLLM()
-        if api_key:
-            self._llm.add_provider(create_deepseek_provider(api_key))
-        if longcat_api_key:
-            self._llm.add_provider(create_longcat_provider(longcat_api_key))
-        if xiaomi_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="xiaomi",
-                base_url=xiaomi_base_url or "https://api.xiaomimimo.com/v1",
-                api_key=xiaomi_api_key,
-                default_model=xiaomi_flash_model,
-            ))
-        if aliyun_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="aliyun",
-                base_url=aliyun_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                api_key=aliyun_api_key,
-                default_model=aliyun_flash_model,
-            ))
-        if zhipu_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="zhipu",
-                base_url=zhipu_base_url or "https://open.bigmodel.cn/api/paas/v4",
-                api_key=zhipu_api_key,
-                default_model=zhipu_flash_model,
-            ))
-        if dmxapi_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="dmxapi",
-                base_url=dmxapi_base_url or "https://www.dmxapi.cn/v1",
-                api_key=dmxapi_api_key,
-                default_model=dmxapi_default_model,
-            ))
-        if spark_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="spark",
-                base_url=spark_base_url or "https://maas-api.cn-huabei-1.xf-yun.com/v2",
-                api_key=spark_api_key,
-                default_model=spark_default_model,
-            ))
-        if siliconflow_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="siliconflow-flash",
-                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
-                api_key=siliconflow_api_key,
-                default_model=siliconflow_flash_model or "Qwen/Qwen2.5-7B-Instruct",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="siliconflow-reasoning",
-                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
-                api_key=siliconflow_api_key,
-                default_model=siliconflow_reasoning_model or "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="siliconflow-pro",
-                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
-                api_key=siliconflow_api_key,
-                default_model=siliconflow_pro_model or "deepseek-ai/DeepSeek-V3",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="siliconflow-small",
-                base_url=siliconflow_base_url or "https://api.siliconflow.cn/v1",
-                api_key=siliconflow_api_key,
-                default_model=siliconflow_small_model or "Qwen/Qwen2.5-1.5B-Instruct",
-            ))
 
-        if mofang_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            self._llm.add_provider(OpenAILikeProvider(
-                name="mofang-flash",
-                base_url=mofang_base_url or "https://ai.gitee.com/v1",
-                api_key=mofang_api_key,
-                default_model=mofang_flash_model or "Qwen/Qwen2.5-7B-Instruct",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="mofang-reasoning",
-                base_url=mofang_base_url or "https://ai.gitee.com/v1",
-                api_key=mofang_api_key,
-                default_model=mofang_reasoning_model or "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="mofang-small",
-                base_url=mofang_base_url or "https://ai.gitee.com/v1",
-                api_key=mofang_api_key,
-                default_model=mofang_small_model or "Qwen/Qwen2.5-1.5B-Instruct",
-            ))
-            self._llm.add_provider(OpenAILikeProvider(
-                name="mofang-pro",
-                base_url=mofang_base_url or "https://ai.gitee.com/v1",
-                api_key=mofang_api_key,
-                default_model=mofang_pro_model or "deepseek-ai/DeepSeek-V3",
-            ))
-
-        if nvidia_api_key:
-            from ..treellm.providers import OpenAILikeProvider
-            nvidia_url = nvidia_base_url or "https://integrate.api.nvidia.com/v1"
-            # Reasoning tier: deepseek-r1 — strongest free reasoning model
-            self._llm.add_provider(OpenAILikeProvider(
-                name="nvidia-reasoning",
-                base_url=nvidia_url,
-                api_key=nvidia_api_key,
-                default_model="deepseek-ai/deepseek-r1",
-            ))
-            # Pro tier: nemotron ultra — 253B flagship
-            self._llm.add_provider(OpenAILikeProvider(
-                name="nvidia-pro",
-                base_url=nvidia_url,
-                api_key=nvidia_api_key,
-                default_model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
-            ))
-            # Flash tier: llama 70B — fast general purpose
-            self._llm.add_provider(OpenAILikeProvider(
-                name="nvidia-flash",
-                base_url=nvidia_url,
-                api_key=nvidia_api_key,
-                default_model="meta/llama-3.3-70b-instruct",
-            ))
-            # Small tier: phi-3.5-mini — lightweight fast
-            self._llm.add_provider(OpenAILikeProvider(
-                name="nvidia-small",
-                base_url=nvidia_url,
-                api_key=nvidia_api_key,
-                default_model="microsoft/phi-3.5-mini-instruct",
-            ))
+        # ── Unified provider registration (single source of truth) ──
+        try:
+            from ..treellm.provider_registry import register_all_providers
+            register_all_providers(self._llm)
+        except Exception as e:
+            logger.warning(f"Provider registry: {e}")
+            # Fallback: manual deepseek registration for backward compat
+            if api_key:
+                self._llm.add_provider(create_deepseek_provider(api_key))
 
         # ── Election order: free models first ──
         self._free_models = []

@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -785,12 +786,15 @@ class JointEvolutionCoordinator:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _je: Optional[JointEvolutionCoordinator] = None
+_je_lock = threading.Lock()
 
 
 def get_joint_evolution() -> JointEvolutionCoordinator:
     global _je
     if _je is None:
-        _je = JointEvolutionCoordinator()
+        with _je_lock:
+            if _je is None:
+                _je = JointEvolutionCoordinator()
     return _je
 
 

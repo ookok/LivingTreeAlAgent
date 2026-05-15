@@ -10,15 +10,14 @@ MultiDocFusion-enhanced (Shin et al., EMNLP 2025):
 
 from .knowledge_base import KnowledgeBase, Document, RetrievalResult, MergedCandidate, ScoredResult, FusionResult, SchemaInferrer, InferredSchema, InferredField, InferredFieldType, SCHEMA_INFERRER
 from .vector_store import VectorStore, EmbeddingBackend
-from .knowledge_graph import KnowledgeGraph, Entity
+from .knowledge_graph import KnowledgeGraph, Entity, Triplet, RelationRule, RelationEngine, RELATION_ENGINE, get_relation_engine
 from .format_discovery import FormatDiscovery, Template
 from .gap_detector import GapDetector, Gap
-from .learning_engine import TemplateLearner, SkillDiscoverer, RoleGenerator
+from .learning_engine import TemplateLearner, SkillDiscoverer, RoleGenerator, ExtractedTemplate, AutoMinedTerm, AutoKnowledgeMiner
 from .struct_mem import StructMemory, EventEntry, SynthesisBlock, MemoryBuffer, Opinion, MentalModel, TemporalCompressor, SignalCleaner, MemoryTier, CleanStage, CompressedEntry
 from .provenance import ProvenanceTracker, ProvenanceEntry
 from .context_glossary import DomainTerm, ContextGlossary, GLOSSARY
 from .onto_bridge import OntoBridge, ExternalBinding, SchemaOrgMapper, WikidataMapper, IndustryOntology, ONTO_BRIDGE, get_onto_bridge
-from .relation_engine import RelationEngine, RelationRule, RELATION_ENGINE, get_relation_engine
 from .document_tree import DocumentTree, DocSection
 from .hierarchical_chunker import HierarchicalChunker, DocumentChunk, build_document_tree, chunk_document, SemanticChunker, TableAwareSplitter
 from .multidoc_fusion import MultiDocFusionEngine, CrossReference, DocumentConflict, FusionResult as MDFusionResult
@@ -34,12 +33,11 @@ from .intelligent_kb import (
 from .query_decomposer import QueryDecomposer, DecomposedQuery, SubQuery, DecomposedResult
 from .retrieval_validator import RetrievalValidator, ValidatedHit, ValidationResult
 from .hallucination_guard import HallucinationGuard, HallucinationReport, SentenceCheck, HallucinationStats
-from .quality_guard import KnowledgeQualityTest, run_quality_tests, QUALITY_TEMPLATES
-from .content_quality import ContentQuality, QualityScore, ContentLabel
-from .cognitive_delta import CognitiveDelta, DeltaResult, DeltaDecision
+from .quality_guard import KnowledgeQualityTest, run_quality_tests, QUALITY_TEMPLATES, ContentQuality, QualityScore, ContentLabel
+from .dedup import CognitiveDelta, DeltaResult, DeltaDecision
 from .engram_store import EngramStore, EngramEntry, get_engram_store
 from .pii_redactor import PIIRedactor, PIIFinding, RedactionResult, get_pii_redactor, redact_text, has_pii
-from .knowledge_router import KnowledgeRouter, RouteDecision, RouteTarget, get_knowledge_router
+from .knowledge_router import KnowledgeRouter, RouteDecision, RouteTarget, get_knowledge_router, DynamicRetrievalRouter, ChunkFeatures
 from .ideablock_enricher import IdeaBlockEnricher, IdeaBlockMeta, get_ideablock_enricher
 from .agentic_rag import AgenticRAG, AgenticResult, RetrievalRound, RAGMode, get_agentic_rag
 from .reranker import Reranker, RankedDocument, RerankResult, get_reranker
@@ -50,16 +48,15 @@ __all__ = [
     "KnowledgeBase", "Document", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult",
     "SchemaInferrer", "InferredSchema", "InferredField", "InferredFieldType", "SCHEMA_INFERRER",
     "VectorStore", "EmbeddingBackend",
-    "KnowledgeGraph", "Entity",
+    "KnowledgeGraph", "Entity", "Triplet", "RelationRule", "RelationEngine", "RELATION_ENGINE", "get_relation_engine",
     "FormatDiscovery", "Template",
     "GapDetector", "Gap",
-    "TemplateLearner", "SkillDiscoverer", "RoleGenerator",
+    "TemplateLearner", "SkillDiscoverer", "RoleGenerator", "ExtractedTemplate", "AutoMinedTerm", "AutoKnowledgeMiner",
     "StructMemory", "EventEntry", "SynthesisBlock", "MemoryBuffer", "Opinion", "MentalModel",
     "TemporalCompressor", "SignalCleaner", "MemoryTier", "CleanStage", "CompressedEntry",
     "ProvenanceTracker", "ProvenanceEntry",
     "DomainTerm", "ContextGlossary", "GLOSSARY",
     "OntoBridge", "ExternalBinding", "SchemaOrgMapper", "WikidataMapper", "IndustryOntology", "ONTO_BRIDGE", "get_onto_bridge",
-    "RelationEngine", "RelationRule", "RELATION_ENGINE", "get_relation_engine",
     "DocumentTree", "DocSection",
     "HierarchicalChunker", "DocumentChunk", "build_document_tree", "chunk_document",
     "SemanticChunker", "TableAwareSplitter",
@@ -78,7 +75,7 @@ __all__ = [
     "CognitiveDelta", "DeltaResult", "DeltaDecision",
     "EngramStore", "EngramEntry", "get_engram_store",
     "PIIRedactor", "PIIFinding", "RedactionResult", "get_pii_redactor", "redact_text", "has_pii",
-    "KnowledgeRouter", "RouteDecision", "RouteTarget", "get_knowledge_router",
+    "KnowledgeRouter", "RouteDecision", "RouteTarget", "get_knowledge_router", "DynamicRetrievalRouter", "ChunkFeatures",
     "IdeaBlockEnricher", "IdeaBlockMeta", "get_ideablock_enricher",
     "AgenticRAG", "AgenticResult", "RetrievalRound", "RAGMode", "get_agentic_rag",
     "Reranker", "RankedDocument", "RerankResult", "get_reranker",

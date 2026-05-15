@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -57,11 +58,14 @@ class StrategicDistiller:
     """Distill interaction experiences into strategic principles."""
 
     _instance: Optional["StrategicDistiller"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "StrategicDistiller":
         if cls._instance is None:
-            cls._instance = StrategicDistiller()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = StrategicDistiller()
         return cls._instance
 
     def __init__(self):
@@ -298,12 +302,15 @@ class StrategicDistiller:
 
 
 _distiller: Optional[StrategicDistiller] = None
+_distiller_lock = threading.Lock()
 
 
 def get_strategic_distiller() -> StrategicDistiller:
     global _distiller
     if _distiller is None:
-        _distiller = StrategicDistiller()
+        with _distiller_lock:
+            if _distiller is None:
+                _distiller = StrategicDistiller()
     return _distiller
 
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -170,11 +171,14 @@ class APIMap:
     """Unified web API discovery, invocation, and registration."""
 
     _instance: Optional["APIMap"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "APIMap":
         if cls._instance is None:
-            cls._instance = APIMap()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = APIMap()
         return cls._instance
 
     def __init__(self):
@@ -474,12 +478,15 @@ class APIMap:
 
 
 _api_map: Optional[APIMap] = None
+_api_map_lock = threading.Lock()
 
 
 def get_api_map() -> APIMap:
     global _api_map
     if _api_map is None:
-        _api_map = APIMap()
+        with _api_map_lock:
+            if _api_map is None:
+                _api_map = APIMap()
     return _api_map
 
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -423,12 +424,15 @@ class CompetitiveEliminator:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _eliminator: Optional[CompetitiveEliminator] = None
+_eliminator_lock = threading.Lock()
 
 
 def get_eliminator() -> CompetitiveEliminator:
     global _eliminator
     if _eliminator is None:
-        _eliminator = CompetitiveEliminator()
+        with _eliminator_lock:
+            if _eliminator is None:
+                _eliminator = CompetitiveEliminator()
     return _eliminator
 
 

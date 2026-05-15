@@ -20,6 +20,7 @@ all organs through unified interfaces. Every request flows:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -45,11 +46,14 @@ class TreeOrchestrator:
     """Unified architecture controller — routes everything through unified layers."""
 
     _instance: Optional["TreeOrchestrator"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "TreeOrchestrator":
         if cls._instance is None:
-            cls._instance = TreeOrchestrator()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = TreeOrchestrator()
         return cls._instance
 
     def __init__(self):
@@ -268,12 +272,15 @@ class TreeOrchestrator:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _orchestrator: Optional[TreeOrchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_tree_orchestrator() -> TreeOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = TreeOrchestrator()
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = TreeOrchestrator()
     return _orchestrator
 
 

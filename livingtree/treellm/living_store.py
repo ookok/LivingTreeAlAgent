@@ -38,6 +38,7 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -460,11 +461,14 @@ class LivingStore:
     """Unified liquid/solid storage with auto-tiering and write-back caching."""
 
     _instance: Optional["LivingStore"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "LivingStore":
         if cls._instance is None:
-            cls._instance = LivingStore()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = LivingStore()
         return cls._instance
 
     def __init__(self):
@@ -664,12 +668,15 @@ class LivingStore:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _store: Optional[LivingStore] = None
+_store_lock = threading.Lock()
 
 
 def get_living_store() -> LivingStore:
     global _store
     if _store is None:
-        _store = LivingStore()
+        with _store_lock:
+            if _store is None:
+                _store = LivingStore()
     return _store
 
 

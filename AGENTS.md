@@ -1,6 +1,6 @@
 # LivingTree AI Agent v2.4 — AGENTS.md
 
-> 2026-05-13 | Python 3.14+ | FastAPI + HTMX + WebRTC | 36 treellm modules | 18 LLM providers
+> 2026-05-16 | Python 3.14+ | FastAPI + HTMX + WebRTC | 100 treellm modules | 18 LLM providers
 
 ## OVERVIEW
 
@@ -48,6 +48,8 @@ TreeLLM (36 modules, 18 providers)
 
 ## CONVENTIONS
 - All new code in `livingtree/`
-- Secrets: `livingtree secrets set KEY VALUE` → `config/secrets.enc`
+- **Config** (unified): `config/livingtree.yaml` — all settings in ONE file. Edit directly or `livingtree config set <key> <value>`. Auto hot-reload.
+- **Secrets**: `config/secrets.enc` — encrypted API keys only. `livingtree secrets set KEY VALUE`. Built-in sensetime key auto-seeded on first run.
 - API: `/tree/living` (canvas), `/tree/admin` (console)
 - Test: `python test_queries.py` (3-turn conversation test)
+- Config files archived to `config/archive/` (unified.yaml, logging.yaml, etc.)

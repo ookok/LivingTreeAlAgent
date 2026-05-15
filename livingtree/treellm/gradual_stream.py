@@ -15,6 +15,7 @@ Integration:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass
 from enum import StrEnum
@@ -49,11 +50,14 @@ class GradualStream:
     """Three-phase progressive disclosure streaming."""
 
     _instance: Optional["GradualStream"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "GradualStream":
         if cls._instance is None:
-            cls._instance = GradualStream()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = GradualStream()
         return cls._instance
 
     def __init__(self):
@@ -141,12 +145,15 @@ class GradualStream:
 
 
 _gradual: Optional[GradualStream] = None
+_gradual_lock = threading.Lock()
 
 
 def get_gradual_stream() -> GradualStream:
     global _gradual
     if _gradual is None:
-        _gradual = GradualStream()
+        with _gradual_lock:
+            if _gradual is None:
+                _gradual = GradualStream()
     return _gradual
 
 

@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -495,12 +496,15 @@ class InputRouter:
 
 
 _bus: Optional[InputRouter] = None
+_bus_lock = threading.Lock()
 
 
 def get_living_input_bus() -> InputRouter:
     global _bus
     if _bus is None:
-        _bus = InputRouter()
+        with _bus_lock:
+            if _bus is None:
+                _bus = InputRouter()
     return _bus
 
 

@@ -60,6 +60,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -900,12 +901,15 @@ class FluidCollective:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _fc: Optional[FluidCollective] = None
+_fc_lock = threading.Lock()
 
 
 def get_fluid_collective() -> FluidCollective:
     global _fc
     if _fc is None:
-        _fc = FluidCollective()
+        with _fc_lock:
+            if _fc is None:
+                _fc = FluidCollective()
     return _fc
 
 

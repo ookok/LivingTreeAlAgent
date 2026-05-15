@@ -369,6 +369,11 @@ class IntegrationHub:
         self.world.swarm = self.swarm
         logger.debug("SwarmCoordinator initialized")
 
+        # ── P2P Presence: distributed spatial perception ──
+        from ..network.p2p_presence import get_p2p_presence
+        self.world.p2p_presence = get_p2p_presence(world=self.world)
+        logger.debug("P2PPresence initialized")
+
         from ..dna.evolution import SelfEvolvingEngine
         self.world.self_evolving = SelfEvolvingEngine(world=self.world)
         logger.debug("SelfEvolvingEngine initialized")
@@ -381,42 +386,12 @@ class IntegrationHub:
         self.world.predictive = PredictiveWorldModel(world=self.world)
         logger.debug("PredictiveWorldModel initialized")
 
-        # Auto-discover vault-based providers
+        # ── Unified provider registration (single source of truth) ──
         try:
-            from ..config.secrets import get_secret_vault
-            from ..treellm.providers import OpenAILikeProvider
-            # RouteMoA: expose embedding scorer import for late binding elsewhere
-            from ..treellm.embedding_scorer import get_embedding_scorer
-            vault = get_secret_vault()
-            # Default base URLs for vault-only providers (no separate config entry)
-            _DEFAULT_BASE_URLS = {
-                "modelscope": "https://api-inference.modelscope.cn/v1",
-                "bailing": "https://api.bailing.cn/v1",
-                "stepfun": "https://api.stepfun.com/v1",
-                "internlm": "https://api.sensenova.cn/v1",
-            }
-            vault_providers = [
-                ("baidu", "baidu_api_key", "baidu_base_url", "baidu_default_model", "ernie-4.0-turbo-8k"),
-                ("siliconflow", "siliconflow_api_key", "siliconflow_base_url", "siliconflow_default_model", "Qwen/Qwen2.5-7B-Instruct"),
-                ("mofang", "mofang_api_key", "mofang_base_url", "mofang_default_model", "Qwen/Qwen2.5-7B-Instruct"),
-                ("nvidia", "nvidia_api_key", "nvidia_base_url", "nvidia_default_model", "deepseek-ai/deepseek-r1"),
-                ("modelscope", "modelscope_api_key", "modelscope_base_url", "modelscope_flash_model", "Qwen/Qwen3-8B"),
-                ("bailing", "bailing_api_key", "bailing_base_url", "bailing_flash_model", "Baichuan4-Turbo"),
-                ("stepfun", "stepfun_api_key", "stepfun_base_url", "stepfun_flash_model", "step-1-flash"),
-                ("internlm", "internlm_api_key", "internlm_base_url", "internlm_flash_model", "internlm2.5-7b-chat"),
-            ]
-            for name, key_name, url_name, model_name, default_model in vault_providers:
-                key = vault.get(key_name, "")
-                if key:
-                    base_url = vault.get(url_name, "") or _DEFAULT_BASE_URLS.get(name, "")
-                    model = vault.get(model_name, "") or default_model
-                    self.world.consciousness._llm.add_provider(OpenAILikeProvider(
-                        name=name, base_url=base_url, api_key=key, default_model=model,
-                    ))
-                    self.world.consciousness._paid_models.append(name)
-                    logger.info(f"Vault provider: {name} ({model})")
+            from ..treellm.provider_registry import register_all_providers
+            register_all_providers(self.world.consciousness._llm)
         except Exception as e:
-            logger.warning(f"Vault providers: {e}")
+            logger.warning(f"Provider registry in hub: {e}")
 
         # Register web2api as a local provider (no API key needed)
         try:
@@ -531,17 +506,17 @@ class IntegrationHub:
         logger.debug("ForesightGate initialized")
 
         # Calibration Tracker (foresight + Agentic Harness: prediction vs actual)
-        from ..observability.calibration import get_calibration_tracker
+        from ..treellm.confidence_calibrator import get_calibration_tracker
         self.world.calibration_tracker = get_calibration_tracker()
         logger.debug("CalibrationTracker initialized")
 
         # Claim Checker (AutoResearchClaw: anti-fabrication)
-        from ..observability.claim_checker import CLAIM_CHECKER
+        from ..knowledge.hallucination_guard import CLAIM_CHECKER
         self.world.claim_checker = CLAIM_CHECKER
         logger.debug("ClaimChecker initialized")
 
         # Sentinel (AutoResearchClaw: watchdog monitoring)
-        from ..observability.sentinel import get_sentinel
+        from ..treellm.daemon_doctor import get_sentinel
         self.world.sentinel = get_sentinel()
         logger.debug("Sentinel initialized (5 default checks)")
 
@@ -582,12 +557,12 @@ class IntegrationHub:
         logger.debug("ActivityFeed initialized")
 
         # Error Replay (observability: error reproduction)
-        from ..observability.error_replay import get_error_replay
+        from ..treellm.debug_pro import get_error_replay
         self.world.error_replay = get_error_replay()
         logger.debug("ErrorReplay initialized")
 
         # Trust Scorer (observability: trust scoring)
-        from ..observability.trust_scoring import get_trust_scorer
+        from ..core.system_health import get_trust_scorer
         self.world.trust_scorer = get_trust_scorer()
         logger.debug("TrustScorer initialized")
 
@@ -815,7 +790,7 @@ class IntegrationHub:
 
         # ── TrustScoring: per-agent posture ──
         try:
-            from ..observability.trust_scoring import get_trust_scorer
+            from ..core.system_health import get_trust_scorer
             self.world.trust_scorer = get_trust_scorer()
             logger.info("TrustScoring initialized (profile: standard)")
         except Exception as e:
@@ -880,7 +855,7 @@ class IntegrationHub:
 
         # ── ErrorReplay: operation recording + self-healing ──
         try:
-            from ..observability.error_replay import get_error_replay
+            from ..treellm.debug_pro import get_error_replay
             self.world.error_replay = get_error_replay()
             logger.info("ErrorReplay initialized")
         except Exception as e:
@@ -1061,6 +1036,16 @@ class IntegrationHub:
             logger.info("DaemonDoctor started (10min checkup interval)")
         except Exception as e:
             logger.debug(f"DaemonDoctor: {e}")
+
+        # ── ModelRegistry: periodic /models endpoint polling ──
+        try:
+            from ..treellm.model_registry import get_model_registry
+            mr = get_model_registry()
+            # Start 24h full refresh + DaemonDoctor handles free-provider 6h refresh
+            self._spawn_task(mr.start_periodic_refresh(interval=86400), "model_refresh_daily")
+            logger.info("ModelRegistry periodic refresh started (24h interval)")
+        except Exception as e:
+            logger.debug(f"ModelRegistry periodic: {e}")
 
         # ── WarmStartAccel: pre-warm providers for zero cold-start latency ──
         try:

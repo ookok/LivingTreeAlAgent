@@ -1,8 +1,0 @@
-{
-  "ollama_url": "http://localhost:11434",
-  "default_model": "qwen2.5:1.5b",
-  "theme": "light",
-  "auto_update": true,
-  "auto_heal": true,
-  "log_level": "info"
-}

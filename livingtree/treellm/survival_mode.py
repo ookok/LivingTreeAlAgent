@@ -27,6 +27,7 @@ Integration:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -59,11 +60,14 @@ class SurvivalMode:
     """Unified cross-modal survival state machine."""
 
     _instance: Optional["SurvivalMode"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "SurvivalMode":
         if cls._instance is None:
-            cls._instance = SurvivalMode()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = SurvivalMode()
         return cls._instance
 
     def __init__(self):
@@ -230,12 +234,15 @@ class SurvivalMode:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _survival: Optional[SurvivalMode] = None
+_survival_lock = threading.Lock()
 
 
 def get_survival_mode() -> SurvivalMode:
     global _survival
     if _survival is None:
-        _survival = SurvivalMode()
+        with _survival_lock:
+            if _survival is None:
+                _survival = SurvivalMode()
     return _survival
 
 

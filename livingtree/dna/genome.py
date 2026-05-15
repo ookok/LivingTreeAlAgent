@@ -97,7 +97,7 @@ class Genome(BaseModel):
             generation=self.generation + 1,
             config={**self.config},
             expressed_genes=self.expressed_genes.model_copy(),
-            mutation_history=list(self.mutation_history),
+            mutation_history=[m.model_copy() for m in self.mutation_history],
             parent_genome_id=f"gen_{self.generation}",
         )
         child.add_mutation("Forked from parent genome", source="mitosis")

@@ -17,6 +17,7 @@ Integrated with DaemonDoctor: runs during idle windows.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -41,11 +42,14 @@ class DreamOrchestrator:
     """Unified dream cycle with canary validation."""
 
     _instance: Optional["DreamOrchestrator"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "DreamOrchestrator":
         if cls._instance is None:
-            cls._instance = DreamOrchestrator()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = DreamOrchestrator()
         return cls._instance
 
     def __init__(self):
@@ -190,12 +194,15 @@ class DreamOrchestrator:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _orchestrator: Optional[DreamOrchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_dream_orchestrator() -> DreamOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = DreamOrchestrator()
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = DreamOrchestrator()
     return _orchestrator
 
 

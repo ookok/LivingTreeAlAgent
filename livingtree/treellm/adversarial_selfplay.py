@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -655,12 +656,15 @@ class AdversarialSelfPlay:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _selfplay: Optional[AdversarialSelfPlay] = None
+_selfplay_lock = threading.Lock()
 
 
 def get_selfplay() -> AdversarialSelfPlay:
     global _selfplay
     if _selfplay is None:
-        _selfplay = AdversarialSelfPlay()
+        with _selfplay_lock:
+            if _selfplay is None:
+                _selfplay = AdversarialSelfPlay()
     return _selfplay
 
 

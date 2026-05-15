@@ -32,6 +32,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Optional
@@ -618,12 +619,15 @@ class DeepProbe:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _probe: Optional[DeepProbe] = None
+_probe_lock = threading.Lock()
 
 
 def get_deep_probe() -> DeepProbe:
     global _probe
     if _probe is None:
-        _probe = DeepProbe()
+        with _probe_lock:
+            if _probe is None:
+                _probe = DeepProbe()
     return _probe
 
 

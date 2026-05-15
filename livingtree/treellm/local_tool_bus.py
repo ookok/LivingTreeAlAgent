@@ -20,6 +20,7 @@ Integration:
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -42,11 +43,14 @@ class LocalToolBus:
     """
 
     _instance: Optional["LocalToolBus"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "LocalToolBus":
         if cls._instance is None:
-            cls._instance = LocalToolBus()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = LocalToolBus()
         return cls._instance
 
     def __init__(self):
@@ -461,12 +465,15 @@ class LocalToolBus:
 
 
 _bus: Optional[LocalToolBus] = None
+_bus_lock = threading.Lock()
 
 
 def get_local_tool_bus() -> LocalToolBus:
     global _bus
     if _bus is None:
-        _bus = LocalToolBus()
+        with _bus_lock:
+            if _bus is None:
+                _bus = LocalToolBus()
     return _bus
 
 

@@ -26,10 +26,15 @@ class EnvironmentChecker:
         return False, f"缺少 {client_main}"
 
     def _check_config(self):
-        config_files = ['config/config.yaml', 'config/unified.yaml']
+        config_files = ['config/livingtree.yaml']
         exists = [f for f in config_files if os.path.exists(f)]
         if exists:
             return True, f"配置文件: {', '.join(exists)}"
+        # Legacy fallback
+        legacy_files = ['config/config.yaml', 'config/unified.yaml']
+        legacy_exists = [f for f in legacy_files if os.path.exists(f)]
+        if legacy_exists:
+            return True, f"配置文件(legacy): {', '.join(legacy_exists)} — consider migrating to config/livingtree.yaml"
         return False, "缺少配置文件"
 
     def _check_ollama(self):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -345,14 +346,17 @@ class SkillRouter:
 # ═══ Global singleton ═══
 
 _router: SkillRouter | None = None
+_router_lock = threading.Lock()
 
 
 def get_router() -> SkillRouter:
     global _router
     if _router is None:
-        _router = SkillRouter()
-        _router._build_default_catalog()
-        _router.build()
+        with _router_lock:
+            if _router is None:
+                _router = SkillRouter()
+                _router._build_default_catalog()
+                _router.build()
     return _router
 
 # Backward compatibility alias (core.py uses TinyClassifier)

@@ -548,12 +548,15 @@ class ModelsDevSync:
 # ── Singleton ──────────────────────────────────────────────────────
 
 _models_dev_sync: ModelsDevSync | None = None
+_models_dev_sync_lock = threading.Lock()
 
 
 def get_models_dev_sync() -> ModelsDevSync:
     global _models_dev_sync
     if _models_dev_sync is None:
-        _models_dev_sync = ModelsDevSync()
+        with _models_dev_sync_lock:
+            if _models_dev_sync is None:
+                _models_dev_sync = ModelsDevSync()
     return _models_dev_sync
 
 

@@ -18,6 +18,7 @@ Builds on: rationale_generator.Rationale, audit.py, tracer.py
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -53,11 +54,14 @@ class ExplainabilityAudit:
     """Unified decision traceability pipeline."""
 
     _instance: Optional["ExplainabilityAudit"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "ExplainabilityAudit":
         if cls._instance is None:
-            cls._instance = ExplainabilityAudit()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = ExplainabilityAudit()
         return cls._instance
 
     def __init__(self):
@@ -144,12 +148,15 @@ class ExplainabilityAudit:
 
 
 _audit: Optional[ExplainabilityAudit] = None
+_audit_lock = threading.Lock()
 
 
 def get_explainability_audit() -> ExplainabilityAudit:
     global _audit
     if _audit is None:
-        _audit = ExplainabilityAudit()
+        with _audit_lock:
+            if _audit is None:
+                _audit = ExplainabilityAudit()
     return _audit
 
 

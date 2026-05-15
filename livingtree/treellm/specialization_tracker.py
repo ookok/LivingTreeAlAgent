@@ -14,6 +14,7 @@ Integration:
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -28,11 +29,14 @@ class SpecializationTracker:
     """Empirical provider specialization discovery."""
 
     _instance: Optional["SpecializationTracker"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "SpecializationTracker":
         if cls._instance is None:
-            cls._instance = SpecializationTracker()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = SpecializationTracker()
         return cls._instance
 
     def __init__(self):
@@ -114,12 +118,15 @@ class SpecializationTracker:
 
 
 _tracker: Optional[SpecializationTracker] = None
+_tracker_lock = threading.Lock()
 
 
 def get_specialization_tracker() -> SpecializationTracker:
     global _tracker
     if _tracker is None:
-        _tracker = SpecializationTracker()
+        with _tracker_lock:
+            if _tracker is None:
+                _tracker = SpecializationTracker()
     return _tracker
 
 

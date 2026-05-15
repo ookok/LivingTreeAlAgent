@@ -220,9 +220,9 @@ class ThermodynamicBudget:
 
         # ── Metabolism check ──
         try:
-            from .metabolism import get_metabolism
+            from .metabolism import get_metabolism, OperationType
             meta = get_metabolism()
-            if not meta.can_afford("economy", "budget_eval"):
+            if not meta.can_afford("economy", OperationType.ACTIVE):
                 return ThermoDecision(
                     task_id=task_id,
                     proceed=False,
@@ -544,5 +544,4 @@ def get_thermo_budget(daily_budget: float = 50.0) -> ThermodynamicBudget:
 __all__ = [
     "ThermodynamicBudget", "ThermalState", "ThermoDecision",
     "get_thermo_budget",
-    "AnnealingScheduler", "EnergyLandscape", "TunnelGate",  # re-exported for convenience
 ]

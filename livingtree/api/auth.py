@@ -22,11 +22,24 @@ from pydantic import BaseModel
 from loguru import logger
 
 # ═══ Config ═══
+
+def _load_secret(key: str, default: str = "") -> str:
+    """Load a secret from encrypted vault."""
+    try:
+        from ..config.secrets import get_secret_vault
+        return get_secret_vault().get(key, default)
+    except Exception:
+        return default
+
+
 CORP_ID = os.environ.get("WEWORK_CORP_ID", "")
 AGENT_ID = os.environ.get("WEWORK_AGENT_ID", "")
 APP_SECRET = os.environ.get("WEWORK_APP_SECRET", "")
-TOKEN_SECRET = os.environ.get("JWT_SECRET", "livingtree-wework-2026")
+TOKEN_SECRET = os.environ.get("JWT_SECRET", "") or _load_secret("jwt_secret", "")
 TOKEN_EXPIRE = 86400 * 7  # 7 days
+
+if not TOKEN_SECRET:
+    logger.warning("JWT_SECRET not set — auth tokens will be insecure. Set env JWT_SECRET or add jwt_secret to vault.")
 
 # Admin detection: configurable rules
 WEWORK_ADMIN_USERS = os.environ.get("WEWORK_ADMIN_USERS", "").split(",") if os.environ.get("WEWORK_ADMIN_USERS") else []

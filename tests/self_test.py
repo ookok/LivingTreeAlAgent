@@ -164,7 +164,7 @@ def _test_predictability():
     assert report.predictability_score > 0
 
 def _test_sgrpo():
-    from livingtree.economy.spatial_reward import SpatialGRPOOptimizer, SpatialContext
+    from livingtree.economy.grpo_optimizer import SpatialGRPOOptimizer, SpatialContext
     sgrpo = SpatialGRPOOptimizer()
     ctx = SpatialContext(avg_centrality=0.4)
     result = sgrpo.optimize(
@@ -172,7 +172,7 @@ def _test_sgrpo():
     assert result.round_id > 0
 
 def _test_tdm():
-    from livingtree.economy.tdm_reward import TDMRewardOptimizer, SurrogateRewardModel
+    from livingtree.economy.grpo_optimizer import TDMRewardOptimizer, SurrogateRewardModel
     sm = SurrogateRewardModel()
     sm.train_step({"f": 0.5}, 0.7)
     tdm = TDMRewardOptimizer()
@@ -186,7 +186,7 @@ def _test_thermo():
     assert d.proceed
 
 def _test_latent():
-    from livingtree.economy.latent_grpo import LatentGRPO, LatentEncoder
+    from livingtree.economy.grpo_optimizer import LatentGRPO, LatentEncoder
     enc = LatentEncoder(input_dim=3, latent_dim=2)
     loss = enc.feedback_align({"f1": 0.5}, ["f1"], [0.3, -0.2])
     assert loss >= 0

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import random
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -540,12 +541,15 @@ class ThompsonRouter:
 # ═══ Singleton ═══
 
 _bandit_router: ThompsonRouter | None = None
+_bandit_router_lock = threading.Lock()
 
 
 def get_bandit_router() -> ThompsonRouter:
     global _bandit_router
     if _bandit_router is None:
-        _bandit_router = ThompsonRouter()
+        with _bandit_router_lock:
+            if _bandit_router is None:
+                _bandit_router = ThompsonRouter()
     return _bandit_router
 
 

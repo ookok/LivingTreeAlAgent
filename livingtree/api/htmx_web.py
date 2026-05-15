@@ -1306,7 +1306,7 @@ async def tree_params(request: Request):
 
     # Autonomic loop Intentional TD
     try:
-        from ..core.autonomic_loop import AutonomicLoop
+        from ..treellm.daemon_doctor import AutonomicLoop
         params["自愈 Intentional TD γ"] = "0.5 (已启用)"
     except Exception:
         pass

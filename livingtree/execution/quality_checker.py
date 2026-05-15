@@ -407,7 +407,7 @@ class MultiAgentQualityChecker:
     @staticmethod
     def _check_prompt_injection(content: str) -> CheckResult:
         """Detect prompt injection and social engineering patterns."""
-        from ...dna.safety import PromptInjectionScanner
+        from ..dna.safety import PromptInjectionScanner
         result = PromptInjectionScanner.scan(content)
         if result["safe"]:
             return CheckResult("PromptInjection", CheckStatus.PASS, [], [], score=1.0)

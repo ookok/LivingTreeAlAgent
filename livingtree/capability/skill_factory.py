@@ -14,6 +14,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -129,6 +130,19 @@ class SkillFactory:
         self._tmp_root: Path = Path(tempfile.gettempdir()) / "livingtree_skills"
         self._tmp_root.mkdir(parents=True, exist_ok=True)
 
+
+_skill_factory: Optional[SkillFactory] = None
+_skill_factory_lock = threading.Lock()
+
+
+def get_skill_factory() -> SkillFactory:
+    global _skill_factory
+    if _skill_factory is None:
+        with _skill_factory_lock:
+            if _skill_factory is None:
+                _skill_factory = SkillFactory()
+    return _skill_factory
+
     def discover_skills(self) -> List[str]:
         return list(self._skills.keys())
 
@@ -173,9 +187,14 @@ class SkillFactory:
         lines.append("def execute(input_data):")
         lines.append("    results = []")
         for name in skill_list[:5]:
-            lines.append(f"    # Step: {name}")
-            lines.append(f"    # result_{name} = skill_{name}.execute(input_data)")
-            lines.append(f"    # results.append(result_{name})")
+            lines.append(f"    try:")
+            lines.append(f"        from importlib import import_module")
+            lines.append(f"        m = import_module('livingtree_skills.{name}')")
+            lines.append(f"        r = m.execute(input_data)")
+            lines.append(f"        results.append({{'skill':'{name}','result':r}})")
+            lines.append(f"        input_data = r if isinstance(r, dict) else {{'data': r}}")
+            lines.append(f"    except Exception as e:")
+            lines.append(f"        results.append({{'skill':'{name}','error':str(e)}})")
         if len(skill_list) > 5:
             lines.append(f"    # ... and {len(skill_list) - 5} more skills")
         lines.append("    return {'status': 'composed', 'skills': " + str(skill_list) + ", 'results': results}")

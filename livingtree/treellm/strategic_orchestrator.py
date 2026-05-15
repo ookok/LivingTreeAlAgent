@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -753,12 +754,15 @@ class StrategicOrchestrator:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _orchestrator: Optional[StrategicOrchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> StrategicOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = StrategicOrchestrator()
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = StrategicOrchestrator()
     return _orchestrator
 
 

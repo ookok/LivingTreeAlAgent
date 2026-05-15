@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -319,15 +320,16 @@ class MCPAdapter(CapabilityAdapter):
             self._local_bus = get_local_tool_bus()
             for t in MCP_TOOLS:
                 tool_name = t.get("name", "")
-                # Wire LocalToolBus handler for direct Python invocation
                 handler = self._local_bus._registry.get(tool_name)
+                if handler is None:
+                    continue
                 cap = Capability(
                     id=f"mcp:{tool_name}", name=tool_name,
                     category=CapCategory.MCP,
                     description=t.get("description", "")[:200],
-                    handler=handler,  # ← Direct local handler, NOT None
+                    handler=handler,
                     source="mcp_server",
-                    cost_estimate={"seconds": 0.001, "tokens": 0},  # local = near-zero cost
+                    cost_estimate={"seconds": 0.001, "tokens": 0},
                 )
                 caps.append(cap)
                 self.register(cap)
@@ -551,11 +553,14 @@ class CapabilityBus:
     """
 
     _instance: Optional["CapabilityBus"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "CapabilityBus":
         if cls._instance is None:
-            cls._instance = CapabilityBus()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = CapabilityBus()
         return cls._instance
 
     def __init__(self):
@@ -670,6 +675,18 @@ class CapabilityBus:
 
     def prompt_fragment_sync(self, categories: list[str] = None) -> str:
         """Synchronous version for use in core.py chat() prompt injection."""
+        if not self._discovered:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._ensure_discovered())
+                else:
+                    loop.run_until_complete(self._ensure_discovered())
+            except RuntimeError:
+                try:
+                    asyncio.run(self._ensure_discovered())
+                except RuntimeError:
+                    pass
         cats = [CapCategory(c) for c in categories] if categories else list(self._adapters.keys())
         lines = []
         for cat in cats:
@@ -707,12 +724,16 @@ class CapabilityBus:
 # ═══ Singleton ════════════════════════════════════════════════════
 
 _bus: Optional[CapabilityBus] = None
+_bus_lock = threading.Lock()
 
 
 def get_capability_bus() -> CapabilityBus:
     global _bus
     if _bus is None:
-        _bus = CapabilityBus()
+        with _bus_lock:
+            if _bus is None:
+                _bus = CapabilityBus()
+                CapabilityBus._instance = _bus
     return _bus
 
 

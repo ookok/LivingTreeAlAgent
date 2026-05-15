@@ -41,8 +41,8 @@ from loguru import logger
 class LivingTreeStartupConfig:
     """One-click configuration for the entire digital lifeform."""
     identity: str = "tree_001"
-    # API keys
-    sensetime_api_key: str = "sk-9kybnl63EsTepGUEwOK9H5FwIKlUkGkC"
+    # API keys (encrypted in config/secrets.enc — see livingtree.config.secrets)
+    sensetime_api_key: str = ""
     deepseek_api_key: str = ""
     # Features
     enable_autopilot: bool = True       # SystemHealth background daemons
@@ -233,15 +233,11 @@ async def startup(config: LivingTreeStartupConfig | None = None) -> LivingTreeIn
 
 
 def _init_config(cfg: LivingTreeStartupConfig, mods: dict) -> None:
-    """Phase 1: Load configuration."""
+    """Phase 1: Load configuration (API keys from encrypted vault)."""
     try:
         from ..config.settings import get_config
         mods["config"] = get_config()
-        if cfg.sensetime_api_key:
-            mods["config"].model.sensetime_api_key = cfg.sensetime_api_key
-        if cfg.deepseek_api_key:
-            mods["config"].model.deepseek_api_key = cfg.deepseek_api_key
-        logger.debug("Phase 1: config loaded")
+        logger.debug("Phase 1: config loaded (keys from encrypted vault)")
     except Exception as e:
         logger.warning(f"Phase 1 skipped: {e}")
 
@@ -271,7 +267,7 @@ async def _init_providers(cfg: LivingTreeStartupConfig, mods: dict) -> None:
         from ..treellm.holistic_election import get_election
 
         cm = mods.get("config")
-        api_key = cm.model.sensetime_api_key if cm else cfg.sensetime_api_key
+        api_key = cm.model.sensetime_api_key if cm else ""
 
         if api_key:
             provider = create_sensetime_provider(api_key=api_key)
@@ -361,9 +357,7 @@ def _init_economy(cfg: LivingTreeStartupConfig, mods: dict) -> None:
     try:
         from ..economy.economic_engine import get_economic_orchestrator
         from ..economy.thermo_budget import get_thermo_budget
-        from ..economy.tdm_reward import get_tdm_optimizer
-        from ..economy.spatial_reward import get_sgrpo
-        from ..economy.latent_grpo import get_latent_grpo
+        from ..economy.grpo_optimizer import get_tdm_optimizer, get_sgrpo, get_latent_grpo
 
         mods["economic"] = get_economic_orchestrator()
         mods["thermo_budget"] = get_thermo_budget()
@@ -395,7 +389,7 @@ async def _init_autonomy(cfg: LivingTreeStartupConfig, mods: dict) -> None:
     try:
         from ..core.system_health import get_system_health
         from ..core.action_principle import get_action_principle
-        from ..core.autonomic_loop import AutonomicLoop
+        from ..treellm.daemon_doctor import AutonomicLoop
 
         mods["health"] = get_system_health()
         mods["action_principle"] = get_action_principle()

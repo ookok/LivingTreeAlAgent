@@ -1,5 +1,9 @@
 """Metabolism Engine — Unified resource consumption across all 12 organs.
 
+DISPLAY LAYER: Metabolic ATP/Glucose/O2/NADPH tracking is for monitoring only.
+Routing is controlled by SurvivalMode (budget/error/memory-driven), not by
+Krebs cycle metabolic rates. Token budgets are enforced by BudgetRouter + SurvivalMode.
+
 Biological grounding:
   Krebs cycle (citric acid cycle): ATP production via oxidative phosphorylation —
     organs consume ATP proportional to their metabolic rate. The Metabolism Engine

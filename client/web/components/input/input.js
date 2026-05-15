@@ -6,16 +6,6 @@ class Input extends Component {
     this._files = [];
     this._recorder = null;
     this._recording = false;
-    this._slashCommands = [
-      { cmd: '/ask', desc: '搜索查资料', icon: '🔍' },
-      { cmd: '/do', desc: '执行操作', icon: '⚡' },
-      { cmd: '/files', desc: '文件管理', icon: '📁' },
-      { cmd: '/learn', desc: '学习进化', icon: '🧠' },
-      { cmd: '/check', desc: '检查诊断', icon: '🔧' },
-      { cmd: '/docs', desc: '文档生成', icon: '📝' },
-      { cmd: '/team', desc: '协作网络', icon: '🌐' },
-      { cmd: '/help', desc: '帮助', icon: '❓' }
-    ];
     this._slashIdx = -1;
     this._slashFiltered = [];
   }
@@ -77,21 +67,11 @@ class Input extends Component {
     this._uploadBtn = this.el.querySelector('.upload-btn');
     this._voiceBtn = this.el.querySelector('.voice-btn');
     this._fileInput = this.el.querySelector('.hidden-file-input');
-
-    this._slashDDItems = [];
-    this._slashCommands.forEach((c) => {
-      const d = document.createElement('div');
-      d.className = 'slash-item';
-      d.innerHTML = `<span class="slash-item-icon">${c.icon}</span><div class="slash-item-info"><div class="slash-item-name">${c.cmd}</div><div class="slash-item-desc">${c.desc}</div></div>`;
-      d.addEventListener('click', () => this._selectSlash(c));
-      this._slashDD.appendChild(d);
-      this._slashDDItems.push({ el: d, cmd: c });
-    });
   }
 
   _setupSlashCommands() {
     this._slashBtn.addEventListener('click', () => {
-      this._slashFiltered = [...this._slashCommands];
+      this._slashFiltered = SlashCommands.list();
       this._slashIdx = 0;
       this._renderSlashDD();
       this._textarea.value = '/';
@@ -103,9 +83,7 @@ class Input extends Component {
       const idx = v.lastIndexOf('/');
       if (idx >= 0 && (idx === 0 || v[idx - 1] === ' ')) {
         const q = v.slice(idx + 1).toLowerCase();
-        this._slashFiltered = this._slashCommands.filter(c =>
-          c.cmd.includes(q) || c.desc.includes(q)
-        );
+        this._slashFiltered = SlashCommands.filter(q);
         this._slashIdx = 0;
         this._renderSlashDD();
       } else {
@@ -124,12 +102,19 @@ class Input extends Component {
   }
 
   _renderSlashDD() {
-    this._slashDDItems.forEach(({ el, cmd }) => {
-      const show = this._slashFiltered.includes(cmd);
-      el.style.display = show ? 'flex' : 'none';
-      el.classList.toggle('selected', cmd === this._slashFiltered[this._slashIdx]);
+    let html = '';
+    this._slashFiltered.forEach((c, i) => {
+      const sel = i === this._slashIdx ? ' selected' : '';
+      html += `<div class="slash-item${sel}" data-idx="${i}">${c.icon || '•'} <strong>${c.cmd}</strong> ${c.desc}</div>`;
     });
+    this._slashDD.innerHTML = html;
     this._slashDD.style.display = this._slashFiltered.length ? 'block' : 'none';
+    this._slashDD.querySelectorAll('.slash-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const i = parseInt(el.dataset.idx);
+        if (this._slashFiltered[i]) this._selectSlash(this._slashFiltered[i]);
+      });
+    });
   }
 
   _closeSlash() {

@@ -9,6 +9,7 @@ Core modules:
   - ROIModel: 投入产出比计算与预测
   - ComplianceGate: 合法合规审查门控
   - EconomicOrchestrator: 经济决策编排器
+  - GRPOOptimizer: 3-in-1 composite GRPO (Latent + Spatial + TDM)
 """
 
 from .economic_engine import (
@@ -24,6 +25,30 @@ from .economic_engine import (
     get_economic_orchestrator,
 )
 
+from .grpo_optimizer import (
+    LatentGRPO,
+    LatentEncoder,
+    LatentVector,
+    LatentGRPOResult,
+    get_latent_grpo,
+    SpatialGRPOOptimizer,
+    SpatialContextExtractor,
+    SpatialContext,
+    SpatialReward,
+    SGRPOResult,
+    get_sgrpo,
+    TDMRewardOptimizer,
+    SurrogateRewardModel,
+    PerStepReward,
+    TrajectoryReward,
+    TDMOptimizationResult,
+    RewardType,
+    lifeengine_to_trajectory,
+    get_tdm_optimizer,
+    GRPOOptimizer,
+    get_grpo_optimizer,
+)
+
 __all__ = [
     "TrilemmaVector",
     "EconomicPolicy",
@@ -35,4 +60,25 @@ __all__ = [
     "EconomicDecision",
     "AdaptiveEconomicScheduler",
     "get_economic_orchestrator",
+    "LatentGRPO",
+    "LatentEncoder",
+    "LatentVector",
+    "LatentGRPOResult",
+    "get_latent_grpo",
+    "SpatialGRPOOptimizer",
+    "SpatialContextExtractor",
+    "SpatialContext",
+    "SpatialReward",
+    "SGRPOResult",
+    "get_sgrpo",
+    "TDMRewardOptimizer",
+    "SurrogateRewardModel",
+    "PerStepReward",
+    "TrajectoryReward",
+    "TDMOptimizationResult",
+    "RewardType",
+    "lifeengine_to_trajectory",
+    "get_tdm_optimizer",
+    "GRPOOptimizer",
+    "get_grpo_optimizer",
 ]

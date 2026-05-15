@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -183,6 +184,7 @@ def phi_first_from_result(
 
 
 _confidence_singleton: Optional["LogitConfidenceGate"] = None
+_confidence_lock = threading.Lock()
 
 
 class LogitConfidenceGate:
@@ -211,5 +213,7 @@ class LogitConfidenceGate:
 def get_confidence_gate(threshold: float = 0.6, top_k: int = 10) -> LogitConfidenceGate:
     global _confidence_singleton
     if _confidence_singleton is None:
-        _confidence_singleton = LogitConfidenceGate(threshold=threshold, top_k=top_k)
+        with _confidence_lock:
+            if _confidence_singleton is None:
+                _confidence_singleton = LogitConfidenceGate(threshold=threshold, top_k=top_k)
     return _confidence_singleton

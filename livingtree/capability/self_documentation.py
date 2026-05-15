@@ -230,7 +230,7 @@ class SelfDocumenter:
 
     def _gather_trust(self) -> str:
         try:
-            from ..observability.trust_scoring import get_trust_scorer
+            from ..core.system_health import get_trust_scorer
             ts = get_trust_scorer()
             return json.dumps(ts.summary(), indent=2, ensure_ascii=False)
         except Exception:

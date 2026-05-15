@@ -291,7 +291,6 @@ class SiteAccelerator:
         for domain, mirror in mirrors.items():
             if domain in url:
                 return url.replace(f"https://{domain}", mirror.rstrip("/"))
-                return url.replace(f"https://{domain}", mirror)
         return None
 
 

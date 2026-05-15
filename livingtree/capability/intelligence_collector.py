@@ -176,7 +176,7 @@ class IntelligenceCollector:
 
         # Step 3: Initialize engines
         from .online_stream_parser import OnlineStreamParser
-        from ..knowledge.cognitive_delta import CognitiveDelta
+        from ..knowledge.dedup import CognitiveDelta
         stream_parser = OnlineStreamParser()
         delta = CognitiveDelta()
 

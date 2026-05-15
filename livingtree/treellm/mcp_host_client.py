@@ -51,6 +51,46 @@ MCP_SERVER_REGISTRY: dict[str, dict] = {
         "env": None,
         "tools": ["web_search", "web_fetch"],
     },
+    "filesystem": {
+        "name": "Filesystem",
+        "description": "Secure file system access MCP server — read/write/list files with sandboxed paths",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+        "env": None,
+        "tools": ["read_file", "write_file", "list_directory", "move_file", "search_files", "get_file_info"],
+    },
+    "sqlite": {
+        "name": "SQLite",
+        "description": "SQLite database MCP server — query/insert/update with parameterized queries",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-sqlite", "livingtree.db"],
+        "env": None,
+        "tools": ["read_query", "write_query", "create_table", "list_tables", "describe_table"],
+    },
+    "github": {
+        "name": "GitHub",
+        "description": "GitHub API MCP server — repo ops, issues, PRs, code search. Requires GITHUB_TOKEN env",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
+        "tools": ["search_repositories", "get_file_contents", "create_issue", "list_pull_requests"],
+    },
+    "brave-search": {
+        "name": "Brave Search",
+        "description": "Brave Search API MCP server — web + news + local search. Requires BRAVE_API_KEY env",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "env": {"BRAVE_API_KEY": "${BRAVE_API_KEY}"},
+        "tools": ["web_search", "news_search", "local_search"],
+    },
+    "fetch": {
+        "name": "Fetch",
+        "description": "Web content fetching MCP server — fetch URLs as markdown/html/text",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-fetch"],
+        "env": None,
+        "tools": ["fetch", "fetch_markdown"],
+    },
 }
 
 _SERVER_PRESETS: dict[str, dict] = dict(MCP_SERVER_REGISTRY)

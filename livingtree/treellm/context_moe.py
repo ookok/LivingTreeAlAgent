@@ -30,6 +30,7 @@ import asyncio
 import hashlib
 import json
 import math
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -274,11 +275,14 @@ class ContextMoE:
     """Human-like Mixture-of-Experts context memory."""
 
     _instance: Optional["ContextMoE"] = None
+    _instance_lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "ContextMoE":
         if cls._instance is None:
-            cls._instance = ContextMoE()
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = ContextMoE()
         return cls._instance
 
     def __init__(self, session_id: str = "perpetual"):

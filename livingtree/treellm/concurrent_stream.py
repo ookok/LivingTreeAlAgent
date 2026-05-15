@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -531,13 +532,16 @@ class ConcurrentStream:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _cs: Optional[ConcurrentStream] = None
+_cs_lock = threading.Lock()
 
 
 def get_concurrent_stream() -> ConcurrentStream:
     global _cs
     if _cs is None:
-        _cs = ConcurrentStream()
-        _cs.auto_connect()
+        with _cs_lock:
+            if _cs is None:
+                _cs = ConcurrentStream()
+                _cs.auto_connect()
     return _cs
 
 

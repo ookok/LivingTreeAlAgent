@@ -440,7 +440,7 @@ class HolisticElection:
         alive_scores.sort(key=lambda s: -(s.lpo_score or s.total))
         return alive_scores
 
-    def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False):
+    def record_result(self, name: str, success: bool, latency_ms: float, tokens: int = 0, error: str = "", rate_limited: bool = False, task_type: str = "general"):
         stats = self.get_stats(name)
         stats.record(success, latency_ms, tokens, error, rate_limited)
         # ── CompetitiveEliminator: update Elo rankings ──
@@ -454,6 +454,16 @@ class HolisticElection:
                 opponent_providers=list(self._stats.keys()),
             )
         except ImportError:
+            pass
+        # ── CausalEffectTracker: record treatment→outcome ──
+        try:
+            tracker = get_causal_tracker()
+            tracker.record(
+                treatment=f"provider:{name}",
+                outcome=1.0 if success else 0.0,
+                context=task_type,
+            )
+        except Exception:
             pass
         if stats.calls % 50 == 0:
             self._save()
@@ -672,8 +682,12 @@ def get_election() -> HolisticElection:
     return _election
 
 
-def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
-    """Return dynamic weights for scoring based on task type (Pattern 5)."""
+def get_dynamic_weights(task_type: str = "general", complexity: float = 0.5) -> dict[str, float]:
+    """Return dynamic weights for scoring based on task type and complexity.
+
+    complexity: 0.0 (simple) → 1.0 (complex). Higher complexity shifts
+    weight from latency toward quality and capability.
+    """
     t = (task_type or "general").lower()
     base = {
         "elo": 0.08,
@@ -755,8 +769,17 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
             "sticky": 0.10,
         }
         return {**base, **w}
-    # general/default — apply adaptive weight adjustment
+    # general/default — apply complexity + adaptive weight adjustment
     w = {**WEIGHTS, **base}
+
+    # Complexity-aware adjustment: shift quality↑ latency↓ for complex tasks
+    if complexity != 0.5:
+        delta = (complexity - 0.5) * 0.2  # Max ±0.10 shift
+        w["quality"] = round(w.get("quality", 0.23) + delta, 3)
+        w["capability"] = round(w.get("capability", 0.12) + delta * 0.8, 3)
+        w["latency"] = round(w.get("latency", 0.18) - delta, 3)
+        w["cost"] = round(w.get("cost", 0.15) - delta * 0.5, 3)
+
     try:
         from .adaptive_weights import get_adaptive_weights
         aw = get_adaptive_weights()
@@ -764,3 +787,259 @@ def get_dynamic_weights(task_type: str = "general") -> dict[str, float]:
     except Exception:
         pass
     return w
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CausalEffectTracker — do-calculus reasoning about provider choices
+# ═══════════════════════════════════════════════════════════════════
+
+from collections import defaultdict
+
+CAUSAL_FILE = Path(".livingtree/causal_effects.json")
+
+
+@dataclass
+class CausalObservation:
+    treatment: str
+    outcome: float
+    context: str = "general"
+    counterfactuals: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class CausalEffect:
+    treatment: str
+    control: str
+    ate: float
+    confidence: float
+    sample_size: int
+    context: str = ""
+
+
+class CausalEffectTracker:
+    _instance: "CausalEffectTracker | None" = None
+
+    @classmethod
+    def instance(cls) -> "CausalEffectTracker":
+        if cls._instance is None:
+            cls._instance = CausalEffectTracker()
+        return cls._instance
+
+    def __init__(self):
+        self._observations: dict[str, list[CausalObservation]] = defaultdict(list)
+        self._effects: dict[str, CausalEffect] = {}
+
+    def record(self, treatment: str, outcome: float,
+               context: str = "general",
+               counterfactuals: list[dict] = None):
+        obs = CausalObservation(
+            treatment=treatment, outcome=outcome,
+            context=context,
+            counterfactuals=counterfactuals or [],
+        )
+        self._observations[context].append(obs)
+        if len(self._observations[context]) > 200:
+            self._observations[context] = self._observations[context][-200:]
+        if sum(len(v) for v in self._observations.values()) % 20 == 0:
+            self._compute_effects()
+
+    def _compute_effects(self):
+        for context, obs_list in self._observations.items():
+            if len(obs_list) < 10:
+                continue
+            by_treatment = defaultdict(list)
+            for obs in obs_list:
+                by_treatment[obs.treatment].append(obs.outcome)
+            treatments = list(by_treatment.keys())
+            for i in range(len(treatments)):
+                for j in range(i + 1, len(treatments)):
+                    ti, tj = treatments[i], treatments[j]
+                    mean_i = sum(by_treatment[ti]) / len(by_treatment[ti])
+                    mean_j = sum(by_treatment[tj]) / len(by_treatment[tj])
+                    ate = mean_i - mean_j
+                    n = min(len(by_treatment[ti]), len(by_treatment[tj]))
+                    conf = min(1.0, n / 30)
+                    key = f"{context}:{ti}_vs_{tj}"
+                    self._effects[key] = CausalEffect(
+                        treatment=ti, control=tj, ate=round(ate, 4),
+                        confidence=round(conf, 3), sample_size=n,
+                        context=context,
+                    )
+
+    def get_effect(self, context: str, treatment: str,
+                   control: str) -> CausalEffect | None:
+        key = f"{context}:{treatment}_vs_{control}"
+        if key in self._effects:
+            return self._effects[key]
+        key_rev = f"{context}:{control}_vs_{treatment}"
+        if key_rev in self._effects:
+            eff = self._effects[key_rev]
+            return CausalEffect(
+                treatment=eff.control, control=eff.treatment,
+                ate=-eff.ate, confidence=eff.confidence,
+                sample_size=eff.sample_size, context=context,
+            )
+        return None
+
+    def best_treatment(self, context: str) -> tuple[str, float] | None:
+        if context not in self._observations or len(self._observations[context]) < 5:
+            return None
+        by_treatment = defaultdict(list)
+        for obs in self._observations[context]:
+            by_treatment[obs.treatment].append(obs.outcome)
+        best, best_mean = None, -1.0
+        for treatment, outcomes in by_treatment.items():
+            mean = sum(outcomes) / len(outcomes)
+            if mean > best_mean:
+                best_mean = mean
+                best = treatment
+        return (best, best_mean) if best else None
+
+    def causal_score(self, provider_name: str, context: str = "general") -> float:
+        best = self.best_treatment(context)
+        if not best:
+            return 0.5
+        _, best_mean = best
+        outcomes = [o.outcome for o in self._observations.get(context, [])
+                    if o.treatment == f"provider:{provider_name}"]
+        if not outcomes:
+            return 0.5
+        return sum(outcomes) / max(len(outcomes), 1)
+
+    def report(self, context: str = "") -> dict:
+        effects = {}
+        for key, eff in self._effects.items():
+            if not context or eff.context == context:
+                effects[key] = {
+                    "treatment": eff.treatment, "control": eff.control,
+                    "ate": eff.ate,
+                    "interpretation": (
+                        f"{eff.treatment} performs {'better' if eff.ate > 0 else 'worse'} "
+                        f"than {eff.control} by {abs(eff.ate):.3f} "
+                        f"({eff.confidence:.0%} confidence, n={eff.sample_size})"
+                    ),
+                }
+        return {
+            "contexts": list(self._observations.keys()),
+            "total_observations": sum(len(v) for v in self._observations.values()),
+            "effects": effects,
+        }
+
+    def stats(self) -> dict:
+        return {
+            "observations": sum(len(v) for v in self._observations.values()),
+            "effects_computed": len(self._effects),
+            "contexts": list(self._observations.keys()),
+        }
+
+
+_causal_tracker: CausalEffectTracker | None = None
+
+
+def get_causal_tracker() -> CausalEffectTracker:
+    global _causal_tracker
+    if _causal_tracker is None:
+        _causal_tracker = CausalEffectTracker()
+    return _causal_tracker
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ABTestManager — provider/routing A/B testing
+# ═══════════════════════════════════════════════════════════════════
+
+import random
+
+AB_EXPERIMENTS_FILE = Path(".livingtree/ab_experiments.json")
+
+
+class ABTestManager:
+    _instance: "ABTestManager | None" = None
+
+    @classmethod
+    def instance(cls) -> "ABTestManager":
+        if cls._instance is None:
+            cls._instance = ABTestManager()
+        return cls._instance
+
+    def __init__(self):
+        self._experiments: dict[str, dict] = {}
+
+    def create(self, exp_id: str, groups: dict[str, dict[str, Any]]) -> bool:
+        if exp_id in self._experiments:
+            return False
+        self._experiments[exp_id] = {
+            "groups": groups,
+            "results": {g: [] for g in groups},
+            "created": time.time(),
+        }
+        logger.info(f"ABTestManager: created experiment '{exp_id}' ({len(groups)} groups)")
+        return True
+
+    def assign(self, exp_id: str) -> str:
+        exp = self._experiments.get(exp_id)
+        if not exp:
+            return ""
+        return random.choice(list(exp["groups"].keys()))
+
+    def get_params(self, exp_id: str, group: str) -> dict[str, Any]:
+        exp = self._experiments.get(exp_id)
+        if not exp:
+            return {}
+        return dict(exp["groups"].get(group, {}))
+
+    def record(self, exp_id: str, group: str, depth: float,
+               latency_ms: float, user_signal: float) -> None:
+        exp = self._experiments.get(exp_id)
+        if not exp or group not in exp["results"]:
+            return
+        exp["results"][group].append({
+            "depth": depth, "latency": latency_ms, "signal": user_signal,
+        })
+
+    def report(self, exp_id: str) -> dict[str, Any]:
+        exp = self._experiments.get(exp_id)
+        if not exp:
+            return {"error": f"Experiment '{exp_id}' not found"}
+        report = {"experiment": exp_id, "groups": {}}
+        for group, data in exp["results"].items():
+            n = len(data)
+            if n < 10:
+                report["groups"][group] = {"n": n, "status": "insufficient_data"}
+                continue
+            avg_depth = sum(d["depth"] for d in data) / n
+            avg_lat = sum(d["latency"] for d in data) / n
+            avg_signal = sum(d["signal"] for d in data) / n
+            report["groups"][group] = {
+                "n": n, "avg_depth": round(avg_depth, 3),
+                "avg_latency_ms": round(avg_lat, 0),
+                "avg_signal": round(avg_signal, 3),
+            }
+        groups = list(report["groups"].keys())
+        if len(groups) >= 2 and all(
+            report["groups"][g].get("n", 0) >= 10 for g in groups
+        ):
+            best = max(groups, key=lambda g: report["groups"][g]["avg_depth"])
+            report["winner"] = best
+        return report
+
+    def stop(self, exp_id: str) -> dict:
+        report = self.report(exp_id)
+        if exp_id in self._experiments:
+            del self._experiments[exp_id]
+        return report
+
+    def list_experiments(self) -> list[str]:
+        return list(self._experiments.keys())
+
+    def stats(self) -> dict:
+        return {"active_experiments": len(self._experiments)}
+
+
+_ab_manager: ABTestManager | None = None
+
+
+def get_ab_manager() -> ABTestManager:
+    global _ab_manager
+    if _ab_manager is None:
+        _ab_manager = ABTestManager()
+    return _ab_manager

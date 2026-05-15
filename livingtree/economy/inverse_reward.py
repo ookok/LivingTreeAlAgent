@@ -297,8 +297,11 @@ class InverseRewardModel:
             self._preferences.items(), key=lambda x: x[1], reverse=True,
         )
         top = [(k, round(v, 3)) for k, v in sorted_prefs[:10]]
+        pref_dict = {k: v for k, v in top}
         return {
             "preferences": top,
+            "prefers_speed": pref_dict.get("speed", pref_dict.get("latency", 0)),
+            "prefers_simplicity": pref_dict.get("simplicity", pref_dict.get("cost", 0)),
             "total_preferences_learned": len(self._preferences),
             "total_observations": len(self._observation_history),
             "signal_distribution": dict(self._signal_counts),

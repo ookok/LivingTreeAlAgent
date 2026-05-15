@@ -24,6 +24,7 @@ import asyncio
 import json
 import math
 import os
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -181,11 +182,14 @@ class LivingScheduler:
     """Time-space aware task scheduler. Maximizes benefit/cost under constraints."""
 
     _instance: Optional["LivingScheduler"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "LivingScheduler":
         if cls._instance is None:
-            cls._instance = LivingScheduler()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = LivingScheduler()
         return cls._instance
 
     def __init__(self):
@@ -631,12 +635,15 @@ class HITLEscalator:
 
 
 _scheduler: Optional[LivingScheduler] = None
+_scheduler_lock = threading.Lock()
 
 
 def get_living_scheduler() -> LivingScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = LivingScheduler()
+        with _scheduler_lock:
+            if _scheduler is None:
+                _scheduler = LivingScheduler()
     return _scheduler
 
 

@@ -1017,8 +1017,7 @@ class LifeEngine(BranchMixin, StageMixin):
         # ── LatentGRPO ↔ TDM Reward: coordinate latent space + reward model optimization ──
         if ok:
             try:
-                from ..economy.latent_grpo import get_latent_grpo
-                from ..economy.tdm_reward import get_tdm_optimizer
+                from ..economy.grpo_optimizer import get_latent_grpo, get_tdm_optimizer
                 grpo = get_latent_grpo()
                 tdm = get_tdm_optimizer()
                 # Share profit signal: success rate → coordinated learning rate adjustment

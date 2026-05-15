@@ -1058,4 +1058,19 @@ class KnowledgeBase:
         return sorted(domains)
 
 
-__all__ = ["Document", "StorageBackend", "SQLiteBackend", "FileBackend", "KnowledgeBase"]
+__all__ = ["Document", "StorageBackend", "SQLiteBackend", "FileBackend", "KnowledgeBase",
+           "get_knowledge_base", "RetrievalResult", "MergedCandidate", "ScoredResult", "FusionResult"]
+
+import threading
+
+_kb_instance: KnowledgeBase | None = None
+_kb_lock = threading.Lock()
+
+
+def get_knowledge_base() -> KnowledgeBase:
+    global _kb_instance
+    if _kb_instance is None:
+        with _kb_lock:
+            if _kb_instance is None:
+                _kb_instance = KnowledgeBase()
+    return _kb_instance

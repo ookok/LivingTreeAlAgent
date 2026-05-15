@@ -196,3 +196,192 @@ def get_knowledge_router() -> KnowledgeRouter:
     if _knowledge_router is None:
         _knowledge_router = KnowledgeRouter()
     return _knowledge_router
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Merged from dynamic_router.py — Linear-time retrieval routing
+# ═══════════════════════════════════════════════════════════════════════
+
+import math
+import time
+from collections import defaultdict
+
+from loguru import logger
+
+
+@dataclass
+class ChunkFeatures:
+    """Lightweight features extracted from a retrieved chunk.
+
+    These are the "dynamic parameters" that replace attention weights.
+    """
+    text: str
+    source: str
+    chunk_len: int = 0
+    term_overlap_score: float = 0.0
+    source_priority: float = 0.5
+    position_bonus: float = 0.0
+    entity_density: float = 0.0
+    score: float = 0.0
+
+
+class DynamicRetrievalRouter:
+    """Linear-time relevance prediction for multi-source retrieval.
+
+    Replaces O(n²) pairwise attention with O(n) feature-based prediction.
+    WeightFormer insight: dynamic parameters = compressed global context.
+    """
+
+    SOURCE_PRIORITY = {
+        "document_kb": 0.9,
+        "knowledge_base": 0.7,
+        "struct_mem": 0.5,
+        "knowledge_graph": 0.6,
+        "engram": 0.8,
+    }
+
+    DEFAULT_WEIGHTS = {
+        "term_overlap": 0.35,
+        "source_priority": 0.25,
+        "position": 0.10,
+        "entity_density": 0.15,
+        "length_norm": 0.15,
+    }
+
+    def __init__(self):
+        self._weights = dict(self.DEFAULT_WEIGHTS)
+        self._feedback_count = 0
+
+    def score_chunks(
+        self, chunks: list[dict], query: str
+    ) -> list[tuple[float, dict]]:
+        t0 = time.time()
+        query_terms = set(query.lower().split()) if query else set()
+
+        scored = []
+        for i, chunk in enumerate(chunks):
+            text = chunk.get("text", "")
+            source = chunk.get("source", "unknown")
+
+            features = self._extract_features(text, source, i, query_terms, len(chunks))
+            score = self._predict_score(features)
+
+            scored.append((score, chunk))
+
+        scored.sort(key=lambda x: -x[0])
+
+        elapsed_ms = (time.time() - t0) * 1000
+        if len(chunks) > 50:
+            logger.debug(
+                f"DynamicRouter: scored {len(chunks)} chunks in {elapsed_ms:.1f}ms "
+                f"(linear O(n) vs O(n²)={len(chunks)**2/1000:.0f}ms pairwise)"
+            )
+
+        return scored
+
+    def select_top_k(
+        self, chunks: list[dict], query: str, top_k: int = 10
+    ) -> list[dict]:
+        scored = self.score_chunks(chunks, query)
+        return [chunk for _, chunk in scored[:top_k]]
+
+    def fuse_sources(
+        self, source_results: dict[str, list[dict]], query: str, top_k: int = 10
+    ) -> list[dict]:
+        all_chunks = []
+        for source, chunks in source_results.items():
+            for c in chunks:
+                if "source" not in c:
+                    c["source"] = source
+            all_chunks.extend(chunks)
+
+        return self.select_top_k(all_chunks, query, top_k)
+
+    def feedback(self, chunk_text: str, source: str, was_useful: bool) -> None:
+        self._feedback_count += 1
+        alpha = 1.0 / (self._feedback_count + 10)
+
+        features = self._extract_features(chunk_text, source, 0, set(), 1)
+        target = 1.0 if was_useful else 0.0
+
+        for feat_name, weight in self._weights.items():
+            feat_val = getattr(features, self._feat_to_attr(feat_name), 0.5)
+            predicted = sum(
+                self._weights[k] * getattr(features, self._feat_to_attr(k), 0.5)
+                for k in self._weights
+            )
+            error = target - predicted
+            self._weights[feat_name] += alpha * error * feat_val
+
+        total = sum(self._weights.values())
+        if total > 0:
+            for k in self._weights:
+                self._weights[k] /= total
+
+    def _extract_features(
+        self, text: str, source: str, position: int,
+        query_terms: set, total_chunks: int,
+    ) -> ChunkFeatures:
+        text_lower = text.lower() if text else ""
+        words = text_lower.split()
+
+        overlap = sum(1 for t in query_terms if t in text_lower) if query_terms else 0
+        term_overlap = overlap / max(1, len(query_terms)) if query_terms else 0.0
+
+        source_priority = self.SOURCE_PRIORITY.get(source, 0.5)
+
+        position_bonus = 1.0 - (position / max(1, total_chunks))
+
+        cap_words = sum(1 for w in words if w and w[0].isupper())
+        entity_density = cap_words / max(1, len(words))
+
+        return ChunkFeatures(
+            text=text,
+            source=source,
+            chunk_len=len(text),
+            term_overlap_score=term_overlap,
+            source_priority=source_priority,
+            position_bonus=position_bonus,
+            entity_density=entity_density,
+        )
+
+    def _predict_score(self, features: ChunkFeatures) -> float:
+        return (
+            self._weights["term_overlap"] * features.term_overlap_score
+            + self._weights["source_priority"] * features.source_priority
+            + self._weights["position"] * features.position_bonus
+            + self._weights["entity_density"] * features.entity_density
+            + self._weights["length_norm"] * math.log(1 + features.chunk_len) / 10
+        )
+
+    @staticmethod
+    def _feat_to_attr(feat_name: str) -> str:
+        mapping = {
+            "term_overlap": "term_overlap_score",
+            "source_priority": "source_priority",
+            "position": "position_bonus",
+            "entity_density": "entity_density",
+            "length_norm": "chunk_len",
+        }
+        return mapping.get(feat_name, feat_name)
+
+
+_dynamic_router: DynamicRetrievalRouter | None = None
+
+
+def get_dynamic_router() -> DynamicRetrievalRouter:
+    global _dynamic_router
+    if _dynamic_router is None:
+        _dynamic_router = DynamicRetrievalRouter()
+    return _dynamic_router
+
+
+__all__ = [
+    "ChunkFeatures",
+    "DynamicRetrievalRouter",
+    "KnowledgeRouter",
+    "RouteDecision",
+    "RouteTarget",
+    "get_dynamic_router",
+    "get_knowledge_router",
+]

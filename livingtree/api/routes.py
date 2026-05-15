@@ -642,6 +642,43 @@ def setup_routes(app: FastAPI) -> None:
         except Exception as e:
             return {"error": str(e), "version": "2.1.0", "status": "initializing"}
 
+    @app.get("/api/config/tianditu_key")
+    async def tianditu_key(request: Request) -> dict[str, str]:
+        """Serve Tianditu API key from encrypted vault (exposed to frontend for map tiles)."""
+        try:
+            from ..config.secrets import get_secret_vault
+            key = get_secret_vault().get("tianditu_key", "")
+            # Also try env var override
+            if not key:
+                key = os.environ.get("LT_TIANDITU_KEY", "")
+            return {"key": key}
+        except Exception:
+            return {"key": ""}
+
+    @app.get("/api/config/tencent_map_key")
+    async def tencent_map_key(request: Request) -> dict[str, str]:
+        """Serve Tencent Map API key from encrypted vault (exposed to frontend for map tiles)."""
+        try:
+            from ..config.secrets import get_secret_vault
+            key = get_secret_vault().get("tencent_map_key", "")
+            if not key:
+                key = os.environ.get("LT_TENCENT_MAP_KEY", "")
+            return {"key": key}
+        except Exception:
+            return {"key": ""}
+
+    @app.get("/api/config/baidu_map_key")
+    async def baidu_map_key(request: Request) -> dict[str, str]:
+        """Serve Baidu Map browser Key from encrypted vault (for frontend map.html)."""
+        try:
+            from ..config.secrets import get_secret_vault
+            key = get_secret_vault().get("baidu_map_browser_key", "")
+            if not key:
+                key = os.environ.get("LT_BAIDU_MAP_BROWSER_KEY", "")
+            return {"key": key}
+        except Exception:
+            return {"key": ""}
+
     @app.get("/api/tools")
     async def list_tools(request: Request) -> list[dict[str, Any]]:
         """List all registered tools."""
@@ -1645,7 +1682,13 @@ async def _handle_relay_config(msg: str, ml: str):
     actions, reply = [], ""
 
     relay_url = os.environ.get("LT_RELAY_URL", "http://127.0.0.1:8899")
-    admin_pwd = os.environ.get("LT_RELAY_ADMIN_PWD", "admin123")
+    admin_pwd = os.environ.get("LT_RELAY_ADMIN_PWD", "")
+    if not admin_pwd:
+        try:
+            from ..config.secrets import get_secret_vault
+            admin_pwd = get_secret_vault().get("relay_admin_pwd", "")
+        except Exception:
+            pass
 
     async def _call_relay(method: str, path: str, data: dict | None = None) -> dict:
         try:

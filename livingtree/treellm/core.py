@@ -45,6 +45,15 @@ from .providers import (
 )
 from .holistic_election import get_election, RouterStats
 
+# Lazy-imported modules (imported here once, not per-call)
+from .capability_bus import get_capability_bus
+from .session_compressor import get_session_compressor
+from .latency_oracle import get_latency_oracle
+from .session_binding import get_session_binding
+from .recording_engine import get_recording_engine, RecordLayer
+from .synapse_aggregator import get_synapse_aggregator, ModelOutput
+from .auto_prompt import get_auto_prompt
+
 # Pre-compiled regex for hot paths
 TOOL_CALL_RE = re.compile(r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL)
 # JSON tool call: {"tool": "name", "params": {...}}
@@ -67,68 +76,18 @@ class TreeLLM:
 
     @classmethod
     def from_config(cls) -> "TreeLLM":
-        """Create a fully initialized TreeLLM from the system config.
+        """Create a fully initialized TreeLLM from system config.
 
-        Autoregisters all providers with configured API keys from the vault.
-        This is the canonical entry point — no manual provider registration needed.
+        Delegates to ProviderRegistry — the single source of truth.
         """
         llm = cls()
         try:
-            from livingtree.config.settings import get_config
-            config = get_config().model
-
-            # Map provider name → (api_key_attr, create_fn, thinking_disabled_for_chat)
-            # Only providers with dedicated create_ functions in providers.py are listed
-            provider_specs = [
-                ("deepseek", "deepseek_api_key", create_deepseek_provider, False),
-                ("longcat", "longcat_api_key", create_longcat_provider, True),
-                ("nvidia", "nvidia_api_key", create_nvidia_provider, True),
-                ("modelscope", "modelscope_api_key", create_modelscope_provider, True),
-                ("bailing", "bailing_api_key", create_bailing_provider, False),
-                ("stepfun", "stepfun_api_key", create_stepfun_provider, True),
-                ("internlm", "internlm_api_key", create_internlm_provider, True),
-                ("sensetime", "sensetime_api_key", create_sensetime_provider, True),
-                ("openrouter", "openrouter_api_key", create_openrouter_provider, True),
-            ]
-            # Generic OpenAI-compatible providers (use OpenAILikeProvider with config URLs)
-            from .providers import OpenAILikeProvider
-            generic_providers = [
-                ("xiaomi", "xiaomi_api_key", "https://api.xiaomi.com/v1", "mixtral-8x7b"),
-                ("aliyun", "aliyun_api_key", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-turbo"),
-                ("zhipu", "zhipu_api_key", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),
-                ("hunyuan", "hunyuan_api_key", "https://api.hunyuan.cloud.tencent.com/v1", "hunyuan-lite"),
-                ("baidu", "baidu_api_key", "https://qianfan.baidubce.com/v2", "ernie-speed-128k"),
-                ("spark", "spark_api_key", "https://spark-api-open.xf-yun.com/v1", "lite"),
-                ("siliconflow", "siliconflow_api_key", "https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-7B-Instruct"),
-                ("mofang", "mofang_api_key", "https://api.mofang.ai/v1", "Qwen/Qwen2.5-7B-Instruct"),
-                ("dmxapi", "dmxapi_api_key", "https://api.dmxapi.com/v1", "gpt-3.5-turbo"),
-            ]
-
-            for name, key_attr, create_fn, _no_think in provider_specs:
-                api_key = getattr(config, key_attr, "")
-                if api_key:
-                    try:
-                        provider = create_fn(api_key)
-                        llm.add_provider(provider)
-                    except Exception as e:
-                        logger.debug(f"TreeLLM.from_config: {name} skipped ({e})")
-
-            # Generic OpenAI-compatible providers
-            for name, key_attr, base_url, default_model in generic_providers:
-                api_key = getattr(config, key_attr, "")
-                if api_key:
-                    try:
-                        provider = OpenAILikeProvider(
-                            name=name, api_key=api_key, base_url=base_url,
-                            default_model=default_model,
-                        )
-                        llm.add_provider(provider)
-                    except Exception as e:
-                        logger.debug(f"TreeLLM.from_config: {name} generic skipped ({e})")
+            from .provider_registry import register_all_providers
+            register_all_providers(llm)
 
             logger.info(
-                f"TreeLLM.from_config: bootstrapped with "
-                f"{len(llm._providers)} providers: {list(llm._providers.keys())}"
+                f"TreeLLM.from_config: {llm.provider_count} providers: "
+                f"{list(llm._providers.keys())}"
             )
 
             # ── Model Registry: auto-discover latest model names ──
@@ -177,9 +136,17 @@ class TreeLLM:
 
     # ── Provider management ──
 
-    def add_provider(self, provider: Provider) -> None:
+    def add_provider(self, provider: Provider) -> bool:
+        """Add a provider. Returns True if new, False if name already exists (no-op)."""
+        if provider.name in self._providers:
+            return False
         self._providers[provider.name] = provider
         self._stats[provider.name] = RouterStats(provider=provider.name)
+        return True
+
+    @property
+    def provider_count(self) -> int:
+        return len(self._providers)
 
     def remove_provider(self, name: str) -> None:
         self._providers.pop(name, None)
@@ -350,6 +317,29 @@ class TreeLLM:
         except Exception:
             pass
 
+        # ── P→C→B Organ Health Modulation ──
+        p_health = 1.0
+        c_health = 1.0
+        b_health = 1.0
+        try:
+            from .joint_evolution import get_joint_evolution
+            jh = get_joint_evolution().get_health()
+            p_health = jh.p_health
+            c_health = jh.c_health
+            b_health = jh.b_health
+            # P体↓ (<0.4): 感知退步 → 用更多深度探测策略探索
+            if p_health < 0.4:
+                deep_probe = True
+                probe_quality = "extra_deep"  # triggers more strategies
+            # C体↓ (<0.4): 认知衰退 → 减少选举候选, 延长缓存TTL
+            if c_health < 0.4:
+                top_k_per_layer = max(1, top_k_per_layer - 1)
+            # B体↓ (<0.4): 执行能力降级 → 跳过聚合, 直接用最佳结果
+            if b_health < 0.4:
+                aggregate = False
+        except ImportError:
+            pass
+
         # ── AdaptiveTopK: dynamically adjust candidates per query complexity ──
         if probing_result:
             complexity = probing_result.get("probe_depth", 2) / 3.0
@@ -456,6 +446,21 @@ class TreeLLM:
         except Exception as e:
             logger.debug(f"Task vector geometry skipped: {e}")
 
+        # ── JointHealth: P→C→B organ-aware routing hints ──
+        p_health = c_health = b_health = 0.5
+        joint_score = 0.5
+        try:
+            from .joint_evolution import get_joint_evolution
+            je = get_joint_evolution()
+            h = je.joint_health()
+            if h and h.total_trajectories > 0:
+                p_health = max(h.p_health, 0.01)
+                c_health = max(h.c_health, 0.01)
+                b_health = max(h.b_health, 0.01)
+                joint_score = h.score
+        except Exception:
+            pass
+
         # Prepare initial candidate list
         layer1_candidates = list(candidates) if candidates else list(self._providers.keys())
         if not layer1_candidates:
@@ -512,6 +517,13 @@ class TreeLLM:
                 layer2_candidates = [p for p, _ in top2]
         except Exception:
             layer2_candidates = layer1_candidates_final[:top_k_per_layer]
+
+        # ── Organ-aware adjustment ──
+        if c_health < 0.3 and len(layer2_candidates) > 1:
+            layer2_candidates = layer1_candidates_final[:max(1, len(layer2_candidates) - 1)]
+        if p_health < 0.3 and len(layer1_candidates_final) > len(layer2_candidates):
+            layer2_candidates = list(dict.fromkeys(layer2_candidates + [layer1_candidates_final[-1]]))
+        skip_aggregation = b_health < 0.3
 
         # Layer 3: Inference + self-assessment (parallel candidates, early-stop)
         final_provider = None
@@ -598,41 +610,31 @@ class TreeLLM:
         # ── Layer 4: Smart fallback with local LLM guarantee ──
         l4_provider = None
         l4_result = None
-        original_provider = final_provider
-        original_result = final_result
 
         if final_provider is None or final_result is None:
-            remaining = [p for p in list(self._providers.keys())
-                         if p not in (layer2_candidates or []) and p not in (final_provider or "")]
-            remaining = remaining[:top_k_per_layer]
+            # Combine remaining providers + local candidates in single fast loop
+            remaining = [p for p in self._providers.keys()
+                         if p not in (layer2_candidates or [])]
+            local_keywords = ("local", "offline", "ollama", "opencode", "serve", "llama")
+            # Local-first: prioritize local models, then remaining
+            fallback_order = sorted(
+                remaining,
+                key=lambda n: (0 if any(k in n.lower() for k in local_keywords) else 1, n),
+            )[:5]  # Cap at 5 to avoid excessive retries
 
-            for candidate in remaining:
+            for candidate in fallback_order:
                 try:
-                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)
+                    res = await asyncio.wait_for(
+                        self.chat([{"role": "user", "content": query}], provider=candidate),
+                        timeout=15.0,  # Fast-fail per fallback
+                    )
                     if res and (getattr(res, "text", None) or getattr(res, "content", None)):
                         l4_provider = candidate
                         l4_result = res
                         layers_used = 4
                         break
-                except Exception as e:
-                    logger.warning("{}: {}".format("TreeLLM core", e))
-                    continue
-
-        if l4_provider is None and (final_provider is None or final_result is None):
-            local_candidates = [
-                n for n in self._providers.keys()
-                if any(k in n.lower() for k in ("local", "offline", "ollama", "opencode", "serve", "llama"))
-            ]
-            for candidate in local_candidates:
-                try:
-                    res = await self.chat([{"role": "user", "content": query}], provider=candidate)
-                    if res and (getattr(res, "text", None) or getattr(res, "content", None)):
-                        l4_provider = candidate
-                        l4_result = res
-                        layers_used = 4
-                        break
-                except Exception as e:
-                    logger.warning("{}: {}".format("TreeLLM core", e))
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"TreeLLM L4: {candidate} fallback failed ({e})"[:120])
                     continue
 
         if l4_provider and l4_result:
@@ -641,9 +643,8 @@ class TreeLLM:
 
         # ── SynapseAggregator: multi-model reasoning fusion ──
         synapse_result: dict[str, Any] | None = None
-        if aggregate and final_result and final_provider:
+        if aggregate and final_result and final_provider and not skip_aggregation:
             try:
-                from .synapse_aggregator import get_synapse_aggregator, ModelOutput
                 aggregator = get_synapse_aggregator()
                 agg_outputs: list[ModelOutput] = []
                 # Reuse Layer 3 results to avoid duplicate LLM calls
@@ -752,7 +753,6 @@ class TreeLLM:
         # ── SessionCompressor: compress long conversations ──
         if len(messages) > 10:
             try:
-                from .session_compressor import get_session_compressor
                 comp = get_session_compressor()
                 messages = await comp.compress(messages, max_tokens=max_tokens,
                                                chat_fn=self.chat)
@@ -762,7 +762,6 @@ class TreeLLM:
         # ── AutoPrompt + PromptEngine: inject optimized system prompt ──
         task_type = kwargs.get("task_type", "general")
         try:
-            from .auto_prompt import get_auto_prompt
             prompt_text, _ = get_auto_prompt().select(task_type)
 
             # Override with DSPy-style compiled prompt if available for this capability
@@ -789,7 +788,6 @@ class TreeLLM:
 
         # ── LatencyOracle: adaptive timeout per provider ──
         try:
-            from .latency_oracle import get_latency_oracle
             oracle = get_latency_oracle()
             complexity = kwargs.get("complexity", 0.5)
             predicted, viable = oracle.predict(provider_name, complexity)
@@ -810,7 +808,6 @@ class TreeLLM:
             # Dynamic tool prompt from CapabilityBus + hardcoded essentials
             dynamic_tools = ""
             try:
-                from .capability_bus import get_capability_bus
                 bus = get_capability_bus()
                 dynamic_tools = bus.prompt_fragment_sync(["tool", "skill", "mcp"])
             except Exception:
@@ -843,7 +840,6 @@ class TreeLLM:
 
         # ── Session binding: inject transition context if model switched ──
         sid = kwargs.get("session_id", f"session_{id(self)}")
-        from .session_binding import get_session_binding
         sb = get_session_binding()
         old_model = sb.get_session(sid).bound_model
         if old_model and old_model != provider_name:
@@ -874,7 +870,6 @@ class TreeLLM:
                     # Tool search instruction: LLM can search before calling
                     if tool_turn == 0 and any(k in result.text.lower() for k in ["搜索工具", "search_tool", "list_tools"]):
                         try:
-                            from .capability_bus import get_capability_bus
                             bus = get_capability_bus()
                             caps = bus.prompt_fragment_sync(["tool"])
                             result.text = f"[Available tools]\n{caps}\n\nChoose a tool and call it."
@@ -889,7 +884,6 @@ class TreeLLM:
                     tool_result_text = ""
                     try:
                         # Tier 1: Route through unified CapabilityBus (core tools)
-                        from .capability_bus import get_capability_bus
                         bus = get_capability_bus()
                         cap_id = f"tool:{tool_name}"
                         result = await bus.invoke(cap_id, input=tool_args.strip())
@@ -951,7 +945,6 @@ class TreeLLM:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
                 # ── Recording capture: LLM response ──
                 try:
-                    from .recording_engine import get_recording_engine, RecordLayer
                     get_recording_engine().capture(
                         RecordLayer.LLM, "llm_chat",
                         params={"messages": str(messages)[:500], "provider": p.name, "tokens": result.tokens},
@@ -974,7 +967,7 @@ class TreeLLM:
                 # ── Activity feed + trust scoring ──
                 try:
                     from ..observability.activity_feed import get_activity_feed
-                    from ..observability.trust_scoring import get_trust_scorer
+                    from ..core.system_health import get_trust_scorer
                     feed = get_activity_feed()
                     feed.election(p.name, 1.0, f"{result.tokens}t")
                     ts = get_trust_scorer()
@@ -1162,7 +1155,6 @@ class TreeLLM:
     async def _tool_read_vfs(path: str) -> str:
         """Read file through unified VFS. Supports all mounts: /ram, /disk, /cache, etc."""
         try:
-            from .capability_bus import get_capability_bus
             bus = get_capability_bus()
             result = await bus.invoke("vfs:read", path=path.strip())
             if isinstance(result, dict):
@@ -1178,7 +1170,6 @@ class TreeLLM:
         path = parts[0].strip()
         content = parts[1] if len(parts) > 1 else ""
         try:
-            from .capability_bus import get_capability_bus
             bus = get_capability_bus()
             result = await bus.invoke("vfs:write", path=path, data=content)
             return str(result)

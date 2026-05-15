@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -526,12 +527,15 @@ class VitalSigns:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _vitals: Optional[VitalSigns] = None
+_vitals_lock = threading.Lock()
 
 
 def get_vital_signs() -> VitalSigns:
     global _vitals
     if _vitals is None:
-        _vitals = VitalSigns()
+        with _vitals_lock:
+            if _vitals is None:
+                _vitals = VitalSigns()
     return _vitals
 
 

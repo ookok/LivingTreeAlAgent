@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -412,12 +413,15 @@ class RouteLearner:
 # ── Singleton ──────────────────────────────────────────────────────
 
 _route_learner: RouteLearner | None = None
+_route_learner_lock = threading.Lock()
 
 
 def get_route_learner() -> RouteLearner:
     global _route_learner
     if _route_learner is None:
-        _route_learner = RouteLearner()
+        with _route_learner_lock:
+            if _route_learner is None:
+                _route_learner = RouteLearner()
     return _route_learner
 
 

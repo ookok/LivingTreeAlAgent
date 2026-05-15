@@ -38,6 +38,10 @@ class SwarmCoordinator:
         self._session: Optional[aiohttp.ClientSession] = None
         self._running = False
         self._sync_tasks: list[asyncio.Task] = []
+        self._goodput = type('', (), {
+            'fragment_syncs': 0, 'task_distributes': 0,
+            'knowledge_syncs': 0, 'cell_shares': 0,
+        })()
 
     async def start(self):
         if self._running:

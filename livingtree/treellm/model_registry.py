@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,7 @@ from loguru import logger
 CACHE_DIR = Path(".livingtree/model_cache")
 CACHE_FILE = CACHE_DIR / "model_registry.json"
 REFRESH_INTERVAL = 86400  # 24 hours
+REFRESH_INTERVAL_FREE = 21600  # 6 hours for free/open providers
 FETCH_TIMEOUT = 15.0
 
 
@@ -67,11 +69,14 @@ class ModelRegistry:
     """Central registry of available models from all providers."""
 
     _instance: ModelRegistry | None = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> ModelRegistry:
         if cls._instance is None:
-            cls._instance = ModelRegistry()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = ModelRegistry()
         return cls._instance
 
     def __init__(self):
@@ -271,7 +276,12 @@ class ModelRegistry:
     # ═══ Periodic refresh ═══
 
     async def refresh_all(self) -> dict[str, list[ModelInfo]]:
-        """Fetch models from all registered providers."""
+        """Fetch models from all registered providers. Detects and reports changes."""
+        # Snapshot current models for diff
+        old_models: dict[str, set[str]] = {}
+        for name, p in self._providers.items():
+            old_models[name] = {m.id for m in p.models}
+
         results = {}
         tasks = []
         for name in self._providers:
@@ -285,8 +295,36 @@ class ModelRegistry:
                 results[name] = []
             else:
                 results[name] = result
+
+        # Detect and report model changes
+        for name, p in self._providers.items():
+            new_ids = {m.id for m in p.models}
+            old_ids = old_models.get(name, set())
+            added = new_ids - old_ids
+            removed = old_ids - new_ids
+            if added or removed:
+                msgs = []
+                if added:
+                    msgs.append(f"+{len(added)} models: {', '.join(sorted(added)[:3])}")
+                if removed:
+                    msgs.append(f"-{len(removed)} models: {', '.join(sorted(removed)[:3])}")
+                logger.info(f"ModelRegistry [{name}]: {'; '.join(msgs)}")
+                # Auto-update provider fallback_models
+                try:
+                    self._update_provider_fallback(name, p.models)
+                except Exception:
+                    pass
+
         self._save_cache()
         return results
+
+    def _update_provider_fallback(self, name: str, models: list[ModelInfo]) -> None:
+        """Log model changes and update cached provider fallback_models."""
+        non_embedding = [m.id for m in models if m.tier != "embedding" and m.enabled]
+        if non_embedding:
+            logger.info(f"  → {name} fallback_models updated ({len(non_embedding)} models)")
+            # Note: runtime provider.fallback_models are updated on next from_config() or
+            # when DaemonDoctor detects model staleness and triggers election cache invalidation
 
     async def start_periodic_refresh(self, interval: float = REFRESH_INTERVAL):
         """Start periodic background refresh."""

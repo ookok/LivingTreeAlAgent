@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -226,10 +227,13 @@ class ResponseCache:
 # ── Singleton ──
 
 _cache: Optional[ResponseCache] = None
+_cache_lock = threading.Lock()
 
 
 def get_response_cache() -> ResponseCache:
     global _cache
     if _cache is None:
-        _cache = ResponseCache()
+        with _cache_lock:
+            if _cache is None:
+                _cache = ResponseCache()
     return _cache

@@ -68,6 +68,24 @@ class CLIIntrospector:
 
     _instance: Optional["CLIIntrospector"] = None
 
+    DANGEROUS_PATTERNS = [
+        r"\brm\b", r"\brmdir\b", r"\bdel\b", r"\bformat\b", r"\bfdisk\b",
+        r"\bmkfs\b", r"\bdd\s+if=", r"\bshutdown\b", r"\breboot\b",
+        r"\bchmod\s+777\b", r"\bchown\b", r"\bsudo\b", r"\bsu\b",
+        r"\beval\b", r"\bexec\b", r"\bsource\b", r"\bcurl.*\|.*sh\b",
+        r"\bwget.*\|.*sh\b", r"\b>.*/dev/sd", r"\bmount\b", r"\bumount\b",
+        r"\biptables\b", r"\bufw\b", r"\bchkconfig\b", r"\bcrontab\b",
+        r"\bkill\b", r"\bpkill\b", r"\bkillall\b", r"\btaskkill\b",
+        r"\bsc\s+stop\b", r"\bdocker\s+rm", r"\bdocker\s+prune",
+        r"\bkubectl\s+delete\b", r"\bnet\s+user\b", r"\bnc\s+-e\b",
+    ]
+    DANGEROUS_COMMANDS = {
+        "rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd",
+        "shutdown", "reboot", "halt", "poweroff", "sudo", "su", "chown",
+        "chmod", "mount", "umount", "iptables", "ufw", "crontab",
+        "kill", "pkill", "killall", "taskkill",
+    }
+
     @classmethod
     def instance(cls) -> "CLIIntrospector":
         if cls._instance is None:
@@ -319,10 +337,25 @@ class CLIIntrospector:
 
     # ── Execution ──────────────────────────────────────────────────
 
+    def _is_dangerous(self, name: str, args: str = "") -> str:
+        """Check if command or args contain dangerous patterns. Returns reason or ''."""
+        cmd = f"{name} {args}".lower()
+        import re
+        for pat in self.DANGEROUS_PATTERNS:
+            if re.search(pat, cmd):
+                return f"Blocked dangerous pattern: {pat}"
+        if name.lower() in self.DANGEROUS_COMMANDS:
+            return f"Blocked dangerous command: {name}"
+        return ""
+
     async def execute(self, name: str, args: str = "",
-                      timeout: float = 30.0,
-                      cwd: str = "") -> dict:
+                       timeout: float = 30.0,
+                       cwd: str = "") -> dict:
         """Execute a CLI program through unified ShellExecutor with safety gates."""
+        blocked = self._is_dangerous(name, args)
+        if blocked:
+            return {"error": blocked, "exit_code": -1}
+
         # Use unified ShellExecutor when available
         try:
             from ..core.shell_env import get_shell
@@ -368,6 +401,11 @@ class CLIIntrospector:
     @staticmethod
     def _execute_sync(path: str, args: str) -> dict:
         """Sync wrapper for CapabilityBus handler."""
+        name = Path(path).name
+        introspector = get_cli_introspector()
+        blocked = introspector._is_dangerous(name, args)
+        if blocked:
+            return {"error": blocked, "exit_code": -1}
         try:
             import shlex
             result = subprocess.run(

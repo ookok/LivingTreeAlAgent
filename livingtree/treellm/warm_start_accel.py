@@ -13,6 +13,7 @@ Integration:
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from typing import Any, Optional
 
@@ -23,11 +24,14 @@ class WarmStartAccel:
     """Pre-warms providers and caches on startup to eliminate cold starts."""
 
     _instance: Optional["WarmStartAccel"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "WarmStartAccel":
         if cls._instance is None:
-            cls._instance = WarmStartAccel()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = WarmStartAccel()
         return cls._instance
 
     def __init__(self):
@@ -112,12 +116,15 @@ class WarmStartAccel:
 
 
 _accel: Optional[WarmStartAccel] = None
+_accel_lock = threading.Lock()
 
 
 def get_warm_start_accel() -> WarmStartAccel:
     global _accel
     if _accel is None:
-        _accel = WarmStartAccel()
+        with _accel_lock:
+            if _accel is None:
+                _accel = WarmStartAccel()
     return _accel
 
 

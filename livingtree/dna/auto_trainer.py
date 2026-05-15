@@ -198,7 +198,7 @@ class AutoTrainer:
       await trainer.full_pipeline()  # Scans, trains, deploys
     """
 
-    def __init__(self, config_path: str = "config/config.yaml"):
+    def __init__(self, config_path: str = "config/livingtree.yaml"):
         self.config_path = Path(config_path)
         self.hw = detect_hardware()
         self._results: dict[str, Any] = {}

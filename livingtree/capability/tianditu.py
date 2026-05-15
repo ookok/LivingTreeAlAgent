@@ -16,22 +16,30 @@ from __future__ import annotations
 import io
 import json
 import math
+import os
 import struct
 import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
-_DEFAULT_KEY = "2e0225658699ccabf223a2c376c535bb"
+_DEFAULT_KEY = ""  # No hardcoded key — use vault or env var LT_TIANDITU_KEY
 
 
 def _get_key() -> str:
+    # 1. Environment variable
+    key = os.environ.get("LT_TIANDITU_KEY", "")
+    if key:
+        return key
+    # 2. Encrypted vault
     try:
         from ..config.secrets import get_secret_vault
-        key = get_secret_vault().get("tianditu_key", "")
-        return key or _DEFAULT_KEY
+        vault_key = get_secret_vault().get("tianditu_key", "")
+        if vault_key:
+            return vault_key
     except Exception:
-        return _DEFAULT_KEY
+        pass
+    return ""
 
 
 def lonlat_to_tile(lon: float, lat: float, zoom: int) -> tuple[int, int, int, int]:

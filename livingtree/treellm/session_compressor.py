@@ -21,6 +21,7 @@ Integration:
 from __future__ import annotations
 
 import math
+import threading
 from typing import Any, Callable, Optional
 
 from loguru import logger
@@ -44,11 +45,14 @@ class SessionCompressor:
     """Hierarchical session compression for long conversations."""
 
     _instance: Optional["SessionCompressor"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "SessionCompressor":
         if cls._instance is None:
-            cls._instance = SessionCompressor()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = SessionCompressor()
         return cls._instance
 
     def __init__(self, recent_turns: int = 5, middle_turns: int = 10):
@@ -278,12 +282,15 @@ class SessionCompressor:
 
 
 _compressor: Optional[SessionCompressor] = None
+_compressor_lock = threading.Lock()
 
 
 def get_session_compressor() -> SessionCompressor:
     global _compressor
     if _compressor is None:
-        _compressor = SessionCompressor()
+        with _compressor_lock:
+            if _compressor is None:
+                _compressor = SessionCompressor()
     return _compressor
 
 

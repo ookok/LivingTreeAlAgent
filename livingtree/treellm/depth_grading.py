@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import math
 import re
+import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Optional
@@ -594,12 +595,15 @@ class DepthGrader:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _grader: Optional[DepthGrader] = None
+_grader_lock = threading.Lock()
 
 
 def get_depth_grader() -> DepthGrader:
     global _grader
     if _grader is None:
-        _grader = DepthGrader()
+        with _grader_lock:
+            if _grader is None:
+                _grader = DepthGrader()
     return _grader
 
 

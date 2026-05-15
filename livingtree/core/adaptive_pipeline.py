@@ -193,6 +193,48 @@ class AdaptivePipeline:
         )
         return ctx
 
+    def _safe_eval(self, condition: str, ctx: PipelineContext) -> bool:
+        try:
+            parts = condition.strip()
+            if not parts:
+                return True
+            for op in ("!=", ">=", "<=", "==", ">", "<"):
+                if op in parts:
+                    left, right = parts.split(op, 1)
+                    left = left.strip()
+                    right = right.strip()
+                    left_val = self._resolve_expr(left, ctx)
+                    right_val = self._resolve_expr(right, ctx)
+                    if op == "==": return left_val == right_val
+                    elif op == "!=": return left_val != right_val
+                    elif op == ">=": return left_val >= right_val
+                    elif op == "<=": return left_val <= right_val
+                    elif op == ">": return left_val > right_val
+                    elif op == "<": return left_val < right_val
+            return bool(self._resolve_expr(condition, ctx))
+        except Exception:
+            return False
+
+    def _resolve_expr(self, expr: str, ctx: PipelineContext) -> Any:
+        expr = expr.strip()
+        if expr.startswith("len(") and expr.endswith(")"):
+            inner = expr[4:-1].strip()
+            return len(self._resolve_attr(inner, ctx))
+        if expr.startswith("ctx."):
+            return self._resolve_attr(expr[4:], ctx)
+        try: return int(expr)
+        except ValueError:
+            try: return float(expr)
+            except ValueError: pass
+        if expr.startswith("'") and expr.endswith("'"): return expr[1:-1]
+        return expr
+
+    def _resolve_attr(self, path: str, ctx: PipelineContext) -> Any:
+        obj = ctx
+        for part in path.split("."):
+            obj = getattr(obj, part, None)
+        return obj
+
     async def execute(
         self,
         ctx: PipelineContext,
@@ -207,12 +249,12 @@ class AdaptivePipeline:
         """Execute the optimal pipeline for the classified request."""
         start = time.time()
         steps = self.PIPELINE_TEMPLATES.get(ctx.request_type, [])
-        steps.sort(key=lambda s: -s.priority)
+        steps.sort(key=lambda s: s.priority)
 
         for step in steps:
             if step.condition:
                 try:
-                    if not eval(step.condition, {"ctx": ctx, "len": len}):
+                    if not self._safe_eval(step.condition, ctx):
                         continue
                 except Exception:
                     pass
@@ -333,7 +375,7 @@ class AdaptivePipeline:
             ctx.response_proto = req.to_proto()
 
         elif step.module == "content_quality":
-            from ..knowledge.content_quality import ContentQuality
+            from ..knowledge.quality_guard import ContentQuality
             cq = ContentQuality()
             text = "\n".join(getattr(h, 'text', str(h)) for h in ctx.retrieved_hits[:5])
             score = cq.evaluate(text)

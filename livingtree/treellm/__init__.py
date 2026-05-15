@@ -24,8 +24,10 @@ from .embedding_scorer import EmbeddingScorer, ModelProfile, get_embedding_score
 from .foresight_gate import ForesightGate, ForesightDecision, get_foresight_gate
 from .onto_prompt_builder import OntoPromptBuilder, get_onto_prompt_builder
 from .holistic_election import HolisticElection, ProviderScore, PROVIDER_CAPABILITIES, get_election
+from .holistic_election import CausalEffectTracker, CausalEffect, ABTestManager, get_causal_tracker, get_ab_manager
 from .route_learner import RouteLearner, LearnedProfile, RoutingWeight, get_route_learner
 from .synapse_aggregator import SynapseAggregator, SynapseResult, ModelOutput, CrossValidation, get_synapse_aggregator
+from .synapse_aggregator import ParliamentSession, Verdict, ParliamentRole, get_parliament
 from .competitive_eliminator import CompetitiveEliminator, ModelRanking, get_eliminator
 from .strategic_orchestrator import StrategicOrchestrator, OrchestrationPlan, TaskStep, get_orchestrator
 from .deep_probe import DeepProbe, ProbeStrategy, ProbeContext, ProbeResult, get_deep_probe
@@ -57,8 +59,10 @@ __all__ = [
     "ForesightGate", "ForesightDecision", "get_foresight_gate",
     "OntoPromptBuilder", "get_onto_prompt_builder",
     "HolisticElection", "ProviderScore", "PROVIDER_CAPABILITIES", "get_election",
+    "CausalEffectTracker", "CausalEffect", "ABTestManager", "get_causal_tracker", "get_ab_manager",
     "RouteLearner", "LearnedProfile", "RoutingWeight", "get_route_learner",
     "SynapseAggregator", "SynapseResult", "ModelOutput", "CrossValidation", "get_synapse_aggregator",
+    "ParliamentSession", "Verdict", "ParliamentRole", "get_parliament",
     "CompetitiveEliminator", "ModelRanking", "get_eliminator",
     "StrategicOrchestrator", "OrchestrationPlan", "TaskStep", "get_orchestrator",
     "DeepProbe", "ProbeStrategy", "ProbeContext", "ProbeResult", "get_deep_probe",

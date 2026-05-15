@@ -14,6 +14,7 @@ Integration:
 
 from __future__ import annotations
 
+import threading
 from typing import Optional
 
 
@@ -21,11 +22,14 @@ class QueryClassifier:
     """Fast local task type classification using keyword + pattern heuristics."""
 
     _instance: Optional["QueryClassifier"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "QueryClassifier":
         if cls._instance is None:
-            cls._instance = QueryClassifier()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = QueryClassifier()
         return cls._instance
 
     def __init__(self):
@@ -93,12 +97,15 @@ class QueryClassifier:
 
 
 _classifier: Optional[QueryClassifier] = None
+_classifier_lock = threading.Lock()
 
 
 def get_query_classifier() -> QueryClassifier:
     global _classifier
     if _classifier is None:
-        _classifier = QueryClassifier()
+        with _classifier_lock:
+            if _classifier is None:
+                _classifier = QueryClassifier()
     return _classifier
 
 

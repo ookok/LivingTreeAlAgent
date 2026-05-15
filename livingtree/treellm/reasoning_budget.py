@@ -41,6 +41,7 @@ Usage:
 from __future__ import annotations
 
 import math
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -444,12 +445,15 @@ class ReasoningBudgetEngine:
 # ═══ Singleton ═════════════════════════════════════════════════════
 
 _rb: Optional[ReasoningBudgetEngine] = None
+_rb_lock = threading.Lock()
 
 
 def get_reasoning_budget() -> ReasoningBudgetEngine:
     global _rb
     if _rb is None:
-        _rb = ReasoningBudgetEngine()
+        with _rb_lock:
+            if _rb is None:
+                _rb = ReasoningBudgetEngine()
     return _rb
 
 

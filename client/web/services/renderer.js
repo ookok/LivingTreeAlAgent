@@ -82,151 +82,31 @@ const renderer = {
 
   md(text) {
     if (!text) return '';
-
-    const lines = text.split('\n');
-    const output = [];
-    let inCodeBlock = false;
-    let codeBuf = [];
-    let codeLang = '';
-    let inList = false;
-    let listType = '';
-
-    function _flushList() {
-      if (inList) {
-        output.push(listType === 'ol' ? '</ol>' : '</ul>');
-        inList = false;
-        listType = '';
+    try {
+      let html = marked.parse(text, { breaks: true, gfm: true });
+      html = html.replace(/<pre><code(?:\s+class="[^"]*")?>/g, (m) => {
+        const langMatch = m.match(/class="(?:lang-)?(\w+)"/);
+        const lang = langMatch ? langMatch[1] : '';
+        return `__CODEBLOCK_START__${lang}__`;
+      });
+      html = html.replace(/<\/code><\/pre>/g, '__CODEBLOCK_END__');
+      let begin = 0, result = [];
+      while (begin < html.length) {
+        const startIdx = html.indexOf('__CODEBLOCK_START__', begin);
+        if (startIdx === -1) { result.push(html.slice(begin)); break; }
+        result.push(html.slice(begin, startIdx));
+        const langEnd = html.indexOf('__', startIdx + 19);
+        const lang = html.slice(startIdx + 19, langEnd);
+        const endIdx = html.indexOf('__CODEBLOCK_END__', langEnd);
+        const code = html.slice(langEnd + 2, endIdx).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        result.push(this.codeBlock(code, lang || 'plaintext'));
+        begin = endIdx + 18;
       }
+      return result.join('');
+    } catch (e) {
+      console.warn('[renderer] marked failed, using plain text:', e);
+      return text.replace(/</g, '&lt;').replace(/\n/g, '<br>');
     }
-
-    function _inline(s) {
-      let t = s;
-      t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      t = t.replace(/__(.+?)__/g, '<strong>$1</strong>');
-      t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      t = t.replace(/_(.+?)_/g, '<em>$1</em>');
-      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-      t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" title="$1">');
-      t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-      return t;
-    }
-
-    for (let i = 0; i < lines.length; i++) {
-      const raw = lines[i];
-      const trimmed = raw.trim();
-
-      if (trimmed.startsWith('```')) {
-        if (inCodeBlock) {
-          output.push(this.codeBlock(codeBuf.join('\n'), codeLang));
-          codeBuf = [];
-          codeLang = '';
-          inCodeBlock = false;
-        } else {
-          _flushList();
-          inCodeBlock = true;
-          codeLang = trimmed.slice(3).trim();
-        }
-        continue;
-      }
-
-      if (inCodeBlock) {
-        codeBuf.push(raw);
-        continue;
-      }
-
-      if (!trimmed) {
-        _flushList();
-        output.push('<br>');
-        continue;
-      }
-
-      if (/^#{1,6}\s/.test(trimmed)) {
-        _flushList();
-        const m = trimmed.match(/^(#{1,6})\s+(.*)/);
-        const level = m ? m[1].length : 1;
-        const heading = m ? _inline(this.esc(m[2])) : '';
-        output.push(`<h${level}>${heading}</h${level}>`);
-        continue;
-      }
-
-      if (/^>\s/.test(trimmed)) {
-        _flushList();
-        const q = trimmed.replace(/^>\s?/, '');
-        output.push(`<blockquote><p>${_inline(this.esc(q))}</p></blockquote>`);
-        continue;
-      }
-
-      if (/^---\s*$/.test(trimmed)) {
-        _flushList();
-        output.push('<hr>');
-        continue;
-      }
-
-      const ulMatch = trimmed.match(/^[-*+]\s+(.*)/);
-      if (ulMatch) {
-        if (!inList || listType !== 'ul') {
-          _flushList();
-          output.push('<ul>');
-          inList = true;
-          listType = 'ul';
-        }
-        output.push(`<li>${_inline(this.esc(ulMatch[1]))}</li>`);
-        continue;
-      }
-
-      const olMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
-      if (olMatch) {
-        if (!inList || listType !== 'ol') {
-          _flushList();
-          output.push('<ol>');
-          inList = true;
-          listType = 'ol';
-        }
-        output.push(`<li>${_inline(this.esc(olMatch[2]))}</li>`);
-        continue;
-      }
-
-      _flushList();
-
-      let processed = trimmed;
-      const tableSep = /^\|[-:| ]+\|$/;
-      const tableRow = /^\|.+\|$/;
-
-      if (i + 2 < lines.length && tableRow.test(trimmed) && tableSep.test(lines[i + 1].trim())) {
-        const headerCells = trimmed.split('|').filter(c => c.trim());
-        output.push('<table><thead><tr>');
-        for (const cell of headerCells) {
-          output.push(`<th>${_inline(this.esc(cell.trim()))}</th>`);
-        }
-        output.push('</tr></thead><tbody>');
-        i += 1;
-        for (i = i + 1; i < lines.length; i++) {
-          const row = lines[i].trim();
-          if (!tableRow.test(row)) {
-            i--;
-            break;
-          }
-          const cells = row.split('|').filter(c => c.trim());
-          output.push('<tr>');
-          for (const cell of cells) {
-            output.push(`<td>${_inline(this.esc(cell.trim()))}</td>`);
-          }
-          output.push('</tr>');
-        }
-        output.push('</tbody></table>');
-        continue;
-      }
-
-      output.push(`<p>${_inline(this.esc(processed))}</p>`);
-    }
-
-    _flushList();
-
-    if (inCodeBlock && codeBuf.length) {
-      output.push(this.codeBlock(codeBuf.join('\n'), codeLang));
-    }
-
-    return output.join('\n');
   },
 
   copyBtn(btn) {

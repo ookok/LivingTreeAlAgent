@@ -17,6 +17,7 @@ Integration:
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -36,11 +37,14 @@ class UserSignalCollector:
     """Infers user satisfaction from implicit behavioral signals."""
 
     _instance: Optional["UserSignalCollector"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "UserSignalCollector":
         if cls._instance is None:
-            cls._instance = UserSignalCollector()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = UserSignalCollector()
         return cls._instance
 
     def __init__(self):
@@ -135,12 +139,15 @@ def _jaccard_similarity(a: str, b: str) -> float:
 
 
 _user_signal: Optional[UserSignalCollector] = None
+_user_signal_lock = threading.Lock()
 
 
 def get_user_signal() -> UserSignalCollector:
     global _user_signal
     if _user_signal is None:
-        _user_signal = UserSignalCollector()
+        with _user_signal_lock:
+            if _user_signal is None:
+                _user_signal = UserSignalCollector()
     return _user_signal
 
 

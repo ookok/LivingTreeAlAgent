@@ -1,13 +1,11 @@
 """Unit tests for Economy & Routing layer."""
 import pytest
-from livingtree.economy.spatial_reward import (
-    SpatialGRPOOptimizer, SpatialContext, get_sgrpo)
-from livingtree.economy.tdm_reward import (
-    TDMRewardOptimizer, SurrogateRewardModel, get_tdm_optimizer)
+from livingtree.economy.grpo_optimizer import (
+    SpatialGRPOOptimizer, SpatialContext, get_sgrpo,
+    TDMRewardOptimizer, SurrogateRewardModel, get_tdm_optimizer,
+    LatentGRPO, LatentEncoder, get_latent_grpo)
 from livingtree.economy.thermo_budget import (
     ThermodynamicBudget, get_thermo_budget)
-from livingtree.economy.latent_grpo import (
-    LatentGRPO, LatentEncoder, get_latent_grpo)
 from livingtree.economy.economic_engine import EconomicPolicy, ROIModel
 
 

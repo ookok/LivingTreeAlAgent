@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover
     SentenceTransformer = None  # type: ignore
 
 try:
-    from livingtree.core.hardware_accelerator import get_accelerator
+    from livingtree.core.hardware_acceleration import get_accelerator
     _HAS_ACCELERATOR = True
 except Exception:
     _HAS_ACCELERATOR = False

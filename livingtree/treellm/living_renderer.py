@@ -31,6 +31,7 @@ import hashlib
 import json
 import math
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -261,11 +262,14 @@ class LivingRenderer:
     """Capability-probing, performance-aware polymorphic renderer."""
 
     _instance: Optional["LivingRenderer"] = None
+    _lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "LivingRenderer":
         if cls._instance is None:
-            cls._instance = LivingRenderer()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = LivingRenderer()
         return cls._instance
 
     def __init__(self):
@@ -851,12 +855,15 @@ class LivingRenderer:
 
 
 _renderer: Optional[LivingRenderer] = None
+_renderer_lock = threading.Lock()
 
 
 def get_living_renderer() -> LivingRenderer:
     global _renderer
     if _renderer is None:
-        _renderer = LivingRenderer()
+        with _renderer_lock:
+            if _renderer is None:
+                _renderer = LivingRenderer()
     return _renderer
 
 

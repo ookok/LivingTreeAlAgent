@@ -1,0 +1,41 @@
+<!-- Self-Evolution Panel — HTMX-powered dashboard for improve/learn/skills pipeline -->
+<div id="evolution-panel" class="p-4 max-w-2xl mx-auto" hx-ext="a2ui">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">🧬 自进化面板</h2>
+
+  <!-- Quick Actions -->
+  <div class="flex gap-2 mb-6 flex-wrap">
+    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            hx-post="/api/improve/scan" hx-target="#evo-results" hx-indicator="#evo-spinner">
+      🔍 扫描代码
+    </button>
+    <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            hx-post="/api/learn/cycle" hx-target="#evo-results" hx-indicator="#evo-spinner">
+      📚 外部学习
+    </button>
+    <button class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            hx-post="/api/skills/cycle" hx-target="#evo-results" hx-indicator="#evo-spinner">
+      🌱 技能进化
+    </button>
+    <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            hx-get="/api/dev/hotspots" hx-target="#evo-results" hx-indicator="#evo-spinner">
+      🔥 热点分析
+    </button>
+    <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            hx-get="/api/dev/cognimap" hx-target="#evo-results" hx-indicator="#evo-spinner">
+      🧠 认知地图
+    </button>
+  </div>
+
+  <!-- Spinner -->
+  <div id="evo-spinner" class="htmx-indicator flex justify-center py-4">
+    <div class="w-8 h-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div>
+  </div>
+
+  <!-- Results Area -->
+  <div id="evo-results" class="space-y-4">
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <p class="text-gray-500 text-sm">点击上方按钮开始分析。结果将在此处展示。</p>
+      <p class="text-gray-400 text-xs mt-2">LivingTree v2.5 | TreeLLM 28 providers | CodeGraph 137K entities</p>
+    </div>
+  </div>
+</div>

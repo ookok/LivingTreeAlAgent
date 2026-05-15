@@ -168,9 +168,9 @@ def create_app(hub=None, config=None) -> FastAPI:
         app.mount("/services", StaticFiles(directory=str(web_root / "services")), name="services")
         app.mount("/components", StaticFiles(directory=str(web_root / "components")), name="components")
 
-        @app.get("/")
-        async def serve_index():
-            return FileResponse(str(web_root / "index.html"))
+        @app.get("/static/evolution.html")
+        async def serve_evolution():
+            return FileResponse(str(web_root / "evolution.html"))
 
         @app.get("/favicon.ico")
         async def serve_favicon():

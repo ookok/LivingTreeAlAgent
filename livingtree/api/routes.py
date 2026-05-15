@@ -15,7 +15,7 @@ from typing import Any, Optional
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, UploadFile, File, Form, Query
-from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 from .. import __version__
@@ -2880,3 +2880,110 @@ def _get_user_id_from_request(request: Request) -> str:
             return {"ok": True, "stats": get_debug_loop().stats()}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # ═══ Dev Analysis API (returns Tailwind HTML for frontend) ═══
+
+    @app.post("/api/improve/scan")
+    async def api_improve_scan(request: Request):
+        try:
+            from ..treellm.self_improver import get_self_improver
+            improver = get_self_improver()
+            defects = await improver._scanner.scan()
+            report = improver._scanner.report()
+            rows = [[cat, str(n), ""] for cat, n in report.get("by_category", {}).items()]
+            html = (
+                f'<div class="bg-white rounded-xl shadow-sm p-5">'
+                f'<h3 class="text-lg font-semibold text-gray-800 mb-3">🔍 代码扫描结果</h3>'
+                f'<p class="text-sm text-gray-500 mb-3">发现 {report.get("total",0)} 个缺陷</p>'
+                f'<div class="overflow-x-auto"><table class="w-full text-sm">'
+                f'<thead><tr class="bg-gray-50 border-b"><th class="px-4 py-2 text-left">类别</th><th class="px-4 py-2 text-left">数量</th></tr></thead>'
+                f'<tbody>{"".join(f"<tr class=\"border-b\"><td class=\"px-4 py-2\">{r[0]}</td><td class=\"px-4 py-2\">{r[1]}</td></tr>" for r in rows)}</tbody>'
+                f'</table></div></div>'
+            )
+            return HTMLResponse(content=html)
+        except Exception as e:
+            return HTMLResponse(content=f'<div class="text-red-500">Scan failed: {e}</div>')
+
+    @app.post("/api/learn/cycle")
+    async def api_learn_cycle(request: Request):
+        try:
+            from ..dna.external_learner import get_external_driver
+            driver = get_external_driver()
+            result = await driver.run_cycle()
+            gh = result.get("github_patterns", 0)
+            ar = result.get("arxiv_patterns", 0)
+            na = result.get("nature_patterns", 0)
+            total = result.get("total_patterns", 0)
+            html = (
+                f'<div class="bg-white rounded-xl shadow-sm p-5">'
+                f'<h3 class="text-lg font-semibold text-gray-800 mb-3">📚 外部学习结果</h3>'
+                f'<div class="grid grid-cols-3 gap-3 mb-3">'
+                f'<div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-blue-700">{gh}</div><div class="text-xs text-blue-600">GitHub</div></div>'
+                f'<div class="bg-green-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-green-700">{ar}</div><div class="text-xs text-green-600">arXiv</div></div>'
+                f'<div class="bg-purple-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-purple-700">{na}</div><div class="text-xs text-purple-600">Nature</div></div>'
+                f'</div>'
+                f'<p class="text-sm text-gray-500">共提取 {total} 个改进模式</p>'
+                f'</div>'
+            )
+            return HTMLResponse(content=html)
+        except Exception as e:
+            return HTMLResponse(content=f'<div class="text-red-500">Learn failed: {e}</div>')
+
+    @app.post("/api/skills/cycle")
+    async def api_skills_cycle(request: Request):
+        try:
+            from ..dna.living_skills import get_living_skills
+            skills = get_living_skills()
+            report = skills.run_cycle()
+            html = (
+                f'<div class="bg-white rounded-xl shadow-sm p-5">'
+                f'<h3 class="text-lg font-semibold text-gray-800 mb-3">🌱 三技能进化</h3>'
+                f'<div class="space-y-2 text-sm">'
+                f'<div class="flex justify-between"><span>🧹 自我清理</span><span class="text-gray-600">{report.clean_rules} 项</span></div>'
+                f'<div class="flex justify-between"><span>📝 记忆完善</span><span class="text-gray-600">{report.refine_patterns} 模式</span></div>'
+                f'<div class="flex justify-between"><span>🧬 自我进化</span><span class="text-gray-600">{report.evolve_iterations} 次迭代</span></div>'
+                f'<div class="flex justify-between font-medium"><span>总规则</span><span>{report.total_rules_learned}</span></div>'
+                f'</div></div>'
+            )
+            return HTMLResponse(content=html)
+        except Exception as e:
+            return HTMLResponse(content=f'<div class="text-red-500">Skills failed: {e}</div>')
+
+    @app.get("/api/dev/hotspots")
+    async def api_dev_hotspots(request: Request):
+        try:
+            from ..treellm.dev_assistant import HotColdAnalyzer
+            reports = HotColdAnalyzer.analyze(top_n=8)
+            rows = []
+            icons = {"hot":"🔥","active":"⚡","cooling":"❄️","stable":"✅"}
+            for r in reports:
+                name = Path(r.file).name if isinstance(r.file, str) else str(r.file)
+                rows.append(f'<tr class="border-b"><td class="px-3 py-2">{icons.get(r.status,"")} {name}</td><td class="px-3 py-2 text-right">{r.change_count}</td><td class="px-3 py-2 text-right text-gray-500">{r.last_changed_days}d ago</td></tr>')
+            html = (
+                f'<div class="bg-white rounded-xl shadow-sm p-5">'
+                f'<h3 class="text-lg font-semibold text-gray-800 mb-3">🔥 热点文件 (90天)</h3>'
+                f'<table class="w-full text-sm"><thead><tr class="bg-gray-50 border-b"><th class="px-3 py-2 text-left">文件</th><th class="px-3 py-2 text-right">变更</th><th class="px-3 py-2 text-right">最近</th></tr></thead>'
+                f'<tbody>{"".join(rows)}</tbody></table></div>'
+            )
+            return HTMLResponse(content=html)
+        except Exception as e:
+            return HTMLResponse(content=f'<div class="text-red-500">Hotspots: {e}</div>')
+
+    @app.get("/api/dev/cognimap")
+    async def api_dev_cognimap(request: Request):
+        try:
+            from ..treellm.living_dev import CognitiveLoader
+            files = CognitiveLoader.analyze(risk_filter="critical")[:8]
+            rows = []
+            for f in files:
+                name = Path(f.path).name
+                rows.append(f'<tr class="border-b"><td class="px-3 py-2">{name}</td><td class="px-3 py-2 text-right">{f.cyclomatic}</td><td class="px-3 py-2 text-right">{f.cognitive}</td><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {("bg-red-100 text-red-700" if f.risk=="critical" else "bg-yellow-100 text-yellow-700")}">{f.risk}</span></td></tr>')
+            html = (
+                f'<div class="bg-white rounded-xl shadow-sm p-5">'
+                f'<h3 class="text-lg font-semibold text-gray-800 mb-3">🧠 认知复杂度 Top 8</h3>'
+                f'<table class="w-full text-sm"><thead><tr class="bg-gray-50 border-b"><th class="px-3 py-2 text-left">文件</th><th class="px-3 py-2 text-right">CC</th><th class="px-3 py-2 text-right">Cog</th><th class="px-3 py-2">风险</th></tr></thead>'
+                f'<tbody>{"".join(rows)}</tbody></table></div>'
+            )
+            return HTMLResponse(content=html)
+        except Exception as e:
+            return HTMLResponse(content=f'<div class="text-red-500">Cognimap: {e}</div>')

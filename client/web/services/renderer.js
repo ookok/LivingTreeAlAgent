@@ -140,7 +140,61 @@ const renderer = {
 
   agentMsg(content, stream) {
     const streamAttr = stream ? ' data-stream="true"' : '';
-    return `<div class="message message-agent"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(content)}</div></div>`;
+    const processed = this.extractA2UI(content);
+    return `<div class="message message-agent"><div class="message-bubble agent-bubble"${streamAttr}>${this.md(processed)}</div></div>`;
+  },
+
+  /* Extract A2UI JSON blocks and convert to living-a2ui HTML elements.
+   * Detects: {"type":"chart|diagram|svg|table|tailwind",...}
+   * LLM outputs → auto-rendered as ECharts/Mermaid/Tailwind in chat */
+  extractA2UI(content) {
+    if (!content) return content;
+    // Match A2UI JSON objects: {"type":"xxx","xxx":{...}}
+    const re = /\{\s*"type"\s*:\s*"(chart|diagram|svg|table|tailwind)"/g;
+    let m;
+    let result = content;
+    while ((m = re.exec(content)) !== null) {
+      const a2uiType = m[1];
+      const start = m.index;
+      // Extract balanced JSON
+      let depth = 0, inStr = false, esc = false;
+      let end = start;
+      for (let i = start; i < content.length; i++) {
+        const ch = content[i];
+        if (esc) { esc = false; continue; }
+        if (ch === '\\') { esc = true; continue; }
+        if (ch === '"' && !esc) { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+      }
+      if (end > start) {
+        const jsonStr = content.substring(start, end);
+        try {
+          const a2uiData = JSON.parse(jsonStr);
+          let html = '';
+          if (a2uiType === 'tailwind' && a2uiData.tailwind) {
+            // Render Tailwind component server-side or client-side
+            const comp = a2uiData.tailwind.component || 'Card';
+            const props = JSON.stringify(a2uiData.tailwind.props || {}).replace(/"/g, '&quot;');
+            html = `<div class="living-a2ui" data-a2ui-type="tailwind" data-a2ui-component="${comp}" data-a2ui-props="${props}"></div>`;
+          } else if (a2uiType === 'chart' && a2uiData.chart) {
+            const chartJson = JSON.stringify(a2uiData.chart).replace(/"/g, '&quot;');
+            html = `<div class="living-a2ui" data-a2ui-type="chart" data-a2ui-chart="${chartJson}" style="width:100%;min-height:300px"></div>`;
+          } else if (a2uiType === 'diagram' && a2uiData.diagram) {
+            html = `<div class="living-a2ui" data-a2ui-type="diagram">${a2uiData.diagram.code||''}</div>`;
+          } else if (a2uiType === 'table') {
+            const cols = (a2uiData.columns||[]).map(c => `<th style="padding:4px 8px;border-bottom:1px solid var(--border)">${this.esc(c)}</th>`).join('');
+            const rows = (a2uiData.rows||[]).map(r => `<tr>${r.map(c => `<td style="padding:4px 8px">${this.esc(String(c))}</td>`).join('')}</tr>`).join('');
+            html = `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>${cols}</tr></thead><tbody>${rows}</tbody></table>`;
+          }
+          if (html) {
+            result = result.replace(jsonStr, html);
+          }
+        } catch(e) { /* not valid JSON, skip */ }
+      }
+    }
+    return result;
   },
 
   typing() {

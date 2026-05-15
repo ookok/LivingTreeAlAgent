@@ -77,9 +77,66 @@
           else this.queue.push(() => this.renderMap(el));
         } else if (type === 'svg') {
           this.renderSVG(el);
+        } else if (type === 'tailwind') {
+          this.renderTailwind(el);
         }
       });
     },
+
+    renderTailwind(el) {
+      const comp = el.dataset.a2uiComponent;
+      const props = JSON.parse(el.dataset.a2uiProps || '{}');
+      let html = '';
+      try {
+        if (comp === 'Card') html = this._twCard(props);
+        else if (comp === 'Table') html = this._twTable(props);
+        else if (comp === 'Alert') html = this._twAlert(props);
+        else if (comp === 'Badge') html = this._twBadge(props);
+        else if (comp === 'Button') html = this._twButton(props);
+        else if (comp === 'Form') html = this._twForm(props);
+        else if (comp === 'Tabs') html = this._twTabs(props);
+        else if (comp === 'Spinner') html = '<div class="w-8 h-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 mx-auto"></div>';
+        else html = `<div class="text-gray-500 text-sm p-4">Unknown component: ${comp}</div>`;
+      } catch(e) { html = `<div class="text-red-500 text-sm">Render error: ${e.message}</div>`; }
+      el.innerHTML = html;
+    },
+
+    _twCard(p) {
+      const accent = {blue:'border-l-4 border-blue-500',green:'border-l-4 border-green-500',red:'border-l-4 border-red-500'}[p.accent]||'';
+      return `<div class="bg-white rounded-xl shadow-sm ${accent} p-5 mb-4">
+        ${p.title?`<h3 class="text-lg font-semibold text-gray-800 mb-3">${this._esc(p.title)}</h3>`:''}
+        <div class="text-gray-600">${Array.isArray(p.children)?p.children.join(''):p.children||''}</div>
+        ${p.footer?`<div class="mt-4 pt-3 border-t border-gray-100 text-sm text-gray-500">${p.footer}</div>`:''}
+      </div>`;
+    },
+    _twTable(p) {
+      const cols = (p.columns||[]).map(c=>`<th class="px-4 py-2 text-left font-medium text-gray-600">${this._esc(c)}</th>`).join('');
+      const rows = (p.rows||[]).map(r=>`<tr class="border-b">${r.map(c=>`<td class="px-4 py-2 text-gray-700">${this._esc(String(c))}</td>`).join('')}</tr>`).join('');
+      return `<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-50 border-b">${cols}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    },
+    _twAlert(p) {
+      const levels={info:'bg-blue-50 border-blue-200 text-blue-800',success:'bg-green-50 border-green-200 text-green-800',warning:'bg-yellow-50 border-yellow-200 text-yellow-800',error:'bg-red-50 border-red-200 text-red-800'};
+      return `<div class="border rounded-lg p-4 mb-3 ${levels[p.level]||levels.info}">${this._esc(p.message||'')}</div>`;
+    },
+    _twBadge(p) {
+      const colors={gray:'bg-gray-100 text-gray-700',green:'bg-green-100 text-green-700',red:'bg-red-100 text-red-700',blue:'bg-blue-100 text-blue-700'};
+      return `<span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[p.color]||colors.gray}">${this._esc(p.label||'')}</span>`;
+    },
+    _twButton(p) {
+      return `<button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">${this._esc(p.label||'')}</button>`;
+    },
+    _twForm(p) {
+      const fields = (p.fields||[]).map(f=>`<div><label class="block text-sm font-medium text-gray-700 mb-1">${this._esc(f.label||f.name||'')}</label><input name="${this._esc(f.name||'')}" type="${f.type||'text'}" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>`).join('');
+      return `<form class="space-y-4">${fields}<button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm mt-2">${this._esc(p.submit_label||'提交')}</button></form>`;
+    },
+    _twTabs(p) {
+      const labels = Object.keys(p.tabs||{});
+      const active = p.active || labels[0] || '';
+      const nav = labels.map(l=>`<button class="px-3 py-2 text-sm font-medium ${l===active?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}">${this._esc(l)}</button>`).join('');
+      const content = labels.map(l=>`<div class="tab-content${l!==active?' hidden':''}">${p.tabs[l]||''}</div>`).join('');
+      return `<div><nav class="flex space-x-4 border-b border-gray-200 mb-3">${nav}</nav>${content}</div>`;
+    },
+    _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); },
 
     flush() {
       while (this.queue.length > 0) {

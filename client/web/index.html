@@ -32,6 +32,7 @@
         <button onclick="clearPanel()" title="清空面板" style="background:none;border:1px solid var(--border-secondary);color:var(--text-secondary);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-right:8px">🗑</button>
         <span id="presence-text" style="font-size:11px;color:var(--accent-coral);margin-right:8px;opacity:0.7"></span>
         <span id="shield-indicator" style="font-size:11px;margin-right:8px;cursor:pointer" title="提示注入防护" onclick="fetch('/tree/admin/shield').then(r=>r.text()).then(h=>{var d=document.createElement('div');d.textContent='🛡️ '+h;d.style.cssText='position:fixed;top:40px;right:16px;z-index:500;max-width:400px;padding:8px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:4px;font-size:12px';document.body.appendChild(d);setTimeout(function(){d.remove()},8000)})">🛡️</span>
+        <button onclick="document.getElementById('evo-panel').classList.toggle('hidden')" title="自进化面板" style="background:none;border:1px solid var(--border-secondary);color:var(--text-secondary);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-right:8px">🧬</button>
         <button onclick="LT.emit('code-editor:toggle')" title="代码编辑器"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4l3 3-3 3M8 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></button>
         <button onclick="toggleRightPanel()" title="上下文"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><line x1="8.5" y1="2.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="1.3"/></svg></button>
       </div>
@@ -41,7 +42,18 @@
     <div id="cognition-panel" style="display:none;padding:8px 16px;background:var(--bg-secondary);border-top:1px solid var(--border-secondary);font-size:11px;color:var(--text-secondary);max-height:150px;overflow-y:auto"></div>
   </main>
   <aside class="context-panel" id="context-panel"></aside>
+  <div id="evo-panel" class="hidden" style="position:fixed;top:40px;right:16px;z-index:400;max-width:480px;max-height:80vh;overflow-y:auto;background:var(--bg-primary);border:1px solid var(--border-secondary);border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.12)"></div>
 </div>
+
+<script>
+// Load evolution panel on demand
+document.querySelector('button[onclick*="evo-panel"]').addEventListener('click',function(){
+  var el=document.getElementById('evo-panel');
+  if(!el.dataset.loaded){
+    fetch('/static/evolution.html').then(r=>r.text()).then(h=>{el.innerHTML=h;el.dataset.loaded='1';});
+  }
+});
+</script>
 
 <!-- Shell slots for non-main components -->
 <div id="dashboard" style="display:none"></div>

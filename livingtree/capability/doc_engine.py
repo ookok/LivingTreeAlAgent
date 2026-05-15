@@ -33,7 +33,8 @@ class DocSpec(BaseModel):
 
 
 class DocEngine:
-    """Document generation with dynamic template learning and Context-Folding."""
+    """Document generation with dynamic template learning, Context-Folding,
+    and automatic EIA model data injection."""
 
     def __init__(self, output_dir: str = "./data/output"):
         self._templates: dict[str, DocSpec] = {}
@@ -43,6 +44,136 @@ class DocEngine:
         self.knowledge_base: Any = None
         self.template_learner: Any = None
         self._folded_sections: list[FoldResult] = []
+        self._eia_engine: Any = None
+
+    def _get_eia_engine(self):
+        """Lazy-load EIAEngine for physics model calculations."""
+        if self._eia_engine is None:
+            try:
+                from ..treellm.eia_models import EIAEngine
+                self._eia_engine = EIAEngine()
+            except ImportError:
+                self._eia_engine = False
+        return self._eia_engine if self._eia_engine is not False else None
+
+    def enrich_with_eia_data(self, template_type: str, data: dict) -> dict:
+        """Auto-inject EIA physics model results into report data.
+
+        Bridges the gap between eia_models.py (54 physics models) and DocEngine.
+        Detects report type and runs relevant atmospheric/water/noise/soil/carbon models,
+        injecting results as structured data variables for template filling.
+
+        Example: For 'eia_report', auto-computes:
+          - Gaussian plume dispersion for air quality section
+          - Streeter-Phelps BOD/DO for water quality section
+          - Noise attenuation for noise section
+          - CO2 equivalent for carbon section
+          - Hazard quotient for ecological risk section
+        """
+        eia = self._get_eia_engine()
+        if not eia:
+            return data
+
+        enriched = dict(data)
+
+        # ── Air Quality (大气) ──
+        if template_type in ("eia_report", "atmospheric", "air_quality"):
+            if "source_params" in data:
+                sp = data["source_params"]
+                gp = eia.gaussian_plume(
+                    Q=sp.get("emission_rate", 1.0),
+                    u=sp.get("wind_speed", 2.5),
+                    H=sp.get("stack_height", 30),
+                    stability=sp.get("stability_class", "D"),
+                )
+                enriched["gaussian_plume"] = gp
+                enriched["air_max_concentration"] = gp.get("C_max", 0)
+                enriched["air_max_distance"] = gp.get("x_max", 0)
+
+                rise = eia.stack_rise(
+                    Qh=sp.get("heat_emission", 1000),
+                    u=sp.get("wind_speed", 2.5),
+                    stack_height=sp.get("stack_height", 30),
+                )
+                enriched["stack_rise"] = rise
+
+        # ── Water Quality (水环境) ──
+        if template_type in ("eia_report", "water_quality", "surface_water"):
+            if "water_params" in data:
+                wp = data["water_params"]
+                sp = eia.streeter_phelps(
+                    BOD0=wp.get("bod_initial", 30),
+                    DO0=wp.get("do_initial", 8.0),
+                    k1=wp.get("k1_deoxygenation", 0.3),
+                    k2=wp.get("k2_reaeration", 0.5),
+                    u=wp.get("flow_velocity", 0.5),
+                    x_max=wp.get("distance_km", 10),
+                )
+                enriched["streeter_phelps"] = sp
+                enriched["water_bod_min"] = sp.get("BOD_min", 0) if isinstance(sp, dict) else 0
+                enriched["water_do_min"] = sp.get("DO_min", 0) if isinstance(sp, dict) else 0
+                enriched["water_critical_distance"] = sp.get("xc", 0) if isinstance(sp, dict) else 0
+
+        # ── Noise (噪声) ──
+        if template_type in ("eia_report", "noise", "acoustic"):
+            if "noise_params" in data:
+                np = data["noise_params"]
+                ns = eia.noise_attenuation(
+                    Lw=np.get("source_level", 100),
+                    r=np.get("distance", 50),
+                    barrier=np.get("barrier_height", 0),
+                )
+                enriched["noise_attenuation"] = ns
+                enriched["noise_level_at_receptor"] = ns.get("Lp", 0) if isinstance(ns, dict) else 0
+
+        # ── Carbon / GHG (碳排放) ──
+        if template_type in ("eia_report", "carbon", "ghg"):
+            if "carbon_params" in data:
+                cp = data["carbon_params"]
+                co2 = eia.co2_equivalent(
+                    fuel_type=cp.get("fuel_type", "coal"),
+                    fuel_amount=cp.get("fuel_amount", 1000),
+                    emission_factor=cp.get("emission_factor", 0),
+                )
+                enriched["co2_equivalent"] = co2
+                enriched["carbon_emission_tons"] = co2.get("total_co2e", 0) if isinstance(co2, dict) else 0
+
+        # ── Ecological Risk (生态风险) ──
+        if template_type in ("eia_report", "ecological_risk", "health_risk"):
+            if "risk_params" in data:
+                rp = data["risk_params"]
+                hq = eia.hazard_quotient(
+                    exposure=rp.get("exposure_dose", 0.01),
+                    rfd=rp.get("reference_dose", 0.001),
+                )
+                enriched["hazard_quotient"] = hq
+                enriched["risk_hq"] = hq.get("HQ", 0) if isinstance(hq, dict) else 0
+
+        # ── Socioeconomic (社会经济) ──
+        if template_type in ("feasibility", "socioeconomic"):
+            if "economic_params" in data:
+                ep = data["economic_params"]
+                npv = eia.npv_analysis(
+                    initial_cost=ep.get("initial_cost", 100000),
+                    annual_benefit=ep.get("annual_benefit", 20000),
+                    years=ep.get("years", 10),
+                    discount_rate=ep.get("discount_rate", 0.05),
+                )
+                enriched["npv_analysis"] = npv
+                enriched["npv_value"] = npv.get("NPV", 0) if isinstance(npv, dict) else 0
+
+        return enriched
+
+    async def generate_report_with_models(self, template_type: str, data: dict,
+                                           requirements: dict = None,
+                                           fold: bool = False) -> dict:
+        """Generate report with automatic EIA model enrichment.
+
+        Combines: physics model calculations (54 models) + template-based generation
+        + optional context folding for large documents.
+        """
+        enriched = self.enrich_with_eia_data(template_type, data)
+        return await self.generate_report(template_type, enriched, requirements, fold)
 
     def list_templates(self) -> list[str]:
         return list(self._templates.keys())

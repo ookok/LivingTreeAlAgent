@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from loguru import logger
-from .cell_ai import CellAI
+
+
+# ── Stub replacement for deleted cell_ai module ──
+
+class CellAI:
+    """Stub: cell_ai.py deleted."""
+    pass
 
 class Regen:
     """Cell regeneration: detect, restore, validate."""

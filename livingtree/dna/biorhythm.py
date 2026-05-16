@@ -96,13 +96,6 @@ class Biorhythm:
                 self._metrics.state = LifeState.DREAMING
                 self._metrics.respiration = 0.05 + 0.05 * math.sin(now * 0.05)
                 self._metrics.dream_count += 1
-                try:
-                    from ..cell.dream_pretraining import get_dream_pretrainer
-                    dp = get_dream_pretrainer()
-                    if dp.should_dream():
-                        await dp.dream_cycle()
-                except Exception:
-                    pass
                 if self._metrics.dream_count % 30 == 0:
                     self._metrics.state = LifeState.CONSOLIDATING
             

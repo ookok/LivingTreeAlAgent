@@ -74,20 +74,7 @@ class AutonomousCodeEvolution:
         # Step 1: Generate mutation candidates from signals
         candidates = self._generate_mutations(signals)
 
-        # External Learning: GitHub + arXiv → additional mutation candidates
-        try:
-            from .external_learner import get_external_driver
-            ext = get_external_driver()
-            proposals = ext.feed_to_evolution()
-            for prop in proposals[:5]:
-                for f in prop["files"]:
-                    candidates.append(Mutation(
-                        file_path=f, strategy="external_learn",
-                        description=f"[{prop['source']}:{prop['url'][-20:]}] {prop['change'][:100]}",
-                        fitness=prop["confidence"],
-                    ))
-        except Exception:
-            pass
+        # External Learning: module removed (external_learner.py deleted)
 
         # Step 2: Run tests on each candidate in sandbox
         for c in candidates:

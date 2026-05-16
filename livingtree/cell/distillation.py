@@ -18,7 +18,17 @@ from typing import Any, Optional
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from .cell_ai import CellAI, CellCapability
+
+# ── Stub replacements for deleted cell_ai module ──
+
+class CellCapability:
+    """Stub: cell_ai.py deleted."""
+    pass
+
+
+class CellAI:
+    """Stub: cell_ai.py deleted."""
+    pass
 
 
 class ExpertConfig(BaseModel):

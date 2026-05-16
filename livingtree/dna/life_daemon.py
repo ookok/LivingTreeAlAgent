@@ -246,9 +246,8 @@ class LifeDaemon:
         if len(cells) >= 10:
             return  # Don't over-populate
 
-        # Trigger mitosis
-        from ..cell.cell_ai import CellAI, CellCapability
-        from ..cell.mitosis import Mitosis
+        # Trigger mitosis (cell_ai and mitosis modules deleted)
+        from ..cell import CellAI, CellCapability, Mitosis
 
         parent = cells[0] if cells else CellAI(name=f"cell_gen{self.world.genome.generation}")
         if not registry.get(getattr(parent, 'id', '')):

@@ -1610,19 +1610,93 @@ def _svc_dev(args: list):
         from .treellm.dev_assistant import (
             ChangeRehearsal, HotColdAnalyzer, DocstringChecker, ConventionExtractor,
         )
-        from .treellm.living_dev import (
-            CognitiveLoader, APIGuard, LivingADR, DependencyDoctor,
-        )
-        from .treellm.deep_dev import (
-            CodeProvenance, MergeOracle, HealthTrends, OnboardingCompass,
-        )
-        from .treellm.future_dev import (
-            CodeMigrator, DeadCodeAnalyzer, TestAmplifier,
-            LivingDiagram, BugRadar,
-        )
-        from .treellm.long_dev import (
-            RuntimePredictor, SemanticDiffer,
-        )
+
+        # ── Stubs for deleted dev modules ──
+        class CognitiveLoader:
+            @staticmethod
+            def analyze(*args, **kwargs): return []
+            @staticmethod
+            def format_map(*args, **kwargs): return ""
+
+        class APIGuard:
+            @staticmethod
+            def check(): return []
+            @staticmethod
+            def snapshot(): return {}
+            @staticmethod
+            def save_snapshot(*args): pass
+            @staticmethod
+            def format_report(*args, **kwargs): return ""
+
+        class LivingADR:
+            @staticmethod
+            def generate(): return ""
+            @staticmethod
+            def save_adr(*args): return ""
+
+        class DependencyDoctor:
+            @staticmethod
+            def diagnose(): return []
+            @staticmethod
+            def format_report(*args, **kwargs): return ""
+
+        class CodeProvenance:
+            @staticmethod
+            def trace(*args, **kwargs): return {}
+            @staticmethod
+            def format_report(*args): return ""
+
+        class MergeOracle: pass
+
+        class HealthTrends:
+            @staticmethod
+            def analyze(*args, **kwargs): return []
+            @staticmethod
+            def format_report(*args): return ""
+
+        class OnboardingCompass: pass
+
+        class CodeMigrator:
+            @staticmethod
+            def migrate(*args, **kwargs): return {}
+            @staticmethod
+            def format_plan(*args): return ""
+
+        class DeadCodeAnalyzer:
+            @staticmethod
+            def analyze(*args, **kwargs): return {}
+            @staticmethod
+            def format_report(*args): return ""
+
+        class TestAmplifier:
+            @staticmethod
+            def amplify(*args, **kwargs): return []
+            @staticmethod
+            def format_variants(*args): return ""
+
+        class LivingDiagram:
+            @staticmethod
+            def generate(): return ""
+            @staticmethod
+            def save_diagram(*args): return ""
+
+        class BugRadar:
+            @staticmethod
+            def scan(): return []
+            @staticmethod
+            def format_report(*args): return ""
+
+        class RuntimePredictor:
+            @staticmethod
+            def predict(*args, **kwargs): return {}
+            @staticmethod
+            def format_report(*args): return ""
+
+        class SemanticDiffer:
+            @staticmethod
+            def diff(*args, **kwargs): return {}
+            @staticmethod
+            def format_report(*args): return ""
 
         sub = args[0].lower() if args else "all"
 
@@ -1946,93 +2020,9 @@ def _svc_learn(args: list):
     import asyncio
 
     async def _run():
-        from .dna.external_learner import get_external_driver
-        driver = get_external_driver()
-
-        sub = args[0].lower() if args else "cycle"
-
-        if sub == "cycle" or sub == "":
-            print("\n  🧠 External Learning Cycle — GitHub + arXiv + Nature\n")
-            t0 = __import__('time').time()
-            result = await driver.run_cycle()
-            ms = (__import__('time').time() - t0) * 1000
-
-            for source, label in [("github", "GitHub"), ("arxiv", "arXiv"), ("nature", "Nature")]:
-                items = result.get(f"{source}_repos" if source == "github" else f"{source}_papers", 0)
-                patterns = result.get(f"{source}_patterns", 0)
-                err = result.get(f"{source}_error", "")
-                icon = "✅" if patterns else "⚠️ "
-                line = f"  {icon} {label:8s} {items:>3} items → {patterns:>3} patterns"
-                if err:
-                    line += f"  [{err[:60]}]"
-                print(line)
-
-            total = result.get("total_patterns", 0)
-            proposals = result.get("proposals", [])
-            print(f"\n  📊 Total: {total} patterns, {len(proposals)} improvement proposals")
-            print(f"  ⏱️  {ms:.0f}ms")
-
-            if proposals:
-                print(f"\n  ── Top Proposals ──")
-                for p in proposals[:5]:
-                    cat = p.get("category", "?")
-                    desc = p.get("description", "") or p.get("title", "") or p.get("change", "")
-                    conf = p.get("confidence", 0)
-                    print(f"  [{cat}] (conf={conf:.0%}) {desc[:100]}")
-
-        elif sub == "github":
-            print("\n  🔍 GitHub Trending Search...")
-            repos = driver.github.search_related_repos()
-            patterns = driver.github.extract_patterns(repos)
-            print(f"  ✅ {len(repos)} repos → {len(patterns)} patterns")
-            for p in patterns[:5]:
-                print(f"    [{p.category}] {p.title[:100]}")
-
-        elif sub == "arxiv":
-            print("\n  🔍 arXiv Paper Search...")
-            papers = driver.arxiv.search_recent_papers()
-            patterns = driver.arxiv.extract_insights(papers)
-            print(f"  ✅ {len(papers)} papers → {len(patterns)} insights")
-            for p in patterns[:5]:
-                print(f"    [{p.category}] {p.title[:100]}")
-
-        elif sub == "nature":
-            print("\n  🔍 Nature/Semantic Scholar Search...")
-            papers = driver.nature.search_recent_papers()
-            patterns = driver.nature.extract_patterns(papers)
-            print(f"  ✅ {len(papers)} papers → {len(patterns)} patterns")
-            for p in patterns[:5]:
-                print(f"    [{p.category}] {p.title[:100]}")
-
-        elif sub == "apply":
-            proposals = driver.feed_to_evolution()
-            print(f"\n  🧬 Feeding {len(proposals)} patterns into self-evolution pipeline...")
-            if proposals:
-                for p in proposals[:5]:
-                    print(f"    [{p['category']}] {p.get('change','')[:100]} (conf={p['confidence']:.0%})")
-            print(f"  ✅ Ready for next improve --auto cycle")
-
-        elif sub == "stats":
-            stats = driver.stats
-            print(f"\n  📊 External Learning Statistics")
-            print(f"  {'─'*40}")
-            print(f"  Total patterns:     {stats['total_patterns']}")
-            print(f"  Last run:           {stats.get('last_run',0):.0f}s ago")
-            print(f"  GitHub learned:     {stats['github_learned']}")
-            print(f"  arXiv learned:      {stats['arxiv_learned']}")
-            print(f"  Nature learned:     {stats['nature_learned']}")
-            print(f"\n  Cache files:")
-            for f in [".livingtree/github_trending.json", ".livingtree/arxiv_learned.json"]:
-                from pathlib import Path
-                p = Path(f)
-                if p.exists():
-                    print(f"    {f} ({p.stat().st_size} bytes)")
-                else:
-                    print(f"    {f} (not yet cached)")
-
-        else:
-            print(f"Unknown subcommand: {sub}")
-            print("Usage: livingtree learn [cycle|github|arxiv|nature|apply|stats]")
+        print("\n  ⚠️  External learning module (external_learner.py) has been removed.")
+        print("  This feature is no longer available.")
+        return
 
     try:
         asyncio.run(_run())

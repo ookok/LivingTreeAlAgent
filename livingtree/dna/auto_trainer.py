@@ -292,14 +292,7 @@ class AutoTrainer:
             except Exception:
                 pass
 
-        # External learning (dna/external_learner.py)
-        if any(s in spec.data_sources for s in ["external_arxiv", "external_github"]):
-            try:
-                from .external_learner import ExternalLearner
-                learner = ExternalLearner()
-                data["external_sources"] = len(learner.repos) if hasattr(learner, 'repos') else 0
-            except Exception:
-                pass
+        # External learning (module removed)
 
         # Conversation logs
         if "conversations" in spec.data_sources:
@@ -327,21 +320,7 @@ class AutoTrainer:
 
         result = {"layer": layer.value, "model": spec.primary_model, "method": "none"}
 
-        # Prefer MS-SWIFT (cell/swift_trainer.py) for LoRA/QLoRA/GRPO/DPO
-        try:
-            from ..cell.swift_trainer import SwiftTrainer
-            trainer = SwiftTrainer()
-            # Configure for this layer
-            result = await trainer.lora_train(
-                base_model=spec.primary_model,
-                quant=spec.quant,
-                data_samples=data.get("sample_count", 100),
-                output_dir=f".livingtree/models/{layer.value}",
-            )
-            result["method"] = "swift_lora"
-            return result
-        except Exception as e:
-            logger.debug(f"AutoTrainer: swift_trainer not available ({e})")
+        # Prefer MS-SWIFT (module removed, fall through to CellTrainer)
 
         # Fallback: CellTrainer (cell/trainer.py)
         try:

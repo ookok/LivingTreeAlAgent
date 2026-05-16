@@ -23,7 +23,22 @@ from typing import Any, Optional
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from .swift_trainer import SwiftDrillTrainer, DrillConfig, DrillResult
+
+# ── Stub replacements for deleted swift_trainer module ──
+
+class DrillConfig(BaseModel):
+    """Stub: swift_trainer.py deleted."""
+    model_config = {"extra": "allow"}
+
+
+class DrillResult(BaseModel):
+    """Stub: swift_trainer.py deleted."""
+    model_config = {"extra": "allow"}
+
+
+class SwiftDrillTrainer:
+    """Stub: swift_trainer.py deleted."""
+    pass
 
 
 class TrainingConfig(BaseModel):

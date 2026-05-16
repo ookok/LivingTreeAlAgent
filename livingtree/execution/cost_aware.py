@@ -193,33 +193,8 @@ class CostAware:
     # ── Models.dev auto-sync ──────────────────────────────────────
 
     def sync_pricing_from_models_dev(self) -> int:
-        """Update PRICE tables from models.dev open database.
-
-        Returns number of models with pricing synced.
-        """
-        try:
-            from ..treellm.models_dev_sync import get_models_dev_sync
-            sync = get_models_dev_sync()
-            pricing = sync.get_pricing_map()
-            chain = sync.get_degradation_map()
-
-            count = 0
-            for model_id, (input_cny, output_cny) in pricing.items():
-                if input_cny > 0:
-                    PRICE_YUAN_PER_1M_INPUT[model_id] = input_cny
-                if output_cny > 0:
-                    PRICE_YUAN_PER_1M_OUTPUT[model_id] = output_cny
-                count += 1
-
-            for expensive, cheap in chain.items():
-                if expensive not in MODEL_DEGRADATION_CHAIN:
-                    MODEL_DEGRADATION_CHAIN[expensive] = cheap
-
-            logger.info(f"CostAware: synced pricing for {count} models from models.dev")
-            return count
-        except Exception as e:
-            logger.debug(f"CostAware models.dev sync: {e}")
-            return 0
+        """DEPRECATED: models_dev_sync removed. Returns 0."""
+        return 0
 
     def _today_usage(self) -> int:
         return sum(u.tokens for u in self._usage)

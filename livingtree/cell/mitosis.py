@@ -11,7 +11,29 @@ from typing import Any, Optional
 from loguru import logger
 
 from ..dna.genome import Genome
-from .cell_ai import CellAI, CellCapability
+
+
+# ── Stub replacements for deleted cell_ai module ──
+
+class CellCapability:
+    """Stub: cell_ai.py deleted."""
+    def __init__(self, name: str = "general", description: str = ""):
+        self.name = name
+        self.description = description
+
+
+class CellAI:
+    """Stub: cell_ai.py deleted."""
+    def __init__(self, name: str = "", genome: Any = None, checkpoint_dir: Any = None,
+                 capabilities: list = None, **kwargs):
+        self.name = name
+        self.id = kwargs.get("id", name)
+        self.genome = genome
+        self.checkpoint_dir = checkpoint_dir
+        self.capabilities = capabilities or []
+
+    def load_checkpoint(self, path: Any) -> bool:
+        return True
 
 
 # ═══ Mitosis ═══

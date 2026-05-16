@@ -203,28 +203,7 @@ class EconomicPolicy:
         """
         requirements = requirements or {}
 
-        # ── Try models.dev for capability-aware selection ──
-        if requirements:
-            try:
-                from ..treellm.models_dev_sync import get_models_dev_sync
-                sync = get_models_dev_sync()
-                if sync._models:
-                    req = dict(requirements)
-                    if self.cost_weight > 0.5:
-                        req["sort_by"] = "cost"
-                    elif self.quality_weight > 0.5:
-                        req["sort_by"] = "context"
-                    else:
-                        req["sort_by"] = "cost"
-
-                    if preferred_provider != "auto":
-                        req["provider"] = preferred_provider
-
-                    best = sync.cheapest_for(**req)
-                    if best:
-                        return best.id
-            except Exception:
-                pass  # Fall through to static routing
+        # ── models.dev capability selection removed (module deleted) ──
 
         # ── Static routing (fallback) ──
         # Quality-heavy + high complexity → top reasoning model

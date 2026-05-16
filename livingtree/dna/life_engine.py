@@ -572,16 +572,7 @@ class LifeEngine(BranchMixin, StageMixin):
                     logger.debug(f"MemPO hook: {e}")
 
             # ── v5.0 Ultimate Innovations ──
-            if active_hooks and "autonomous_goals" not in active_hooks:
-                pass  # skip
-            else:
-                try:
-                    from .autonomous_goals import get_autonomous_goals
-                    goals_engine = get_autonomous_goals()
-                    goals_engine.observe_cycle(ctx)
-                    if cycle_count % 20 == 0:
-                        await goals_engine.execute_pending(self.world)
-                except Exception as e: logger.debug(f"Autonomous goals hook failed: {e}")
+            # autonomous_goals module removed
             try:
                 from .world_model import get_world_model
                 wm = get_world_model()
@@ -619,27 +610,15 @@ class LifeEngine(BranchMixin, StageMixin):
                 except Exception as e: logger.debug(f"Emotion decision hook failed: {e}")
 
             # ── GEP: compile experience into compact Genes (Evolver-inspired) ──
+            # evolution_gene module removed
             if active_hooks and "gep_compile" not in active_hooks:
                 pass  # skip
             else:
                 try:
-                    from .evolution_gene import get_gene_pool, GeneCompiler
                     from .gep_protocol import get_gep_protocol
-                    pool = get_gene_pool()
                     gep = get_gep_protocol()
-                    compiler = GeneCompiler()
-                    gene = compiler.compile_from_session(ctx, success_rate)
-                    if gene:
-                        existing = pool.find_matching(gene.trigger, top_k=1)
-                        if existing and existing[0].effectiveness() < gene.effectiveness():
-                            pool.evolve_gene(existing[0].id, gene.actions, gene.constraints, gene.failure_warnings)
-                            gep.record_event("gene_evolved", existing[0].id, existing[0].to_dict(), gene.to_dict(), "improved", True)
-                        elif not existing:
-                            pool.add_gene(gene.trigger, gene.actions, gene.constraints, gene.failure_warnings)
-                            gep.record_event("gene_created", gene.id, None, gene.to_dict(), "new", True)
-                    ctx.metadata["gene_pool_size"] = len(pool._genes)
-                    ctx.metadata["gep_events"] = len(gep._events)
-                except Exception as e: logger.debug(f"GEP gene compile failed: {e}")
+                    gep.record_event("gep_compile_noop", None, None, None, "module_removed", False)
+                except Exception as e: logger.debug(f"GEP compile hook failed: {e}")
 
             # ── RLVR Monitor: detect rise-then-fall collapse ──
             if active_hooks and "rlvr_monitor" not in active_hooks:
@@ -700,12 +679,7 @@ class LifeEngine(BranchMixin, StageMixin):
                         logger.debug(f"Phenomenal consciousness import failed (session persist): {e}")
                 conversation_dna = getattr(self.world, 'conversation_dna', None)
                 struct_mem = getattr(self.world, 'struct_memory', None)
-                gene_pool = None
-                try:
-                    from .evolution_gene import get_gene_pool
-                    gene_pool = get_gene_pool()
-                except Exception as e:
-                    logger.debug(f"Gene pool import failed (session persist): {e}")
+                gene_pool = None  # evolution_gene module removed
                 get_session_persistence().save(
                     phenomenal_consciousness=phenomenal,
                     conversation_dna=conversation_dna,

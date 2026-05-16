@@ -387,63 +387,8 @@ class ModelRegistry:
     # ── Models.dev Integration ────────────────────────────────────
 
     async def sync_from_models_dev(self, force: bool = False) -> int:
-        """Sync model data from models.dev open database.
-
-        Uses ModelsDevSync to fetch/cache the community-maintained model
-        database, then populates ModelRegistry providers with the data.
-
-        Returns number of models synced.
-        """
-        from .models_dev_sync import get_models_dev_sync
-
-        sync = get_models_dev_sync()
-        count = await sync.refresh(force=force)
-
-        if count == 0:
-            return 0
-
-        synced = 0
-        for provider_id in sync.get_providers():
-            dev_models = sync.get_provider_models(provider_id)
-            if not dev_models:
-                continue
-
-            provider_name = sync._providers.get(provider_id, {}).get("name", provider_id)
-
-            # Register provider if not exists
-            self.register_provider(
-                name=provider_id,
-                base_url=sync._providers.get(provider_id, {}).get("api",
-                    f"https://api.{provider_id}.com/v1"),
-            )
-
-            p = self._providers.get(provider_id)
-            if not p:
-                continue
-
-            # Convert DevModel → ModelInfo
-            model_infos = []
-            for dm in dev_models:
-                is_free = dm.cost.is_free or dm.open_weights
-                info = ModelInfo(
-                    id=dm.id,
-                    provider=dm.provider_id,
-                    owned_by=dm.provider_name,
-                    context_length=dm.limit.context,
-                    free=is_free,
-                    tier=dm.tier,
-                    pricing="free" if is_free else "token",
-                    enabled=True,
-                )
-                model_infos.append(info)
-
-            p.models = model_infos
-            p.last_fetched = time.time()
-            synced += len(model_infos)
-
-        logger.info(f"Models.dev synced: {synced} models across {len(sync.get_providers())} providers")
-        self._save_cache()
-        return synced
+        """DEPRECATED: models_dev_sync removed. Returns 0."""
+        return 0
 
 
 # ── Global singleton ──

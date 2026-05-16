@@ -244,9 +244,9 @@ async def _run_tests(config: Optional[LTAIConfig] = None) -> None:
         failed += 1
         tests.append(("Knowledge base", f"FAIL: {e}"))
 
-    # Test 4: Cell registration
+    # Test 4: Cell registration (module deleted)
     try:
-        from ..cell.cell_ai import CellAI
+        from ..cell import CellAI
         cell = CellAI(name="test_cell")
         hub.cell_registry.register(cell)
         cells = hub.cell_registry.discover()

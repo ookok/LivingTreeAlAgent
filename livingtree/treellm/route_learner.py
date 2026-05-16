@@ -97,39 +97,8 @@ class RouteLearner:
     # ── Capability Distillation ────────────────────────────────────
 
     async def distill_from_models_dev(self) -> int:
-        """Extract model capabilities from models.dev into LearnedProfiles.
-
-        Returns number of profiles distilled.
-        """
-        try:
-            from .models_dev_sync import get_models_dev_sync
-            sync = get_models_dev_sync()
-            if not sync._models:
-                await sync.refresh()
-
-            count = 0
-            for model_id, model in sync._models.items():
-                profile = LearnedProfile(
-                    model_id=model_id,
-                    provider=model.provider_id,
-                    context_length=model.limit.context,
-                    reasoning=model.reasoning,
-                    tool_call=model.tool_call,
-                    structured_output=model.structured_output,
-                    supports_images=model.modalities.supports_images,
-                    is_free=model.cost.is_free,
-                    cost_score=self._compute_cost_score(model.cost.input_cny),
-                    capability_score=self._compute_capability_score(model),
-                )
-                self._profiles[model_id] = profile
-                count += 1
-
-            logger.info(f"RouteLearner: distilled {count} model profiles from models.dev")
-            self._save()
-            return count
-        except Exception as e:
-            logger.debug(f"RouteLearner distill: {e}")
-            return 0
+        """DEPRECATED: models_dev_sync removed. Returns 0."""
+        return 0
 
     # ── Performance Learning ──────────────────────────────────────
 

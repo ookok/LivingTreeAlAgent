@@ -644,15 +644,7 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"Economy init skipped: {e}")
 
-        # ── Models.dev sync: 全量模型数据库同步 ──
-        try:
-            from ..treellm.models_dev_sync import get_models_dev_sync
-            sync = get_models_dev_sync()
-            if sync._models:
-                logger.info(f"Models.dev cache: {len(sync._models)} models")
-                self._spawn_task(sync.refresh(), "models_dev_refresh")
-        except Exception as e:
-            logger.debug(f"Models.dev sync skipped: {e}")
+        # ── Models.dev sync: module removed ──
 
         # ── RouteLearner: cross-session knowledge distillation ──
         try:

@@ -357,17 +357,8 @@ class GapOrchestrator:
         return merged
 
     def _schedule_auto_goal(self, query: str, gaps: list[str]) -> None:
-        """Schedule async background research for persistent learning."""
-        try:
-            from ..dna.autonomous_goals import get_autonomous_goal_engine
-            engine = get_autonomous_goal_engine()
-            engine.add_goal(
-                topic=f"Research knowledge gap: {query[:150]}",
-                source="gap_detected",
-                patterns=gaps[:3],
-            )
-        except Exception:
-            pass
+        """DEPRECATED: autonomous_goals module removed."""
+        pass
 
 
 __all__ = ["GapOrchestrator", "GapResult"]

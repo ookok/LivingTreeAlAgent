@@ -22,9 +22,28 @@ from loguru import logger
 
 from ..treellm.classifier import SkillRouter, PureTfidf, RouteResult, RoutingDecision
 from ..dna.skill_graph import SkillGraph, SkillNode, get_skill_graph
-from ..dna.skill_self_learn import LearnedSkill, KnowledgeNudge
 from ..dna.meta_memory import get_meta_memory
 from ..capability.tool_registry import SYSTEM_TOOLS, EXPERT_ROLES
+
+# ── Stubs for deleted skill_self_learn module ──
+
+@dataclass
+class LearnedSkill:
+    """Stub: skill_self_learn.py deleted."""
+    name: str = ""
+    description: str = ""
+    prompt_template: str = ""
+    category: str = ""
+    usage_count: int = 0
+    success_count: int = 0
+    version: int = 1
+    proposed: bool = False
+
+
+@dataclass
+class KnowledgeNudge:
+    """Stub: skill_self_learn.py deleted."""
+    pass
 
 GRAPH_FILE = Path(".livingtree/skill_graph.json")
 SKILL_FILE = Path(".livingtree/learned_skills.json")

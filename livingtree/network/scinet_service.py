@@ -281,58 +281,97 @@ class ScinetService:
                 remote_writer.close()
 
     async def _connect_with_fallback(self, host: str, port: int):
-        """Try direct connect, then proxy pool, then DomainIPPool."""
-        # 0. ScinetHardener proxy fallback
+        """Race-to-first: try direct + IP pool + proxy pool in parallel, use fastest."""
+        import asyncio as _aio
+        
+        conn_result = None
+        errors = []
+        
+        async def _try_direct():
+            nonlocal conn_result
+            try:
+                r, w = await _aio.wait_for(
+                    _aio.open_connection(host, port), timeout=3.0,
+                )
+                conn_result = (r, w, "direct")
+            except Exception as e:
+                errors.append(f"direct: {e}")
+        
+        async def _try_ip_pool():
+            nonlocal conn_result
+            if not self._ip_pool:
+                return
+            try:
+                best_ip = self._ip_pool.get_best(host)
+                if best_ip and best_ip.ip != host:
+                    r, w = await _aio.wait_for(
+                        _aio.open_connection(best_ip.ip, port), timeout=5.0,
+                    )
+                    conn_result = (r, w, f"ip_pool({best_ip.ip})")
+            except Exception as e:
+                errors.append(f"ip_pool: {e}")
+        
+        async def _try_proxy_pool():
+            nonlocal conn_result
+            if not self._proxy_pool:
+                return
+            try:
+                proxy = self._proxy_pool.get_best()
+                if proxy:
+                    r, w = await _aio.wait_for(
+                        _aio.open_connection(proxy.host, proxy.port), timeout=3.0,
+                    )
+                    w.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
+                    await w.drain()
+                    line = await _aio.wait_for(r.readline(), timeout=5.0)
+                    if b"200" in line:
+                        conn_result = (r, w, f"proxy({proxy.host}:{proxy.port})")
+                    else:
+                        errors.append(f"proxy: {line.decode()[:100]}")
+            except Exception as e:
+                errors.append(f"proxy_pool: {e}")
+        
+        async def _try_hardener():
+            nonlocal conn_result
+            try:
+                from .scinet_hardening import get_scinet_hardener
+                hardener = get_scinet_hardener()
+                result = await hardener.execute("CONNECT", f"{host}:{port}")
+                if result and result.get("ok"):
+                    conn_result = (None, None, "hardener")
+            except Exception as e:
+                errors.append(f"hardener: {e}")
+        
+        # Race all strategies in parallel — first one wins
+        tasks = [
+            _aio.create_task(_try_direct()),
+            _aio.create_task(_try_ip_pool()),
+            _aio.create_task(_try_proxy_pool()),
+        ]
+        
+        done, pending = await _aio.wait(tasks, timeout=6.0, return_when=_aio.FIRST_COMPLETED)
+        
+        # Cancel remaining
+        for t in pending:
+            t.cancel()
+        
+        if conn_result:
+            r, w, method = conn_result
+            logger.debug("CONNECT %s:%d → %s", host, port, method)
+            return r, w
+        
+        # If parallel failed, try hardener as last resort
         try:
             from .scinet_hardening import get_scinet_hardener
             hardener = get_scinet_hardener()
             result = await hardener.execute("CONNECT", f"{host}:{port}")
             if result and result.get("ok"):
+                logger.debug("CONNECT %s:%d → hardener", host, port)
                 return result["connection"]
         except Exception:
             pass
-
-        # 1. Direct connection
-        try:
-            r, w = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=10.0,
-            )
-            logger.debug("CONNECT %s:%d → direct", host, port)
-            return r, w
-        except Exception:
-            pass
-
-        # 2. Domain IP Pool (pre-tested optimal IPs)
-        if self._ip_pool:
-            best_ip = self._ip_pool.get_best(host)
-            if best_ip and best_ip.ip != host:
-                try:
-                    r, w = await asyncio.wait_for(
-                        asyncio.open_connection(best_ip.ip, port), timeout=10.0,
-                    )
-                    logger.info("CONNECT %s:%d → optimal IP %s", host, port, best_ip.ip)
-                    return r, w
-                except Exception:
-                    pass
-
-        # 3. Proxy pool (free proxies)
-        if self._proxy_pool:
-            for _ in range(3):
-                proxy = self._proxy_pool.get_random()
-                if not proxy:
-                    break
-                try:
-                    r, w = await self._http_connect_via_proxy(
-                        proxy.host, proxy.port, host, port,
-                    )
-                    if r:
-                        logger.info("CONNECT %s:%d → proxy %s:%d", host, port, proxy.host, proxy.port)
-                        self._proxy_pool.mark_success(proxy)
-                        return r, w
-                    self._proxy_pool.mark_failure(proxy)
-                except Exception:
-                    self._proxy_pool.mark_failure(proxy)
-
+        
+        logger.debug("CONNECT %s:%d ALL FAILED: %s", host, port, "; ".join(errors[:3]))
         return None, None
 
     async def _http_connect_via_proxy(self, proxy_host: str, proxy_port: int,
@@ -591,8 +630,27 @@ class ScinetService:
             from .domain_ip_pool import DomainIPPool
             self._ip_pool = DomainIPPool()
             await self._ip_pool.initialize()
+            # Background: immediately warm up IP pool for key domains
+            asyncio.create_task(self._warmup_ip_pool())
         except Exception as e:
             logger.debug("Scinet: IP pool init skipped: %s", e)
+
+    async def _warmup_ip_pool(self):
+        """Warm up IP pool for key blocked domains on startup."""
+        key_domains = [
+            "github.com", "api.github.com", "raw.githubusercontent.com",
+            "huggingface.co", "huggingface.co",
+            "stackoverflow.com",
+        ]
+        for domain in key_domains:
+            try:
+                best = self._ip_pool.get_best(domain)
+                if best and best.success_rate > 0.5:
+                    logger.debug("IP pool warm: %s → %s (score=%.2f)", domain, best.ip, best.score)
+                else:
+                    logger.debug("IP pool cold: %s — will resolve on first request", domain)
+            except Exception:
+                pass
 
         try:
             from .proxy_fetcher import get_proxy_pool

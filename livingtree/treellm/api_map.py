@@ -191,9 +191,74 @@ class APIMap:
         for api in DOMESTIC_FREE_APIS:
             self._apis[api.name] = api
 
+        # Auto-load API keys from secrets vault
+        self._load_api_keys()
+
         # Load from public-apis if available
         self._load_public_apis()
         self._load_cache()
+
+    def _load_api_keys(self):
+        """Auto-load API keys from secrets vault and environment variables.
+
+        Mapping:
+          secrets vault key        → API name
+          openweathermap_api_key   → openweathermap
+          qweather_api_key        → qweather
+          github_token            → github_api
+          baidu_translate_key     → baidu_translate
+          unsplash_access_key     → unsplash
+          pixabay_api_key         → pixabay
+          tencent_map_key         → tencent_location
+
+        Also checks: LT_<API_NAME>_KEY environment variables.
+        """
+        vault_keys = {}
+        try:
+            from ..config.secrets import get_secret_vault
+            vault = get_secret_vault()
+            vault_keys = {k: v for k, v in vault._cache.items()}
+        except Exception:
+            pass
+
+        import os as _os
+        key_map = {
+            "qweather": ("qweather_api_key", "LT_QWEATHER_KEY"),
+            "openweathermap": ("openweathermap_api_key", "LT_OPENWEATHER_KEY"),
+            "github_api": ("github_token", "GITHUB_TOKEN"),
+            "baidu_translate": ("baidu_translate_key", "LT_BAIDU_TRANSLATE_KEY"),
+            "unsplash": ("unsplash_access_key", "LT_UNSPLASH_KEY"),
+            "pixabay": ("pixabay_api_key", "LT_PIXABAY_KEY"),
+            "tencent_location": ("tencent_map_key", "LT_TENCENT_MAP_KEY"),
+        }
+        for api_name, (vault_key, env_key) in key_map.items():
+            key = vault_keys.get(vault_key, "") or _os.environ.get(env_key, "")
+            if key and api_name in self._apis:
+                self._apis[api_name].auth_key = key
+                logger.debug(f"APIMap: loaded key for {api_name}")
+
+    def set_api_key(self, api_name: str, key: str):
+        """Set API key for an endpoint. Also persists to secrets vault."""
+        if api_name in self._apis:
+            self._apis[api_name].auth_key = key
+        # Persist to vault
+        vault_key_map = {
+            "openweathermap": "openweathermap_api_key",
+            "qweather": "qweather_api_key",
+            "github_api": "github_token",
+            "baidu_translate": "baidu_translate_key",
+            "unsplash": "unsplash_access_key",
+            "pixabay": "pixabay_api_key",
+            "tencent_location": "tencent_map_key",
+        }
+        vault_key = vault_key_map.get(api_name)
+        if vault_key:
+            try:
+                from ..config.secrets import get_secret_vault
+                get_secret_vault().set(vault_key, key)
+                logger.info(f"APIMap: saved {api_name} key to vault")
+            except Exception as e:
+                logger.debug(f"APIMap save key: {e}")
 
     # ── Discovery ──────────────────────────────────────────────────
 

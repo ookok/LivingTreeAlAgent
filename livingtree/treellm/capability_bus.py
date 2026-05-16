@@ -171,8 +171,10 @@ class ToolAdapter(CapabilityAdapter):
         try:
             from ..execution.react_executor import ReactExecutor
             rex_tools = {
-                "web_search": ("Search the internet (Parallel MCP → SparkSearch → DuckDuckGo)", "query"),
-                "web_lookup": ("Unified web lookup: auto-routes to API/browser/fetch/search", "query or url + task"),
+                "web_search": ("Search the internet for current information, news, or facts", "query"),
+                "browser_browse": ("Open a web page in headless browser, perform actions (type/click), and extract content. Use for JS-heavy or interactive sites", "url + task"),
+                "web_fetch": ("Fetch a static web page by URL and return its text content", "url"),
+                "api_search": ("Find available API endpoints (weather, maps, translation, etc.) by keyword. Use before api_call", "keyword"),
                 "kb_search": ("Search knowledge base", "query"),
                 "read_file": ("Read a file", "path"),
                 "write_file": ("Write to a file", "path\\ncontent"),
@@ -222,7 +224,9 @@ class ToolAdapter(CapabilityAdapter):
             rex = ReactExecutor()
             methods = {
                 "web_search": rex._tool_web_search,
-                "web_lookup": lambda s: self._web_lookup(s),
+                "browser_browse": lambda s: self._browser_browse(s),
+                "web_fetch": lambda s: self._web_fetch(s),
+                "api_search": lambda s: self._api_search(s),
                 "kb_search": rex._tool_kb_search,
                 "read_file": lambda s: self._read_file(s),
                 "write_file": lambda s: self._write_file(s),
@@ -236,43 +240,87 @@ class ToolAdapter(CapabilityAdapter):
             return {"error": str(e)}
         return {"error": f"Unknown tool: {name}"}
 
-    async def _web_lookup(self, input_str: str) -> dict:
-        """Route web lookup through WebToolRouter for auto-tool selection."""
+    # ═══ Web Tools ═══════════════════════════════════════════════════
+
+    async def _browser_browse(self, input_str: str) -> dict:
+        """LLM-driven browser: navigate, search, extract JS-rendered pages."""
         try:
-            from ..capability.web_router import get_web_router
-            router = get_web_router()
-            args = input_str.strip()
-            url = ""
-            query = ""
-            task = ""
-
-            if args.startswith("{"):
-                import json
-                try:
-                    parsed = json.loads(args)
-                    url = parsed.get("url", "")
-                    query = parsed.get("query", parsed.get("q", ""))
-                    task = parsed.get("task", "")
-                except json.JSONDecodeError:
-                    query = args
-            elif args.startswith("http"):
-                url = args
-                task = query = ""
-            else:
-                query = args
-
-            result = await router.lookup(query=query, url=url, task=task)
+            from ..capability.browser_agent import get_browser_agent
+            args = self._parse_tool_args(input_str)
+            url = args.get("url", "")
+            task = args.get("task", input_str)
+            agent = get_browser_agent()
+            r = await agent.browse(url=url, task=task)
             return {
-                "source": result.source,
-                "url": result.url,
-                "title": result.title,
-                "data": result.data,
-                "text": result.text[:5000] if result.text else "",
-                "found": result.found,
-                "error": result.error,
+                "success": r.success,
+                "url": r.url,
+                "title": r.title,
+                "items": r.items,
+                "count": r.count,
+                "method": r.method,
+                "elapsed_ms": r.elapsed_ms,
+                "error": r.error,
             }
         except Exception as e:
-            return {"error": str(e), "source": "web_lookup"}
+            return {"success": False, "error": str(e), "source": "browser_browse"}
+
+    async def _web_fetch(self, input_str: str) -> dict:
+        """Fetch a static web page, returns cleaned text content."""
+        try:
+            args = self._parse_tool_args(input_str)
+            url = args.get("url", input_str.strip())
+            import aiohttp
+            async with aiohttp.ClientSession() as s:
+                r = await s.get(url, timeout=aiohttp.ClientTimeout(total=15),
+                               headers={"User-Agent": "Mozilla/5.0"})
+                text = await r.text()
+                import re
+                clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL)
+                clean = re.sub(r'<[^>]+>', '\n', clean)
+                clean = re.sub(r'\n{3,}', '\n\n', clean).strip()[:8000]
+                title_m = re.search(r'<title[^>]*>(.*?)</title>', text, re.I)
+                links = []
+                for m in re.finditer(r'href=["\']([^"\']+\.(?:pdf|docx?|xlsx?|zip))["\'][^>]*>([^<]+)', text, re.I):
+                    links.append({"url": m.group(1), "title": m.group(2).strip()[:80]})
+                return {
+                    "success": r.status < 400,
+                    "url": url,
+                    "title": title_m.group(1).strip() if title_m else "",
+                    "text": clean,
+                    "links": links[:20],
+                    "status": r.status,
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "web_fetch"}
+
+    async def _api_search(self, input_str: str) -> dict:
+        """Search registered APIs by keyword."""
+        try:
+            from ..treellm.api_map import get_api_map
+            m = get_api_map()
+            args = self._parse_tool_args(input_str)
+            keyword = args.get("keyword", input_str.strip())
+            results = m.search(keyword, max_results=5)
+            return {
+                "success": len(results) > 0,
+                "keyword": keyword,
+                "apis": results,
+                "count": len(results),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "api_search"}
+
+    @staticmethod
+    def _parse_tool_args(input_str: str) -> dict:
+        s = input_str.strip()
+        if s.startswith("{"):
+            try:
+                import json
+                return json.loads(s)
+            except json.JSONDecodeError:
+                pass
+        return {"text": s}
 
     def _read_file(self, path: str) -> str:
         """Read file — VFS (LivingStore) is primary path, raw disk is sandboxed fallback."""

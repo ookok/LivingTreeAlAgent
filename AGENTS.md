@@ -1,21 +1,24 @@
-## WEB TOOL CHAIN (v2.4)
+## WEB TOOL CHAIN (v2.5)
 
 ```
 User Input → TreeLLM.chat() →
-  LLM decides if web tool needed →
-    <tool_call name="web_lookup">{"url":"...","query":"..."}</tool_call>
-      → CapabilityBus → WebToolRouter.lookup() →
-        ├─ URL + interaction needed → browser_agent.browse(url, task)
-        ├─ URL + static page        → web_fetch(url) [light_crawler]
-        ├─ Matches API (score≥5)    → api_map.call(name, params)
-        └─ Natural language search  → web_search(query) [Parallel MCP → SparkSearch → DDG]
+  LLM receives tool list in system prompt:
+    api_search(keyword)   — find matching REST API endpoints
+    api_call(name, params) — call a registered API (28 endpoints)
+    web_search(query)      — search internet (MCP→Spark→Bing→DDG)
+    web_fetch(url)         — fetch static HTML page
+    browser_browse(url, task) — LLM-driven JS page (Playwright)
+  LLM autonomously chooses which tool to call based on intent
   Result → injected into LLM context → final answer
 ```
 
 | Tool | Module | Purpose |
 |------|--------|---------|
-| `api_map.call()` | `treellm/api_map.py` | 28 REST/JSON APIs (weather, maps, translate, etc.) |
-| `web_fetch()` | `web_router.py → light_crawler` | Static HTTP GET, returns raw HTML |
-| `browser_agent.browse()` | `capability/browser_agent.py` | LLM-driven Playwright: JS render, type, click, extract |
-| `web_search()` | `web_router.py → duckduckgo_search` | General search engine |
-| `WebToolRouter.lookup()` | `capability/web_router.py` | Unified entry point, auto-classify + route |
+| `api_search` | `capability_bus.py → api_map` | Discover matching APIs by keyword |
+| `api_call` | `treellm/api_map.py` | 28 REST/JSON APIs (weather, maps, translate, etc.) |
+| `web_search` | `execution/react_executor.py` | Multi-engine: Parallel MCP → SparkSearch → Bing → DDG |
+| `web_fetch` | `capability_bus.py → aiohttp` | Static HTTP GET, returns cleaned text |
+| `browser_browse` | `capability/browser_agent.py` | Playwright + LLM: JS render, type, click, extract (ARIA tree, ~2KB per page) |
+
+Key: **LLM is the router**. No centralized tool dispatcher. The LLM sees available tools
+and decides which to call based on the user's intent.

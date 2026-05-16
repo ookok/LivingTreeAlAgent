@@ -20,7 +20,7 @@ from livingtree.network.scinet_service import get_scinet
 def main():
     parser = argparse.ArgumentParser(description="Scinet v2.0 — LivingTree Smart Proxy")
     parser.add_argument("--port", type=int, default=7890, help="代理端口 (默认 7890)")
-    parser.add_argument("--pac", action="store_true", help="自动配置 Windows 系统代理")
+    parser.add_argument("--no-pac", action="store_true", help="不要自动配置 Windows 系统代理")
     parser.add_argument("--wt", action="store_true", help="启用 WebTransport")
     parser.add_argument("--dns", action="store_true", help="启用 Smart DNS 分流")
     parser.add_argument("--dns-port", type=int, default=5353, help="DNS 端口 (默认 5353)")

@@ -1,12 +1,13 @@
 """Scinet v2.0 — One-click proxy launcher.
 
 Usage:
-    python scinet_launch.py                # default port 7890
+    python scinet_launch.py                # start + auto-configure system proxy
+    python scinet_launch.py --no-pac       # start WITHOUT system proxy config
     python scinet_launch.py --port 8080    # custom port
-    python scinet_launch.py --pac          # enable system proxy auto-config
     python scinet_launch.py --wt           # enable WebTransport (port+1)
 
 Features:
+    - Auto-configures Windows system proxy (127.0.0.1:{port})
     - Local HTTP/HTTPS proxy on 127.0.0.1:{port}
     - 6-source proxy pool auto-refresh (every 10min)
     - 100+ overseas domain IP pool with pre-tested optimal IPs
@@ -54,7 +55,7 @@ USAGE_TIPS = """
 async def main():
     parser = argparse.ArgumentParser(description="Scinet v2.0 — Smart Proxy Launcher")
     parser.add_argument("--port", type=int, default=7890, help="Proxy port (default: 7890)")
-    parser.add_argument("--pac", action="store_true", help="Auto-set Windows system proxy")
+    parser.add_argument("--no-pac", action="store_true", help="Do NOT auto-set Windows system proxy")
     parser.add_argument("--wt", action="store_true", help="Enable WebTransport (port+1)")
     args = parser.parse_args()
 
@@ -94,7 +95,7 @@ async def main():
     print(USAGE_TIPS.format(port=args.port))
 
     # Windows system proxy auto-config
-    if args.pac and sys.platform == "win32":
+    if not args.no_pac and sys.platform == "win32":
         scinet.set_windows_proxy(True)
         print("  ✓ Windows system proxy configured")
 
@@ -142,7 +143,7 @@ async def main():
     finally:
         print("\n\n  Shutting down...")
         status_task.cancel()
-        if args.pac and sys.platform == "win32":
+        if not args.no_pac and sys.platform == "win32":
             scinet.set_windows_proxy(False)
         if args.wt:
             from livingtree.network.scinet_webtransport import get_webtransport_server

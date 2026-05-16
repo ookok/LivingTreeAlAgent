@@ -291,6 +291,14 @@ class TreeLLM:
         When model=False: runs preprocessing only (stigmergy, DeepProbe, 
         MicroTurn, JointEvolution) without calling LLM — ~100ms for storage ops.
         """
+        original_query = query
+
+        # ── Fast-path: simple queries skip all preprocessing ──
+        if self._is_simple_query(query):
+            result = await self._fast_route(original_query, task_type)
+            if result:
+                return result
+
         # ── DeepProbe: cognitive forcing rewriter (reinstate original for display) ──
         probing_result: dict[str, Any] | None = None
         original_query = query
@@ -1214,6 +1222,36 @@ class TreeLLM:
             get_sticky_election()._get_embedding("warmup")
         except Exception:
             pass
+
+    @staticmethod
+    def _is_simple_query(query: str) -> bool:
+        q = query.lower()
+        if len(query) > 80: return False
+        for kw in ["fix","debug","implement","analyze","compare","evaluate",
+                    "code","refactor","search","optimize","deploy",
+                    "修复","调试","实现","分析","搜索","优化"]:
+            if kw in q: return False
+        return True
+
+    async def _fast_route(self, query: str, task_type: str) -> dict | None:
+        try:
+            from .sticky_election import get_layer_config
+            provider_name, model = get_layer_config().get_provider(1)
+        except Exception:
+            provider_name = "deepseek"
+        p = self._providers.get(provider_name) or self._resolve_provider("")
+        if not p: return None
+        try:
+            result = await p.chat(
+                messages=[{"role": "user", "content": query}],
+                temperature=0.7, max_tokens=1024, timeout=30,
+            )
+            if result and getattr(result, 'text', None):
+                return {"provider": provider_name, "mode": "fast_path",
+                        "result": result.text, "layers_used": 0}
+        except Exception:
+            pass
+        return None
 
     def _resolve_provider(self, name: str) -> Provider | None:
         if name and name in self._providers:

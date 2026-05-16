@@ -240,7 +240,7 @@ class ScinetService:
 
         logger.info("CONNECT tunnel: %s:%d", host, port)
 
-        remote_reader, remote_writer = await self._redwood_or_fallback(host, port)
+        remote_reader, remote_writer = await self._connect_with_fallback(host, port)
 
         if remote_reader is None:
             logger.debug("CONNECT %s:%d failed (direct + proxy)", host, port)
@@ -281,25 +281,6 @@ class ScinetService:
             if remote_writer:
                 remote_writer.close()
 
-    async def _redwood_or_fallback(self, host: str, port: int):
-        """Try Redwood (Refraction+Fountain+HDC), fallback to Waterfall."""
-        # Tier 1: Redwood — Refraction + Fountain + HDC
-        try:
-            from .scinet_redwood import redwood_connect
-            r, w = await redwood_connect(
-                host, port,
-                ip_pool=self._ip_pool,
-                proxy_pool=self._proxy_pool,
-                ip_cache=self._ip_cache,
-            )
-            if r is not None:
-                return r, w
-        except Exception as e:
-            logger.debug("Redwood failed: %s (falling back to waterfall)", e)
-        
-        # Tier 2: Waterfall — parallel IP try
-        return await self._connect_with_fallback(host, port)
-    
     async def _connect_with_fallback(self, host: str, port: int):
         """Waterfall: try ALL known IPs in parallel, first TCP success wins.
         

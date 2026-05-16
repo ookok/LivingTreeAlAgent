@@ -60,7 +60,11 @@ class TextReport:
 # ═══ 1. Spell/Typo Checker ════════════════════════════════════════
 
 class SpellChecker:
-    """Chinese + English typo and spelling detection."""
+    """Chinese + English typo and spelling detection.
+
+    Supports VFS correction learning: loads corrections from ContentGraph
+    and /ram/corrections.txt user-defined typo fixes.
+    """
 
     # Common Chinese typos (同音错字, 形近字)
     CN_TYPOS = {
@@ -87,8 +91,19 @@ class SpellChecker:
         """Check text for spelling and typo errors."""
         issues = []
 
+        # Load VFS-learned corrections
+        dynamic_typos = dict(cls.CN_TYPOS)
+        dynamic_typos.update(dict(cls.EN_TYPOS))
+        try:
+            from .content_graph import get_content_graph
+            cg = get_content_graph()
+            for c in cg._corrections:
+                dynamic_typos[c.wrong] = c.correct
+        except Exception:
+            pass
+
         # Chinese typos
-        for wrong, correct in cls.CN_TYPOS.items():
+        for wrong, correct in dynamic_typos.items():
             if wrong and correct:  # Skip the compound False examples
                 idx = 0
                 while True:
@@ -250,7 +265,26 @@ class TextPolisher:
 # ═══ 4. Context Consistency Checker ════════════════════════════════
 
 class ConsistencyChecker:
-    """Cross-paragraph consistency and contradiction detection."""
+    """Cross-paragraph consistency and contradiction detection.
+
+    For cross-DOCUMENT consistency (novels, multi-file reports),
+    use ContentGraph (capability/content_graph.py) which tracks
+    entities across VFS-mounted files in real-time.
+    """
+
+    @classmethod
+    async def check_across_documents(cls, vfs_path: str = "/disk/novel/") -> list:
+        """Check consistency across all documents in a VFS directory.
+
+        Uses ContentGraph for entity extraction + cross-document comparison.
+        """
+        try:
+            from .content_graph import get_content_graph
+            cg = get_content_graph()
+            await cg.index_vfs(vfs_path)
+            return cg.check_all()
+        except Exception:
+            return []
 
     @classmethod
     def check(cls, paragraphs: list[str]) -> list[TextIssue]:

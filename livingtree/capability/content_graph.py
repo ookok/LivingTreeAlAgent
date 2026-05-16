@@ -510,6 +510,8 @@ class ContentGraph:
         entity.properties[property_name] = correct_value
         return count
 
+    # ── Fuzzy Entity Matching ──────────────────────────────────
+
     # ── Consistency Checking ──────────────────────────────────────
 
     def check_entity(self, entity_name: str,

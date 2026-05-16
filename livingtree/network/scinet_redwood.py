@@ -187,46 +187,33 @@ def _select_refraction(real_host: str) -> RefractionPath:
     )
 
 
-async def _refraction_connect(reader: asyncio.StreamReader,
-                              writer: asyncio.StreamWriter,
-                              host: str, port: int,
-                              ips: list[str]) -> Optional[tuple]:
-    """Establish a refracted connection.
-
-    Outer: TLS ClientHello with SNI = bilibili.com
-    Inner: HTTP CONNECT with Host = github.com
+async def _refraction_connect(reader, writer, host: str, port: int,
+                               ips: list[str]) -> Optional[tuple]:
+    """Multi-port waterfall: try common ports for blocked sites.
     
-    GFW sees bilibili → passes → tunnel works.
+    Replaces SNI spoofing (needs relay server) with port-based fallback.
+    Many firewalls only block specific ports — 443 might be blocked,
+    but 8443, 8080, or even port 80 may pass through.
+    
+    Also tries connecting to the original IP at port 80 (HTTP), which
+    often receives a redirect to HTTPS, but at least we get through.
     """
-    refraction = _select_refraction(host)
+    ports_to_try = [port, 8443, 9443, 80, 8080]
     
-    # Try each IP with refracted SNI
-    for ip in ips[:10]:
-        try:
-            r, w = await asyncio.wait_for(
-                asyncio.open_connection(ip, port), timeout=4.0,
-            )
-            
-            # TLS outer layer: SNI = refraction.outer_host
-            import ssl
-            ctx = ssl.create_default_context()
-            r_ssl = await asyncio.wait_for(
-                asyncio.open_connection(ip, 443, ssl=ctx, server_hostname=refraction.outer_host),
-                timeout=5.0,
-            )
-            r2, w2 = r_ssl
-            
-            # HTTP inner: Host = real destination (inside TLS tunnel)
-            w2.write(f"CONNECT {host}:{port} HTTP/1.1\r\n".encode())
-            w2.write(f"Host: {host}:{port}\r\n\r\n".encode())
-            await w2.drain()
-            
-            line = await asyncio.wait_for(r2.readline(), timeout=5.0)
-            if b"200" in line:
-                logger.debug("Refraction: %s → SNI=%s via IP %s", host, refraction.outer_host, ip)
-                return r2, w2
-        except Exception:
-            continue
+    for try_port in ports_to_try:
+        for ip in ips[:5]:
+            try:
+                r, w = await asyncio.wait_for(
+                    asyncio.open_connection(ip, try_port), timeout=3.0,
+                )
+                if try_port == port:
+                    logger.debug("Refraction: %s → IP %s (original port)", host, ip)
+                    return r, w
+                else:
+                    logger.debug("Refraction: %s → IP %s:%d (alt port)", host, ip, try_port)
+                    return r, w
+            except Exception:
+                continue
     
     return None
 
@@ -336,13 +323,10 @@ async def redwood_connect(host: str, port: int,
                           ip_pool: Any = None,
                           proxy_pool: Any = None,
                           ip_cache: dict[str, str] | None = None) -> tuple:
-    """Integrated Redwood pipeline — Refraction + Fountain + HDC.
+    """Redwood experimental pipeline — last-resort connection attempt.
     
-    Combines all three innovations:
-    1. HDC generates traffic pattern (burst size, timing, port mask)
-    2. Refraction wraps with harmless SNI
-    3. Fountain spray distributes across multiple IPs
-    4. First successful path wins
+    Strategy: Multi-port waterfall (tries alt ports) + HDC pattern.
+    Runs AFTER the main waterfall and proxy pool have failed.
     
     Returns: (reader, writer) or (None, None)
     """

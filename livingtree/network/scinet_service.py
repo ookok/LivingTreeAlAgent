@@ -422,7 +422,21 @@ class ScinetService:
         except Exception:
             pass
         
-        # 1. Cached successful IP (from previous waterfall)
+        # 1. Topology graph — real IPs from GNN, bypasses poisoned DNS
+        if self._engine:
+            try:
+                top = getattr(self._engine, '_topology', None)
+                if top:
+                    nodes = getattr(top, 'get_nodes_for_domain', None)
+                    if nodes:
+                        top_ips = nodes(host)
+                        if top_ips:
+                            ips.update(top_ips)
+                            logger.debug("Topology: %s → %d IPs", host, len(top_ips))
+            except Exception:
+                pass
+        
+        # 2. Cached successful IP (from previous waterfall)
         cached = self._ip_cache.get(host)
         if cached:
             ips.add(cached)

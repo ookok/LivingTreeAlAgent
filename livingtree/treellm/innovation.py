@@ -59,6 +59,9 @@ class InnovationEngine:
         # Semantic tool cache
         self._tool_cache: dict[str, tuple[list[float], Any, float]] = {}
         self._tool_cache_ttl = 300  # 5 min
+        # HMM transition matrix for multi-turn intent prediction
+        self._hmm_transitions: dict[str, dict[str, float]] = {}
+        self._hmm_observations: dict[str, int] = {}
 
     # ═══ 1. Speculative Decoding ══════════════════════════════════
 
@@ -678,6 +681,177 @@ class InnovationEngine:
         elapsed = (time.time() - t0) * 1000
         logger.debug(f"Chameleon: {len(intro)}→{len(detail)} chars ({elapsed:.0f}ms)")
         return result
+
+    # ═══ 11. Self-Consistency Hallucination Detection ═════════════
+
+    async def self_consistency_check(self, messages: list[dict],
+                                      temperature: float = 0.7) -> dict:
+        """Ask same question twice with different temperatures → detect hallucination.
+
+        If two answers diverge significantly, likely hallucination.
+        Returns {text, hallucination_risk, divergence_score}.
+        """
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            prov, model = cfg.get_provider(2)
+        except Exception:
+            prov, model = "deepseek", ""
+
+        p = self._tree._providers.get(prov)
+        if not p:
+            return {"text": "", "hallucination_risk": 0.0, "divergence": 0.0}
+
+        t0 = time.time()
+
+        async def _call(temp: float) -> str:
+            try:
+                r = await p.chat(messages=messages, model=model or None,
+                                temperature=temp, max_tokens=512, timeout=20)
+                return r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                return ""
+
+        # Two independent generations
+        ans1, ans2 = await asyncio.gather(_call(temperature), _call(temperature + 0.3))
+
+        # Compute divergence via embedding similarity
+        try:
+            from .adaptive_classifier import get_adaptive_classifier
+            ac = get_adaptive_classifier()
+            e1 = ac._embed(ans1)
+            e2 = ac._embed(ans2)
+            sim = self._cosine(e1 or [], e2 or [])
+            divergence = 1.0 - sim
+        except Exception:
+            divergence = 0.0
+
+        hallucination_risk = 0.0
+        if divergence > 0.4:
+            hallucination_risk = 0.8
+        elif divergence > 0.2:
+            hallucination_risk = 0.4
+        elif divergence > 0.1:
+            hallucination_risk = 0.15
+
+        # Return the consensus (longer) answer with risk flag
+        winner = ans1 if len(ans1) >= len(ans2) else ans2
+        elapsed = (time.time() - t0) * 1000
+        logger.debug(f"Self-consistency: divergence={divergence:.3f} risk={hallucination_risk:.0%} ({elapsed:.0f}ms)")
+        return {"text": winner, "hallucination_risk": hallucination_risk,
+                "divergence": round(divergence, 3)}
+
+    # ═══ 12. Embedding Voting Aggregation (improved MoA) ═══════════
+
+    async def embedding_vote_aggregate(self, messages: list[dict],
+                                        num_agents: int = 3) -> str:
+        """MoA with embedding-based voting: closest to centroid wins.
+
+        Better than simple longest-answer selection — the answer most
+        representative of the consensus group wins, not the most verbose.
+        """
+        t0 = time.time()
+
+        candidates = ["deepseek", "longcat", "xiaomi", "siliconflow-flash",
+                      "mofang-flash", "spark", "zhipu"]
+        agents = [(n, self._tree._providers.get(n)) for n in candidates
+                  if self._tree._providers.get(n)][:num_agents]
+        if len(agents) < 2:
+            return ""
+
+        results = []
+        async def _call(name, provider):
+            try:
+                r = await provider.chat(messages=messages, temperature=0.7,
+                                       max_tokens=1024, timeout=20)
+                if r and hasattr(r, 'text') and r.text:
+                    results.append((name, r.text))
+            except Exception: pass
+
+        await asyncio.gather(*[_call(n, p) for n, p in agents])
+
+        if not results:
+            return ""
+        if len(results) == 1:
+            return results[0][1]
+
+        # Embedding-based centroid voting
+        try:
+            from .adaptive_classifier import get_adaptive_classifier
+            ac = get_adaptive_classifier()
+            embeddings = [ac._embed(text) for _, text in results]
+            embeddings = [e for e in embeddings if e]
+
+            if embeddings:
+                # Centroid: average embedding
+                dim = len(embeddings[0])
+                centroid = [sum(e[i] for e in embeddings) / len(embeddings) for i in range(dim)]
+
+                # Closest to centroid wins
+                best_idx = 0
+                best_sim = -1
+                for i, emb in enumerate(embeddings):
+                    sim = self._cosine(emb, centroid)
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_idx = i
+
+                winner = results[best_idx][1]
+                elapsed = (time.time() - t0) * 1000
+                logger.debug(f"Embedding vote: {len(results)} agents → {results[best_idx][0]} (sim={best_sim:.3f}, {elapsed:.0f}ms)")
+                return winner
+        except Exception:
+            pass
+
+        # Fallback: longest (original MoA)
+        results.sort(key=lambda x: len(x[1]), reverse=True)
+        return results[0][1]
+
+    # ═══ 13. Multi-Turn Intent HMM ═════════════════════════════════
+
+    def hmm_learn(self, current_intent: str, next_intent: str):
+        """Learn transition probability: P(next | current)."""
+        self._hmm_observations[current_intent] = self._hmm_observations.get(current_intent, 0) + 1
+        if current_intent not in self._hmm_transitions:
+            self._hmm_transitions[current_intent] = {}
+        trans = self._hmm_transitions[current_intent]
+        trans[next_intent] = trans.get(next_intent, 0) + 1
+
+    def hmm_predict(self, current_intent: str, top_k: int = 3) -> list[str]:
+        """Predict most likely next intents given current intent."""
+        if current_intent not in self._hmm_transitions:
+            return []
+        trans = self._hmm_transitions[current_intent]
+        total = sum(trans.values())
+        if total == 0:
+            return []
+        probs = [(nxt, count / total) for nxt, count in trans.items()]
+        probs.sort(key=lambda x: -x[1])
+        return [nxt for nxt, _ in probs[:top_k]]
+
+    async def hmm_pre_route(self, messages: list[dict], task_type: str = ""):
+        """Pre-warm cache for predicted next intents."""
+        if not task_type:
+            # Detect current intent
+            query = messages[-1]["content"] if messages else ""
+            try:
+                from .adaptive_classifier import get_adaptive_classifier
+                ac = get_adaptive_classifier()
+                task_type, _ = ac.classify(query, ac.TASK_TYPES, "tasks")
+            except Exception:
+                return
+
+        predicted = self.hmm_predict(task_type)
+        if predicted:
+            try:
+                from .adaptive_classifier import get_adaptive_classifier
+                ac = get_adaptive_classifier()
+                for nxt in predicted:
+                    # Pre-warm embedding cache for predicted intents
+                    ac._embed(nxt)
+                logger.debug(f"HMM pre-route: {task_type}→{predicted[:3]}")
+            except Exception:
+                pass
 
 
 # ═══ Singleton ═══

@@ -380,8 +380,22 @@ class ScinetService:
         
         if conn_result:
             r, w, ip = conn_result
-            logger.debug("CONNECT %s:%d → %s (waterfall %d IPs, %d errors)", host, port, ip, len(tasks), len(errors))
+            logger.debug("CONNECT %s:%d → %s", host, port, ip)
             return r, w
+        
+        # Tier 3 (experimental): Redwood Refraction + Fountain — opt-in
+        try:
+            from .scinet_redwood import redwood_connect
+            r, w = await redwood_connect(
+                host, port,
+                ip_pool=self._ip_pool, proxy_pool=self._proxy_pool,
+                ip_cache=self._ip_cache,
+            )
+            if r is not None:
+                logger.debug("CONNECT %s:%d → redwood", host, port)
+                return r, w
+        except Exception as e:
+            logger.debug("Redwood: %s", e)
         
         logger.debug("CONNECT %s:%d ALL FAILED (%d IPs): %s", host, port, len(tasks), "; ".join(errors[:3]))
         return None, None

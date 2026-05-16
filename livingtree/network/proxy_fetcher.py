@@ -136,6 +136,8 @@ class ProxyPool:
         if added:
             self._save()
             logger.info(f"ProxyPool: +{added} new ({len(self._pool)} total)")
+            # Immediate health check on new proxies (SOCKS handshake verification)
+            asyncio.create_task(self.health_check_all())
 
         return added
 
@@ -574,10 +576,12 @@ class ProxyPool:
         return proxies
 
     def get_best(self) -> Proxy | None:
-        """Get best proxy by composite score (success_rate + latency + stability)."""
+        """Get best proxy — prefer health-check-verified (success_count > 0)."""
         if not self._pool:
             return None
-        sorted_pool = sorted(self._pool.values(), key=lambda p: p.score, reverse=True)
+        verified = [p for p in self._pool.values() if p.success_count > 0 and p.failure_count < 3]
+        sorted_pool = sorted(verified or self._pool.values(),
+                           key=lambda p: (p.success_count - p.failure_count), reverse=True)
         for p in sorted_pool:
             if p.failure_count < 5:
                 return p
@@ -604,17 +608,52 @@ class ProxyPool:
             self._pool.pop(f"{proxy.host}:{proxy.port}", None)
 
     async def health_check(self, proxy: Proxy) -> bool:
-        """TCP connect + quick HTTP test."""
+        """TCP connect + protocol handshake verification."""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
             t0 = time.time()
             result = sock.connect_ex((proxy.host, proxy.port))
             latency = time.time() - t0
+            if result != 0:
+                sock.close()
+                self.mark_failure(proxy)
+                return False
+            
+            # Protocol handshake verification
+            if proxy.protocol in ('socks5', 'socks'):
+                try:
+                    sock.send(b'\x05\x01\x00')
+                    resp = sock.recv(2)
+                    if resp == b'\x05\x00':
+                        self.mark_success(proxy, latency)
+                        sock.close()
+                        return True
+                except Exception:
+                    pass
+            elif proxy.protocol == 'socks4':
+                try:
+                    sock.send(b'\x04\x01\x00\x50\x00\x00\x00\x01\x00')
+                    resp = sock.recv(8)
+                    if len(resp) == 8 and resp[1] in (0x5a, 0x5b, 0x5c, 0x5d):
+                        self.mark_success(proxy, latency)
+                        sock.close()
+                        return True
+                except Exception:
+                    pass
+            else:
+                # HTTP proxy: send CONNECT probe
+                try:
+                    sock.send(b'CONNECT github.com:443 HTTP/1.1\r\nHost: github.com\r\n\r\n')
+                    resp = sock.recv(100)
+                    if b'200' in resp or b'HTTP' in resp:
+                        self.mark_success(proxy, latency)
+                        sock.close()
+                        return True
+                except Exception:
+                    pass
+            
             sock.close()
-            if result == 0:
-                self.mark_success(proxy, latency)
-                return True
         except Exception:
             pass
         self.mark_failure(proxy)

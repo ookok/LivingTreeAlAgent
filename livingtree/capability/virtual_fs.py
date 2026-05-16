@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import fnmatch
+import hashlib
 import os
 import shlex
 import time
@@ -747,9 +748,63 @@ class VirtualFS:
         return await res.read_file(rel)
 
     async def write_file(self, vpath: str, content: str) -> None:
-        """Direct write to a virtual file path."""
+        """Direct write to a virtual file path with content-based dedup check."""
         res, rel = self._resolve(vpath)
+        # Dedup: check if content already exists with same hash
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        try:
+            existing = await res.read_file(rel)
+            if hashlib.sha256(existing.encode()).hexdigest() == content_hash:
+                return  # Skip write — identical content
+        except Exception:
+            pass  # File doesn't exist or can't read — proceed with write
         await res.write_file(rel, content)
+
+    async def dedup_dir(self, vpath: str, delete: bool = False) -> dict:
+        """Find and optionally remove duplicate files in a VFS directory.
+
+        Uses SHA256 content hash. Like office_tools.file_deduplicate but VFS-aware.
+        """
+        res, rel = self._resolve(vpath)
+        if not hasattr(res, 'walk_files'):
+            return {"error": "Resource does not support directory scanning"}
+
+        entries = res.walk_files(vpath) if hasattr(res, 'walk_files') else []
+        if not entries and hasattr(res, 'list_dir'):
+            entries = await res.list_dir(rel)
+
+        seen: dict[str, list[str]] = {}
+        for entry in entries:
+            fpath = entry.path if hasattr(entry, 'path') else str(entry)
+            try:
+                content = await res.read_file(fpath)
+                h = hashlib.sha256(content.encode()).hexdigest()
+                seen.setdefault(h, []).append(fpath)
+            except Exception:
+                continue
+
+        duplicates = {h: paths for h, paths in seen.items() if len(paths) > 1}
+        deleted = saved_bytes = 0
+        if delete:
+            for paths in duplicates.values():
+                for dup in paths[1:]:
+                    try:
+                        saved_bytes += len(await res.read_file(dup))
+                        await self._resolve(dup)[0].write_file(
+                            self._resolve(dup)[1], "")  # Clear content
+                    except Exception:
+                        pass
+                    deleted += 1
+
+        return {
+            "scanned": len(entries),
+            "duplicate_groups": len(duplicates),
+            "duplicate_files": sum(len(v) - 1 for v in duplicates.values()),
+            "deleted": deleted,
+            "saved_kb": round(saved_bytes / 1024, 1),
+            "samples": [{"hash": h[:12], "count": len(v), "files": v[:3]}
+                       for h, v in list(duplicates.items())[:10]],
+        }
 
     async def list_dir(self, vpath: str) -> list[VFSEntry]:
         """Direct list of a virtual directory path."""

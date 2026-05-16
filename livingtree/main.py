@@ -49,6 +49,13 @@ _watchdog_child_pid = 0
 
 def main():
     if len(sys.argv) < 2:
+        # Check admin login state — if admin initialized, prefer CLI
+        admin_state = Path(".livingtree/admin/admin_state.json")
+        if admin_state.exists():
+            print(f"🌳 LivingTree CLI v{VERSION} (已初始化)")
+            from .integration.launcher import launch, LaunchMode
+            launch(LaunchMode.CLIENT)
+            return
         _start_web()
         return
 

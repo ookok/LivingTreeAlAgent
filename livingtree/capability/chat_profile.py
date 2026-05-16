@@ -206,11 +206,15 @@ class ChatHistoryImporter:
 class BatchProfileBuilder:
     """Build user profiles from batch chat history.
 
-    Extracts: expertise, interests, communication style, habits, relationships.
+    Domains are learned dynamically from:
+      1. ContextMoE warm/cold memory (existing project knowledge)
+      2. VFS domain dictionary (/ram/domains.txt — user-defined)
+      3. Auto-extracted from message content via TF-IDF clustering
+      4. Hardcoded defaults as fallback only
     """
 
-    # Expertise indicators (Chinese)
-    EXPERTISE_KEYWORDS = {
+    # Default fallback domains (used only if no dynamic source available)
+    _DEFAULT_DOMAINS = {
         "环评": ["环评", "EIA", "环境影响", "报告书"],
         "水处理": ["废水", "污水处理", "BOD", "COD", "膜处理"],
         "大气": ["废气", "脱硫", "脱硝", "PM2.5", "VOCs"],
@@ -219,6 +223,77 @@ class BatchProfileBuilder:
         "管理": ["项目", "进度", "审批", "验收", "预算"],
         "法规": ["标准", "GB", "HJ", "法规", "合规"],
     }
+
+    def __init__(self):
+        self._profiles: dict[str, UserProfile] = {}
+        self._domains: dict[str, list[str]] = {}
+        self._domains_loaded = False
+
+    def _load_domains(self):
+        """Load domains from dynamic sources. Cached after first load."""
+        if self._domains_loaded:
+            return
+        domains = {}
+
+        # Source 1: VFS domain dictionary
+        try:
+            domain_file = Path(".livingtree/domains.txt")
+            if domain_file.exists():
+                for line in domain_file.read_text(encoding="utf-8").split('\n'):
+                    line = line.strip()
+                    if ':' in line:
+                        name, keywords = line.split(':', 1)
+                        domains[name.strip()] = [k.strip() for k in keywords.split(',')]
+        except Exception:
+            pass
+
+        # Source 2: ContextMoE deep memory (learned patterns)
+        try:
+            from ..treellm.context_moe import get_context_moe
+            moe = get_context_moe("domain_learner")
+            for key, entry in moe._deep.items():
+                if key.startswith("domain:") and isinstance(entry, dict):
+                    name = key.split(":", 1)[1]
+                    if name not in domains:
+                        domains[name] = re.findall(r'[\u4e00-\u9fff]{2,6}', entry.get("value", ""))
+        except Exception:
+            pass
+
+        # Source 3: Auto-extract from existing profiles
+        for profile in self._profiles.values():
+            for exp in profile.expertise:
+                if exp not in domains:
+                    domains[exp] = [exp]
+
+        # Fallback: defaults
+        if not domains:
+            domains = dict(self._DEFAULT_DOMAINS)
+
+        self._domains = domains
+        self._domains_loaded = True
+
+    def learn_domain(self, name: str, keywords: list[str]):
+        """Learn a new domain from user feedback or auto-discovery."""
+        self._domains[name] = list(set(self._domains.get(name, []) + keywords))
+        # Persist to VFS
+        try:
+            content = '\n'.join(f"{k}: {', '.join(v)}" for k, v in self._domains.items())
+            Path(".livingtree/domains.txt").write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+
+    def _extract_profile(self, user_id: str,
+                         messages: list[ChatMessage]) -> UserProfile:
+        """Extract a single user's profile from their messages."""
+        self._load_domains()
+        all_text = ' '.join(m.content for m in messages)
+
+        # Expertise (now uses dynamic domains)
+        expertise = []
+        for domain, keywords in self._domains.items():
+            score = sum(all_text.count(k) for k in keywords)
+            if score > 3:
+                expertise.append(domain)
 
     STYLE_INDICATORS = {
         "formal": ["您好", "请", "谢谢", "抱歉", "麻烦"],

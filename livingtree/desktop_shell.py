@@ -66,31 +66,91 @@ class DesktopShell:
         self._project_path = None
 
     def start(self, debug: bool = False):
-        """Start the desktop shell with embedded LivingTree server."""
+        """Start the desktop shell with embedded LivingTree server.
+
+        Shows a local loading screen immediately (before server is ready),
+        then auto-navigates to the server URL once the server responds.
+        """
         try:
             import webview
         except ImportError:
-            logger.error(
-                "pywebview not installed. Run: pip install pywebview"
-            )
+            logger.error("pywebview not installed. Run: pip install pywebview")
             self._fallback_browser()
             return
 
         # Start LivingTree server in background thread
         self._start_server()
 
-        # Create pywebview window
+        # Show loading screen while server boots
+        loading_html = self._loading_page()
+
+        # Create pywebview window — starts with loading screen
         self._window = webview.create_window(
             title="LivingTree · 数字生命体",
-            url="http://127.0.0.1:8100/tree/living",
-            width=900,
-            height=700,
+            html=loading_html,  # Local HTML loads instantly (no network wait)
+            width=900, height=700,
             min_size=(600, 400),
-            js_api=JsBridge(self),  # Expose Python API to JavaScript
+            js_api=JsBridge(self),
             confirm_close=True,
         )
 
+        # Start background task to detect server ready and navigate
+        import threading
+        def _wait_and_navigate():
+            import time, urllib.request
+            for _ in range(60):  # Wait up to 30 seconds
+                try:
+                    urllib.request.urlopen("http://127.0.0.1:8100/api/health", timeout=1)
+                    # Server ready — navigate to real page
+                    self._window.load_url("http://127.0.0.1:8100/tree/living")
+                    break
+                except Exception:
+                    time.sleep(0.5)
+
+        threading.Thread(target=_wait_and_navigate, daemon=True).start()
+
         webview.start(debug=debug)
+
+    @staticmethod
+    def _loading_page() -> str:
+        """Generate local loading HTML — no network required, renders instantly."""
+        return """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;
+min-height:100vh;background:linear-gradient(135deg,#0f172a,#1e293b);font-family:system-ui}
+.load{text-align:center}.load .icon{font-size:64px;animation:pulse 2s ease-in-out infinite}
+.load h1{color:#e2e8f0;font-size:24px;margin-top:16px;font-weight:600}
+.load p{color:#94a3b8;font-size:13px;margin-top:8px}
+.load .bar{width:200px;height:3px;background:#334155;border-radius:2px;margin:24px auto 0;overflow:hidden}
+.load .fill{height:100%;background:linear-gradient(90deg,#3b82f6,#22c55e);border-radius:2px;
+animation:slide 2s ease-in-out infinite;width:40%}
+.load .stages{margin-top:20px;text-align:left;display:inline-block}
+.load .stages div{color:#64748b;font-size:11px;padding:3px 0;transition:color .3s}
+.load .stages div.done{color:#22c55e}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.1)}}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+</style></head><body>
+<div class="load"><div class="icon">🌳</div><h1>LivingTree AI Agent</h1><p>数字生命体正在觉醒...</p>
+<div class="bar"><div class="fill"></div></div>
+<div class="stages">
+  <div id="s0">⏳ 加载配置...</div>
+  <div id="s1">⏳ 初始化核心引擎...</div>
+  <div id="s2">⏳ 启动 API 服务...</div>
+  <div id="s3">⏳ 准备就绪...</div>
+</div></div>
+<script>
+var stages=['s0','s1','s2','s3'];
+var i=0;
+setInterval(function(){
+  if(i>0)document.getElementById(stages[i-1]).className='done';
+  if(i<stages.length){
+    document.getElementById(stages[i]).innerHTML='✅ '+document.getElementById(stages[i]).textContent.replace('⏳ ','');
+    document.getElementById(stages[i]).className='done';
+  }
+  i++;
+  if(i>=stages.length)i=0;
+},2000);
+</script>
+</body></html>"""
 
     def _start_server(self):
         """Start LivingTree server in background thread."""

@@ -1,5 +1,6 @@
-"""Entry point for 'python -m livingtree'."""
-from livingtree.main import main
+"""LivingTree entry point for PyInstaller exe packaging.
 
-if __name__ == "__main__":
-    main()
+Usage: python -m livingtree → desktop app
+"""
+from livingtree.main import main
+main()

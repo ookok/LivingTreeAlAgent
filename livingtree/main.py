@@ -157,6 +157,10 @@ def main():
         _svc_autoinstall(sys.argv[2:])
     elif command == "skills":
         _svc_skills(sys.argv[2:])
+    elif command in ("desktop", "app"):
+        _start_desktop()
+    elif command == "build":
+        _build_exe()
     else:
         print(f"Unknown command: {command}")
         _print_usage()
@@ -2225,6 +2229,33 @@ def _start_web():
     os.chdir(project_root)
     from .integration.launcher import launch, LaunchMode
     launch(LaunchMode.SERVER)
+
+
+def _start_desktop():
+    """Launch LivingTree as a native desktop app via pywebview."""
+    from .desktop_shell import DesktopShell
+    shell = DesktopShell()
+    shell.start(debug="--debug" in sys.argv)
+
+
+def _build_exe():
+    """Build standalone exe using PyInstaller."""
+    print("🔨 Building LivingTree.exe...")
+    import subprocess
+
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--onefile", "--windowed",
+        "--name", "LivingTree",
+        "--add-data", f"config{os.pathsep}config",
+        "--add-data", f"client{os.pathsep}client",
+        "--hidden-import", "livingtree",
+        "--hidden-import", "webview",
+        "--hidden-import", "aiohttp",
+        "livingtree/__main__.py",
+    ]
+    subprocess.run(cmd, check=True)
+    print("✅ LivingTree.exe built in dist/")
 
 
 def _print_usage():

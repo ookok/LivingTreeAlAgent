@@ -68,6 +68,17 @@ class StickyElection:
 
     LAYER_COUNT = 5
     LAYER_NAMES = {0: "primary", 1: "fallback", 2: "reasoning", 3: "creative", 4: "emergency"}
+    LAYER_DOMAINS = {
+        0: ["general", "chat", "conversation", "qa"],
+        1: ["search", "knowledge", "retrieval", "lookup"],
+        2: ["code", "analysis", "reasoning", "math", "debug", "planning"],
+        3: ["creative", "writing", "generation", "translation", "summarization"],
+        4: ["emergency", "long_context", "multimodal", "all"],
+    }
+    DOMAIN_TO_LAYER = {}
+    for layer, domains in LAYER_DOMAINS.items():
+        for domain in domains:
+            DOMAIN_TO_LAYER[domain] = layer
 
     _instance: Optional["StickyElection"] = None
     _lock = threading.Lock()
@@ -86,7 +97,54 @@ class StickyElection:
                     cls._instance = StickyElection(tree_llm)
         return cls._instance
 
-    # ═══ Election ══════════════════════════════════════════════════
+    # ═══ Intent → Layer Mapping (unified: keyword + semantic) ═════
+
+    def classify_intent(self, query: str) -> int:
+        """Map a query to a layer (0-4) via keyword + holistic election.
+
+        Combines intent recognition and semantic understanding into one step.
+        """
+        import re
+        q = (query or "").lower()
+        scores = {l: 0.0 for l in range(self.LAYER_COUNT)}
+
+        kw_map = {
+            "fix": 2, "debug": 2, "refactor": 2, "implement": 2, "optimize": 2,
+            "analyze": 2, "reason": 2, "compare": 2, "evaluate": 2,
+            "search": 1, "find": 1, "lookup": 1, "query": 1, "retrieve": 1,
+            "write": 3, "create": 3, "generate": 3, "translate": 3,
+            "summarize": 3, "rewrite": 3, "compose": 3, "poem": 3, "story": 3,
+            "chat": 0, "hello": 0, "help": 0, "explain": 0,
+        }
+        # Also check for code indicators
+        code_indicators = re.findall(r'\b(def|class|import|function|api|http|sql|json|csv|xml|regex)\b', q)
+        if code_indicators:
+            scores[2] += len(code_indicators) * 0.5
+        for kw, layer in kw_map.items():
+            if kw in q:
+                scores[layer] += 1.0
+
+        # Fallback: holistic_election task type detection (if available)
+        try:
+            from .holistic_election import get_election
+            task_type = get_election().detect_task_type(query)
+            domain_layer = self.DOMAIN_TO_LAYER.get(task_type, -1)
+            if domain_layer >= 0:
+                scores[domain_layer] += 1.0  # equal weight to keywords
+        except Exception:
+            pass
+
+        # Return highest-scoring layer (tiebreaker: prefer higher layer)
+        best_score = max(scores.values())
+        if best_score == 0:
+            return 0
+        # Among ties, prefer higher-index layers (reasoning/creative over primary)
+        return max((l for l, s in scores.items() if s == best_score), key=lambda x: (x, scores[x]))
+
+    def intent_name(self, query: str) -> str:
+        """Human-readable intent name for a query."""
+        layer = self.classify_intent(query)
+        return self.LAYER_NAMES[layer]
 
     async def elect_all(self) -> dict[int, LayerBinding]:
         """Full L0-L4 election + attractor basin computation."""
@@ -197,32 +255,35 @@ class StickyElection:
 
     # ═══ Provider Access ═══════════════════════════════════════════
 
-    def get_for_request(self, layer: int = 0,
-                        intent: str = "") -> tuple[str, str, bool]:
-        """Get provider for a request. Returns (provider_name, model, is_primary).
+    def get_for_request(self, layer: int | None = None,
+                        intent: str = "") -> tuple[str, str, bool, int]:
+        """Get provider for a request. Returns (provider_name, model, is_primary, layer).
 
-        If the layer's provider is available → return it.
-        If failed → try attractor basin members.
-        Only the primary binding is returned here; fallback
-        to higher layers is handled by the caller (TreeLLM).
+        If layer is None: auto-classify intent → layer via keyword + semantic.
+        Intent is the raw query string — same embedding used for both
+        classification and provider matching.
         """
+        if layer is None and intent:
+            layer = self.classify_intent(intent)
+        elif layer is None:
+            layer = 0
+
         binding = self._layers.get(layer)
         if not binding:
-            return "", "", False
+            return "", "", False, layer
 
         # Primary: elected provider
         if not binding.degraded or binding.basin_failures.get(binding.provider_name, 0) < 2:
-            return binding.provider_name, binding.model, True
+            return binding.provider_name, binding.model, True, layer
 
         # Basin fallback: try attractor neighbors
         for basin_name in binding.attractor_basin:
             basin_fails = binding.basin_failures.get(basin_name, 0)
             if basin_fails < 2:
-                logger.debug(f"StickyElection L{layer}: basin fallback {binding.provider_name}→{basin_name}")
-                return basin_name, self._get_model(basin_name), False
+                return basin_name, self._get_model(basin_name), False, layer
 
-        # All basin members exhausted → need re-election
-        return "", "", False
+        # All basin members exhausted
+        return "", "", False, layer
 
     def mark_failure(self, layer: int, provider_name: str = "", error: str = ""):
         """Mark a provider as failed at a layer."""

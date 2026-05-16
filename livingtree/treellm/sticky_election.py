@@ -88,6 +88,7 @@ class StickyElection:
         self._layers: dict[int, LayerBinding] = {}
         self._lock = threading.RLock()
         self._initialized = False
+        self._layer_prototypes: dict[int, list[float]] = {}  # layer → embedding
 
     @classmethod
     def instance(cls, tree_llm=None) -> "StickyElection":
@@ -100,46 +101,96 @@ class StickyElection:
     # ═══ Intent → Layer Mapping (unified: keyword + semantic) ═════
 
     def classify_intent(self, query: str) -> int:
-        """Map a query to a layer (0-4) via keyword + holistic election.
+        """Map a query to a layer (0-4) via embedding similarity.
 
-        Combines intent recognition and semantic understanding into one step.
+        Uses text_to_embedding() from task_vector_geometry.
+        Each layer has a prototype embedding (computed once on first call).
+        Query embedding is compared to all prototypes via cosine similarity.
+        Falls back to keyword matching if embedding unavailable.
         """
-        import re
         q = (query or "").lower()
-        scores = {l: 0.0 for l in range(self.LAYER_COUNT)}
 
-        kw_map = {
-            "fix": 2, "debug": 2, "refactor": 2, "implement": 2, "optimize": 2,
-            "analyze": 2, "reason": 2, "compare": 2, "evaluate": 2,
-            "search": 1, "find": 1, "lookup": 1, "query": 1, "retrieve": 1,
-            "write": 3, "create": 3, "generate": 3, "translate": 3,
-            "summarize": 3, "rewrite": 3, "compose": 3, "poem": 3, "story": 3,
-            "chat": 0, "hello": 0, "help": 0, "explain": 0,
-        }
-        # Also check for code indicators
-        code_indicators = re.findall(r'\b(def|class|import|function|api|http|sql|json|csv|xml|regex)\b', q)
-        if code_indicators:
-            scores[2] += len(code_indicators) * 0.5
-        for kw, layer in kw_map.items():
-            if kw in q:
-                scores[layer] += 1.0
-
-        # Fallback: holistic_election task type detection (if available)
+        # Primary: embedding-based classification
         try:
-            from .holistic_election import get_election
-            task_type = get_election().detect_task_type(query)
-            domain_layer = self.DOMAIN_TO_LAYER.get(task_type, -1)
-            if domain_layer >= 0:
-                scores[domain_layer] += 1.0  # equal weight to keywords
+            from ..dna.task_vector_geometry import text_to_embedding
+            q_emb = text_to_embedding(query)
+
+            if not self._layer_prototypes:
+                self._build_prototypes(text_to_embedding)
+
+            best_layer = 0
+            best_sim = -1.0
+            for layer, proto_emb in self._layer_prototypes.items():
+                sim = self._cosine_similarity(q_emb, proto_emb)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_layer = layer
+
+            if best_sim > 0.1:
+                return best_layer
         except Exception:
             pass
 
-        # Return highest-scoring layer (tiebreaker: prefer higher layer)
-        best_score = max(scores.values())
-        if best_score == 0:
+        # Fallback: keyword matching (fast, works without embedding model)
+        return self._classify_keywords(q)
+
+    def _build_prototypes(self, embed_fn):
+        """Build prototype embeddings for each layer from domain descriptions."""
+        prototypes = {}
+        domain_descriptions = {
+            0: "hello chat conversation general question help explain what is how to",
+            1: "search find lookup query retrieve knowledge information web",
+            2: "code debug fix implement refactor analyze reason compare evaluate algorithm function class import",
+            3: "write create generate translate summarize rewrite compose poem story email report",
+            4: "emergency critical urgent fallback any domain",
+        }
+        for layer, desc in domain_descriptions.items():
+            self._layer_prototypes[layer] = embed_fn(desc)
+        return prototypes
+
+    def _classify_keywords(self, q: str) -> int:
+        """Keyword-based fallback classification (CN + EN)."""
+        import re
+        scores = {l: 0.0 for l in range(self.LAYER_COUNT)}
+        kw = {
+            # L2 reasoning
+            "fix": 2, "debug": 2, "refactor": 2, "implement": 2, "optimize": 2,
+            "analyze": 2, "reason": 2, "compare": 2, "evaluate": 2,
+            "修复": 2, "调试": 2, "实现": 2, "分析": 2, "优化": 2, "重构": 2,
+            "排查": 2, "对比": 2, "评估": 2, "检查": 2, "测试": 2,
+            # L1 fallback/search
+            "search": 1, "find": 1, "lookup": 1, "retrieve": 1, "query": 1,
+            "搜索": 1, "查找": 1, "检索": 1, "查询": 1, "寻找": 1,
+            # L3 creative
+            "write": 3, "create": 3, "generate": 3, "translate": 3,
+            "summarize": 3, "rewrite": 3, "compose": 3,
+            "写": 3, "创建": 3, "生成": 3, "翻译": 3, "总结": 3, "重写": 3,
+            "创作": 3, "编写": 3, "作曲": 3, "报告": 3, "诗歌": 3, "文章": 3,
+            # L0 primary/chat
+            "chat": 0, "hello": 0, "help": 0, "explain": 0,
+            "你好": 0, "帮助": 0, "解释": 0, "是什么": 0, "怎么": 0,
+        }
+        for k, layer in kw.items():
+            if k in q:
+                scores[layer] += 1.0
+        code = re.findall(r'\b(def|class|import|function|api|http|sql|json|csv|xml|regex|代码|函数|接口)\b', q)
+        if code:
+            scores[2] += len(code) * 0.5
+        best = max(scores.values())
+        if best == 0:
             return 0
-        # Among ties, prefer higher-index layers (reasoning/creative over primary)
-        return max((l for l, s in scores.items() if s == best_score), key=lambda x: (x, scores[x]))
+        return max((l for l, s in scores.items() if s == best))
+
+    @staticmethod
+    def _cosine_similarity(a, b) -> float:
+        if not a or not b:
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(y * y for y in b) ** 0.5
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
 
     def intent_name(self, query: str) -> str:
         """Human-readable intent name for a query."""

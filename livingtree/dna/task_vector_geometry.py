@@ -441,12 +441,15 @@ def text_to_embedding(text: str, dim: int = DEFAULT_DIM) -> list[float]:
         L2-normalized embedding vector of length dim.
     """
     import re
-    tokens: list[str] = re.findall(r"[a-z0-9]+", text.lower())
-    vec = [0.0] * dim
+    # Match English words AND Chinese characters/sequences
+    tokens: list[str] = re.findall(r"[a-z0-9]{2,}|[\u4e00-\u9fff]{1,}", text.lower())
     if not tokens:
-        return vec
+        return [0.0] * dim
+    # Add bigrams for semantic context
+    bigrams = [tokens[i] + "_" + tokens[i+1] for i in range(len(tokens) - 1)]
+    all_terms = tokens + bigrams
     freqs: dict[str, int] = {}
-    for t in tokens:
+    for t in all_terms:
         freqs[t] = freqs.get(t, 0) + 1
     for t, freq in freqs.items():
         idx = abs(hash(t)) % dim

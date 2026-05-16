@@ -24,11 +24,10 @@ from loguru import logger
 
 try:
     from numba import jit, njit, prange  # type: ignore
-    _HAS_NUMBA = True
+    _numba_available = True
     logger.debug("JIT: Numba available")
 except ImportError:
-    _HAS_NUMBA = False
-    logger.debug("JIT: Numba not installed — using pure Python fallback")
+    _numba_available = False
 
     # Dummy decorator for when numba is not installed
     def njit(*args: Any, **kwargs: Any) -> Any:
@@ -76,7 +75,7 @@ def cosine_similarity_batch(
     q = np.array(query_vec, dtype=np.float32)
     d = np.array(doc_vecs, dtype=np.float32)
 
-    if _HAS_NUMBA:
+    if _numba_available:
         import numpy as np
         out = np.zeros(len(doc_vecs), dtype=np.float32)
         _cosine_similarity_batch_jit(q, d, out)
@@ -109,7 +108,7 @@ def bm25_score(
     doc_count: int, doc_freq: int, k1: float = 1.2, b: float = 0.75,
 ) -> float:
     """BM25 评分（JIT 加速）."""
-    if _HAS_NUMBA:
+    if _numba_available:
         return _bm25_score_jit(tf, doc_len, avg_doc_len, doc_count, doc_freq, k1, b)
 
     # Pure Python fallback
@@ -170,7 +169,7 @@ def jit_status() -> dict[str, Any]:
     """JIT 加速状态报告."""
     import numpy as np
     return {
-        "numba_available": _HAS_NUMBA,
+        "numba_available": _numba_available,
         "numpy_available": True,
-        "recommended": "pip install numba" if not _HAS_NUMBA else "✓ JIT enabled",
+        "recommended": "pip install numba" if not _numba_available else "✓ JIT enabled",
     }

@@ -26,9 +26,8 @@ try:
     import tree_sitter_go as tsgo
     import tree_sitter_rust as tsrust
     import tree_sitter as ts
-    HAS_TREE_SITTER = True
 except ImportError:
-    HAS_TREE_SITTER = False
+    tspython = tsjs = tsts = tsgo = tsrust = ts = None
 
 LANG_GRAMMARS = {
     "python": ("tree_sitter_python", lambda: tspython.language()),
@@ -87,7 +86,7 @@ class ASTParser:
 
     def __init__(self):
         self._parsers: dict[str, Any] = {}
-        self._available = HAS_TREE_SITTER
+        self._available = ts is not None
 
     def available(self) -> bool:
         return self._available

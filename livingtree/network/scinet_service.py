@@ -33,12 +33,8 @@ from typing import Any, Optional
 
 from loguru import logger
 
-try:
-    import aiohttp
-    from aiohttp import web
-    HAS_AIOHTTP = True
-except ImportError:
-    HAS_AIOHTTP = False
+import aiohttp
+from aiohttp import web
 
 
 @dataclass

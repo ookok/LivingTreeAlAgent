@@ -26,17 +26,26 @@ from typing import Any, Optional
 from loguru import logger
 
 # Optional imports with graceful degradation
-_HAS_REDIS = _HAS_MONGO = _HAS_NEO4J = _HAS_PG = _HAS_MYSQL = False
-try: import redis.asyncio as aioredis; _HAS_REDIS = True
-except ImportError: pass
-try: from motor.motor_asyncio import AsyncIOMotorClient; _HAS_MONGO = True
-except ImportError: pass
-try: from neo4j import AsyncGraphDatabase; _HAS_NEO4J = True
-except ImportError: pass
-try: import asyncpg; _HAS_PG = True
-except ImportError: pass
-try: import aiomysql; _HAS_MYSQL = True
-except ImportError: pass
+try:
+    import redis.asyncio as aioredis
+except ImportError:
+    aioredis = None
+try:
+    from motor.motor_asyncio import AsyncIOMotorClient
+except ImportError:
+    AsyncIOMotorClient = None
+try:
+    from neo4j import AsyncGraphDatabase
+except ImportError:
+    AsyncGraphDatabase = None
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
+try:
+    import aiomysql
+except ImportError:
+    aiomysql = None
 
 
 # ═══ 1. Core Table Migrations ════════════════════════════════════
@@ -203,7 +212,7 @@ class RedisBackend:
         self._client: Any = None
 
     async def connect(self) -> bool:
-        if not _HAS_REDIS:
+        if not aioredis is not None:
             return False
         try:
             self._client = aioredis.from_url(self._url, decode_responses=True)
@@ -264,7 +273,7 @@ class MongoBackend:
         self._db: Any = None
 
     async def connect(self) -> bool:
-        if not _HAS_MONGO:
+        if not AsyncIOMotorClient is not None:
             return False
         try:
             self._client = AsyncIOMotorClient(self._url, serverSelectionTimeoutMS=5000)
@@ -318,7 +327,7 @@ class Neo4jBackend:
         self._driver: Any = None
 
     async def connect(self) -> bool:
-        if not _HAS_NEO4J:
+        if not AsyncGraphDatabase is not None:
             return False
         try:
             self._driver = AsyncGraphDatabase.driver(
@@ -676,7 +685,7 @@ class PGBackend:
         self._pool: Any = None
 
     async def connect(self) -> bool:
-        if not _HAS_PG:
+        if not asyncpg is not None:
             return False
         try:
             self._pool = await asyncpg.create_pool(self._dsn, min_size=2, max_size=10)
@@ -717,7 +726,7 @@ class MySQLBackend:
         self._pool: Any = None
 
     async def connect(self) -> bool:
-        if not _HAS_MYSQL:
+        if not aiomysql is not None:
             return False
         try:
             self._pool = await aiomysql.create_pool(**self._config,

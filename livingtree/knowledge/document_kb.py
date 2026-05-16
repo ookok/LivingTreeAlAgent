@@ -30,13 +30,12 @@ CHUNK_SIZE = 1000   # chars per chunk
 CHUNK_OVERLAP = 200  # overlap between chunks
 
 # ── Hardware acceleration (optional) ──
-_HAS_GPU = False
 try:
     from livingtree.core.hardware_acceleration import get_hardware_accelerator
     _hw = get_hardware_accelerator()
-    _HAS_GPU = _hw.gpu.can_accelerate_torch
+    _use_gpu = _hw.gpu.can_accelerate_torch
 except Exception:
-    pass
+    _use_gpu = False
 
 
 @dataclass
@@ -297,7 +296,7 @@ class DocumentKB:
             return []
 
         # ── GPU batch cosine (if available) ──
-        if _HAS_GPU and len(cached_items) > 50:
+        if _use_gpu and len(cached_items) > 50:
             try:
                 from livingtree.core.jit_accel import cosine_similarity_batch
                 ids = [cid for cid, _ in cached_items]

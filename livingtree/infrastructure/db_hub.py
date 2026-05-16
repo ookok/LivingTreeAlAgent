@@ -33,11 +33,10 @@ from typing import Any, Optional
 
 from loguru import logger
 
-HAS_AIOSQLITE = False
 try:
     import aiosqlite
-    HAS_AIOSQLITE = True
 except ImportError:
+    aiosqlite = None
     logger.debug("aiosqlite not installed, using sync sqlite3 with thread executor")
 
 
@@ -57,7 +56,7 @@ class AsyncDB:
         self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        if HAS_AIOSQLITE:
+        if aiosqlite is not None:
             self._conn = await aiosqlite.connect(self._path)
             self._conn.row_factory = aiosqlite.Row
             if self._wal:
@@ -78,7 +77,7 @@ class AsyncDB:
     async def execute(self, sql: str, params: tuple = ()) -> int:
         """Execute SQL, return rowcount."""
         async with self._lock:
-            if HAS_AIOSQLITE:
+            if aiosqlite is not None:
                 cursor = await self._conn.execute(sql, params)
                 await self._conn.commit()
                 return cursor.rowcount
@@ -93,7 +92,7 @@ class AsyncDB:
     async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
         """Fetch all rows as list of dicts."""
         async with self._lock:
-            if HAS_AIOSQLITE:
+            if aiosqlite is not None:
                 cursor = await self._conn.execute(sql, params)
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows] if rows else []
@@ -116,7 +115,7 @@ class AsyncDB:
         placeholders = ", ".join("?" * len(data))
         sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders})"
         async with self._lock:
-            if HAS_AIOSQLITE:
+            if aiosqlite is not None:
                 cursor = await self._conn.execute(sql, tuple(data.values()))
                 await self._conn.commit()
                 return cursor.lastrowid
@@ -154,7 +153,7 @@ class AsyncDB:
 
     async def close(self) -> None:
         if self._conn:
-            if HAS_AIOSQLITE:
+            if aiosqlite is not None:
                 await self._conn.close()
             else:
                 self._conn.close()

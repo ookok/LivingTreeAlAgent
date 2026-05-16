@@ -35,9 +35,8 @@ from loguru import logger
 
 try:
     import psutil
-    HAS_PSUTIL = True
 except ImportError:
-    HAS_PSUTIL = False
+    psutil = None
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -135,7 +134,7 @@ class RemoteOpsSession:
     async def _monitor_loop(self, interval: float):
         while True:
             data = {"op": "monitor_data", "ts": _time.time()}
-            if HAS_PSUTIL:
+            if psutil is not None:
                 data["cpu"] = round(psutil.cpu_percent(interval=0.5), 1)
                 mem = psutil.virtual_memory()
                 data["mem"] = round(mem.percent, 1)

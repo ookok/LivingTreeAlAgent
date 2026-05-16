@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import math
 import re
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -37,9 +38,7 @@ from loguru import logger
 
 try:
     import numpy as np
-    HAS_NUMPY = True
 except ImportError:
-    HAS_NUMPY = False
     np = None
 
 
@@ -62,7 +61,7 @@ class ActivationSignature:
     timestamp: float = field(default_factory=time.time)
 
     def as_array(self) -> "np.ndarray | None":
-        if not HAS_NUMPY:
+        if not np is not None:
             return None
         return np.array(self.hidden_states, dtype=np.float32)
 
@@ -266,7 +265,7 @@ class PALECMScorer:
         truthful_sigs: list[ActivationSignature],
         hallucinated_sigs: list[ActivationSignature],
     ) -> None:
-        if not HAS_NUMPY:
+        if not np is not None:
             logger.warning("PALECMScorer: numpy not available, using scalar fallback")
             self._truthful_activations = [s.hidden_states for s in truthful_sigs]
             self._hallucinated_activations = [s.hidden_states for s in hallucinated_sigs]
@@ -306,7 +305,7 @@ class PALECMScorer:
         )
 
     def cm_score(self, signature: ActivationSignature) -> float:
-        if not self._fitted or self._mean_truthful is None or HAS_NUMPY and self._cov_inv is None:
+        if not self._fitted or self._mean_truthful is None or np is not None and self._cov_inv is None:
             return self._scalar_fallback(signature)
 
         arr = signature.as_array()
@@ -336,7 +335,7 @@ class PALECMScorer:
         )
 
     def _distance_to_truthful(self, signature: ActivationSignature) -> float:
-        if not HAS_NUMPY or self._mean_truthful is None or self._cov_inv is None:
+        if not np is not None or self._mean_truthful is None or self._cov_inv is None:
             return 0.0
         arr = signature.as_array()
         if arr is None:
@@ -344,7 +343,7 @@ class PALECMScorer:
         return float(self._mahalanobis(arr, self._mean_truthful, self._cov_inv))
 
     def _distance_to_hallucinated(self, signature: ActivationSignature) -> float:
-        if not HAS_NUMPY or self._mean_hallucinated is None or self._cov_inv is None:
+        if not np is not None or self._mean_hallucinated is None or self._cov_inv is None:
             return 0.0
         arr = signature.as_array()
         if arr is None:
@@ -452,7 +451,7 @@ def compute_shrunken_covariance(
     This ensures the covariance is always invertible (positive definite),
     which is required for Mahalanobis distance computation.
     """
-    if not HAS_NUMPY:
+    if not np is not None:
         return activations
     dim = activations.shape[1]
     cov_sample = np.cov(activations, rowvar=False)

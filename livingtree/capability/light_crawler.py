@@ -28,11 +28,7 @@ from urllib.parse import urljoin, urlparse
 
 from loguru import logger
 
-try:
-    import httpx
-    HAS_HTTPX = True
-except ImportError:
-    HAS_HTTPX = False
+import httpx
 
 
 # ═══ TLS Fingerprint Profiles ═══
@@ -133,7 +129,7 @@ class LightCrawler:
         self._profile_index = 0
         self._total_fetches = 0
         self._total_ms = 0.0
-        self._scrapling = ScraplingFetcher() if _HAS_SCRAPLING else None
+        self._scrapling = ScraplingFetcher()
 
     async def fetch(self, url: str, tls_rotate: bool = True,
                     timeout: int = 15) -> LightPage:
@@ -156,11 +152,7 @@ class LightCrawler:
         page = LightPage(url=url, tls_profile_used=profile["name"])
 
         try:
-            if HAS_HTTPX:
-                html = await self._fetch_httpx(url, profile, timeout)
-            else:
-                import aiohttp
-                html = await self._fetch_aiohttp(url, profile, timeout)
+            html = await self._fetch_httpx(url, profile, timeout)
 
             if html:
                 page = self._extract_structured(html, url, page)
@@ -290,15 +282,13 @@ class LightCrawler:
         return any(ext.endswith(e) for e in (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar", ".7z"))
 
     async def _fetch_httpx(self, url: str, profile: dict, timeout: int) -> Optional[str]:
-        # Use Scrapling's Fetcher if available (better TLS impersonation)
-        if _HAS_SCRAPLING:
-            try:
-                from scrapling.fetchers import Fetcher
-                fetcher_page = Fetcher.get(url, timeout=timeout)
-                if fetcher_page:
-                    return str(fetcher_page)
-            except Exception:
-                pass
+        try:
+            from scrapling.fetchers import Fetcher
+            fetcher_page = Fetcher.get(url, timeout=timeout)
+            if fetcher_page:
+                return str(fetcher_page)
+        except Exception:
+            pass
         headers = {
             "User-Agent": profile["user_agent"],
             "Accept": profile.get("accept", "*/*"),
@@ -368,13 +358,6 @@ def get_light_crawler() -> LightCrawler:
 
 # ═══ Scrapling Integration (optional accelerated backend) ═══
 
-_HAS_SCRAPLING = False
-try:
-    from scrapling.fetchers import Fetcher
-    _HAS_SCRAPLING = True
-except ImportError:
-    pass
-
 
 class ScraplingFetcher:
     """Optional Scrapling-backed fetcher — 100x faster text extraction.
@@ -392,7 +375,13 @@ class ScraplingFetcher:
     """
 
     def __init__(self):
-        self._available = _HAS_SCRAPLING
+        try:
+            from scrapling.fetchers import Fetcher as _Fetcher
+            self._Fetcher = _Fetcher
+            self._available = True
+        except ImportError:
+            self._Fetcher = None
+            self._available = False
 
     def is_available(self) -> bool:
         return self._available
@@ -406,7 +395,7 @@ class ScraplingFetcher:
 
         try:
             # Scrapling's Fetcher with Chrome TLS impersonation
-            fetcher_page = Fetcher.get(url, timeout=timeout)
+            fetcher_page = self._Fetcher.get(url, timeout=timeout)
             if not fetcher_page:
                 return None
 

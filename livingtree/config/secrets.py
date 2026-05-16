@@ -27,11 +27,7 @@ from typing import Any, Optional
 
 from loguru import logger
 
-try:
-    from cryptography.fernet import Fernet
-    HAS_CRYPTO = True
-except ImportError:
-    HAS_CRYPTO = False
+from cryptography.fernet import Fernet
 
 
 def _machine_key() -> bytes:
@@ -145,20 +141,17 @@ class SecretVault:
         logger.debug(f"Saved {len(self._cache)} secrets to {self._path}")
 
     def _encrypt(self, plaintext: str) -> bytes:
-        if HAS_CRYPTO:
-            fernet_key = _derive_fernet_key(self._machine_key)
-            f = Fernet(fernet_key)
-            return f.encrypt(plaintext.encode("utf-8"))
-        return self._xor_encrypt(plaintext)
+        fernet_key = _derive_fernet_key(self._machine_key)
+        f = Fernet(fernet_key)
+        return f.encrypt(plaintext.encode("utf-8"))
 
     def _decrypt(self, ciphertext: bytes) -> str:
-        if HAS_CRYPTO:
-            try:
-                fernet_key = _derive_fernet_key(self._machine_key)
-                f = Fernet(fernet_key)
-                return f.decrypt(ciphertext).decode("utf-8")
-            except Exception:
-                pass
+        try:
+            fernet_key = _derive_fernet_key(self._machine_key)
+            f = Fernet(fernet_key)
+            return f.decrypt(ciphertext).decode("utf-8")
+        except Exception:
+            pass
         return self._xor_decrypt(ciphertext)
 
     def _xor_encrypt(self, plaintext: str) -> bytes:

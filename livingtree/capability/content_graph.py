@@ -42,15 +42,23 @@ from typing import Any, Optional
 from loguru import logger
 
 # NLP optional imports with graceful degradation
-_HAS_JIEBA = _HAS_LTP = _HAS_SPACY = _HAS_HANLP = False
-try: import jieba; import jieba.posseg as pseg; _HAS_JIEBA = True
-except ImportError: pass
-try: from ltp import LTP; _HAS_LTP = True
-except ImportError: pass
-try: import spacy; _HAS_SPACY = True
-except ImportError: pass
-try: import hanlp; _HAS_HANLP = True
-except ImportError: pass
+try:
+    import jieba
+    import jieba.posseg as pseg
+except ImportError:
+    jieba = pseg = None
+try:
+    from ltp import LTP
+except ImportError:
+    LTP = None
+try:
+    import spacy
+except ImportError:
+    spacy = None
+try:
+    import hanlp
+except ImportError:
+    hanlp = None
 
 
 # ═══ Data Types ════════════════════════════════════════════════════
@@ -155,7 +163,7 @@ class EntityExtractor:
 
     @classmethod
     def _get_ltp(cls):
-        if not _HAS_LTP: return None
+        if LTP is None: return None
         if cls._ltp_instance is None:
             try: cls._ltp_instance = LTP()
             except Exception: return None
@@ -163,7 +171,7 @@ class EntityExtractor:
 
     @classmethod
     def _get_spacy(cls):
-        if not _HAS_SPACY: return None
+        if spacy is None: return None
         if cls._spacy_instance is None:
             try: cls._spacy_instance = spacy.load("en_core_web_sm")
             except Exception:
@@ -228,7 +236,7 @@ class EntityExtractor:
                 pass
 
         # Try jieba POS tagging
-        if _HAS_JIEBA:
+        if jieba is not None:
             try:
                 words = list(pseg.cut(text))
                 for i, (word, flag) in enumerate(words):

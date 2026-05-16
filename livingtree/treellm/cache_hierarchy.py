@@ -41,18 +41,10 @@ from loguru import logger
 
 try:
     import aiosqlite
-    _HAS_AIOSQLITE = True
 except ImportError:  # pragma: no cover
-    _HAS_AIOSQLITE = False
     aiosqlite = None  # type: ignore
 
-try:
-    from livingtree.knowledge.vector_store import VectorStore, LocalEmbeddingBackend
-    _HAS_VECTOR_STORE = True
-except ImportError:  # pragma: no cover
-    _HAS_VECTOR_STORE = False
-    VectorStore = None  # type: ignore
-    LocalEmbeddingBackend = None  # type: ignore
+from livingtree.knowledge.vector_store import VectorStore, LocalEmbeddingBackend
 
 
 class CacheTier(str, Enum):
@@ -184,7 +176,7 @@ class CacheHierarchy:
         self._l3_misses: int = 0
         self._vector_store: Optional[VectorStore] = None
 
-        if _HAS_VECTOR_STORE:
+        if VectorStore is not None:
             try:
                 backend = LocalEmbeddingBackend()
                 self._vector_store = VectorStore(backend, collection_name="cache_l3")
@@ -204,7 +196,7 @@ class CacheHierarchy:
 
     async def _init_l2(self) -> None:
         """Initialize L2 SQLite database. Safe to call multiple times."""
-        if self._l2_initialized or not _HAS_AIOSQLITE:
+        if self._l2_initialized or not aiosqlite:
             return
         async with self._l2_init_lock:
             if self._l2_initialized:

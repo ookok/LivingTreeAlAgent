@@ -22,15 +22,13 @@ from loguru import logger
 
 from .vector_store import EmbeddingBackend, VectorStore, LocalEmbeddingBackend
 
-_HAS_MILVUS = False
 try:
     from pymilvus import (  # type: ignore
         Collection, CollectionSchema, DataType, FieldSchema,
         MilvusClient, connections, utility,
     )
-    _HAS_MILVUS = True
 except ImportError:
-    pass
+    MilvusClient = None
 
 
 class MilvusEmbeddingBackend(EmbeddingBackend):
@@ -125,7 +123,7 @@ class MilvusVectorStore:
     def _ensure_connected(self) -> bool:
         if self._connected and self._client:
             return True
-        if not _HAS_MILVUS:
+        if MilvusClient is None:
             if self._fallback is None:
                 logger.info("pymilvus not installed, using in-memory VectorStore fallback")
                 self._fallback = VectorStore(self.embedding_backend, self.collection_name)

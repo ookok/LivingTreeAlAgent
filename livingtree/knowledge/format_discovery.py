@@ -32,9 +32,7 @@ except Exception:
 
 try:
     from magika import Magika  # type: ignore
-    HAS_MAGIKA = True
 except Exception:
-    HAS_MAGIKA = False
     Magika = None  # type: ignore
 
 
@@ -59,7 +57,7 @@ class FormatDiscovery:
 
     def __init__(self) -> None:
         self._magika: Optional[Magika] = None
-        if HAS_MAGIKA and Magika is not None:
+        if Magika is not None:
             try:
                 self._magika = Magika()
             except Exception as e:

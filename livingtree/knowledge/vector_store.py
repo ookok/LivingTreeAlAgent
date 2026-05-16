@@ -18,25 +18,18 @@ from loguru import logger
 from pydantic import BaseModel
 
 try:
-    # Optional dependency: heavy embedding model (not required for defaults)
     from sentence_transformers import SentenceTransformer  # type: ignore
-    _HAS_SENTENCE_TRANSFORMERS = True
 except Exception:  # pragma: no cover
-    _HAS_SENTENCE_TRANSFORMERS = False
     SentenceTransformer = None  # type: ignore
 
 try:
     from livingtree.core.hardware_acceleration import get_accelerator
-    _HAS_ACCELERATOR = True
 except Exception:
-    _HAS_ACCELERATOR = False
     get_accelerator = None
 
 try:
     from livingtree.core.memory_optimizer import get_memory_optimizer
-    _HAS_MEMORY_OPT = True
 except Exception:
-    _HAS_MEMORY_OPT = False
     get_memory_optimizer = None
 
 
@@ -56,7 +49,7 @@ class LocalEmbeddingBackend(EmbeddingBackend):
         self._model = None
         self._model_loaded = False
         self._accelerator = None
-        if _HAS_ACCELERATOR:
+        if get_accelerator is not None:
             try:
                 self._accelerator = get_accelerator()
             except Exception:
@@ -66,7 +59,7 @@ class LocalEmbeddingBackend(EmbeddingBackend):
         if self._model_loaded:
             return
         self._model_loaded = True
-        if _HAS_SENTENCE_TRANSFORMERS:
+        if SentenceTransformer is not None:
             try:
                 self._model = SentenceTransformer(
                     "all-MiniLM-L6-v2"
@@ -132,7 +125,7 @@ class VectorStore:
         self._matrix_ids: list[str] = []  # keys corresponding to cached matrix
         self._matrix_dirty = True
         self._cache = None
-        if _HAS_MEMORY_OPT:
+        if get_memory_optimizer is not None:
             try:
                 opt = get_memory_optimizer()
                 self._cache = opt.get_embed_cache()

@@ -30,15 +30,13 @@ from loguru import logger
 
 try:
     import fitz
-    HAS_PYMUPDF = True
 except ImportError:
-    HAS_PYMUPDF = False
+    fitz = None
 
 try:
     from PIL import Image
-    HAS_PIL = True
 except ImportError:
-    HAS_PIL = False
+    Image = None
 
 
 @dataclass
@@ -132,7 +130,7 @@ class MultimodalParser:
 
         ext = path.suffix.lower()
 
-        if ext == ".pdf" and HAS_PYMUPDF:
+        if ext == ".pdf" and fitz is not None:
             return self._parse_pdf_pymupdf(path)
         elif ext == ".pdf":
             return self._parse_pdf_fallback(path)
@@ -172,7 +170,7 @@ class MultimodalParser:
             return doc, regions
 
         path = Path(file_path)
-        if path.suffix.lower() == ".pdf" and HAS_PYMUPDF:
+        if path.suffix.lower() == ".pdf" and fitz is not None:
             try:
                 import fitz
                 pdf = fitz.open(str(path))
@@ -220,7 +218,7 @@ class MultimodalParser:
         path = Path(file_path)
 
         layouts = []
-        if path.suffix.lower() == ".pdf" and HAS_PYMUPDF:
+        if path.suffix.lower() == ".pdf" and fitz is not None:
             try:
                 from ..knowledge.layout_analyzer import DocumentLayoutAnalyzer
                 analyzer = DocumentLayoutAnalyzer()
@@ -330,7 +328,7 @@ class MultimodalParser:
             doc.text = meaningful[:50000]
             doc.total_pages = 1
 
-            if HAS_PIL and any(pattern in raw[:100] for pattern in [b"%PDF", b"%!", b"\x89PNG"]):
+            if Image is not None and any(pattern in raw[:100] for pattern in [b"%PDF", b"%!", b"\x89PNG"]):
                 try:
                     img = Image.open(path)
                     buf = io.BytesIO()
@@ -357,7 +355,7 @@ class MultimodalParser:
         doc = ParsedDocument(file_path=str(path), total_pages=1)
         try:
             doc.text = f"[Image file: {path.name}]"
-            if HAS_PIL:
+            if Image is not None:
                 img = Image.open(path)
                 import io
                 buf = io.BytesIO()

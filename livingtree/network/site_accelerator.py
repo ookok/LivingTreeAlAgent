@@ -42,11 +42,7 @@ from loguru import logger
 
 from .domain_ip_pool import DomainIPPool, DomainIP
 
-try:
-    import aiohttp
-    HAS_AIOHTTP = True
-except ImportError:
-    HAS_AIOHTTP = False
+import aiohttp
 
 
 class SiteAccelerator:
@@ -119,9 +115,6 @@ class SiteAccelerator:
 
         Fallback chain: accelerated IP → direct domain → mirror URL.
         """
-        if not HAS_AIOHTTP:
-            return None
-
         params = self.get_optimal_connection_params(url)
         headers = headers or {}
 

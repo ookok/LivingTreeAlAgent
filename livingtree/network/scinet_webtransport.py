@@ -54,7 +54,6 @@ from typing import Any, Optional
 
 from loguru import logger
 
-HAS_AIOQUIC = False
 try:
     from aioquic.asyncio import serve as quic_serve
     from aioquic.asyncio.protocol import QuicConnectionProtocol
@@ -64,16 +63,14 @@ try:
     from aioquic.h3.events import (
         DataReceived, HeadersReceived, WebTransportStreamDataReceived,
     )
-    HAS_AIOQUIC = True
 except ImportError:
-    pass
+    QuicConnectionProtocol = object
+    quic_serve = QuicConfiguration = None
+    QuicEvent = StreamDataReceived = None
+    H3Connection = None
+    DataReceived = HeadersReceived = WebTransportStreamDataReceived = None
 
-HAS_AIOHTTP = False
-try:
-    import aiohttp
-    HAS_AIOHTTP = True
-except ImportError:
-    pass
+import aiohttp
 
 
 # WebTransport subprotocol identifier
@@ -109,7 +106,7 @@ class WTStreamStats:
     failed_connects: int = 0
 
 
-class WebTransportProtocol(QuicConnectionProtocol if HAS_AIOQUIC else object):
+class WebTransportProtocol(QuicConnectionProtocol):
     """QUIC protocol handler for WebTransport connections.
 
     Receives WebTransport sessions and creates bidirectional streams
@@ -117,7 +114,7 @@ class WebTransportProtocol(QuicConnectionProtocol if HAS_AIOQUIC else object):
     """
 
     def __init__(self, *args, server: WebTransportServer = None, **kwargs):
-        if HAS_AIOQUIC:
+        if quic_serve is not None:
             super().__init__(*args, **kwargs)
         self._server = server
         self._h3: Optional[H3Connection] = None
@@ -125,7 +122,7 @@ class WebTransportProtocol(QuicConnectionProtocol if HAS_AIOQUIC else object):
 
     def quic_event_received(self, event: QuicEvent):
         """Handle QUIC events."""
-        if not HAS_AIOQUIC:
+        if quic_serve is None:
             return
 
         if self._h3 is None:
@@ -196,7 +193,7 @@ class WebTransportServer:
 
     async def start(self) -> None:
         """Start the WebTransport server."""
-        if not HAS_AIOQUIC:
+        if quic_serve is None:
             logger.warning(
                 "WebTransport: aioquic not installed. "
                 "Install with: pip install aioquic"
@@ -281,9 +278,6 @@ class WebTransportServer:
 
             body = "\r\n".join(lines[body_start:]) if body_start else ""
 
-            if not HAS_AIOHTTP:
-                return
-
             # Forward request
             async with aiohttp.ClientSession() as http_session:
                 async with http_session.request(
@@ -304,7 +298,7 @@ class WebTransportServer:
 
             # Get the session's H3 connection
             session = protocol._sessions.get(session_id)
-            if session and HAS_AIOQUIC:
+            if session and H3Connection is not None:
                 stream_id = session.h3.get_next_available_stream_id()
                 session.h3.send_data(stream_id, response_data, end_stream=True)
                 session.bytes_out += len(response_data)

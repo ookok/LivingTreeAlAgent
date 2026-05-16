@@ -23,11 +23,7 @@ from loguru import logger
 
 from .protobuf_engine import MessageEncoder, MessageDecoder, encode_varint, decode_varint
 
-try:
-    import msgpack
-    HAS_MSGPACK = True
-except ImportError:
-    HAS_MSGPACK = False
+import msgpack
 
 
 @dataclass
@@ -167,16 +163,15 @@ class SerializationBenchmark:
         results.append(proto_result)
 
         # MessagePack benchmark
-        if HAS_MSGPACK:
-            enc_mp, dec_mp, size_mp = self._measure_msgpack(msg, self.iterations)
-            mp_result = BenchResult(
-                format_name="MessagePack", message_type=msg_type,
-                encode_us=enc_mp, decode_us=dec_mp, size_bytes=size_mp,
-                json_size_bytes=size_json, iterations=self.iterations,
-            )
-            mp_result.encode_speedup = enc_json / max(enc_mp, 1)
-            mp_result.decode_speedup = dec_json / max(dec_mp, 1)
-            results.append(mp_result)
+        enc_mp, dec_mp, size_mp = self._measure_msgpack(msg, self.iterations)
+        mp_result = BenchResult(
+            format_name="MessagePack", message_type=msg_type,
+            encode_us=enc_mp, decode_us=dec_mp, size_bytes=size_mp,
+            json_size_bytes=size_json, iterations=self.iterations,
+        )
+        mp_result.encode_speedup = enc_json / max(enc_mp, 1)
+        mp_result.decode_speedup = dec_json / max(dec_mp, 1)
+        results.append(mp_result)
 
         return results
 

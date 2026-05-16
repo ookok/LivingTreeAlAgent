@@ -32,9 +32,7 @@ from loguru import logger
 # Hardware accelerator support
 try:
     from livingtree.core.hardware_acceleration import get_accelerator
-    _HAS_ACCELERATOR = True
 except ImportError:
-    _HAS_ACCELERATOR = False
     get_accelerator = None
 
 
@@ -79,7 +77,7 @@ class ModernOCR:
         self._lock = threading.Lock()
         self._backend_cache: dict[str, Any] = {}
         self._accelerator = None
-        if _HAS_ACCELERATOR:
+        if get_accelerator is not None:
             try:
                 self._accelerator = get_accelerator()
             except Exception as e:
@@ -206,7 +204,7 @@ class ModernOCR:
 
         lang = "ch" if "chi" in language else "en"
         # Use GPU if accelerator says so
-        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
+        use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
         with self._lock:
             cache_key = f"paddleocr_gpu{use_gpu}_{lang}"
@@ -237,7 +235,7 @@ class ModernOCR:
         try:
             from paddleocr import PaddleOCR
             lang = "ch" if "chi" in language else "en"
-            use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
+            use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
             with self._lock:
                 cache_key = f"paddleocr_regions_gpu{use_gpu}_{lang}"
@@ -302,7 +300,7 @@ class ModernOCR:
         import easyocr
 
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
-        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
+        use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
         with self._lock:
             cache_key = f"easyocr_gpu{use_gpu}_{'-'.join(langs)}"
@@ -329,7 +327,7 @@ class ModernOCR:
         import numpy as np
 
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
-        use_gpu = (self._accelerator is not None and self._accelerator.has_cuda) if _HAS_ACCELERATOR else False
+        use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
         with self._lock:
             cache_key = f"easyocr_regions_gpu{use_gpu}_{'-'.join(langs)}"

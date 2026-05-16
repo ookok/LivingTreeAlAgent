@@ -28,26 +28,20 @@ from ..gc_metrics import StorageStats
 
 try:
     import numpy as np
-    _HAS_NUMPY = True
 except ImportError:
-    _HAS_NUMPY = False
     np = None
 
 _SEGMENT_VECTORS = 1000  # Vectors per logical segment
-_FAISS_AVAILABLE = False
 
 try:
     import faiss
-    _FAISS_AVAILABLE = True
 except ImportError:
     faiss = None
 
 # Hardware accelerator support
 try:
     from livingtree.core.hardware_acceleration import get_accelerator
-    _HAS_ACCELERATOR = True
 except ImportError:
-    _HAS_ACCELERATOR = False
     get_accelerator = None
 
 
@@ -78,7 +72,7 @@ class FAISSStorageBackend(StorageBackend):
 
         self._lock = threading.Lock()
         self._index: Any = None
-        self._vectors: List[np.ndarray] = [] if _HAS_NUMPY else []
+        self._vectors: List[np.ndarray] = [] if np is not None else []
         self._metadata: List[Dict[str, Any]] = []
         self._access_counts: List[int] = []
         self._last_access: List[float] = []
@@ -86,13 +80,13 @@ class FAISSStorageBackend(StorageBackend):
         self._accelerator = None
 
         # Try to use hardware accelerator for GPU FAISS
-        if _HAS_ACCELERATOR:
+        if get_accelerator is not None:
             try:
                 self._accelerator = get_accelerator()
             except Exception as e:
                 logger.debug("HardwareAccelerator init failed: %s", e)
 
-        if _FAISS_AVAILABLE and faiss is not None:
+        if faiss is not None and faiss is not None:
             # Use GPU index if accelerator says so
             if self._accelerator and self._accelerator.has_cuda:
                 try:
@@ -103,7 +97,7 @@ class FAISSStorageBackend(StorageBackend):
                     self._index = faiss.IndexFlatL2(dimension)
             else:
                 self._index = faiss.IndexFlatL2(dimension)
-        elif _HAS_NUMPY:
+        elif np is not None:
             logger.info("FAISSStorageBackend[%s]: FAISS not available, using list fallback", self.name)
         else:
             logger.warning("FAISSStorageBackend[%s]: numpy not available, limited functionality", self.name)
@@ -274,13 +268,13 @@ class FAISSStorageBackend(StorageBackend):
             start_index = len(self._metadata)
             now = time.time()
 
-            if _HAS_NUMPY:
+            if np is not None:
                 arr = np.array(vectors, dtype=np.float32)
             else:
                 arr = vectors
 
             for i, vec in enumerate(vectors):
-                if _HAS_NUMPY:
+                if np is not None:
                     self._vectors.append(np.array(vec, dtype=np.float32))
                 else:
                     self._vectors.append(vec)
@@ -289,7 +283,7 @@ class FAISSStorageBackend(StorageBackend):
                 self._last_access.append(now)
                 self._created_at.append(now)
 
-            if self._index is not None and _HAS_NUMPY:
+            if self._index is not None and np is not None:
                 self._index.add(arr)
 
             if self.persist_path:
@@ -303,7 +297,7 @@ class FAISSStorageBackend(StorageBackend):
             if not self._vectors:
                 return []
 
-            if self._index is not None and _HAS_NUMPY:
+            if self._index is not None and np is not None:
                 q = np.array([query_vector], dtype=np.float32)
                 distances, indices = self._index.search(q, min(k, self._index.ntotal))
                 results = []
@@ -323,7 +317,7 @@ class FAISSStorageBackend(StorageBackend):
     def _brute_force_search(
         self, query_vector: List[float], k: int
     ) -> List[Tuple[int, float, Dict]]:
-        if not _HAS_NUMPY:
+        if not np is not None:
             return []
         now = time.time()
         q = np.array(query_vector, dtype=np.float32)
@@ -360,7 +354,7 @@ class FAISSStorageBackend(StorageBackend):
             t for i, t in enumerate(self._created_at) if i not in indices_set
         ]
 
-        if self._index is not None and _HAS_NUMPY and self._vectors:
+        if self._index is not None and np is not None and self._vectors:
             dim = self.dimension
             new_index = faiss.IndexFlatL2(dim)
             arr = np.array([v.tolist() if isinstance(v, np.ndarray) else v for v in self._vectors], dtype=np.float32)
@@ -410,7 +404,7 @@ class FAISSStorageBackend(StorageBackend):
                 data = pickle.load(f)
             with self._lock:
                 vectors = data.get("vectors", [])
-                if _HAS_NUMPY:
+                if np is not None:
                     self._vectors = [np.array(v, dtype=np.float32) for v in vectors]
                     if self._index is not None and vectors:
                         arr = np.array(vectors, dtype=np.float32)

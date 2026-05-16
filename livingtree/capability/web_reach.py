@@ -36,9 +36,8 @@ from ..network.resilience import resilient_fetch, with_resilience
 
 try:
     from readability import Document as ReadabilityDocument
-    HAS_READABILITY = True
 except ImportError:
-    HAS_READABILITY = False
+    ReadabilityDocument = None
 
 
 @dataclass
@@ -176,7 +175,7 @@ class WebReach:
     # ── Private ──
 
     def _extract_content(self, page: PageContent, html: str, base_url: str) -> PageContent:
-        if HAS_READABILITY:
+        if ReadabilityDocument is not None:
             try:
                 doc = ReadabilityDocument(html)
                 page.title = doc.title() or ""

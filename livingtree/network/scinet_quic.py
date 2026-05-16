@@ -32,7 +32,6 @@ from typing import Any, Optional
 
 from loguru import logger
 
-HAS_AIOQUIC = False
 try:
     from aioquic.asyncio import connect as quic_connect
     from aioquic.asyncio.protocol import QuicConnectionProtocol
@@ -40,16 +39,11 @@ try:
     from aioquic.quic.events import QuicEvent, StreamDataReceived
     from aioquic.h3.connection import H3Connection
     from aioquic.h3.events import DataReceived, HeadersReceived
-    HAS_AIOQUIC = True
 except ImportError:
-    pass
+    quic_connect = QuicConfiguration = H3Connection = DataReceived = HeadersReceived = None
+    QuicConnectionProtocol = object
 
-HAS_AIOHTTP = False
-try:
-    import aiohttp
-    HAS_AIOHTTP = True
-except ImportError:
-    pass
+import aiohttp
 
 
 @dataclass
@@ -140,7 +134,7 @@ class QuicTunnel:
     """
 
     def __init__(self):
-        self._quic_active = HAS_AIOQUIC
+        self._quic_active = quic_connect is not None
         self._obfuscator = ProtocolObfuscator()
         self._connections: dict[str, Any] = {}
         self._connection_locks: dict[str, asyncio.Lock] = {}
@@ -151,7 +145,7 @@ class QuicTunnel:
     async def initialize(self):
         if self._initialized:
             return
-        if not HAS_AIOQUIC:
+        if quic_connect is None:
             logger.info("QuicTunnel: aioquic not installed, using TLS 1.3 fallback")
         else:
             logger.info("QuicTunnel: QUIC/HTTP3 active with protocol obfuscation")
@@ -167,7 +161,7 @@ class QuicTunnel:
         """
         self._stats.total_requests += 1
 
-        if HAS_AIOQUIC and self._quic_active:
+        if quic_connect is not None and self._quic_active:
             try:
                 return await self._quic_fetch(url, headers, method, body, timeout)
             except Exception as e:
@@ -280,9 +274,6 @@ class QuicTunnel:
         self, url: str, headers: dict, method: str, body: bytes, timeout: float,
     ) -> tuple[int, bytes, dict]:
         """Standard TLS 1.3 TCP fetch as fallback."""
-        if not HAS_AIOHTTP:
-            raise RuntimeError("aiohttp required for TCP fallback")
-
         if self._session is None:
             connector = aiohttp.TCPConnector(
                 limit=50,

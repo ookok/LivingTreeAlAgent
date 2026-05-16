@@ -33,33 +33,29 @@ from loguru import logger
 # Optional imports with graceful degradation
 try:
     import numpy as np
-    HAS_NUMPY = True
 except ImportError:
-    HAS_NUMPY = False
-    logger.debug("numpy not installed — using math fallback")
+    np = None
 
 try:
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
-    HAS_MPL = True
 except ImportError:
-    HAS_MPL = False
+    plt = None
 
 try:
     import plotly.graph_objects as go
     import plotly.express as px
-    HAS_PLOTLY = True
 except ImportError:
-    HAS_PLOTLY = False
+    go = px = None
 
 try:
     import folium
     from folium import plugins
-    HAS_FOLIUM = True
 except ImportError:
-    HAS_FOLIUM = False
+    folium = None
+    plugins = None
 
 
 class EIAChartBridge:
@@ -85,7 +81,7 @@ class EIAChartBridge:
 
     def gaussian_plume_map(self, params: dict) -> str:
         """Generate concentration distribution contour map from Gaussian plume model."""
-        if not HAS_NUMPY or not HAS_MPL:
+        if not np is not None or not plt is not None:
             return self._empty_chart("gaussian_plume")
 
         Q = params.get("emission_rate", 1.0)    # g/s
@@ -141,7 +137,7 @@ class EIAChartBridge:
 
     def wind_rose(self, wind_data: list[dict]) -> str:
         """Generate wind rose diagram from meteorological data."""
-        if not HAS_MPL:
+        if not plt is not None:
             return self._empty_chart("wind_rose")
 
         speeds = [d.get("speed", 0) for d in wind_data]
@@ -172,7 +168,7 @@ class EIAChartBridge:
 
         Computes DO and BOD profiles along river distance with critical point annotation.
         """
-        if not HAS_NUMPY or not HAS_MPL:
+        if not np is not None or not plt is not None:
             return self._empty_chart("do_profile")
 
         BOD0 = params.get("bod_initial", 30)
@@ -228,7 +224,7 @@ class EIAChartBridge:
 
     def water_quality_bars(self, monitoring_data: list[dict]) -> str:
         """Bar chart comparing water quality parameters against GB standards."""
-        if not HAS_MPL:
+        if not plt is not None:
             return self._empty_chart("water_bars")
 
         params = [d.get("parameter", "") for d in monitoring_data]
@@ -264,7 +260,7 @@ class EIAChartBridge:
 
     def noise_attenuation_curve(self, params: dict) -> str:
         """Noise attenuation with distance including barrier effect."""
-        if not HAS_NUMPY or not HAS_MPL:
+        if not np is not None or not plt is not None:
             return self._empty_chart("noise")
 
         Lw = params.get("source_level", 100)  # dB(A)
@@ -308,7 +304,7 @@ class EIAChartBridge:
 
     def carbon_breakdown(self, emissions: dict) -> str:
         """Pie/bar chart showing GHG emission breakdown by scope/source."""
-        if not HAS_MPL:
+        if not plt is not None:
             return self._empty_chart("carbon")
 
         sources = list(emissions.keys())
@@ -338,7 +334,7 @@ class EIAChartBridge:
 
     def interactive_timeseries(self, data: dict, output_html: str = "") -> str:
         """Generate interactive plotly timeseries chart for HTML reports."""
-        if not HAS_PLOTLY:
+        if not go is not None:
             return self._empty_chart("interactive_ts")
 
         fig = go.Figure()
@@ -367,7 +363,7 @@ class EIAChartBridge:
     def plume_map(self, center_lat: float = 31.2, center_lon: float = 118.8,
                   plume_params: dict = None, output: str = "") -> str:
         """Generate interactive folium map with plume overlay."""
-        if not HAS_FOLIUM:
+        if not folium is not None:
             return self._empty_chart("plume_map")
 
         m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
@@ -383,7 +379,7 @@ class EIAChartBridge:
             ).add_to(m)
 
         # Add plume area as heatmap
-        if plume_params and HAS_NUMPY:
+        if plume_params and np is not None:
             plume_data = []
             for i in range(50):
                 for j in range(50):

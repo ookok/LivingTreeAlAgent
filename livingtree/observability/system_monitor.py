@@ -18,9 +18,8 @@ from loguru import logger
 
 try:
     import psutil
-    HAS_PSUTIL = True
 except ImportError:
-    HAS_PSUTIL = False
+    psutil = None
 
 
 @dataclass
@@ -87,7 +86,7 @@ class SystemMonitor:
 
         snap = ResourceSnapshot(timestamp=now)
 
-        if HAS_PSUTIL:
+        if psutil is not None:
             try:
                 snap.cpu_percent = psutil.cpu_percent(interval=0.5)
                 mem = psutil.virtual_memory()

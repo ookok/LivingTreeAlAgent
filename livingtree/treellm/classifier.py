@@ -29,9 +29,8 @@ except ImportError:
 
 try:
     import numpy as np
-    HAS_NUMPY = True
 except ImportError:
-    HAS_NUMPY = False
+    np = None
 
 WEIGHTS_FILE = Path(".livingtree/skill_router_weights.json")
 HISTORY_FILE = Path(".livingtree/skill_router_history.jsonl")

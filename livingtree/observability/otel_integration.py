@@ -37,9 +37,7 @@ try:
     )
     from opentelemetry.trace import SpanKind, Status, StatusCode
 
-    HAS_OTEL = True
 except ImportError:
-    HAS_OTEL = False
     _SdkProvider = None  # type: ignore[assignment]
     BatchSpanProcessor = None  # type: ignore[assignment]
     ConsoleSpanExporter = None  # type: ignore[assignment]
@@ -53,9 +51,7 @@ try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
         OTLPSpanExporter,
     )
-    HAS_OTLP = True
 except ImportError:
-    HAS_OTLP = False
     OTLPSpanExporter = None  # type: ignore[assignment]
 
 
@@ -85,7 +81,7 @@ class OtelSpan:
         self._attributes: dict[str, Any] = attributes or {}
         self._span: Any = None
         self._start_time: float = 0.0
-        self._otel_ok = HAS_OTEL and _otel_trace is not None
+        self._otel_ok = _otel_trace is not None
 
     def set_attribute(self, key: str, value: Any) -> None:
         self._attributes[key] = value
@@ -159,7 +155,7 @@ class OtelIntegration:
             self._config = config or OtelConfig()
             self._resolve_collector(collector)
 
-            if not self._config.enabled or not HAS_OTEL:
+            if not self._config.enabled or not _otel_trace is not None:
                 logger.info("OpenTelemetry integration not enabled or SDK unavailable")
                 self._setup_done = True
                 return
@@ -172,7 +168,7 @@ class OtelIntegration:
             if self._config.console_export and ConsoleSpanExporter is not None:
                 processors.append(BatchSpanProcessor(ConsoleSpanExporter()))
 
-            if self._config.otlp_endpoint and HAS_OTLP and OTLPSpanExporter is not None:
+            if self._config.otlp_endpoint and OTLPSpanExporter is not None and OTLPSpanExporter is not None:
                 processors.append(
                     BatchSpanProcessor(
                         OTLPSpanExporter(endpoint=self._config.otlp_endpoint, insecure=True)
@@ -208,7 +204,7 @@ class OtelIntegration:
             name: Logical name for the tracer (e.g. "livingtree.tasks",
                   "livingtree.knowledge"). Falls back to __name__ for OTel SDK.
         """
-        if not self._setup_done or not HAS_OTEL or _otel_trace is None:
+        if not self._setup_done or not _otel_trace is not None or _otel_trace is None:
             return None
         return _otel_trace.get_tracer(name or "livingtree")
 
@@ -375,7 +371,7 @@ class OtelIntegration:
 
     def shutdown(self) -> None:
         """Gracefully shut down the tracer provider."""
-        if self._provider is not None and HAS_OTEL:
+        if self._provider is not None and _otel_trace is not None:
             self._provider.shutdown()
             logger.info("OpenTelemetry tracer provider shut down")
 
@@ -390,7 +386,7 @@ class OtelIntegration:
             self._setup_done
             and self._config is not None
             and self._config.enabled
-            and HAS_OTEL
+            and _otel_trace is not None
             and _otel_trace is not None
         )
 

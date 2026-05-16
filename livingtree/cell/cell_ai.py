@@ -8,13 +8,17 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from ..dna.genome import Genome
 
-try: import torch; HAS_TORCH = True
-except ImportError: HAS_TORCH = False
+try:
+    import torch
+except ImportError:
+    torch = None
 
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
-    from peft import LoraConfig, get_peft_model, PeftModel; HAS_PEFT = True
-except ImportError: HAS_PEFT = False
+    from peft import LoraConfig, get_peft_model, PeftModel  # noqa: F401
+except ImportError:
+    AutoModelForCausalLM = AutoTokenizer = Trainer = TrainingArguments = None
+    LoraConfig = get_peft_model = PeftModel = None
 
 class CellCapability(BaseModel):
     name: str; description: str; confidence: float = 0.0
@@ -31,7 +35,7 @@ class CellAI(BaseModel):
     def get_capabilities(self) -> list[CellCapability]: return self.capabilities
 
     def train(self, data: list[dict], epochs: int = 3, **kwargs) -> dict:
-        if not HAS_TORCH or not HAS_PEFT:
+        if torch is None or AutoModelForCausalLM is None:
             return {"status": "skipped", "reason": "torch/peft not installed"}
         logger.info(f"Training cell {self.name} with {len(data)} samples, {epochs} epochs")
 

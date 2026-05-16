@@ -40,12 +40,8 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
-try:
-    import aiohttp
-    from aiohttp import ClientTimeout, ClientSession, ClientResponse
-    HAS_AIOHTTP = True
-except ImportError:
-    HAS_AIOHTTP = False
+import aiohttp
+from aiohttp import ClientTimeout, ClientSession, ClientResponse
 
 # ═══ Constants ═══
 
@@ -149,10 +145,6 @@ class DeepProxyHealth:
         Stage 4: Measure end-to-end latency
         """
         result = HealthResult(proxy_url=proxy_url)
-
-        if not HAS_AIOHTTP:
-            result.error = "aiohttp not available"
-            return result
 
         try:
             t_start = time.time()
@@ -718,8 +710,6 @@ class SmartFailoverChain:
         conn_pool: Optional[ProxyConnectionPool] = None,
     ) -> FailoverResult:
         """Core HTTP executor with retry and backoff."""
-        if not HAS_AIOHTTP:
-            return FailoverResult(strategy=strategy)
 
         last_error = ""
         for attempt in range(retries + 1):

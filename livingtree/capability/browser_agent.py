@@ -146,13 +146,14 @@ class BrowserAgent:
         return result
 
     async def _navigate(self, page, url: str):
-        """Navigate with Scrapling pre-check: retries, ad block, adaptive on."""
+        """Navigate with Scrapling: retries, ad block, adaptive, page_action."""
         if HAS_SCRAPLING:
-            DynamicFetcher.adaptive = True  # enable adaptive selectors globally
+            DynamicFetcher.adaptive = True
             try:
                 sp = DynamicFetcher.fetch(
                     url, headless=True, network_idle=True, timeout=15_000,
                     disable_resources=True, retries=2, block_ads=True,
+                    page_action=self._page_action_scroll,
                 )
                 if sp and not self._is_blocked(sp.text or ""):
                     html = sp.body.decode("utf-8", errors="replace") if isinstance(sp.body, bytes) else str(sp.body)
@@ -162,6 +163,14 @@ class BrowserAgent:
                 pass
         await page.goto(url, timeout=30_000, wait_until="networkidle")
         await asyncio.sleep(2)
+
+    @staticmethod
+    def _page_action_scroll(page):
+        """Auto-scroll to trigger lazy-loaded content."""
+        try:
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        except Exception:
+            pass
 
     @staticmethod
     def _is_blocked(text: str) -> bool:
@@ -193,58 +202,96 @@ class BrowserAgent:
         return None
 
     def _direct_extract(self, page, task: str) -> list[dict]:
-        """General-purpose extraction: CSS → text search → similar elements → download links.
+        """Scrapling full extraction pipeline.
 
-        Uses Scrapling's full extraction toolkit:
-          css/xpath, find_by_text, find_similar, get_all_text,
-          find_ancestor, extract_first, generate_css_selector.
+        Tries in order:
+          1. CSS selectors with auto_save (adaptive) → get_all_text
+          2. find_by_text from task keywords → find_similar → find_ancestor
+          3. find_by_regex for common patterns
+          4. Download links
         """
+        import re as _re
         items = []
 
-        # 1) Structured containers: tables, lists, articles, content blocks
-        for sel in ["table tr", "ul li", "[class*='item']", "[class*='list']",
+        # ═══ 1) CSS selectors with auto_save (adaptive) ═══
+        for sel in ["table tr", "ul li", "ol li",
+                    "[class*='item']", "[class*='list']", "[class*='row']",
                     "[class*='article']", "[class*='result']", "[class*='content']",
-                    ".xxgk_content", "#zoom", ".article-content", ".main-content"]:
+                    "[class*='entry']", "[class*='post']",
+                    ".xxgk_content", "#zoom", "#content",
+                    ".article-content", ".main-content", ".entry-content"]:
             els = page.css(sel, auto_save=True)
-            if len(els) > 1:
+            if len(els) >= 2:
                 for el in els[:50]:
-                    if hasattr(el, 'get_all_text'):
-                        text = el.get_all_text(strip=True)[:500]
-                    else:
-                        text = el.text.strip()[:500] if el.text else ""
+                    text = el.get_all_text(strip=True) if hasattr(el, 'get_all_text') else (el.text or "")
+                    text = (text[:500] if isinstance(text, str) else "")
                     if len(text) > 20:
-                        sel_gen = el.generate_css_selector if hasattr(el, 'generate_css_selector') else ""
-                        items.append({"text": text, "selector": sel_gen or sel})
+                        sel_gen = el.generate_css_selector if hasattr(el, 'generate_css_selector') else sel
+                        items.append({"text": text, "selector": sel_gen})
                 if items:
                     return items
 
-        # 2) find_by_text: extract keywords from task, search page, find similar
-        import re as _re
+        # ═══ 2) find_by_text → find_similar → find_ancestor ═══
         keywords = _re.findall(r'[\u4e00-\u9fff]{2,}|\w{3,}', task)
         for kw in keywords[:5]:
             try:
                 el = page.find_by_text(kw, partial=True, first_match=True)
-                if el:
-                    similar = el.find_similar() if hasattr(el, 'find_similar') else [el]
-                    for s in similar[:50]:
-                        if hasattr(s, 'get_all_text'):
-                            text = s.get_all_text(strip=True)[:500]
-                        else:
-                            text = s.text.strip()[:500] if s.text else ""
-                        if text and len(text) > 15:
-                            items.append({"text": text, "method": "find_similar"})
+                if not el:
+                    continue
+
+                # Find the list/table ancestor container
+                container = None
+                if hasattr(el, 'find_ancestor'):
+                    container = el.find_ancestor(
+                        lambda e: e.tag in ('ul', 'ol', 'table', 'section', 'div') and
+                        (getattr(e, 'css', None) and len(e.css('li, tr, [class*="item"]')) >= 2)
+                    ) or el.parent
+                else:
+                    container = el.parent if hasattr(el, 'parent') else el
+
+                # Find similar items within the container
+                source = container if container else el
+                similar = source.find_similar() if hasattr(source, 'find_similar') else ([source] if source else [])
+                for s in similar[:50]:
+                    text = s.get_all_text(strip=True) if hasattr(s, 'get_all_text') else (s.text or "")
+                    text = (text[:500] if isinstance(text, str) else "")
+                    if text and len(text) > 15:
+                        items.append({"text": text, "method": "find_similar"})
+
+                if items:
+                    return items
+            except Exception:
+                continue
+
+        # ═══ 3) find_by_regex: common extractable patterns ═══
+        generic_patterns = [
+            r'https?://[^\s<>"\')\]},，。]{10,}',  # URLs
+            r'[\w.-]+@[\w.-]+\.\w+',               # emails
+            r'(?:1[3-9]\d|86)?\d{7,11}',           # phone numbers
+        ]
+        for pat in generic_patterns:
+            try:
+                matches = page.find_by_regex(_re.compile(pat), first_match=False)
+                if matches:
+                    for m in matches[:50]:
+                        text = m.extract_first() if hasattr(m, 'extract_first') else (m.text or "")
+                        text = (text[:500] if isinstance(text, str) else "")
+                        if text:
+                            items.append({"text": text, "pattern": pat, "method": "regex"})
                     if items:
                         return items
             except Exception:
                 continue
 
-        # 3) Download links (pdf, doc, xls, zip, rar, 7z)
-        dl_links = [{"text": ((a.text or "").strip() if hasattr(a, 'text') else "")[:200],
-                     "link": a.attrib.get("href", ""),
-                     "method": "download_link"}
-                    for a in page.css("a[href]")
-                    if any(e in (a.attrib.get("href", "") or "").lower()
-                           for e in [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar"])]
+        # ═══ 4) Download links ═══
+        dl_exts = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar", ".7z", ".ppt", ".pptx"]
+        dl_links = []
+        for a in page.css("a[href]"):
+            href = (a.attrib.get("href", "") or "").lower()
+            if any(href.endswith(e) or (f".{e.strip('.')}?" in href) for e in dl_exts):
+                label = (a.text or "").strip() if hasattr(a, 'text') else ""
+                label = label.clean if hasattr(label, 'clean') else label
+                dl_links.append({"text": label[:200] if label else "附件", "link": a.attrib.get("href", ""), "method": "download_link"})
         if dl_links:
             return dl_links[:50]
 

@@ -24,6 +24,7 @@ Key: **LLM is the router**. No centralized tool dispatcher. The LLM sees availab
 and decides which to call based on the user's intent.
 
 Scrapling extraction toolkit (in browser_agent._direct_extract):
-  css/xpath selectors → find_by_text → find_similar → get_all_text → download links
+  css/xpath selectors → find_by_text → find_similar → find_ancestor → find_by_regex
+  get_all_text → extract_first → text.clean → generate_css_selector → download links
   Adaptive: auto_save + adaptive survives page structure changes
-  Anti-bot: DynamicFetcher with retries, block_ads, disable_resources
+  Anti-bot: DynamicFetcher with retries, block_ads, disable_resources, page_action scroll

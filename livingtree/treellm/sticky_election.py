@@ -178,17 +178,13 @@ class LayerConfigManager:
 
     def classify(self, query: str) -> int:
         """Classify intent: returns 1 (FAST) or 2 (REASONING)."""
-        # Embedding-based classification
-        emb = self._get_embedding(query)
-        if emb:
-            fast_proto = self._get_embedding("general chat question answer help")
-            reas_proto = self._get_embedding("code debug analyze reason implement fix write create generate")
-            if fast_proto and reas_proto:
-                sim_fast = self._cosine(emb, fast_proto)
-                sim_reas = self._cosine(emb, reas_proto)
-                return 2 if sim_reas > sim_fast else 1
-
-        # Keyword fallback
+        try:
+            from .adaptive_classifier import get_adaptive_classifier
+            cat, conf = get_adaptive_classifier().classify(query, get_adaptive_classifier().LAYERS, "layers")
+            return 2 if cat == "reasoning" else 1
+        except Exception:
+            pass
+        return 1
         q = query.lower()
         reasoning_kw = ["fix", "debug", "implement", "analyze", "code", "refactor",
                        "修复", "调试", "实现", "分析", "优化", "代码", "重构", "排查"]

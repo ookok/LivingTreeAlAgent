@@ -799,8 +799,24 @@ class TreeLLM:
 
     async def chat(self, messages: list[dict], provider: str = "",
                    temperature: float = 0.7, max_tokens: int = 4096,
-                   timeout: int = 120, model: str = "", tools: bool = False, **kwargs) -> ProviderResult:
+                   timeout: int = 120, model: str = "", tools: bool = False,
+                   accelerate: str = "", **kwargs) -> ProviderResult:
         p = self._resolve_provider(provider)
+
+        # ── Acceleration fast-path (bypasses layered routing) ──
+        if accelerate and not provider:
+            try:
+                from .acceleration import get_accelerator
+                accel = get_accelerator(self)
+                result = await accel.chat(messages, prefer=accelerate,
+                                         temperature=temperature,
+                                         max_tokens=max_tokens, tools=tools)
+                if result and result.text:
+                    return ProviderResult(text=result.text, provider=result.provider,
+                                         success=True, elapsed_ms=result.elapsed_ms)
+            except Exception:
+                pass
+
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
 

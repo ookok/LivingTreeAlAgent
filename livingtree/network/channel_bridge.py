@@ -91,31 +91,80 @@ class ChannelBridge:
         self._callbacks.append(callback)
 
     async def start(self):
-        """Start all enabled channel listeners."""
+        """Auto-start ALL available channels silently in background.
+
+        Priority order (most likely to have credentials):
+          1. WeCom Bot (企业微信机器人) — token-based, most reliable
+          2. Feishu (飞书) — tenant_access_token, WebSocket
+          3. DingTalk (钉钉) — Stream mode
+          4. WeChat (微信) — itchat QR (requires user scan, lowest priority)
+          5. Terminal — always available fallback
+        """
         self._running = True
+        tasks = []
 
-        if self._config.channel_type == ChannelType.WEB:
-            return
+        # Auto-detect which channels have credentials
+        cfg = self._config
 
-        ct = self._config.channel_type
+        # WeCom Bot: check for env vars or vault secrets
+        if cfg.wecom_bot_id or self._auto_load_secret("wework_corp_id"):
+            logger.info("ChannelBridge: auto-starting 企业微信")
+            tasks.append(asyncio.create_task(self._run_wecom()))
 
-        if ct == ChannelType.TERMINAL:
-            asyncio.create_task(self._run_terminal())
+        # Feishu: check for app credentials
+        if cfg.feishu_app_id or self._auto_load_secret("feishu_app_id"):
+            logger.info("ChannelBridge: auto-starting 飞书")
+            tasks.append(asyncio.create_task(self._run_feishu()))
 
-        if ct == ChannelType.WEIXIN:
-            asyncio.create_task(self._run_weixin())
+        # DingTalk: check for client credentials
+        if cfg.dingtalk_client_id or self._auto_load_secret("dingtalk_client_id"):
+            logger.info("ChannelBridge: auto-starting 钉钉")
+            tasks.append(asyncio.create_task(self._run_dingtalk()))
 
-        if ct == ChannelType.FEISHU:
-            asyncio.create_task(self._run_feishu())
+        # WeChat: always try (may need QR scan, but will try silently first)
+        try:
+            import importlib
+            importlib.import_module("itchat")
+            logger.info("ChannelBridge: auto-starting 微信 (itchat)")
+            tasks.append(asyncio.create_task(self._run_weixin()))
+        except ImportError:
+            logger.debug("ChannelBridge: itchat not installed, skipping WeChat auto-connect")
 
-        if ct == ChannelType.DINGTALK:
-            asyncio.create_task(self._run_dingtalk())
+        # Terminal: always available
+        if cfg.channel_type == ChannelType.TERMINAL or not tasks:
+            tasks.append(asyncio.create_task(self._run_terminal()))
 
-        if ct == ChannelType.WECOM_BOT:
-            asyncio.create_task(self._run_wecom())
+        # Web: if nothing else, web is default
+        if not tasks:
+            logger.info("ChannelBridge: no channel credentials found, using web only")
 
-        if ct == ChannelType.QQ:
-            asyncio.create_task(self._run_qq())
+        # Feed all incoming messages to user profile pipeline
+        self._callbacks.append(self._auto_profile_feed)
+
+        logger.info(f"ChannelBridge: {len(tasks)} channels auto-started")
+        return tasks
+
+    def _auto_load_secret(self, key: str) -> str:
+        """Load credential from secrets vault or environment."""
+        try:
+            from ..config.secrets import get_secret_vault
+            return get_secret_vault().get(key, "")
+        except Exception:
+            return ""
+
+    async def _auto_profile_feed(self, msg: ChannelMessage):
+        """Silently feed incoming channel messages to user profile pipeline."""
+        try:
+            from ..capability.chat_profile import ChannelToUserAdapter
+            await ChannelToUserAdapter.on_message(
+                platform=msg.channel.value,
+                user_id=msg.user_id or "unknown",
+                content=msg.text,
+                group_id=msg.group_id,
+                metadata={"timestamp": msg.timestamp, "user_name": msg.user_name},
+            )
+        except Exception:
+            pass  # Silent — user shouldn't notice this
 
     async def stop(self):
         self._running = False

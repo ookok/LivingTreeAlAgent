@@ -344,6 +344,82 @@ class InnovationEngine:
             score += 0.1  # diverse vocabulary
         return min(1.0, score)
 
+    # ═══ 10. Entropy-gated Token Routing (Scratchpad Patching inspired) ═
+
+    async def entropy_gated_route(self, messages: list[dict],
+                                   max_switch_tokens: int = 512) -> str:
+        """Adaptive token routing: switch to reasoning based on entropy, not token count.
+
+        Based on arXiv:2605.09630 Scratchpad Patching.
+        Instead of fixed switch at token 256, monitor prediction entropy.
+        High entropy = complex region → switch to reasoning.
+        Low entropy = simple region → stay on fast model.
+        """
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            fast_prov, _ = cfg.get_provider(1)
+            reas_prov, reas_model = cfg.get_provider(2)
+        except Exception:
+            fast_prov, reas_prov = "deepseek", "deepseek"
+
+        t0 = time.time()
+        fast_p = self._tree._providers.get(fast_prov)
+        if not fast_p:
+            return ""
+
+        # Phase 1: Generate from fast model
+        try:
+            fast_resp = await fast_p.chat(
+                messages=messages, temperature=0.5, max_tokens=max_switch_tokens, timeout=20,
+            )
+            fast_text = fast_resp.text if fast_resp and hasattr(fast_resp, 'text') else ""
+        except Exception:
+            return ""
+
+        # Phase 2: Entropy check — is content information-dense?
+        entropy = self._predict_entropy(fast_text)
+        if entropy < 0.4 or len(fast_text) < 100:
+            return fast_text  # low entropy → simple answer, no upgrade needed
+
+        # Phase 3: High entropy → switch to reasoning for remainder
+        reas_p = self._tree._providers.get(reas_prov)
+        if reas_p:
+            try:
+                cont_msgs = list(messages) + [
+                    {"role": "assistant", "content": fast_text},
+                    {"role": "user", "content": "Continue with deeper analysis. The above is incomplete."},
+                ]
+                reas_resp = await reas_p.chat(
+                    messages=cont_msgs, model=reas_model or None,
+                    temperature=0.3, max_tokens=2048, timeout=30,
+                )
+                reas_text = reas_resp.text if reas_resp and hasattr(reas_resp, 'text') else ""
+                full = fast_text + "\n" + reas_text
+                elapsed = (time.time() - t0) * 1000
+                logger.debug(f"Entropy gate: H={entropy:.2f}→L2, {len(fast_text)}→{len(full)} chars ({elapsed:.0f}ms)")
+                return full
+            except Exception:
+                pass
+
+        return fast_text
+
+    @staticmethod
+    def _predict_entropy(text: str) -> float:
+        """Estimate prediction entropy from structural features (0-1)."""
+        if not text or len(text) < 20:
+            return 0.0
+        entropy = 0.3  # base
+        if any(kw in text for kw in ["however", "but", "although", "然而", "但是", "不过"]):
+            entropy += 0.15  # contrast → complexity
+        if text.count(",") > 3:
+            entropy += 0.1  # list → structured
+        if any(p in text for p in ["```", "def ", "class ", "import "]):
+            entropy += 0.2  # code
+        if len(set(text.split())) > 50:
+            entropy += 0.1  # diverse vocabulary
+        return min(1.0, entropy)
+
     @staticmethod
     def _cosine(a, b) -> float:
         if not a or not b or len(a) != len(b):

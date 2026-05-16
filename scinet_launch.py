@@ -23,6 +23,8 @@ import sys
 import os
 import argparse
 import time
+import subprocess
+import socket
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -52,12 +54,56 @@ USAGE_TIPS = """
 """
 
 
+def _kill_existing_scinet(port: int):
+    """Kill any existing scinet process and free the port."""
+    if sys.platform == "win32":
+        # Kill any python process named scinet
+        try:
+            subprocess.run(
+                ['taskkill', '/F', '/IM', 'python.exe', '/FI', f'WINDOWTITLE eq Scinet*'],
+                capture_output=True, timeout=5,
+            )
+        except Exception:
+            pass
+        # Kill process holding the port
+        try:
+            result = subprocess.run(
+                ['netstat', '-ano', '-p', 'tcp'], capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                if f':{port}' in line and 'LISTENING' in line:
+                    parts = line.split()
+                    pid = parts[-1] if parts else ''
+                    if pid.isdigit():
+                        subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True)
+                        print(f"  Killed existing scinet (PID {pid}) on port {port}")
+                        time.sleep(1)
+        except Exception:
+            pass
+    else:
+        try:
+            subprocess.run(
+                ['pkill', '-f', f'scinet_launch.*{port}'], capture_output=True, timeout=5,
+            )
+        except Exception:
+            pass
+        try:
+            subprocess.run(
+                ['fuser', '-k', f'{port}/tcp'], capture_output=True, timeout=5,
+            )
+        except Exception:
+            pass
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Scinet v2.0 — Smart Proxy Launcher")
     parser.add_argument("--port", type=int, default=7890, help="Proxy port (default: 7890)")
     parser.add_argument("--no-pac", action="store_true", help="Do NOT auto-set Windows system proxy")
     parser.add_argument("--wt", action="store_true", help="Enable WebTransport (port+1)")
     args = parser.parse_args()
+
+    # ── Kill existing scinet processes + free the port ──
+    _kill_existing_scinet(args.port)
 
     print(BANNER)
     print(f"  Starting on port {args.port}...\n")

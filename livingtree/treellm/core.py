@@ -902,6 +902,8 @@ class TreeLLM:
                     f"{dynamic_tools}\n"
                     "Core tools always available:\n"
                     "- web_search: search the internet. Args: query text.\n"
+                    "- search_apis: find available APIs by category or keyword. Args: query category.\n"
+                    "- call_api: call a specific web API. Args: api_name, then params as key=value pairs.\n"
                     "- kb_search: search internal knowledge base. Args: query text.\n"
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
@@ -918,7 +920,13 @@ class TreeLLM:
                     '  Card:   {"component":"Card","props":{"title":"标题","children":["<p>内容</p>"],"accent":"blue|green|red"}}\n'
                     '  Alert:  {"component":"Alert","props":{"message":"消息","level":"info|success|warning|error"}}\n'
                     '  Page:   {"component":"Page","props":{"title":"页面标题","children":["..."],"navbar":"..."}}\n'
-                    "After tool results, continue your reasoning. You may call multiple tools."
+                    "After tool results, continue your reasoning. You may call multiple tools.\n\n"
+                    "## When to use which tool:\n"
+                    "- web_search: general questions, news, facts, research topics → broad internet search\n"
+                    "- search_apis: need structured data (weather, finance, maps, translation) → find specific APIs\n"
+                    "- call_api: found the right API via search_apis → call it with specific params\n"
+                    "- kb_search: internal documents, past reports, knowledge base → local search\n"
+                    "- bash: file operations, code execution, system commands → terminal access\n"
                 ),
             }] + messages
         from .cache_director import get_cache_director

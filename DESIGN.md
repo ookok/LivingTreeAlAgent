@@ -1,7 +1,96 @@
+---
+name: LivingTree
+version: 1.0.0
+description: Dark data-dashboard aesthetic with biophilic green accent. Command-center feel, minimal chrome, high information density.
+colors:
+  primary: "#6c8"
+  primary-on: "#0a0a0f"
+  on-primary: "#ffffff"
+  bg: "#0a0a0f"
+  panel: "#12121a"
+  border: "#1e1e2e"
+  text: "#c8c8d4"
+  dim: "#667"
+  warn: "#e8a030"
+  err: "#e05050"
+  light-bg: "#f5f5f5"
+  light-text: "#333"
+  light-dim: "#999"
+typography:
+  fontFamily: system-ui, -apple-system, "Segoe UI", sans-serif
+  fontMono: "JetBrains Mono", "Fira Code", monospace
+  h1: { fontFamily: inherit, fontSize: 18px, fontWeight: 700 }
+  h2: { fontFamily: inherit, fontSize: 14px, fontWeight: 600 }
+  body: { fontFamily: inherit, fontSize: 12px, fontWeight: 400 }
+  code: { fontFamily: "JetBrains Mono", fontSize: 11px }
+  label: { fontFamily: inherit, fontSize: 10px, fontWeight: 400 }
+rounded:
+  sm: 4px
+  md: 6px
+  lg: 8px
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+components:
+  card: { backgroundColor: "{colors.panel}", rounded: "{rounded.lg}", padding: 12px, borderColor: "{colors.border}" }
+  button-primary: { backgroundColor: "{colors.primary}", textColor: "{colors.on-primary}", rounded: "{rounded.md}", padding: "8px 16px" }
+  button-secondary: { backgroundColor: "{colors.panel}", textColor: "{colors.text}", rounded: "{rounded.md}", borderColor: "{colors.border}" }
+  input: { backgroundColor: "{colors.panel}", textColor: "{colors.text}", rounded: "{rounded.sm}", borderColor: "{colors.border}" }
+  tooltip: { backgroundColor: "{colors.panel}", textColor: "{colors.dim}", fontSize: 10px }
+  status-active: { color: "{colors.primary}" }
+  status-error: { color: "{colors.err}" }
+  status-warning: { color: "{colors.warn}" }
+---
+
 # DESIGN.md — Architecture & Design Decisions
 
-> LivingTree AI Agent v2.5 — Web Tool Chain Architecture
-> See also: [AGENTS.md](AGENTS.md) for the tool chain reference card.
+> LivingTree AI Agent v2.5 — Google DESIGN.md format
+> Validated via `npx @google/design.md lint DESIGN.md`
+> See also: [AGENTS.md](AGENTS.md) for the tool chain reference card, [CONVENTIONS.md](CONVENTIONS.md) for code conventions
+
+---
+
+## Overview
+
+Dark command-center aesthetic with a biophilic green accent (`#6c8`). The UI evokes a data dashboard — high information density, minimal chrome, monospace code areas. Focus is on content, not decoration.
+
+## Colors
+
+Three-layer hierarchy:
+- **Primary (`#6c8`)** — accent green. CTA buttons, active states, success indicators. The only saturated color.
+- **Neutrals (`#0a0a0f` → `#c8c8d4`)** — bg → panel → border → text → dim. Dark slate gradient.
+- **Alert colors** — warn (`#e8a030`) and err (`#e05050`) for status indicators only.
+
+Light mode inverts the neutral scale (`#f5f5f5` bg, `#333` text).
+
+## Layout & Spacing
+
+Grid-based admin console with auto-fill columns (`grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))`). Cards use `{spacing.md}` padding. Nav buttons use `{spacing.sm}` gaps.
+
+## Shapes
+
+All UI elements use `{rounded.sm}` to `{rounded.md}`. No sharp corners. Cards and panels use `{rounded.lg}`.
+
+## Components
+
+| Component | Token |
+|-----------|-------|
+| Card | `{components.card}` |
+| Primary Button | `{components.button-primary}` |
+| Secondary Button | `{components.button-secondary}` |
+| Input/Textarea | `{components.input}` |
+
+## Do's and Don'ts
+
+- ✅ Use `var(--accent)` for interactive elements and primary CTA
+- ✅ Use `var(--dim)` for secondary info, timestamps, metadata
+- ✅ Use `var(--err)` only for destructive actions and error states
+- ✅ Prefer Tailwind utility classes over custom CSS
+- ❌ Don't add new color tokens without updating this file
+- ❌ Don't use raw hex values in HTML — use CSS variables
 
 ---
 
@@ -14,156 +103,86 @@ User Input → TreeLLM.chat() →
   Result → injected into LLM context → final answer
 ```
 
-**Key design decision**: No centralized tool dispatcher. The LLM itself is the router.
-It sees the full available tool list in its system prompt and decides which tool(s) to
-invoke based on the user's intent. This avoids the fragility of hard-coded dispatch rules
-and lets the LLM reason about tool selection dynamically.
+| Tool | Module | Purpose |
+|------|--------|---------|
+| `api_search` | `capability_bus.py → api_map` | Discover matching APIs by keyword |
+| `api_call` | `treellm/api_map.py` | 28 REST/JSON APIs (weather, maps, translate, etc.) |
+| `web_search` | `execution/react_executor.py` | Multi-engine: Parallel MCP → SparkSearch → Bing → DDG |
+| `web_fetch` | `capability_bus.py → Scrapling Fetcher` | Static HTTP GET (TLS impersonation, stealth headers) |
+| `browser_browse` | `capability/browser_agent.py` | Playwright + LLM: JS render, type, click, extract (ARIA tree, ~2KB per page) |
+| `browser_screenshot` | `capability/browser_agent.py` | Take page screenshot, returns base64 for LLM visual analysis |
+| `browser_session_open` | `capability/browser_agent.py` | Open persistent browser session (reuse across calls) |
+| `browser_session_close` | `capability/browser_agent.py` | Close browser session |
+| `browser_session_list` | `capability/browser_agent.py` | List active sessions |
 
-### 1.1 Eight Tools in Scope
+Key: **LLM is the router**. No centralized tool dispatcher. The LLM sees available tools
+and decides which to call based on the user's intent.
 
-| # | Tool | Module | Purpose |
-|---|------|--------|---------|
-| 1 | `api_search` | `capability_bus.py → api_map` | Discover matching REST API endpoints by keyword |
-| 2 | `api_call` | `treellm/api_map.py` | Call a registered API (28 REST/JSON endpoints) |
-| 3 | `web_search` | `execution/react_executor.py` | Multi-engine internet search (MCP → Spark → Bing → DDG) |
-| 4 | `web_fetch` | `capability_bus.py → Scrapling Fetcher` | Static HTTP GET with TLS impersonation, stealth headers |
-| 5 | `browser_browse` | `capability/browser_agent.py` | Playwright + LLM: JS render, type, click, extract |
-| 6 | `browser_screenshot` | `capability/browser_agent.py` | Page screenshot → base64 for LLM visual analysis |
-| 7 | `browser_session_open` | `capability/browser_agent.py` | Open persistent browser session (reuse across calls) |
-| 8 | `browser_session_close` | `capability/browser_agent.py` | Close browser session |
-| 9 | `browser_session_list` | `capability/browser_agent.py` | List active sessions |
-
-### 1.2 Tool Call XML Format
-
-The LLM emits tool invocations in a structured XML-like format understood by
-`execution/react_executor.py`. Each call carries a tool name, parameters, and an
-optional `think` block for reasoning trace.
-
-### 1.3 Entry Point: `TreeLLM.chat()`
-
-`livingtree/treellm/core.py` — `TreeLLM` is the multi-provider LLM engine (28 providers
-from 18 base classes). `TreeLLM.chat()` is the single entry point for all LLM interactions,
-including tool-augmented ones.
+Scrapling extraction toolkit (in browser_agent._direct_extract):
+  css/xpath selectors → find_by_text → find_similar → find_ancestor → find_by_regex
+  get_all_text → extract_first → text.clean → generate_css_selector → download links
+  Adaptive: auto_save + adaptive survives page structure changes
+  Anti-bot: StealthyFetcher with solve_cloudflare, hide_canvas, block_webrtc, retries, block_ads, disable_resources, page_action scroll
 
 ---
 
-## 2. Scrapling Integration — Anti-Bot & JS Render
+## 2. StealthyFetcher — Anti-bot Bypass
 
-The web tool chain integrates **Scrapling** (Python stealth scraping library) for two
-distinct purposes:
+Tiered browser launch in `browser_agent._navigate()`:
+  1. **StealthyFetcher** (patchright) — solve_cloudflare, hide_canvas, block_webrtc
+  2. **DynamicFetcher** (Playwright) — JS render, retries=2, block_ads, disable_resources
+  3. **Raw Playwright** — direct goto with stealth headers
 
-### 2.1 Static Fetcher (`StealthyFetcher`)
-
-- **Module**: `livingtree/treellm/capability_bus.py`
-- **Class**: `StealthyFetcher` (from `scrapling.fetchers`)
-- **Purpose**: Static HTTP GET with TLS impersonation (Chromium fingerprint), stealth
-  headers, and cookie persistence to bypass Cloudflare, Turnstile, canvas fingerprinting,
-  and WebRTC leak detection.
-- **Used by**: `web_fetch` tool
-
-### 2.2 Dynamic Fetcher (`DynamicFetcher`)
-
-- **Module**: `livingtree/capability/browser_agent.py`
-- **Class**: `DynamicFetcher` (from `scrapling.fetchers`)
-- **Purpose**: Chromium-backed JS rendering for pages that require JavaScript execution.
-  Supports retries, ad blocking, resource disabling, and scroll actions.
-
-### 2.3 Fetcher Import Pattern
-
-All imports are **hard** — no `try/except ImportError` fallback:
-
-```python
-from scrapling.fetchers import Fetcher, DynamicFetcher, StealthyFetcher
-from scrapling.parser import Selector
-```
+Block detection: checks for 云防御/拦截/captcha/blocked signals.
 
 ---
 
-## 3. ARIA Tree Extraction — ~2KB vs. 30KB Raw HTML
+## 3. ARIA Tree Extraction
 
-The `browser_browse` tool extracts the **ARIA accessibility tree** instead of raw HTML
-for LLM consumption:
-
-| Approach | Size | LLM Token Cost |
-|----------|------|----------------|
-| Raw HTML | ~30 KB | ~7,500 tokens |
-| ARIA Tree | ~2 KB | ~500 tokens |
-
-The ARIA tree provides structured, semantic page state (roles, labels, values) with 15x
-fewer tokens, making it practical to fit page context in the LLM's context window without
-truncation.
-
-**Implementation**: `livingtree/capability/browser_agent.py` — `_extract_aria_tree()` method.
-
-Scrapling extraction toolkit (`_direct_extract`):
-```
-css/xpath selectors → find_by_text → find_similar → find_ancestor → find_by_regex
-get_all_text → extract_first → text.clean → generate_css_selector → download links
-Adaptive: auto_save + adaptive survives page structure changes
-```
+Replaces raw HTML (30KB) with structured JSON (~2KB):
+  - `_extract_page_state()` → {title, inputs[], clickables[], text}
+  - Inputs include CSS selector, type, placeholder, visibility
+  - Clickables include CSS selector and text label
+  - LLM receives clean structure, decides next action
 
 ---
 
-## 4. JSON Serialization — orjson 12x
+## 4. orjson — 12x Faster Serialization
 
-All JSON input/output uses `orjson` for 12x faster serialization compared to stdlib `json`:
-
-```python
-import orjson
-_json_dumps = lambda obj: orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()
-_json_loads = orjson.loads
-```
-
-This is critical because tool results (especially browser screenshots and ARIA trees) are
-serialized/deserialized frequently in the LLM context pipeline.
+All JSON output uses orjson (12x over stdlib json.dumps):
+  - `BrowseResult.to_json()` — browser result serialization
+  - `WebToolRouter` result formatting
+  - LLM response parsing (`_parse_json`)
 
 ---
 
-## 5. API Map — 28 REST Endpoints
+## 5. API Map — 28 Endpoints, 50 Secrets
 
-`livingtree/treellm/api_map.py` registers 28 REST/JSON API endpoints covering:
-weather, maps, translation, geocoding, IP lookup, currency conversion, and more.
-
-The `api_search` tool queries this map by keyword and returns matching endpoint
-descriptors. The `api_call` tool then executes a selected endpoint with user-provided
-parameters.
+- 28 REST/JSON API endpoints in `api_map.py`
+- 50 encrypted secrets in `config/secrets.enc`
+- Auto-loads API keys from vault on init
+- Categories: weather (5), media (2), map (3), dev (3), academic (1), knowledge (1), language (1), finance (2), data (3), fun (4), news (2), network (1)
 
 ---
 
-## 6. Skill System — 10 Security Fixes Applied
+## 6. Skill System — 10 Security Fixes
 
-The Three-SKILL system (`skill_discovery.py`, `skill_factory.py`, `skill_buckets.py`)
-allows the agent to autonomously discover, create, and organize skills. After an audit,
-**10 security fixes** were applied:
-
-- Input sanitization on skill parameters
-- Sandboxed execution boundaries
-- Permission gating for destructive skills
-- Rate limiting on skill factory
-- Skill source verification
-- Prevent recursive self-modification loops
-- Output validation before downstream consumption
-- Scope isolation between skill buckets
-- Audit logging for all skill creations
-- Kill switch for runaway skill execution
+- AST scan on LLM-generated code (reject dangerous imports/calls)
+- Git clone URL whitelist (github/gitlab/gitee/bitbucket/codeberg only)
+- pip install virtualenv isolation with --user fallback
+- Skill body HTML sanitization (strip script/iframe/js:)
+- YAML bomb protection (64KB frontmatter cap, 500-key map limit)
+- Rate limiting on skill creation (20/hour per user)
+- Workspace membership check before skill CRUD
+- File extension validation in skill discovery
+- Frontmatter line count limit (100 lines)
+- Fixed SkillAdapter method reference (execute_skill → execute)
 
 ---
 
-## 7. Encrypted Secrets Vault — 50 Entries
+## 7. Hard Import Policy
 
-The secrets vault stores ~50 encrypted values (API keys, tokens, service credentials)
-using `cryptography` (Fernet symmetric encryption). Vault is loaded at startup by the
-config subsystem and never exposes raw values in logs or LLM context.
-
-**Module**: `livingtree/config/` — vault integration.
-
----
-
-## 8. All Imports Are Hard
-
-Every package import in the codebase uses direct `import` statements. There are no
-`try/except ImportError` fallback patterns. This ensures:
-
-- Fast-fail at import time (no silent degradation)
-- Clear dependency requirements
-- No hidden missing-package bugs
+All external package imports are direct (no try/except ImportError):
+  - Framework deps: scrapling, playwright, orjson, aiohttp, bs4, lxml
+  - Optional deps: numpy, torch, faiss, paddleocr, etc. (fail-fast with clear ModuleNotFoundError)
+  - Internal module imports use try/except (legitimate for optional subsystems)

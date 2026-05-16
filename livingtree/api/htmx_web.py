@@ -2625,6 +2625,82 @@ async def tree_admin_shield(request: Request):
     from ..core.prompt_shield import get_shield
     return HTMLResponse(get_shield().render_html())
 
+@htmx_router.get("/admin/layers")
+async def tree_admin_layers(request: Request):
+    """3-layer provider configuration panel."""
+    from ..treellm.sticky_election import get_layer_config, LayerConfigManager
+    mgr = get_layer_config()
+    configs = mgr.get_all()
+    
+    rows = ""
+    for name in ["vector", "fast", "reasoning"]:
+        c = configs[name]
+        icon = {"vector": "🧮", "fast": "⚡", "reasoning": "🧠"}[name]
+        desc = {"vector": "意图识别 & 嵌入", "fast": "日常快反 (80%请求)", "reasoning": "深度推理 & 创作"}[name]
+        deg = "🔴" if c["degraded"] else "🟢"
+        rows += f'''
+        <div class="card" style="padding:12px;margin:8px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <b>{icon} {name.upper()}</b>
+              <span style="color:var(--dim);font-size:11px;margin-left:8px">{desc}</span>
+              <span style="margin-left:8px">{deg}</span>
+            </div>
+            <div style="font-size:10px;color:var(--dim)">{c["successes"]} OK / {c["failures"]} fail</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px">
+            <div>
+              <label style="font-size:10px;color:var(--dim)">Provider</label>
+              <input id="{name}-provider" value="{c["provider"]}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:11px">
+            </div>
+            <div>
+              <label style="font-size:10px;color:var(--dim)">Model</label>
+              <input id="{name}-model" value="{c["model"]}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:11px">
+            </div>
+            <div>
+              <label style="font-size:10px;color:var(--dim)">API Key {"✅" if c["api_key_set"] else ""}</label>
+              <input id="{name}-apikey" placeholder="(从vault自动加载)" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:11px">
+            </div>
+          </div>
+        </div>'''
+    
+    html = f'''<div class="card">
+<h2>🔧 层配置 <span style="font-size:10px;color:var(--dim)">— 向量层 · 快反层 · 推理层</span></h2>
+<p style="font-size:10px;color:var(--dim);margin:4px 0">配置自动保存到 .livingtree/layer_config.json。留空使用默认值。</p>
+{rows}
+<div style="margin-top:12px;display:flex;gap:6px">
+  <button onclick="saveLayers()" style="font-size:11px;padding:6px 16px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;cursor:pointer">💾 保存</button>
+  <button onclick="resetLayers()" style="font-size:11px;padding:6px 16px;background:var(--panel);color:var(--dim);border:1px solid var(--border);border-radius:6px;cursor:pointer">↩ 重置默认</button>
+</div>
+<div id="layer-result" style="margin-top:8px;font-size:10px;color:var(--dim)"></div>
+</div>
+<script>
+async function saveLayers(){{
+  var data={{}};
+  ["vector","fast","reasoning"].forEach(function(n){{
+    var l={{"vector":0,"fast":1,"reasoning":2}}[n];
+    data[n]={{provider:document.getElementById(n+"-provider").value,model:document.getElementById(n+"-model").value,api_key:document.getElementById(n+"-apikey").value}};
+  }});
+  var el=document.getElementById("layer-result");
+  try{{
+    var r=await fetch("/api/layers/save",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify(data)}});
+    var j=await r.json();
+    el.innerHTML="<span style=\\'color:var(--accent)\\'>✅ 已保存。重启或下次请求生效。</span>";
+  }}catch(e){{el.innerHTML="<span style=\\'color:var(--err)\\'>❌ "+e.message+"</span>"}}
+}}
+async function resetLayers(){{
+  var el=document.getElementById("layer-result");
+  try{{
+    var r=await fetch("/api/layers/reset",{{method:"POST"}});
+    var j=await r.json();
+    el.innerHTML="<span style=\\'color:var(--accent)\\'>✅ 已重置为默认值。刷新页面查看。</span>";
+    setTimeout(function(){{location.reload()}},500);
+  }}catch(e){{el.innerHTML="<span style=\\'color:var(--err)\\'>❌ "+e.message+"</span>"}}
+}}
+</script>'''
+    return HTMLResponse(html)
+
+
 @htmx_router.get("/admin/telemetry")
 async def tree_admin_telemetry(request: Request):
     from ..core.telemetry import get_telemetry
@@ -2722,6 +2798,7 @@ async def tree_admin_console(request: Request):
   <button onclick="loadAdminPanel('shield')" class="admin-nav-btn" id="admin-nav-shield">🛡️ 防护</button>
   <button onclick="loadAdminPanel('telemetry')" class="admin-nav-btn" id="admin-nav-telemetry">📊 遥测</button>
   <button onclick="loadAdminPanel('pipeline')" class="admin-nav-btn" id="admin-nav-pipeline">⚙ 管道</button>
+  <button onclick="loadAdminPanel('layers')" class="admin-nav-btn" id="admin-nav-layers">🔧 层配置</button>
   <button onclick="loadAdminPanel('spider')" class="admin-nav-btn" id="admin-nav-spider">🕷 爬虫</button>
 </div>
 
@@ -2751,6 +2828,7 @@ var adminPanelMap = {
   shield: "/tree/admin/shield",
   telemetry: "/tree/admin/telemetry",
   pipeline: "/tree/admin/pipeline",
+  layers: "/tree/admin/layers",
   spider: "/tree/admin/spider"
 };
 

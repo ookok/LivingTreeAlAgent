@@ -158,15 +158,13 @@ class TreeLLM:
             except Exception as e:
                 logger.debug(f"ModelRegistry: {e}")
 
-            # ── StickyElection: startup L0-L4 provider election + bge embedding ──
+            # ── LayerConfig: startup 3-layer provider loading ──
             try:
-                from .sticky_election import get_sticky_election
-                self._sticky = get_sticky_election(llm)
-                asyncio.ensure_future(self._sticky.elect_all())
-                # Pre-warm embedding model in background
+                from .sticky_election import get_layer_config
+                self._layer_config = get_layer_config()
                 asyncio.ensure_future(self._warm_embedding())
             except Exception as e:
-                logger.debug(f"StickyElection init: {e}")
+                logger.debug(f"LayerConfig init: {e}")
             # Quick health check
             try:
                 from .vital_signs import get_vital_signs

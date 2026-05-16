@@ -1,439 +1,215 @@
-"""Sticky Layer Election with Continuous Attractor stabilization.
-
-Based on: Representation Transfer via Invariant Input-driven Continuous
-  Attractors for Fast Domain Adaptation (Communications Biology, 2026)
-
-Core insight: Provider election converges to stable attractor states.
-  Same intent with different phrasing → same attractor basin.
-  Small input perturbations don't cause unnecessary re-elections.
+"""LayerConfig — 3-layer provider election with frontend-configurable settings.
 
 Architecture:
-  L0 (primary)    → cheapest + fastest
-  L1 (fallback)   → balanced
-  L2 (reasoning)  → highest reasoning score
-  L3 (creative)   → highest quality
-  L4 (emergency)  → most survivable
+  L0 VECTOR     → embedding/intent classification (BAAI/bge-large-zh-v1.5)
+  L1 FAST       → fast response (deepseek-v4-flash, default for 80% queries)
+  L2 REASONING  → deep thinking (deepseek-v4-pro, code/analysis/creative)
 
-Attractor Basin:
-  Each elected provider creates an attractor basin — neighboring
-  providers in the same family/tier that share similar characteristics.
-  On failure, basin members are tried first before full re-election.
-  Only when entire basin fails → re-elect the layer.
+Startup: load config from .livingtree/layer_config.json (or use defaults).
+Admin panel: /admin/layers → configure provider, api_key, model per layer.
 
 Flow:
-  Startup → elect all 5 layers → compute attractor basins → lock
-  Request → use L0; fail → try L0 basin → fail → try L1 → ... L4
-  Layer fail → try basin members → all fail → re-elect layer → new basin
-
-Integration:
-  election = get_sticky_election()
-  await election.elect_all()
-  binding = election.get_for_request(0, intent="weather query")
+  classify(query) → embedding → FAST or REASONING
+  FAST fails → retry FAST → fails → fallback to REASONING
+  REASONING fails → fallback to FAST
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
 
+CONFIG_PATH = Path(".livingtree/layer_config.json")
+
 
 @dataclass
-class LayerBinding:
-    """A locked provider + its attractor basin."""
-    layer: int
-    provider_name: str
+class LayerConfig:
+    """Configuration for one layer."""
+    provider: str = ""
     model: str = ""
-    elected_at: float = 0.0
-    failure_count: int = 0
-    success_count: int = 0
-    last_error: str = ""
+    api_key: str = ""      # empty = use vault, "vault" = auto-load
     degraded: bool = False
-    # Continuous attractor basin: same-family providers that can substitute
-    attractor_basin: list[str] = field(default_factory=list)
-    basin_failures: dict[str, int] = field(default_factory=dict)
+    failures: int = 0
+    successes: int = 0
+    last_error: str = ""
 
 
-class StickyElection:
-    """Startup-elected provider layers with attractor-based fallback.
+class LayerConfigManager:
+    """3-layer provider configuration with frontend settings support."""
 
-    Each layer's provider forms an attractor basin — neighboring providers
-    that share the same base family or tier. On failure, basin members
-    are tried first (they're within the same attractor), avoiding unnecessary
-    full re-elections for minor perturbations.
-    """
-
-    LAYER_COUNT = 5
-    LAYER_NAMES = {0: "primary", 1: "fallback", 2: "reasoning", 3: "creative", 4: "emergency"}
-    LAYER_DEFAULTS = {
-        0: ("deepseek", "deepseek-v4-flash"),    # fast/cheap
-        1: ("deepseek", "deepseek-v4-flash"),    # retry same model
-        2: ("deepseek", "deepseek-v4-pro"),      # deep reasoning
-        3: ("deepseek", "deepseek-v4-pro"),      # high quality
-        4: ("deepseek", "deepseek-v4-flash"),    # reliable baseline
+    LAYERS = {0: "vector", 1: "fast", 2: "reasoning"}
+    DEFAULTS = {
+        0: LayerConfig(provider="siliconflow", model="BAAI/bge-large-zh-v1.5"),
+        1: LayerConfig(provider="deepseek", model="deepseek-v4-flash"),
+        2: LayerConfig(provider="deepseek", model="deepseek-v4-pro"),
     }
-    EMBEDDING_MODEL = "BAAI/bge-large-zh-v1.5"
-    LAYER_DOMAINS = {
-        0: ["general", "chat", "conversation", "qa"],
-        1: ["search", "knowledge", "retrieval", "lookup"],
-        2: ["code", "analysis", "reasoning", "math", "debug", "planning"],
-        3: ["creative", "writing", "generation", "translation", "summarization"],
-        4: ["emergency", "long_context", "multimodal", "all"],
-    }
-    DOMAIN_TO_LAYER = {}
-    for layer, domains in LAYER_DOMAINS.items():
-        for domain in domains:
-            DOMAIN_TO_LAYER[domain] = layer
 
-    _instance: Optional["StickyElection"] = None
+    _instance: Optional["LayerConfigManager"] = None
     _lock = threading.Lock()
 
-    def __init__(self, tree_llm=None):
-        self._tree = tree_llm
-        self._layers: dict[int, LayerBinding] = {}
-        self._lock = threading.RLock()
-        self._initialized = False
-        self._layer_prototypes: dict[int, list[float]] = {}  # layer → embedding
+    def __init__(self):
+        self._configs: dict[int, LayerConfig] = {l: LayerConfig() for l in range(3)}
+        self._load()
 
     @classmethod
-    def instance(cls, tree_llm=None) -> "StickyElection":
+    def instance(cls) -> "LayerConfigManager":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = StickyElection(tree_llm)
+                    cls._instance = LayerConfigManager()
         return cls._instance
 
-    # ═══ Intent → Layer Mapping (unified: keyword + semantic) ═════
+    # ═══ Config Persistence ════════════════════════════════════════
 
-    def classify_intent(self, query: str) -> int:
-        """Map a query to a layer (0-4) via embedding similarity.
-
-        Uses text_to_embedding() from task_vector_geometry.
-        Each layer has a prototype embedding (computed once on first call).
-        Query embedding is compared to all prototypes via cosine similarity.
-        Falls back to keyword matching if embedding unavailable.
-        """
-        q = (query or "").lower()
-
-        # Primary: embedding-based classification
+    def _load(self):
         try:
-            from ..dna.task_vector_geometry import text_to_embedding
-            q_emb = text_to_embedding(query)
-
-            if not self._layer_prototypes:
-                self._build_prototypes(text_to_embedding)
-
-            best_layer = 0
-            best_sim = -1.0
-            for layer, proto_emb in self._layer_prototypes.items():
-                sim = self._cosine_similarity(q_emb, proto_emb)
-                if sim > best_sim:
-                    best_sim = sim
-                    best_layer = layer
-
-            if best_sim > 0.1:
-                return best_layer
+            if CONFIG_PATH.exists():
+                data = json.loads(CONFIG_PATH.read_text())
+                for l in range(3):
+                    key = str(l)
+                    if key in data:
+                        d = data[key]
+                        self._configs[l] = LayerConfig(
+                            provider=d.get("provider", self.DEFAULTS[l].provider),
+                            model=d.get("model", self.DEFAULTS[l].model),
+                            api_key=d.get("api_key", ""),
+                        )
+                logger.info(f"LayerConfig loaded from {CONFIG_PATH}")
+                return
         except Exception:
             pass
+        self._configs = {l: LayerConfig(**dc.__dict__) for l, dc in self.DEFAULTS.items()}
 
-        # Fallback: keyword matching (fast, works without embedding model)
-        return self._classify_keywords(q)
+    def _save(self):
+        try:
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                str(l): {"provider": c.provider, "model": c.model, "api_key": c.api_key}
+                for l, c in self._configs.items()
+            }
+            CONFIG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        except Exception as e:
+            logger.warning(f"LayerConfig save: {e}")
 
-    def _build_prototypes(self, embed_fn):
-        """Build prototype embeddings for each layer from domain descriptions."""
-        prototypes = {}
-        domain_descriptions = {
-            0: "hello chat conversation general question help explain what is how to",
-            1: "search find lookup query retrieve knowledge information web",
-            2: "code debug fix implement refactor analyze reason compare evaluate algorithm function class import",
-            3: "write create generate translate summarize rewrite compose poem story email report",
-            4: "emergency critical urgent fallback any domain",
+    # ═══ Getters ═══════════════════════════════════════════════════
+
+    def get_provider(self, layer: int) -> tuple[str, str]:
+        """Get (provider_name, model) for a layer."""
+        c = self._configs.get(layer, self.DEFAULTS[layer])
+        return c.provider or self.DEFAULTS[layer].provider, c.model or self.DEFAULTS[layer].model
+
+    def get_api_key(self, layer: int) -> str:
+        """Get API key for a layer. Tries explicit key → vault → env."""
+        c = self._configs.get(layer)
+        if c and c.api_key and c.api_key != "vault":
+            return c.api_key
+        try:
+            from livingtree.config.secrets import get_secret_vault
+            vault = get_secret_vault()
+            key_map = {0: "siliconflow_api_key", 1: "deepseek_api_key", 2: "deepseek_api_key"}
+            return vault._cache.get(key_map.get(layer, ""), "")
+        except Exception:
+            pass
+        return ""
+
+    def get_all(self) -> dict:
+        """Get all layer configs for frontend display."""
+        return {
+            self.LAYERS[l]: {
+                "provider": c.provider, "model": c.model,
+                "api_key_set": bool(c.api_key),
+                "degraded": c.degraded, "failures": c.failures,
+                "successes": c.successes, "last_error": c.last_error[:80],
+            }
+            for l, c in self._configs.items()
         }
-        for layer, desc in domain_descriptions.items():
-            self._layer_prototypes[layer] = embed_fn(desc)
-        return prototypes
 
-    def _classify_keywords(self, q: str) -> int:
-        """Keyword-based fallback classification (CN + EN)."""
-        import re
-        scores = {l: 0.0 for l in range(self.LAYER_COUNT)}
-        kw = {
-            # L2 reasoning
-            "fix": 2, "debug": 2, "refactor": 2, "implement": 2, "optimize": 2,
-            "analyze": 2, "reason": 2, "compare": 2, "evaluate": 2,
-            "修复": 2, "调试": 2, "实现": 2, "分析": 2, "优化": 2, "重构": 2,
-            "排查": 2, "对比": 2, "评估": 2, "检查": 2, "测试": 2,
-            # L1 fallback/search
-            "search": 1, "find": 1, "lookup": 1, "retrieve": 1, "query": 1,
-            "搜索": 1, "查找": 1, "检索": 1, "查询": 1, "寻找": 1,
-            # L3 creative
-            "write": 3, "create": 3, "generate": 3, "translate": 3,
-            "summarize": 3, "rewrite": 3, "compose": 3,
-            "写": 3, "创建": 3, "生成": 3, "翻译": 3, "总结": 3, "重写": 3,
-            "创作": 3, "编写": 3, "作曲": 3, "报告": 3, "诗歌": 3, "文章": 3,
-            # L0 primary/chat
-            "chat": 0, "hello": 0, "help": 0, "explain": 0,
-            "你好": 0, "帮助": 0, "解释": 0, "是什么": 0, "怎么": 0,
-        }
-        for k, layer in kw.items():
-            if k in q:
-                scores[layer] += 1.0
-        code = re.findall(r'\b(def|class|import|function|api|http|sql|json|csv|xml|regex|代码|函数|接口)\b', q)
-        if code:
-            scores[2] += len(code) * 0.5
-        best = max(scores.values())
-        if best == 0:
-            return 0
-        return max((l for l, s in scores.items() if s == best))
+    # ═══ Setters (for frontend API) ════════════════════════════════
 
-    @staticmethod
-    def _cosine_similarity(a, b) -> float:
-        if not a or not b:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = sum(x * x for x in a) ** 0.5
-        nb = sum(y * y for y in b) ** 0.5
-        if na == 0 or nb == 0:
-            return 0.0
-        return dot / (na * nb)
+    def set_layer(self, layer: int, provider: str = "", model: str = "", api_key: str = ""):
+        """Update layer config from frontend and persist."""
+        if layer not in self._configs:
+            raise ValueError(f"Invalid layer: {layer}")
+        c = self._configs[layer]
+        if provider:
+            c.provider = provider
+        if model:
+            c.model = model
+        if api_key:
+            c.api_key = api_key
+        c.degraded = False
+        c.failures = 0
+        self._save()
+        logger.info(f"LayerConfig L{layer} ({self.LAYERS[layer]}): {c.provider}/{c.model}")
+        return self.get_all()
 
-    def intent_name(self, query: str) -> str:
-        """Human-readable intent name for a query."""
-        layer = self.classify_intent(query)
-        return self.LAYER_NAMES[layer]
+    # ═══ Health ════════════════════════════════════════════════════
 
-    async def elect_all(self) -> dict[int, LayerBinding]:
-        """Full L0-L4 election + attractor basin computation."""
-        with self._lock:
-            for layer in range(self.LAYER_COUNT):
-                binding = await self._elect_layer(layer)
-                binding.attractor_basin = self._compute_basin(binding)
-                self._layers[layer] = binding
-                logger.info(
-                    f"StickyElection L{layer} ({self.LAYER_NAMES[layer]}): "
-                    f"{binding.provider_name}/{binding.model} "
-                    f"[basin={len(binding.attractor_basin)}]"
-                )
-            self._initialized = True
-            return dict(self._layers)
+    def mark_failure(self, layer: int, error: str = ""):
+        c = self._configs.get(layer)
+        if c:
+            c.failures += 1
+            c.last_error = error
+            if c.failures >= 2:
+                c.degraded = True
 
-    async def reelect_layer(self, layer: int) -> LayerBinding:
-        """Re-elect a single layer + recompute its attractor basin."""
-        with self._lock:
-            old = self._layers.get(layer)
-            binding = await self._elect_layer(layer, exclude=old.provider_name if old else "")
-            binding.attractor_basin = self._compute_basin(binding)
-            self._layers[layer] = binding
-            if old:
-                logger.warning(
-                    f"StickyElection L{layer} re-elected: "
-                    f"{old.provider_name}→{binding.provider_name} "
-                    f"(old failures={old.failure_count}, basin exhausted={len(old.basin_failures)})"
-                )
-            return binding
-
-    async def _elect_layer(self, layer: int, exclude: str = "") -> LayerBinding:
-        """Elect provider for a layer using pre-configured defaults or scoring."""
-        candidates = self._get_candidates()
-
-        # Use LAYER_DEFAULTS if no runtime scoring data accumulated
-        default = self.LAYER_DEFAULTS.get(layer, ("deepseek", ""))
-        has_scoring = any(
-            c.get("success_rate", 0.5) != 0.5 or c.get("reasoning_score", 0) > 0
-            for c in candidates
-        )
-
-        if not has_scoring:
-            provider_name, model = default
-            return LayerBinding(layer=layer, provider_name=provider_name,
-                               model=model, elected_at=time.time())
-
-        # Scoring-based election (runs after history accumulated)
-        if exclude:
-            candidates = [c for c in candidates if c.get("name") != exclude]
-        if not candidates:
-            return LayerBinding(layer=layer, provider_name=default[0],
-                               model=default[1], elected_at=time.time())
-            best = min(candidates, key=lambda c: (c.get("cost", 999), c.get("avg_latency_ms", 9999)))
-        elif layer == 1:
-            scored = [(c, c.get("success_rate", 0) * 0.6 + (1 - c.get("avg_latency_ms", 0) / 10000) * 0.4) for c in candidates]
-            best = max(scored, key=lambda x: x[1])[0]
-        elif layer == 2:
-            best = max(candidates, key=lambda c: c.get("reasoning_score", 0) or c.get("capability_score", 0))
-        elif layer == 3:
-            best = max(candidates, key=lambda c: c.get("quality_score", 0) or c.get("success_rate", 0))
-        else:
-            best = max(candidates, key=lambda c: c.get("survivability", 0) or c.get("success_rate", 0))
-
-        return LayerBinding(
-            layer=layer,
-            provider_name=best.get("name", "unknown"),
-            model=best.get("model", best.get("default_model", "")),
-            elected_at=time.time(),
-        )
-
-    # ═══ Attractor Basin (continuous attractor network) ═══════════
-
-    def _compute_basin(self, binding: LayerBinding) -> list[str]:
-        """Compute attractor basin — providers in the same family/tier.
-
-        Two providers share an attractor if:
-          - Same base provider family (e.g., deepseek→deepseek-r1)
-          - OR same tier (flash/pro/reasoning/small)
-          - OR similar capability profile (<0.3 distance)
-
-        Basin members can substitute for the elected provider
-        without triggering a full layer re-election.
-        """
-        basin = []
-        candidates = self._get_candidates()
-        elected = next((c for c in candidates if c.get("name") == binding.provider_name), {})
-
-        for c in candidates:
-            name = c.get("name", "")
-            if name == binding.provider_name:
-                continue
-
-            # Same base family (e.g., deepseek + deepseek-r1)
-            elected_base = binding.provider_name.split("-")[0]
-            candidate_base = name.split("-")[0]
-            if elected_base == candidate_base and elected_base:
-                basin.append(name)
-                continue
-
-            # Same tier (flash/reasoning/pro/small)
-            elected_tier = binding.provider_name.split("-")[-1] if "-" in binding.provider_name else ""
-            candidate_tier = name.split("-")[-1] if "-" in name else ""
-            if elected_tier and elected_tier == candidate_tier:
-                basin.append(name)
-                continue
-
-            # Similar capability (cosine distance < 0.3)
-            if self._capability_distance(elected, c) < 0.3:
-                basin.append(name)
-                continue
-
-        return basin[:5]  # max 5 basin members
-
-    @staticmethod
-    def _capability_distance(a: dict, b: dict) -> float:
-        """Distance between two providers' capability profiles (0-1)."""
-        dims = ["success_rate", "reasoning_score", "capability_score", "quality_score"]
-        diff = sum(abs(a.get(d, 0) - b.get(d, 0)) for d in dims)
-        return diff / max(len(dims), 1)
-
-    # ═══ Provider Access ═══════════════════════════════════════════
-
-    def get_for_request(self, layer: int | None = None,
-                        intent: str = "") -> tuple[str, str, bool, int]:
-        """Get provider for a request. Returns (provider_name, model, is_primary, layer).
-
-        If layer is None: auto-classify intent → layer via keyword + semantic.
-        Intent is the raw query string — same embedding used for both
-        classification and provider matching.
-        """
-        if layer is None and intent:
-            layer = self.classify_intent(intent)
-        elif layer is None:
-            layer = 0
-
-        binding = self._layers.get(layer)
-        if not binding:
-            return "", "", False, layer
-
-        # Primary: elected provider
-        if not binding.degraded or binding.basin_failures.get(binding.provider_name, 0) < 2:
-            return binding.provider_name, binding.model, True, layer
-
-        # Basin fallback: try attractor neighbors
-        for basin_name in binding.attractor_basin:
-            basin_fails = binding.basin_failures.get(basin_name, 0)
-            if basin_fails < 2:
-                return basin_name, self._get_model(basin_name), False, layer
-
-        # All basin members exhausted
-        return "", "", False, layer
-
-    def mark_failure(self, layer: int, provider_name: str = "", error: str = ""):
-        """Mark a provider as failed at a layer."""
-        with self._lock:
-            if layer not in self._layers:
-                return
-            binding = self._layers[layer]
-            binding.failure_count += 1
-            binding.last_error = error
-
-            if provider_name:
-                fails = binding.basin_failures.get(provider_name, 0) + 1
-                binding.basin_failures[provider_name] = fails
-
-            # Degrade if primary provider has 2+ failures
-            if binding.failure_count >= 2:
-                binding.degraded = True
-                logger.warning(
-                    f"StickyElection L{layer} DEGRADED: {binding.provider_name} "
-                    f"(basin exhausted={len([k for k,v in binding.basin_failures.items() if v>=2])}/{len(binding.attractor_basin)})"
-                )
-
-    def mark_success(self, layer: int, provider_name: str = ""):
-        """Mark success — reduces failure count for recovery."""
-        with self._lock:
-            binding = self._layers.get(layer)
-            if not binding:
-                return
-            binding.success_count += 1
-            if binding.failure_count > 0:
-                binding.failure_count = max(0, binding.failure_count - 1)
-            if provider_name and provider_name in binding.basin_failures:
-                binding.basin_failures[provider_name] = max(
-                    0, binding.basin_failures[provider_name] - 1
-                )
-            # Auto-recover if failures dropped below threshold
-            if binding.failure_count < 2 and binding.degraded:
-                binding.degraded = False
-                logger.info(f"StickyElection L{layer} RECOVERED: {binding.provider_name}")
+    def mark_success(self, layer: int):
+        c = self._configs.get(layer)
+        if c:
+            c.successes += 1
+            if c.failures > 0:
+                c.failures = max(0, c.failures - 1)
+            if c.failures < 2:
+                c.degraded = False
 
     def is_degraded(self, layer: int) -> bool:
-        binding = self._layers.get(layer)
-        return binding.degraded if binding else False
+        c = self._configs.get(layer)
+        return c.degraded if c else False
 
-    def needs_reelection(self, layer: int) -> bool:
-        """Check if the layer needs re-election (all basin members exhausted)."""
-        binding = self._layers.get(layer)
-        if not binding:
-            return True
-        all_exhausted = all(
-            binding.basin_failures.get(name, 0) >= 2
-            for name in [binding.provider_name] + binding.attractor_basin
-        )
-        return binding.degraded and all_exhausted
+    # ═══ Intent Classification ════════════════════════════════════
 
-    # ═══ Embedding ══════════════════════════════════════════════════
+    def classify(self, query: str) -> int:
+        """Classify intent: returns 1 (FAST) or 2 (REASONING)."""
+        # Embedding-based classification
+        emb = self._get_embedding(query)
+        if emb:
+            fast_proto = self._get_embedding("general chat question answer help")
+            reas_proto = self._get_embedding("code debug analyze reason implement fix write create generate")
+            if fast_proto and reas_proto:
+                sim_fast = self._cosine(emb, fast_proto)
+                sim_reas = self._cosine(emb, reas_proto)
+                return 2 if sim_reas > sim_fast else 1
 
-    def _get_embedding(self, text: str) -> list[float]:
-        """Get text embedding. SiliconFlow API → local bge → hash fallback."""
-        # Tier 1: SiliconFlow API (fast, no model download)
-        emb = self._embed_siliconflow(text)
+        # Keyword fallback
+        q = query.lower()
+        reasoning_kw = ["fix", "debug", "implement", "analyze", "code", "refactor",
+                       "修复", "调试", "实现", "分析", "优化", "代码", "重构", "排查"]
+        for kw in reasoning_kw:
+            if kw in q:
+                return 2
+        return 1
+
+    # ═══ Embedding ═════════════════════════════════════════════════
+
+    def _get_embedding(self, text: str) -> list[float] | None:
+        """Tier 1: SiliconFlow API, Tier 2: hash-based fallback."""
+        emb = self._embed_api(text)
         if emb:
             return emb
-
-        # Tier 2: Local bge-large-zh from hf-mirror.com
-        emb = self._embed_local(text)
-        if emb:
-            return emb
-
-        # Tier 3: Hash-based (always works)
         return self._embed_hash(text)
 
-    def _embed_siliconflow(self, text: str) -> list[float] | None:
-        """SiliconFlow Embedding API: BAAI/bge-large-zh-v1.5"""
+    def _embed_api(self, text: str) -> list[float] | None:
         try:
-            import httpx, json
-            from ..config.secrets import get_secret_vault
-            key = get_secret_vault()._cache.get("siliconflow_api_key", "")
+            import httpx
+            key = self.get_api_key(0)
             if not key:
                 return None
             resp = httpx.post(
@@ -443,95 +219,29 @@ class StickyElection:
                 timeout=10.0,
             )
             if resp.status_code == 200:
-                data = resp.json()
-                return data["data"][0]["embedding"]
+                return resp.json()["data"][0]["embedding"]
         except Exception:
             pass
         return None
 
-    def _embed_local(self, text: str) -> list[float] | None:
-        """Local BAAI/bge-large-zh-v1.5 from hf-mirror.com"""
-        if getattr(self, '_embed_model', None) is False:
-            return None
-        if not getattr(self, '_embed_model', None):
-            try:
-                import os
-                os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-                from sentence_transformers import SentenceTransformer
-                self._embed_model = SentenceTransformer(
-                    "BAAI/bge-large-zh-v1.5", cache_folder="./models")
-            except Exception:
-                self._embed_model = False
-                return None
-        try:
-            return self._embed_model.encode(text).tolist()
-        except Exception:
-            return None
-
     def _embed_hash(self, text: str) -> list[float]:
-        """Hash-based embedding (always available)."""
         try:
             from ..dna.task_vector_geometry import text_to_embedding
             return text_to_embedding(text)
         except Exception:
             return [0.0] * 128
 
-    # ═══ Internal ═══════════════════════════════════════════════════
-
-    def _get_candidates(self) -> list[dict]:
-        candidates = []
-        try:
-            if self._tree and hasattr(self._tree, '_providers'):
-                for name, p in self._tree._providers.items():
-                    candidates.append({
-                        "name": name,
-                        "model": getattr(p, 'default_model', ''),
-                        "success_rate": getattr(p, 'success_rate', 0.5),
-                        "avg_latency_ms": getattr(p, 'avg_latency_ms', 1000.0),
-                        "cost": getattr(p, 'cost_per_1k', 0.0),
-                        "reasoning_score": getattr(p, 'reasoning_score', 0.0),
-                        "capability_score": getattr(p, 'capability_score', 0.0),
-                        "quality_score": getattr(p, 'quality_score', 0.0),
-                        "survivability": getattr(p, 'survivability', 0.5),
-                    })
-        except Exception as e:
-            logger.debug(f"StickyElection candidates: {e}")
-        return candidates
-
-    def _get_model(self, provider_name: str) -> str:
-        candidates = self._get_candidates()
-        for c in candidates:
-            if c.get("name") == provider_name:
-                return c.get("model", "")
-        return ""
-
-    # ═══ Stats ═════════════════════════════════════════════════════
-
-    def stats(self) -> dict:
-        return {
-            "initialized": self._initialized,
-            "layers": {
-                str(l): {
-                    "provider": b.provider_name,
-                    "model": b.model,
-                    "degraded": b.degraded,
-                    "failures": b.failure_count,
-                    "successes": b.success_count,
-                    "basin_size": len(b.attractor_basin),
-                    "basin_exhausted": sum(1 for v in b.basin_failures.values() if v >= 2),
-                    "last_error": b.last_error[:100],
-                    "elected_at": b.elected_at,
-                }
-                for l, b in self._layers.items()
-            },
-        }
+    @staticmethod
+    def _cosine(a, b) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        na = (sum(x * x for x in a) ** 0.5)
+        nb = (sum(y * y for y in b) ** 0.5)
+        return dot / (na * nb) if na and nb else 0.0
 
 
-_sticky: Optional[StickyElection] = None
+# ═══ Singleton ═══
 
-
-def get_sticky_election(tree_llm=None) -> StickyElection:
-    global _sticky
-    if _sticky is None or tree_llm:
-        _sticky = StickyElection(tree_llm)
-    return _sticky
+def get_layer_config() -> LayerConfigManager:
+    return LayerConfigManager.instance()

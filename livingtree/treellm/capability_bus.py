@@ -180,6 +180,18 @@ class ToolAdapter(CapabilityAdapter):
                 "browser_session_open": ("Open a persistent browser session (reuse across multiple browse calls)", "url"),
                 "browser_session_close": ("Close the current browser session", "none"),
                 "browser_session_list": ("List active browser sessions", "none"),
+                # ── Automation / DevOps tools ──
+                "system_health": ("Check system health across all subsystems (CPU, memory, models, errors)", "none"),
+                "system_metrics": ("Get Prometheus-style metrics snapshot (LLM calls, latency, cost)", "none"),
+                "cron_add": ("Schedule a recurring task. Format: name|schedule|task_description", "name|schedule|task"),
+                "cron_list": ("List all scheduled cron jobs", "none"),
+                "cron_remove": ("Remove a cron job by name", "name"),
+                "improve_scan": ("Scan codebase for defects, vulnerabilities, and improvement opportunities", "none"),
+                "improve_propose": ("Propose code improvements (auto test gen, config centralize, refactor)", "none"),
+                "improve_apply": ("Apply a specific code improvement by proposal id. Requires confirmation", "id"),
+                "overnight_start": ("Start a long-running autonomous task (LLM decomposes goal into steps)", "goal description"),
+                "overnight_status": ("Check status of running overnight tasks", "none"),
+                "overnight_cancel": ("Cancel an overnight task", "task_id"),
                 "api_search": ("Find available API endpoints (weather, maps, translation) by keyword. Use before api_call", "keyword"),
                 "kb_search": ("Search knowledge base", "query"),
                 "read_file": ("Read a file", "path"),
@@ -236,6 +248,17 @@ class ToolAdapter(CapabilityAdapter):
                 "browser_session_open": lambda s: self._browser_session(s, "open", s),
                 "browser_session_close": lambda s: self._browser_session(s, "close", ""),
                 "browser_session_list": lambda s: self._browser_session_list(),
+                "system_health": lambda s: self._system_health(),
+                "system_metrics": lambda s: self._system_metrics(),
+                "cron_add": lambda s: self._cron_add(s),
+                "cron_list": lambda s: self._cron_list(),
+                "cron_remove": lambda s: self._cron_remove(s),
+                "improve_scan": lambda s: self._improve_scan(),
+                "improve_propose": lambda s: self._improve_propose(),
+                "improve_apply": lambda s: self._improve_apply(s),
+                "overnight_start": lambda s: self._overnight_start(s),
+                "overnight_status": lambda s: self._overnight_status(),
+                "overnight_cancel": lambda s: self._overnight_cancel(s),
                 "api_search": lambda s: self._api_search(s),
                 "kb_search": rex._tool_kb_search,
                 "read_file": lambda s: self._read_file(s),
@@ -357,6 +380,109 @@ class ToolAdapter(CapabilityAdapter):
             except json.JSONDecodeError:
                 pass
         return {"text": s}
+
+    # ═══ Automation / DevOps Handlers ══════════════════════════════
+
+    async def _system_health(self) -> dict:
+        try:
+            from ..core.system_health import get_system_health
+            report = get_system_health().check()
+            return {"success": True, "status": getattr(report, 'status', 'unknown'),
+                    "overall_score": getattr(report, 'overall_score', 0),
+                    "actors": getattr(report, 'actors', {}),
+                    "actions": getattr(report, 'actions', [])}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _system_metrics(self) -> dict:
+        try:
+            from ..core.telemetry import get_telemetry
+            t = get_telemetry()
+            return {"success": True, "metrics": t.stats(), "prometheus": t.prometheus_metrics()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _cron_add(self, input_str: str) -> dict:
+        try:
+            from ..execution.cron_scheduler import get_scheduler
+            parts = input_str.strip().split("|", 2)
+            name = parts[0].strip() if len(parts) > 0 else "unnamed"
+            schedule = parts[1].strip() if len(parts) > 1 else "daily 08:00"
+            task = parts[2].strip() if len(parts) > 2 else input_str
+            get_scheduler().add(name=name, schedule=schedule, prompt=task)
+            return {"success": True, "name": name, "schedule": schedule, "task": task}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _cron_list(self) -> dict:
+        try:
+            from ..execution.cron_scheduler import get_scheduler
+            jobs = get_scheduler().list()
+            return {"success": True, "jobs": jobs, "count": len(jobs)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _cron_remove(self, input_str: str) -> dict:
+        try:
+            from ..execution.cron_scheduler import get_scheduler
+            get_scheduler().remove(input_str.strip())
+            return {"success": True, "removed": input_str.strip()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _improve_scan(self) -> dict:
+        try:
+            from ..treellm.self_improver import get_self_improver
+            si = get_self_improver()
+            defects = si._scanner.scan() if hasattr(si, '_scanner') else []
+            return {"success": True, "defects": defects[:20], "count": len(defects)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _improve_propose(self) -> dict:
+        try:
+            from ..treellm.self_improver import get_self_improver
+            si = get_self_improver()
+            proposals = si._proposer.propose() if hasattr(si, '_proposer') else []
+            return {"success": True, "proposals": proposals[:10], "count": len(proposals)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _improve_apply(self, input_str: str) -> dict:
+        try:
+            from ..treellm.self_improver import get_self_improver
+            si = get_self_improver()
+            result = await si._implement(input_str.strip()) if hasattr(si, '_implement') else None
+            return {"success": True, "applied": input_str.strip()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _overnight_start(self, input_str: str) -> dict:
+        try:
+            from ..capability.overnight_task import get_overnight_task
+            ot = get_overnight_task()
+            task_id = await ot.start(input_str.strip(), hub=None)
+            return {"success": True, "task_id": task_id, "goal": input_str[:200]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _overnight_status(self) -> dict:
+        try:
+            from ..capability.overnight_task import get_overnight_task
+            ot = get_overnight_task()
+            tasks = ot.list_tasks() if hasattr(ot, 'list_tasks') else []
+            return {"success": True, "tasks": tasks}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _overnight_cancel(self, input_str: str) -> dict:
+        try:
+            from ..capability.overnight_task import get_overnight_task
+            ot = get_overnight_task()
+            await ot.cancel(input_str.strip())
+            return {"success": True, "cancelled": input_str.strip()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def _read_file(self, path: str) -> str:
         """Read file — VFS (LivingStore) is primary path, raw disk is sandboxed fallback."""

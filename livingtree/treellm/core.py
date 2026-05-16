@@ -48,6 +48,7 @@ from .holistic_election import get_election, RouterStats
 # Lazy-imported modules (imported here once, not per-call)
 from .capability_bus import get_capability_bus
 from .session_compressor import get_session_compressor
+from .segmented_kv_compressor import get_segmented_compressor
 from .latency_oracle import get_latency_oracle
 from .session_binding import get_session_binding
 from .recording_engine import get_recording_engine, RecordLayer
@@ -787,14 +788,35 @@ class TreeLLM:
         if not p:
             return ProviderResult.empty(f"No provider: {provider}")
 
-        # ── SessionCompressor: compress long conversations ──
+        # ── Cross-provider KV tail migration ──
+        # When switching providers, carry minimal context (~500 tokens).
+        # This avoids sending full conversation history to each provider.
+        if kwargs.get("previous_provider") and kwargs.get("previous_provider") != provider:
+            try:
+                kvc = get_segmented_compressor()
+                kv_state = kvc.extract_tail(kwargs.get("previous_messages", messages[:-1]))
+                if kv_state.get("tail_text"):
+                    kv_msg = {"role": "system",
+                              "content": f"[context from {kwargs['previous_provider']}]\n{kv_state['tail_text']}"}
+                    messages = [kv_msg] + messages[-3:]
+            except Exception:
+                pass
+
+        # ── SegmentedKVCompressor: segment-level compression (TBPTT K=1) ──
+        # Uses fixed-size KV tail instead of full-summary compression.
+        # Falls back to legacy SessionCompressor if SegmentedKV not available.
         if len(messages) > 10:
             try:
-                comp = get_session_compressor()
+                comp = get_segmented_compressor()
                 messages = await comp.compress(messages, max_tokens=max_tokens,
                                                chat_fn=self.chat)
             except Exception:
-                pass
+                try:
+                    comp = get_session_compressor()
+                    messages = await comp.compress(messages, max_tokens=max_tokens,
+                                                   chat_fn=self.chat)
+                except Exception:
+                    pass
 
         # ── Identity: inject 小树 persona + constitution as FIRST system message ──
         # This runs before AutoPrompt, tool injection, or any task-specific prompt.

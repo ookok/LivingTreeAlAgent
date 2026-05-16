@@ -33,9 +33,13 @@ from typing import Any
 
 from loguru import logger
 
-import torch
-import faiss
-from paddleocr import PaddleOCR
+# GPU/vector libs — imported on demand (heavy optional deps)
+def _import_torch():
+    import torch; return torch
+def _import_faiss():
+    import faiss; return faiss
+def _import_paddleocr():
+    from paddleocr import PaddleOCR; return PaddleOCR
 # ═══════════════════════════════════════════════════════════════════
 # GPU Detection
 # ═══════════════════════════════════════════════════════════════════
@@ -87,7 +91,7 @@ class HardwareAccelerator:
             return GPUInfo()
 
         # 1. Try CUDA
-        if torch.cuda.is_available():
+        if _get_torch().cuda.is_available():
             info = GPUInfo(
                 available=True, backend="cuda",
                 device_name=torch.cuda.get_device_name(0),

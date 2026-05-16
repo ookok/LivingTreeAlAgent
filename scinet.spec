@@ -1,16 +1,55 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+# PyInstaller spec for scinet.exe — standalone smart proxy
+# Build: pyinstaller --clean scinet.spec
 
 a = Analysis(
     ['scinet_cli.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['livingtree', 'aiohttp', 'loguru', 'argparse'],
+    hiddenimports=[
+        # Core
+        'livingtree', 'livingtree.network',
+        'livingtree.network.scinet_service',
+        'livingtree.network.scinet_engine',
+        'livingtree.network.scinet_hardening',
+        'livingtree.network.scinet_quic',
+        'livingtree.network.scinet_webtransport',
+        'livingtree.network.scinet_bandit',
+        'livingtree.network.scinet_federated',
+        'livingtree.network.scinet_topology',
+        'livingtree.network.scinet_cache',
+        'livingtree.network.scinet_vllm',
+        'livingtree.network.scinet_swarm',
+        'livingtree.network.scinet_morph',
+        'livingtree.network.scinet_dssa',
+        'livingtree.network.scinet_laser',
+        'livingtree.network.site_accelerator',
+        'livingtree.network.smart_dns',
+        'livingtree.network.domain_ip_pool',
+        'livingtree.network.proxy_fetcher',
+        'livingtree.network.resilience',
+        # External
+        'aiohttp', 'loguru', 'numpy',
+        'aioquic', 'cryptography',
+        'argparse', 'asyncio', 'signal',
+        'json', 'threading', 'hashlib', 'sqlite3',
+        'ssl', 'struct', 'socket', 'pathlib',
+        'dataclasses', 'enum', 'collections',
+        'typing', 'math', 'random', 'os',
+        'zlib', 'ipaddress', 'urllib.parse',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'torch', 'transformers', 'paddleocr', 'faiss',
+        'pytesseract', 'easyocr', 'pynvml', 'modelscope',
+        'scipy', 'pandas', 'matplotlib', 'PIL',
+        'playwright', 'scrapling', 'orjson',
+        'fastapi', 'uvicorn', 'starlette', 'pydantic',
+        'rich', 'click', 'prompt_toolkit',
+    ],
     noarchive=False,
     optimize=0,
 )

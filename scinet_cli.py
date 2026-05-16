@@ -7,16 +7,24 @@
     scinet.exe --wt         # 启用 WebTransport
 
 编译:
-    pyinstaller --onefile --name scinet scinet_cli.py
+    pyinstaller --clean scinet.spec
 """
 
-import sys
-import asyncio
-import signal
-import argparse
-import os
+import sys, os, asyncio, signal, argparse, importlib.util
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.abspath(__file__))
+
+def _load_module(name: str, path: str):
+    """Load a module by file path — bypasses package __init__.py chain."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+# Import scinet directly, bypassing livingtree/__init__.py heavy chain
+_scinet = _load_module("scinet_service", os.path.join(BASE, "livingtree", "network", "scinet_service.py"))
+get_scinet = _scinet.get_scinet
 
 
 def main():
@@ -24,51 +32,47 @@ def main():
     parser.add_argument("--port", type=int, default=7890, help="代理端口 (默认 7890)")
     parser.add_argument("--pac", action="store_true", help="自动配置 Windows 系统代理")
     parser.add_argument("--wt", action="store_true", help="启用 WebTransport")
+    parser.add_argument("--dns", action="store_true", help="启用 Smart DNS 分流")
+    parser.add_argument("--dns-port", type=int, default=5353, help="DNS 端口 (默认 5353)")
     args = parser.parse_args()
 
-    from livingtree.network.scinet_service import get_scinet
-
     scinet = get_scinet(port=args.port)
+    dns = None
+    if args.dns:
+        _dns_mod = _load_module("smart_dns", os.path.join(BASE, "livingtree", "network", "smart_dns.py"))
+        dns = _dns_mod.get_smart_dns(port=args.dns_port)
 
     async def run():
         print(f"[Scinet v2.0] Starting on port {args.port}...")
         status = await scinet.start()
+        await asyncio.sleep(1)
 
-        await asyncio.sleep(2)
+        print(f"\n  Status:    {'RUNNING' if status.running else 'FAILED'}")
+        print(f"  Proxy:     http://127.0.0.1:{args.port}")
+        print(f"  PAC:       http://127.0.0.1:{args.port}/pac")
 
-        print(f"\n[Scinet] Status: {'RUNNING' if status.running else 'FAILED'}")
-        print(f"  Proxy:    http://127.0.0.1:{args.port}")
-        print(f"  PAC:      http://127.0.0.1:{args.port}/pac")
-        print(f"  Dashboard: http://127.0.0.1:{args.port}/v2/status")
-
-        # Proxy pool stats
         if scinet._proxy_pool:
             ps = scinet._proxy_pool.stats()
-            print(f"  Proxies:  {ps['total']} total, {ps['healthy']} healthy")
-            for p in ps.get("top5", []):
-                print(f"    - {p['url']} score={p['score']:.2f}")
+            print(f"  Proxies:   {ps['total']} total, {ps['healthy']} healthy")
 
-        # IP pool stats
-        if scinet._ip_pool:
-            ipstats = scinet._ip_pool.get_stats()
-            print(f"  IP Pool:  {ipstats['total_domains']} domains, {ipstats['total_ips']} IPs")
-
-        # v2.0 engine
         if scinet._v2_enabled:
-            print(f"  Engine:   BanditRL + GNN Topology + Federated + QUIC + Cache")
-        else:
-            print(f"  Engine:   (v2.0 deferred, will init in background)")
+            print(f"  Engine:    BanditRL + GNN Topology + Federated + QUIC + Cache")
 
-        # Windows proxy
         if args.pac and sys.platform == "win32":
             scinet.set_windows_proxy(True)
-            print(f"  System:   Windows proxy configured → 127.0.0.1:{args.port}")
+            print(f"  System:    Windows proxy configured -> 127.0.0.1:{args.port}")
 
-        # WebTransport
+        if args.dns and dns:
+            try:
+                await dns.start()
+                print(f"  DNS:       127.0.0.1:{args.dns_port}")
+            except Exception as e:
+                print(f"  DNS:       error ({e})")
+
         if args.wt:
             try:
-                from livingtree.network.scinet_webtransport import get_webtransport_server
-                wt = get_webtransport_server(port=args.port + 1)
+                _wt = _load_module("scinet_webtransport", os.path.join(BASE, "livingtree", "network", "scinet_webtransport.py"))
+                wt = _wt.get_webtransport_server(port=args.port + 1)
                 await wt.start()
                 print(f"  WebTransport: https://127.0.0.1:{args.port + 1}/scinet/wt")
             except Exception as e:
@@ -76,10 +80,7 @@ def main():
 
         print(f"\n  按 Ctrl+C 停止...\n")
 
-        # Wait for shutdown
         stop_event = asyncio.Event()
-        loop = asyncio.get_event_loop()
-
         def _shutdown():
             print("\n[Scinet] Shutting down...")
             stop_event.set()
@@ -87,6 +88,7 @@ def main():
         if sys.platform == "win32":
             signal.signal(signal.SIGINT, lambda s, f: _shutdown())
         else:
+            loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, _shutdown)
             loop.add_signal_handler(signal.SIGTERM, _shutdown)
 

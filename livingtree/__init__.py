@@ -19,7 +19,7 @@ __author__ = "LivingTree Team"
 
 # Lightweight imports — always available immediately
 from .config import LTAIConfig, get_config, reload_config
-from .observability import setup_observability, get_logger
+# observability lazy-loaded on first access
 
 __all__ = [
     "__version__",
@@ -127,6 +127,9 @@ _LAZY = {
     # Core infrastructure
     "get_concurrency_guard": ".core.concurrency_guard",
     "get_event_bus": ".infrastructure.event_bus_v2",
+    # Observability (lazy to avoid full dependency chain)
+    "setup_observability": ".observability",
+    "get_logger": ".observability",
     # DNA defense & signaling
     "get_immune_system": ".dna.immune_system",
     "get_endocrine": ".dna.hormone_signaling",

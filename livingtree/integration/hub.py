@@ -959,12 +959,12 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"MemoryOptimizer: {e}")
 
-        # ── Scinet: smart proxy for overseas acceleration ──
+        # ── Scinet: smart proxy (manual start only: python -m livingtree scinet start) ──
         try:
             from ..network.scinet_service import get_scinet
             self.scinet = get_scinet(port=7890)
-            self._spawn_task(self.scinet.start(), "scinet")
-            logger.info("Scinet proxy started (localhost:7890)")
+            # Not auto-started — user controls via CLI or admin panel
+            logger.info("Scinet proxy ready (localhost:7890) — manual start required")
         except Exception as e:
             logger.debug(f"Scinet: {e}")
 

@@ -146,10 +146,14 @@ class BrowserAgent:
         return result
 
     async def _navigate(self, page, url: str):
-        """Navigate with Scrapling pre-check for WAF detection."""
+        """Navigate with Scrapling pre-check: retries, ad block, adaptive on."""
         if HAS_SCRAPLING:
+            DynamicFetcher.adaptive = True  # enable adaptive selectors globally
             try:
-                sp = DynamicFetcher.fetch(url, headless=True, network_idle=True, timeout=15_000)
+                sp = DynamicFetcher.fetch(
+                    url, headless=True, network_idle=True, timeout=15_000,
+                    disable_resources=True, retries=2, block_ads=True,
+                )
                 if sp and not self._is_blocked(sp.text or ""):
                     html = sp.body.decode("utf-8", errors="replace") if isinstance(sp.body, bytes) else str(sp.body)
                     await page.set_content(html, wait_until="networkidle")
@@ -189,25 +193,66 @@ class BrowserAgent:
         return None
 
     def _direct_extract(self, page, task: str) -> list[dict]:
+        """Use Scrapling's full extraction toolkit: CSS, text, regex, similar, adaptive."""
         items = []
-        try:
-            for sel in ["table tr", "ul li", ".xxgk_content", "#zoom",
-                        "[class*='item']", "[class*='list']", "[class*='article']"]:
-                els = page.css(sel)
-                if len(els) > 1:
-                    for el in els[:50]:
-                        text = el.text.strip() if el.text else ""
-                        if len(text) > 20:
-                            items.append({"text": text[:500], "selector": sel})
+
+        # 1) Structured selectors: tables, lists, articles
+        for sel in ["table tr", "ul li", ".xxgk_content", "#zoom",
+                    "[class*='item']", "[class*='list']", "[class*='article']", "[class*='result']"]:
+            els = page.css(sel, auto_save=True)
+            if len(els) > 1:
+                for el in els[:50]:
+                    text = el.text.strip() if el.text else ""
+                    if len(text) > 20:
+                        # Auto-generate CSS selector for later reuse
+                        sel_gen = el.generate_css_selector if hasattr(el, 'generate_css_selector') else ""
+                        items.append({"text": text[:500], "selector": sel_gen or sel})
+                if items:
+                    return items
+
+        # 2) find_by_text: search for task keywords in page
+        import re as _re
+        keywords = _re.findall(r'[\u4e00-\u9fff]{2,}|\w{3,}', task)
+        for kw in keywords[:5]:
+            try:
+                el = page.find_by_text(kw, partial=True, first_match=True)
+                if el:
+                    similar = el.find_similar() if hasattr(el, 'find_similar') else [el]
+                    for s in similar[:50]:
+                        text = s.text.strip() if s.text else ""
+                        if text and len(text) > 15:
+                            items.append({"text": text[:500], "method": "find_similar"})
                     if items:
-                        break
-            if not items:
-                items = [{"text": (a.text or "附件").strip()[:200], "link": a.attrib.get("href","")}
-                         for a in page.css("a[href]")
-                         if any(e in (a.attrib.get("href","") or "").lower()
-                                for e in [".pdf", ".doc", ".docx", ".xls", ".zip"])]
-        except Exception:
-            pass
+                        return items
+            except Exception:
+                continue
+
+        # 3) find_by_regex: match patterns like 项目名称, 建设单位, 下载
+        patterns = [
+            r'(?:项目|工程).{2,30}(?:项目|报告|公示)',
+            r'(?:建设|编制|评价).{2,20}(?:单位|机构)',
+            r'https?://[^\s]+\.(?:pdf|docx?|xlsx?|zip)',
+        ]
+        for pat in patterns:
+            try:
+                matches = page.find_by_regex(_re.compile(pat), first_match=False)
+                if matches:
+                    for m in matches[:50]:
+                        items.append({"text": m.text[:500], "pattern": pat, "method": "regex"})
+                    return items
+            except Exception:
+                continue
+
+        # 4) Download links
+        dl_links = [{"text": (a.text or "附件").strip()[:200],
+                     "link": a.attrib.get("href", ""),
+                     "method": "download_link"}
+                    for a in page.css("a[href]")
+                    if any(e in (a.attrib.get("href", "") or "").lower()
+                           for e in [".pdf", ".doc", ".docx", ".xls", ".zip"])]
+        if dl_links:
+            return dl_links[:50]
+
         return items[:50]
 
     async def _extract_page_state(self, page) -> dict:

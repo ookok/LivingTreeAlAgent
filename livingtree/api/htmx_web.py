@@ -2634,6 +2634,67 @@ async def tree_admin_telemetry(request: Request):
 async def tree_reach_mobile(request: Request):
     return _render_template("reach_mobile.html", request=request)
 
+@htmx_router.get("/admin/spider")
+async def tree_admin_spider(request: Request):
+    """Scrapling Spider framework — visual crawl dashboard."""
+    from ..capability.browser_agent import HAS_SCRAPLING, HAS_PLAYWRIGHT
+    scrapling_ok = "✅ Scrapling" if HAS_SCRAPLING else "❌ 未安装 pip install scrapling[fetchers]"
+    pw_ok = "✅ Playwright" if HAS_PLAYWRIGHT else "❌ 未安装 playwright install chromium"
+    html = '''<div class="card">
+<h2>🕷 爬虫框架 <span style="font-size:10px;color:var(--dim)">— Scrapling Spider + LLM</span></h2>
+<div style="display:flex;gap:16px;margin:8px 0;font-size:11px">
+  <span>''' + scrapling_ok + '''</span><span>''' + pw_ok + '''</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+  <div class="card" style="padding:10px">
+    <h3>🎯 已集成特性</h3>
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>自适应选择器</b></td><td style="text-align:right">auto_save / adaptive</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>文本搜索</b></td><td style="text-align:right">find_by_text / regex</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>同类元素发现</b></td><td style="text-align:right">find_similar</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>选择器自动生成</b></td><td style="text-align:right">generate_css_selector</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>广告屏蔽</b></td><td style="text-align:right">block_ads (~3500域名)</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>资源拦截</b></td><td style="text-align:right">disable_resources (+25%速度)</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>自动重试</b></td><td style="text-align:right">retries=2</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>元素等待</b></td><td style="text-align:right">wait_selector</td></tr>
+      <tr><td style="padding:4px;border-bottom:1px solid var(--border)"><b>Canvas指纹</b></td><td style="text-align:right">hide_canvas (需patchright)</td></tr>
+      <tr><td style="padding:4px"><b>Cloudflare绕过</b></td><td style="text-align:right">solve_cloudflare (需patchright)</td></tr>
+    </table>
+  </div>
+  <div class="card" style="padding:10px">
+    <h3>🔧 快速测试</h3>
+    <div style="margin:8px 0">
+      <input id="spider-url" placeholder="目标URL" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:12px" value="http://esg.epmap.org/reports">
+    </div>
+    <div style="margin:8px 0">
+      <input id="spider-task" placeholder="提取任务 (如: 搜索格林美ESG报告)" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:12px" value="搜索ESG报告">
+    </div>
+    <button onclick="runSpider()" style="font-size:12px;padding:8px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;cursor:pointer">▶ 运行爬虫</button>
+    <div id="spider-result" style="margin-top:12px;font-size:11px;color:var(--dim);max-height:400px;overflow:auto"></div>
+  </div>
+</div>
+</div>
+<script>
+async function runSpider() {
+  var url = document.getElementById("spider-url").value;
+  var task = document.getElementById("spider-task").value;
+  var el = document.getElementById("spider-result");
+  el.innerHTML = '<div class="lc-loading">爬取中...</div>';
+  try {
+    var resp = await fetch("/tree/api/debug/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: "/browse " + url + " task=" + task, stream: false})
+    });
+    var data = await resp.json();
+    el.innerHTML = "<pre style='white-space:pre-wrap;font-size:10px'>" + JSON.stringify(data, null, 2).slice(0, 3000) + "</pre>";
+  } catch(e) {
+    el.innerHTML = "<span style='color:var(--err)'>Error: " + e.message + "</span>";
+  }
+}
+</script>'''
+    return HTMLResponse(html)
+
 # ═══ Unified Admin Console ═══
 
 @htmx_router.get("/admin")
@@ -2657,6 +2718,7 @@ async def tree_admin_console(request: Request):
   <button onclick="loadAdminPanel('shield')" class="admin-nav-btn" id="admin-nav-shield">🛡️ 防护</button>
   <button onclick="loadAdminPanel('telemetry')" class="admin-nav-btn" id="admin-nav-telemetry">📊 遥测</button>
   <button onclick="loadAdminPanel('pipeline')" class="admin-nav-btn" id="admin-nav-pipeline">⚙ 管道</button>
+  <button onclick="loadAdminPanel('spider')" class="admin-nav-btn" id="admin-nav-spider">🕷 爬虫</button>
 </div>
 
 <div id="admin-panel-content" style="min-height:400px">
@@ -2684,7 +2746,8 @@ var adminPanelMap = {
   green: "/tree/admin/green",
   shield: "/tree/admin/shield",
   telemetry: "/tree/admin/telemetry",
-  pipeline: "/tree/admin/pipeline"
+  pipeline: "/tree/admin/pipeline",
+  spider: "/tree/admin/spider"
 };
 
 function loadAdminPanel(name) {

@@ -312,9 +312,25 @@ async def _fountain_spray(r: asyncio.StreamReader,
             return rp, wp
     
     return None
-
-
-# ═══ Integrated Redwood Pipeline ══════════════════════════════════
+def _shadow_ips(host: str, all_ips: list[str]) -> list[str]:
+    """Shadow: borrow unblocked IPs from sibling domains on same CDN.
+    
+    Key insight: github.com and api.github.com share the same CDN subnet
+    and wildcard certificate (*.github.com). Connect to the unblocked
+    IP but set SNI=github.com — GFW sees traffic to api.github.com IP
+    but the target server accepts github.com SNI.
+    
+    Shadow map: known working sibling domain → blocked domain
+    """
+    SHADOW_MAP = {
+        # GitHub CDN: */20.205.243.x
+        "github.com": ["20.205.243.168"],  # api.github.com IP
+        "raw.githubusercontent.com": ["20.205.243.168"],
+        "github.githubassets.com": ["20.205.243.168"],
+    }
+    
+    shadow = SHADOW_MAP.get(host, [])
+    return list(dict.fromkeys(shadow + all_ips))[:30]  # shadow first, then originals
 
 _hdc_mask = HDCTrafficMask()
 
@@ -323,10 +339,13 @@ async def redwood_connect(host: str, port: int,
                           ip_pool: Any = None,
                           proxy_pool: Any = None,
                           ip_cache: dict[str, str] | None = None) -> tuple:
-    """Redwood experimental pipeline — last-resort connection attempt.
+    """Redwood experimental pipeline — IP Shadowing + multi-port waterfall.
     
-    Strategy: Multi-port waterfall (tries alt ports) + HDC pattern.
-    Runs AFTER the main waterfall and proxy pool have failed.
+    Strategy:
+      1. IP Shadowing: borrow unblocked IPs from sibling CDN domains
+         (e.g., connect to api.github.com IP with SNI=github.com)
+      2. Multi-port waterfall: try 443, 8443, 80
+      3. HDC pattern masking
     
     Returns: (reader, writer) or (None, None)
     """
@@ -335,15 +354,18 @@ async def redwood_connect(host: str, port: int,
     all_ips = []
     ip_cache = ip_cache or {}
     
+    # 0. IP Shadowing: borrow from sibling domains on same CDN
+    all_ips = _shadow_ips(host, [])
+    
     # 1. Cached IP
     cached = ip_cache.get(host)
-    if cached:
+    if cached and cached not in all_ips:
         all_ips.append(cached)
     
     # 2. IP pool
     if ip_pool:
         best = ip_pool.get_best(host)
-        if best:
+        if best and best.ip not in all_ips:
             all_ips.append(best.ip)
     
     # 3. DoH resolution

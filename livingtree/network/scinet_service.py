@@ -404,6 +404,14 @@ class ScinetService:
         """Resolve host via multiple DNS sources. Returns unique IP list."""
         ips = set()
         
+        # 0. IP Shadowing: borrow from sibling CDN domains
+        try:
+            from .scinet_redwood import _shadow_ips
+            shadow = _shadow_ips(host, [])
+            ips.update(shadow)
+        except Exception:
+            pass
+        
         # 1. Cached successful IP (from previous waterfall)
         cached = self._ip_cache.get(host)
         if cached:

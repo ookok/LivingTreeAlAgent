@@ -433,7 +433,7 @@ class DynamicPolicyEngine:
 
     Usage:
         engine = DynamicPolicyEngine()
-        await engine.initialize(hub, scinet_engine=None)
+        await engine.initialize(hub)
         await engine.start_background()
 
         # Or just evaluate once:
@@ -449,11 +449,9 @@ class DynamicPolicyEngine:
         self._initialized = False
         self._running = False
         self._eval_task: Optional[asyncio.Task] = None
-        self._scinet_engine: Any = None
+        self._bands: dict[str, PolicyBand] = {}
 
-    async def initialize(self, hub=None, scinet_engine=None):
-        """Wire up to LivingTree infrastructure."""
-        self._scinet_engine = scinet_engine
+    async def initialize(self, hub=None):
 
         # Register standard action handlers
         self._dsl_engine.register_action("reroute_proxy_pool", self._act_reroute_pool)
@@ -542,35 +540,7 @@ class DynamicPolicyEngine:
         except Exception:
             pass
 
-        # Scinet engine signals
-        if self._scinet_engine:
-            try:
-                det = self._scinet_engine.get_detailed_status()
-                eng = det.get("engine", {})
-
-                # Network
-                self._signal_bus.emit(
-                    SignalType.PROXY_SUCCESS_RATE,
-                    eng.get("success_rate", 0),
-                    "scinet_engine",
-                )
-                self._signal_bus.emit(
-                    SignalType.PROXY_LATENCY,
-                    eng.get("avg_latency_ms", 0),
-                    "scinet_engine", "ms",
-                )
-                self._signal_bus.emit(
-                    SignalType.BANDWIDTH_BYTES,
-                    eng.get("bandwidth_bytes", 0),
-                    "scinet_engine", "bytes",
-                )
-                self._signal_bus.emit(
-                    SignalType.CONSECUTIVE_FAILURES,
-                    max(0, eng.get("total_requests", 0) - eng.get("success_rate", 0) * eng.get("total_requests", 1)),
-                    "scinet_engine",
-                )
-
-                # Cache
+        # Cache
                 cache = det.get("cache", {})
                 self._signal_bus.emit(
                     SignalType.CACHE_HIT_RATE,

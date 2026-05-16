@@ -959,14 +959,13 @@ class IntegrationHub:
         except Exception as e:
             logger.debug(f"MemoryOptimizer: {e}")
 
-        # ── Scinet: smart proxy (manual start only: python -m livingtree scinet start) ──
+        # ── Site acceleration (no proxy needed) ──
         try:
-            from ..network.scinet_service import get_scinet
-            self.scinet = get_scinet(port=7890)
-            # Not auto-started — user controls via CLI or admin panel
-            logger.info("Scinet proxy ready (localhost:7890) — manual start required")
+            from ..network.site_accelerator import get_accelerator
+            self.accelerator = get_accelerator()
+            logger.info("Site accelerator ready")
         except Exception as e:
-            logger.debug(f"Scinet: {e}")
+            logger.debug(f"Site accelerator: {e}")
 
         # ── ImmuneSystem: auto-defense against adversarial inputs ──
         try:

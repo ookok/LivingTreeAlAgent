@@ -405,8 +405,10 @@ def generate_wpad_dat(proxy_host: str = "127.0.0.1", proxy_port: int = 7890) -> 
 
     Place at http://wpad/wpad.dat or serve locally.
     """
-    from .scinet_service import PAC_TEMPLATE
-    return PAC_TEMPLATE.format(port=proxy_port, accelerated_domains="")
+    return f"""function FindProxyForURL(url, host) {{
+    if (dnsDomainIs(host, ".cn") || dnsDomainIs(host, ".local")) return "DIRECT";
+    return "PROXY 127.0.0.1:{proxy_port}; DIRECT";
+}}"""
 
 
 # ═══ One-Click System Toggle ═══

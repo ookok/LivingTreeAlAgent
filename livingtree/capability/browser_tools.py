@@ -37,25 +37,10 @@ def _get_browser_adapter() -> Any:
         from browser_gateway.browser_pool import get_browser_pool
         adapter = BrowserUseAdapter()
         pool = get_browser_pool()
-        # Auto-detect scinet proxy for overseas access
-        if not pool.proxy_url:
-            _auto_set_scinet_proxy(pool)
         return adapter, pool
     except Exception as e:
         logger.debug("Browser gateway unavailable: %s", e)
         return None, None
-
-
-def _auto_set_scinet_proxy(pool: Any) -> None:
-    """Auto-detect scinet (localhost:7890) and set proxy on BrowserPool."""
-    try:
-        from livingtree.network.scinet_service import get_scinet
-        scinet = get_scinet()
-        if getattr(scinet.status, "running", False):
-            pool.proxy_url = "http://127.0.0.1:7890"
-            logger.info("Browser proxy auto-set → scinet (localhost:7890)")
-    except Exception:
-        pass
 
 
 def _get_identity_pool() -> Any:

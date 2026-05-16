@@ -714,6 +714,204 @@ class ContentGraph:
         out.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
         return str(out)
 
+    # ── Code-Document Analogy Systems ─────────────────────────────
+    # Code: function → callers     Document: section → references
+    # Code: blast_radius           Document: change_impact
+    # Code: lint rules             Document: content_rules
+    # Code: unit tests             Document: data_tests
+
+    def build_reference_graph(self) -> dict[str, list[str]]:
+        """Build section→section reference graph (like call graph for code).
+
+        Detects: "参见表3-2", "如第4.1节所述", "根据2.3节的数据", etc.
+        Returns {section_id: [referenced_section_ids]}
+        """
+        refs: dict[str, list[str]] = defaultdict(list)
+        patterns = [
+            (r'参见\s*(?:表|图|节|第)\s*([\d.-]+)', 'table'),
+            (r'如\s*第?\s*([\d.]+)\s*(?:节|章)所述', 'section'),
+            (r'根据\s*(?:表|图|节|第)\s*([\d.-]+)', 'data'),
+            (r'详见\s*(?:表|图|第)\s*([\d.-]+)', 'detail'),
+            (r'cf\.\s*(?:Table|Figure|Section)\s*([\d.]+)', 'reference'),
+        ]
+        for key, entity in self._entities.items():
+            for occ in entity.occurrences:
+                for pattern, ref_type in patterns:
+                    for m in re.finditer(pattern, occ.context):
+                        refs[f"{occ.file}:{occ.line}"].append(f"{ref_type}:{m.group(1)}")
+        return dict(refs)
+
+    def blast_radius_sections(self, changed_section: str,
+                              files: list[str]) -> dict:
+        """Like CodeGraph blast_radius: which sections need review if X changes?
+
+        changed_section: "3.2" (water quality section)
+        Returns all sections that reference the changed section.
+        """
+        refs = self.build_reference_graph()
+        impacted = []
+        target_pattern = re.compile(r'(?:table|section|data|detail|reference):' + re.escape(changed_section))
+
+        for ref_key, ref_list in refs.items():
+            if any(target_pattern.match(r) for r in ref_list):
+                file, line = ref_key.split(":", 1)
+                impacted.append({"file": file, "line": int(line), "references": ref_list})
+
+        return {
+            "changed": changed_section,
+            "impacted_sections": len(impacted),
+            "impacted_files": len(set(i["file"] for i in impacted)),
+            "details": impacted[:20],
+            "severity": "critical" if len(impacted) > 10 else "high" if len(impacted) > 5 else "low",
+        }
+
+    # ── Content Linting (like code linting) ───────────────────
+
+    def lint_document(self, content: str, template_type: str = "") -> list[ConsistencyIssue]:
+        """Apply document-level linting rules.
+
+        Rules: required sections, section ordering, paragraph quality, passive voice, etc.
+        """
+        issues = []
+        lines = content.split('\n')
+
+        # Rule 1: Required sections per template
+        required = {
+            "eia_report": ["总论", "工程分析", "环境现状", "环境影响预测", "污染防治", "结论"],
+            "emergency_plan": ["总则", "风险评估", "应急组织", "应急响应", "后期处置", "保障措施"],
+        }
+        if template_type in required:
+            for section in required[template_type]:
+                found = any(section in line for line in lines)
+                if not found:
+                    issues.append(ConsistencyIssue(
+                        entity=template_type, property_name="required_section",
+                        files=[template_type], values=[section, "missing"],
+                        severity="error",
+                        description=f"缺少必需章节: {section}",
+                        suggestion=f"添加{section}章节",
+                    ))
+
+        # Rule 2: No single-sentence paragraphs
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#') and 5 < len(stripped) < 30:
+                # Check if it's a lone sentence
+                prev_empty = i == 0 or not lines[i-1].strip()
+                next_empty = i == len(lines)-1 or not lines[i+1].strip()
+                if prev_empty and next_empty:
+                    issues.append(ConsistencyIssue(
+                        entity=f"line_{i+1}", property_name="paragraph_quality",
+                        files=["document"], values=[stripped[:40]],
+                        severity="suggestion",
+                        description=f"单句段落: L{i+1} '{stripped[:40]}'",
+                        suggestion="合并到相邻段落或扩展内容",
+                    ))
+
+        # Rule 3: Passive voice detection (Chinese 被字句)
+        passive_count = sum(1 for line in lines if '被' in line and not line.strip().startswith('#'))
+        total_sentences = sum(1 for line in lines if line.strip().endswith(('。', '！', '？')))
+        passive_ratio = passive_count / max(total_sentences, 1)
+        if passive_ratio > 0.3:
+            issues.append(ConsistencyIssue(
+                entity="document", property_name="passive_voice_ratio",
+                files=["document"], values=[f"{passive_ratio:.0%}"],
+                severity="warning",
+                description=f"被动语态过多 ({passive_ratio:.0%})，建议控制在30%以下",
+                suggestion="将被动句改为主动句",
+            ))
+
+        return issues
+
+    # ── Content Unit Tests (like unit tests for code) ─────────
+
+    def data_test(self, section_name: str, expected_values: dict,
+                  tolerance: float = 0.05) -> dict:
+        """Verify that document data matches expected values (like unit tests).
+
+        expected_values: {"PM2.5": 35.0, "DO": 7.5, "noise": 55.0}
+        Checks extracted entity properties against expected values.
+        """
+        results = []
+        for key, entity in self._entities.items():
+            if entity.category != "claim":
+                continue
+            for prop, expected in expected_values.items():
+                if prop.lower() in entity.name.lower():
+                    actual = entity.properties.get("value")
+                    unit = entity.properties.get("unit", "")
+                    if actual is not None and expected is not None:
+                        try:
+                            diff = abs(float(actual) - float(expected)) / max(abs(float(expected)), 1e-9)
+                            passed = diff <= tolerance
+                            results.append({
+                                "test": f"{entity.name} == {expected}",
+                                "actual": actual,
+                                "expected": expected,
+                                "unit": unit,
+                                "passed": passed,
+                                "deviation_pct": round(diff * 100, 1),
+                            })
+                        except (ValueError, TypeError):
+                            pass
+
+        passed = sum(1 for r in results if r["passed"])
+        return {
+            "total_tests": len(results),
+            "passed": passed,
+            "failed": len(results) - passed,
+            "pass_rate": round(passed / max(len(results), 1) * 100, 1),
+            "results": results,
+        }
+
+    def cross_validate_with_eia_models(self, eia_engine=None) -> dict:
+        """Cross-validate document claims against EIA physics models.
+
+        Like: integration tests for document data consistency.
+        For each claim in the document that matches an EIA model parameter,
+        re-compute the model and check if the documented value matches.
+        """
+        if not eia_engine:
+            try:
+                from ..treellm.eia_models import EIAEngine
+                eia_engine = EIAEngine()
+            except ImportError:
+                return {"error": "EIAEngine not available"}
+
+        validations = []
+
+        # Check air quality claims
+        for key, entity in self._entities.items():
+            if entity.category != "claim":
+                continue
+            name_lower = entity.name.lower()
+            actual = entity.properties.get("value")
+
+            # Gaussian plume max concentration
+            if any(k in name_lower for k in ("最大落地浓度", "max concentration", "cmax")) and actual:
+                try:
+                    from ..treellm.eia_models import compute_gaussian_plume_max
+                    expected = compute_gaussian_plume_max(
+                        Q=entity.properties.get("emission_rate", 1.0),
+                        u=entity.properties.get("wind_speed", 2.5),
+                        H=entity.properties.get("stack_height", 30),
+                    )
+                    validations.append({
+                        "claim": entity.name, "actual": actual,
+                        "computed": round(expected, 2),
+                        "passed": abs(float(actual) - expected) / max(expected, 1e-9) <= 0.1,
+                    })
+                except Exception:
+                    pass
+
+        passed = sum(1 for v in validations if v["passed"])
+        return {
+            "total": len(validations),
+            "passed": passed,
+            "failed": len(validations) - passed,
+            "validations": validations,
+        }
+
 
 # ═══ Singleton ════════════════════════════════════════════════════
 

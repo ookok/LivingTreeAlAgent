@@ -85,6 +85,19 @@ DOMESTIC_FREE_APIS = [
                ], auth_type="apiKey"),
     APIEndpoint("tianqi_ali", "https://ali-weather.showapi.com/showapi_weather",
                "阿里云天气 (免费100次/天)", "weather"),
+    APIEndpoint("openmeteo_weather", "https://api.open-meteo.com/v1/forecast",
+               "Open-Meteo全球天气预报 (免费,无需Key)", "weather", params=[
+                   {"name":"latitude","type":"float","required":True,"description":"纬度如39.9"},
+                   {"name":"longitude","type":"float","required":True,"description":"经度如116.4"},
+                   {"name":"current_weather","type":"bool","required":False,"description":"true=当前天气"},
+               ], auth_type="none"),
+    APIEndpoint("openmeteo_air", "https://air-quality-api.open-meteo.com/v1/air-quality",
+               "Open-Meteo空气质量API PM2.5/PM10/O3 (免费,无需Key)", "weather", params=[
+                   {"name":"latitude","type":"float","required":True,"description":"纬度如39.9"},
+                   {"name":"longitude","type":"float","required":True,"description":"经度如116.4"},
+                   {"name":"current","type":"str","required":False,"description":"pm2_5,pm10,ozone"},
+                   {"name":"forecast_days","type":"int","required":False,"description":"预报天数"},
+               ], auth_type="none"),
 
     # Data & Info
     APIEndpoint("github_api", "https://api.github.com",
@@ -134,6 +147,16 @@ DOMESTIC_FREE_APIS = [
                "腾讯地图地理编码 (免费配额)", "map", params=[
                    {"name":"address","type":"str","required":True,"description":"地址"},
                    {"name":"key","type":"str","required":True,"description":"腾讯地图Key"},
+               ], auth_type="apiKey"),
+    APIEndpoint("baidu_map_geocode", "https://api.map.baidu.com/geocoding/v3",
+               "百度地图地址→坐标 (免费5000次/天)", "map", params=[
+                   {"name":"address","type":"str","required":True,"description":"地址"},
+                   {"name":"ak","type":"str","required":True,"description":"百度地图AK"},
+               ], auth_type="apiKey"),
+    APIEndpoint("baidu_map_reverse", "https://api.map.baidu.com/reverse_geocoding/v3",
+               "百度地图坐标→地址 (免费5000次/天)", "map", params=[
+                   {"name":"location","type":"str","required":True,"description":"lat,lng"},
+                   {"name":"ak","type":"str","required":True,"description":"百度地图AK"},
                ], auth_type="apiKey"),
     APIEndpoint("baidu_translate", "https://fanyi-api.baidu.com/api/trans/vip/translate",
                "百度翻译API (免费100万字/月)", "language", params=[
@@ -186,6 +209,7 @@ class APIMap:
         self._cache: dict[str, tuple[Any, float]] = {}  # key → (data, timestamp)
         self._cache_ttl = 300  # 5 min default
         self._call_count = 0
+        self._baidu_sk = ""
 
         # Load built-in APIs
         for api in DOMESTIC_FREE_APIS:
@@ -230,12 +254,27 @@ class APIMap:
             "unsplash": ("unsplash_access_key", "LT_UNSPLASH_KEY"),
             "pixabay": ("pixabay_api_key", "LT_PIXABAY_KEY"),
             "tencent_location": ("tencent_map_key", "LT_TENCENT_MAP_KEY"),
+            "baidu_map_geocode": ("baidu_map_ak", "LT_BAIDU_MAP_AK"),
+            "baidu_map_reverse": ("baidu_map_ak", "LT_BAIDU_MAP_AK"),
+            "baidu_translate_appid": ("baidu_translate_appid", "LT_BAIDU_TRANSLATE_APPID"),
         }
         for api_name, (vault_key, env_key) in key_map.items():
             key = vault_keys.get(vault_key, "") or _os.environ.get(env_key, "")
             if key and api_name in self._apis:
                 self._apis[api_name].auth_key = key
                 logger.debug(f"APIMap: loaded key for {api_name}")
+
+        # Baidu Map: load sk for signature generation
+        baidu_sk = vault_keys.get("baidu_map_sk", "")
+        if baidu_sk:
+            self._baidu_sk = baidu_sk
+            logger.debug("APIMap: loaded Baidu Map SK")
+
+        # Baidu Translate: load appid separately (needs both appid + key)
+        baidu_appid = vault_keys.get("baidu_translate_appid", "")
+        if baidu_appid and "baidu_translate" in self._apis:
+            self._apis["baidu_translate"].auth_key = baidu_appid  # Store appid
+            self._apis["baidu_translate"].auth_type = "baidu"  # Special auth
 
     def set_api_key(self, api_name: str, key: str):
         """Set API key for an endpoint. Also persists to secrets vault."""
@@ -250,6 +289,8 @@ class APIMap:
             "unsplash": "unsplash_access_key",
             "pixabay": "pixabay_api_key",
             "tencent_location": "tencent_map_key",
+            "baidu_map_geocode": "baidu_map_ak",
+            "baidu_map_reverse": "baidu_map_ak",
         }
         vault_key = vault_key_map.get(api_name)
         if vault_key:

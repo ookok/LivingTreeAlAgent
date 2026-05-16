@@ -171,7 +171,8 @@ class ToolAdapter(CapabilityAdapter):
         try:
             from ..execution.react_executor import ReactExecutor
             rex_tools = {
-                "web_search": ("Search the internet", "query"),
+                "web_search": ("Search the internet (Parallel MCP → SparkSearch → DuckDuckGo)", "query"),
+                "web_lookup": ("Unified web lookup: auto-routes to API/browser/fetch/search", "query or url + task"),
                 "kb_search": ("Search knowledge base", "query"),
                 "read_file": ("Read a file", "path"),
                 "write_file": ("Write to a file", "path\\ncontent"),
@@ -221,6 +222,7 @@ class ToolAdapter(CapabilityAdapter):
             rex = ReactExecutor()
             methods = {
                 "web_search": rex._tool_web_search,
+                "web_lookup": lambda s: self._web_lookup(s),
                 "kb_search": rex._tool_kb_search,
                 "read_file": lambda s: self._read_file(s),
                 "write_file": lambda s: self._write_file(s),
@@ -233,6 +235,44 @@ class ToolAdapter(CapabilityAdapter):
         except Exception as e:
             return {"error": str(e)}
         return {"error": f"Unknown tool: {name}"}
+
+    async def _web_lookup(self, input_str: str) -> dict:
+        """Route web lookup through WebToolRouter for auto-tool selection."""
+        try:
+            from ..capability.web_router import get_web_router
+            router = get_web_router()
+            args = input_str.strip()
+            url = ""
+            query = ""
+            task = ""
+
+            if args.startswith("{"):
+                import json
+                try:
+                    parsed = json.loads(args)
+                    url = parsed.get("url", "")
+                    query = parsed.get("query", parsed.get("q", ""))
+                    task = parsed.get("task", "")
+                except json.JSONDecodeError:
+                    query = args
+            elif args.startswith("http"):
+                url = args
+                task = query = ""
+            else:
+                query = args
+
+            result = await router.lookup(query=query, url=url, task=task)
+            return {
+                "source": result.source,
+                "url": result.url,
+                "title": result.title,
+                "data": result.data,
+                "text": result.text[:5000] if result.text else "",
+                "found": result.found,
+                "error": result.error,
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "web_lookup"}
 
     def _read_file(self, path: str) -> str:
         """Read file — VFS (LivingStore) is primary path, raw disk is sandboxed fallback."""
@@ -304,11 +344,12 @@ class SkillAdapter(CapabilityAdapter):
             for name, skill in factory._skills.items():
                 cap_id = f"skill:{name}"
                 if cap_id not in self._caps:
+                    skill_instance = factory._instances.get(name)
                     cap = Capability(
                         id=cap_id, name=name, category=CapCategory.SKILL,
                         description=getattr(skill, 'description', '')[:200],
                         params=[CapParam(name="input", type="object")],
-                        handler=lambda input=None, _f=factory, _n=name: _f.execute_skill(_n, input),
+                        handler=lambda input=None, _si=skill_instance, _n=name: _si.execute(input) if _si else {"skill": _n, "error": "not instantiated"},
                         source="skill_factory",
                     )
                     caps.append(cap)

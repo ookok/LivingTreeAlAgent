@@ -123,7 +123,7 @@ class SkillDiscoveryManager:
         for item in root.iterdir():
             if item.is_dir():
                 skill_md = item / "SKILL.md"
-                if skill_md.exists():
+                if skill_md.exists() and skill_md.suffix.lower() == ".md":
                     results.append(item)
                 else:
                     sub_results = self._walk_skill_dirs(item)
@@ -133,11 +133,14 @@ class SkillDiscoveryManager:
 
     def _parse_skill(self, skill_dir: Path, source: str) -> Optional[DiscoveredSkill]:
         skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
+        if not skill_md.exists() or skill_md.suffix.lower() != ".md":
             return None
 
         try:
             content = skill_md.read_text(encoding="utf-8")
+            if len(content) > 256 * 1024:  # 256KB max
+                logger.warning(f"Skill file too large: {skill_md}")
+                return None
         except Exception as e:
             logger.warning(f"Cannot read {skill_md}: {e}")
             return None
@@ -153,11 +156,17 @@ class SkillDiscoveryManager:
                 fm_text = parts[1].strip()
                 body = parts[2].strip()
                 try:
-                    for line in fm_text.split("\n"):
+                    lines = fm_text.split("\n")
+                    if len(lines) > 100:  # prevent line-bombing
+                        logger.warning(f"Frontmatter has {len(lines)} lines, truncating: {skill_md}")
+                        lines = lines[:100]
+                    for line in lines:
                         line = line.strip()
                         if ":" in line:
                             key, val = line.split(":", 1)
-                            frontmatter[key.strip()] = val.strip().strip('"').strip("'")
+                            key = key.strip()[:64]  # clip key length
+                            val = val.strip().strip('"').strip("'")[:1024]  # clip value length
+                            frontmatter[key] = val
                 except Exception:
                     pass
 

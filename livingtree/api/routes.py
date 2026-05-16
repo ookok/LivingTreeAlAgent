@@ -1677,20 +1677,27 @@ def setup_routes(app: FastAPI) -> None:
     @app.post("/api/skills")
     async def create_or_update_skill(request: Request) -> dict:
         """Create or update a skill."""
+        user_id = _get_user_id_from_request(request)
+        if not _check_skill_rate_limit(user_id, "create", max_per_hour=20):
+            raise HTTPException(status_code=429, detail="技能创建频率过高，请稍后再试")
         try:
             body = await request.json()
-            user_id = _get_user_id_from_request(request)
+            ws_id = body.get("workspace_id", "")
+            if ws_id:
+                _check_workspace_membership(ws_id, user_id)
             from livingtree.core.skills import create_or_update_skill
             return create_or_update_skill(
                 name=body.get("name", ""),
                 body=body.get("body", ""),
-                user_id=user_id if not body.get("workspace_id") else "",
-                workspace_id=body.get("workspace_id", ""),
+                user_id=user_id if not ws_id else "",
+                workspace_id=ws_id,
                 description=body.get("description", ""),
                 tags=body.get("tags", []),
                 source_project=body.get("source_project", ""),
                 source_user=body.get("source_user", user_id),
             )
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -1702,6 +1709,8 @@ def setup_routes(app: FastAPI) -> None:
     ) -> dict:
         """Delete a skill."""
         user_id = _get_user_id_from_request(request)
+        if workspace_id:
+            _check_workspace_membership(workspace_id, user_id)
         from livingtree.core.skills import delete_skill
         ok = delete_skill(name, user_id=user_id if not workspace_id else "", workspace_id=workspace_id)
         return {"ok": ok}
@@ -1891,6 +1900,33 @@ def _get_user_id_from_request(request: Request) -> str:
     except Exception:
         pass
     return ""
+
+_skill_rate_limits: dict[str, list[float]] = {}
+
+def _check_skill_rate_limit(user_id: str, action: str, max_per_hour: int = 20) -> bool:
+    """Simple sliding-window rate limiter for skill operations."""
+    key = f"{user_id}:{action}"
+    now = _time.time()
+    window = 3600.0
+    if key not in _skill_rate_limits:
+        _skill_rate_limits[key] = []
+    _skill_rate_limits[key] = [t for t in _skill_rate_limits[key] if now - t < window]
+    if len(_skill_rate_limits[key]) >= max_per_hour:
+        return False
+    _skill_rate_limits[key].append(now)
+    if len(_skill_rate_limits) > 500:  # cleanup leak
+        _skill_rate_limits.clear()
+    return True
+
+def _check_workspace_membership(workspace_id: str, user_id: str):
+    """Verify user is a member of the workspace."""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未认证")
+    try:
+        from livingtree.api.workspace import check_workspace_access
+        check_workspace_access(workspace_id, user_id, min_role="editor")
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=f"工作区访问受限: {e}")
 
     # ── Document parsing routes ──
 

@@ -33,6 +33,14 @@ GIT_CLONE_TIMEOUT = 60
 LIVINGTREE_VERSION = "2.3.0"
 SANDBOX_LEVELS = ["full", "network", "filesystem", "shell", "none"]
 
+ALLOWED_GIT_HOSTS = {
+    "github.com", "www.github.com",
+    "gitlab.com", "www.gitlab.com",
+    "gitee.com", "www.gitee.com",
+    "bitbucket.org", "www.bitbucket.org",
+    "codeberg.org", "www.codeberg.org",
+}
+
 
 @dataclass
 class SkillMeta:
@@ -247,13 +255,23 @@ class SkillHub:
 
     async def _install_from_url(self, url: str, name: str = "") -> Optional[SkillMeta]:
         parsed = urlparse(url)
+        host = parsed.hostname or ""
+        if host.lower() not in ALLOWED_GIT_HOSTS:
+            raise RuntimeError(
+                f"Git host '{host}' not in allow list. Allowed: {sorted(ALLOWED_GIT_HOSTS)}"
+            )
+        if not url.endswith(".git") and "/" in parsed.path:
+            safe_url = url if url.endswith(".git") else f"{url.rstrip('/')}.git"
+        else:
+            safe_url = url
+
         install_path = SKILLS_DIR / (name or Path(parsed.path).stem.replace(".git", ""))
         if install_path.exists():
             shutil.rmtree(install_path, ignore_errors=True)
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                "git", "clone", "--depth", "1", url, str(install_path),
+                "git", "clone", "--depth", "1", safe_url, str(install_path),
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
             await asyncio.wait_for(proc.communicate(), timeout=GIT_CLONE_TIMEOUT)
@@ -282,7 +300,6 @@ class SkillHub:
         self._installed[meta.name] = meta
         self._save_installed(meta)
 
-        # ── Orthogonality gate: warn if skill overlaps with existing ones ──
         try:
             score = self.skill_orthogonality_score(meta)
             if score is not None and score.get("orthogonality_score", 0) > 0.6:
@@ -297,8 +314,9 @@ class SkillHub:
 
         if meta.dependencies:
             try:
+                pip_cmd = self._get_pip_install_cmd()
                 proc = await asyncio.create_subprocess_exec(
-                    "pip", "install", *meta.dependencies.values(),
+                    *pip_cmd, *meta.dependencies.values(),
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                 await proc.communicate()
             except Exception:
@@ -306,6 +324,27 @@ class SkillHub:
 
         logger.info(f"Skill installed: {meta.name} v{meta.version}")
         return meta
+
+    @staticmethod
+    def _get_pip_install_cmd() -> list[str]:
+        """Return pip install command with virtualenv isolation.
+        
+        prefers: venv pip → user pip with --user → system pip (warns)
+        """
+        venv = os.environ.get("VIRTUAL_ENV", "")
+        if venv and Path(venv, "Scripts" if os.name == "nt" else "bin", "pip").exists():
+            return ["pip", "install"]
+        if os.environ.get("CONDA_PREFIX"):
+            return ["pip", "install"]
+        try:
+            subprocess.run(
+                ["pip", "install", "--user", "--dry-run", "pip"],
+                capture_output=True, timeout=5,
+            )
+            return ["pip", "install", "--user"]
+        except Exception:
+            logger.warning("No virtualenv detected; pip install may affect system packages")
+            return ["pip", "install"]
 
     def uninstall(self, name: str) -> bool:
         if name not in self._installed:

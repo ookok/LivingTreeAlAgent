@@ -24,6 +24,7 @@ Inspired by SkillClaw (AMAP-ML/SkillClaw).
 from __future__ import annotations
 
 import hashlib
+import html as _html
 import json
 import re
 import time
@@ -38,6 +39,14 @@ SKILLS_BASE = PROJECT_ROOT / "data" / "skills"
 SESSIONS_DIR = PROJECT_ROOT / "data" / "skill_sessions"
 
 FRONTMATTER_RE = re.compile(r'^---\s*\n(.*?)\n---\s*\n', re.DOTALL)
+
+MAX_FRONTMATTER_BYTES = 64 * 1024
+MAX_BODY_BYTES = 512 * 1024
+MAX_YAML_DEPTH = 10
+SAFE_TAGS = {"b", "i", "em", "strong", "code", "pre", "blockquote",
+             "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",
+             "ul", "ol", "li", "a", "img", "table", "thead", "tbody",
+             "tr", "th", "td", "span", "div"}
 
 
 class SkillEntry:
@@ -100,7 +109,24 @@ def _parse_skill_file(filepath: Path) -> Optional[SkillEntry]:
         content = filepath.read_text(encoding="utf-8")
         m = FRONTMATTER_RE.match(content)
         if m:
-            metadata = yaml.safe_load(m.group(1)) or {}
+            fm_text = m.group(1)
+            if len(fm_text.encode("utf-8")) > MAX_FRONTMATTER_BYTES:
+                logger.warning(f"Skill frontmatter too large ({len(fm_text)} bytes) for {filepath}")
+                metadata = {}
+            else:
+                yaml.SafeLoader.add_constructor(
+                    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+                    _safe_map_loader
+                )
+                yaml.SafeLoader.add_constructor(
+                    yaml.resolver.BaseResolver.DEFAULT_SEQUENCE_TAG,
+                    _safe_seq_loader
+                )
+                try:
+                    metadata = yaml.safe_load(fm_text) or {}
+                except yaml.YAMLError as e:
+                    logger.warning(f"YAML parse error in {filepath}: {e}")
+                    metadata = {}
             body = content[m.end():].strip()
         else:
             metadata = {}
@@ -111,11 +137,56 @@ def _parse_skill_file(filepath: Path) -> Optional[SkillEntry]:
         return None
 
 
+def _safe_map_loader(loader, node, deep=False):
+    """Custom YAML mapping loader with nesting depth guard (prevents YAML bombs)."""
+    mapping = {}
+    for k, v in (node.value if hasattr(node, 'value') else []):
+        if len(mapping) > 500:
+            break
+        key = loader.construct_object(k, deep=deep)
+        if isinstance(key, str) and len(key) > 256:
+            key = key[:256]
+        val = loader.construct_object(v, deep=deep)
+        if isinstance(val, str) and len(val) > 4096:
+            val = val[:4096]
+        mapping[key] = val
+    return mapping
+
+
+def _safe_seq_loader(loader, node, deep=False):
+    """Custom YAML sequence loader with length guard."""
+    seq = []
+    for v in (node.value if hasattr(node, 'value') else []):
+        if len(seq) > 200:
+            break
+        val = loader.construct_object(v, deep=deep)
+        if isinstance(val, str) and len(val) > 4096:
+            val = val[:4096]
+        seq.append(val)
+    return seq
+
+
 def _write_skill_file(filepath: Path, metadata: dict, body: str) -> None:
     """Write a SKILL.md file with YAML frontmatter."""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = yaml.dump(metadata, allow_unicode=True, default_flow_style=False, sort_keys=False).strip()
     filepath.write_text(f"---\n{frontmatter}\n---\n\n{body}", encoding="utf-8")
+
+
+def _sanitize_body(body: str) -> str:
+    """Strip dangerous HTML/JS from skill body to prevent XSS."""
+    if not body:
+        return ""
+    if len(body.encode("utf-8")) > MAX_BODY_BYTES:
+        body = body[:MAX_BODY_BYTES]
+    body = re.sub(r'<script[^>]*>.*?</script>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r'<iframe[^>]*>.*?</iframe>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r'<object[^>]*>.*?</object>', '', body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r'<embed[^>]*>', '', body, flags=re.IGNORECASE)
+    body = re.sub(r'javascript:', '', body, flags=re.IGNORECASE)
+    body = re.sub(r'on\w+\s*=', '', body, flags=re.IGNORECASE)
+    body = re.sub(r'style\s*=\s*"[^"]*expression\s*\(', '', body, flags=re.IGNORECASE)
+    return body
 
 
 def _skill_name_to_filename(name: str) -> str:
@@ -186,6 +257,7 @@ def create_or_update_skill(
     source_user: str = "",
 ) -> dict:
     """Create a new skill or update an existing one (version bump)."""
+    body = _sanitize_body(body)
     skill_dir = _get_skill_dir(user_id=user_id, workspace_id=workspace_id)
     filename = _skill_name_to_filename(name)
     filepath = skill_dir / filename

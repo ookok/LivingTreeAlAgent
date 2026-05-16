@@ -1,7 +1,7 @@
 """AutoSkillResolver — when an agent lacks a needed skill/tool, auto-create it.
 
 Handles 3 scenarios:
-  1. Missing Python tool → generate code via LLM → test → register
+  1. Missing Python tool → generate code via LLM → scan → test → register
   2. Missing external CLI → auto-install via pkg_manager → register wrapper
   3. Missing knowledge → search web → ingest → create skill from learned content
 
@@ -10,6 +10,7 @@ this resolver automatically creates the missing capability and retries.
 """
 from __future__ import annotations
 
+import ast
 import re
 import time
 from dataclasses import dataclass, field
@@ -144,10 +145,16 @@ class AutoSkillResolver:
             )
             if result and result.text and "def " in result.text:
                 code = result.text.strip()
-                # Extract function body from ``` blocks
                 m = re.search(r'```(?:python)?\s*\n?(.*?)\n?```', code, re.DOTALL)
                 if m:
                     code = m.group(1)
+
+                # AST security scan: reject dangerous code
+                scan = self._scan_code(code, name)
+                if not scan["safe"]:
+                    logger.warning(f"Skill '{name}' rejected by AST scan: {scan['reason']}")
+                    return None
+
                 SKILLS_DIR.mkdir(parents=True, exist_ok=True)
                 filepath = SKILLS_DIR / f"{name}.py"
                 filepath.write_text(code, encoding="utf-8")
@@ -163,6 +170,78 @@ class AutoSkillResolver:
         except Exception as e:
             logger.debug(f"Generate {name}: {e}")
         return None
+
+    # ═══ AST Security Scan ═══
+
+    DANGEROUS_IMPORTS = {"os", "subprocess", "socket", "shutil", "ctypes",
+                          "signal", "multiprocessing", "threading", "pty",
+                          "fcntl", "posix", "eval", "exec", "compile",
+                          "__import__", "importlib", "pickle", "marshal"}
+
+    DANGEROUS_CALLS = {"eval", "exec", "compile", "__import__",
+                       "os.system", "os.popen", "os.execl", "os.execle",
+                       "os.execlp", "os.execlpe", "os.execv", "os.execve",
+                       "os.execvp", "os.execvpe", "os.spawnl", "os.spawnle",
+                       "os.spawnlp", "os.spawnlpe", "os.spawnv", "os.spawnve",
+                       "os.spawnvp", "os.spawnvpe", "subprocess.call",
+                       "subprocess.Popen", "subprocess.run", "subprocess.check_call",
+                       "subprocess.check_output"}
+
+    def _scan_code(self, code: str, name: str) -> dict:
+        """AST-based security scan of LLM-generated code.
+
+        Returns: {"safe": bool, "reason": str, "warnings": list}
+        """
+        try:
+            tree = ast.parse(code, filename=f"<auto_skill:{name}>")
+        except SyntaxError as e:
+            return {"safe": False, "reason": f"Syntax error: {e}", "warnings": []}
+
+        warnings = []
+        imports = []
+
+        class _Scanner(ast.NodeVisitor):
+            def visit_Import(self, node):
+                for alias in node.names:
+                    base = alias.name.split(".")[0]
+                    imports.append(base)
+                    if base in AutoSkillResolver.DANGEROUS_IMPORTS:
+                        warnings.append(f"Dangerous import: {alias.name}")
+                self.generic_visit(node)
+
+            def visit_ImportFrom(self, node):
+                if node.module:
+                    base = node.module.split(".")[0]
+                    imports.append(base)
+                    if base in AutoSkillResolver.DANGEROUS_IMPORTS:
+                        warnings.append(f"Dangerous import: {node.module}")
+                self.generic_visit(node)
+
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Attribute):
+                    chain = self._get_attr_chain(node.func)
+                    if chain in AutoSkillResolver.DANGEROUS_CALLS:
+                        warnings.append(f"Dangerous call: {chain}()")
+                elif isinstance(node.func, ast.Name):
+                    if node.func.id in AutoSkillResolver.DANGEROUS_CALLS:
+                        warnings.append(f"Dangerous call: {node.func.id}()")
+                self.generic_visit(node)
+
+            def _get_attr_chain(self, node):
+                parts = []
+                while isinstance(node, ast.Attribute):
+                    parts.append(node.attr)
+                    node = node.value
+                if isinstance(node, ast.Name):
+                    parts.append(node.id)
+                return ".".join(reversed(parts))
+
+        _Scanner().visit(tree)
+
+        if warnings:
+            return {"safe": False, "reason": "; ".join(warnings[:3]), "warnings": warnings}
+
+        return {"safe": True, "reason": "", "warnings": [], "imports": imports}
 
     async def _learn_from_web(self, name: str, context: str) -> ResolvedSkill | None:
         """Search the web and create a knowledge-based skill."""

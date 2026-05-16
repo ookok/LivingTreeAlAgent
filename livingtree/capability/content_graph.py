@@ -41,24 +41,11 @@ from typing import Any, Optional
 
 from loguru import logger
 
-# NLP optional imports with graceful degradation
-try:
-    import jieba
-    import jieba.posseg as pseg
-except ImportError:
-    jieba = pseg = None
-try:
-    from ltp import LTP
-except ImportError:
-    LTP = None
-try:
-    import spacy
-except ImportError:
-    spacy = None
-try:
-    import hanlp
-except ImportError:
-    hanlp = None
+import hanlp
+import jieba
+import jieba.posseg as pseg
+import spacy
+from ltp import LTP
 
 
 # ═══ Data Types ════════════════════════════════════════════════════

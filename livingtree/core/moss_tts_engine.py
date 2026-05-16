@@ -24,6 +24,9 @@ from typing import Any, Optional
 
 from loguru import logger
 
+import edge_tts
+import numpy as np
+
 DEFAULT_GGUF_PATH = "models/moss-tts-nano-q4km.gguf"
 MOSS_TTS_BINARY_NAMES = ["moss-tts", "moss-tts-cli", "tts", "vits-cli"]
 SAMPLE_RATE = 22050
@@ -139,11 +142,7 @@ class MossTTSEngine:
         return self._backend != "none"
 
     def _try_edge_tts(self) -> bool:
-        try:
-            import edge_tts
-            return True
-        except ImportError:
-            return False
+        return True
 
     async def _try_vibevoice(self) -> bool:
         try:
@@ -155,15 +154,11 @@ class MossTTSEngine:
 
     async def _try_numpy(self) -> bool:
         try:
-            import numpy as np
             if not self._gguf_path.is_file():
                 logger.debug(f"GGUF model not found: {self._gguf_path}")
                 return False
             self._model_info, self._tensors = _parse_gguf(self._gguf_path)
             return self._validate_moss_tts_tensors()
-        except ImportError:
-            logger.debug("numpy not installed")
-            return False
         except Exception as e:
             logger.debug(f"GGUF numpy load: {e}")
             return False
@@ -213,7 +208,6 @@ class MossTTSEngine:
 
     async def _synth_edge_tts(self, text: str, voice: str) -> bytes:
         try:
-            import edge_tts
             voice_map = {
                 "xiaoshu": "zh-CN-XiaoxiaoNeural",
                 "warm": "zh-CN-XiaoyiNeural",
@@ -226,8 +220,6 @@ class MossTTSEngine:
                 if chunk["type"] == "audio":
                     chunks.append(chunk["data"])
             return b"".join(chunks)
-        except ImportError:
-            logger.warning("edge-tts not installed. Run: pip install edge-tts")
         except Exception as e:
             logger.debug(f"edge-tts: {e}")
         return b""
@@ -503,16 +495,12 @@ def get_moss_tts(gguf_path: str = "") -> MossTTSEngine:
 async def synthesize_edge_tts(text: str, voice: str = "zh-CN-XiaoxiaoNeural") -> bytes:
     """Standalone edge-tts synthesis — shared by voice_call, inline_parser, etc."""
     try:
-        import edge_tts
         communicate = edge_tts.Communicate(text, voice)
         chunks = []
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 chunks.append(chunk["data"])
         return b"".join(chunks)
-    except ImportError:
-        from loguru import logger
-        logger.warning("edge-tts not installed. Run: pip install edge-tts")
     except Exception as e:
         from loguru import logger
         logger.debug(f"edge-tts: {e}")

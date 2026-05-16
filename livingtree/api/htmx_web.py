@@ -2642,6 +2642,7 @@ async def tree_admin_spider(request: Request):
         from scrapling.fetchers import StealthyFetcher
         stealth_ok = "✅ StealthyFetcher (patchright)" 
     except ImportError:
+        StealthyFetcher = None
         stealth_ok = "❌ patchright install chromium"
     html = '''<div class="card">
 <h2>🕷 爬虫框架 <span style="font-size:10px;color:var(--dim)">— Scrapling Spider + LLM</span></h2>

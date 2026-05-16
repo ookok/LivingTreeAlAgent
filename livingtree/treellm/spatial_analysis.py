@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+import shapely
 
 
 # ═══ Coordinate Transforms ═════════════════════════════════════════
@@ -166,12 +167,7 @@ class SpatialEngine:
         return cls._instance
 
     def __init__(self):
-        self._has_shapely = False
-        try:
-            import shapely
-            self._has_shapely = True
-        except ImportError:
-            logger.info("SpatialEngine: shapely not installed, using pure Python fallback")
+        self._has_shapely = True
 
     # ── Geometry Operations ────────────────────────────────────────
 

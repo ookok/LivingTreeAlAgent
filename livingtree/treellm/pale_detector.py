@@ -35,11 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from loguru import logger
-
-try:
-    import numpy as np
-except ImportError:
-    np = None
+import numpy as np
 
 
 # ═══ Data Types ════════════════════════════════════════════════════

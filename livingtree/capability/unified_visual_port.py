@@ -34,6 +34,13 @@ from typing import Any, Optional
 
 from loguru import logger
 
+from PIL import Image
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from docx import Document
+import graphviz
+
 
 # ═══ VisualOutput — 双通道输出容器 ═══
 
@@ -168,7 +175,6 @@ class ImageAdapter(VisualAdapter):
         path = data if isinstance(data, str) else str(data.get("image_path", ""))
         width = (data if isinstance(data, dict) else {}).get("ascii_width", 60)
         try:
-            from PIL import Image
             img = Image.open(path).convert("L")
             aspect = img.height / max(img.width, 1)
             h = max(5, int(width * aspect * 0.5))
@@ -183,8 +189,6 @@ class ImageAdapter(VisualAdapter):
                 )
                 lines.append(line)
             return "\n".join(lines)
-        except ImportError:
-            return f"[需要 PIL/Pillow] {path}"
         except Exception as e:
             return f"[图片错误] {path}: {e}"
 
@@ -335,12 +339,6 @@ class PlotAdapter(VisualAdapter):
         return "\n".join(lines)
 
     def render_image(self, data: Any) -> Optional[bytes]:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-        except ImportError:
-            return None
         t = data.get("type", "")
         d = data.get("data", {})
         title = data.get("title", "")
@@ -441,9 +439,6 @@ class TableAdapter(VisualAdapter):
         if not headers and not rows:
             return None
         try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(max(8, len(headers) * 1.2), max(4, len(rows) * 0.4)))
             ax.axis("off")
             tbl = ax.table(cellText=rows, colLabels=headers, loc="center", cellLoc="center")
@@ -462,8 +457,6 @@ class TableAdapter(VisualAdapter):
             fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
             plt.close(fig)
             return buf.getvalue()
-        except ImportError:
-            return None
         except Exception as e:
             logger.debug(f"TableAdapter image: {e}")
             return None
@@ -516,22 +509,16 @@ class DocumentAdapter(VisualAdapter):
 
     def _extract_docx(self, path: Path) -> str:
         try:
-            from docx import Document
             doc = Document(str(path))
             parts = [f"📄 {path.name}"]
             parts.extend(p.text for p in doc.paragraphs if p.text.strip())
             return "\n".join(parts) if len(parts) > 1 else "[无文本内容]"
-        except ImportError:
-            return f"[需要 python-docx: {path.name}]"
         except Exception as e:
             return f"[DOCX 错误] {e}"
 
     def render_image(self, data: Any) -> Optional[bytes]:
         """Layout document text as a styled PNG preview."""
         try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
             text = self.render_text(data)[:3000]
             lines = text.split("\n")[:60]
             fig, ax = plt.subplots(figsize=(8, max(4, len(lines) * 0.3)))
@@ -543,15 +530,9 @@ class DocumentAdapter(VisualAdapter):
             fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
             plt.close(fig)
             return buf.getvalue()
-        except ImportError:
-            return None
         except Exception as e:
             logger.debug(f"DocumentAdapter image: {e}")
             return None
-
-    def _extract_meta(self, data: Any) -> dict:
-        path = Path(data)
-        return {"path": str(path), "ext": path.suffix.lower()}
 
 
 # ── 5. MapAdapter ──
@@ -601,9 +582,6 @@ class MapAdapter(VisualAdapter):
         lon = data.get("lon", 0.0)
         title = data.get("title", f"({lat:.4f}, {lon:.4f})")
         try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(8, 6))
             # Simple scatter plot with context box
             margin = 0.1
@@ -623,8 +601,6 @@ class MapAdapter(VisualAdapter):
             fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
             plt.close(fig)
             return buf.getvalue()
-        except ImportError:
-            return None
         except Exception as e:
             logger.debug(f"MapAdapter image: {e}")
             return None
@@ -705,11 +681,8 @@ class DiagramAdapter(VisualAdapter):
 
     def _render_dot(self, source: str) -> Optional[bytes]:
         try:
-            import graphviz
             dot = graphviz.Source(source, format="png")
             return dot.pipe()
-        except ImportError:
-            return None
         except Exception as e:
             logger.warning(f"UnifiedVisual: {e}")
             return None

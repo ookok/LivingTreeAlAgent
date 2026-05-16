@@ -33,7 +33,9 @@ from typing import Any
 
 from loguru import logger
 
-
+import torch
+import faiss
+from paddleocr import PaddleOCR
 # ═══════════════════════════════════════════════════════════════════
 # GPU Detection
 # ═══════════════════════════════════════════════════════════════════
@@ -85,38 +87,30 @@ class HardwareAccelerator:
             return GPUInfo()
 
         # 1. Try CUDA
-        try:
-            import torch
-            if torch.cuda.is_available():
-                info = GPUInfo(
-                    available=True, backend="cuda",
-                    device_name=torch.cuda.get_device_name(0),
-                    device_count=torch.cuda.device_count(),
-                )
-                try:
-                    info.memory_mb = int(
-                        torch.cuda.get_device_properties(0).total_memory / 1024**2)
-                except Exception:
-                    pass
-                try:
-                    cap = torch.cuda.get_device_capability(0)
-                    info.compute_capability = f"{cap[0]}.{cap[1]}"
-                except Exception:
-                    pass
-                return info
-        except ImportError:
-            pass
+        if torch.cuda.is_available():
+            info = GPUInfo(
+                available=True, backend="cuda",
+                device_name=torch.cuda.get_device_name(0),
+                device_count=torch.cuda.device_count(),
+            )
+            try:
+                info.memory_mb = int(
+                    torch.cuda.get_device_properties(0).total_memory / 1024**2)
+            except Exception:
+                pass
+            try:
+                cap = torch.cuda.get_device_capability(0)
+                info.compute_capability = f"{cap[0]}.{cap[1]}"
+            except Exception:
+                pass
+            return info
 
         # 2. Try MPS (Apple Silicon)
-        try:
-            import torch
-            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                return GPUInfo(
-                    available=True, backend="mps",
-                    device_name="Apple MPS", device_count=1,
-                )
-        except ImportError:
-            pass
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return GPUInfo(
+                available=True, backend="mps",
+                device_name="Apple MPS", device_count=1,
+            )
 
         # 3. Try nvidia-smi (even without torch)
         import asyncio
@@ -170,24 +164,19 @@ class HardwareAccelerator:
     def create_faiss_index(self, dimension: int = 768,
                            use_gpu: bool = True) -> Any:
         """创建 FAISS 索引（自动选择 GPU/CPU）."""
-        try:
-            import faiss
-            if use_gpu and self._gpu.can_accelerate_faiss:
-                # GPU index: IVF + Flat
-                nlist = min(4096, max(128, dimension // 4))
-                quantizer = faiss.IndexFlatL2(dimension)
-                index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
-                gpu_index = faiss.index_cpu_to_all_gpus(index)
-                logger.info(f"FAISS GPU index: dim={dimension}, nlist={nlist}")
-                return gpu_index
+        if use_gpu and self._gpu.can_accelerate_faiss:
+            # GPU index: IVF + Flat
+            nlist = min(4096, max(128, dimension // 4))
+            quantizer = faiss.IndexFlatL2(dimension)
+            index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
+            gpu_index = faiss.index_cpu_to_all_gpus(index)
+            logger.info(f"FAISS GPU index: dim={dimension}, nlist={nlist}")
+            return gpu_index
 
-            # CPU index (flat for small, IVF for large)
-            cpu_index = faiss.IndexFlatL2(dimension)
-            logger.info(f"FAISS CPU index: dim={dimension}")
-            return cpu_index
-        except ImportError:
-            logger.warning("FAISS not installed")
-            return None
+        # CPU index (flat for small, IVF for large)
+        cpu_index = faiss.IndexFlatL2(dimension)
+        logger.info(f"FAISS CPU index: dim={dimension}")
+        return cpu_index
 
     def ensure_faiss_gpu(self, index: Any) -> Any:
         """If GPU available, move existing FAISS index to GPU."""
@@ -311,15 +300,12 @@ class HardwareAccelerator:
             return None
 
         try:
-            from paddleocr import PaddleOCR
             ocr = PaddleOCR(
                 use_angle_cls=True, lang='ch',
                 use_gpu=True, show_log=False,
             )
             logger.info("PaddleOCR GPU initialized")
             return ocr
-        except ImportError:
-            logger.debug("PaddleOCR not installed for GPU OCR")
         except Exception as e:
             logger.debug(f"PaddleOCR GPU: {e}")
         return None

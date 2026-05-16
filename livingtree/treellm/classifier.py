@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+import numpy as np
 
-# Lazy import to avoid circular dependency with capability/
 SYSTEM_TOOLS = {}
 EXPERT_ROLES = {}
 try:
@@ -26,11 +26,6 @@ try:
     EXPERT_ROLES = _er
 except ImportError:
     pass
-
-try:
-    import numpy as np
-except ImportError:
-    np = None
 
 WEIGHTS_FILE = Path(".livingtree/skill_router_weights.json")
 HISTORY_FILE = Path(".livingtree/skill_router_history.jsonl")

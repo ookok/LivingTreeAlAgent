@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from loguru import logger
+import yaml
 
 CLI_TOOLS_DIR = Path(".livingtree/cli_tools")
 MANIFEST_DIR = Path(".livingtree/cli_manifests")
@@ -413,11 +414,7 @@ class CLIManifest:
     def from_yaml(yaml_path: str | Path) -> CLIDefinition:
         """Parse a CLI manifest YAML file into a CLIDefinition."""
         path = Path(yaml_path)
-        import yaml
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except ImportError:
-            data = json.loads(path.read_text(encoding="utf-8"))
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
 
         commands = []
         for cmd_data in data.get("commands", []):

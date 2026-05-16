@@ -496,24 +496,18 @@ class DreamPretrainer:
         return h >= 22 or h < 6
 
     def _has_resources(self) -> bool:
-        try:
-            import psutil
-            if psutil.cpu_percent() > 70 or psutil.virtual_memory().percent > 80:
+        import psutil
+        if psutil.cpu_percent() > 70 or psutil.virtual_memory().percent > 80:
+            return False
+        import pynvml
+        pynvml.nvmlInit()
+        for i in range(pynvml.nvmlDeviceGetCount()):
+            h = pynvml.nvmlDeviceGetHandleByIndex(i)
+            m = pynvml.nvmlDeviceGetMemoryInfo(h)
+            if m.used / m.total > 0.85:
+                pynvml.nvmlShutdown()
                 return False
-        except ImportError:
-            pass
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-            for i in range(pynvml.nvmlDeviceGetCount()):
-                h = pynvml.nvmlDeviceGetHandleByIndex(i)
-                m = pynvml.nvmlDeviceGetMemoryInfo(h)
-                if m.used / m.total > 0.85:
-                    pynvml.nvmlShutdown()
-                    return False
-            pynvml.nvmlShutdown()
-        except ImportError:
-            pass
+        pynvml.nvmlShutdown()
         return True
 
     def _check_token_budget(self) -> bool:

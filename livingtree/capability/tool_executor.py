@@ -32,6 +32,11 @@ from typing import Any
 
 from loguru import logger
 
+import jmespath
+import pytesseract
+from PIL import Image
+from pypdf import PdfReader
+
 
 @dataclass
 class ToolResult:
@@ -307,18 +312,13 @@ class ToolExecutor:
         t0 = time.monotonic()
         try:
             # Try pypdf first
-            try:
-                from pypdf import PdfReader
-                reader = PdfReader(path)
-                page_nums = self._parse_page_range(pages, len(reader.pages))
-                texts = []
-                for i in page_nums:
-                    texts.append(reader.pages[i].extract_text() or f"[Page {i+1}: no text]")
-                return ToolResult("pdf_parse", True, "\n\n--- Page ---\n\n".join(texts[:10]),
-                                elapsed_ms=(time.monotonic()-t0)*1000)
-            except ImportError:
-                pass
-            # Fallback: read as text
+            reader = PdfReader(path)
+            page_nums = self._parse_page_range(pages, len(reader.pages))
+            texts = []
+            for i in page_nums:
+                texts.append(reader.pages[i].extract_text() or f"[Page {i+1}: no text]")
+            return ToolResult("pdf_parse", True, "\n\n--- Page ---\n\n".join(texts[:10]),
+                            elapsed_ms=(time.monotonic()-t0)*1000)
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read(100000)
             return ToolResult("pdf_parse", True, content, elapsed_ms=(time.monotonic()-t0)*1000)
@@ -329,16 +329,9 @@ class ToolExecutor:
         """OCR image to text."""
         t0 = time.monotonic()
         try:
-            try:
-                import pytesseract
-                from PIL import Image
-                img = Image.open(path)
-                text = pytesseract.image_to_string(img, lang=language)
-                return ToolResult("ocr_extract", True, text[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
-            except ImportError:
-                return ToolResult("ocr_extract", False,
-                    error="pytesseract not installed. pip install pytesseract pillow",
-                    elapsed_ms=(time.monotonic()-t0)*1000)
+            img = Image.open(path)
+            text = pytesseract.image_to_string(img, lang=language)
+            return ToolResult("ocr_extract", True, text[:50000], elapsed_ms=(time.monotonic()-t0)*1000)
         except Exception as e:
             return ToolResult("ocr_extract", False, error=str(e), elapsed_ms=(time.monotonic()-t0)*1000)
 
@@ -396,14 +389,9 @@ class ToolExecutor:
                                 elapsed_ms=(time.monotonic()-t0)*1000)
             else:
                 # Try JMESPath
-                try:
-                    import jmespath
-                    data = jmespath.search(expression, data)
-                    return ToolResult("json_transform", True, json.dumps(data, indent=2, ensure_ascii=False)[:50000],
-                                    elapsed_ms=(time.monotonic()-t0)*1000)
-                except ImportError:
-                    return ToolResult("json_transform", True, json.dumps(data, indent=2, ensure_ascii=False)[:50000],
-                                    elapsed_ms=(time.monotonic()-t0)*1000)
+                data = jmespath.search(expression, data)
+                return ToolResult("json_transform", True, json.dumps(data, indent=2, ensure_ascii=False)[:50000],
+                                elapsed_ms=(time.monotonic()-t0)*1000)
         except json.JSONDecodeError as e:
             return ToolResult("json_transform", False, error=f"Invalid JSON: {e}", elapsed_ms=(time.monotonic()-t0)*1000)
 

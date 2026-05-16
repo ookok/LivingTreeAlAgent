@@ -16,21 +16,10 @@ from typing import List, Tuple, Dict, Any, Optional
 
 from loguru import logger
 from pydantic import BaseModel
-
-try:
-    from sentence_transformers import SentenceTransformer  # type: ignore
-except Exception:  # pragma: no cover
-    SentenceTransformer = None  # type: ignore
-
-try:
-    from livingtree.core.hardware_acceleration import get_accelerator
-except Exception:
-    get_accelerator = None
-
-try:
-    from livingtree.core.memory_optimizer import get_memory_optimizer
-except Exception:
-    get_memory_optimizer = None
+import lancedb
+from sentence_transformers import SentenceTransformer
+from livingtree.core.hardware_acceleration import get_accelerator
+from livingtree.core.memory_optimizer import get_memory_optimizer
 
 
 class EmbeddingBackend(ABC):
@@ -49,27 +38,24 @@ class LocalEmbeddingBackend(EmbeddingBackend):
         self._model = None
         self._model_loaded = False
         self._accelerator = None
-        if get_accelerator is not None:
-            try:
-                self._accelerator = get_accelerator()
-            except Exception:
-                self._accelerator = None
+        try:
+            self._accelerator = get_accelerator()
+        except Exception:
+            self._accelerator = None
 
     def _ensure_model(self) -> None:
         if self._model_loaded:
             return
         self._model_loaded = True
-        if SentenceTransformer is not None:
-            try:
-                self._model = SentenceTransformer(
-                    "all-MiniLM-L6-v2"
-                )
-                # Move to GPU if accelerator says so
-                if self._accelerator:
-                    self._accelerator.patch_sentence_transformer(self._model)
-            except Exception as e:
-                logger.warning("Local embedding model load failed: %s", e)
-                self._model = None
+        try:
+            self._model = SentenceTransformer(
+                "all-MiniLM-L6-v2"
+            )
+            if self._accelerator:
+                self._accelerator.patch_sentence_transformer(self._model)
+        except Exception as e:
+            logger.warning("Local embedding model load failed: %s", e)
+            self._model = None
 
     def _fallback_embed(self, texts: List[str]) -> List[List[float]]:
         import hashlib
@@ -125,13 +111,12 @@ class VectorStore:
         self._matrix_ids: list[str] = []  # keys corresponding to cached matrix
         self._matrix_dirty = True
         self._cache = None
-        if get_memory_optimizer is not None:
-            try:
-                opt = get_memory_optimizer()
-                self._cache = opt.get_embed_cache()
-                logger.info("VectorStore: using MemoryOptimizer embed cache (size=%d)", self._cache.max_size)
-            except Exception as e:
-                logger.debug("MemoryOptimizer not available: %s", e)
+        try:
+            opt = get_memory_optimizer()
+            self._cache = opt.get_embed_cache()
+            logger.info("VectorStore: using MemoryOptimizer embed cache (size=%d)", self._cache.max_size)
+        except Exception as e:
+            logger.debug("MemoryOptimizer not available: %s", e)
         if self._cache is None:
             # Fallback to simple dict cache
             try:
@@ -240,20 +225,14 @@ class LanceDBStore:
     def _ensure_db(self) -> bool:
         if self._db is not None:
             return True
+        Path(self._path).mkdir(parents=True, exist_ok=True)
+        self._db = lancedb.connect(self._path)
         try:
-            import lancedb
-            Path(self._path).mkdir(parents=True, exist_ok=True)
-            self._db = lancedb.connect(self._path)
-            try:
-                self._table = self._db.open_table(self._collection_name)
-            except Exception:
-                pass
-            logger.info(f"LanceDB initialized: {self._path}/{self._collection_name}")
-            return True
-        except ImportError:
-            if self._fallback is None:
-                self._fallback = VectorStore(self.embedding_backend, self._collection_name)
-            return False
+            self._table = self._db.open_table(self._collection_name)
+        except Exception:
+            pass
+        logger.info(f"LanceDB initialized: {self._path}/{self._collection_name}")
+        return True
 
     def embed(self, text: str) -> list[float]:
         vecs = self.embedding_backend.embed([text])

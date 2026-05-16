@@ -21,14 +21,10 @@ from typing import List, Optional, Tuple
 from loguru import logger
 
 from .vector_store import EmbeddingBackend, VectorStore, LocalEmbeddingBackend
-
-try:
-    from pymilvus import (  # type: ignore
-        Collection, CollectionSchema, DataType, FieldSchema,
-        MilvusClient, connections, utility,
-    )
-except ImportError:
-    MilvusClient = None
+from pymilvus import (
+    Collection, CollectionSchema, DataType, FieldSchema,
+    MilvusClient, connections, utility,
+)
 
 
 class MilvusEmbeddingBackend(EmbeddingBackend):
@@ -123,11 +119,6 @@ class MilvusVectorStore:
     def _ensure_connected(self) -> bool:
         if self._connected and self._client:
             return True
-        if MilvusClient is None:
-            if self._fallback is None:
-                logger.info("pymilvus not installed, using in-memory VectorStore fallback")
-                self._fallback = VectorStore(self.embedding_backend, self.collection_name)
-            return False
         try:
             if self.uri.endswith(".db"):
                 self._client = MilvusClient(uri=self.uri)

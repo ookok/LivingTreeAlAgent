@@ -8,17 +8,9 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from ..dna.genome import Genome
 
-try:
-    import torch
-except ImportError:
-    torch = None
-
-try:
-    from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
-    from peft import LoraConfig, get_peft_model, PeftModel  # noqa: F401
-except ImportError:
-    AutoModelForCausalLM = AutoTokenizer = Trainer = TrainingArguments = None
-    LoraConfig = get_peft_model = PeftModel = None
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from peft import LoraConfig, get_peft_model, PeftModel  # noqa: F401
 
 class CellCapability(BaseModel):
     name: str; description: str; confidence: float = 0.0

@@ -29,6 +29,8 @@ from urllib.parse import urljoin, urlparse
 from loguru import logger
 
 import httpx
+from bs4 import BeautifulSoup
+from scrapling.fetchers import Fetcher as ScraplingFetcherClass
 
 
 # ═══ TLS Fingerprint Profiles ═══
@@ -181,11 +183,7 @@ class LightCrawler:
 
     def _extract_structured(self, html: str, base_url: str, page: LightPage) -> LightPage:
         """Ultra-fast structured extraction — no BeautifulSoup unless needed."""
-        try:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html, "html.parser")
-        except Exception:
-            soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
 
         # Title
         title_tag = soup.find("title")
@@ -283,8 +281,7 @@ class LightCrawler:
 
     async def _fetch_httpx(self, url: str, profile: dict, timeout: int) -> Optional[str]:
         try:
-            from scrapling.fetchers import Fetcher
-            fetcher_page = Fetcher.get(url, timeout=timeout)
+            fetcher_page = ScraplingFetcherClass.get(url, timeout=timeout)
             if fetcher_page:
                 return str(fetcher_page)
         except Exception:
@@ -375,13 +372,8 @@ class ScraplingFetcher:
     """
 
     def __init__(self):
-        try:
-            from scrapling.fetchers import Fetcher as _Fetcher
-            self._Fetcher = _Fetcher
-            self._available = True
-        except ImportError:
-            self._Fetcher = None
-            self._available = False
+        self._Fetcher = ScraplingFetcherClass
+        self._available = True
 
     def is_available(self) -> bool:
         return self._available

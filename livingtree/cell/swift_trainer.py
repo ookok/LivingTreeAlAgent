@@ -31,6 +31,10 @@ from typing import Any, AsyncIterator, Callable, Optional
 from loguru import logger
 from pydantic import BaseModel, Field
 
+import modelscope
+import psutil
+import pynvml
+
 
 @dataclass
 class DrillConfig:
@@ -223,34 +227,23 @@ class SwiftDrillTrainer:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             self._swift_available = False
 
-        try:
-            import modelscope
-            self._modelscope_available = True
-            logger.info(f"ModelScope SDK available: {modelscope.__version__}")
-        except ImportError:
-            self._modelscope_available = False
+        self._modelscope_available = True
+        logger.info(f"ModelScope SDK available: {modelscope.__version__}")
 
         self._system_info = self._detect_system()
 
     def _detect_system(self) -> dict[str, Any]:
         """Detect system hardware for optimal training config."""
         info = {"cpu_count": os.cpu_count() or 1, "gpu_count": 0, "gpu_vram_gb": 0, "ram_gb": 0}
-        try:
-            import psutil
-            info["ram_gb"] = round(psutil.virtual_memory().total / (1024**3), 1)
-        except ImportError:
-            pass
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-            info["gpu_count"] = pynvml.nvmlDeviceGetCount()
-            if info["gpu_count"] > 0:
-                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                info["gpu_vram_gb"] = round(mem.total / (1024**3), 1)
-            pynvml.nvmlShutdown()
-        except ImportError:
-            pass
+        info["ram_gb"] = round(psutil.virtual_memory().total / (1024**3), 1)
+
+        pynvml.nvmlInit()
+        info["gpu_count"] = pynvml.nvmlDeviceGetCount()
+        if info["gpu_count"] > 0:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            info["gpu_vram_gb"] = round(mem.total / (1024**3), 1)
+        pynvml.nvmlShutdown()
 
         logger.info(f"System: {info['cpu_count']} CPUs, {info['gpu_count']} GPUs, {info['ram_gb']}GB RAM, {info['gpu_vram_gb']}GB VRAM")
         return info
@@ -655,26 +648,19 @@ class SwiftDrillTrainer:
 
     def _is_system_idle(self) -> bool:
         """Check if system resources are free enough for training."""
-        try:
-            import psutil
-            if psutil.cpu_percent() > 30:
+        if psutil.cpu_percent() > 30:
+            return False
+        if psutil.virtual_memory().percent > 50:
+            return False
+
+        pynvml.nvmlInit()
+        for i in range(pynvml.nvmlDeviceGetCount()):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            if (mem.used / mem.total) > 0.2:
+                pynvml.nvmlShutdown()
                 return False
-            if psutil.virtual_memory().percent > 50:
-                return False
-        except ImportError:
-            return True
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-            for i in range(pynvml.nvmlDeviceGetCount()):
-                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                if (mem.used / mem.total) > 0.2:
-                    pynvml.nvmlShutdown()
-                    return False
-            pynvml.nvmlShutdown()
-        except ImportError:
-            pass
+        pynvml.nvmlShutdown()
         return True
 
     @staticmethod

@@ -19,13 +19,7 @@ from typing import Any
 
 from loguru import logger
 
-try:
-    import tomllib
-except ImportError:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        tomllib = None
+import tomllib
 
 
 class OpenCodeBridge:

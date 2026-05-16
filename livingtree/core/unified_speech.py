@@ -29,6 +29,8 @@ from typing import Any, Optional
 
 from loguru import logger
 
+import edge_tts
+
 from ..dna.phenomenal_consciousness import VADVector
 
 
@@ -134,11 +136,7 @@ class UnifiedSpeechPipeline:
         return self.status()
 
     def _probe_tts(self):
-        try:
-            import edge_tts
-            self._tts_enabled = True
-        except ImportError:
-            self._tts_enabled = False
+        self._tts_enabled = True
 
     def status(self) -> dict:
         return {
@@ -289,15 +287,12 @@ class UnifiedSpeechPipeline:
     async def _synthesize(self, text: str) -> bytes:
         """TTS via edge-tts."""
         try:
-            import edge_tts
             communicate = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural")
             chunks = []
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
                     chunks.append(chunk["data"])
             return b"".join(chunks)
-        except ImportError:
-            raise RuntimeError("edge-tts not installed. Run: pip install edge-tts")
         except Exception as e:
             raise RuntimeError(f"TTS failed: {e}")
 

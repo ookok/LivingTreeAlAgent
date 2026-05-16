@@ -19,15 +19,12 @@ from typing import Any, Optional
 
 from loguru import logger
 
-try:
-    import tree_sitter_python as tspython
-    import tree_sitter_javascript as tsjs
-    import tree_sitter_typescript as tsts
-    import tree_sitter_go as tsgo
-    import tree_sitter_rust as tsrust
-    import tree_sitter as ts
-except ImportError:
-    tspython = tsjs = tsts = tsgo = tsrust = ts = None
+import tree_sitter_python as tspython
+import tree_sitter_javascript as tsjs
+import tree_sitter_typescript as tsts
+import tree_sitter_go as tsgo
+import tree_sitter_rust as tsrust
+import tree_sitter as ts
 
 LANG_GRAMMARS = {
     "python": ("tree_sitter_python", lambda: tspython.language()),

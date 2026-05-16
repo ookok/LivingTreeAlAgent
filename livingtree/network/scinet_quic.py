@@ -31,17 +31,12 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from loguru import logger
-
-try:
-    from aioquic.asyncio import connect as quic_connect
-    from aioquic.asyncio.protocol import QuicConnectionProtocol
-    from aioquic.quic.configuration import QuicConfiguration
-    from aioquic.quic.events import QuicEvent, StreamDataReceived
-    from aioquic.h3.connection import H3Connection
-    from aioquic.h3.events import DataReceived, HeadersReceived
-except ImportError:
-    quic_connect = QuicConfiguration = H3Connection = DataReceived = HeadersReceived = None
-    QuicConnectionProtocol = object
+from aioquic.asyncio import connect as quic_connect
+from aioquic.asyncio.protocol import QuicConnectionProtocol
+from aioquic.quic.configuration import QuicConfiguration
+from aioquic.quic.events import QuicEvent, StreamDataReceived
+from aioquic.h3.connection import H3Connection
+from aioquic.h3.events import DataReceived, HeadersReceived
 
 import aiohttp
 

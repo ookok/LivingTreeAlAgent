@@ -32,11 +32,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
-
-try:
-    import psutil
-except ImportError:
-    psutil = None
+import psutil
 
 IS_WINDOWS = platform.system() == "Windows"
 

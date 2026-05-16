@@ -28,15 +28,8 @@ from typing import Any, Optional
 
 from loguru import logger
 
-try:
-    import fitz
-except ImportError:
-    fitz = None
-
-try:
-    from PIL import Image
-except ImportError:
-    Image = None
+import fitz
+from PIL import Image
 
 
 @dataclass

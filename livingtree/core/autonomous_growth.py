@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+import psutil
 
 
 GROWTH_DIR = Path(".livingtree/growth")
@@ -222,12 +223,8 @@ class AutonomousGrowth:
         world = self.hub.world if self.hub else None
         cpu = 4
         mem = 8
-        try:
-            import psutil
-            cpu = psutil.cpu_count()
-            mem = psutil.virtual_memory().total // (1024**3)
-        except ImportError:
-            pass
+        cpu = psutil.cpu_count()
+        mem = psutil.virtual_memory().total // (1024**3)
 
         daily_revenue = self._revenue_total / max((_time.time() - self._started_at) / 86400, 1)
         daily_cost = self._cost_total / max((_time.time() - self._started_at) / 86400, 1)

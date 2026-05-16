@@ -28,31 +28,16 @@ from loguru import logger
 
 # ── Optional OpenTelemetry imports ──────────────────────────────────────────
 
-try:
-    from opentelemetry import trace as _otel_trace
-    from opentelemetry.sdk.trace import TracerProvider as _SdkProvider
-    from opentelemetry.sdk.trace.export import (
-        BatchSpanProcessor,
-        ConsoleSpanExporter,
-    )
-    from opentelemetry.trace import SpanKind, Status, StatusCode
-
-except ImportError:
-    _SdkProvider = None  # type: ignore[assignment]
-    BatchSpanProcessor = None  # type: ignore[assignment]
-    ConsoleSpanExporter = None  # type: ignore[assignment]
-    SpanKind = None
-    Status = None
-    StatusCode = None
-    _otel_trace = None  # type: ignore[assignment]
-    logger.debug("OpenTelemetry SDK not installed — OTel integration disabled")
-
-try:
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-        OTLPSpanExporter,
-    )
-except ImportError:
-    OTLPSpanExporter = None  # type: ignore[assignment]
+from opentelemetry import trace as _otel_trace
+from opentelemetry.sdk.trace import TracerProvider as _SdkProvider
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    ConsoleSpanExporter,
+)
+from opentelemetry.trace import SpanKind, Status, StatusCode
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+    OTLPSpanExporter,
+)
 
 
 # ── Configuration ───────────────────────────────────────────────────────────

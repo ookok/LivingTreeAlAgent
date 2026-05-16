@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from ltp import LTP as _LTP
 
 
 # ═══ 1. LLM Prompt Cache ═════════════════════════════════════════
@@ -90,11 +91,7 @@ class BatchedNLP:
     @classmethod
     def _get_ltp(cls):
         if cls._ltp is None:
-            try:
-                from ltp import LTP
-                cls._ltp = LTP()
-            except ImportError:
-                pass
+            cls._ltp = _LTP()
         return cls._ltp
 
     @classmethod

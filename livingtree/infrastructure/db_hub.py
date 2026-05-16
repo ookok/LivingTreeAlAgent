@@ -32,12 +32,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
-
-try:
-    import aiosqlite
-except ImportError:
-    aiosqlite = None
-    logger.debug("aiosqlite not installed, using sync sqlite3 with thread executor")
+import aiosqlite
 
 
 # ═══ 1. Async Database Driver ═════════════════════════════════════
@@ -56,107 +51,11 @@ class AsyncDB:
         self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        if aiosqlite is not None:
-            self._conn = await aiosqlite.connect(self._path)
-            self._conn.row_factory = aiosqlite.Row
-            if self._wal:
-                await self._conn.execute("PRAGMA journal_mode=WAL")
-                await self._conn.execute("PRAGMA busy_timeout=5000")
-        else:
-            loop = asyncio.get_event_loop()
-            self._conn = await loop.run_in_executor(None, self._connect_sync)
-
-    def _connect_sync(self):
-        conn = sqlite3.connect(self._path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
+        self._conn = await aiosqlite.connect(self._path)
+        self._conn.row_factory = aiosqlite.Row
         if self._wal:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    async def execute(self, sql: str, params: tuple = ()) -> int:
-        """Execute SQL, return rowcount."""
-        async with self._lock:
-            if aiosqlite is not None:
-                cursor = await self._conn.execute(sql, params)
-                await self._conn.commit()
-                return cursor.rowcount
-            else:
-                loop = asyncio.get_event_loop()
-                def _exec():
-                    self._conn.execute(sql, params)
-                    self._conn.commit()
-                    return self._conn.total_changes
-                return await loop.run_in_executor(None, _exec)
-
-    async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
-        """Fetch all rows as list of dicts."""
-        async with self._lock:
-            if aiosqlite is not None:
-                cursor = await self._conn.execute(sql, params)
-                rows = await cursor.fetchall()
-                return [dict(r) for r in rows] if rows else []
-            else:
-                loop = asyncio.get_event_loop()
-                def _fetch():
-                    cur = self._conn.execute(sql, params)
-                    rows = cur.fetchall()
-                    return [dict(r) for r in rows]
-                return await loop.run_in_executor(None, _fetch)
-
-    async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
-        """Fetch single row."""
-        rows = await self.fetch_all(sql, params)
-        return rows[0] if rows else None
-
-    async def insert(self, table: str, data: dict) -> int:
-        """Insert a row. Returns lastrowid."""
-        cols = ", ".join(data.keys())
-        placeholders = ", ".join("?" * len(data))
-        sql = f"INSERT INTO {table} ({cols}) VALUES ({placeholders})"
-        async with self._lock:
-            if aiosqlite is not None:
-                cursor = await self._conn.execute(sql, tuple(data.values()))
-                await self._conn.commit()
-                return cursor.lastrowid
-            else:
-                loop = asyncio.get_event_loop()
-                def _insert():
-                    cur = self._conn.execute(sql, tuple(data.values()))
-                    self._conn.commit()
-                    return cur.lastrowid
-                return await loop.run_in_executor(None, _insert)
-
-    async def update(self, table: str, data: dict, where: str,
-                     where_params: tuple = ()) -> int:
-        """Update rows. Returns rowcount."""
-        sets = ", ".join(f"{k}=?" for k in data)
-        sql = f"UPDATE {table} SET {sets} WHERE {where}"
-        return await self.execute(sql, tuple(data.values()) + where_params)
-
-    async def delete(self, table: str, where: str = "1=1",
-                     params: tuple = ()) -> int:
-        """Delete rows. Returns rowcount."""
-        return await self.execute(f"DELETE FROM {table} WHERE {where}", params)
-
-    async def table_exists(self, table: str) -> bool:
-        """Check if table exists."""
-        rows = await self.fetch_all(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
-        return len(rows) > 0
-
-    async def create_table(self, table: "Table") -> None:
-        """Create table from Table definition."""
-        cols_sql = ", ".join(c.to_sql() for c in table.columns)
-        sql = f"CREATE TABLE IF NOT EXISTS {table.name} ({cols_sql})"
-        await self.execute(sql)
-
-    async def close(self) -> None:
-        if self._conn:
-            if aiosqlite is not None:
-                await self._conn.close()
-            else:
-                self._conn.close()
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
 
     async def __aenter__(self):
         await self.connect()

@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import csv
+import difflib
 import json
 import re
 import sqlite3
@@ -24,6 +25,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.shared import Cm, Inches, Pt, RGBColor
+from lxml import etree
+from pypdf import PdfReader, PdfWriter
 
 
 # ═══ 1. Citation Tracker — auto-number tables, figures, references ═══
@@ -496,11 +508,6 @@ class Watermark:
                    font_size: int = 72, rotation: float = -45) -> str:
         """Add diagonal watermark to .docx file."""
         try:
-            from docx import Document
-            from docx.shared import Pt, Inches
-            from docx.oxml.ns import qn
-            from lxml import etree
-
             doc = Document(doc_path)
             for section in doc.sections:
                 header = section.header
@@ -551,13 +558,6 @@ class ChartGenerator:
 
         chart_configs: [{type:'bar|line|pie|scatter', title:'', x:[], y:[], labels:[]}]
         """
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-        except ImportError:
-            return []
-
         out_dir = Path(output_dir or ".livingtree/charts")
         out_dir.mkdir(parents=True, exist_ok=True)
         paths = []
@@ -601,12 +601,6 @@ class ChartGenerator:
     @staticmethod
     def generate_distribution_map(params: dict, output: str = "") -> str:
         """Generate concentration distribution contour map (for EIA reports)."""
-        try:
-            import matplotlib.pyplot as plt
-            import numpy as np
-        except ImportError:
-            return ""
-
         x = np.linspace(-500, 500, 100)
         y = np.linspace(-500, 500, 100)
         X, Y = np.meshgrid(x, y)
@@ -652,11 +646,6 @@ class DiffTracker:
 
     def diff(self, v1: int, v2: int) -> dict:
         """Compare two versions. Returns {added_lines, removed_lines, unified_diff}."""
-        try:
-            import difflib
-        except ImportError:
-            return {"error": "difflib not available"}
-
         c1 = self._get_version_content(v1)
         c2 = self._get_version_content(v2)
         if not c1 or not c2:
@@ -872,12 +861,6 @@ class PDFFormFiller:
     @staticmethod
     def fill(template_path: str, fields: dict, output: str = "") -> str:
         """Fill PDF form fields."""
-        try:
-            from pypdf import PdfReader, PdfWriter
-        except ImportError:
-            logger.warning("pypdf not available for form filling")
-            return ""
-
         reader = PdfReader(template_path)
         writer = PdfWriter()
         writer.append(reader)
@@ -913,22 +896,6 @@ class OfficialDocFormat:
         Title: 方正小标宋简体 22pt, centered.
         Body: 仿宋 16pt, 28 chars per line, 22 lines per page.
         """
-        try:
-            from docx import Document
-            from docx.shared import Pt, Cm, RGBColor
-            from docx.enum.text import WD_ALIGN_PARAGRAPH
-        except ImportError:
-            # Fallback: markdown with format notes
-            md = (f"# {title}\n\n"
-                  f"*发文字号: {doc_number}*\n\n"
-                  f"*签发机构: {issuing_org}*\n\n"
-                  f"{body}\n\n"
-                  f"*日期: {date}*\n\n"
-                  f"---\n*格式: GB/T 9704-2012 党政机关公文格式*")
-            out = Path(output or f"/tmp/ofd_{int(datetime.now().timestamp())}.md")
-            out.write_text(md, encoding="utf-8")
-            return str(out)
-
         doc = Document()
         section = doc.sections[0]
         section.page_width = Cm(21.0)

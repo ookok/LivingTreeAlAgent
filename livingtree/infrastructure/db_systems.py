@@ -25,27 +25,11 @@ from typing import Any, Optional
 
 from loguru import logger
 
-# Optional imports with graceful degradation
-try:
-    import redis.asyncio as aioredis
-except ImportError:
-    aioredis = None
-try:
-    from motor.motor_asyncio import AsyncIOMotorClient
-except ImportError:
-    AsyncIOMotorClient = None
-try:
-    from neo4j import AsyncGraphDatabase
-except ImportError:
-    AsyncGraphDatabase = None
-try:
-    import asyncpg
-except ImportError:
-    asyncpg = None
-try:
-    import aiomysql
-except ImportError:
-    aiomysql = None
+import aiomysql
+import asyncpg
+import redis.asyncio as aioredis
+from motor.motor_asyncio import AsyncIOMotorClient
+from neo4j import AsyncGraphDatabase
 
 
 # ═══ 1. Core Table Migrations ════════════════════════════════════

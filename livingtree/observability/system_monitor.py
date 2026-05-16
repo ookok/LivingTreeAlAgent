@@ -15,11 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from loguru import logger
-
-try:
-    import psutil
-except ImportError:
-    psutil = None
+import psutil
 
 
 @dataclass

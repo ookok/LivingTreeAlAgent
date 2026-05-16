@@ -45,6 +45,8 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from loguru import logger
+import torch
+import numpy as np
 
 from .holistic_election import IsingModel, IsingOptimizer
 from livingtree.optimization.annealing_core import AnnealingScheduler, EnergyLandscape, TunnelGate, ConvergenceCertificate
@@ -852,20 +854,13 @@ class NeuromorphicAutoencoder:
     def __init__(self, encoding_dim: int = 64, target_accuracy: float = 0.95):
         self._encoding_dim = encoding_dim
         self._target_accuracy = target_accuracy
-        self._components = None       # PCA components
-        self._mean = None             # Data mean
+        self._components = None
+        self._mean = None
         self._iteration = 0
-        self._use_torch = False
-        try:
-            import torch
-            self._use_torch = True
-        except ImportError:
-            pass
+        self._use_torch = True
 
     def compress(self, data: dict[str, Any]) -> list[float]:
         """Compress structured data into a compact vector using PCA-like encoding."""
-        import numpy as np
-
         features = self._extract_features(data)
         if len(features) == 0:
             return [0.0] * self._encoding_dim
@@ -908,7 +903,6 @@ class NeuromorphicAutoencoder:
 
     def predict(self, encoding: list[float]) -> dict[str, float]:
         """Reconstruct from encoding and measure reconstruction quality."""
-        import numpy as np
         if self._components is None or self._mean is None:
             return {"reconstruction_error": 1.0, "explained_variance": 0.0}
 

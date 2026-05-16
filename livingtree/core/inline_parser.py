@@ -30,6 +30,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+import pypdf
+import docx
 
 MAX_TEXT_BYTES = 50 * 1024 * 1024       # 50 MB
 MAX_AUDIO_BYTES = 25 * 1024 * 1024      # 25 MB
@@ -282,41 +284,32 @@ class InlineParser:
     # ═══ PDF Parser (in-memory) ═══
 
     async def _parse_pdf(self, data: bytes, filename: str) -> ParseResult:
-        text = ""
-        try:
-            from io import BytesIO
-            import pypdf
-            reader = pypdf.PdfReader(BytesIO(data))
-            ...
-            return ParseResult(ok=False, error="PDF parsing requires: pip install pypdf (or pdfplumber/pymupdf)")
-        except ImportError:
-            return ParseResult(ok=False, error="PDF parsing requires: pip install pypdf (or pdfplumber/pymupdf)")
-        except Exception as e:
-            return ParseResult(ok=False, error=f"PDF parse error: {e}")
+        from io import BytesIO
+        reader = pypdf.PdfReader(BytesIO(data))
+        text_parts = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                text_parts.append(t)
+        text = "\n".join(text_parts)
         return self._build_result(text, filename, "pdf")
 
     # ═══ DOCX Parser (in-memory) ═══
 
     async def _parse_docx(self, data: bytes, filename: str) -> ParseResult:
-        try:
-            from io import BytesIO
-            import docx
-            doc = docx.Document(BytesIO(data))
-            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-            text = "\n".join(paragraphs)
+        from io import BytesIO
+        doc = docx.Document(BytesIO(data))
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        text = "\n".join(paragraphs)
 
-            for table in doc.tables:
-                rows = []
-                for row in table.rows:
-                    cells = [cell.text.strip() for cell in row.cells]
-                    rows.append(" | ".join(cells))
-                text += "\n\n" + "\n".join(rows)
+        for table in doc.tables:
+            rows = []
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                rows.append(" | ".join(cells))
+            text += "\n\n" + "\n".join(rows)
 
-            return self._build_result(text, filename, "docx")
-        except ImportError:
-            return ParseResult(ok=False, error="DOCX parsing requires: pip install python-docx")
-        except Exception as e:
-            return ParseResult(ok=False, error=f"DOCX parse: {e}")
+        return self._build_result(text, filename, "docx")
 
     # ═══ Audio Parser (STT) ═══
 

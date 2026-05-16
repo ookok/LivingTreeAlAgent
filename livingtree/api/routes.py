@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Requ
 from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from loguru import logger
+from cryptography.fernet import Fernet
 from .. import __version__
 
 
@@ -214,18 +215,10 @@ def setup_routes(app: FastAPI) -> None:
         from hashlib import sha256
         enc_key = sha256(b"livingtree_admin_export").digest()
         import base64 as b64
-        from cryptography.fernet import Fernet
-        try:
-            f = Fernet(b64.urlsafe_b64encode(enc_key))
-            encrypted = f.encrypt(plain.encode())
-            return Response(content=encrypted, media_type="application/octet-stream",
-                          headers={"Content-Disposition": "attachment; filename=config.enc"})
-        except ImportError:
-            # Fallback: simple XOR with key hash
-            key_bytes = enc_key
-            encrypted = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(plain.encode()))
-            return Response(content=encrypted, media_type="application/octet-stream",
-                          headers={"Content-Disposition": "attachment; filename=config.enc"})
+        f = Fernet(b64.urlsafe_b64encode(enc_key))
+        encrypted = f.encrypt(plain.encode())
+        return Response(content=encrypted, media_type="application/octet-stream",
+                      headers={"Content-Disposition": "attachment; filename=config.enc"})
 
     @app.post("/api/admin/import")
     async def import_config(request: Request):
@@ -240,12 +233,8 @@ def setup_routes(app: FastAPI) -> None:
         enc_key = sha256(b"livingtree_admin_export").digest()
         import base64 as b64
         try:
-            from cryptography.fernet import Fernet
             f = Fernet(b64.urlsafe_b64encode(enc_key))
             plain = f.decrypt(body).decode()
-        except ImportError:
-            key_bytes = enc_key
-            plain = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(body)).decode()
         except Exception:
             raise HTTPException(400, "Invalid or corrupted config file")
 

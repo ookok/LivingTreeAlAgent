@@ -21,6 +21,7 @@ from typing import Any, Callable, Optional
 import aiohttp
 from loguru import logger
 from pydantic import BaseModel, Field
+import psutil
 
 
 class PeerInfo(BaseModel):
@@ -216,10 +217,6 @@ class Discovery:
     @staticmethod
     def _get_capabilities() -> list[str]:
         caps = ["chat", "knowledge", "documents"]
-        try:
-            import psutil
-            caps.append(f"cpu:{psutil.cpu_count()}")
-            caps.append(f"mem:{psutil.virtual_memory().total // (1024**3)}GB")
-        except ImportError:
-            pass
+        caps.append(f"cpu:{psutil.cpu_count()}")
+        caps.append(f"mem:{psutil.virtual_memory().total // (1024**3)}GB")
         return caps

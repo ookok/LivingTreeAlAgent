@@ -47,6 +47,8 @@ from pathlib import Path
 
 from loguru import logger
 
+import webview
+
 
 class DesktopShell:
     """pywebview desktop wrapper for LivingTree.
@@ -71,13 +73,6 @@ class DesktopShell:
         Shows a local loading screen immediately (before server is ready),
         then auto-navigates to the server URL once the server responds.
         """
-        try:
-            import webview
-        except ImportError:
-            logger.error("pywebview not installed. Run: pip install pywebview")
-            self._fallback_browser()
-            return
-
         # Start LivingTree server in background thread
         self._start_server()
 
@@ -247,7 +242,6 @@ class JsBridge:
     def select_folder(self) -> dict:
         """Open native folder selection dialog."""
         try:
-            import webview
             result = webview.windows[0].create_file_dialog(
                 webview.FOLDER_DIALOG
             )
@@ -262,7 +256,6 @@ class JsBridge:
     def select_file(self, file_types: tuple = ()) -> dict:
         """Open native file selection dialog."""
         try:
-            import webview
             result = webview.windows[0].create_file_dialog(
                 webview.OPEN_DIALOG, file_types=file_types
             )
@@ -275,7 +268,6 @@ class JsBridge:
     def save_file_dialog(self, default_name: str = "") -> dict:
         """Open native save file dialog."""
         try:
-            import webview
             result = webview.windows[0].create_file_dialog(
                 webview.SAVE_DIALOG, save_filename=default_name
             )

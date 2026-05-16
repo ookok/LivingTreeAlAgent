@@ -21,25 +21,9 @@ import math
 from typing import Any
 
 from loguru import logger
+from numba import jit, njit, prange
 
-try:
-    from numba import jit, njit, prange  # type: ignore
-    _numba_available = True
-    logger.debug("JIT: Numba available")
-except ImportError:
-    _numba_available = False
-
-    # Dummy decorator for when numba is not installed
-    def njit(*args: Any, **kwargs: Any) -> Any:
-        """No-op decorator when numba unavailable."""
-        def decorator(func):
-            return func
-        return decorator(args[0]) if args and callable(args[0]) else decorator
-
-    def prange(n: int) -> range:
-        return range(n)
-
-    jit = njit  # type: ignore
+_numba_available = True
 
 
 # ═══ JIT: 批处理余弦相似度 ═══

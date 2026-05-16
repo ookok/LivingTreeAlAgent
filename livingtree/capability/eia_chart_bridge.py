@@ -30,32 +30,15 @@ from typing import Any, Optional
 
 from loguru import logger
 
-# Optional imports with graceful degradation
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap
-except ImportError:
-    plt = None
-
-try:
-    import plotly.graph_objects as go
-    import plotly.express as px
-except ImportError:
-    go = px = None
-
-try:
-    import folium
-    from folium import plugins
-except ImportError:
-    folium = None
-    plugins = None
+import folium
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from folium import plugins
+from matplotlib.colors import LinearSegmentedColormap
 
 
 class EIAChartBridge:

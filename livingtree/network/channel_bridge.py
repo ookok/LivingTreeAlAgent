@@ -15,6 +15,7 @@ Channels:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json as _json
 import subprocess
 import time
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+import itchat
 
 
 class ChannelType(str, Enum):
@@ -123,7 +125,6 @@ class ChannelBridge:
 
         # WeChat: always try (may need QR scan, but will try silently first)
         try:
-            import importlib
             importlib.import_module("itchat")
             logger.info("ChannelBridge: auto-starting 微信 (itchat)")
             tasks.append(asyncio.create_task(self._run_weixin()))
@@ -208,31 +209,25 @@ class ChannelBridge:
 
     async def _run_weixin(self):
         """WeChat via itchat."""
-        try:
-            import itchat
-            logger.info("Channel: WeChat (itchat) loading...")
+        logger.info("Channel: WeChat (itchat) loading...")
 
-            @itchat.msg_register(itchat.content.TEXT)
-            def _on_text(msg):
-                asyncio.create_task(self._dispatch(ChannelMessage(
-                    channel=ChannelType.WEIXIN,
-                    user_id=msg.get("FromUserName", ""),
-                    user_name=msg.get("User", {}).get("NickName", ""),
-                    text=msg.get("Text", ""),
-                    raw=msg,
-                )))
+        @itchat.msg_register(itchat.content.TEXT)
+        def _on_text(msg):
+            asyncio.create_task(self._dispatch(ChannelMessage(
+                channel=ChannelType.WEIXIN,
+                user_id=msg.get("FromUserName", ""),
+                user_name=msg.get("User", {}).get("NickName", ""),
+                text=msg.get("Text", ""),
+                raw=msg,
+            )))
 
-            def _itchat_loop():
-                if self._config.weixin_qrcode:
-                    itchat.auto_login(hotReload=self._config.weixin_hot_reload)
-                itchat.run()
+        def _itchat_loop():
+            if self._config.weixin_qrcode:
+                itchat.auto_login(hotReload=self._config.weixin_hot_reload)
+            itchat.run()
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _itchat_loop)
-        except ImportError:
-            logger.info("WeChat: itchat not installed. Run: pip install itchat-uos")
-        except Exception as e:
-            logger.warning(f"WeChat channel: {e}")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _itchat_loop)
 
     async def _run_feishu(self):
         """Feishu bot via WebSocket."""

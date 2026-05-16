@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+from sentence_transformers import SentenceTransformer
 
 DB_PATH = Path(".livingtree/document_kb.db")
 
@@ -345,12 +346,11 @@ class DocumentKB:
             return self._embed_cache[key]
 
         try:
-            from sentence_transformers import SentenceTransformer
             model = SentenceTransformer("all-MiniLM-L6-v2")
             emb = model.encode(text[:2000]).tolist()
             self._embed_cache[key] = emb
             return emb
-        except ImportError:
+        except Exception:
             pass
         return self._fallback_embed(text[:1000])
 

@@ -20,16 +20,13 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from markitdown import MarkItDown
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MEMORY_DIR = PROJECT_ROOT / "data" / "memory"
 
-_cognee_available = False
-try:
-    import cognee  # noqa: F401
-    _cognee_available = True
-except ImportError:
-    pass
+import cognee  # noqa: F401
+_cognee_available = True
 
 
 class AgentMemory:
@@ -286,12 +283,9 @@ async def ingest_document(
     # MarkItDown for Office/PDF/image documents
     if suffix in _MD_EXTENSIONS:
         try:
-            from markitdown import MarkItDown
             md = MarkItDown()
             result = md.convert(str(fpath))
             markdown = result.text_content.strip()
-        except ImportError:
-            pass
         except Exception as e:
             return {"ok": False, "error": f"MarkItDown 解析失败: {e}"}
 

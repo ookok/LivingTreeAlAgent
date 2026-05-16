@@ -34,10 +34,7 @@ from loguru import logger
 
 from ..network.resilience import resilient_fetch, with_resilience
 
-try:
-    from readability import Document as ReadabilityDocument
-except ImportError:
-    ReadabilityDocument = None
+from readability import Document as ReadabilityDocument
 
 
 @dataclass
@@ -175,13 +172,9 @@ class WebReach:
     # ── Private ──
 
     def _extract_content(self, page: PageContent, html: str, base_url: str) -> PageContent:
-        if ReadabilityDocument is not None:
-            try:
-                doc = ReadabilityDocument(html)
-                page.title = doc.title() or ""
-                page.summary = doc.summary() or ""
-            except Exception:
-                pass
+        doc = ReadabilityDocument(html)
+        page.title = doc.title() or ""
+        page.summary = doc.summary() or ""
 
         try:
             soup = BeautifulSoup(html, "lxml")

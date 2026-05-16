@@ -18,11 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 from pydantic import BaseModel, Field
 
-try:
-    import networkx as nx
-except ImportError:
-    nx = None  # type: ignore
-    logger.debug("networkx not installed — graph features disabled")
+import networkx as nx
 
 
 class Entity(BaseModel):

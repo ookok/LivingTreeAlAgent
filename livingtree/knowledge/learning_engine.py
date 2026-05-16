@@ -549,19 +549,13 @@ class AutoKnowledgeMiner:
         if suffix == ".md":
             return path.read_text(errors="replace")[:50000]
         elif suffix == ".docx":
-            try:
-                from docx import Document
-                doc = Document(str(path))
-                return "\n".join(p.text for p in doc.paragraphs if p.text)[:50000]
-            except ImportError:
-                return ""
+            from docx import Document
+            doc = Document(str(path))
+            return "\n".join(p.text for p in doc.paragraphs if p.text)[:50000]
         elif suffix == ".pdf":
-            try:
-                from pypdf import PdfReader
-                reader = PdfReader(str(path))
-                return "\n".join(p.extract_text() or "" for p in reader.pages[:20])
-            except ImportError:
-                return ""
+            from pypdf import PdfReader
+            reader = PdfReader(str(path))
+            return "\n".join(p.extract_text() or "" for p in reader.pages[:20])
         elif suffix in (".txt", ".py", ".json", ".yaml", ".xml"):
             return path.read_text(errors="replace")[:50000]
         return ""

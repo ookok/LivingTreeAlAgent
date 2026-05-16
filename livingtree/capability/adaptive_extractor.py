@@ -19,7 +19,8 @@ from urllib.parse import urljoin, urlparse
 
 from loguru import logger
 
-
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 @dataclass
 class ExtractedField:
     """A single key-value pair extracted from an unknown page."""
@@ -85,7 +86,6 @@ class AdaptiveExtractor:
         page = ExtractedPage(url=base_url)
 
         try:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "lxml")
         except ImportError:
             soup = BeautifulSoup(html, "html.parser")
@@ -563,14 +563,6 @@ async def fetch_with_js(url: str, timeout: int = 30, wait_selector: str = "",
         wait_selector: CSS selector to wait for before returning HTML
         scroll: scroll to bottom to trigger lazy loading
     """
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        logger.debug("Playwright not installed — use: pip install playwright && playwright install")
-        from ..network.resilience import resilient_fetch
-        status, html, _ = await resilient_fetch(url, timeout=timeout, use_accelerator=True)
-        return html.decode("utf-8", errors="replace") if status == 200 else ""
-
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()

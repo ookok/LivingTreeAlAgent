@@ -13,17 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+import abxpkg
+from abxpkg import Binary, SemVer, env, pip, npm as abx_npm, cargo, brew, apt, uv as abx_uv, gem, pnpm, yarn, bun
 
 from ..network.resilience import get_mirror_env, run_with_mirrors, resilient_fetch_sync, rewrite_url
-
-# Windows: abxpkg fails (pwd module). Use pip fallback.
-try:
-    import abxpkg
-    from abxpkg import Binary, SemVer, env, pip, npm as abx_npm, cargo, brew
-    _has_abxpkg = True
-except (ImportError, ModuleNotFoundError):
-    _has_abxpkg = False
-    logger.debug("abxpkg unavailable, using pip fallback")
 
 
 @dataclass
@@ -58,7 +51,7 @@ def install(name: str, *, providers: list[str] | None = None,
     result = PackageResult(name=name)
 
     # Try abxpkg first (handles npm, pip, brew, cargo, gem, etc.)
-    if _has_abxpkg and providers:
+    if providers:
         try:
             binproviders = _resolve_providers(providers)
             if binproviders:
@@ -98,7 +91,7 @@ def install(name: str, *, providers: list[str] | None = None,
 def search(name: str, providers: list[str] | None = None) -> list[PackageResult]:
     """Search for a package across providers."""
     results = []
-    if _has_abxpkg and providers:
+    if providers:
         provider_map = {"pip": pip, "npm": abx_npm, "brew": brew}
         for p in providers:
             if p not in provider_map:
@@ -116,18 +109,14 @@ def search(name: str, providers: list[str] | None = None) -> list[PackageResult]
 
 def _resolve_providers(names: list[str]) -> list:
     """Convert provider name strings to abxpkg provider instances."""
-    if not _has_abxpkg:
+    if False:
         return []
     pmap = {
         "env": env, "pip": pip, "npm": abx_npm,
         "cargo": cargo, "brew": brew,
     }
-    try:
-        from abxpkg import apt, uv as abx_uv, gem, pnpm, yarn, bun
-        pmap.update({"apt": apt, "uv": abx_uv, "gem": gem,
-                      "pnpm": pnpm, "yarn": yarn, "bun": bun})
-    except ImportError:
-        pass
+    pmap.update({"apt": apt, "uv": abx_uv, "gem": gem,
+                  "pnpm": pnpm, "yarn": yarn, "bun": bun})
     return [pmap[n] for n in names if n in pmap]
 
 

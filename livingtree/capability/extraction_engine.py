@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from langextract import extract as lx_extract
+from langextract import data as lx_data
 
 
 @dataclass
@@ -70,17 +72,10 @@ class ExtractionEngine:
         self._api_key = api_key
         self._base_url = base_url
         self._model = model or "deepseek/deepseek-v4-flash"
-        self._lx_available = False
-
-        try:
-            from langextract import extract as lx_extract
-            from langextract import data as lx_data
-            self._lx_extract = lx_extract
-            self._lx_data = lx_data
-            self._lx_available = True
-            logger.debug("LangExtract v1.3.0 loaded")
-        except ImportError:
-            logger.warning("LangExtract not available — using fallback extraction")
+        self._lx_available = True
+        self._lx_extract = lx_extract
+        self._lx_data = lx_data
+        logger.debug("LangExtract v1.3.0 loaded")
 
     def extract(
         self,

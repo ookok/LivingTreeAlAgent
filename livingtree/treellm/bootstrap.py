@@ -333,19 +333,12 @@ class Bootstrapper:
             ))
 
         # Numba JIT
-        try:
-            import numba
-            checks.append(BootstrapCheck(
-                name="Numba JIT", status="ok",
-                detail=f"numba {numba.__version__}",
-                optional=True,
-            ))
-        except ImportError:
-            checks.append(BootstrapCheck(
-                name="Numba JIT", status="missing", optional=True,
-                detail="Pure Python fallback active",
-                fix_hint="pip install numba",
-            ))
+        import numba
+        checks.append(BootstrapCheck(
+            name="Numba JIT", status="ok",
+            detail=f"numba {numba.__version__}",
+            optional=True,
+        ))
 
         # py-spy profiler
         py_spy = shutil.which("py-spy")
@@ -361,34 +354,20 @@ class Bootstrapper:
             ))
 
         # NetworkX (for knowledge graph)
-        try:
-            import networkx
-            checks.append(BootstrapCheck(
-                name="networkx", status="ok",
-                detail=f"networkx {networkx.__version__}",
-                optional=True,
-            ))
-        except ImportError:
-            checks.append(BootstrapCheck(
-                name="networkx", status="missing", optional=True,
-                detail="Knowledge graph features disabled",
-                fix_hint="pip install networkx",
-            ))
+        import networkx
+        checks.append(BootstrapCheck(
+            name="networkx", status="ok",
+            detail=f"networkx {networkx.__version__}",
+            optional=True,
+        ))
 
         # cryptography (for secrets vault Fernet)
-        try:
-            import cryptography
-            checks.append(BootstrapCheck(
-                name="cryptography", status="ok",
-                detail=f"cryptography {cryptography.__version__}",
-                optional=True,
-            ))
-        except ImportError:
-            checks.append(BootstrapCheck(
-                name="cryptography", status="missing", optional=True,
-                detail="Secrets fallback to XOR encryption",
-                fix_hint="pip install cryptography",
-            ))
+        import cryptography
+        checks.append(BootstrapCheck(
+            name="cryptography", status="ok",
+            detail=f"cryptography {cryptography.__version__}",
+            optional=True,
+        ))
 
         return checks
 

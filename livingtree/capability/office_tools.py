@@ -38,6 +38,16 @@ from typing import Any, Optional
 
 from loguru import logger
 
+import openpyxl
+import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from PIL import Image
+from jinja2 import Template
+from pypdf import PdfReader, PdfWriter
+
 
 class OfficeTools:
     """Office automation toolkit — batch ops, document generation, file conversion."""
@@ -216,18 +226,6 @@ class OfficeTools:
     def generate_table_xlsx(data: list[list], headers: list[str] = None,
                             output: str = "", sheet_name: str = "Sheet1") -> dict:
         """Generate Excel file from 2D data array."""
-        try:
-            import openpyxl
-        except ImportError:
-            # Fallback: CSV
-            output_path = Path(output or f"table_{int(time.time())}.csv")
-            with open(output_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                if headers:
-                    writer.writerow(headers)
-                writer.writerows(data)
-            return {"output": str(output_path), "format": "csv", "rows": len(data)}
-
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = sheet_name
@@ -285,11 +283,6 @@ class OfficeTools:
     @staticmethod
     def pdf_merge(sources: list[str], output: str) -> dict:
         """Merge multiple PDF files into one."""
-        try:
-            from pypdf import PdfWriter, PdfReader
-        except ImportError:
-            return {"error": "pypdf not installed. pip install pypdf"}
-
         writer = PdfWriter()
         for src in sources:
             if not Path(src).exists():
@@ -307,11 +300,6 @@ class OfficeTools:
     def pdf_split(source: str, output_dir: str = "",
                   pages_per_file: int = 1) -> dict:
         """Split PDF into individual pages or chunks."""
-        try:
-            from pypdf import PdfReader, PdfWriter
-        except ImportError:
-            return {"error": "pypdf not installed"}
-
         reader = PdfReader(source)
         out_dir = Path(output_dir or Path(source).parent / "split")
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -332,11 +320,6 @@ class OfficeTools:
     @staticmethod
     def pdf_extract_text(source: str, pages: str = "all") -> dict:
         """Extract text from PDF pages."""
-        try:
-            from pypdf import PdfReader
-        except ImportError:
-            return {"error": "pypdf not installed"}
-
         reader = PdfReader(source)
         pages_to_extract = (range(len(reader.pages)) if pages == "all"
                            else [int(p)-1 for p in pages.split(",")])
@@ -405,15 +388,6 @@ class OfficeTools:
     def send_email(to: str, subject: str, body: str,
                    smtp_config: dict = None, attachments: list[str] = None) -> dict:
         """Send email via SMTP."""
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.base import MIMEBase
-            from email import encoders
-        except ImportError:
-            return {"error": "email modules not available"}
-
         cfg = smtp_config or {}
         host = cfg.get("host", os.environ.get("SMTP_HOST", "smtp.gmail.com"))
         port = cfg.get("port", int(os.environ.get("SMTP_PORT", "587")))
@@ -452,11 +426,6 @@ class OfficeTools:
         operation: "resize" (width, height), "compress" (quality 1-100),
                    "thumbnail" (size), "convert" (format: jpg/png/webp)
         """
-        try:
-            from PIL import Image
-        except ImportError:
-            return {"error": "Pillow not installed. pip install Pillow"}
-
         sp = Path(source)
         if not sp.exists():
             return {"error": f"Not found: {source}"}
@@ -501,16 +470,8 @@ class OfficeTools:
 
         # Try Jinja2 first
         if "{{" in content or "{%" in content:
-            try:
-                from jinja2 import Template
-                tmpl = Template(content)
-                result = tmpl.render(**variables)
-            except ImportError:
-                # Fallback to simple substitution
-                result = content
-                for k, v in variables.items():
-                    result = result.replace("{{ " + k + " }}", str(v))
-                    result = result.replace("{{" + k + "}}", str(v))
+            tmpl = Template(content)
+            result = tmpl.render(**variables)
         else:
             result = content.format(**{k: str(v) for k, v in variables.items()})
 

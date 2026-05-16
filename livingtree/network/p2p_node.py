@@ -18,6 +18,7 @@ from typing import Any
 
 import aiohttp
 from loguru import logger
+import psutil
 
 NODE_ID_FILE = Path(".livingtree/node_id.json")
 RELAY_URL = os.environ.get("LT_RELAY_URL", "http://www.mogoo.com.cn:8899")
@@ -204,11 +205,7 @@ class P2PNode:
     def _collect_capabilities(self) -> NodeCapabilities:
         caps = NodeCapabilities(platform=platform.system())
         caps.cpu_cores = os.cpu_count() or 0
-        try:
-            import psutil
-            caps.memory_gb = psutil.virtual_memory().total / (1024**3)
-        except ImportError:
-            pass
+        caps.memory_gb = psutil.virtual_memory().total / (1024**3)
 
         if self._hub and self._hub.world:
             try:

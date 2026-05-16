@@ -26,17 +26,10 @@ from loguru import logger
 from ..storage_layer import StorageBackend, StorageSegment
 from ..gc_metrics import StorageStats
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
+import numpy as np
+import faiss
 
 _SEGMENT_VECTORS = 1000  # Vectors per logical segment
-
-try:
-    import faiss
-except ImportError:
-    faiss = None
 
 # Hardware accelerator support
 try:

@@ -35,6 +35,7 @@ from enum import IntEnum
 from typing import Any, Optional
 
 from loguru import logger
+import psutil
 
 
 class SurvivalLevel(IntEnum):
@@ -201,13 +202,9 @@ class SurvivalMode:
             pass
 
         # Memory
-        try:
-            import psutil
-            mem = psutil.virtual_memory()
-            vitals.memory_pressure = mem.percent / 100.0
-            vitals.cpu_percent = psutil.cpu_percent(interval=0.1)
-        except ImportError:
-            pass
+        mem = psutil.virtual_memory()
+        vitals.memory_pressure = mem.percent / 100.0
+        vitals.cpu_percent = psutil.cpu_percent(interval=0.1)
 
         return vitals
 

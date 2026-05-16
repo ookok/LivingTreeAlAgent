@@ -29,6 +29,15 @@ from typing import Any, Optional
 
 from loguru import logger
 
+import easyocr
+import fitz
+import numpy as np
+import paddleocr
+import pytesseract
+from paddleocr import PaddleOCR
+from PIL import Image
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+
 # Hardware accelerator support
 try:
     from livingtree.core.hardware_acceleration import get_accelerator
@@ -169,39 +178,21 @@ class ModernOCR:
 
     @property
     def _try_paddleocr(self) -> bool:
-        try:
-            import paddleocr
-            return True
-        except ImportError:
-            return False
+        return True
 
     @property
     def _try_trocr(self) -> bool:
-        try:
-            import transformers
-            return True
-        except ImportError:
-            return False
+        return True
 
     @property
     def _try_easyocr(self) -> bool:
-        try:
-            import easyocr
-            return True
-        except ImportError:
-            return False
+        return True
 
     @property
     def _try_tesseract(self) -> bool:
-        try:
-            import pytesseract
-            return True
-        except ImportError:
-            return False
+        return True
 
     def _paddle_ocr(self, filepath: str, language: str, is_pdf: bool = False) -> str:
-        from paddleocr import PaddleOCR
-
         lang = "ch" if "chi" in language else "en"
         # Use GPU if accelerator says so
         use_gpu = self._accelerator is not None and self._accelerator.has_cuda
@@ -215,7 +206,6 @@ class ModernOCR:
             ocr = self._backend_cache[cache_key]
 
         if is_pdf:
-            import fitz
             doc = fitz.open(filepath)
             texts = []
             for page in doc:
@@ -233,7 +223,6 @@ class ModernOCR:
 
     def _paddle_ocr_regions(self, filepath: str, language: str) -> list[OCRRegion]:
         try:
-            from paddleocr import PaddleOCR
             lang = "ch" if "chi" in language else "en"
             use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
@@ -263,9 +252,6 @@ class ModernOCR:
             return []
 
     def _trocr(self, filepath: str, language: str, is_pdf: bool = False) -> str:
-        from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-        from PIL import Image
-
         with self._lock:
             if "trocr_processor" not in self._backend_cache:
                 self._backend_cache["trocr_processor"] = TrOCRProcessor.from_pretrained(
@@ -279,7 +265,6 @@ class ModernOCR:
         model = self._backend_cache["trocr_model"]
 
         if is_pdf:
-            import fitz
             doc = fitz.open(filepath)
             texts = []
             for page in doc:
@@ -297,8 +282,6 @@ class ModernOCR:
             return processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
     def _easy_ocr(self, filepath: str, language: str, is_pdf: bool = False) -> str:
-        import easyocr
-
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
         use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
@@ -309,7 +292,6 @@ class ModernOCR:
             reader = self._backend_cache[cache_key]
 
         if is_pdf:
-            import fitz
             doc = fitz.open(filepath)
             texts = []
             for page in doc:
@@ -323,9 +305,6 @@ class ModernOCR:
             return "\n".join(r[1] for r in result)
 
     def _easy_ocr_regions(self, filepath: str, language: str) -> list[OCRRegion]:
-        import easyocr
-        import numpy as np
-
         langs = ["ch_sim", "en"] if "chi" in language else ["en"]
         use_gpu = self._accelerator is not None and self._accelerator.has_cuda
 
@@ -348,13 +327,9 @@ class ModernOCR:
         return regions
 
     def _tesseract(self, filepath: str, language: str, is_pdf: bool = False) -> str:
-        import pytesseract
-        from PIL import Image
-
         lang_code = "chi_sim+eng" if "chi" in language else "eng"
 
         if is_pdf:
-            import fitz
             doc = fitz.open(filepath)
             texts = []
             for page in doc:
@@ -368,9 +343,6 @@ class ModernOCR:
             return pytesseract.image_to_string(img, lang=lang_code)
 
     def _tesseract_regions(self, filepath: str, language: str) -> list[OCRRegion]:
-        import pytesseract
-        from PIL import Image
-
         lang_code = "chi_sim+eng" if "chi" in language else "eng"
         img = Image.open(filepath)
         data = pytesseract.image_to_data(img, lang=lang_code, output_type=pytesseract.Output.DICT)

@@ -12,6 +12,7 @@ Integration: uses LearningSourceRegistry for user-configurable queries.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import re
 import time
@@ -742,7 +743,6 @@ class NatureLearner:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # In async context, use create_task
-                import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, _fetch())
                     papers = future.result(timeout=15)

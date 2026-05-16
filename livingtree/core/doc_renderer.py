@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from weasyprint import HTML
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RENDER_OUTPUT = PROJECT_ROOT / "output" / "rendered"
@@ -298,23 +299,8 @@ def render_document(
         output_path = str(RENDER_OUTPUT / f"{safe_name}_{ts}.pdf")
 
     # Render to PDF via WeasyPrint
-    try:
-        from weasyprint import HTML
-        HTML(string=html).write_pdf(output_path)
-        logger.info(f"Document rendered: {output_path}")
-    except ImportError:
-        # Fallback: save HTML only
-        html_path = output_path.replace(".pdf", ".html")
-        Path(html_path).write_text(html, encoding="utf-8")
-        logger.warning("WeasyPrint not installed, saved HTML only. Install: pip install weasyprint")
-        return {
-            "ok": True,
-            "html": html,
-            "pdf_path": "",
-            "html_path": html_path,
-            "file_name": Path(html_path).name,
-            "format": "html",
-        }
+    HTML(string=html).write_pdf(output_path)
+    logger.info(f"Document rendered: {output_path}")
 
     return {
         "ok": True,

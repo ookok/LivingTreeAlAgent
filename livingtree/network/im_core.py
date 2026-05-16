@@ -132,31 +132,17 @@ class SecureChannel:
     @staticmethod
     def _aes_gcm_encrypt(key: bytes, plaintext: bytes) -> tuple[bytes, bytes, bytes]:
         """Returns (nonce, ciphertext, tag)."""
-        try:
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            aesgcm = AESGCM(key)
-            nonce = os.urandom(12)
-            ct = aesgcm.encrypt(nonce, plaintext, None)
-            return nonce, ct[:-16], ct[-16:]
-        except ImportError:
-            nonce = secrets.token_bytes(16)
-            key_stream = hashlib.sha256(key + nonce).digest() * (len(plaintext) // 32 + 1)
-            ct = bytes(p ^ k for p, k in zip(plaintext, key_stream[:len(plaintext)]))
-            tag = hmac.digest(key, ct, hashlib.sha256)[:16]
-            return nonce, ct, tag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        aesgcm = AESGCM(key)
+        nonce = os.urandom(12)
+        ct = aesgcm.encrypt(nonce, plaintext, None)
+        return nonce, ct[:-16], ct[-16:]
 
     @staticmethod
     def _aes_gcm_decrypt(key: bytes, nonce: bytes, ciphertext: bytes, tag: bytes) -> bytes:
-        try:
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            aesgcm = AESGCM(key)
-            return aesgcm.decrypt(nonce, ciphertext + tag, None)
-        except ImportError:
-            expected_tag = hmac.digest(key, ciphertext, hashlib.sha256)[:16]
-            if not hmac.compare_digest(tag, expected_tag):
-                raise ValueError("Authentication failed")
-            key_stream = hashlib.sha256(key + nonce).digest() * (len(ciphertext) // 32 + 1)
-            return bytes(c ^ k for c, k in zip(ciphertext, key_stream[:len(ciphertext)]))
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        aesgcm = AESGCM(key)
+        return aesgcm.decrypt(nonce, ciphertext + tag, None)
 
     def encrypt(self, plaintext: str) -> str:
         nonce, ct, tag = self._aes_gcm_encrypt(self._key, plaintext.encode())

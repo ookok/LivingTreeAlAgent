@@ -54,21 +54,19 @@ from typing import Any, Optional
 
 from loguru import logger
 
-try:
-    from aioquic.asyncio import serve as quic_serve
-    from aioquic.asyncio.protocol import QuicConnectionProtocol
-    from aioquic.quic.configuration import QuicConfiguration
-    from aioquic.quic.events import QuicEvent, StreamDataReceived
-    from aioquic.h3.connection import H3Connection
-    from aioquic.h3.events import (
-        DataReceived, HeadersReceived, WebTransportStreamDataReceived,
-    )
-except ImportError:
-    QuicConnectionProtocol = object
-    quic_serve = QuicConfiguration = None
-    QuicEvent = StreamDataReceived = None
-    H3Connection = None
-    DataReceived = HeadersReceived = WebTransportStreamDataReceived = None
+from aioquic.asyncio import serve as quic_serve
+from aioquic.asyncio.protocol import QuicConnectionProtocol
+from aioquic.quic.configuration import QuicConfiguration
+from aioquic.quic.events import QuicEvent, StreamDataReceived
+from aioquic.h3.connection import H3Connection
+from aioquic.h3.events import (
+    DataReceived, HeadersReceived, WebTransportStreamDataReceived,
+)
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+import datetime
 
 import aiohttp
 
@@ -313,73 +311,46 @@ class WebTransportServer:
         self, cert_path: Path, key_path: Path,
     ) -> None:
         """Generate self-signed certificate for localhost."""
-        try:
-            from cryptography import x509
-            from cryptography.x509.oid import NameOID
-            from cryptography.hazmat.primitives import hashes, serialization
-            from cryptography.hazmat.primitives.asymmetric import rsa
-            import datetime
+        key = rsa.generate_private_key(
+            public_exponent=65537, key_size=2048,
+        )
 
-            key = rsa.generate_private_key(
-                public_exponent=65537, key_size=2048,
-            )
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "CN"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Beijing"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "Beijing"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "LivingTree Scinet"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        ])
 
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.COUNTRY_NAME, "CN"),
-                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Beijing"),
-                x509.NameAttribute(NameOID.LOCALITY_NAME, "Beijing"),
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "LivingTree Scinet"),
-                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-            ])
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.utcnow()
+        ).not_valid_after(
+            datetime.datetime.utcnow() + datetime.timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName("localhost"),
+                x509.DNSName("127.0.0.1"),
+            ]),
+            critical=False,
+        ).sign(key, hashes.SHA256())
 
-            cert = x509.CertificateBuilder().subject_name(
-                subject
-            ).issuer_name(
-                issuer
-            ).public_key(
-                key.public_key()
-            ).serial_number(
-                x509.random_serial_number()
-            ).not_valid_before(
-                datetime.datetime.utcnow()
-            ).not_valid_after(
-                datetime.datetime.utcnow() + datetime.timedelta(days=365)
-            ).add_extension(
-                x509.SubjectAlternativeName([
-                    x509.DNSName("localhost"),
-                    x509.DNSName("127.0.0.1"),
-                ]),
-                critical=False,
-            ).sign(key, hashes.SHA256())
-
-            cert_path.parent.mkdir(parents=True, exist_ok=True)
-            cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-            key_path.write_bytes(key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption(),
-            ))
-            logger.debug("Generated self-signed cert for WebTransport")
-        except ImportError:
-            logger.warning("cryptography not installed, using ad-hoc cert")
-            # Fallback: generate using openssl if available
-            import subprocess
-            cert_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                from livingtree.treellm.unified_exec import run
-                import asyncio
-                result = asyncio.run(run(
-                    f"openssl req -x509 -newkey rsa:2048 "
-                    f"-keyout {key_path} -out {cert_path} -days 365 -nodes "
-                    f"-subj /CN=localhost",
-                    timeout=10))
-            except ImportError:
-                subprocess.run([
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
-                    "-keyout", str(key_path), "-out", str(cert_path),
-                    "-days", "365", "-nodes",
-                    "-subj", "/CN=localhost",
-                ], capture_output=True, timeout=10)
+        cert_path.parent.mkdir(parents=True, exist_ok=True)
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        key_path.write_bytes(key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ))
+        logger.debug("Generated self-signed cert for WebTransport")
 
     def _generate_js_client(self) -> str:
         """Generate JavaScript client library for browser-side usage.

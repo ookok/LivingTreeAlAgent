@@ -38,11 +38,7 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
-
-try:
-    import aiosqlite
-except ImportError:  # pragma: no cover
-    aiosqlite = None  # type: ignore
+import aiosqlite
 
 from livingtree.knowledge.vector_store import VectorStore, LocalEmbeddingBackend
 
@@ -196,7 +192,7 @@ class CacheHierarchy:
 
     async def _init_l2(self) -> None:
         """Initialize L2 SQLite database. Safe to call multiple times."""
-        if self._l2_initialized or not aiosqlite:
+        if self._l2_initialized:
             return
         async with self._l2_init_lock:
             if self._l2_initialized:

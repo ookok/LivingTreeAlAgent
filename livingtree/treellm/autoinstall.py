@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import re
@@ -146,7 +147,6 @@ class AutoInstaller:
         for mod in ["livingtree.config.settings", "livingtree.treellm.core",
                      "livingtree.dna.life_engine"]:
             try:
-                import importlib
                 importlib.import_module(mod)
             except ImportError as e:
                 issues.append(EnvIssue(category="import_error", detail=str(e)[:80]))

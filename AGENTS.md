@@ -22,3 +22,8 @@ User Input → TreeLLM.chat() →
 
 Key: **LLM is the router**. No centralized tool dispatcher. The LLM sees available tools
 and decides which to call based on the user's intent.
+
+Scrapling extraction toolkit (in browser_agent._direct_extract):
+  css/xpath selectors → find_by_text → find_similar → get_all_text → download links
+  Adaptive: auto_save + adaptive survives page structure changes
+  Anti-bot: DynamicFetcher with retries, block_ads, disable_resources

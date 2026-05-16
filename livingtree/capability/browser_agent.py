@@ -193,24 +193,32 @@ class BrowserAgent:
         return None
 
     def _direct_extract(self, page, task: str) -> list[dict]:
-        """General-purpose extraction via Scrapling: CSS → text → similar → links."""
+        """General-purpose extraction: CSS → text search → similar elements → download links.
+
+        Uses Scrapling's full extraction toolkit:
+          css/xpath, find_by_text, find_similar, get_all_text,
+          find_ancestor, extract_first, generate_css_selector.
+        """
         items = []
 
-        # 1) Structured selectors: tables, lists, articles
+        # 1) Structured containers: tables, lists, articles, content blocks
         for sel in ["table tr", "ul li", "[class*='item']", "[class*='list']",
                     "[class*='article']", "[class*='result']", "[class*='content']",
                     ".xxgk_content", "#zoom", ".article-content", ".main-content"]:
             els = page.css(sel, auto_save=True)
             if len(els) > 1:
                 for el in els[:50]:
-                    text = el.text.strip() if el.text else ""
+                    if hasattr(el, 'get_all_text'):
+                        text = el.get_all_text(strip=True)[:500]
+                    else:
+                        text = el.text.strip()[:500] if el.text else ""
                     if len(text) > 20:
                         sel_gen = el.generate_css_selector if hasattr(el, 'generate_css_selector') else ""
-                        items.append({"text": text[:500], "selector": sel_gen or sel})
+                        items.append({"text": text, "selector": sel_gen or sel})
                 if items:
                     return items
 
-        # 2) find_by_text: search for task keywords in page
+        # 2) find_by_text: extract keywords from task, search page, find similar
         import re as _re
         keywords = _re.findall(r'[\u4e00-\u9fff]{2,}|\w{3,}', task)
         for kw in keywords[:5]:
@@ -219,21 +227,24 @@ class BrowserAgent:
                 if el:
                     similar = el.find_similar() if hasattr(el, 'find_similar') else [el]
                     for s in similar[:50]:
-                        text = s.text.strip() if s.text else ""
+                        if hasattr(s, 'get_all_text'):
+                            text = s.get_all_text(strip=True)[:500]
+                        else:
+                            text = s.text.strip()[:500] if s.text else ""
                         if text and len(text) > 15:
-                            items.append({"text": text[:500], "method": "find_similar"})
+                            items.append({"text": text, "method": "find_similar"})
                     if items:
                         return items
             except Exception:
                 continue
 
-        # 3) Download links (pdf, doc, xls, zip etc.)
-        dl_links = [{"text": (a.text or "附件").strip()[:200],
+        # 3) Download links (pdf, doc, xls, zip, rar, 7z)
+        dl_links = [{"text": ((a.text or "").strip() if hasattr(a, 'text') else "")[:200],
                      "link": a.attrib.get("href", ""),
                      "method": "download_link"}
                     for a in page.css("a[href]")
                     if any(e in (a.attrib.get("href", "") or "").lower()
-                           for e in [".pdf", ".doc", ".docx", ".xls", ".zip"])]
+                           for e in [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar"])]
         if dl_links:
             return dl_links[:50]
 

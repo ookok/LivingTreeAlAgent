@@ -41,6 +41,17 @@ from typing import Any, Optional
 
 from loguru import logger
 
+# NLP optional imports with graceful degradation
+_HAS_JIEBA = _HAS_LTP = _HAS_SPACY = _HAS_HANLP = False
+try: import jieba; import jieba.posseg as pseg; _HAS_JIEBA = True
+except ImportError: pass
+try: from ltp import LTP; _HAS_LTP = True
+except ImportError: pass
+try: import spacy; _HAS_SPACY = True
+except ImportError: pass
+try: import hanlp; _HAS_HANLP = True
+except ImportError: pass
+
 
 # ═══ Data Types ════════════════════════════════════════════════════
 
@@ -111,94 +122,227 @@ class EntityRelation:
 class EntityExtractor:
     """Extract named entities and their properties from text.
 
-    Supports both Chinese and English entity recognition.
+    Tiered extraction:
+      L1: NLP dependency parsing (jieba+LTP/spaCy) — precise, slow
+      L2: Regex patterns — fast, less precise
+      L3: Simple keyword matching — fastest, least precise
+
+    Auto-selects tier based on available libraries.
     """
 
-    # Chinese name patterns (姓氏+名)
+    # Regex patterns (L2 fallback)
     CN_NAME_RE = re.compile(
         r'(?:[张王李赵刘陈杨黄周吴徐孙马胡朱郭何罗高林]'
         r'[\u4e00-\u9fff]{1,2})'
     )
-    # Property patterns: "XXX的YYY是ZZZ"
     CN_PROPERTY_RE = re.compile(
         r'([\u4e00-\u9fff]{1,4})的([\u4e00-\u9fff]{1,4})(?:是|为|：|:)'
         r'\s*([\u4e00-\u9fff\d]+)'
     )
-    # Location patterns
     CN_LOCATION_RE = re.compile(
         r'(?:在|位于|于)([\u4e00-\u9fff]{2,8}(?:市|县|镇|村|区|路|街|楼|室|层|号))'
     )
-    # Time patterns
     CN_TIME_RE = re.compile(
         r'(\d{4}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日|第[一二三四五六七八九十]+章)'
     )
-    # Numeric claim patterns
     CLAIM_RE = re.compile(
         r'([\u4e00-\u9fff]{2,10})\s*(?:为|是|达到|约|大约|共|合计)'
         r'\s*([\d.]+)\s*(mg|μg|dB|km|m|t|万|亿|元|%|℃|个|家|人)'
     )
 
+    _ltp_instance: Any = None
+    _spacy_instance: Any = None
+
+    @classmethod
+    def _get_ltp(cls):
+        if not _HAS_LTP: return None
+        if cls._ltp_instance is None:
+            try: cls._ltp_instance = LTP()
+            except Exception: return None
+        return cls._ltp_instance
+
+    @classmethod
+    def _get_spacy(cls):
+        if not _HAS_SPACY: return None
+        if cls._spacy_instance is None:
+            try: cls._spacy_instance = spacy.load("en_core_web_sm")
+            except Exception:
+                try: cls._spacy_instance = spacy.load("en_core_web_sm")
+                except Exception: return None
+        return cls._spacy_instance
+
+    @classmethod
+    def extract_nlp_chinese(cls, text: str, filepath: str = "",
+                            line_offset: int = 0) -> dict[str, ContentEntity]:
+        """L1: Dependency-parsing-based entity extraction for Chinese."""
+        entities: dict[str, ContentEntity] = {}
+        now = time.time()
+
+        def _add(name, cat, props, ln, ctx):
+            key = f"{cat}:{name}"
+            if key not in entities:
+                entities[key] = ContentEntity(id=key, name=name, category=cat,
+                    properties=props, first_seen=now, last_seen=now)
+            e = entities[key]; e.last_seen = now; e.properties.update(props)
+            e.occurrences.append(EntityOccurrence(file=filepath, line=ln+line_offset,
+                context=ctx[:200], properties_snapshot=dict(props), timestamp=now))
+
+        # Try LTP dependency parsing first
+        ltp = cls._get_ltp()
+        if ltp:
+            try:
+                result = ltp.pipeline([text], tasks=["cws", "pos", "ner", "dep", "sdp"])
+                words = result.cws[0]
+                pos_tags = result.pos[0]
+                ner_tags = result.ner[0]
+                dep_heads = result.dep[0]["head"]
+                dep_labels = result.dep[0]["label"]
+
+                # Named entities from NER
+                current_ner = ""
+                for i, (word, ner) in enumerate(zip(words, ner_tags)):
+                    if ner.startswith("B-"):
+                        current_ner = word
+                    elif ner.startswith("I-") and current_ner:
+                        current_ner += word
+                    elif ner.startswith("S-"):
+                        cat = "person" if "Nh" in ner else "location" if "Ns" in ner else "object"
+                        _add(word, cat, {}, 0, text)
+
+                # Dependency-based property extraction: nsubj→amod/dobj patterns
+                for i, (word, pos, label, head) in enumerate(
+                    zip(words, pos_tags, dep_labels, dep_heads)):
+                    if label == "ATT" and head > 0 and head <= len(words):
+                        # "X的Y" → owner=X, property=Y
+                        owner = words[head - 1]
+                        prop = word
+                        # Find value (copula: "是")
+                        for j in range(i + 1, min(i + 5, len(words))):
+                            if dep_labels[j] == "VOW" and j + 1 < len(words):
+                                value = words[j + 1]
+                                _add(owner, "character", {prop: value}, 0, text)
+                                break
+
+                return entities
+            except Exception:
+                pass
+
+        # Try jieba POS tagging
+        if _HAS_JIEBA:
+            try:
+                words = list(pseg.cut(text))
+                for i, (word, flag) in enumerate(words):
+                    if flag == "nr" and len(word) >= 2:  # Person name
+                        _add(word, "character", {}, 0, text)
+                    elif flag == "ns" and len(word) >= 2:  # Place name
+                        _add(word, "location", {}, 0, text)
+                    elif flag == "n" and i + 1 < len(words):
+                        # Look for "X的Y是Z" pattern via POS sequence
+                        next_w, next_f = words[i + 1]
+                        if next_w == "的" and i + 2 < len(words):
+                            owner = word
+                            prop_w, _ = words[i + 2]
+                            if i + 3 < len(words) and words[i + 3].word in ("是", "为"):
+                                val_w, _ = words[i + 4] if i + 4 < len(words) else ("", "")
+                                _add(owner, "character", {prop_w: val_w}, 0, text)
+                return entities
+            except Exception:
+                pass
+
+        return entities
+
+    @classmethod
+    def extract_nlp_english(cls, text: str, filepath: str = "",
+                            line_offset: int = 0) -> dict[str, ContentEntity]:
+        """L1: Dependency-parsing-based entity extraction for English (spaCy)."""
+        entities: dict[str, ContentEntity] = {}
+        now = time.time()
+        nlp = cls._get_spacy()
+        if not nlp: return entities
+
+        try:
+            doc = nlp(text[:5000])  # Cap for performance
+            for ent in doc.ents:
+                cat = {"PERSON": "character", "ORG": "organization",
+                       "GPE": "location", "LOC": "location",
+                       "DATE": "event", "CARDINAL": "claim",
+                       "QUANTITY": "claim"}.get(ent.label_, "object")
+                key = f"{cat}:{ent.text}"
+                entities[key] = ContentEntity(
+                    id=key, name=ent.text, category=cat,
+                    properties={"label": ent.label_},
+                    first_seen=now, last_seen=now,
+                )
+
+            # Dependency-based property extraction
+            for sent in doc.sents:
+                for token in sent:
+                    if token.dep_ == "nsubj" and token.head.pos_ == "VERB":
+                        subject = token.text
+                        # Find object or complement
+                        for child in token.head.children:
+                            if child.dep_ in ("dobj", "attr", "acomp"):
+                                entities[f"character:{subject}"] = ContentEntity(
+                                    id=f"character:{subject}", name=subject,
+                                    category="character",
+                                    properties={token.head.lemma_: child.text},
+                                    first_seen=now, last_seen=now,
+                                )
+        except Exception:
+            pass
+
+        return entities
+
     @classmethod
     def extract(cls, text: str, filepath: str = "",
                 line_offset: int = 0) -> dict[str, ContentEntity]:
-        """Extract all entities and their properties from text."""
+        """Unified extraction: NLP first, regex fallback."""
+        # Detect language
+        cn_chars = len(re.findall(r'[\u4e00-\u9fff]', text))
+        is_cn = cn_chars > len(text) * 0.3
+
+        if is_cn:
+            entities = cls.extract_nlp_chinese(text, filepath, line_offset)
+        else:
+            entities = cls.extract_nlp_english(text, filepath, line_offset)
+
+        # Fallback: regex if NLP produced nothing
+        if not entities:
+            entities = cls._extract_regex(text, filepath, line_offset)
+
+        return entities
+
+    @classmethod
+    def _extract_regex(cls, text: str, filepath: str = "",
+                       line_offset: int = 0) -> dict[str, ContentEntity]:
+        """L2/L3: Regex-based fallback extraction."""
         entities: dict[str, ContentEntity] = {}
         lines = text.split('\n')
         now = time.time()
 
-        def _add_entity(name: str, category: str, props: dict, line_num: int, context: str):
-            key = f"{category}:{name}"
+        def _add_entity(name, cat, props, ln, ctx):
+            key = f"{cat}:{name}"
             if key not in entities:
-                entities[key] = ContentEntity(
-                    id=key, name=name, category=category,
-                    properties=props, first_seen=now, last_seen=now,
-                )
-            e = entities[key]
-            e.last_seen = now
-            e.properties.update(props)
-            e.occurrences.append(EntityOccurrence(
-                file=filepath, line=line_num + line_offset,
-                context=context[:200],
-                properties_snapshot=dict(props),
-                timestamp=now,
-            ))
-            return e
+                entities[key] = ContentEntity(id=key, name=name, category=cat,
+                    properties=props, first_seen=now, last_seen=now)
+            e = entities[key]; e.last_seen = now; e.properties.update(props)
+            e.occurrences.append(EntityOccurrence(file=filepath, line=ln+line_offset,
+                context=ctx[:200], properties_snapshot=dict(props), timestamp=now))
 
         for i, line in enumerate(lines, 1):
-            # Characters (Chinese names)
             for m in cls.CN_NAME_RE.finditer(line):
-                name = m.group()
-                _add_entity(name, "character", {}, i, line)
-
-            # Properties
+                _add_entity(m.group(), "character", {}, i, line)
             for m in cls.CN_PROPERTY_RE.finditer(line):
-                owner = m.group(1)
-                prop = m.group(2)
-                value = m.group(3)
-                key = f"character:{owner}"
-                if key in entities:
-                    entities[key].properties[prop] = value
-                else:
-                    _add_entity(owner, "character", {prop: value}, i, line)
-
-            # Locations
+                _add_entity(m.group(1), "character", {m.group(2): m.group(3)}, i, line)
             for m in cls.CN_LOCATION_RE.finditer(line):
-                loc = m.group(1)
-                _add_entity(loc, "location", {}, i, line)
-
-            # Timeline events
+                _add_entity(m.group(1), "location", {}, i, line)
             for m in cls.CN_TIME_RE.finditer(line):
-                time_str = m.group()
-                _add_entity(time_str, "event", {"time": time_str}, i, line)
-
-            # Claims (numeric)
+                _add_entity(m.group(), "event", {"time": m.group()}, i, line)
             for m in cls.CLAIM_RE.finditer(line):
-                subject = m.group(1)
-                value = float(m.group(2))
-                unit = m.group(3)
-                _add_entity(subject, "claim",
-                          {"value": value, "unit": unit}, i, line)
-
+                try:
+                    _add_entity(m.group(1), "claim",
+                              {"value": float(m.group(2)), "unit": m.group(3)}, i, line)
+                except ValueError: pass
         return entities
 
 

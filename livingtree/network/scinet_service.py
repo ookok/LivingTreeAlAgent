@@ -318,26 +318,60 @@ class ScinetService:
         
         tasks = [_aio.create_task(_try_ip(ip)) for ip in all_ips[:20]]
         
-        # Also try proxy pool in parallel
-        async def _try_proxy():
+        # Also try proxy pool in parallel (up to 5 proxies, SOCKS4/5 + HTTP)
+        async def _try_multi_proxy():
+            """Try up to 5 proxies in parallel"""
             nonlocal conn_result
             if not self._proxy_pool:
                 return
-            try:
-                proxy = self._proxy_pool.get_best()
-                if proxy:
+            proxies = list(self._proxy_pool._pool.values())[:5] if hasattr(self._proxy_pool, '_pool') else []
+            if not proxies:
+                for _ in range(5):
+                    p = self._proxy_pool.get_best()
+                    if p and p not in proxies:
+                        proxies.append(p)
+            if not proxies:
+                return
+            
+            async def _try_one(proxy):
+                nonlocal conn_result
+                try:
                     r, w = await _aio.wait_for(
-                        _aio.open_connection(proxy.host, proxy.port), timeout=3.0,
+                        _aio.open_connection(proxy.host, proxy.port), timeout=2.0,
                     )
-                    w.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
-                    await w.drain()
-                    line = await _aio.wait_for(r.readline(), timeout=5.0)
-                    if b"200" in line:
-                        conn_result = (r, w, f"proxy({proxy.host})")
-            except Exception as e:
-                errors.append(f"proxy: {e}")
+                    proto = getattr(proxy, 'protocol', 'http') or 'http'
+                    if proto in ('socks5', 'socks'):
+                        w.write(b'\x05\x01\x00'); await w.drain()
+                        resp = await _aio.wait_for(r.readexactly(2), timeout=2.0)
+                        if resp[0] != 5 or resp[1] != 0: return
+                        host_bytes = host.encode()
+                        w.write(b'\x05\x01\x00\x03' + bytes([len(host_bytes)]) + host_bytes + port.to_bytes(2,'big'))
+                        await w.drain()
+                        reply = await _aio.wait_for(r.readexactly(10), timeout=2.0)
+                        if reply[1] == 0 and conn_result is None:
+                            conn_result = (r, w, f"socks5({proxy.host})")
+                    elif proto == 'socks4':
+                        w.write(b'\x04\x01' + port.to_bytes(2,'big') + b'\x00\x00\x00\x01\x00')
+                        await w.drain()
+                        resp = await _aio.wait_for(r.readexactly(8), timeout=2.0)
+                        if resp[1] == 0x5a and conn_result is None:
+                            conn_result = (r, w, f"socks4({proxy.host})")
+                    else:
+                        w.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
+                        await w.drain()
+                        line = await _aio.wait_for(r.readline(), timeout=3.0)
+                        if b"200" in line and conn_result is None:
+                            conn_result = (r, w, f"proxy({proxy.host})")
+                except Exception:
+                    pass
+            
+            tasks = [_aio.create_task(_try_one(p)) for p in proxies[:5]]
+            await _aio.wait(tasks, timeout=4.0, return_when=_aio.FIRST_COMPLETED)
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
         
-        tasks.append(_aio.create_task(_try_proxy()))
+        tasks.append(_aio.create_task(_try_multi_proxy()))
         
         done, pending = await _aio.wait(tasks, timeout=6.0, return_when=_aio.FIRST_COMPLETED)
         

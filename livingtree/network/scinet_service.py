@@ -303,6 +303,16 @@ class ScinetService:
         conn_result = None
         errors = []
         
+        # Tier 0: DPI bypass (TCP segmentation) for first IP
+        try:
+            from .dpi_bypass import dpi_bypass_connect
+            r, w = await dpi_bypass_connect(all_ips[0], port, timeout=5.0)
+            if r is not None:
+                logger.debug("CONNECT %s:%d → DPI bypass (%s)", host, port, all_ips[0])
+                return r, w
+        except Exception:
+            pass
+        
         async def _try_ip(ip: str):
             nonlocal conn_result
             try:

@@ -632,6 +632,88 @@ class ContentGraph:
             },
         }
 
+    # ── Fuzzy Matching ────────────────────────────────────────
+
+    def find_similar_entities(self, threshold: float = 0.7) -> list[tuple[str, str, float]]:
+        similar = []
+        keys = list(self._entities.keys())
+        for i in range(len(keys)):
+            for j in range(i + 1, len(keys)):
+                e1, e2 = self._entities[keys[i]], self._entities[keys[j]]
+                if e1.category != e2.category: continue
+                name_sim = difflib.SequenceMatcher(None, e1.name, e2.name).ratio()
+                if name_sim < 0.5: continue
+                p1, p2 = set(e1.properties.keys()), set(e2.properties.keys())
+                overlap = len(p1 & p2) / max(len(p1 | p2), 1)
+                score = name_sim * 0.6 + overlap * 0.4
+                if score >= threshold: similar.append((keys[i], keys[j], round(score, 3)))
+        return sorted(similar, key=lambda x: -x[2])
+
+    # ── Auto-Fixer ────────────────────────────────────────────
+
+    def auto_fix(self, entity_name: str, property_name: str,
+                 strategy: str = "majority") -> dict:
+        entity = self._entities.get(f"character:{entity_name}")
+        if not entity: return {"error": "Entity not found"}
+        vc = defaultdict(int)
+        for occ in entity.occurrences:
+            v = occ.properties_snapshot.get(property_name)
+            if v is not None: vc[str(v)] += 1
+        if not vc: return {"error": "No values"}
+        correct = (max(vc, key=vc.get) if strategy == "majority"
+              else str(max(entity.occurrences, key=lambda o: o.timestamp).properties_snapshot.get(property_name, "")) if strategy == "latest"
+              else str(min(entity.occurrences, key=lambda o: o.timestamp).properties_snapshot.get(property_name, "")) if strategy == "first"
+              else strategy)
+        fixes = [{"file": o.file, "line": o.line, "old": str(o.properties_snapshot.get(property_name, "")), "new": correct}
+                 for o in entity.occurrences if str(o.properties_snapshot.get(property_name, "")) != correct]
+        self.learn_from_fix(entity_name, property_name, correct)
+        return {"entity": entity_name, "property": property_name, "chosen": correct,
+                "fixes": fixes[:20], "files": len(set(f["file"] for f in fixes))}
+
+    # ── Predictive Impact ─────────────────────────────────────
+
+    def predict_impact(self, entity_name: str, property_name: str, new_value: Any = None) -> dict:
+        entity = self._entities.get(f"character:{entity_name}")
+        if not entity: return {"error": "Entity not found"}
+        affected = list(set(o.file for o in entity.occurrences
+                           if o.properties_snapshot.get(property_name) is not None))
+        related = [{"entity": (r.target.name if entity_name == r.source.name else r.source).name,
+                    "relation": r.relation_type}
+                   for r in self._relations
+                   if entity_name in (r.source.name, r.target.name)]
+        return {"files": len(affected), "affected": affected[:10], "related": related[:10],
+                "est_minutes": len(affected) * 1.5}
+
+    # ── Entity Heatmap ─────────────────────────────────────────
+
+    def entity_heatmap(self, top_n: int = 20) -> dict:
+        hm = [{"name": e.name, "category": e.category, "occurrences": len(e.occurrences),
+               "files": len(set(o.file for o in e.occurrences)),
+               "spread": len(set(o.file for o in e.occurrences)) * len(e.occurrences)}
+              for e in self._entities.values()]
+        return {"top": sorted(hm, key=lambda h: -h["spread"])[:top_n], "total": len(hm),
+                "cross_file_pct": round(sum(1 for h in hm if h["files"] > 1) / max(len(hm), 1) * 100, 1)}
+
+    # ── Batch + Persist ───────────────────────────────────────
+
+    async def batch_index(self, files: list[tuple[str, str]], max_concurrent: int = 10) -> dict:
+        sem = asyncio.Semaphore(max_concurrent)
+        async def _one(fp, ct):
+            async with sem:
+                return await asyncio.get_event_loop().run_in_executor(None, self.index_file, fp, ct)
+        results = await asyncio.gather(*[_one(fp, ct) for fp, ct in files], return_exceptions=True)
+        return {"total": len(files), "indexed": sum(1 for r in results if isinstance(r, int) and r > 0)}
+
+    def save_graph(self, path: str = "") -> str:
+        out = Path(path or ".livingtree/content_graph.json")
+        data = {"entities": {k: {"name": e.name, "category": e.category, "properties": e.properties}
+                for k, e in self._entities.items()},
+                "relations": [{"source": r.source.name, "target": r.target.name,
+                "type": r.relation_type, "strength": r.strength} for r in self._relations]}
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+        return str(out)
+
 
 # ═══ Singleton ════════════════════════════════════════════════════
 

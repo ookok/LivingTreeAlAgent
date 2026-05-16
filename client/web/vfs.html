@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>📂 VFS — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+  .mount-card:hover { border-color: #93c5fd; }
+</style>
+</head>
+<body class="h-full bg-gray-50 flex">
+
+<!-- Sidebar -->
+<aside class="w-56 bg-white border-r border-gray-200 flex-shrink-0 p-3 flex flex-col">
+  <div class="mb-4">
+    <h1 class="text-sm font-bold text-gray-800">📂 虚拟文件系统</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Virtual File System</p>
+  </div>
+  <nav class="flex-1 space-y-0.5" id="mount-nav">
+    <div class="text-xs text-gray-400 p-1">加载中...</div>
+  </nav>
+  <a href="/" class="text-xs text-blue-500 hover:text-blue-600 mt-2 block">← 返回首页</a>
+</aside>
+
+<!-- Main -->
+<main class="flex-1 flex flex-col min-w-0">
+  <header class="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200 flex-shrink-0">
+    <span class="text-sm font-semibold text-gray-700" id="current-path">/</span>
+    <span class="flex-1"></span>
+    <button onclick="refresh()" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600">🔄 刷新</button>
+  </header>
+  <div class="flex-1 overflow-auto p-4" id="content-area">
+    <div class="flex items-center justify-center h-full text-gray-400 text-sm">选择左侧挂载点查看文件</div>
+  </div>
+  <footer class="flex items-center gap-4 px-3 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 flex-shrink-0">
+    <span id="vfs-stats">加载中...</span>
+  </footer>
+</main>
+
+<script>
+let currentPath = '/';
+let mounts = {};
+
+async function loadMounts() {
+  try {
+    const r = await fetch('/api/vfs/mounts');
+    const d = await r.json();
+    mounts = d.mounts || {};
+    const nav = document.getElementById('mount-nav');
+    nav.innerHTML = Object.entries(mounts).map(([path, name]) => `
+      <div class="px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 text-xs flex items-center gap-2 mount-card border border-transparent"
+           onclick="browse('${path}')">
+        <span>${iconFor(path)}</span>
+        <span class="text-gray-700">${path}</span>
+        <span class="text-gray-300 ml-auto">${name}</span>
+      </div>
+    `).join('') || '<div class="text-xs text-gray-400 p-1">无挂载点</div>';
+  } catch(e) { document.getElementById('mount-nav').innerHTML = '<div class="text-xs text-red-400 p-1">加载失败</div>'; }
+}
+
+function iconFor(path) {
+  if (path.includes('ram')) return '💧'; if (path.includes('cache')) return '⚡';
+  if (path.includes('disk')) return '💾'; if (path.includes('db')) return '🗄️';
+  if (path.includes('config')) return '⚙️'; if (path.includes('kb')) return '📚';
+  return '📁';
+}
+
+async function browse(path) {
+  currentPath = path;
+  document.getElementById('current-path').textContent = path + '/';
+  const area = document.getElementById('content-area');
+  area.innerHTML = '<div class="flex justify-center py-8"><div class="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div></div>';
+
+  try {
+    const r = await fetch('/api/vfs/list?path=' + encodeURIComponent(path));
+    const d = await r.json();
+    if (d.error) { area.innerHTML = `<div class="text-red-500 text-sm p-4">${d.error}</div>`; return; }
+
+    const entries = d.entries || [];
+    document.getElementById('vfs-stats').textContent = `${entries.length} 项目`;
+
+    if (!entries.length) { area.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400 text-sm">目录为空</div>'; return; }
+
+    // Group: dirs first, then files
+    const dirs = entries.filter(e => e.is_dir);
+    const files = entries.filter(e => !e.is_dir);
+
+    let html = '';
+    if (dirs.length) {
+      html += '<div class="text-xs text-gray-400 mb-2 font-medium">📁 目录</div>';
+      html += '<div class="grid grid-cols-1 gap-1 mb-4">';
+      for (const d of dirs) {
+        html += `<div class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-200 text-sm"
+          onclick="browse('${(currentPath+'/'+d.name).replace('//','/')}')">
+          <span>📁</span><span class="text-blue-600">${d.name}</span></div>`;
+      }
+      html += '</div>';
+    }
+
+    if (files.length) {
+      html += '<div class="text-xs text-gray-400 mb-2 font-medium">📄 文件</div>';
+      html += '<div class="grid grid-cols-1 gap-1">';
+      for (const f of files) {
+        const size = f.size > 1024 ? (f.size/1024).toFixed(1)+'KB' : f.size+'B';
+        html += `<div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 text-sm"
+          onclick="readFile('${(currentPath+'/'+f.name).replace('//','/')}')">
+          <span>${iconByExt(f.name)}</span>
+          <span class="flex-1 text-gray-700 truncate">${f.name}</span>
+          <span class="text-xs text-gray-400">${size}</span>
+          ${f.resource_type?`<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">${f.resource_type}</span>`:''}
+        </div>`;
+      }
+      html += '</div>';
+    }
+    area.innerHTML = html;
+  } catch(e) { area.innerHTML = `<div class="text-red-500 text-sm p-4">${e.message}</div>`; }
+}
+
+function iconByExt(name) {
+  const ext = (name||'').split('.').pop().toLowerCase();
+  const map = {py:'🐍',js:'🟨',ts:'🔷',json:'📋',yaml:'⚙️',yml:'⚙️',md:'📝',txt:'📄',csv:'📊',db:'🗄️',sqlite:'🗄️',pickle:'💾'};
+  return map[ext] || '📄';
+}
+
+async function readFile(path) {
+  try {
+    const r = await fetch('/api/vfs/read?path=' + encodeURIComponent(path));
+    const d = await r.json();
+    const area = document.getElementById('content-area');
+    if (d.error) { area.innerHTML = `<div class="text-red-500 text-sm p-4">${d.error}</div>`; return; }
+    const content = d.content || '';
+    const lang = (path.split('.').pop()||'').toLowerCase();
+    const isCode = ['py','js','ts','json','yaml','yml','sql','sh','html','css'].includes(lang);
+    area.innerHTML = `
+      <div class="mb-2 flex items-center gap-2">
+        <span class="text-xs text-gray-400">${path}</span>
+        <span class="text-xs text-gray-300">${content.length} 字符</span>
+        <button onclick="browse('${currentPath}')" class="text-xs text-blue-500 ml-auto">← 返回</button>
+      </div>
+      <pre class="bg-gray-900 text-green-400 rounded-xl p-4 text-xs overflow-auto max-h-screen whitespace-pre-wrap font-mono">${isCode ? content : content.slice(0,5000)}</pre>
+    `;
+  } catch(e) {}
+}
+
+function refresh() { browse(currentPath); }
+
+loadMounts();
+setTimeout(() => { if (Object.keys(mounts).length) browse(Object.keys(mounts)[0]); }, 500);
+</script>
+</body>
+</html>

@@ -3146,27 +3146,73 @@ def _get_user_id_from_request(request: Request) -> str:
         try:
             data = await request.json()
             question = data.get("question", "")
-
-            # Get schema context
             db = getattr(request.app.state, '_db_connection', None)
             schema_hint = ""
             if db:
                 tables = await db.fetch_all("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name")
-                schema_hint = "\n".join(
-                    f"Table {t['name']}: {t.get('sql','')[:200]}" for t in (tables or [])[:10])
-
+                schema_hint = "\n".join(f"Table {t['name']}: {t.get('sql','')[:200]}" for t in (tables or [])[:10])
             from ..treellm.core import TreeLLM
             llm = TreeLLM.from_config()
             result = await llm.chat(
-                [{"role": "system", "content": f"你是SQL专家。根据以下数据库Schema，将用户的中文问题转换为SQLite SQL语句。只输出SQL，不加解释。\n\nSchema:\n{schema_hint}"},
+                [{"role": "system", "content": f"你是SQL专家。根据数据库Schema将中文问题转换为SQLite SQL。只输出SQL。\n\nSchema:\n{schema_hint}"},
                  {"role": "user", "content": question}],
-                max_tokens=500, temperature=0.0, task_type="code",
-            )
+                max_tokens=500, temperature=0.0, task_type="code")
             sql = getattr(result, 'text', '') or ""
-            # Extract SQL from markdown code blocks if present
             m = re.search(r'```(?:sql)?\s*\n?(.*?)\n?```', sql, re.DOTALL)
             if m: sql = m.group(1).strip()
-            # Clean up
+            sql = sql.strip().rstrip(';') + ';'
+            return {"sql": sql, "question": question}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    # ═══ VFS Browser API ═══
+
+    @app.get("/api/vfs/mounts")
+    async def api_vfs_mounts(request: Request):
+        try:
+            from ..capability.virtual_fs import get_virtual_fs
+            vfs = get_virtual_fs()
+            return {"mounts": vfs.list_mounts()}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    @app.get("/api/vfs/list")
+    async def api_vfs_list(request: Request, path: str = "/"):
+        try:
+            from ..capability.virtual_fs import get_virtual_fs
+            vfs = get_virtual_fs()
+            entries = await vfs.list_dir(path)
+            return {"entries": [{"name": e.name, "path": e.path, "is_dir": e.is_dir,
+                    "size": e.size, "resource_type": e.resource_type} for e in entries]}
+        except Exception as e:
+            return {"error": str(e)[:200], "entries": []}
+
+    @app.get("/api/vfs/read")
+    async def api_vfs_read(request: Request, path: str = ""):
+        try:
+            from ..capability.virtual_fs import get_virtual_fs
+            vfs = get_virtual_fs()
+            content = await vfs.read_file(path)
+            return {"content": content[:10000]}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    # ═══ Capability Browser API ═══
+
+    @app.get("/api/capability/list")
+    async def api_capability_list(request: Request):
+        try:
+            from ..treellm.capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            await bus._ensure_discovered()
+            caps = await bus.list_all()
+            return {"capabilities": [{"id": c.get("id",""), "name": c.get("name",""),
+                    "category": c.get("category",""), "description": c.get("description",""),
+                    "params": c.get("params",[]), "tags": c.get("tags",[]),
+                    "source": c.get("source","")} for c in caps]}
+        except Exception as e:
+            return {"error": str(e)[:200], "capabilities": []}
+
             sql = sql.strip().rstrip(';') + ';'
 
             return {"sql": sql, "question": question}

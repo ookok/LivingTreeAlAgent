@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🧰 能力层 — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+  .cap-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+</style>
+</head>
+<body class="h-full bg-gray-50">
+
+<header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+  <h1 class="text-sm font-bold text-gray-800">🧰 能力层 · Capability Bus</h1>
+  <div class="flex gap-1" id="cat-tabs"></div>
+  <span class="flex-1"></span>
+  <span id="cap-count" class="text-xs text-gray-400"></span>
+  <a href="/" class="text-xs text-blue-500 hover:text-blue-600">← 返回首页</a>
+</header>
+
+<main class="flex-1 overflow-auto p-4" id="caps-area">
+  <div class="flex items-center justify-center h-full text-gray-400 text-sm">加载中...</div>
+</main>
+
+<script>
+let allCaps = [];
+let currentCat = 'all';
+
+async function load() {
+  try {
+    const r = await fetch('/api/capability/list');
+    const d = await r.json();
+    allCaps = d.capabilities || [];
+
+    // Build category tabs
+    const cats = ['all', ...new Set(allCaps.map(c => c.category || 'other'))];
+    document.getElementById('cat-tabs').innerHTML = cats.map(c =>
+      `<button onclick="filter('${c}')" id="tab-${c}"
+        class="px-2.5 py-1 text-xs rounded-full transition-colors ${c==='all'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${c}</button>`
+    ).join('');
+    document.getElementById('cap-count').textContent = `${allCaps.length} 能力`;
+
+    render(allCaps);
+  } catch(e) {
+    document.getElementById('caps-area').innerHTML = `<div class="text-red-500 text-sm p-4">加载失败: ${e.message}</div>`;
+  }
+}
+
+function filter(cat) {
+  currentCat = cat;
+  document.querySelectorAll('#cat-tabs button').forEach(b => {
+    b.className = b.id === 'tab-'+cat
+      ? 'px-2.5 py-1 text-xs rounded-full transition-colors bg-blue-600 text-white'
+      : 'px-2.5 py-1 text-xs rounded-full transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200';
+  });
+  const filtered = cat === 'all' ? allCaps : allCaps.filter(c => (c.category||'other') === cat);
+  document.getElementById('cap-count').textContent = `${filtered.length} 能力`;
+  render(filtered);
+}
+
+function render(caps) {
+  const area = document.getElementById('caps-area');
+  if (!caps.length) { area.innerHTML = '<div class="text-gray-400 text-sm p-4">无匹配能力</div>'; return; }
+
+  const colorMap = {
+    tool: 'border-l-blue-500 bg-blue-50',
+    skill: 'border-l-green-500 bg-green-50',
+    mcp: 'border-l-purple-500 bg-purple-50',
+    vfs: 'border-l-orange-500 bg-orange-50',
+    role: 'border-l-pink-500 bg-pink-50',
+    llm: 'border-l-indigo-500 bg-indigo-50',
+  };
+
+  area.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">' +
+    caps.map(c => {
+      const cat = c.category || 'other';
+      const accent = colorMap[cat] || 'border-l-gray-300 bg-white';
+      const tags = (c.tags||[]).slice(0,3).map(t =>
+        `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">${t}</span>`
+      ).join('');
+      const source = c.source ? `<span class="text-xs text-gray-300">${c.source}</span>` : '';
+      return `<div class="cap-card bg-white rounded-xl shadow-sm p-4 border-l-4 ${accent} transition-all cursor-pointer hover:shadow-md"
+          title="${c.id||''}">
+          <div class="flex items-start justify-between mb-2">
+            <span class="text-sm font-medium text-gray-700 truncate">${c.name||c.id||'?'}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 ml-2 flex-shrink-0">${cat}</span>
+          </div>
+          <p class="text-xs text-gray-500 mb-2 line-clamp-2">${c.description||''}</p>
+          <div class="flex items-center gap-2 mt-2">
+            ${tags}
+            ${source}
+          </div>
+          ${(c.params||[]).length ? `<div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+            ${(c.params||[]).map(p => `<span class="mr-2">${p.name}:${p.type||'string'}</span>`).join('')}
+          </div>` : ''}
+        </div>`;
+    }).join('') +
+    '</div>';
+}
+
+load();
+</script>
+</body>
+</html>

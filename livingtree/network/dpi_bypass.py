@@ -42,39 +42,16 @@ async def dpi_bypass_connect(host: str, port: int,
     import asyncio as _aio
     
     try:
-        # Standard TCP connect first
         r, w = await _aio.wait_for(
             _aio.open_connection(host, port), timeout=timeout,
         )
-        
-        # Get the underlying socket
         sock = w.get_extra_info('socket')
-        if not sock:
-            logger.debug("DPI bypass: no socket handle, falling back")
-            return r, w
-        
-        # Set socket options for DPI evasion
-        try:
-            sock.setsockopt(_socket.IPPROTO_IP, _socket.IP_TTL, DPI_FAKE_TTL)
-        except Exception:
-            pass
-        
-        # Disable Nagle's algorithm (send segments immediately, no buffering)
-        try:
-            sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-        except Exception:
-            pass
-        
-        # We return the normal connection — the browser/client will
-        # send its own ClientHello. The TCP_NODELAY + segmentation
-        # trick works at the OS TCP stack level when the client sends.
-        # 
-        # For the CONNECT tunnel case, scinet just relays bytes.
-        # The browser's TCP stack handles ClientHello segmentation.
-        #
-        # But if scinet is doing the TLS (e.g., HTTPS forwarding),
-        # we need to handle it. For now, CONNECT tunnel = raw relay = OK.
-        
+        if sock:
+            try:
+                sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
+                sock.setsockopt(_socket.IPPROTO_IP, _socket.IP_TTL, DPI_FAKE_TTL)
+            except Exception:
+                pass
         return r, w
         
     except Exception as e:

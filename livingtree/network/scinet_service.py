@@ -299,20 +299,32 @@ class ScinetService:
             logger.debug("CONNECT %s:%d — no IPs resolved", host, port)
             return None, None
         
-        # Phase 2: Waterfall — race all IPs
+        # Phase 2: Waterfall — race all IPs (DPI bypass + direct + proxy last)
         conn_result = None
         errors = []
         
-        # Tier 0: DPI bypass (TCP segmentation) for first IP
+        # Strategy 1: DPI bypass — try ALL IPs with TCP segmentation
         try:
             from .dpi_bypass import dpi_bypass_connect
-            r, w = await dpi_bypass_connect(all_ips[0], port, timeout=5.0)
-            if r is not None:
-                logger.debug("CONNECT %s:%d → DPI bypass (%s)", host, port, all_ips[0])
-                return r, w
+            async def _try_dpi(ip):
+                nonlocal conn_result
+                r, w = await dpi_bypass_connect(ip, port, timeout=4.0)
+                if r is not None and conn_result is None:
+                    conn_result = (r, w, f"dpi({ip})")
+                    self._ip_cache[host] = ip
+            dpi_tasks = [_aio.create_task(_try_dpi(ip)) for ip in all_ips[:10]]
+            await _aio.wait(dpi_tasks, timeout=5.0, return_when=_aio.FIRST_COMPLETED)
+            for t in dpi_tasks:
+                if not t.done(): t.cancel()
         except Exception:
             pass
         
+        if conn_result:
+            r, w, method = conn_result
+            logger.debug("CONNECT %s:%d → %s", host, port, method)
+            return r, w
+        
+        # Strategy 2: Direct TCP — race all IPs
         async def _try_ip(ip: str):
             nonlocal conn_result
             try:
@@ -328,61 +340,6 @@ class ScinetService:
         
         tasks = [_aio.create_task(_try_ip(ip)) for ip in all_ips[:20]]
         
-        # Also try proxy pool in parallel (up to 5 proxies, SOCKS4/5 + HTTP)
-        async def _try_multi_proxy():
-            """Try up to 5 proxies in parallel"""
-            nonlocal conn_result
-            if not self._proxy_pool:
-                return
-            proxies = list(self._proxy_pool._pool.values())[:5] if hasattr(self._proxy_pool, '_pool') else []
-            if not proxies:
-                for _ in range(5):
-                    p = self._proxy_pool.get_best()
-                    if p and p not in proxies:
-                        proxies.append(p)
-            if not proxies:
-                return
-            
-            async def _try_one(proxy):
-                nonlocal conn_result
-                try:
-                    r, w = await _aio.wait_for(
-                        _aio.open_connection(proxy.host, proxy.port), timeout=2.0,
-                    )
-                    proto = getattr(proxy, 'protocol', 'http') or 'http'
-                    if proto in ('socks5', 'socks'):
-                        w.write(b'\x05\x01\x00'); await w.drain()
-                        resp = await _aio.wait_for(r.readexactly(2), timeout=2.0)
-                        if resp[0] != 5 or resp[1] != 0: return
-                        host_bytes = host.encode()
-                        w.write(b'\x05\x01\x00\x03' + bytes([len(host_bytes)]) + host_bytes + port.to_bytes(2,'big'))
-                        await w.drain()
-                        reply = await _aio.wait_for(r.readexactly(10), timeout=2.0)
-                        if reply[1] == 0 and conn_result is None:
-                            conn_result = (r, w, f"socks5({proxy.host})")
-                    elif proto == 'socks4':
-                        w.write(b'\x04\x01' + port.to_bytes(2,'big') + b'\x00\x00\x00\x01\x00')
-                        await w.drain()
-                        resp = await _aio.wait_for(r.readexactly(8), timeout=2.0)
-                        if resp[1] == 0x5a and conn_result is None:
-                            conn_result = (r, w, f"socks4({proxy.host})")
-                    else:
-                        w.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
-                        await w.drain()
-                        line = await _aio.wait_for(r.readline(), timeout=3.0)
-                        if b"200" in line and conn_result is None:
-                            conn_result = (r, w, f"proxy({proxy.host})")
-                except Exception:
-                    pass
-            
-            tasks = [_aio.create_task(_try_one(p)) for p in proxies[:5]]
-            await _aio.wait(tasks, timeout=4.0, return_when=_aio.FIRST_COMPLETED)
-            for t in tasks:
-                if not t.done():
-                    t.cancel()
-        
-        tasks.append(_aio.create_task(_try_multi_proxy()))
-        
         done, pending = await _aio.wait(tasks, timeout=6.0, return_when=_aio.FIRST_COMPLETED)
         
         for t in pending:
@@ -393,7 +350,50 @@ class ScinetService:
             logger.debug("CONNECT %s:%d → %s", host, port, ip)
             return r, w
         
-        # Tier 3 (experimental): Redwood Refraction + Fountain — opt-in
+        # Strategy 3: Proxy pool (SOCKS4/5 + HTTP, try up to 5 in parallel)
+        if self._proxy_pool:
+            proxies = list(self._proxy_pool._pool.values())[:5] if hasattr(self._proxy_pool, '_pool') else []
+            if not proxies:
+                for _ in range(5):
+                    p = self._proxy_pool.get_best()
+                    if p and p not in proxies:
+                        proxies.append(p)
+            async def _try_one(proxy):
+                nonlocal conn_result
+                try:
+                    r, w = await _aio.wait_for(_aio.open_connection(proxy.host, proxy.port), timeout=2.0)
+                    proto = getattr(proxy, 'protocol', 'http') or 'http'
+                    if proto in ('socks5', 'socks'):
+                        w.write(b'\x05\x01\x00'); await w.drain()
+                        resp = await _aio.wait_for(r.readexactly(2), timeout=2.0)
+                        if resp[0]==5 and resp[1]==0:
+                            hb = host.encode(); w.write(b'\x05\x01\x00\x03'+bytes([len(hb)])+hb+port.to_bytes(2,'big'))
+                            await w.drain()
+                            reply = await _aio.wait_for(r.readexactly(10), timeout=2.0)
+                            if reply[1]==0 and conn_result is None:
+                                conn_result = (r, w, f"socks5({proxy.host})")
+                    elif proto == 'socks4':
+                        w.write(b'\x04\x01'+port.to_bytes(2,'big')+b'\x00\x00\x00\x01\x00'); await w.drain()
+                        resp = await _aio.wait_for(r.readexactly(8), timeout=2.0)
+                        if resp[1]==0x5a and conn_result is None:
+                            conn_result = (r, w, f"socks4({proxy.host})")
+                    else:
+                        w.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
+                        await w.drain()
+                        line = await _aio.wait_for(r.readline(), timeout=3.0)
+                        if b"200" in line and conn_result is None:
+                            conn_result = (r, w, f"proxy({proxy.host})")
+                except Exception: pass
+            ptasks = [_aio.create_task(_try_one(p)) for p in proxies[:5]]
+            await _aio.wait(ptasks, timeout=4.0, return_when=_aio.FIRST_COMPLETED)
+            for t in ptasks: 
+                if not t.done(): t.cancel()
+            if conn_result:
+                r, w, method = conn_result
+                logger.debug("CONNECT %s:%d → %s", host, port, method)
+                return r, w
+        
+        # Strategy 4: Redwood experimental
         try:
             from .scinet_redwood import redwood_connect
             r, w = await redwood_connect(

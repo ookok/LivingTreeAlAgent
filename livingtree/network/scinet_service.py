@@ -108,6 +108,7 @@ class ScinetService:
         self._ip_pool: Any = None
         self._proxy_pool: Any = None
         self._accelerator: Any = None
+        self._ip_cache: dict[str, str] = {}  # domain → successful IP
 
         # Scinet v2.0 Engine (RL + GNN + Federated + QUIC + Cache + WebTransport)
         self._engine: Any = None
@@ -281,37 +282,44 @@ class ScinetService:
                 remote_writer.close()
 
     async def _connect_with_fallback(self, host: str, port: int):
-        """Race-to-first: try direct + IP pool + proxy pool in parallel, use fastest."""
+        """Waterfall: try ALL known IPs in parallel, first TCP success wins.
+        
+        1. Multi-source DNS resolution (DoH: Google + Cloudflare + Quad9 + cached IPs)
+        2. Deduplicate → up to 20 IPs
+        3. All IPs tried in parallel → waterfall effect
+        4. First TCP connection established → return immediately
+        5. Successful IP cached for future use
+        """
         import asyncio as _aio
         
+        # Phase 1: Gather all candidate IPs
+        all_ips = await self._resolve_all_ips(host)
+        
+        if not all_ips:
+            logger.debug("CONNECT %s:%d — no IPs resolved", host, port)
+            return None, None
+        
+        # Phase 2: Waterfall — race all IPs
         conn_result = None
         errors = []
         
-        async def _try_direct():
+        async def _try_ip(ip: str):
             nonlocal conn_result
             try:
                 r, w = await _aio.wait_for(
-                    _aio.open_connection(host, port), timeout=3.0,
+                    _aio.open_connection(ip, port), timeout=4.0,
                 )
-                conn_result = (r, w, "direct")
+                if conn_result is None:
+                    conn_result = (r, w, ip)
+                    # Cache the successful IP
+                    self._ip_cache[host] = ip
             except Exception as e:
-                errors.append(f"direct: {e}")
+                errors.append(f"{ip}: {e}")
         
-        async def _try_ip_pool():
-            nonlocal conn_result
-            if not self._ip_pool:
-                return
-            try:
-                best_ip = self._ip_pool.get_best(host)
-                if best_ip and best_ip.ip != host:
-                    r, w = await _aio.wait_for(
-                        _aio.open_connection(best_ip.ip, port), timeout=5.0,
-                    )
-                    conn_result = (r, w, f"ip_pool({best_ip.ip})")
-            except Exception as e:
-                errors.append(f"ip_pool: {e}")
+        tasks = [_aio.create_task(_try_ip(ip)) for ip in all_ips[:20]]
         
-        async def _try_proxy_pool():
+        # Also try proxy pool in parallel
+        async def _try_proxy():
             nonlocal conn_result
             if not self._proxy_pool:
                 return
@@ -325,54 +333,64 @@ class ScinetService:
                     await w.drain()
                     line = await _aio.wait_for(r.readline(), timeout=5.0)
                     if b"200" in line:
-                        conn_result = (r, w, f"proxy({proxy.host}:{proxy.port})")
-                    else:
-                        errors.append(f"proxy: {line.decode()[:100]}")
+                        conn_result = (r, w, f"proxy({proxy.host})")
             except Exception as e:
-                errors.append(f"proxy_pool: {e}")
+                errors.append(f"proxy: {e}")
         
-        async def _try_hardener():
-            nonlocal conn_result
-            try:
-                from .scinet_hardening import get_scinet_hardener
-                hardener = get_scinet_hardener()
-                result = await hardener.execute("CONNECT", f"{host}:{port}")
-                if result and result.get("ok"):
-                    conn_result = (None, None, "hardener")
-            except Exception as e:
-                errors.append(f"hardener: {e}")
-        
-        # Race all strategies in parallel — first one wins
-        tasks = [
-            _aio.create_task(_try_direct()),
-            _aio.create_task(_try_ip_pool()),
-            _aio.create_task(_try_proxy_pool()),
-        ]
+        tasks.append(_aio.create_task(_try_proxy()))
         
         done, pending = await _aio.wait(tasks, timeout=6.0, return_when=_aio.FIRST_COMPLETED)
         
-        # Cancel remaining
         for t in pending:
             t.cancel()
         
         if conn_result:
-            r, w, method = conn_result
-            logger.debug("CONNECT %s:%d → %s", host, port, method)
+            r, w, ip = conn_result
+            logger.debug("CONNECT %s:%d → %s (waterfall %d IPs, %d errors)", host, port, ip, len(tasks), len(errors))
             return r, w
         
-        # If parallel failed, try hardener as last resort
+        logger.debug("CONNECT %s:%d ALL FAILED (%d IPs): %s", host, port, len(tasks), "; ".join(errors[:3]))
+        return None, None
+    
+    async def _resolve_all_ips(self, host: str) -> list[str]:
+        """Resolve host via multiple DNS sources. Returns unique IP list."""
+        ips = set()
+        
+        # 1. Cached successful IP (from previous waterfall)
+        cached = self._ip_cache.get(host)
+        if cached:
+            ips.add(cached)
+        
+        # 2. IP pool (pre-tested optimal IPs)
+        if self._ip_pool:
+            pool_best = self._ip_pool.get_best(host)
+            if pool_best:
+                ips.add(pool_best.ip)
+        
+        # 3. DoH multi-source resolution
         try:
-            from .scinet_hardening import get_scinet_hardener
-            hardener = get_scinet_hardener()
-            result = await hardener.execute("CONNECT", f"{host}:{port}")
-            if result and result.get("ok"):
-                logger.debug("CONNECT %s:%d → hardener", host, port)
-                return result["connection"]
+            from .external_access import ExternalDNS
+            dns = ExternalDNS()
+            for provider in ["cloudflare", "google", "quad9"]:
+                try:
+                    result = await dns.resolve(host, provider=provider)
+                    if result and hasattr(result, 'ips'):
+                        ips.update(result.ips)
+                except Exception:
+                    pass
         except Exception:
             pass
         
-        logger.debug("CONNECT %s:%d ALL FAILED: %s", host, port, "; ".join(errors[:3]))
-        return None, None
+        # 4. System DNS fallback
+        try:
+            import socket
+            addrs = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+            for addr in addrs:
+                ips.add(addr[4][0])
+        except Exception:
+            pass
+        
+        return list(ips)[:30]
 
     async def _http_connect_via_proxy(self, proxy_host: str, proxy_port: int,
                                        target_host: str, target_port: int):

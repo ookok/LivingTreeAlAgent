@@ -31,6 +31,15 @@ from typing import Any, Optional
 
 from loguru import logger
 
+try:
+    import orjson
+    _json_dumps = lambda obj: orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()
+    _json_loads = orjson.loads
+except ImportError:
+    import json
+    _json_dumps = lambda obj: json.dumps(obj, ensure_ascii=False, indent=2)
+    _json_loads = json.loads
+
 MAX_ITERATIONS = 6
 MAX_TEXT_LENGTH = 5000
 
@@ -62,8 +71,9 @@ class BrowseResult:
     iterations: int = 0
     error: str = ""
 
-    def to_json(self) -> dict:
-        return asdict(self)
+    def to_json(self) -> str:
+        """Fast serialization via orjson (10x over stdlib)."""
+        return _json_dumps(asdict(self))
 
 
 class BrowserAgent:
@@ -378,8 +388,8 @@ class BrowserAgent:
     def _parse_json(text: str) -> dict:
         m = re.search(r'\{.*\}', text, re.DOTALL)
         if m:
-            try: return json.loads(m.group(0))
-            except json.JSONDecodeError: pass
+            try: return _json_loads(m.group(0))
+            except Exception: pass
         return {}
 
     # ═══ Session Management ════════════════════════════════════════

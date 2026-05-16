@@ -537,6 +537,17 @@ class HolisticElection:
 
     # ===== Pattern 2: Mixture of Judges (self and cross assessments) =====
     def detect_task_type(self, query: str) -> str:
+        """Detect task type: embedding-based with keyword fallback."""
+        try:
+            from .adaptive_classifier import get_adaptive_classifier
+            ac = get_adaptive_classifier()
+            cat, _ = ac.classify(query, ac.TASK_TYPES, "tasks")
+            return cat
+        except Exception:
+            pass
+        return self._detect_task_type_kw(query)
+
+    def _detect_task_type_kw(self, query: str) -> str:
         """Heuristic mapping from user query to task type.
         Returns one of: code, reasoning, search, multimodal, chat, general
         """

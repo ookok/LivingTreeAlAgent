@@ -814,6 +814,14 @@ class TreeLLM:
                 if result and result.text:
                     return ProviderResult(text=result.text, provider=result.provider,
                                          success=True, elapsed_ms=result.elapsed_ms)
+                
+                # Speculative decoding fallback
+                from .innovation import get_innovation_engine
+                inn = get_innovation_engine(self)
+                spec = await inn.speculative_chat(messages, draft_k=4)
+                if spec and spec.text and spec.speedup > 1.2:
+                    return ProviderResult(text=spec.text, provider=spec.verifier,
+                                         success=True, elapsed_ms=spec.elapsed_ms)
             except Exception:
                 pass
 

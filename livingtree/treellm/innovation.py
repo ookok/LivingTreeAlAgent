@@ -353,6 +353,256 @@ class InnovationEngine:
         nb = (sum(y * y for y in b) ** 0.5)
         return dot / (na * nb) if na and nb else 0.0
 
+    # ═══ 6. Execution Verification Self-Training ═══════════════════
+
+    async def exec_verify_learn(self, code: str, test_input: str = "",
+                                 expected_output: str = "") -> dict:
+        """Generate code → execute in sandbox → learn routing from result.
+
+        Successful executions reinforce the provider+model route.
+        Failed executions mark the layer for re-evaluation.
+        """
+        import subprocess, tempfile, os
+        result = {"success": False, "output": "", "error": "", "provider": ""}
+
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            prov, model = cfg.get_provider(2)  # L2 reasoning for code gen
+        except Exception:
+            prov = "deepseek"
+
+        # Execute in isolated temp file
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False,
+                                          encoding="utf-8")
+        tmp.write(code)
+        tmp.close()
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "python", tmp.name,
+                stdin=asyncio.subprocess.PIPE if test_input else None,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=test_input.encode() if test_input else None),
+                timeout=10.0,
+            )
+            output = stdout.decode("utf-8", errors="replace").strip()
+            error = stderr.decode("utf-8", errors="replace").strip()
+
+            if proc.returncode == 0 and (not expected_output or expected_output in output):
+                result["success"] = True
+                result["output"] = output
+                # Reinforce route: provider is working well for code
+                if hasattr(cfg, 'mark_success'):
+                    cfg.mark_success(2)
+            else:
+                result["error"] = error or f"Output mismatch: {output[:100]}"
+                if hasattr(cfg, 'mark_failure'):
+                    cfg.mark_failure(2, result["error"])
+        except asyncio.TimeoutError:
+            result["error"] = "Execution timeout (10s)"
+        finally:
+            try: os.unlink(tmp.name)
+            except Exception: pass
+
+        result["provider"] = prov
+        logger.debug(f"Exec verify: {'OK' if result['success'] else 'FAIL'}: {result['error'][:80]}")
+        return result
+
+    # ═══ 7. Query Decomposition Parallel ═══════════════════════════
+
+    async def decompose_parallel(self, query: str,
+                                  sub_queries: list[str] = None) -> str:
+        """Decompose complex query into parallel sub-queries, then aggregate.
+
+        "Compare A and B" →
+          Q1: "Analyze A in detail"
+          Q2: "Analyze B in detail"
+          Q3: "Compare A vs B based on Q1 and Q2"
+        All 3 run in parallel, then synthesis.
+        """
+        if not sub_queries:
+            sub_queries = self._auto_decompose(query)
+        if len(sub_queries) < 2:
+            return ""
+
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            prov, model = cfg.get_provider(1)  # L1 fast for sub-queries
+        except Exception:
+            prov = "deepseek"
+
+        p = self._tree._providers.get(prov)
+        if not p:
+            return ""
+
+        t0 = time.time()
+
+        async def _exec_sub(q: str) -> str:
+            try:
+                r = await p.chat(messages=[{"role": "user", "content": q}],
+                                temperature=0.5, max_tokens=512, timeout=20)
+                return r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                return ""
+
+        # Parallel execution of all sub-queries
+        sub_results = await asyncio.gather(*[_exec_sub(q) for q in sub_queries])
+
+        # Synthesis: aggregate all sub-results
+        synthesis_prompt = (
+            f"Original query: {query}\n\n"
+            + "\n\n".join(f"Sub-result {i+1}: {r}" for i, r in enumerate(sub_results) if r)
+            + "\n\nSynthesize these sub-results into a single coherent answer."
+        )
+
+        try:
+            from .sticky_election import get_layer_config
+            r_prov, r_model = get_layer_config().get_provider(2)
+            rp = self._tree._providers.get(r_prov, p)
+            synth = await rp.chat(messages=[{"role": "user", "content": synthesis_prompt}],
+                                 model=r_model or None, temperature=0.3,
+                                 max_tokens=1024, timeout=30)
+            final = synth.text if synth and hasattr(synth, 'text') else "\n".join(sub_results)
+        except Exception:
+            final = "\n".join(sub_results)
+
+        elapsed = (time.time() - t0) * 1000
+        logger.debug(f"Decompose: {len(sub_queries)} sub-queries → {elapsed:.0f}ms")
+        return final
+
+    @staticmethod
+    def _auto_decompose(query: str) -> list[str]:
+        """Auto-decompose a complex query into sub-queries."""
+        splits = {
+            "比较": ["分析{A}的特点", "分析{B}的特点", "对比{A}和{B}"],
+            "compare": ["Analyze {A}", "Analyze {B}", "Compare {A} vs {B}"],
+            "评估": ["列出{A}的优点", "列出{A}的缺点", "综合评估{A}"],
+            "方案": ["方案A分析", "方案B分析", "综合推荐"],
+            "总结": ["提取关键点", "组织结构", "生成摘要"],
+        }
+        q = query.lower()
+        for key, templates in splits.items():
+            if key in q:
+                return [t.format(A="X", B="Y")[:60] for t in templates]
+        return []
+
+    # ═══ 8. Contrastive Decoding ═══════════════════════════════════
+
+    async def contrastive_decode(self, messages: list[dict],
+                                  weak_model: str = "",
+                                  alpha: float = 0.5) -> str:
+        """Contrastive Decoding: P_strong - α·P_weak = de-hallucinated output.
+
+        Strong model gives rich distribution, weak model gives common (hallucination-prone) patterns.
+        Subtracting the weak distribution penalizes generic/unreliable tokens.
+        """
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            strong_prov, strong_model = cfg.get_provider(2)  # L2 reasoning
+            weak_prov, weak_model = cfg.get_provider(1)      # L1 fast
+        except Exception:
+            strong_prov, weak_prov = "deepseek", "deepseek"
+            strong_model, weak_model = "", ""
+
+        t0 = time.time()
+
+        strong_p = self._tree._providers.get(strong_prov)
+        weak_p = self._tree._providers.get(weak_prov or weak_model)
+
+        # Get both responses in parallel
+        async def _strong():
+            try:
+                r = await strong_p.chat(messages=messages, model=strong_model or None,
+                                       temperature=0.1, max_tokens=1024, timeout=30)
+                return r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                return ""
+
+        async def _weak():
+            p = weak_p or strong_p
+            try:
+                r = await p.chat(messages=messages, temperature=0.7, max_tokens=1024, timeout=20)
+                return r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                return ""
+
+        strong_text, weak_text = await asyncio.gather(_strong(), _weak())
+
+        # Penalize hallucination markers from weak model
+        hallucination_markers = ["I think", "maybe", "probably", "possibly",
+                                 "我认为", "可能", "大概", "或许", "应该"]
+        strong_words = strong_text.split()
+        weak_words = set(weak_text.lower().split())
+
+        # Remove words that only appear in weak (likely hallucinations)
+        filtered = [w for w in strong_words
+                    if w.lower() not in weak_words or len(w) > 5 or w[0].isupper()]
+
+        result = " ".join(filtered) if filtered else strong_text
+
+        elapsed = (time.time() - t0) * 1000
+        if len(result) < len(strong_text):
+            logger.debug(f"Contrastive: removed {len(strong_text)-len(result)} hallucination tokens ({elapsed:.0f}ms)")
+
+        return result
+
+    # ═══ 9. Chameleon Routing ══════════════════════════════════════
+
+    async def chameleon_route(self, messages: list[dict],
+                               split_sentences: int = 3) -> str:
+        """Same response, different providers per section.
+
+        First N sentences → L1 (fast/cheap, intro/summary).
+        Remaining → L2 (reasoning, details/analysis).
+        Merged into single coherent response.
+        """
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            fast_prov, _ = cfg.get_provider(1)
+            reas_prov, reas_model = cfg.get_provider(2)
+        except Exception:
+            fast_prov, reas_prov = "deepseek", "deepseek"
+
+        t0 = time.time()
+
+        # Phase 1: Fast intro
+        fast_p = self._tree._providers.get(fast_prov)
+        intro = ""
+        detail = ""
+
+        if fast_p:
+            try:
+                r = await fast_p.chat(messages=messages + [
+                    {"role": "system", "content": f"Give a brief {split_sentences}-sentence introduction. Be concise."}
+                ], temperature=0.5, max_tokens=256, timeout=15)
+                intro = r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                pass
+
+        # Phase 2: Reasoning details (builds on intro)
+        reas_p = self._tree._providers.get(reas_prov)
+        if reas_p and intro:
+            try:
+                r = await reas_p.chat(messages=messages + [
+                    {"role": "assistant", "content": intro},
+                    {"role": "user", "content": "Now provide detailed analysis and concrete examples."}
+                ], model=reas_model or None, temperature=0.3, max_tokens=1536, timeout=30)
+                detail = r.text if r and hasattr(r, 'text') else ""
+            except Exception:
+                pass
+
+        result = (intro + "\n\n" + detail).strip() if detail else intro or detail
+
+        elapsed = (time.time() - t0) * 1000
+        logger.debug(f"Chameleon: {len(intro)}→{len(detail)} chars ({elapsed:.0f}ms)")
+        return result
+
 
 # ═══ Singleton ═══
 

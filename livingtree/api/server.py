@@ -172,6 +172,10 @@ def create_app(hub=None, config=None) -> FastAPI:
         async def serve_evolution():
             return FileResponse(str(web_root / "evolution.html"))
 
+        @app.get("/db-explorer")
+        async def serve_db_explorer():
+            return FileResponse(str(web_root / "db-explorer.html"))
+
         @app.get("/favicon.ico")
         async def serve_favicon():
             return FileResponse(str(web_root / "assets" / "favicon.ico")) if (web_root / "assets" / "favicon.ico").exists() else Response(status_code=204)

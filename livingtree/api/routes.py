@@ -3101,3 +3101,42 @@ def _get_user_id_from_request(request: Request) -> str:
             return HTMLResponse(content=html)
         except Exception as e:
             return HTMLResponse(content=f'<div class="text-red-500">Cognimap: {e}</div>')
+
+    @app.post("/api/db/connect")
+    async def api_db_connect(request: Request):
+        """Connect to a SQLite database file."""
+        try:
+            data = await request.json()
+            path = data.get("path", ".livingtree/living_store.db")
+            from ..infrastructure.db_hub import AsyncDB
+            db = AsyncDB(path)
+            await db.connect()
+            request.app.state._db_connection = db
+            return {"ok": True, "path": path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/db/query")
+    async def api_db_query(request: Request):
+        """Execute SQL query and return results."""
+        try:
+            data = await request.json()
+            sql = data.get("sql", "SELECT 1")
+            limit = data.get("limit", 500)
+            db = getattr(request.app.state, '_db_connection', None)
+            if not db:
+                from ..infrastructure.db_hub import AsyncDB
+                db = AsyncDB(".livingtree/living_store.db")
+                await db.connect()
+                request.app.state._db_connection = db
+
+            if sql.strip().upper().startswith(("SELECT", "PRAGMA", "EXPLAIN")):
+                rows = await db.fetch_all(sql)
+                columns = list(rows[0].keys()) if rows else []
+                return {"columns": columns, "rows": rows[:limit], "total": len(rows)}
+            else:
+                count = await db.execute(sql)
+                return {"columns": [], "rows": [], "affected": count}
+        except Exception as e:
+            return {"error": str(e)[:200], "columns": [], "rows": []}
+

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🗄️ DB Explorer — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .sql-editor { font-family: 'JetBrains Mono', 'Fira Code', monospace; tab-size: 2; }
+  .sql-keyword { color: #2563eb; }
+  .sql-string { color: #16a34a; }
+  .sql-number { color: #d97706; }
+  .sql-comment { color: #9ca3af; font-style: italic; }
+  tr:hover td { background: #f0f9ff; }
+  .table-header { position: sticky; top: 0; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+</style>
+</head>
+<body class="h-full bg-gray-50 flex">
+
+<!-- ═══ Sidebar ═══ -->
+<aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+  <div class="p-4 border-b border-gray-100">
+    <h1 class="text-sm font-bold text-gray-800">🗄️ DB Explorer</h1>
+    <p class="text-xs text-gray-400 mt-0.5">数据库查询与分析</p>
+  </div>
+
+  <!-- Connection -->
+  <div class="p-3 border-b border-gray-100">
+    <label class="text-xs text-gray-500 mb-1 block">数据库文件</label>
+    <input type="file" id="db-file" accept=".db,.sqlite,.sqlite3" onchange="connectDB(this.files[0])"
+      class="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+    <div id="conn-status" class="text-xs text-gray-400 mt-1">未连接</div>
+  </div>
+
+  <!-- Schema Tree -->
+  <nav class="flex-1 overflow-y-auto p-2" id="schema-tree">
+    <p class="text-xs text-gray-400 p-2">选择数据库文件开始</p>
+  </nav>
+
+  <!-- Quick Actions -->
+  <div class="p-2 border-t border-gray-100">
+    <button onclick="quickQuery('tables')" class="w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 rounded">📋 显示所有表</button>
+    <button onclick="quickQuery('sample')" class="w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 rounded">🎲 随机抽样</button>
+    <button onclick="quickQuery('stats')" class="w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 rounded">📊 表统计</button>
+  </div>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<main class="flex-1 flex flex-col min-w-0">
+  <!-- Toolbar -->
+  <header class="flex items-center gap-2 px-3 py-1.5 bg-white border-b border-gray-200 flex-shrink-0">
+    <button onclick="runQuery()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors flex items-center gap-1">
+      <span>▶</span> 运行
+    </button>
+    <button onclick="runQuery(true)" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-lg transition-colors">📊 EXPLAIN</button>
+    <button onclick="formatSQL()" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-lg transition-colors">🔤 格式化</button>
+    <span class="flex-1"></span>
+    <span id="row-count" class="text-xs text-gray-400"></span>
+    <span id="query-time" class="text-xs text-gray-300"></span>
+  </header>
+
+  <!-- Editor -->
+  <div class="border-b border-gray-200 bg-white flex-shrink-0">
+    <textarea id="sql-editor" rows="4" placeholder="SELECT * FROM sqlite_master;"
+      class="sql-editor w-full px-4 py-3 text-sm text-gray-700 outline-none resize-none border-0"
+      onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();runQuery()}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,200)+'px'"
+    >SELECT * FROM sqlite_master WHERE type='table';</textarea>
+  </div>
+
+  <!-- Results -->
+  <div class="flex-1 overflow-auto bg-white" id="results-area">
+    <div class="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div class="text-center">
+        <div class="text-4xl mb-2">🗄️</div>
+        <p>选择数据库文件，编写 SQL 查询</p>
+        <p class="text-xs mt-1">Ctrl+Enter 运行 | 点击侧边栏表名快速查询</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <footer class="flex items-center gap-4 px-3 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 flex-shrink-0">
+    <span id="db-path">未连接</span>
+    <span class="flex-1"></span>
+    <span>LivingTree DB Explorer</span>
+  </footer>
+</main>
+
+<!-- ═══ Logic ═══ -->
+<script>
+let dbPath = '';
+let currentTable = '';
+
+/* Connection */
+async function connectDB(file) {
+  if (!file) return;
+  dbPath = file.name;
+  document.getElementById('conn-status').innerHTML = '⏳ 连接中...';
+  document.getElementById('db-path').textContent = file.name;
+
+  try {
+    const r = await fetch('/api/db/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: file.name, file: true})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('conn-status').innerHTML = '<span class="text-green-600">✅ 已连接</span>';
+      loadSchema();
+    } else {
+      document.getElementById('conn-status').innerHTML = '<span class="text-red-500">❌ 连接失败</span>';
+    }
+  } catch(e) {
+    document.getElementById('conn-status').innerHTML = '<span class="text-red-500">❌ ' + e.message + '</span>';
+  }
+}
+
+/* Schema */
+async function loadSchema() {
+  try {
+    const r = await fetch('/api/db/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql: "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name"})
+    });
+    const d = await r.json();
+    if (!d.rows) return;
+
+    const tree = document.getElementById('schema-tree');
+    tree.innerHTML = d.rows.map(row => `
+      <div class="mb-1">
+        <div class="flex items-center gap-1 px-2 py-1 rounded cursor-pointer hover:bg-gray-50 text-xs"
+             onclick="selectTable('${row.name}')">
+          <span>${row.type==='view'?'👁️':'📋'}</span>
+          <span class="text-gray-700 truncate">${row.name}</span>
+        </div>
+        <div id="cols-${row.name}" class="hidden pl-6 text-xs text-gray-400"></div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+async function selectTable(name) {
+  currentTable = name;
+  document.getElementById('sql-editor').value = `SELECT * FROM ${name} LIMIT 100;`;
+  // Load columns
+  const colsDiv = document.getElementById('cols-'+name);
+  if (colsDiv.innerHTML) { colsDiv.classList.toggle('hidden'); return; }
+  try {
+    const r = await fetch('/api/db/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql: `PRAGMA table_info(${name})`})
+    });
+    const d = await r.json();
+    colsDiv.innerHTML = (d.rows||[]).map(c => `<div>${c.pk?'🔑':''} ${c.name} <span class="text-gray-300">${c.type||''}</span></div>`).join('');
+    colsDiv.classList.remove('hidden');
+  } catch(e) {}
+}
+
+/* Query */
+async function runQuery(explain) {
+  let sql = document.getElementById('sql-editor').value.trim();
+  if (!sql) return;
+  if (explain) sql = 'EXPLAIN QUERY PLAN ' + sql;
+
+  const area = document.getElementById('results-area');
+  area.innerHTML = '<div class="flex items-center justify-center h-full"><div class="w-6 h-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div></div>';
+
+  const t0 = performance.now();
+  try {
+    const r = await fetch('/api/db/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql, limit: 500})
+    });
+    const d = await r.json();
+    const elapsed = (performance.now() - t0).toFixed(0);
+
+    if (d.error) { area.innerHTML = `<div class="p-4 text-red-500 text-sm">❌ ${d.error}</div>`; return; }
+
+    const rows = d.rows || [];
+    const cols = d.columns || [];
+    document.getElementById('row-count').textContent = `${rows.length} 行`;
+    document.getElementById('query-time').textContent = `${elapsed}ms`;
+
+    if (!rows.length) { area.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400 text-sm">查询结果为空</div>'; return; }
+
+    // Build table
+    let html = '<div class="overflow-auto max-h-full"><table class="w-full text-xs border-collapse"><thead class="table-header bg-gray-50">';
+    html += '<tr>' + cols.map(c => `<th class="px-3 py-2 text-left font-medium text-gray-600 border-b border-gray-200 whitespace-nowrap">${c}</th>`).join('') + '</tr></thead><tbody>';
+
+    for (const row of rows.slice(0, 500)) {
+      html += '<tr class="border-b border-gray-100">';
+      for (const col of cols) {
+        const val = row[col];
+        const display = val === null ? '<span class="text-gray-300 italic">NULL</span>' :
+                       typeof val === 'object' ? JSON.stringify(val).slice(0, 100) :
+                       String(val).slice(0, 200);
+        html += `<td class="px-3 py-1.5 text-gray-700 max-w-xs truncate" title="${String(val||'').slice(0,200)}">${display}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    area.innerHTML = html;
+
+  } catch(e) {
+    area.innerHTML = `<div class="p-4 text-red-500 text-sm">❌ ${e.message}</div>`;
+  }
+}
+
+/* Quick queries */
+async function quickQuery(type) {
+  let sql = '';
+  if (type === 'tables') sql = "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name;";
+  else if (type === 'sample' && currentTable) sql = `SELECT * FROM ${currentTable} ORDER BY RANDOM() LIMIT 10;`;
+  else if (type === 'stats' && currentTable) {
+    sql = `SELECT COUNT(*) as rows FROM ${currentTable};`;
+  }
+  if (sql) { document.getElementById('sql-editor').value = sql; runQuery(); }
+}
+
+/* Format */
+function formatSQL() {
+  const el = document.getElementById('sql-editor');
+  let sql = el.value;
+  const keywords = ['SELECT','FROM','WHERE','AND','OR','INSERT','UPDATE','DELETE','CREATE','ALTER','DROP','JOIN','LEFT','RIGHT','INNER','OUTER','GROUP BY','ORDER BY','LIMIT','OFFSET','HAVING','UNION','INTO','SET','VALUES','ON','AS','COUNT','SUM','AVG','MAX','MIN'];
+  for (const kw of keywords) {
+    sql = sql.replace(new RegExp('\\b'+kw+'\\b', 'gi'), kw);
+  }
+  el.value = sql;
+}
+</script>
+</body>
+</html>

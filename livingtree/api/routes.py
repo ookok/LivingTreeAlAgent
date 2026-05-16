@@ -3140,3 +3140,36 @@ def _get_user_id_from_request(request: Request) -> str:
         except Exception as e:
             return {"error": str(e)[:200], "columns": [], "rows": []}
 
+    @app.post("/api/db/nl-to-sql")
+    async def api_db_nl_to_sql(request: Request):
+        """Convert natural language to SQL via TreeLLM."""
+        try:
+            data = await request.json()
+            question = data.get("question", "")
+
+            # Get schema context
+            db = getattr(request.app.state, '_db_connection', None)
+            schema_hint = ""
+            if db:
+                tables = await db.fetch_all("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name")
+                schema_hint = "\n".join(
+                    f"Table {t['name']}: {t.get('sql','')[:200]}" for t in (tables or [])[:10])
+
+            from ..treellm.core import TreeLLM
+            llm = TreeLLM.from_config()
+            result = await llm.chat(
+                [{"role": "system", "content": f"你是SQL专家。根据以下数据库Schema，将用户的中文问题转换为SQLite SQL语句。只输出SQL，不加解释。\n\nSchema:\n{schema_hint}"},
+                 {"role": "user", "content": question}],
+                max_tokens=500, temperature=0.0, task_type="code",
+            )
+            sql = getattr(result, 'text', '') or ""
+            # Extract SQL from markdown code blocks if present
+            m = re.search(r'```(?:sql)?\s*\n?(.*?)\n?```', sql, re.DOTALL)
+            if m: sql = m.group(1).strip()
+            # Clean up
+            sql = sql.strip().rstrip(';') + ';'
+
+            return {"sql": sql, "question": question}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+

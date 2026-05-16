@@ -62,6 +62,10 @@
 
   <!-- Editor -->
   <div class="border-b border-gray-200 bg-white flex-shrink-0">
+    <div class="flex items-center gap-1 px-3 py-1 bg-blue-50 border-b border-blue-100">
+      <button onclick="toggleNLMode()" id="nl-toggle" class="text-xs px-2 py-0.5 rounded-full bg-white text-gray-500 border border-gray-200 hover:border-blue-300 transition-colors">💬 自然语言</button>
+      <span id="nl-hint" class="text-xs text-blue-400 hidden ml-1">输入中文描述，AI 自动生成 SQL</span>
+    </div>
     <textarea id="sql-editor" rows="4" placeholder="SELECT * FROM sqlite_master;"
       class="sql-editor w-full px-4 py-3 text-sm text-gray-700 outline-none resize-none border-0"
       onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();runQuery()}"
@@ -233,6 +237,58 @@ function formatSQL() {
   }
   el.value = sql;
 }
+
+/* NL to SQL */
+let nlMode = false;
+function toggleNLMode() {
+  nlMode = !nlMode;
+  const btn = document.getElementById('nl-toggle');
+  const hint = document.getElementById('nl-hint');
+  const editor = document.getElementById('sql-editor');
+  if (nlMode) {
+    btn.className = 'text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white transition-colors';
+    btn.textContent = '💬 NL模式';
+    hint.classList.remove('hidden');
+    editor.placeholder = '用中文描述你想查询的内容，例如：查看所有文档表的内容，按创建时间排序...';
+    editor.value = '';
+  } else {
+    btn.className = 'text-xs px-2 py-0.5 rounded-full bg-white text-gray-500 border border-gray-200 hover:border-blue-300 transition-colors';
+    btn.textContent = '💬 自然语言';
+    hint.classList.add('hidden');
+    editor.placeholder = 'SELECT * FROM sqlite_master;';
+  }
+}
+
+async function runQuery(explain) {
+  let sql = document.getElementById('sql-editor').value.trim();
+  if (!sql) return;
+
+  // NL mode: convert to SQL via LLM
+  if (nlMode && !explain) {
+    const area = document.getElementById('results-area');
+    area.innerHTML = '<div class="flex flex-col items-center justify-center h-full gap-2"><div class="w-6 h-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div><span class="text-xs text-gray-400">AI 正在生成 SQL...</span></div>';
+    try {
+      const r = await fetch('/api/db/nl-to-sql', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question: sql})
+      });
+      const d = await r.json();
+      if (d.sql) {
+        document.getElementById('sql-editor').value = d.sql;
+        sql = d.sql;
+        nlMode = false; toggleNLMode(); // Switch back to SQL mode
+      } else {
+        area.innerHTML = `<div class="p-4 text-red-500 text-sm">❌ NL→SQL 失败: ${d.error||'无法生成'}</div>`;
+        return;
+      }
+    } catch(e) {
+      area.innerHTML = `<div class="p-4 text-red-500 text-sm">❌ ${e.message}</div>`;
+      return;
+    }
+  }
+
+  if (explain) sql = 'EXPLAIN QUERY PLAN ' + sql;
 </script>
 </body>
 </html>

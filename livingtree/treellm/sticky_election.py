@@ -1,26 +1,34 @@
-"""Sticky Layer Election — startup-elected providers, locked until failure.
+"""Sticky Layer Election with Continuous Attractor stabilization.
 
-Problem: Per-request provider election introduces latency variance and
-cost unpredictability. Providers should be elected once at startup and
-locked, with per-layer re-election only on failure.
+Based on: Representation Transfer via Invariant Input-driven Continuous
+  Attractors for Fast Domain Adaptation (Communications Biology, 2026)
+
+Core insight: Provider election converges to stable attractor states.
+  Same intent with different phrasing → same attractor basin.
+  Small input perturbations don't cause unnecessary re-elections.
 
 Architecture:
-  L0 (primary)    → fastest/cheapest provider for simple tasks
-  L1 (fallback)   → balanced provider for routine tasks
-  L2 (reasoning)  → best reasoning capability
-  L3 (creative)   → highest quality generation
-  L4 (emergency)  → last-resort provider when all above fail
+  L0 (primary)    → cheapest + fastest
+  L1 (fallback)   → balanced
+  L2 (reasoning)  → highest reasoning score
+  L3 (creative)   → highest quality
+  L4 (emergency)  → most survivable
+
+Attractor Basin:
+  Each elected provider creates an attractor basin — neighboring
+  providers in the same family/tier that share similar characteristics.
+  On failure, basin members are tried first before full re-election.
+  Only when entire basin fails → re-elect the layer.
 
 Flow:
-  Startup → elect all 5 layers → lock → no re-election
-  Request → use L0; if fail → L1; if fail → ... L4
-  Layer fail → mark degraded → re-elect ONLY that layer → relock
+  Startup → elect all 5 layers → compute attractor basins → lock
+  Request → use L0; fail → try L0 basin → fail → try L1 → ... L4
+  Layer fail → try basin members → all fail → re-elect layer → new basin
 
 Integration:
   election = get_sticky_election()
-  await election.elect_all()  # called once at startup
-  provider = election.get_provider(layer=0)  # get cached L0
-  election.mark_failure(layer=0)  # on error, triggers re-election
+  await election.elect_all()
+  binding = election.get_for_request(0, intent="weather query")
 """
 
 from __future__ import annotations
@@ -35,7 +43,7 @@ from loguru import logger
 
 @dataclass
 class LayerBinding:
-    """A locked provider binding for one election layer."""
+    """A locked provider + its attractor basin."""
     layer: int
     provider_name: str
     model: str = ""
@@ -44,10 +52,19 @@ class LayerBinding:
     success_count: int = 0
     last_error: str = ""
     degraded: bool = False
+    # Continuous attractor basin: same-family providers that can substitute
+    attractor_basin: list[str] = field(default_factory=list)
+    basin_failures: dict[str, int] = field(default_factory=dict)
 
 
 class StickyElection:
-    """Startup-elected provider layers, locked until failure."""
+    """Startup-elected provider layers with attractor-based fallback.
+
+    Each layer's provider forms an attractor basin — neighboring providers
+    that share the same base family or tier. On failure, basin members
+    are tried first (they're within the same attractor), avoiding unnecessary
+    full re-elections for minor perturbations.
+    """
 
     LAYER_COUNT = 5
     LAYER_NAMES = {0: "primary", 1: "fallback", 2: "reasoning", 3: "creative", 4: "emergency"}
@@ -72,39 +89,39 @@ class StickyElection:
     # ═══ Election ══════════════════════════════════════════════════
 
     async def elect_all(self) -> dict[int, LayerBinding]:
-        """Run full L0-L4 election once at startup."""
+        """Full L0-L4 election + attractor basin computation."""
         with self._lock:
             for layer in range(self.LAYER_COUNT):
                 binding = await self._elect_layer(layer)
+                binding.attractor_basin = self._compute_basin(binding)
                 self._layers[layer] = binding
-                logger.info(f"StickyElection L{layer} ({self.LAYER_NAMES[layer]}): {binding.provider_name}/{binding.model}")
+                logger.info(
+                    f"StickyElection L{layer} ({self.LAYER_NAMES[layer]}): "
+                    f"{binding.provider_name}/{binding.model} "
+                    f"[basin={len(binding.attractor_basin)}]"
+                )
             self._initialized = True
             return dict(self._layers)
 
     async def reelect_layer(self, layer: int) -> LayerBinding:
-        """Re-elect ONLY the specified layer (on failure)."""
+        """Re-elect a single layer + recompute its attractor basin."""
         with self._lock:
             old = self._layers.get(layer)
             binding = await self._elect_layer(layer, exclude=old.provider_name if old else "")
+            binding.attractor_basin = self._compute_basin(binding)
             self._layers[layer] = binding
             if old:
-                logger.warning(f"StickyElection L{layer} re-elected: {old.provider_name}→{binding.provider_name} (failures={old.failure_count})")
+                logger.warning(
+                    f"StickyElection L{layer} re-elected: "
+                    f"{old.provider_name}→{binding.provider_name} "
+                    f"(old failures={old.failure_count}, basin exhausted={len(old.basin_failures)})"
+                )
             return binding
 
     async def _elect_layer(self, layer: int, exclude: str = "") -> LayerBinding:
-        """Elect the best provider for a specific layer.
-
-        Layer-specific criteria:
-          L0: cheapest + fastest
-          L1: balanced
-          L2: highest reasoning score
-          L3: highest quality/creativity
-          L4: most reliable (survivability)
-        """
         candidates = self._get_candidates()
         if exclude:
             candidates = [c for c in candidates if c.get("name") != exclude]
-
         if not candidates:
             return LayerBinding(layer=layer, provider_name="unknown", model="unknown",
                                elected_at=time.time())
@@ -118,7 +135,7 @@ class StickyElection:
             best = max(candidates, key=lambda c: c.get("reasoning_score", 0) or c.get("capability_score", 0))
         elif layer == 3:
             best = max(candidates, key=lambda c: c.get("quality_score", 0) or c.get("success_rate", 0))
-        else:  # L4 emergency
+        else:
             best = max(candidates, key=lambda c: c.get("survivability", 0) or c.get("success_rate", 0))
 
         return LayerBinding(
@@ -128,40 +145,142 @@ class StickyElection:
             elected_at=time.time(),
         )
 
-    # ═══ Provider Management ═══════════════════════════════════════
+    # ═══ Attractor Basin (continuous attractor network) ═══════════
 
-    def get_provider(self, layer: int = 0) -> LayerBinding | None:
-        """Get the locked provider for a layer. Returns None if not elected yet."""
-        return self._layers.get(layer)
+    def _compute_basin(self, binding: LayerBinding) -> list[str]:
+        """Compute attractor basin — providers in the same family/tier.
 
-    def mark_failure(self, layer: int, error: str = ""):
-        """Mark layer provider as failed — triggers degradation."""
+        Two providers share an attractor if:
+          - Same base provider family (e.g., deepseek→deepseek-r1)
+          - OR same tier (flash/pro/reasoning/small)
+          - OR similar capability profile (<0.3 distance)
+
+        Basin members can substitute for the elected provider
+        without triggering a full layer re-election.
+        """
+        basin = []
+        candidates = self._get_candidates()
+        elected = next((c for c in candidates if c.get("name") == binding.provider_name), {})
+
+        for c in candidates:
+            name = c.get("name", "")
+            if name == binding.provider_name:
+                continue
+
+            # Same base family (e.g., deepseek + deepseek-r1)
+            elected_base = binding.provider_name.split("-")[0]
+            candidate_base = name.split("-")[0]
+            if elected_base == candidate_base and elected_base:
+                basin.append(name)
+                continue
+
+            # Same tier (flash/reasoning/pro/small)
+            elected_tier = binding.provider_name.split("-")[-1] if "-" in binding.provider_name else ""
+            candidate_tier = name.split("-")[-1] if "-" in name else ""
+            if elected_tier and elected_tier == candidate_tier:
+                basin.append(name)
+                continue
+
+            # Similar capability (cosine distance < 0.3)
+            if self._capability_distance(elected, c) < 0.3:
+                basin.append(name)
+                continue
+
+        return basin[:5]  # max 5 basin members
+
+    @staticmethod
+    def _capability_distance(a: dict, b: dict) -> float:
+        """Distance between two providers' capability profiles (0-1)."""
+        dims = ["success_rate", "reasoning_score", "capability_score", "quality_score"]
+        diff = sum(abs(a.get(d, 0) - b.get(d, 0)) for d in dims)
+        return diff / max(len(dims), 1)
+
+    # ═══ Provider Access ═══════════════════════════════════════════
+
+    def get_for_request(self, layer: int = 0,
+                        intent: str = "") -> tuple[str, str, bool]:
+        """Get provider for a request. Returns (provider_name, model, is_primary).
+
+        If the layer's provider is available → return it.
+        If failed → try attractor basin members.
+        Only the primary binding is returned here; fallback
+        to higher layers is handled by the caller (TreeLLM).
+        """
+        binding = self._layers.get(layer)
+        if not binding:
+            return "", "", False
+
+        # Primary: elected provider
+        if not binding.degraded or binding.basin_failures.get(binding.provider_name, 0) < 2:
+            return binding.provider_name, binding.model, True
+
+        # Basin fallback: try attractor neighbors
+        for basin_name in binding.attractor_basin:
+            basin_fails = binding.basin_failures.get(basin_name, 0)
+            if basin_fails < 2:
+                logger.debug(f"StickyElection L{layer}: basin fallback {binding.provider_name}→{basin_name}")
+                return basin_name, self._get_model(basin_name), False
+
+        # All basin members exhausted → need re-election
+        return "", "", False
+
+    def mark_failure(self, layer: int, provider_name: str = "", error: str = ""):
+        """Mark a provider as failed at a layer."""
         with self._lock:
-            if layer in self._layers:
-                binding = self._layers[layer]
-                binding.failure_count += 1
-                binding.last_error = error
-                if binding.failure_count >= 2:
-                    binding.degraded = True
-                    logger.warning(f"StickyElection L{layer} DEGRADED: {binding.provider_name} ({error[:80]})")
+            if layer not in self._layers:
+                return
+            binding = self._layers[layer]
+            binding.failure_count += 1
+            binding.last_error = error
 
-    def mark_success(self, layer: int):
-        """Mark layer provider as successful."""
+            if provider_name:
+                fails = binding.basin_failures.get(provider_name, 0) + 1
+                binding.basin_failures[provider_name] = fails
+
+            # Degrade if primary provider has 2+ failures
+            if binding.failure_count >= 2:
+                binding.degraded = True
+                logger.warning(
+                    f"StickyElection L{layer} DEGRADED: {binding.provider_name} "
+                    f"(basin exhausted={len([k for k,v in binding.basin_failures.items() if v>=2])}/{len(binding.attractor_basin)})"
+                )
+
+    def mark_success(self, layer: int, provider_name: str = ""):
+        """Mark success — reduces failure count for recovery."""
         with self._lock:
-            if layer in self._layers:
-                binding = self._layers[layer]
-                binding.success_count += 1
-                if binding.failure_count > 0:
-                    binding.failure_count = max(0, binding.failure_count - 1)
+            binding = self._layers.get(layer)
+            if not binding:
+                return
+            binding.success_count += 1
+            if binding.failure_count > 0:
+                binding.failure_count = max(0, binding.failure_count - 1)
+            if provider_name and provider_name in binding.basin_failures:
+                binding.basin_failures[provider_name] = max(
+                    0, binding.basin_failures[provider_name] - 1
+                )
+            # Auto-recover if failures dropped below threshold
+            if binding.failure_count < 2 and binding.degraded:
+                binding.degraded = False
+                logger.info(f"StickyElection L{layer} RECOVERED: {binding.provider_name}")
 
     def is_degraded(self, layer: int) -> bool:
         binding = self._layers.get(layer)
         return binding.degraded if binding else False
 
+    def needs_reelection(self, layer: int) -> bool:
+        """Check if the layer needs re-election (all basin members exhausted)."""
+        binding = self._layers.get(layer)
+        if not binding:
+            return True
+        all_exhausted = all(
+            binding.basin_failures.get(name, 0) >= 2
+            for name in [binding.provider_name] + binding.attractor_basin
+        )
+        return binding.degraded and all_exhausted
+
     # ═══ Internal ═══════════════════════════════════════════════════
 
     def _get_candidates(self) -> list[dict]:
-        """Get all available provider candidates with scores."""
         candidates = []
         try:
             if self._tree and hasattr(self._tree, '_providers'):
@@ -179,17 +298,14 @@ class StickyElection:
                     })
         except Exception as e:
             logger.debug(f"StickyElection candidates: {e}")
-
-        if not candidates and self._tree:
-            try:
-                reg = getattr(self._tree, '_registry', None)
-                if reg:
-                    for name, info in reg.list_all().items():
-                        candidates.append({"name": name, "model": info.get("default_model", "")})
-            except Exception:
-                pass
-
         return candidates
+
+    def _get_model(self, provider_name: str) -> str:
+        candidates = self._get_candidates()
+        for c in candidates:
+            if c.get("name") == provider_name:
+                return c.get("model", "")
+        return ""
 
     # ═══ Stats ═════════════════════════════════════════════════════
 
@@ -203,6 +319,8 @@ class StickyElection:
                     "degraded": b.degraded,
                     "failures": b.failure_count,
                     "successes": b.success_count,
+                    "basin_size": len(b.attractor_basin),
+                    "basin_exhausted": sum(1 for v in b.basin_failures.values() if v >= 2),
                     "last_error": b.last_error[:100],
                     "elected_at": b.elected_at,
                 }

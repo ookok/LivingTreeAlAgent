@@ -16,91 +16,29 @@ import asyncio
 import time
 from loguru import logger
 
-SNI_FRAGMENT_SIZE = 40  # bytes per fragment
-SNI_FRAGMENT_DELAY = 0.01  # seconds between fragments
+SNI_FRAGMENT_SIZE = 40
+SNI_FRAGMENT_DELAY = 0.0   # no delay — instant fragmentation
 
 
 class FragmentedStreamWriter:
     """Wraps asyncio.StreamWriter to fragment writes for DPI evasion.
 
-    Automatically splits any write into small chunks with delays.
-    The first 200 bytes (ClientHello header) are most critical.
+    Splits each write into 40-byte chunks immediately with no delay.
+    TCP_NODELAY ensures OS sends each chunk as a separate TCP segment.
+    GFW's DPI sees fragmented segments → can't read full SNI → doesn't block.
     """
 
     def __init__(self, writer: asyncio.StreamWriter):
         self._w = writer
 
     async def write(self, data: bytes):
-        """Write data in fragments to avoid DPI detection."""
-        if len(data) <= SNI_FRAGMENT_SIZE:
-            self._w.write(data)
-            await self._w.drain()
-            return
-
-        total = len(data)
-        offset = 0
-        
-        # First byte: send alone (triggers DPI to start buffering)
-        self._w.write(data[0:1])
-        await self._w.drain()
-        await asyncio.sleep(SNI_FRAGMENT_DELAY)
-        offset = 1
-
-        # Fragment the rest into small chunks
-        while offset < total:
-            size = min(SNI_FRAGMENT_SIZE, total - offset)
-            # Occasionally send a single byte to really confuse DPI
-            if size > 1 and offset % 3 == 0:
-                self._w.write(data[offset:offset + 1])
-                await self._w.drain()
-                await asyncio.sleep(SNI_FRAGMENT_DELAY)
-                offset += 1
-                continue
-            
-            self._w.write(data[offset:offset + size])
-            await self._w.drain()
-            await asyncio.sleep(SNI_FRAGMENT_DELAY)
-            offset += size
-
-        logger.debug("DPI frag: %d bytes → %d fragments", total,
-                     max(1, total // SNI_FRAGMENT_SIZE + 1))
+        chunk = SNI_FRAGMENT_SIZE
+        for i in range(0, len(data), chunk):
+            self._w.write(data[i:i + chunk])
 
     async def drain(self):
-        return await self._w.drain()
+        await self._w.drain()
 
-    def close(self):
-        self._w.close()
-        return self._w.wait_closed()
-
-    def get_extra_info(self, name, default=None):
-        return self._w.get_extra_info(name, default)
-
-    def __getattr__(self, name):
-        return getattr(self._w, name)
-
-
-async def dpi_fragmented_connect(host: str, port: int, timeout: float = 8.0) -> tuple | None:
-    """Connect to host:port with ClientHello fragmentation.
-    
-    Opens a TCP connection, then returns a FragmentedStreamWriter
-    that automatically splits all writes into tiny chunks.
-    
-    The CONNECT tunnel replaces the remote_writer with this,
-    so the browser's ClientHello gets fragmented automatically.
-    """
-    import asyncio as _aio
-    
-    try:
-        r, w = await _aio.wait_for(
-            _aio.open_connection(host, port), timeout=timeout,
-        )
-        # Wrap writer for DPI fragmentation
-        return r, FragmentedStreamWriter(w)
-    except Exception:
-        return None, None
-
-
-# ═══ Relay fragmenter — wraps existing tunnel ═══
 
 def wrap_fragmented(writer: asyncio.StreamWriter) -> FragmentedStreamWriter:
     """Wrap an existing StreamWriter for DPI-fragmented writes."""

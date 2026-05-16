@@ -306,32 +306,10 @@ class ScinetService:
             logger.debug("CONNECT %s:%d — no IPs resolved", host, port)
             return None, None
         
-        # Phase 2: Waterfall — race all IPs (DPI bypass + direct + proxy last)
+        # Phase 2: Waterfall — race all IPs
         conn_result = None
         errors = []
         
-        # Strategy 1: DPI bypass — try ALL IPs with TCP segmentation
-        try:
-            from .dpi_bypass import dpi_bypass_connect
-            async def _try_dpi(ip):
-                nonlocal conn_result
-                r, w = await dpi_bypass_connect(ip, port, timeout=4.0)
-                if r is not None and conn_result is None:
-                    conn_result = (r, w, f"dpi({ip})")
-                    self._ip_cache[host] = ip
-            dpi_tasks = [_aio.create_task(_try_dpi(ip)) for ip in all_ips[:10]]
-            await _aio.wait(dpi_tasks, timeout=5.0, return_when=_aio.FIRST_COMPLETED)
-            for t in dpi_tasks:
-                if not t.done(): t.cancel()
-        except Exception:
-            pass
-        
-        if conn_result:
-            r, w, method = conn_result
-            logger.debug("CONNECT %s:%d → %s", host, port, method)
-            return r, w
-        
-        # Strategy 2: Direct TCP — race all IPs
         async def _try_ip(ip: str):
             nonlocal conn_result
             try:

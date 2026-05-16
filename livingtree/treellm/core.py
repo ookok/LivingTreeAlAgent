@@ -1027,6 +1027,25 @@ class TreeLLM:
                     result.text = f"[tool_result: {tool_results[-1][0]}]\n{tool_results[-1][1]}\n\n{result.text}"
             if result and result.text:
                 self._record_success(p.name, result.tokens, (time.monotonic() - t0) * 1000)
+                # ── Gap Orchestrator: detect and fill knowledge/tool gaps ──
+                try:
+                    from .gap_orchestrator import GapOrchestrator
+                    orchestrator = GapOrchestrator()
+                    gap = await orchestrator.handle_gap(
+                        str(messages[-1].get("content", ""))[:200],
+                        result.text,
+                    )
+                    if gap.resolved and gap.enriched_query:
+                        # Retry with enriched context
+                        retry_messages = [{"role": "system",
+                            "content": f"[Enriched context from {gap.resolution_method}]\n{gap.enriched_query[:2000]}"}] + messages
+                        retry_result = await p.chat(retry_messages, temperature=temperature,
+                            max_tokens=max_tokens, timeout=timeout, model=model or kwargs.get("model_extra", ""))
+                        if retry_result and retry_result.text:
+                            result = retry_result
+                            logger.info(f"GapOrchestrator: retry succeeded via {gap.resolution_method}")
+                except Exception:
+                    pass
                 # ── Recording capture: LLM response ──
                 try:
                     get_recording_engine().capture(

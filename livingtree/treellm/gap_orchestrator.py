@@ -53,10 +53,10 @@ class GapOrchestrator:
         r"超出了我的知识范围", r"没有相关信息",
     ]
     TOOL_GAP_PATTERNS = [
-        r"\[tool:(\w+)\] not available",
-        r"Tool not in LocalToolBus",
-        r"Unknown tool",
-        r"not available",
+        r'\[tool:(\w+)\]\s*not available',
+        r'Tool not in LocalToolBus',
+        r'Unknown tool:\s*(\w+)',
+        r'(\w+)\s*not available',
     ]
 
     def __init__(self):
@@ -131,7 +131,37 @@ class GapOrchestrator:
             except Exception as e:
                 result.attempts.append(f"web_search: {e}")
 
-        # Tier 3: Explore domain (deep research)
+        # Tier 3: P2P swarm knowledge search (distributed consciousness)
+        if not result.resolved:
+            try:
+                from ..network.swarm_coordinator import get_swarm
+                from ..network.p2p_node import get_p2p_node
+
+                swarm = get_swarm()
+                p2p = get_p2p_node()
+
+                # Query peers for knowledge about this topic
+                peer_knowledge = await swarm.query_peers(
+                    topic=query[:150],
+                    query_type="knowledge",
+                    timeout=10.0,
+                )
+                if peer_knowledge and len(peer_knowledge) > 20:
+                    result.enriched_query = (
+                        f"[P2P Swarm knowledge from {len(peer_knowledge)} peers]\n"
+                        f"{peer_knowledge[:1000]}\n\nUser query: {query}"
+                    )
+                    result.resolved = True
+                    result.resolution_method = "p2p_swarm"
+                    result.attempts.append(
+                        f"p2p_swarm: found knowledge from {len(peer_knowledge)} peers")
+                    logger.info(f"GapOrchestrator: P2P swarm filled knowledge gap")
+                else:
+                    result.attempts.append("p2p_swarm: no peer knowledge found")
+            except Exception as e:
+                result.attempts.append(f"p2p_swarm: {e}")
+
+        # Tier 4: Explore domain (deep research)
         if not result.resolved:
             try:
                 from ..execution.react_executor import ReactExecutor
@@ -146,7 +176,7 @@ class GapOrchestrator:
             except Exception as e:
                 result.attempts.append(f"explore_domain: {e}")
 
-        # Tier 4: Schedule async AutoGoal for persistent learning
+        # Tier 5: Schedule async AutoGoal for persistent learning
         try:
             self._schedule_auto_goal(query, gaps)
             result.attempts.append("auto_goal: scheduled background research")
@@ -159,7 +189,10 @@ class GapOrchestrator:
     # ═══ Tool Gap Resolution ══════════════════════════════════════
 
     async def resolve_tool_gap(self, query: str, tool_name: str) -> GapResult:
-        """Auto-synthesize missing tools on demand."""
+        """Auto-synthesize missing tools on demand.
+
+        Final fallback: request user assistance for commercial/uninstallable tools.
+        """
         result = GapResult(gap_type="tool", resolved=False,
                           resolution_method="none")
         t0 = time.time()
@@ -167,12 +200,17 @@ class GapOrchestrator:
         if not tool_name:
             return result
 
+        # Commercial software that cannot be auto-installed
+        COMMERCIAL_ONLY = {"matlab", "ansys", "autocad", "arcgis", "envi", "spss",
+                          "stata", "photoshop", "illustrator", "solidworks",
+                          "revit", "abaqus", "comsol", "aspen", "hysys",
+                          "flacs", "phast", "safeti", "cadnaa", "soundplan"}
+
         # Tier 1: Try CLIAnything — wrap any system program
         try:
             result.attempts.append("cli_anything: attempting to wrap binary")
             from ..treellm.cli_anything import get_cli_anything
             cli = get_cli_anything()
-            # Check if binary exists on PATH
             import shutil
             if shutil.which(tool_name):
                 result.new_tool_name = f"cli:{tool_name}"
@@ -184,7 +222,7 @@ class GapOrchestrator:
             result.attempts.append(f"cli_anything: {e}")
 
         # Tier 2: Try ToolSynthesizer — LLM generate tool code
-        if not result.resolved:
+        if not result.resolved and tool_name.lower() not in COMMERCIAL_ONLY:
             try:
                 from ..capability.tool_synthesis import ToolSynthesizer
                 if not self._synthesizer:
@@ -200,7 +238,25 @@ class GapOrchestrator:
             except Exception as e:
                 result.attempts.append(f"tool_synthesis: {e}")
 
-        # Tier 3: Try CapabilityBus registration for future use
+        # Tier 3: Try MCP external host
+        if not result.resolved:
+            try:
+                from ..treellm.mcp_host_client import get_mcp_host_client
+                mcp = get_mcp_host_client()
+                mcp_tools = await mcp.list_tools()
+                for mcp_tool in mcp_tools:
+                    if tool_name.lower() in mcp_tool.get("name", "").lower():
+                        result.new_tool_name = f"mcp:{mcp_tool['name']}"
+                        result.resolved = True
+                        result.resolution_method = "mcp_host"
+                        result.attempts.append(f"mcp_host: found {tool_name} in external MCP")
+                        break
+                if not result.resolved:
+                    result.attempts.append("mcp_host: tool not found in external servers")
+            except Exception as e:
+                result.attempts.append(f"mcp_host: {e}")
+
+        # Tier 4: CapabilityBus registration for future use
         if result.resolved and result.new_tool_name:
             try:
                 from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
@@ -217,6 +273,34 @@ class GapOrchestrator:
                 result.attempts.append("capability_bus: registered for future use")
             except Exception:
                 pass
+
+        # Tier 5: User Assist — request human help for ungraspable tools
+        if not result.resolved:
+            if tool_name.lower() in COMMERCIAL_ONLY:
+                result.resolution_method = "user_assist_commercial"
+                result.attempts.append(
+                    f"user_assist: {tool_name} is commercial software, needs manual install")
+                result.enriched_query = (
+                    f"<ask type=\"confirm\" label=\"需要 {tool_name}\">\n"
+                    f"  <option value=\"already_installed\" label=\"已安装，继续\"/>\n"
+                    f"  <option value=\"will_install\" label=\"我去安装\"/>\n"
+                    f"  <option value=\"use_alternative\" label=\"用替代方案\"/>\n"
+                    f"</ask>\n\n"
+                    f"[系统提示] 工具 '{tool_name}' 是商用软件，无法自动安装。"
+                    f"请确认您是否已安装该软件，或选择替代方案。"
+                )
+            else:
+                result.resolution_method = "user_assist_unknown"
+                result.attempts.append(
+                    f"user_assist: {tool_name} not found in any repository")
+                result.enriched_query = (
+                    f"<ask type=\"input\" label=\"如何实现 {tool_name}？\">\n"
+                    f"</ask>\n\n"
+                    f"[系统提示] 未能找到工具 '{tool_name}'。已尝试："
+                    f"CLI搜索、工具合成、MCP外部服务。"
+                    f"请提供替代方案或手动安装指令。"
+                )
+            logger.info(f"GapOrchestrator: {result.resolution_method} for {tool_name}")
 
         result.elapsed_ms = (time.time() - t0) * 1000
         return result

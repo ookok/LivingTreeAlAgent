@@ -1,72 +1,92 @@
-"""DPI-Bypass — TCP segmentation against Deep Packet Inspection.
+"""DPI Bypass v2 — ClientHello fragmentation at TCP level.
 
-Based on: zapret/GoodbyeDPI (github.com/bol-van/zapret)
-Pure client-side, no relay server needed.
+Based on: zapret/GoodbyeDPI (tcp_segmentation technique)
+Pure Python, no driver needed. Works because scinet IS the proxy.
 
 Principle:
-  GFW's DPI reads TLS ClientHello → finds SNI=github.com → sends RST
-  If ClientHello is split into tiny TCP segments, GFW can't read it atomically
-  Server TCP stack reassembles normally → connection succeeds
-
-Implementation:
-  Instead of normal TCP connect, open raw socket and manually do:
-  1. TCP SYN handshake (normal)
-  2. Send ClientHello split into N segments (each < GFW DPI buffer)
-  3. Receive ServerHello normally
-  4. Switch to normal bidirectional relay
+  Browser → scinet (127.0.0.1:7890) → GitHub
+  scinet receives complete ClientHello from browser
+  scinet splits it into N fragments (each < 50 bytes) when sending to GitHub
+  GFW's DPI sees small fragments → can't read full SNI → doesn't block
+  
+  GitHub's TCP stack reassembles normally → TLS works
 """
 
 import asyncio
-import random
-import struct
-import socket as _socket
 import time
-
 from loguru import logger
 
-# GFW DPI parameters (from zapret reverse engineering)
-DPI_MIN_TTL = 4         # GFW injects RST with TTL usually < 64
-DPI_SEGMENT_SIZE = 50   # Split ClientHello into 50-byte chunks
-DPI_FAKE_TTL = 128      # Our SYN uses high TTL to distinguish from GFW RST
+SNI_FRAGMENT_SIZE = 40  # bytes per fragment
+SNI_FRAGMENT_DELAY = 0.01  # seconds between fragments
 
 
-async def dpi_bypass_connect(host: str, port: int,
-                              timeout: float = 8.0) -> tuple | None:
-    """Connect to host:port with DPI bypass via TCP segmentation.
-    
-    Opens a raw TCP connection, then sends the TLS ClientHello
-    split into small segments that GFW's DPI can't parse atomically.
-    
-    Returns (reader, writer) on success, None on failure.
+class FragmentedStreamWriter:
+    """Wraps asyncio.StreamWriter to fragment writes for DPI evasion.
+
+    Automatically splits any write into small chunks with delays.
+    The first 200 bytes (ClientHello header) are most critical.
     """
-    import asyncio as _aio
-    
-    try:
-        r, w = await _aio.wait_for(
-            _aio.open_connection(host, port), timeout=timeout,
-        )
-        sock = w.get_extra_info('socket')
-        if sock:
-            try:
-                sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-                sock.setsockopt(_socket.IPPROTO_IP, _socket.IP_TTL, DPI_FAKE_TTL)
-            except Exception:
-                pass
-        return r, w
+
+    def __init__(self, writer: asyncio.StreamWriter):
+        self._w = writer
+
+    async def write(self, data: bytes):
+        """Write data in fragments to avoid DPI detection."""
+        if len(data) <= SNI_FRAGMENT_SIZE:
+            self._w.write(data)
+            await self._w.drain()
+            return
+
+        total = len(data)
+        offset = 0
         
-    except Exception as e:
-        logger.debug("DPI bypass connect failed: %s", e)
-        return None
+        # First byte: send alone (triggers DPI to start buffering)
+        self._w.write(data[0:1])
+        await self._w.drain()
+        await asyncio.sleep(SNI_FRAGMENT_DELAY)
+        offset = 1
+
+        # Fragment the rest into small chunks
+        while offset < total:
+            size = min(SNI_FRAGMENT_SIZE, total - offset)
+            # Occasionally send a single byte to really confuse DPI
+            if size > 1 and offset % 3 == 0:
+                self._w.write(data[offset:offset + 1])
+                await self._w.drain()
+                await asyncio.sleep(SNI_FRAGMENT_DELAY)
+                offset += 1
+                continue
+            
+            self._w.write(data[offset:offset + size])
+            await self._w.drain()
+            await asyncio.sleep(SNI_FRAGMENT_DELAY)
+            offset += size
+
+        logger.debug("DPI frag: %d bytes → %d fragments", total,
+                     max(1, total // SNI_FRAGMENT_SIZE + 1))
+
+    async def drain(self):
+        return await self._w.drain()
+
+    def close(self):
+        self._w.close()
+        return self._w.wait_closed()
+
+    def get_extra_info(self, name, default=None):
+        return self._w.get_extra_info(name, default)
+
+    def __getattr__(self, name):
+        return getattr(self._w, name)
 
 
-async def dpi_connect_with_fragmentation(host: str, port: int,
-                                         client_hello: bytes = None,
-                                         timeout: float = 8.0) -> tuple | None:
-    """Connect with ClientHello fragmentation.
+async def dpi_fragmented_connect(host: str, port: int, timeout: float = 8.0) -> tuple | None:
+    """Connect to host:port with ClientHello fragmentation.
     
-    Opens raw socket, sends ClientHello in 50-byte chunks with delays.
-    Requires the caller to provide the actual ClientHello bytes.
-    Used when scinet is an active proxy (not CONNECT tunnel).
+    Opens a TCP connection, then returns a FragmentedStreamWriter
+    that automatically splits all writes into tiny chunks.
+    
+    The CONNECT tunnel replaces the remote_writer with this,
+    so the browser's ClientHello gets fragmented automatically.
     """
     import asyncio as _aio
     
@@ -74,51 +94,14 @@ async def dpi_connect_with_fragmentation(host: str, port: int,
         r, w = await _aio.wait_for(
             _aio.open_connection(host, port), timeout=timeout,
         )
-        return r, w
+        # Wrap writer for DPI fragmentation
+        return r, FragmentedStreamWriter(w)
     except Exception:
-        pass
-    
-    # Manual TCP: raw socket with segmentation
-    try:
-        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-        sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-        sock.settimeout(timeout)
-        
-        t0 = time.time()
-        sock.connect((host, port))
-        elapsed = time.time() - t0
-        
-        if elapsed < 0.05:
-            # Connection too fast — likely RST from GFW
-            logger.debug("DPI bypass: suspiciously fast connect (%.0fms)", elapsed * 1000)
-            sock.close()
-            return None
-        
-        # Connection established — wrap in asyncio
-        loop = asyncio.get_event_loop()
-        r = _aio.StreamReader()
-        protocol = _aio.StreamReaderProtocol(r)
-        
-        await loop.connect_accepted_socket(
-            lambda: protocol, sock,
-        )
-        w = _aio.StreamWriter(sock.detach() if hasattr(sock, 'detach') else sock,
-                              protocol, r, loop)
-        
-        logger.debug("DPI bypass: connection established")
-        return r, w
-        
-    except Exception as e:
-        logger.debug("DPI bypass fragmentation: %s", e)
-        return None
+        return None, None
 
 
-def get_dpi_status() -> dict:
-    """Get DPI bypass module status."""
-    return {
-        "method": "TCP segmentation (zapret/GoodbyeDPI)",
-        "segment_size": DPI_SEGMENT_SIZE,
-        "fake_ttl": DPI_FAKE_TTL,
-        "nagle_disabled": True,
-        "status": "passive — enabled via TCP_NODELAY on all connections",
-    }
+# ═══ Relay fragmenter — wraps existing tunnel ═══
+
+def wrap_fragmented(writer: asyncio.StreamWriter) -> FragmentedStreamWriter:
+    """Wrap an existing StreamWriter for DPI-fragmented writes."""
+    return FragmentedStreamWriter(writer)

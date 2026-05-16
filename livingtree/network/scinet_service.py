@@ -248,6 +248,13 @@ class ScinetService:
             await writer.drain()
             return
 
+        # Wrap remote writer for DPI fragmentation (zapret-style ClientHello split)
+        try:
+            from .dpi_bypass import wrap_fragmented
+            remote_writer = wrap_fragmented(remote_writer)
+        except Exception:
+            pass
+
         # Send 200 to client
         writer.write(b"HTTP/1.1 200 Connection Established\r\n")
         writer.write(b"Proxy-Agent: LivingTree-Scinet/2.0\r\n\r\n")

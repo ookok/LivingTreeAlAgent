@@ -15,6 +15,9 @@
   <h1 class="text-sm font-bold text-gray-800">🧰 能力层 · Capability Bus</h1>
   <div class="flex gap-1" id="cat-tabs"></div>
   <span class="flex-1"></span>
+  <button onclick="exportCaps()" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600">📥 导出</button>
+  <button onclick="document.getElementById('import-file').click()" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600">📤 导入</button>
+  <input type="file" id="import-file" class="hidden" accept=".json" onchange="importCaps(this.files[0])">
   <span id="cap-count" class="text-xs text-gray-400"></span>
   <a href="/" class="text-xs text-blue-500 hover:text-blue-600">← 返回首页</a>
 </header>
@@ -84,7 +87,10 @@ function render(caps) {
           title="${c.id||''}">
           <div class="flex items-start justify-between mb-2">
             <span class="text-sm font-medium text-gray-700 truncate">${c.name||c.id||'?'}</span>
-            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 ml-2 flex-shrink-0">${cat}</span>
+            <div class="flex items-center gap-1">
+              <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 flex-shrink-0">${cat}</span>
+              <button onclick="event.stopPropagation();deleteCap('${c.id}')" class="text-xs px-1 py-0.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded" title="删除">×</button>
+            </div>
           </div>
           <p class="text-xs text-gray-500 mb-2 line-clamp-2">${c.description||''}</p>
           <div class="flex items-center gap-2 mt-2">
@@ -100,6 +106,42 @@ function render(caps) {
 }
 
 load();
+
+/* Export / Import / Delete */
+function exportCaps() {
+  const json = JSON.stringify(allCaps, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'capabilities_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+
+async function importCaps(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const caps = JSON.parse(text);
+    if (!Array.isArray(caps)) { alert('JSON格式错误: 需要数组'); return; }
+    for (const cap of caps) {
+      await fetch('/api/capability/register', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(cap)
+      });
+    }
+    alert(`导入完成: ${caps.length} 条`);
+    location.reload();
+  } catch(e) { alert('导入失败: '+e.message); }
+}
+
+async function deleteCap(id) {
+  if (!confirm('删除能力: '+id+'?')) return;
+  try {
+    await fetch('/api/capability/delete', {method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id})});
+    load();
+  } catch(e) { alert('删除失败: '+e.message); }
+}
 </script>
 </body>
 </html>

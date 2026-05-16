@@ -3197,6 +3197,35 @@ def _get_user_id_from_request(request: Request) -> str:
         except Exception as e:
             return {"error": str(e)[:200]}
 
+    @app.post("/api/vfs/write")
+    async def api_vfs_write(request: Request):
+        try:
+            data = await request.json()
+            path = data.get("path", "")
+            content = data.get("content", "")
+            from ..capability.virtual_fs import get_virtual_fs
+            vfs = get_virtual_fs()
+            await vfs.write_file(path, content)
+            return {"ok": True, "path": path, "size": len(content)}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    @app.post("/api/vfs/delete")
+    async def api_vfs_delete(request: Request):
+        try:
+            data = await request.json()
+            path = data.get("path", "")
+            from pathlib import Path
+            import shutil
+            real = Path(path)
+            if real.exists():
+                if real.is_dir(): shutil.rmtree(real)
+                else: real.unlink()
+                return {"ok": True, "path": path, "deleted": True}
+            return {"ok": False, "path": path, "error": "not found"}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
     # ═══ Capability Browser API ═══
 
     @app.get("/api/capability/list")
@@ -3212,6 +3241,18 @@ def _get_user_id_from_request(request: Request) -> str:
                     "source": c.get("source","")} for c in caps]}
         except Exception as e:
             return {"error": str(e)[:200], "capabilities": []}
+
+    @app.post("/api/capability/delete")
+    async def api_capability_delete(request: Request):
+        try:
+            data = await request.json()
+            cap_id = data.get("id", "")
+            from ..treellm.capability_bus import get_capability_bus
+            bus = get_capability_bus()
+            ok = bus.unregister(cap_id)
+            return {"ok": ok, "id": cap_id}
+        except Exception as e:
+            return {"error": str(e)[:200]}
 
     # ═══ Improve API ═══
 

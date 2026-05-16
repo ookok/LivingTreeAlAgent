@@ -1,62 +1,32 @@
-"""BrowserAgent — Scrapling-powered LLM-driven browser automation.
+"""BrowserAgent — Scrapling + StealthyFetcher LLM-driven browser automation.
 
 Core capabilities:
-  1. DynamicFetcher pre-check — WAF/block detection
-  2. Playwright browser — JS rendering + interaction (reused across iterations)
-  3. ARIA tree extraction — structured page state for LLM (~2KB vs 30KB raw HTML)
-  4. Adaptive selectors (Scrapling) — survive page structure changes
-  5. Structured JSON output — ready for UI rendering
-
-Architecture:
-  Scrapling pre-check → Playwright page → LLM analysis → click/type →
-  ARIA refresh → LLM extraction → structured JSON
-
-Usage:
-    agent = BrowserAgent()
-    result = await agent.browse(
-        url="http://www.njls.gov.cn/...",
-        task="Extract project name and download link for the EIA report"
-    )
-    # result.items = [{"text":"...", "link":"..."}]
+  1. StealthyFetcher — anti-bot (Cloudflare,Turnstile,canvas,WebRTC leak)
+  2. Playwright/Chromium — JS rendering + interaction (session reuse)
+  3. ARIA tree — structured page state for LLM (~2KB)
+  4. Adaptive selectors — survive page structure changes
+  5. orjson — 12x faster JSON output
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Any, Optional
 
+import orjson
 from loguru import logger
+from playwright.async_api import async_playwright
+from scrapling.fetchers import Fetcher, DynamicFetcher, StealthyFetcher
+from scrapling.parser import Selector
 
-try:
-    import orjson
-    _json_dumps = lambda obj: orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()
-    _json_loads = orjson.loads
-except ImportError:
-    import json
-    _json_dumps = lambda obj: json.dumps(obj, ensure_ascii=False, indent=2)
-    _json_loads = json.loads
+_json_dumps = lambda obj: orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()
+_json_loads = orjson.loads
 
 MAX_ITERATIONS = 6
 MAX_TEXT_LENGTH = 5000
-
-HAS_PLAYWRIGHT = False
-try:
-    from playwright.async_api import async_playwright
-    HAS_PLAYWRIGHT = True
-except ImportError:
-    pass
-
-HAS_SCRAPLING = False
-try:
-    from scrapling.fetchers import DynamicFetcher
-    from scrapling.parser import Selector
-    HAS_SCRAPLING = True
-except ImportError:
-    pass
 
 
 @dataclass
@@ -72,7 +42,6 @@ class BrowseResult:
     error: str = ""
 
     def to_json(self) -> str:
-        """Fast serialization via orjson (10x over stdlib)."""
         return _json_dumps(asdict(self))
 
 
@@ -84,13 +53,9 @@ class BrowserAgent:
     async def _get_llm(self):
         if self._llm:
             return self._llm
-        try:
-            from livingtree.treellm.core import TreeLLM
-            self._llm = TreeLLM.from_config()
-            return self._llm
-        except Exception:
-            pass
-        return None
+        from livingtree.treellm.core import TreeLLM
+        self._llm = TreeLLM.from_config()
+        return self._llm
 
     async def browse(self, url: str, task: str,
                      max_iterations: int = MAX_ITERATIONS) -> BrowseResult:
@@ -100,14 +65,10 @@ class BrowserAgent:
         if not llm:
             result.error = "No LLM available"
             return result
-        if not HAS_PLAYWRIGHT:
-            result.error = "Playwright not installed"
-            return result
 
         browser = None
         own_browser = False
         try:
-            # Reuse session if active
             sid = getattr(self, '_active_session', None)
             state = (getattr(self, '_session_state', {}) or {}).get(sid, {}) if sid else {}
             if state.get("page"):
@@ -140,7 +101,7 @@ class BrowserAgent:
                     break
                 await self._exec_action(page, action)
 
-            if not result.items and HAS_SCRAPLING:
+            if not result.items:
                 html = await page.content()
                 sel = Selector(html)
                 extracted = self._direct_extract(sel, task)
@@ -164,27 +125,39 @@ class BrowserAgent:
         return result
 
     async def _navigate(self, page, url: str):
-        """Navigate with Scrapling: retries, ad block, adaptive, page_action."""
-        if HAS_SCRAPLING:
-            DynamicFetcher.adaptive = True
-            try:
-                sp = DynamicFetcher.fetch(
-                    url, headless=True, network_idle=True, timeout=15_000,
-                    disable_resources=True, retries=2, block_ads=True,
-                    page_action=self._page_action_scroll,
-                )
-                if sp and not self._is_blocked(sp.text or ""):
-                    html = sp.body.decode("utf-8", errors="replace") if isinstance(sp.body, bytes) else str(sp.body)
-                    await page.set_content(html, wait_until="networkidle")
-                    return
-            except Exception:
-                pass
+        DynamicFetcher.adaptive = True
+        try:
+            sp = StealthyFetcher.fetch(
+                url, headless=True, network_idle=True, timeout=30_000,
+                disable_resources=True, retries=2, block_ads=True,
+                solve_cloudflare=True, hide_canvas=True, block_webrtc=True,
+                page_action=self._page_action_scroll,
+            )
+            if sp and not self._is_blocked(sp.text or ""):
+                html = sp.body.decode("utf-8", errors="replace") if isinstance(sp.body, bytes) else str(sp.body)
+                await page.set_content(html, wait_until="networkidle")
+                return
+        except Exception:
+            pass
+
+        try:
+            sp = DynamicFetcher.fetch(
+                url, headless=True, network_idle=True, timeout=30_000,
+                disable_resources=True, retries=2, block_ads=True,
+                page_action=self._page_action_scroll,
+            )
+            if sp and not self._is_blocked(sp.text or ""):
+                html = sp.body.decode("utf-8", errors="replace") if isinstance(sp.body, bytes) else str(sp.body)
+                await page.set_content(html, wait_until="networkidle")
+                return
+        except Exception:
+            pass
+
         await page.goto(url, timeout=30_000, wait_until="networkidle")
         await asyncio.sleep(2)
 
     @staticmethod
     def _page_action_scroll(page):
-        """Auto-scroll to trigger lazy-loaded content."""
         try:
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         except Exception:
@@ -220,18 +193,9 @@ class BrowserAgent:
         return None
 
     def _direct_extract(self, page, task: str) -> list[dict]:
-        """Scrapling full extraction pipeline.
-
-        Tries in order:
-          1. CSS selectors with auto_save (adaptive) → get_all_text
-          2. find_by_text from task keywords → find_similar → find_ancestor
-          3. find_by_regex for common patterns
-          4. Download links
-        """
         import re as _re
         items = []
 
-        # ═══ 1) CSS selectors with auto_save (adaptive) ═══
         for sel in ["table tr", "ul li", "ol li",
                     "[class*='item']", "[class*='list']", "[class*='row']",
                     "[class*='article']", "[class*='result']", "[class*='content']",
@@ -249,15 +213,12 @@ class BrowserAgent:
                 if items:
                     return items
 
-        # ═══ 2) find_by_text → find_similar → find_ancestor ═══
         keywords = _re.findall(r'[\u4e00-\u9fff]{2,}|\w{3,}', task)
         for kw in keywords[:5]:
             try:
                 el = page.find_by_text(kw, partial=True, first_match=True)
                 if not el:
                     continue
-
-                # Find the list/table ancestor container
                 container = None
                 if hasattr(el, 'find_ancestor'):
                     container = el.find_ancestor(
@@ -266,8 +227,6 @@ class BrowserAgent:
                     ) or el.parent
                 else:
                     container = el.parent if hasattr(el, 'parent') else el
-
-                # Find similar items within the container
                 source = container if container else el
                 similar = source.find_similar() if hasattr(source, 'find_similar') else ([source] if source else [])
                 for s in similar[:50]:
@@ -275,19 +234,12 @@ class BrowserAgent:
                     text = (text[:500] if isinstance(text, str) else "")
                     if text and len(text) > 15:
                         items.append({"text": text, "method": "find_similar"})
-
                 if items:
                     return items
             except Exception:
                 continue
 
-        # ═══ 3) find_by_regex: common extractable patterns ═══
-        generic_patterns = [
-            r'https?://[^\s<>"\')\]},，。]{10,}',  # URLs
-            r'[\w.-]+@[\w.-]+\.\w+',               # emails
-            r'(?:1[3-9]\d|86)?\d{7,11}',           # phone numbers
-        ]
-        for pat in generic_patterns:
+        for pat in [r'https?://[^\s<>"\')\]},，。]{10,}', r'[\w.-]+@[\w.-]+\.\w+', r'(?:1[3-9]\d|86)?\d{7,11}']:
             try:
                 matches = page.find_by_regex(_re.compile(pat), first_match=False)
                 if matches:
@@ -301,7 +253,6 @@ class BrowserAgent:
             except Exception:
                 continue
 
-        # ═══ 4) Download links ═══
         dl_exts = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar", ".7z", ".ppt", ".pptx"]
         dl_links = []
         for a in page.css("a[href]"):
@@ -395,44 +346,33 @@ class BrowserAgent:
     # ═══ Session Management ════════════════════════════════════════
 
     async def session_open(self, url: str = "") -> dict:
-        """Open a persistent browser session (reused across browse calls)."""
-        if not HAS_PLAYWRIGHT:
-            return {"success": False, "error": "Playwright not installed"}
-        try:
-            if not hasattr(self, '_session_state'):
-                self._session_state = {}
-            sid = f"ses_{int(time.time())}"
-            pw = await async_playwright().__aenter__()
-            browser = await pw.chromium.launch(headless=True)
-            ctx = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
-                viewport={"width": 1920, "height": 1080}, locale="zh-CN",
-            )
-            page = await ctx.new_page()
-            if url:
-                await page.goto(url, timeout=30_000, wait_until="networkidle")
-            self._session_state[sid] = {"playwright": pw, "browser": browser, "context": ctx, "page": page}
-            self._active_session = sid
-            return {"success": True, "session_id": sid, "url": url}
-        except Exception as e:
-            return {"success": False, "error": str(e)[:200]}
+        if not hasattr(self, '_session_state'):
+            self._session_state = {}
+        sid = f"ses_{int(time.time())}"
+        pw = await async_playwright().__aenter__()
+        browser = await pw.chromium.launch(headless=True)
+        ctx = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}, locale="zh-CN",
+        )
+        page = await ctx.new_page()
+        if url:
+            await page.goto(url, timeout=30_000, wait_until="networkidle")
+        self._session_state[sid] = {"playwright": pw, "browser": browser, "context": ctx, "page": page}
+        self._active_session = sid
+        return {"success": True, "session_id": sid, "url": url}
 
     async def session_close(self) -> dict:
-        """Close the active browser session."""
         sid = getattr(self, '_active_session', None)
         if not sid or not hasattr(self, '_session_state'):
             return {"success": False, "error": "No active session"}
-        try:
-            state = self._session_state.pop(sid, {})
-            if state.get("browser"):
-                await state["browser"].close()
-            self._active_session = None
-            return {"success": True, "closed": sid}
-        except Exception as e:
-            return {"success": False, "error": str(e)[:200]}
+        state = self._session_state.pop(sid, {})
+        if state.get("browser"):
+            await state["browser"].close()
+        self._active_session = None
+        return {"success": True, "closed": sid}
 
     def session_list(self) -> dict:
-        """List active browser sessions."""
         sessions = getattr(self, '_session_state', {})
         return {"sessions": [{"id": k, "url": v.get("page", None) and v["page"].url or ""}
                              for k, v in sessions.items()],
@@ -441,23 +381,19 @@ class BrowserAgent:
     # ═══ Screenshot ═════════════════════════════════════════════════
 
     async def screenshot(self) -> dict:
-        """Take screenshot of the active browser page."""
         sid = getattr(self, '_active_session', None)
         state = (getattr(self, '_session_state', {}) or {}).get(sid, {}) if sid else {}
         page = state.get("page")
         if not page:
             return {"success": False, "error": "No active browser session. Use browser_session_open first."}
-        try:
-            import base64
-            shot = await page.screenshot(type="png", full_page=False)
-            return {
-                "success": True,
-                "base64": base64.b64encode(shot).decode(),
-                "width": page.viewport_size.get("width", 0) if page.viewport_size else 0,
-                "height": page.viewport_size.get("height", 0) if page.viewport_size else 0,
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)[:200]}
+        import base64
+        shot = await page.screenshot(type="png", full_page=False)
+        return {
+            "success": True,
+            "base64": base64.b64encode(shot).decode(),
+            "width": page.viewport_size.get("width", 0) if page.viewport_size else 0,
+            "height": page.viewport_size.get("height", 0) if page.viewport_size else 0,
+        }
 
 
 _agent: Optional[BrowserAgent] = None

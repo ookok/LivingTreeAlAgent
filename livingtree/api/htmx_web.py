@@ -2637,13 +2637,16 @@ async def tree_reach_mobile(request: Request):
 @htmx_router.get("/admin/spider")
 async def tree_admin_spider(request: Request):
     """Scrapling Spider framework — visual crawl dashboard."""
-    from ..capability.browser_agent import HAS_SCRAPLING, HAS_PLAYWRIGHT
-    scrapling_ok = "✅ Scrapling" if HAS_SCRAPLING else "❌ 未安装 pip install scrapling[fetchers]"
-    pw_ok = "✅ Playwright" if HAS_PLAYWRIGHT else "❌ 未安装 playwright install chromium"
+    from ..capability.browser_agent import BrowserAgent  # verify import works
+    try:
+        from scrapling.fetchers import StealthyFetcher
+        stealth_ok = "✅ StealthyFetcher (patchright)" 
+    except ImportError:
+        stealth_ok = "❌ patchright install chromium"
     html = '''<div class="card">
 <h2>🕷 爬虫框架 <span style="font-size:10px;color:var(--dim)">— Scrapling Spider + LLM</span></h2>
 <div style="display:flex;gap:16px;margin:8px 0;font-size:11px">
-  <span>''' + scrapling_ok + '''</span><span>''' + pw_ok + '''</span>
+  <span>✅ Scrapling + Playwright</span><span>''' + stealth_ok + '''</span>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
   <div class="card" style="padding:10px">

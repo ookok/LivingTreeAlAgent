@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from loguru import logger
+from scrapling.fetchers import Fetcher as _ScraplingFetcher
+from scrapling.parser import Selector as _ScraplingSelector
 
 
 # ═══ Capability Category ═══════════════════════════════════════════
@@ -273,46 +275,18 @@ class ToolAdapter(CapabilityAdapter):
             return {"success": False, "error": str(e), "source": "browser_browse"}
 
     async def _web_fetch(self, input_str: str) -> dict:
-        """Fetch a static page via Scrapling Fetcher (TLS impersonation)."""
-        try:
-            args = self._parse_tool_args(input_str)
-            url = args.get("url", input_str.strip())
-            from scrapling.fetchers import Fetcher
-            import re
-            page = Fetcher.get(url, timeout=15, stealthy_headers=True)
-            title = page.css("title::text").get() or ""
-            clean = page.get_all_text(strip=True)[:8000] if hasattr(page, 'get_all_text') else (page.text or "")[:8000]
-            links = []
-            for a in page.css("a[href]"):
-                href = a.attrib.get("href", "")
-                if any(href.lower().endswith(e) for e in [".pdf", ".docx", ".xlsx", ".zip"]):
-                    links.append({"url": href, "title": (a.text or "").strip()[:80]})
-            return {
-                "success": True, "url": url, "title": title,
-                "text": clean, "links": links[:20],
-            }
-        except Exception as e:
-            # Fallback: aiohttp
-            try:
-                args = self._parse_tool_args(input_str)
-                url = args.get("url", input_str.strip())
-                import aiohttp, re
-                async with aiohttp.ClientSession() as s:
-                    r = await s.get(url, timeout=aiohttp.ClientTimeout(total=15),
-                                   headers={"User-Agent": "Mozilla/5.0"})
-                    text = await r.text()
-                    clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
-                    clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL)
-                    clean = re.sub(r'<[^>]+>', '\n', clean)
-                    clean = re.sub(r'\n{3,}', '\n\n', clean).strip()[:8000]
-                    title_m = re.search(r'<title[^>]*>(.*?)</title>', text, re.I)
-                    return {
-                        "success": r.status < 400, "url": url,
-                        "title": title_m.group(1).strip() if title_m else "",
-                        "text": clean, "links": [], "status": r.status,
-                    }
-            except Exception as e2:
-                return {"success": False, "error": str(e2), "source": "web_fetch"}
+        """Fetch a static page via Scrapling Fetcher (TLS impersonation, HTTP/3)."""
+        args = self._parse_tool_args(input_str)
+        url = args.get("url", input_str.strip())
+        page = _ScraplingFetcher.get(url, timeout=15, stealthy_headers=True)
+        title = page.css("title::text").get() or ""
+        clean = page.get_all_text(strip=True)[:8000] if hasattr(page, 'get_all_text') else (page.text or "")[:8000]
+        links = []
+        for a in page.css("a[href]"):
+            href = a.attrib.get("href", "")
+            if any(href.lower().endswith(e) for e in [".pdf", ".docx", ".xlsx", ".zip"]):
+                links.append({"url": href, "title": (a.text or "").strip()[:80]})
+        return {"success": True, "url": url, "title": title, "text": clean, "links": links[:20]}
 
     async def _browser_screenshot(self, input_str: str) -> dict:
         """Take screenshot of current browser page, return base64 for LLM analysis."""

@@ -66,3 +66,4 @@ frp/
 test_*.py
 diag_*.py
 __pycache__/
+models/

@@ -414,19 +414,62 @@ class StickyElection:
     # ═══ Embedding ══════════════════════════════════════════════════
 
     def _get_embedding(self, text: str) -> list[float]:
-        """Get text embedding. Tries bge-large-zh first, falls back to hash."""
+        """Get text embedding. SiliconFlow API → local bge → hash fallback."""
+        # Tier 1: SiliconFlow API (fast, no model download)
+        emb = self._embed_siliconflow(text)
+        if emb:
+            return emb
+
+        # Tier 2: Local bge-large-zh from hf-mirror.com
+        emb = self._embed_local(text)
+        if emb:
+            return emb
+
+        # Tier 3: Hash-based (always works)
+        return self._embed_hash(text)
+
+    def _embed_siliconflow(self, text: str) -> list[float] | None:
+        """SiliconFlow Embedding API: BAAI/bge-large-zh-v1.5"""
+        try:
+            import httpx, json
+            from ..config.secrets import get_secret_vault
+            key = get_secret_vault()._cache.get("siliconflow_api_key", "")
+            if not key:
+                return None
+            resp = httpx.post(
+                "https://api.siliconflow.cn/v1/embeddings",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": "BAAI/bge-large-zh-v1.5", "input": text},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["data"][0]["embedding"]
+        except Exception:
+            pass
+        return None
+
+    def _embed_local(self, text: str) -> list[float] | None:
+        """Local BAAI/bge-large-zh-v1.5 from hf-mirror.com"""
+        if getattr(self, '_embed_model', None) is False:
+            return None
         if not getattr(self, '_embed_model', None):
             try:
+                import os
+                os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
                 from sentence_transformers import SentenceTransformer
                 self._embed_model = SentenceTransformer(
-                    self.EMBEDDING_MODEL, cache_folder="./models")
+                    "BAAI/bge-large-zh-v1.5", cache_folder="./models")
             except Exception:
-                self._embed_model = None
-        if self._embed_model:
-            try:
-                return self._embed_model.encode(text).tolist()
-            except Exception:
-                pass
+                self._embed_model = False
+                return None
+        try:
+            return self._embed_model.encode(text).tolist()
+        except Exception:
+            return None
+
+    def _embed_hash(self, text: str) -> list[float]:
+        """Hash-based embedding (always available)."""
         try:
             from ..dna.task_vector_geometry import text_to_embedding
             return text_to_embedding(text)

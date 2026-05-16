@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🐛 Debug Pipeline — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+  .stage-pass { border-left: 3px solid #22c55e; }
+  .stage-fail { border-left: 3px solid #ef4444; }
+  .stage-running { border-left: 3px solid #3b82f6; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+  .log-line { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .log-info { color: #2563eb; } .log-warn { color: #d97706; } .log-error { color: #dc2626; }
+</style>
+</head>
+<body class="h-full bg-gray-50 flex flex-col">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+  <h1 class="text-sm font-bold text-gray-800">🐛 Debug Pipeline</h1>
+  <span class="text-xs text-gray-400">6-Phase 全链路调试</span>
+  <span class="flex-1"></span>
+  <a href="/" target="_blank" class="text-xs text-blue-500 hover:text-blue-600">🏠 首页</a>
+</header>
+
+<!-- Main Content -->
+<div class="flex-1 flex overflow-hidden">
+  <!-- Left: Input + Controls -->
+  <aside class="w-80 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+    <div class="p-3 border-b border-gray-100">
+      <label class="text-xs text-gray-500 mb-1 block">查询消息</label>
+      <textarea id="debug-msg" rows="3" placeholder="输入调试查询..."
+        class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+    </div>
+
+    <!-- Multi-modal input -->
+    <div class="p-3 border-b border-gray-100">
+      <label class="text-xs text-gray-500 mb-1 block">多模态输入</label>
+      <div class="flex gap-2">
+        <button onclick="document.getElementById('file-input').click()" class="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">
+          📁 选择文件
+        </button>
+        <input type="file" id="file-input" class="hidden" onchange="handleFile(this.files[0])" multiple>
+        <button onclick="pickFolder()" class="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">
+          📂 选择文件夹
+        </button>
+      </div>
+      <div id="file-list" class="mt-1 text-xs text-gray-400"></div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="p-3 border-b border-gray-100 space-y-2">
+      <label class="text-xs text-gray-500 font-medium">参数配置</label>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-verbose" checked class="rounded"> 详细输出
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-trace" class="rounded"> 逐行追踪
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-selfcheck" class="rounded"> 自一致性检查
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-tools" checked class="rounded"> 启用工具调用
+        </label>
+      </div>
+      <div class="flex gap-2">
+        <select id="opt-level" class="flex-1 px-2 py-1 text-xs border border-gray-200 rounded-lg">
+          <option value="L1">L1 基础</option>
+          <option value="L2" selected>L2 半自动</option>
+          <option value="L3">L3 全自动</option>
+        </select>
+        <input id="opt-attempts" type="number" value="5" min="1" max="10" class="w-16 px-2 py-1 text-xs border border-gray-200 rounded-lg">
+      </div>
+    </div>
+
+    <!-- Run Button -->
+    <div class="p-3">
+      <button onclick="runDebug()" id="run-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
+        <span>▶</span> 启动调试管线
+      </button>
+    </div>
+
+    <!-- History -->
+    <div class="flex-1 overflow-y-auto p-3 border-t border-gray-100">
+      <p class="text-xs text-gray-400 font-medium mb-2">历史查询</p>
+      <div id="history-list" class="space-y-1 text-xs text-gray-500"></div>
+    </div>
+  </aside>
+
+  <!-- Right: Results -->
+  <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <!-- Pipeline Stages -->
+    <div class="p-3 border-b border-gray-200 bg-white flex-shrink-0">
+      <p class="text-xs text-gray-400 font-medium mb-2">管线阶段</p>
+      <div class="grid grid-cols-6 gap-2" id="stages-grid">
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">1. Input</div>
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">2. Memory</div>
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">3. Election</div>
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">4. LLM</div>
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">5. Tools</div>
+        <div class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">6. Summary</div>
+      </div>
+    </div>
+
+    <!-- Output Area -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-3" id="output-area">
+      <div class="flex items-center justify-center h-full text-gray-400 text-sm">
+        <div class="text-center">
+          <div class="text-4xl mb-2">🐛</div>
+          <p>输入查询并点击"启动调试管线"</p>
+          <p class="text-xs mt-1">支持文本/文件/文件夹多模态输入</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Panel -->
+    <div id="log-panel" class="border-t border-gray-200 bg-gray-900 flex-shrink-0 hidden" style="max-height:200px;overflow-y:auto">
+    </div>
+
+    <!-- Status Bar -->
+    <footer class="flex items-center gap-4 px-3 py-0.5 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 flex-shrink-0">
+      <span id="status">就绪</span>
+      <span class="flex-1"></span>
+      <span id="total-time"></span>
+      <span id="provider-name"></span>
+    </footer>
+  </main>
+</div>
+
+<script>
+window.LT = window.LT || {};
+LT.esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const history = [];
+const stageNames = ['Input Normalization','ContextMoE Memory','Provider Election','LLM Chat','Tool Call Detection','Error Summary'];
+
+function handleFile(file) {
+  if (!file) return;
+  const el = document.getElementById('file-list');
+  el.innerHTML = `📎 ${file.name} (${(file.size/1024).toFixed(0)}KB)`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const content = e.target.result.slice(0, 2000);
+    document.getElementById('debug-msg').value = `文件内容:\n${content}\n\n请分析这个文件`;
+  };
+  if (file.type.startsWith('text/') || file.name.endsWith('.py') || file.name.endsWith('.md')) {
+    reader.readAsText(file);
+  }
+}
+
+function pickFolder() {
+  document.getElementById('file-list').innerHTML = '📂 请拖拽文件夹到页面';
+}
+
+async function runDebug() {
+  const msg = document.getElementById('debug-msg').value.trim();
+  if (!msg) return;
+
+  const verbose = document.getElementById('opt-verbose').checked;
+  const trace = document.getElementById('opt-trace').checked;
+  const selfcheck = document.getElementById('opt-selfcheck').checked;
+  const level = document.getElementById('opt-level').value;
+
+  const area = document.getElementById('output-area');
+  area.innerHTML = '';
+
+  const t0 = performance.now();
+  document.getElementById('status').textContent = '运行中...';
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('run-btn').innerHTML = '<div class="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>';
+
+  // Reset stages
+  const grid = document.getElementById('stages-grid');
+  grid.innerHTML = stageNames.map((n,i) =>
+    `<div id="stage-${i}" class="text-center px-2 py-2 rounded-lg bg-gray-50 text-xs text-gray-400">${i+1}. ${n.split(' ')[0]}</div>`
+  ).join('');
+
+  // Open log panel
+  const log = document.getElementById('log-panel');
+  log.classList.remove('hidden');
+  log.innerHTML = '<div class="p-2 text-xs text-gray-400 font-mono">📋 调试日志</div>';
+
+  function addLog(text, cls) {
+    const d = document.createElement('div');
+    d.className = `log-line px-2 py-0.5 ${cls}`;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Build SSE URL
+  let url = `/api/chat/stream?message=${encodeURIComponent(msg)}&verbose=${verbose}`;
+  if (trace) url += '&trace=1';
+  if (selfcheck) url += '&selfcheck=1';
+
+  addLog(`[start] 调试管线启动 L=${level} trace=${trace} selfcheck=${selfcheck}`, 'log-info');
+
+  try {
+    const resp = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg, stream: true, verbose, trace, selfcheck})
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let stageIdx = 0;
+    let fullText = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, {stream: true});
+      const events = chunk.split('\n\n').filter(e => e.trim());
+
+      for (const eventBlock of events) {
+        const lines = eventBlock.split('\n');
+        let eventType = 'message', eventData = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7);
+          else if (line.startsWith('data: ')) eventData = line.slice(6);
+        }
+        if (!eventData || eventData === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(eventData);
+          const content = parsed.content || parsed.text || '';
+
+          // Map to pipeline stage
+          if (content.includes('kind=') && stageIdx < 6) {
+            updateStage(stageIdx, 'stage-running');
+            stageIdx++;
+          } else if (eventType === 'content' && stageIdx < 6) {
+            updateStage(stageIdx, 'stage-pass');
+            stageIdx++;
+          }
+
+          // Show output
+          if (content) {
+            fullText += content;
+            area.innerHTML = `<div class="bg-white rounded-xl shadow-sm p-4">
+              <div class="text-xs text-gray-400 mb-2">📝 输出 (${fullText.length} 字符)</div>
+              <div class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">${LT.esc(fullText.slice(0, 5000))}</div>
+            </div>`;
+          }
+
+          // Tool events
+          if (eventType === 'tool_start') {
+            addLog(`[tool] ${parsed.name}: ${(parsed.args||'').slice(0,80)}`, 'log-warn');
+          }
+          if (eventType === 'tool_done') {
+            addLog(`[tool] ${parsed.name} done (${parsed.elapsed_ms||0}ms)`, 'log-info');
+          }
+
+        } catch(e) {}
+      }
+    }
+
+    // Mark all stages complete
+    for (let i = 0; i < 6; i++) updateStage(i, 'stage-pass');
+
+    const total = (performance.now() - t0).toFixed(0);
+    document.getElementById('total-time').textContent = `总耗时: ${total}ms`;
+    document.getElementById('provider-name').textContent = 'Provider: deepseek';
+    document.getElementById('status').textContent = '✅ 完成';
+
+    // Add to history
+    history.unshift({msg: msg.slice(0,60), time: total, ts: new Date().toLocaleTimeString()});
+    renderHistory();
+
+  } catch(e) {
+    addLog(`[error] ${e.message}`, 'log-error');
+    document.getElementById('status').textContent = '❌ 失败';
+  }
+
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').innerHTML = '<span>▶</span> 启动调试管线';
+}
+
+function updateStage(idx, cls) {
+  const el = document.getElementById('stage-'+idx);
+  if (!el) return;
+  el.className = `text-center px-2 py-2 rounded-lg text-xs ${cls}`;
+  if (cls === 'stage-pass') el.textContent = '✅ ' + stageNames[idx].split(' ')[0];
+  else if (cls === 'stage-running') el.textContent = '🔄 ' + stageNames[idx].split(' ')[0];
+}
+
+function renderHistory() {
+  document.getElementById('history-list').innerHTML = history.map((h,i) =>
+    `<div class="px-2 py-1 rounded hover:bg-gray-50 cursor-pointer truncate" onclick="document.getElementById('debug-msg').value='${LT.esc(h.msg)}'">
+      <span class="text-gray-300">${h.ts}</span> ${LT.esc(h.msg)}
+      <span class="text-gray-300 ml-1">${h.time}ms</span>
+    </div>`
+  ).join('') || '<div class="text-gray-300">暂无历史</div>';
+}
+
+// Drag-drop support
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+</script>
+</body>
+</html>

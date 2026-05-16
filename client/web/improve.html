@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔧 Self-Improve — LivingTree</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+  .defect-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+</style>
+</head>
+<body class="h-full bg-gray-50 flex flex-col">
+
+<header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+  <h1 class="text-sm font-bold text-gray-800">🔧 Self-Improve</h1>
+  <span class="text-xs text-gray-400">代码扫描 · 创新提案 · 自动实施</span>
+  <span class="flex-1"></span>
+  <a href="/" target="_blank" class="text-xs text-blue-500 hover:text-blue-600">🏠 首页</a>
+</header>
+
+<div class="flex-1 flex overflow-hidden">
+  <!-- Controls -->
+  <aside class="w-72 bg-white border-r border-gray-200 flex-shrink-0 p-3 flex flex-col gap-3">
+    <div>
+      <label class="text-xs text-gray-500 font-medium block mb-2">扫描模式</label>
+      <div class="space-y-1.5">
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="radio" name="mode" value="scan" checked onchange="updateMode()"> 🔍 仅扫描缺陷
+        </label>
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="radio" name="mode" value="propose" onchange="updateMode()"> 💡 扫描+提案
+        </label>
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="radio" name="mode" value="auto" onchange="updateMode()"> ⚡ 全自动循环
+        </label>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-xs text-gray-500 font-medium block mb-2">参数</label>
+      <div class="space-y-2">
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-llm" checked class="rounded"> LLM 深度分析
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-apply" class="rounded"> 自动实施修改
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-cg" checked class="rounded"> CodeGraph 分析
+        </label>
+        <label class="flex items-center gap-1 text-xs text-gray-600">
+          <input type="checkbox" id="opt-ripgrep" class="rounded"> ripgrep 加速搜索
+        </label>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-xs text-gray-500 font-medium block mb-1">扫描范围</label>
+      <input id="opt-scope" value="livingtree/" placeholder="livingtree/"
+        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <button onclick="runImprove()" id="run-btn" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
+      <span>▶</span> 开始扫描
+    </button>
+
+    <div id="progress-area" class="hidden">
+      <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full bg-green-500 rounded-full transition-all duration-700" style="width:0%"></div>
+      </div>
+      <p id="progress-text" class="text-xs text-gray-400 mt-1"></p>
+    </div>
+  </aside>
+
+  <!-- Results -->
+  <main class="flex-1 overflow-y-auto p-4" id="results-area">
+    <div class="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div class="text-center"><div class="text-4xl mb-2">🔧</div><p>选择扫描模式并点击"开始扫描"</p></div>
+    </div>
+  </main>
+</div>
+
+<script>
+function updateMode() {
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const btn = document.getElementById('run-btn');
+  const labels = {scan:'▶ 开始扫描', propose:'💡 生成提案', auto:'⚡ 全自动循环'};
+  btn.innerHTML = `<span>▶</span> ${labels[mode]}`;
+}
+
+async function runImprove() {
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const llm = document.getElementById('opt-llm').checked;
+  const apply = document.getElementById('opt-apply').checked;
+
+  const area = document.getElementById('results-area');
+  const progress = document.getElementById('progress-area');
+  const bar = document.getElementById('progress-bar');
+  const text = document.getElementById('progress-text');
+
+  progress.classList.remove('hidden');
+  bar.style.width = '10%'; text.textContent = '扫描代码库...';
+  document.getElementById('run-btn').disabled = true;
+
+  try {
+    const resp = await fetch('/api/improve/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode, llm, apply})
+    });
+    bar.style.width = '50%'; text.textContent = '分析中...';
+
+    const d = await resp.json();
+    bar.style.width = '100%'; text.textContent = '完成';
+
+    if (d.error) {
+      area.innerHTML = `<div class="text-red-500 text-sm">❌ ${d.error}</div>`;
+      return;
+    }
+
+    // Show results
+    let html = '<div class="space-y-4">';
+
+    // Stats
+    if (d.defects !== undefined) {
+      html += `<div class="bg-white rounded-xl shadow-sm p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 扫描统计</h3>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="text-center p-3 bg-red-50 rounded-lg"><div class="text-xl font-bold text-red-600">${d.defects||0}</div><div class="text-xs text-red-500">缺陷</div></div>
+          <div class="text-center p-3 bg-blue-50 rounded-lg"><div class="text-xl font-bold text-blue-600">${d.innovations||0}</div><div class="text-xs text-blue-500">创新提案</div></div>
+          <div class="text-center p-3 bg-green-50 rounded-lg"><div class="text-xl font-bold text-green-600">${d.implemented||0}</div><div class="text-xs text-green-500">已实施</div></div>
+          <div class="text-center p-3 bg-purple-50 rounded-lg"><div class="text-xl font-bold text-purple-600">${d.validated||0}</div><div class="text-xs text-purple-500">已验证</div></div>
+        </div>
+      </div>`;
+    }
+
+    // Categories
+    if (d.by_category) {
+      html += '<div class="bg-white rounded-xl shadow-sm p-4"><h3 class="text-sm font-semibold text-gray-700 mb-2">📂 按类别</h3><div class="space-y-1">';
+      for (const [cat, n] of Object.entries(d.by_category)) {
+        const pct = d.defects ? Math.round(n/d.defects*100) : 0;
+        html += `<div class="flex items-center gap-2 text-xs">
+          <span class="w-16 text-gray-500">${cat}</span>
+          <div class="flex-1 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-blue-500 rounded-full" style="width:${pct}%"></div></div>
+          <span class="w-8 text-right text-gray-400">${n}</span></div>`;
+      }
+      html += '</div></div>';
+    }
+
+    // Top defects
+    if (d.top_defects) {
+      html += '<div class="bg-white rounded-xl shadow-sm p-4"><h3 class="text-sm font-semibold text-gray-700 mb-2">🔝 主要缺陷</h3>';
+      for (const def of d.top_defects.slice(0,10)) {
+        const sev = {high:'🔴',medium:'🟡',low:'🟢'}[def.severity]||'⚪';
+        html += `<div class="defect-card flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 text-xs">
+          <span>${sev}</span><div><span class="text-gray-700">${def.title||''}</span>
+          <span class="text-gray-400 ml-2">${def.file||''}</span></div></div>`;
+      }
+      html += '</div>';
+    }
+
+    // Innovations
+    if (d.innovations_list && d.innovations_list.length) {
+      html += '<div class="bg-white rounded-xl shadow-sm p-4"><h3 class="text-sm font-semibold text-gray-700 mb-2">💡 创新提案</h3>';
+      for (const inn of d.innovations_list.slice(0,10)) {
+        html += `<div class="border-l-2 border-blue-300 pl-3 py-1 mb-1 text-xs">
+          <span class="text-blue-700 font-medium">${inn.title||''}</span>
+          <span class="text-gray-400 ml-2">[${inn.category||''}] ${inn.complexity||''}</span>
+          <p class="text-gray-500 mt-0.5">${inn.description||''}</p></div>`;
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    area.innerHTML = html;
+
+  } catch(e) {
+    area.innerHTML = `<div class="text-red-500 text-sm">❌ ${e.message}</div>`;
+  }
+
+  document.getElementById('run-btn').disabled = false;
+}
+</script>
+</body>
+</html>

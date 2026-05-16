@@ -184,6 +184,14 @@ def create_app(hub=None, config=None) -> FastAPI:
         async def serve_capability():
             return FileResponse(str(web_root / "capability.html"))
 
+        @app.get("/debug")
+        async def serve_debug():
+            return FileResponse(str(web_root / "debug.html"))
+
+        @app.get("/improve")
+        async def serve_improve():
+            return FileResponse(str(web_root / "improve.html"))
+
         @app.get("/favicon.ico")
         async def serve_favicon():
             return FileResponse(str(web_root / "assets" / "favicon.ico")) if (web_root / "assets" / "favicon.ico").exists() else Response(status_code=204)

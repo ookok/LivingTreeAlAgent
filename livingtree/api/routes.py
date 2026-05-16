@@ -3213,9 +3213,52 @@ def _get_user_id_from_request(request: Request) -> str:
         except Exception as e:
             return {"error": str(e)[:200], "capabilities": []}
 
-            sql = sql.strip().rstrip(';') + ';'
+    # ═══ Improve API ═══
 
-            return {"sql": sql, "question": question}
+    @app.post("/api/improve/run")
+    async def api_improve_run(request: Request):
+        """Run self-improvement pipeline with full parameters."""
+        try:
+            data = await request.json()
+            mode = data.get("mode", "scan")
+            use_llm = data.get("llm", True)
+            auto_apply = data.get("apply", False)
+
+            from ..treellm.self_improver import get_self_improver
+            improver = get_self_improver()
+
+            if mode == "scan":
+                defects = await improver._scanner.scan(use_llm=use_llm)
+                report = improver._scanner.report()
+                return {
+                    "defects": report["total"],
+                    "by_category": report.get("by_category", {}),
+                    "by_severity": report.get("by_severity", {}),
+                    "top_defects": [{"title": d["title"], "file": d["file"],
+                        "severity": d["severity"], "category": d["category"]}
+                        for d in report.get("top5", [])],
+                }
+
+            elif mode == "propose":
+                defects = await improver._scanner.scan(use_llm=use_llm)
+                innovations = await improver._proposer.propose(defects, use_llm=use_llm)
+                report = improver._scanner.report()
+                return {
+                    "defects": report["total"],
+                    "by_category": report.get("by_category", {}),
+                    "innovations": len(innovations),
+                    "innovations_list": [{"title": i.title, "description": i.description[:200],
+                        "category": i.category, "complexity": i.complexity} for i in innovations[:10]],
+                }
+
+            else:  # auto
+                result = await improver.improve(use_llm=use_llm, auto_apply=auto_apply)
+                return {
+                    "defects": result.get("defects", 0),
+                    "innovations": result.get("innovations", 0),
+                    "implemented": result.get("implemented", 0),
+                    "validated": result.get("validated", 0),
+                }
         except Exception as e:
             return {"error": str(e)[:200]}
 

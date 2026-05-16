@@ -172,9 +172,13 @@ class ToolAdapter(CapabilityAdapter):
             from ..execution.react_executor import ReactExecutor
             rex_tools = {
                 "web_search": ("Search the internet for current information, news, or facts", "query"),
-                "browser_browse": ("Open a web page in headless browser, perform actions (type/click), and extract content. Use for JS-heavy or interactive sites", "url + task"),
-                "web_fetch": ("Fetch a static web page by URL and return its text content", "url"),
-                "api_search": ("Find available API endpoints (weather, maps, translation, etc.) by keyword. Use before api_call", "keyword"),
+                "browser_browse": ("Open a page in browser, type/click/extract. For JS-rendered or interactive sites", "url + task"),
+                "web_fetch": ("Fetch a static page by URL (Scrapling with TLS impersonation)", "url"),
+                "browser_screenshot": ("Take a screenshot of the current browser page for visual analysis", "none"),
+                "browser_session_open": ("Open a persistent browser session (reuse across multiple browse calls)", "url"),
+                "browser_session_close": ("Close the current browser session", "none"),
+                "browser_session_list": ("List active browser sessions", "none"),
+                "api_search": ("Find available API endpoints (weather, maps, translation) by keyword. Use before api_call", "keyword"),
                 "kb_search": ("Search knowledge base", "query"),
                 "read_file": ("Read a file", "path"),
                 "write_file": ("Write to a file", "path\\ncontent"),
@@ -226,6 +230,10 @@ class ToolAdapter(CapabilityAdapter):
                 "web_search": rex._tool_web_search,
                 "browser_browse": lambda s: self._browser_browse(s),
                 "web_fetch": lambda s: self._web_fetch(s),
+                "browser_screenshot": lambda s: self._browser_screenshot(s),
+                "browser_session_open": lambda s: self._browser_session(s, "open", s),
+                "browser_session_close": lambda s: self._browser_session(s, "close", ""),
+                "browser_session_list": lambda s: self._browser_session_list(),
                 "api_search": lambda s: self._api_search(s),
                 "kb_search": rex._tool_kb_search,
                 "read_file": lambda s: self._read_file(s),
@@ -265,34 +273,88 @@ class ToolAdapter(CapabilityAdapter):
             return {"success": False, "error": str(e), "source": "browser_browse"}
 
     async def _web_fetch(self, input_str: str) -> dict:
-        """Fetch a static web page, returns cleaned text content."""
+        """Fetch a static page via Scrapling Fetcher (TLS impersonation)."""
         try:
             args = self._parse_tool_args(input_str)
             url = args.get("url", input_str.strip())
-            import aiohttp
-            async with aiohttp.ClientSession() as s:
-                r = await s.get(url, timeout=aiohttp.ClientTimeout(total=15),
-                               headers={"User-Agent": "Mozilla/5.0"})
-                text = await r.text()
-                import re
-                clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
-                clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL)
-                clean = re.sub(r'<[^>]+>', '\n', clean)
-                clean = re.sub(r'\n{3,}', '\n\n', clean).strip()[:8000]
-                title_m = re.search(r'<title[^>]*>(.*?)</title>', text, re.I)
-                links = []
-                for m in re.finditer(r'href=["\']([^"\']+\.(?:pdf|docx?|xlsx?|zip))["\'][^>]*>([^<]+)', text, re.I):
-                    links.append({"url": m.group(1), "title": m.group(2).strip()[:80]})
-                return {
-                    "success": r.status < 400,
-                    "url": url,
-                    "title": title_m.group(1).strip() if title_m else "",
-                    "text": clean,
-                    "links": links[:20],
-                    "status": r.status,
-                }
+            from scrapling.fetchers import Fetcher
+            import re
+            page = Fetcher.get(url, timeout=15, stealthy_headers=True)
+            title = page.css("title::text").get() or ""
+            clean = page.get_all_text(strip=True)[:8000] if hasattr(page, 'get_all_text') else (page.text or "")[:8000]
+            links = []
+            for a in page.css("a[href]"):
+                href = a.attrib.get("href", "")
+                if any(href.lower().endswith(e) for e in [".pdf", ".docx", ".xlsx", ".zip"]):
+                    links.append({"url": href, "title": (a.text or "").strip()[:80]})
+            return {
+                "success": True, "url": url, "title": title,
+                "text": clean, "links": links[:20],
+            }
         except Exception as e:
-            return {"success": False, "error": str(e), "source": "web_fetch"}
+            # Fallback: aiohttp
+            try:
+                args = self._parse_tool_args(input_str)
+                url = args.get("url", input_str.strip())
+                import aiohttp, re
+                async with aiohttp.ClientSession() as s:
+                    r = await s.get(url, timeout=aiohttp.ClientTimeout(total=15),
+                                   headers={"User-Agent": "Mozilla/5.0"})
+                    text = await r.text()
+                    clean = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                    clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL)
+                    clean = re.sub(r'<[^>]+>', '\n', clean)
+                    clean = re.sub(r'\n{3,}', '\n\n', clean).strip()[:8000]
+                    title_m = re.search(r'<title[^>]*>(.*?)</title>', text, re.I)
+                    return {
+                        "success": r.status < 400, "url": url,
+                        "title": title_m.group(1).strip() if title_m else "",
+                        "text": clean, "links": [], "status": r.status,
+                    }
+            except Exception as e2:
+                return {"success": False, "error": str(e2), "source": "web_fetch"}
+
+    async def _browser_screenshot(self, input_str: str) -> dict:
+        """Take screenshot of current browser page, return base64 for LLM analysis."""
+        try:
+            from ..capability.browser_agent import get_browser_agent
+            import base64
+            agent = get_browser_agent()
+            result = await agent.screenshot()
+            return {
+                "success": result.get("success", False),
+                "base64_preview": result.get("base64", "")[:200] + "...",
+                "width": result.get("width", 0),
+                "height": result.get("height", 0),
+                "error": result.get("error", ""),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _browser_session(self, input_str: str, action: str) -> dict:
+        """Manage persistent browser sessions: open / close."""
+        try:
+            from ..capability.browser_agent import get_browser_agent
+            agent = get_browser_agent()
+            if action == "open":
+                args = self._parse_tool_args(input_str)
+                url = args.get("url", "")
+                result = await agent.session_open(url)
+                return result
+            elif action == "close":
+                result = await agent.session_close()
+                return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _browser_session_list(self) -> dict:
+        """List active browser sessions."""
+        try:
+            from ..capability.browser_agent import get_browser_agent
+            agent = get_browser_agent()
+            return agent.session_list()
+        except Exception as e:
+            return {"sessions": [], "error": str(e)}
 
     async def _api_search(self, input_str: str) -> dict:
         """Search registered APIs by keyword."""

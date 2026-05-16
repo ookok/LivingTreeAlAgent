@@ -95,16 +95,24 @@ class BrowserAgent:
             return result
 
         browser = None
+        own_browser = False
         try:
-            pw = await async_playwright().__aenter__()
-            browser = await pw.chromium.launch(headless=True)
-            ctx = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
-                viewport={"width": 1920, "height": 1080}, locale="zh-CN",
-            )
-            page = await ctx.new_page()
+            # Reuse session if active
+            sid = getattr(self, '_active_session', None)
+            state = (getattr(self, '_session_state', {}) or {}).get(sid, {}) if sid else {}
+            if state.get("page"):
+                browser = state["browser"]
+                page = state["page"]
+            else:
+                pw = await async_playwright().__aenter__()
+                browser = await pw.chromium.launch(headless=True)
+                ctx = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+                    viewport={"width": 1920, "height": 1080}, locale="zh-CN",
+                )
+                page = await ctx.new_page()
+                own_browser = True
 
-            # Navigate (pre-check via Scrapling for WAF)
             await self._navigate(page, url)
             result.title = await page.title()
             result.method = "playwright"
@@ -137,7 +145,7 @@ class BrowserAgent:
             logger.warning(f"BrowserAgent: {e}")
         finally:
             try:
-                if browser:
+                if browser and own_browser:
                     await browser.close()
             except Exception:
                 pass
@@ -373,6 +381,73 @@ class BrowserAgent:
             try: return json.loads(m.group(0))
             except json.JSONDecodeError: pass
         return {}
+
+    # ═══ Session Management ════════════════════════════════════════
+
+    async def session_open(self, url: str = "") -> dict:
+        """Open a persistent browser session (reused across browse calls)."""
+        if not HAS_PLAYWRIGHT:
+            return {"success": False, "error": "Playwright not installed"}
+        try:
+            if not hasattr(self, '_session_state'):
+                self._session_state = {}
+            sid = f"ses_{int(time.time())}"
+            pw = await async_playwright().__aenter__()
+            browser = await pw.chromium.launch(headless=True)
+            ctx = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}, locale="zh-CN",
+            )
+            page = await ctx.new_page()
+            if url:
+                await page.goto(url, timeout=30_000, wait_until="networkidle")
+            self._session_state[sid] = {"playwright": pw, "browser": browser, "context": ctx, "page": page}
+            self._active_session = sid
+            return {"success": True, "session_id": sid, "url": url}
+        except Exception as e:
+            return {"success": False, "error": str(e)[:200]}
+
+    async def session_close(self) -> dict:
+        """Close the active browser session."""
+        sid = getattr(self, '_active_session', None)
+        if not sid or not hasattr(self, '_session_state'):
+            return {"success": False, "error": "No active session"}
+        try:
+            state = self._session_state.pop(sid, {})
+            if state.get("browser"):
+                await state["browser"].close()
+            self._active_session = None
+            return {"success": True, "closed": sid}
+        except Exception as e:
+            return {"success": False, "error": str(e)[:200]}
+
+    def session_list(self) -> dict:
+        """List active browser sessions."""
+        sessions = getattr(self, '_session_state', {})
+        return {"sessions": [{"id": k, "url": v.get("page", None) and v["page"].url or ""}
+                             for k, v in sessions.items()],
+                "active": getattr(self, '_active_session', None)}
+
+    # ═══ Screenshot ═════════════════════════════════════════════════
+
+    async def screenshot(self) -> dict:
+        """Take screenshot of the active browser page."""
+        sid = getattr(self, '_active_session', None)
+        state = (getattr(self, '_session_state', {}) or {}).get(sid, {}) if sid else {}
+        page = state.get("page")
+        if not page:
+            return {"success": False, "error": "No active browser session. Use browser_session_open first."}
+        try:
+            import base64
+            shot = await page.screenshot(type="png", full_page=False)
+            return {
+                "success": True,
+                "base64": base64.b64encode(shot).decode(),
+                "width": page.viewport_size.get("width", 0) if page.viewport_size else 0,
+                "height": page.viewport_size.get("height", 0) if page.viewport_size else 0,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)[:200]}
 
 
 _agent: Optional[BrowserAgent] = None

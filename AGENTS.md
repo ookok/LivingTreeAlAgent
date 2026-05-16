@@ -17,8 +17,12 @@ User Input → TreeLLM.chat() →
 | `api_search` | `capability_bus.py → api_map` | Discover matching APIs by keyword |
 | `api_call` | `treellm/api_map.py` | 28 REST/JSON APIs (weather, maps, translate, etc.) |
 | `web_search` | `execution/react_executor.py` | Multi-engine: Parallel MCP → SparkSearch → Bing → DDG |
-| `web_fetch` | `capability_bus.py → aiohttp` | Static HTTP GET, returns cleaned text |
+| `web_fetch` | `capability_bus.py → Scrapling Fetcher` | Static HTTP GET (TLS impersonation, stealth headers) |
 | `browser_browse` | `capability/browser_agent.py` | Playwright + LLM: JS render, type, click, extract (ARIA tree, ~2KB per page) |
+| `browser_screenshot` | `capability/browser_agent.py` | Take page screenshot, returns base64 for LLM visual analysis |
+| `browser_session_open` | `capability/browser_agent.py` | Open persistent browser session (reuse across calls) |
+| `browser_session_close` | `capability/browser_agent.py` | Close browser session |
+| `browser_session_list` | `capability/browser_agent.py` | List active sessions |
 
 Key: **LLM is the router**. No centralized tool dispatcher. The LLM sees available tools
 and decides which to call based on the user's intent.

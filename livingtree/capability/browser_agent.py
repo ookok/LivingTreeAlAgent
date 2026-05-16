@@ -193,18 +193,18 @@ class BrowserAgent:
         return None
 
     def _direct_extract(self, page, task: str) -> list[dict]:
-        """Use Scrapling's full extraction toolkit: CSS, text, regex, similar, adaptive."""
+        """General-purpose extraction via Scrapling: CSS → text → similar → links."""
         items = []
 
         # 1) Structured selectors: tables, lists, articles
-        for sel in ["table tr", "ul li", ".xxgk_content", "#zoom",
-                    "[class*='item']", "[class*='list']", "[class*='article']", "[class*='result']"]:
+        for sel in ["table tr", "ul li", "[class*='item']", "[class*='list']",
+                    "[class*='article']", "[class*='result']", "[class*='content']",
+                    ".xxgk_content", "#zoom", ".article-content", ".main-content"]:
             els = page.css(sel, auto_save=True)
             if len(els) > 1:
                 for el in els[:50]:
                     text = el.text.strip() if el.text else ""
                     if len(text) > 20:
-                        # Auto-generate CSS selector for later reuse
                         sel_gen = el.generate_css_selector if hasattr(el, 'generate_css_selector') else ""
                         items.append({"text": text[:500], "selector": sel_gen or sel})
                 if items:
@@ -227,23 +227,7 @@ class BrowserAgent:
             except Exception:
                 continue
 
-        # 3) find_by_regex: match patterns like 项目名称, 建设单位, 下载
-        patterns = [
-            r'(?:项目|工程).{2,30}(?:项目|报告|公示)',
-            r'(?:建设|编制|评价).{2,20}(?:单位|机构)',
-            r'https?://[^\s]+\.(?:pdf|docx?|xlsx?|zip)',
-        ]
-        for pat in patterns:
-            try:
-                matches = page.find_by_regex(_re.compile(pat), first_match=False)
-                if matches:
-                    for m in matches[:50]:
-                        items.append({"text": m.text[:500], "pattern": pat, "method": "regex"})
-                    return items
-            except Exception:
-                continue
-
-        # 4) Download links
+        # 3) Download links (pdf, doc, xls, zip etc.)
         dl_links = [{"text": (a.text or "附件").strip()[:200],
                      "link": a.attrib.get("href", ""),
                      "method": "download_link"}

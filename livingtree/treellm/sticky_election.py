@@ -68,6 +68,14 @@ class StickyElection:
 
     LAYER_COUNT = 5
     LAYER_NAMES = {0: "primary", 1: "fallback", 2: "reasoning", 3: "creative", 4: "emergency"}
+    LAYER_DEFAULTS = {
+        0: ("deepseek", "deepseek-v4-flash"),    # fast/cheap
+        1: ("deepseek", "deepseek-v4-flash"),    # retry same model
+        2: ("deepseek", "deepseek-v4-pro"),      # deep reasoning
+        3: ("deepseek", "deepseek-v4-pro"),      # high quality
+        4: ("deepseek", "deepseek-v4-flash"),    # reliable baseline
+    }
+    EMBEDDING_MODEL = "BAAI/bge-large-zh-v1.5"
     LAYER_DOMAINS = {
         0: ["general", "chat", "conversation", "qa"],
         1: ["search", "knowledge", "retrieval", "lookup"],
@@ -228,14 +236,27 @@ class StickyElection:
             return binding
 
     async def _elect_layer(self, layer: int, exclude: str = "") -> LayerBinding:
+        """Elect provider for a layer using pre-configured defaults or scoring."""
         candidates = self._get_candidates()
+
+        # Use LAYER_DEFAULTS if no runtime scoring data accumulated
+        default = self.LAYER_DEFAULTS.get(layer, ("deepseek", ""))
+        has_scoring = any(
+            c.get("success_rate", 0.5) != 0.5 or c.get("reasoning_score", 0) > 0
+            for c in candidates
+        )
+
+        if not has_scoring:
+            provider_name, model = default
+            return LayerBinding(layer=layer, provider_name=provider_name,
+                               model=model, elected_at=time.time())
+
+        # Scoring-based election (runs after history accumulated)
         if exclude:
             candidates = [c for c in candidates if c.get("name") != exclude]
         if not candidates:
-            return LayerBinding(layer=layer, provider_name="unknown", model="unknown",
-                               elected_at=time.time())
-
-        if layer == 0:
+            return LayerBinding(layer=layer, provider_name=default[0],
+                               model=default[1], elected_at=time.time())
             best = min(candidates, key=lambda c: (c.get("cost", 999), c.get("avg_latency_ms", 9999)))
         elif layer == 1:
             scored = [(c, c.get("success_rate", 0) * 0.6 + (1 - c.get("avg_latency_ms", 0) / 10000) * 0.4) for c in candidates]
@@ -389,6 +410,28 @@ class StickyElection:
             for name in [binding.provider_name] + binding.attractor_basin
         )
         return binding.degraded and all_exhausted
+
+    # ═══ Embedding ══════════════════════════════════════════════════
+
+    def _get_embedding(self, text: str) -> list[float]:
+        """Get text embedding. Tries bge-large-zh first, falls back to hash."""
+        if not getattr(self, '_embed_model', None):
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._embed_model = SentenceTransformer(
+                    self.EMBEDDING_MODEL, cache_folder="./models")
+            except Exception:
+                self._embed_model = None
+        if self._embed_model:
+            try:
+                return self._embed_model.encode(text).tolist()
+            except Exception:
+                pass
+        try:
+            from ..dna.task_vector_geometry import text_to_embedding
+            return text_to_embedding(text)
+        except Exception:
+            return [0.0] * 128
 
     # ═══ Internal ═══════════════════════════════════════════════════
 

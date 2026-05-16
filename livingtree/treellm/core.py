@@ -157,6 +157,16 @@ class TreeLLM:
                     logger.info(f"ModelRegistry: updated {updated} provider models")
             except Exception as e:
                 logger.debug(f"ModelRegistry: {e}")
+
+            # ── StickyElection: startup L0-L4 provider election + bge embedding ──
+            try:
+                from .sticky_election import get_sticky_election
+                self._sticky = get_sticky_election(llm)
+                asyncio.ensure_future(self._sticky.elect_all())
+                # Pre-warm embedding model in background
+                asyncio.ensure_future(self._warm_embedding())
+            except Exception as e:
+                logger.debug(f"StickyElection init: {e}")
             # Quick health check
             try:
                 from .vital_signs import get_vital_signs
@@ -1198,6 +1208,14 @@ class TreeLLM:
             return messages
 
     # ── Private ──
+
+    async def _warm_embedding(self):
+        """Pre-load embedding model in background."""
+        try:
+            from .sticky_election import get_sticky_election
+            get_sticky_election()._get_embedding("warmup")
+        except Exception:
+            pass
 
     def _resolve_provider(self, name: str) -> Provider | None:
         if name and name in self._providers:

@@ -29,9 +29,11 @@ a = Analysis(
         'livingtree.network.domain_ip_pool',
         'livingtree.network.proxy_fetcher',
         'livingtree.network.resilience',
-        # External
+        # External — all must be installed in build env
         'aiohttp', 'loguru', 'numpy',
-        'aioquic', 'cryptography',
+        'aioquic', 'aioquic.asyncio', 'aioquic.h3.connection', 'aioquic.quic.connection',
+        'cryptography', 'cryptography.hazmat.primitives',
+        'pylsqpack',
         'argparse', 'asyncio', 'signal',
         'json', 'threading', 'hashlib', 'sqlite3',
         'ssl', 'struct', 'socket', 'pathlib',

@@ -10,21 +10,11 @@
     pyinstaller --clean scinet.spec
 """
 
-import sys, os, asyncio, signal, argparse, importlib.util
+import sys, os, asyncio, signal, argparse
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def _load_module(name: str, path: str):
-    """Load a module by file path — bypasses package __init__.py chain."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-# Import scinet directly, bypassing livingtree/__init__.py heavy chain
-_scinet = _load_module("scinet_service", os.path.join(BASE, "livingtree", "network", "scinet_service.py"))
-get_scinet = _scinet.get_scinet
+from livingtree.network.scinet_service import get_scinet
 
 
 def main():
@@ -39,8 +29,8 @@ def main():
     scinet = get_scinet(port=args.port)
     dns = None
     if args.dns:
-        _dns_mod = _load_module("smart_dns", os.path.join(BASE, "livingtree", "network", "smart_dns.py"))
-        dns = _dns_mod.get_smart_dns(port=args.dns_port)
+        from livingtree.network.smart_dns import get_smart_dns
+        dns = get_smart_dns(port=args.dns_port)
 
     async def run():
         print(f"[Scinet v2.0] Starting on port {args.port}...")
@@ -71,8 +61,8 @@ def main():
 
         if args.wt:
             try:
-                _wt = _load_module("scinet_webtransport", os.path.join(BASE, "livingtree", "network", "scinet_webtransport.py"))
-                wt = _wt.get_webtransport_server(port=args.port + 1)
+                from livingtree.network.scinet_webtransport import get_webtransport_server
+                wt = get_webtransport_server(port=args.port + 1)
                 await wt.start()
                 print(f"  WebTransport: https://127.0.0.1:{args.port + 1}/scinet/wt")
             except Exception as e:

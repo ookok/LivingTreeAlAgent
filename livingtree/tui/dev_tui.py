@@ -1,19 +1,16 @@
 """DevTUI — minimal terminal UI with bubble messages, streaming, markdown, code highlight, tool calls.
 
-Features:
-  - Bubble messages (user/assistant with colors)
-  - Streaming output (tokens appear in real-time)
-  - Markdown rendering (Rich Markdown)
-  - Code syntax highlighting (Rich Syntax)
-  - Tool call visualization (expandable, status icons)
-  - Diff view
-  - Multi-task status bar
+Task lifecycle:
+  submitted → streaming → processing_tools → reviewing → done/failed
+  Pulse animation shows system is alive during each phase.
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
+import time
+from enum import Enum
 
 from rich.markdown import Markdown
 from rich.syntax import Syntax
@@ -22,10 +19,43 @@ from rich.table import Table
 from rich.text import Text
 from rich.console import RenderableType, Group
 from textual.app import App, ComposeResult
-from textual.containers import Container, VerticalScroll, Horizontal
+from textual.containers import Container, VerticalScroll
 from textual.widgets import Header, Footer, Input, Static
 from textual.widget import Widget
 from textual.binding import Binding
+
+
+class TaskPhase(str, Enum):
+    SUBMITTED = "submitted"
+    STREAMING = "streaming"
+    PROCESSING_TOOLS = "tools"
+    REVIEWING = "reviewing"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class Pulse(Widget):
+    """Animated pulse indicator showing system is alive."""
+
+    DEFAULT_CSS = """
+    Pulse { width: auto; height: 1; }
+    """
+
+    _frames = ["◐", "◓", "◑", "◒"]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._frame = 0
+
+    def on_mount(self) -> None:
+        self.set_interval(0.15, self._tick)
+
+    def _tick(self) -> None:
+        self._frame = (self._frame + 1) % len(self._frames)
+        self.refresh()
+
+    def render(self) -> RenderableType:
+        return Text(self._frames[self._frame], style="bold #58a6ff")
 
 
 class ChatBubble(Widget):
@@ -217,15 +247,18 @@ class DevTUI(App):
     #chat-scroll { height: 1fr; overflow-y: auto; }
     #input-area { dock: bottom; height: auto; padding: 1; background: #161b22; border-top: solid #30363d; }
     #input { width: 100%; background: #0d1117; color: #c9d1d9; border: solid #30363d; padding: 1; }
-    #status-bar { dock: bottom; height: 1; background: #161b22; color: #8b949e; padding: 0 1; }
+    #status-row { dock: bottom; height: 1; background: #161b22; padding: 0 1; }
+    #status-bar { width: 1fr; color: #8b949e; }
     """
 
-    BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit"),
-        Binding("ctrl+l", "clear", "Clear"),
-        Binding("ctrl+d", "show_diff", "Diff"),
-        Binding("ctrl+t", "toggle_tasks", "Tasks"),
-    ]
+    _PHASE_LABELS = {
+        TaskPhase.SUBMITTED: "📥 received",
+        TaskPhase.STREAMING: "📝 generating",
+        TaskPhase.PROCESSING_TOOLS: "🔧 using tools",
+        TaskPhase.REVIEWING: "🔍 reviewing",
+        TaskPhase.DONE: "✅ done",
+        TaskPhase.FAILED: "❌ failed",
+    }
 
     def __init__(self, llm=None):
         super().__init__()
@@ -236,12 +269,15 @@ class DevTUI(App):
         self._message_count = 0
         self._task_bar = TaskBar(id="task-bar")
         self._streaming: StreamingBubble | None = None
+        self._phase = TaskPhase.DONE
+        self._phase_start = 0.0
+        self._active_tool_count = 0
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield VerticalScroll(id="chat-scroll")
         yield self._task_bar
-        yield Static(id="status-bar")
+        yield Horizontal(Pulse(), Static(id="status-bar"), id="status-row")
         yield Container(Input(id="input", placeholder="Ask anything... (Ctrl+C quit, Ctrl+D diff)"), id="input-area")
 
     def on_mount(self) -> None:
@@ -261,26 +297,32 @@ class DevTUI(App):
         event.input.value = ""
         self._message_count += 1
 
+        # Start task
+        self._phase = TaskPhase.SUBMITTED
+        self._phase_start = time.time()
+        self._active_tool_count = 0
+        self._update_status()
+
         scroll = self.query_one("#chat-scroll", VerticalScroll)
-        # User bubble
         scroll.mount(ChatBubble(message, role="user"))
 
-        # Streaming assistant bubble
         self._streaming = StreamingBubble()
         scroll.mount(self._streaming)
         scroll.scroll_end(animate=False)
 
-        self._task_bar.update_task(f"msg{self._message_count}", "running", "thinking...")
-
+        self._task_bar.update_task(f"msg{self._message_count}", "running", "submitted")
         asyncio.create_task(self._stream_chat(message))
 
     async def _stream_chat(self, message: str) -> None:
         if not self._llm:
+            self._phase = TaskPhase.FAILED
             self._streaming.append("\n❌ LLM not initialized.")
+            self._update_status()
             return
 
-        import time
         t0 = time.time()
+        self._phase = TaskPhase.STREAMING
+        self._update_status()
 
         try:
             p = self._llm._resolve_provider(self._provider)
@@ -293,36 +335,50 @@ class DevTUI(App):
                 ):
                     if isinstance(token, str) and token:
                         self._streaming.append(token)
-                        # Detect tool calls for task bar
+                        # Detect tool calls
                         if "<tool_call" in self._streaming.text:
+                            self._phase = TaskPhase.PROCESSING_TOOLS
+                            self._update_status()
                             tools = re.findall(
                                 r'<tool_call\s+name="(\w+)"',
                                 self._streaming.text,
                             )
-                            for t in tools:
+                            self._active_tool_count = len(set(tools))
+                            for t in set(tools):
                                 self._task_bar.update_task(t, "running", "")
+
                 self._total_ms = (time.time() - t0) * 1000
-                # Mark all running tools done
-                for t in self._task_bar._tasks:
-                    if t["status"] == "running":
-                        t["status"] = "done"
+
+                # Tool calls finished → reviewing phase
+                if self._active_tool_count > 0:
+                    self._phase = TaskPhase.REVIEWING
+                    self._update_status()
+                    await asyncio.sleep(0.3)  # Brief pause for review visibility
+
+                self._phase = TaskPhase.DONE
             else:
+                self._phase = TaskPhase.FAILED
                 self._streaming.append("\n❌ No provider available.")
         except Exception as e:
+            self._phase = TaskPhase.FAILED
             self._streaming.append(f"\n❌ {e}")
 
+        for t in self._task_bar._tasks:
+            if t["status"] == "running":
+                t["status"] = "done"
         self._task_bar.update_task(
             f"msg{self._message_count}", "done",
-            f"{len(self._streaming.text)} chars",
+            f"{len(self._streaming.text)} chars | {self._total_ms:.0f}ms",
         )
         self._update_status()
 
     def _update_status(self) -> None:
+        elapsed = time.time() - self._phase_start if self._phase_start else 0
+        phase_label = self._PHASE_LABELS.get(self._phase, "")
         bar = self.query_one("#status-bar", Static)
         bar.update(
-            f" provider={self._provider} | "
-            f"{self._total_ms:.0f}ms | "
-            f"Ctrl+C quit | Ctrl+L clear | Ctrl+D diff"
+            f"{phase_label} | {self._provider} | "
+            f"{elapsed:.0f}s | Ctrl+C quit | Ctrl+L clear | Ctrl+D diff"
         )
 
     async def action_show_diff(self) -> None:

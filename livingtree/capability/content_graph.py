@@ -1029,8 +1029,8 @@ class ContentGraph:
             # Gaussian plume max concentration
             if any(k in name_lower for k in ("最大落地浓度", "max concentration", "cmax")) and actual:
                 try:
-                    from ..treellm.eia_models import compute_gaussian_plume_max
-                    expected = compute_gaussian_plume_max(
+                    from ..bridge.registry import get_tool_registry  # migrated
+                    expected = get_tool_registry().get('eia_models').compute_gaussian_plume_max(
                         Q=entity.properties.get("emission_rate", 1.0),
                         u=entity.properties.get("wind_speed", 2.5),
                         H=entity.properties.get("stack_height", 30),

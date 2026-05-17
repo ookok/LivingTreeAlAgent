@@ -1,13 +1,12 @@
-"""Document style extraction and retrieval — LLM mimics formatting without understanding it.
+"""Document style DNA — LLM-driven atomic formatting extraction and retrieval.
 
-Workflow:
-  1. Index a document → extract its "style DNA" (fonts, margins, colors, spacing)
-  2. Store style DNA in knowledge base alongside content
-  3. When generating a new document, retrieve the best-matching style by domain
-  4. Inject style into format_docx spec or generation prompt
+Atomic tools:
+  parse_style(filepath) → extract raw StyleDNA (LLM decides domain/tags)
+  save_style(json_spec)  → save style to knowledge base
+  find_style(domain)     → retrieve best-matching style
+  apply_style(domain)    → format_docx JSON snippet from stored style
 
-LLM doesn't need to know what "SimSun 12pt justified 1.5 line-spacing" means.
-It just retrieves and applies — pure mimicry.
+LLM controls the entire pipeline — no hardcoded logic.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ import json
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
@@ -76,54 +74,172 @@ class StyleDNA:
         return json.dumps(spec, ensure_ascii=False, indent=2)
 
 
-def extract_style(filepath: str, domain: str = "") -> StyleDNA | None:
-    """Extract visual formatting DNA from a .docx file.
+def parse_style(filepath: str) -> str:
+    """Extract raw formatting DNA from a .docx file.
 
-    Reads XML directly (no python-docx needed for basic extraction).
+    Returns JSON with: fonts, margins, colors, spacing, headers, watermarks.
+    LLM decides domain/tags — this tool just extracts, nothing more.
     """
     p = Path(filepath)
-    if not p.exists() or p.suffix.lower() != ".docx":
-        return None
-
-    dna = StyleDNA()
-    dna.source = str(p)
-    dna.domain = domain or _guess_domain(p.name)
+    if not p.exists():
+        return f"File not found: {filepath}"
+    if p.suffix.lower() != ".docx":
+        return f"Not a .docx file: {filepath}"
 
     try:
-        with zipfile.ZipFile(p) as z:
-            # Read styles
-            if "word/styles.xml" in z.namelist():
-                styles_xml = z.read("word/styles.xml")
-                _parse_styles(dna, styles_xml)
-
-            # Read document body for default paragraph properties
-            if "word/document.xml" in z.namelist():
-                doc_xml = z.read("word/document.xml")
-                _parse_document(dna, doc_xml)
-
-            # Read header/footer
-            for name in z.namelist():
-                if "header" in name.lower() and name.endswith(".xml"):
-                    hdr_xml = z.read(name)
-                    texts = [t.text or "" for t in ET.fromstring(hdr_xml).iter()
-                             if t.tag.endswith("}t") and t.text]
-                    if texts and not dna.header_text:
-                        dna.header_text = " ".join(texts)[:100]
-                if "footer" in name.lower() and name.endswith(".xml"):
-                    ftr_xml = z.read(name)
-                    texts = [t.text or "" for t in ET.fromstring(ftr_xml).iter()
-                             if t.tag.endswith("}t") and t.text]
-                    if texts and not dna.footer_text:
-                        dna.footer_text = " ".join(texts)[:100]
-
-        logger.info(f"StyleDNA extracted: {dna.domain} from {p.name}")
-        return dna
+        dna = _extract_raw(p)
+        return json.dumps(dna.to_dict(), ensure_ascii=False, indent=2)
     except Exception as e:
-        logger.warning(f"Style extraction failed for {filepath}: {e}")
-        return None
+        return f"Parse error: {e}"
 
 
-def _parse_styles(dna: StyleDNA, xml_bytes: bytes):
+def save_style(json_spec: str) -> str:
+    """Save a style spec to the style database.
+
+    Args: JSON with source, domain, tags, and style fields.
+    LLM controls domain and tags — no hardcoded logic.
+    """
+    try:
+        data = json.loads(json_spec)
+        dna = StyleDNA.from_dict(data)
+        db = _get_db()
+        # Deduplicate by source
+        existing = [i for i, s in enumerate(db) if s.source == dna.source]
+        for idx in existing:
+            db[idx] = dna
+        if not existing:
+            db.append(dna)
+        _save_db(db)
+        return f"Style saved: domain={dna.domain} tags={dna.tags} source={dna.source}"
+    except Exception as e:
+        return f"Save error: {e}"
+
+
+def find_style(query: str) -> str:
+    """Find best-matching style by domain or tags.
+
+    Args: "eia" or "eia,formal,report" (domain + comma-separated tags)
+    """
+    parts = query.split(",")
+    domain = parts[0].strip()
+    tags = [t.strip() for t in parts[1:]] if len(parts) > 1 else []
+
+    db = _get_db()
+    candidates = [s for s in db if s.domain == domain] if domain else list(db)
+    if tags:
+        tagged = [s for s in candidates if any(t in s.tags for t in tags)]
+        if tagged:
+            candidates = tagged
+
+    if not candidates:
+        return f"No style found for domain={domain} tags={tags}"
+
+    return json.dumps(candidates[0].to_dict(), ensure_ascii=False, indent=2)
+
+
+def apply_style(domain: str) -> str:
+    """Retrieve best style and output format_docx JSON snippet.
+
+    LLM can directly paste the output into a format_docx call.
+    """
+    parts = domain.split(",")
+    dom = parts[0].strip()
+    tags = [t.strip() for t in parts[1:]] if len(parts) > 1 else []
+
+    db = _get_db()
+    candidates = [s for s in db if s.domain == dom] if dom else list(db)
+    if tags:
+        tagged = [s for s in candidates if any(t in s.tags for t in tags)]
+        if tagged:
+            candidates = tagged
+
+    if not candidates:
+        return f"No style found. Use parse_style to extract from a template first."
+
+    dna = candidates[0]
+    spec = {
+        "page": {
+            "size": dna.page_size,
+            "margin_top_cm": dna.margins["top"],
+            "margin_bottom_cm": dna.margins["bottom"],
+            "margin_left_cm": dna.margins["left"],
+            "margin_right_cm": dna.margins["right"],
+        },
+    }
+    if dna.header_text:
+        spec["header"] = {"text": dna.header_text, "font_size": 9}
+    if dna.footer_text:
+        spec["footer"] = {"text": dna.footer_text, "font_size": 9}
+    if dna.watermark_text:
+        spec["watermark"] = {"text": dna.watermark_text, "font_size": 72}
+
+    # Paragraph style
+    spec["default_paragraph"] = {
+        "font": dna.default_font, "size": dna.default_size,
+        "color": dna.default_color, "align": dna.alignment,
+        "line_spacing": dna.line_spacing, "first_line_indent_cm": dna.first_indent_cm,
+    }
+    if dna.heading_sizes:
+        spec["headings"] = {
+            str(lv): {"font": dna.heading_fonts.get(lv, dna.default_font),
+                      "size": dna.heading_sizes.get(lv, 16 + (3-lv)*2)}
+            for lv in sorted(dna.heading_sizes)
+        }
+
+    return json.dumps(spec, ensure_ascii=False, indent=2)
+
+
+def list_styles() -> str:
+    """List all stored styles."""
+    db = _get_db()
+    if not db:
+        return "No styles stored. Use parse_style to extract from templates."
+    items = [
+        {"source": s.source, "domain": s.domain, "tags": s.tags,
+         "font": s.default_font, "page": s.page_size}
+        for s in db
+    ]
+    return json.dumps(items, ensure_ascii=False, indent=2)
+
+
+# ═══ Internal ═══
+
+def _get_db() -> list[StyleDNA]:
+    if not STYLE_DB.exists():
+        return []
+    try:
+        data = json.loads(STYLE_DB.read_text(encoding="utf-8"))
+        return [StyleDNA.from_dict(d) for d in data]
+    except Exception:
+        return []
+
+
+def _save_db(db: list[StyleDNA]):
+    STYLE_DB.parent.mkdir(parents=True, exist_ok=True)
+    data = [s.to_dict() for s in db]
+    STYLE_DB.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _extract_raw(p: Path) -> "StyleDNA":
+    dna = StyleDNA()
+    dna.source = str(p)
+    with zipfile.ZipFile(p) as z:
+        if "word/styles.xml" in z.namelist():
+            _parse_styles_xml(dna, z.read("word/styles.xml"))
+        if "word/document.xml" in z.namelist():
+            _parse_doc_xml(dna, z.read("word/document.xml"))
+        for name in z.namelist():
+            if "header" in name.lower() and name.endswith(".xml"):
+                texts = [t.text or "" for t in ET.fromstring(z.read(name)).iter()
+                         if t.tag.endswith("}t") and t.text]
+                if texts and not dna.header_text:
+                    dna.header_text = " ".join(texts)[:100]
+            if "footer" in name.lower() and name.endswith(".xml"):
+                texts = [t.text or "" for t in ET.fromstring(z.read(name)).iter()
+                         if t.tag.endswith("}t") and t.text]
+                if texts and not dna.footer_text:
+                    dna.footer_text = " ".join(texts)[:100]
+    return dna
     """Parse word/styles.xml for font/size/color defaults."""
     NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     root = ET.fromstring(xml_bytes)
@@ -166,7 +282,7 @@ def _parse_styles(dna: StyleDNA, xml_bytes: bytes):
                         dna.heading_colors[level] = f"#{val}"
 
 
-def _parse_document(dna: StyleDNA, xml_bytes: bytes):
+def _parse_doc_xml(dna: StyleDNA, xml_bytes: bytes):
     """Parse word/document.xml for paragraph formatting."""
     NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     root = ET.fromstring(xml_bytes)
@@ -220,88 +336,4 @@ def _twips_to_cm(twips: str) -> float:
         return 0.0
 
 
-def _guess_domain(filename: str) -> str:
-    name = filename.lower()
-    if any(kw in name for kw in ["环评", "eia", "environment", "环境"]):
-        return "eia"
-    if any(kw in name for kw in ["合同", "contract", "agreement", "协议"]):
-        return "contract"
-    if any(kw in name for kw in ["报告", "report", "分析"]):
-        return "report"
-    if any(kw in name for kw in ["论文", "paper", "thesis", "学术"]):
-        return "academic"
-    if any(kw in name for kw in ["信", "letter", "通知", "notice"]):
-        return "letter"
-    return "general"
 
-
-# ═══ Style Database — store and retrieve ═══
-
-class StyleDatabase:
-    """Maintains a library of extracted document styles for retrieval."""
-
-    def __init__(self, db_path: str = str(STYLE_DB)):
-        self._path = Path(db_path)
-        self._styles: list[StyleDNA] = []
-        self._load()
-
-    def index(self, filepath: str, domain: str = "") -> StyleDNA | None:
-        """Extract and store style from a document."""
-        dna = extract_style(filepath, domain)
-        if dna:
-            # Deduplicate: replace if same domain+source
-            existing = [i for i, s in enumerate(self._styles) if s.source == str(filepath)]
-            for idx in existing:
-                self._styles[idx] = dna
-            if not existing:
-                self._styles.append(dna)
-            self._save()
-        return dna
-
-    def find_best(self, domain: str = "", tags: list[str] | None = None) -> StyleDNA | None:
-        """Find the best-matching style for a domain."""
-        candidates = self._styles
-
-        if domain:
-            domain_matches = [s for s in candidates if s.domain == domain]
-            if domain_matches:
-                candidates = domain_matches
-
-        if tags:
-            tagged = [s for s in candidates if any(t in s.tags for t in tags)]
-            if tagged:
-                candidates = tagged
-
-        return candidates[0] if candidates else None
-
-    def list_styles(self) -> list[dict]:
-        return [
-            {"source": s.source, "domain": s.domain, "font": s.default_font,
-             "size": s.default_size, "page": s.page_size}
-            for s in self._styles
-        ]
-
-    def _save(self):
-        data = [s.to_dict() for s in self._styles]
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def _load(self):
-        if not self._path.exists():
-            return
-        try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-            self._styles = [StyleDNA.from_dict(d) for d in data]
-        except Exception:
-            pass
-
-
-# Singleton
-_style_db: StyleDatabase | None = None
-
-
-def get_style_database() -> StyleDatabase:
-    global _style_db
-    if _style_db is None:
-        _style_db = StyleDatabase()
-    return _style_db

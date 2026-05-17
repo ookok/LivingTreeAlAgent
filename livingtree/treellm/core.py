@@ -1079,7 +1079,9 @@ class TreeLLM:
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
-                    "- extract_style: extract formatting DNA from a .docx (fonts, margins, colors). Args: filepath [domain].\\n"
+                    "- parse_style: extract raw formatting DNA from a .docx. Args: filepath.\n"
+                    "- save_style: save style to database. Args: json_spec (LLM sets domain/tags).\n"
+                    "- find_style: find best-matching style. Args: domain[,tag1,tag2].\\n"
                     "- list_styles: list all stored document styles in the style database.\\n"
                     "- apply_style: apply a stored style to format_docx output. Args: domain [tags].\\n"
                     "- download_file: download file with resume support (Range header). Args: url [dest].\\n"
@@ -1238,24 +1240,25 @@ class TreeLLM:
                                         tool_result_text = fn(to, subject, body)
                                     else:
                                         tool_result_text = fn(tool_args.strip())
-                                elif tool_name == "extract_style":
-                                    from .style_dna import extract_style, get_style_database
-                                    parts = tool_args.strip().split(maxsplit=1)
-                                    fp = parts[0] if parts else ""
-                                    domain = parts[1] if len(parts) > 1 else ""
-                                    db = get_style_database()
-                                    dna = db.index(fp, domain)
-                                    tool_result_text = json.dumps(dna.to_dict(), ensure_ascii=False, indent=2) if dna else "Extraction failed"
+                                elif tool_name == "parse_style":
+                                    from .style_dna import parse_style
+                                    tool_result_text = parse_style(tool_args.strip())
+                                elif tool_name == "save_style":
+                                    from .style_dna import save_style
+                                    tool_result_text = save_style(tool_args.strip())
+                                elif tool_name == "find_style":
+                                    from .style_dna import find_style
+                                    tool_result_text = find_style(tool_args.strip())
                                 elif tool_name == "list_styles":
                                     from .style_dna import get_style_database
                                     styles = get_style_database().list_styles()
                                     tool_result_text = json.dumps(styles, ensure_ascii=False, indent=2)
                                 elif tool_name == "apply_style":
-                                    from .style_dna import get_style_database
+                                    from .style_dna import apply_style
                                     parts = tool_args.strip().split(maxsplit=1)
                                     domain = parts[0] if parts else ""
                                     tags = parts[1].split(",") if len(parts) > 1 else None
-                                    dna = get_style_database().find_best(domain, tags)
+                                    dna = apply_style(tool_args.strip())
                                     tool_result_text = dna.to_format_docx_prompt() if dna else "No matching style found"
                                 elif tool_name == "download_file":
                                     from .developer_tools import download_file

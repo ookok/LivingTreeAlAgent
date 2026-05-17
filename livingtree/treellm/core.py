@@ -1099,6 +1099,12 @@ class TreeLLM:
                     "- find_style: find best-matching style. Args: domain[,tag1,tag2].\\n"
                     "- list_styles: list all stored document styles in the style database.\\n"
                     "- apply_style: apply a stored style to format_docx output. Args: domain [tags].\\n"
+                    "- gh_pr_create: create GitHub Pull Request. Args: title [body] [base].\\n"
+                    "- gh_pr_list: list GitHub PRs. Args: [state] [limit].\\n"
+                    "- gh_pr_review: review PR (view/approve/comment/merge). Args: pr_number action.\\n"
+                    "- gh_issue_create: create GitHub Issue. Args: title [body] [labels].\\n"
+                    "- jira_update: update Jira issue status. Args: issue_key status [comment].\\n"
+                    "- jira_search: search Jira with JQL. Args: jql.\\n"
                     "- download_file: download file with resume support (Range header). Args: url [dest].\\n"
                     "- upload_file: upload file with streaming (PUT/POST). Args: filepath url [method].\\n"
                     "- list_dir: list directory with file sizes. Args: path.",
@@ -1328,6 +1334,43 @@ class TreeLLM:
                                     tags = parts[1].split(",") if len(parts) > 1 else None
                                     dna = apply_style(tool_args.strip())
                                     tool_result_text = dna.to_format_docx_prompt() if dna else "No matching style found"
+                                elif tool_name == "gh_pr_create":
+                                    from .developer_tools import gh_pr_create
+                                    parts = tool_args.strip().split("\n", 2)
+                                    title = parts[0] if parts else ""
+                                    body = parts[1] if len(parts) > 1 else ""
+                                    base = parts[2] if len(parts) > 2 else "main"
+                                    tool_result_text = gh_pr_create(title, body, base)
+                                elif tool_name == "gh_pr_list":
+                                    from .developer_tools import gh_pr_list
+                                    parts = tool_args.strip().split()
+                                    state = parts[0] if parts else "open"
+                                    limit = int(parts[1]) if len(parts) > 1 else 10
+                                    tool_result_text = gh_pr_list(state, limit)
+                                elif tool_name == "gh_pr_review":
+                                    from .developer_tools import gh_pr_review
+                                    parts = tool_args.strip().split(maxsplit=2)
+                                    pr = parts[0] if parts else ""
+                                    action = parts[1] if len(parts) > 1 else "view"
+                                    comment = parts[2] if len(parts) > 2 else ""
+                                    tool_result_text = gh_pr_review(pr, action, comment)
+                                elif tool_name == "gh_issue_create":
+                                    from .developer_tools import gh_issue_create
+                                    parts = tool_args.strip().split("\n", 2)
+                                    title = parts[0] if parts else ""
+                                    body = parts[1] if len(parts) > 1 else ""
+                                    labels = parts[2] if len(parts) > 2 else ""
+                                    tool_result_text = gh_issue_create(title, body, labels)
+                                elif tool_name == "jira_update":
+                                    from .developer_tools import jira_update
+                                    parts = tool_args.strip().split(maxsplit=2)
+                                    key = parts[0] if parts else ""
+                                    status = parts[1] if len(parts) > 1 else ""
+                                    comment = parts[2] if len(parts) > 2 else ""
+                                    tool_result_text = jira_update(key, status, comment)
+                                elif tool_name == "jira_search":
+                                    from .developer_tools import jira_search
+                                    tool_result_text = jira_search(tool_args.strip())
                                 elif tool_name == "download_file":
                                     from .developer_tools import download_file
                                     parts = tool_args.strip().split(maxsplit=1)

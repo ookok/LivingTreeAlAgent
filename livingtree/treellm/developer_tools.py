@@ -182,6 +182,158 @@ def read_office(filepath: str) -> str:
         return f"Read error: {e}"
 
 
+# ═══ GitHub/GitLab PR workflow ═══
+
+def gh_pr_create(title: str, body: str = "", base: str = "main", draft: bool = False) -> str:
+    """Create a GitHub Pull Request via gh CLI. Requires gh CLI installed and authenticated."""
+    try:
+        from .unified_exec import run_sync
+        draft_flag = " --draft" if draft else ""
+        result = run_sync(
+            f'gh pr create --title "{title}" --body "{body[:5000]}" --base {base}{draft_flag}',
+            timeout=30,
+        )
+        if result.success:
+            return f"PR created: {result.stdout.strip()}"
+        return f"PR creation failed: {result.stderr}"
+    except Exception as e:
+        return f"gh CLI error: {e}. Install: https://cli.github.com"
+
+
+def gh_pr_list(state: str = "open", limit: int = 10) -> str:
+    """List GitHub Pull Requests."""
+    try:
+        from .unified_exec import run_sync
+        result = run_sync(
+            f"gh pr list --state {state} --limit {limit} --json number,title,author,createdAt,url",
+            timeout=20,
+        )
+        if result.success:
+            return result.stdout[:5000]
+        return f"gh pr list failed: {result.stderr}"
+    except Exception as e:
+        return f"gh error: {e}"
+
+
+def gh_pr_review(pr_number: str, action: str = "view", comment: str = "") -> str:
+    """Review a PR: view, approve, comment, or request changes."""
+    try:
+        from .unified_exec import run_sync
+        if action == "view":
+            result = run_sync(f"gh pr view {pr_number} --json number,title,body,author,reviews,comments", timeout=20)
+        elif action == "approve":
+            result = run_sync(f"gh pr review {pr_number} --approve", timeout=20)
+        elif action == "comment" and comment:
+            result = run_sync(f'gh pr review {pr_number} --comment --body "{comment[:2000]}"', timeout=20)
+        elif action == "request-changes" and comment:
+            result = run_sync(f'gh pr review {pr_number} --request-changes --body "{comment[:2000]}"', timeout=20)
+        elif action == "merge":
+            result = run_sync(f"gh pr merge {pr_number} --merge", timeout=30)
+        else:
+            return f"Unknown action: {action}. Use: view, approve, comment, request-changes, merge"
+        return result.stdout[:5000] if result.success else f"Error: {result.stderr}"
+    except Exception as e:
+        return f"gh error: {e}"
+
+
+def gh_issue_create(title: str, body: str = "", labels: str = "") -> str:
+    """Create a GitHub Issue."""
+    try:
+        from .unified_exec import run_sync
+        label_flag = f' --label "{labels}"' if labels else ""
+        result = run_sync(
+            f'gh issue create --title "{title}" --body "{body[:5000]}"{label_flag}',
+            timeout=20,
+        )
+        return f"Issue created: {result.stdout.strip()}" if result.success else f"Error: {result.stderr}"
+    except Exception as e:
+        return f"gh error: {e}"
+
+
+# ═══ Jira/Linear task sync ═══
+
+def jira_update(issue_key: str, status: str, comment: str = "") -> str:
+    """Update Jira issue status. Requires JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN env vars."""
+    import os
+    url = os.environ.get("JIRA_URL", "")
+    email = os.environ.get("JIRA_EMAIL", "")
+    token = os.environ.get("JIRA_API_TOKEN", "")
+
+    if not url:
+        return "JIRA_URL not set. Configure via env or livingtree config."
+
+    try:
+        import base64
+        import urllib.request
+        import json
+
+        auth = base64.b64encode(f"{email}:{token}".encode()).decode()
+        data = json.dumps({
+            "transition": {"id": status} if status.isdigit() else {"name": status},
+        }).encode()
+
+        # Get available transitions first (simplified)
+        req = urllib.request.Request(
+            f"{url}/rest/api/2/issue/{issue_key}/transitions",
+            data=data if status else None,
+            headers={
+                "Authorization": f"Basic {auth}",
+                "Content-Type": "application/json",
+            },
+            method="POST" if status else "GET",
+        )
+        resp = urllib.request.urlopen(req, timeout=15)
+        result = json.loads(resp.read())
+
+        if comment:
+            comment_data = json.dumps({"body": comment}).encode()
+            comment_req = urllib.request.Request(
+                f"{url}/rest/api/2/issue/{issue_key}/comment",
+                data=comment_data,
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(comment_req, timeout=15)
+
+        return f"Jira {issue_key}: transitioned to {status}" if status else json.dumps(result, indent=2)[:2000]
+    except Exception as e:
+        return f"Jira error: {e}"
+
+
+def jira_search(jql: str, max_results: int = 10) -> str:
+    """Search Jira issues with JQL."""
+    import os
+    url = os.environ.get("JIRA_URL", "")
+    if not url:
+        return "JIRA_URL not set."
+
+    try:
+        import base64, urllib.request, json
+        email = os.environ.get("JIRA_EMAIL", "")
+        token = os.environ.get("JIRA_API_TOKEN", "")
+        auth = base64.b64encode(f"{email}:{token}".encode()).decode()
+
+        params = urllib.parse.urlencode({"jql": jql, "maxResults": max_results})
+        req = urllib.request.Request(
+            f"{url}/rest/api/2/search?{params}",
+            headers={"Authorization": f"Basic {auth}"},
+        )
+        resp = urllib.request.urlopen(req, timeout=15)
+        data = json.loads(resp.read())
+
+        issues = data.get("issues", [])
+        lines = []
+        for issue in issues:
+            key = issue.get("key", "?")
+            fields = issue.get("fields", {})
+            summary = fields.get("summary", "")
+            status = fields.get("status", {}).get("name", "")
+            lines.append(f"{key}: [{status}] {summary}")
+        return "\n".join(lines) if lines else "No issues found"
+    except Exception as e:
+        return f"Jira error: {e}"
+
+
 # ═══ High-performance file transfer with resume support ═══
 
 async def download_file(url: str, dest: str = "", resume: bool = True,
@@ -276,6 +428,12 @@ async def upload_file(filepath: str, url: str, method: str = "PUT") -> str:
 # ── Tool registration ──
 
 TOOLS = {
+    "gh_pr_create": {"func": gh_pr_create, "desc": "Create GitHub Pull Request via gh CLI.", "params": "title [body] [base] [draft]"},
+    "gh_pr_list": {"func": gh_pr_list, "desc": "List GitHub Pull Requests.", "params": "[state] [limit]"},
+    "gh_pr_review": {"func": gh_pr_review, "desc": "Review PR: view/approve/comment/merge.", "params": "pr_number action [comment]"},
+    "gh_issue_create": {"func": gh_issue_create, "desc": "Create GitHub Issue.", "params": "title [body] [labels]"},
+    "jira_update": {"func": jira_update, "desc": "Update Jira issue status/comment.", "params": "issue_key status [comment]"},
+    "jira_search": {"func": jira_search, "desc": "Search Jira issues with JQL.", "params": "jql [max_results]"},
     "download_file": {"func": download_file, "desc": "Download file with resume support (Range header, 1MB chunks).", "params": "url [dest] [resume]", "async": true},
     "upload_file": {"func": upload_file, "desc": "Upload file with streaming (PUT/POST).", "params": "filepath url [method]", "async": true},
     "read_office": {"func": read_office, "desc": "Read .docx/.xlsx/.pptx/.pdf content. No heavy deps.", "params": "filepath"},

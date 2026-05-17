@@ -189,6 +189,217 @@ def export_latex(content: str, output: str = "output.pdf") -> str:
 
 # ═══ P2: PPT Generation ═══
 
+# ═══ Atomic Typesetting: LLM-controlled docx formatting ═══
+
+def format_docx(spec_json: str) -> str:
+    """Generate a precisely-formatted .docx from a JSON spec.
+
+    LLM controls every element atomically — font, size, color, alignment, spacing.
+
+    Spec format:
+    {
+      "title": "Report Title",
+      "page": {"size": "A4", "margin_top_cm": 3.7, "margin_bottom_cm": 3.5,
+               "margin_left_cm": 2.8, "margin_right_cm": 2.6},
+      "header": {"text": "Company Name — Confidential", "font_size": 9, "align": "center"},
+      "footer": {"text": "Page {page}", "font_size": 9, "align": "center"},
+      "watermark": {"text": "DRAFT", "font_size": 72, "opacity": 0.1},
+      "toc": true,
+      "sections": [
+        {
+          "heading": "1. Introduction",
+          "level": 1,
+          "content": [
+            {"type": "paragraph", "text": "...", "font": "SimSun", "size": 12,
+             "bold": false, "italic": false, "color": "#333333",
+             "align": "justify", "line_spacing": 1.5, "first_line_indent_cm": 0.74},
+            {"type": "table", "headers": ["Col1","Col2"], "rows": [["a","b"]]},
+            {"type": "image", "path": "chart.png", "width_cm": 14, "align": "center"}
+          ]
+        }
+      ],
+      "output": "report.docx"
+    }
+    """
+    try:
+        import json
+        from docx import Document
+        from docx.shared import Cm, Inches, Pt, RGBColor, Emu
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+
+        spec = json.loads(spec_json)
+        doc = Document()
+        output = spec.get("output", "output.docx")
+
+        # Page setup
+        if "page" in spec:
+            pg = spec["page"]
+            for section in doc.sections:
+                if "size" in pg:
+                    section.page_width = Cm({"A4": 21.0, "A3": 29.7, "Letter": 21.59}.get(pg["size"], 21.0))
+                    section.page_height = Cm({"A4": 29.7, "A3": 42.0, "Letter": 27.94}.get(pg["size"], 29.7))
+                section.top_margin = Cm(pg.get("margin_top_cm", 2.54))
+                section.bottom_margin = Cm(pg.get("margin_bottom_cm", 2.54))
+                section.left_margin = Cm(pg.get("margin_left_cm", 3.18))
+                section.right_margin = Cm(pg.get("margin_right_cm", 3.18))
+
+        # Header/Footer
+        for section in doc.sections:
+            if "header" in spec:
+                hdr = spec["header"]
+                header = section.header
+                header.is_linked_to_previous = False
+                p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+                p.text = hdr.get("text", "")
+                p.alignment = _parse_align(hdr.get("align", "center"))
+                if hdr.get("font_size"):
+                    for run in p.runs:
+                        run.font.size = Pt(hdr["font_size"])
+
+            if "footer" in spec:
+                ftr = spec["footer"]
+                footer = section.footer
+                footer.is_linked_to_previous = False
+                p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+                _add_page_number(p)
+                p.alignment = _parse_align(ftr.get("align", "center"))
+                if ftr.get("font_size"):
+                    for run in p.runs:
+                        run.font.size = Pt(ftr["font_size"])
+
+        # Title
+        if "title" in spec:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(spec["title"])
+            run.font.size = Pt(22)
+            run.font.bold = True
+
+        # TOC
+        if spec.get("toc"):
+            doc.add_paragraph("Table of Contents", style="Heading 1")
+            for sec in spec.get("sections", []):
+                p = doc.add_paragraph()
+                p.add_run(f"{sec.get('heading','')}").font.size = Pt(11)
+
+        # Sections
+        for sec in spec.get("sections", []):
+            heading_text = sec.get("heading", "")
+            level = sec.get("level", 1)
+            if heading_text:
+                doc.add_heading(heading_text, level=min(level, 3))
+
+            for item in sec.get("content", []):
+                item_type = item.get("type", "paragraph")
+
+                if item_type == "paragraph":
+                    p = doc.add_paragraph()
+                    _apply_paragraph_format(p, item)
+
+                elif item_type == "table":
+                    headers = item.get("headers", [])
+                    rows = item.get("rows", [])
+                    if headers or rows:
+                        table = doc.add_table(rows=len(rows) + 1, cols=max(len(headers), 1))
+                        table.style = "Table Grid"
+                        for i, h in enumerate(headers):
+                            cell = table.rows[0].cells[i]
+                            cell.text = h
+                            for run in cell.paragraphs[0].runs:
+                                run.font.bold = True
+                        for r, row in enumerate(rows):
+                            for c, val in enumerate(row[:len(headers)]):
+                                table.rows[r+1].cells[c].text = str(val)
+
+                elif item_type == "image":
+                    img_path = item.get("path", "")
+                    if img_path and Path(img_path).exists():
+                        width = item.get("width_cm", 14)
+                        p = doc.add_paragraph()
+                        p.alignment = _parse_align(item.get("align", "center"))
+                        p.add_run().add_picture(img_path, width=Cm(width))
+
+        # Watermark
+        if "watermark" in spec:
+            wm = spec["watermark"]
+            for section in doc.sections:
+                _add_watermark(section, wm.get("text", ""), wm.get("font_size", 72))
+
+        doc.save(output)
+        size = Path(output).stat().st_size
+        return f"Formatted docx saved: {output} ({size} bytes, {len(spec.get('sections',[]))} sections)"
+    except ImportError:
+        return "pip install python-docx"
+    except Exception as e:
+        return f"format_docx error: {e}"
+
+
+def _parse_align(align: str):
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    return {"left": 0, "center": 1, "right": 2, "justify": 3}.get(align, 1)
+
+
+def _apply_paragraph_format(p, item: dict):
+    from docx.shared import Cm, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+
+    text = item.get("text", "")
+    font_name = item.get("font", "SimSun")
+    font_size = item.get("size", 12)
+    bold = item.get("bold", False)
+    italic = item.get("italic", False)
+    color = item.get("color", "#000000")
+    align = item.get("align", "justify")
+    line_spacing = item.get("line_spacing", 1.5)
+    first_indent = item.get("first_line_indent_cm", 0)
+
+    run = p.add_run(text)
+    run.font.name = font_name
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
+    run.font.size = Pt(font_size)
+    run.font.bold = bold
+    run.font.italic = italic
+    if color.startswith("#"):
+        run.font.color.rgb = RGBColor.from_string(color[1:])
+    p.alignment = _parse_align(align)
+
+    # Line spacing
+    pf = p.paragraph_format
+    pf.line_spacing = line_spacing
+    if first_indent > 0:
+        pf.first_line_indent = Cm(first_indent)
+
+
+def _add_page_number(paragraph):
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    run = paragraph.add_run()
+    fld_char_begin = OxmlElement("w:fldChar")
+    fld_char_begin.set(qn("w:fldCharType"), "begin")
+    run._r.append(fld_char_begin)
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    run._r.append(instr)
+    fld_char_end = OxmlElement("w:fldChar")
+    fld_char_end.set(qn("w:fldCharType"), "end")
+    run._r.append(fld_char_end)
+
+
+def _add_watermark(section, text: str, font_size: int = 72):
+    from docx.shared import Pt, RGBColor
+    from docx.oxml.ns import qn
+    header = section.header
+    header.is_linked_to_previous = False
+    p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    p.alignment = 1
+    run = p.add_run(text)
+    run.font.size = Pt(font_size)
+    run.font.color.rgb = RGBColor(200, 200, 200)
+
 def export_pptx(title: str, slides_json: str) -> str:
     """Generate PowerPoint from JSON slide data.
 
@@ -239,5 +450,5 @@ TOOLS = {
     "ms365_create_doc": {"desc": "Create Word doc in OneDrive via MS365.", "params": "title, content"},
     "wps_create": {"desc": "Create WPS document.", "params": "title, content"},
     "export_latex": {"desc": "Compile LaTeX to PDF.", "params": "latex_content [output_path]"},
-    "export_pptx": {"desc": "Generate PowerPoint from JSON slides.", "params": "title, slides_json"},
+    "format_docx": {"desc": "Generate precisely-formatted .docx with atomic control over fonts, margins, headers, watermarks, TOC.", "params": "json_spec"}, "export_pptx": {"desc": "Generate PowerPoint from JSON slides.", "params": "title, slides_json"},
 }

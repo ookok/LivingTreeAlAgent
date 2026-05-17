@@ -1198,6 +1198,9 @@ class TreeLLM:
                                 elif tool_name == "codegraph_impact":
                                     from .codegraph_tools import codegraph_impact
                                     tool_result_text = codegraph_impact(tool_args.strip())
+                                elif tool_name == "format_docx":
+                                    from .office_connectors import format_docx
+                                    tool_result_text = format_docx(tool_args.strip())
                                 elif tool_name in ("gdocs_create", "ms365_send_email", "ms365_create_doc",
                               "wps_create", "export_latex", "export_pptx"):
                                     from .office_connectors import (

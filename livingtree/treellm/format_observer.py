@@ -341,3 +341,284 @@ def _load_patterns() -> list[dict]:
 def _save_patterns(patterns: list[dict]):
     PATTERN_DB.parent.mkdir(parents=True, exist_ok=True)
     PATTERN_DB.write_text(json.dumps(patterns, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ═══ Innovation 1: Style Diff — compare two templates ═══
+
+def style_diff(file1: str, file2: str) -> str:
+    """Dump both files and prompt LLM to describe formatting differences.
+
+    Returns a prompt-ready diff description. LLM should call this,
+    then describe what changed between the two templates.
+    """
+    dump1 = observe_format(file1)
+    dump2 = observe_format(file2)
+    return (
+        f"=== Template A: {file1} ===\n{dump1[:4000]}\n\n"
+        f"=== Template B: {file2} ===\n{dump2[:4000]}\n\n"
+        f"[INSTRUCTION for LLM] Describe the formatting differences between these two templates. "
+        f"Focus on: fonts, margins, colors, heading styles, spacing, alignment. "
+        f"Output JSON: "
+        '{"differences": [{"element":"...", "A":"...", "B":"..."}], '
+        '"verdict": "A is better for X, B is better for Y"}'
+    )
+
+
+# ═══ Innovation 2: Style Merge — combine from multiple sources ═══
+
+def style_merge(query: str) -> str:
+    """Merge styles from multiple stored patterns.
+
+    Args: comma-separated domains to merge, e.g. "eia,contract,letter"
+    """
+    domains = [d.strip() for d in query.split(",")]
+    patterns = _load_patterns()
+    merged = []
+
+    for d in domains:
+        for p in patterns:
+            if d.lower() in p.get("domain", "").lower():
+                merged.append(p)
+                break
+
+    if not merged:
+        return f"No patterns found for: {domains}"
+
+    result = {
+        "sources": [p.get("source", "") for p in merged],
+        "merged_hints": [p.get("prompt_hint", "") for p in merged],
+        "merged_structure": {},
+    }
+
+    # Merge structures
+    for p in merged:
+        for key, val in p.get("structure", {}).items():
+            if key not in result["merged_structure"]:
+                result["merged_structure"][key] = val
+
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+# ═══ Innovation 3: Cross-format translation ═══
+
+def style_translate(source: str) -> str:
+    """Translate between formats. LLM provides the source format description.
+
+    Args: JSON with {from_format, to_format, style_description}
+    Example: {"from":"docx","to":"css","style":"SimSun 12pt, A4 margins 2.8cm"}
+    """
+    try:
+        spec = json.loads(source)
+        from_fmt = spec.get("from", "docx")
+        to_fmt = spec.get("to", "css")
+        description = spec.get("style", "")
+
+        # Provide format-specific hints
+        hints = {
+            ("docx", "css"): (
+                "Convert docx style to CSS. Font-size in pt → px (1pt≈1.33px). "
+                "Margins in cm → CSS margin. Alignment: both→justify, center→center. "
+                f"Style: {description}\n"
+                "Output as CSS rules."
+            ),
+            ("docx", "md"): (
+                "Convert docx style to Markdown theme hints. "
+                f"Style: {description}\n"
+                "Describe what the Markdown output should look like."
+            ),
+            ("docx", "latex"): (
+                "Convert docx style to LaTeX preamble. "
+                "SimSun → \\setCJKmainfont{SimSun}. A4 → a4paper. "
+                f"Style: {description}\n"
+                "Output LaTeX preamble code."
+            ),
+            ("html", "docx"): (
+                "Convert CSS to docx style description. "
+                f"CSS: {description}\n"
+                "Describe equivalent docx formatting."
+            ),
+            ("css", "latex"): (
+                "Convert CSS to LaTeX preamble. "
+                f"CSS: {description}\n"
+                "Output LaTeX preamble."
+            ),
+        }
+
+        hint = hints.get((from_fmt, to_fmt), (
+            f"Convert from {from_fmt} to {to_fmt} format. "
+            "Style: {description}"
+        ))
+
+        return hint
+    except Exception as e:
+        return f"Translate error: {e}"
+
+
+# ═══ Innovation 4: Style verification loop ═══
+
+def style_verify(original: str, generated: str) -> str:
+    """Compare original template with generated output. Prompt LLM to score and fix.
+
+    Args: original file path, generated file path
+    """
+    orig_dump = observe_format(original)
+    gen_dump = observe_format(generated)
+
+    return (
+        f"=== Original Template: {original} ===\n{orig_dump[:3000]}\n\n"
+        f"=== Generated Output: {generated} ===\n{gen_dump[:3000]}\n\n"
+        f"[INSTRUCTION for LLM] Compare the formatting of these two documents. "
+        f"Score similarity 0-100. If below 80, list specific fixes needed. "
+        f"Output JSON: "
+        '{"score": 85, "issues": ["font size differs", "margin too small"], '
+        '"fixes": ["change font to SimSun 12pt", "set margin to 2.8cm"]}'
+    )
+
+
+# ═══ Innovation 5: Few-shot style learning ═══
+
+def style_learn_examples(good_files: str, bad_files: str) -> str:
+    """Show LLM good and bad examples to learn what good formatting looks like.
+
+    Args: "good1.docx,good2.docx" and "bad1.docx,bad2.docx" (comma-separated paths)
+    """
+    good_list = [f.strip() for f in good_files.split(",")]
+    bad_list = [f.strip() for f in bad_files.split(",")]
+
+    parts = ["=== Good Examples ==="]
+    for f in good_list[:3]:
+        parts.append(observe_format(f)[:2000])
+    parts.append("\n=== Bad Examples ===")
+    for f in bad_list[:3]:
+        parts.append(observe_format(f)[:2000])
+
+    parts.append(
+        "\n[INSTRUCTION for LLM] These are GOOD and BAD document formatting examples. "
+        "Learn what makes a document well-formatted. Summarize the principles. "
+        "Output JSON: "
+        '{"principles": ["use consistent fonts", "adequate margins", ...], '
+        f'"anti_patterns": ["cramped margins", "inconsistent headings", ...], '
+        '"scoring_rubric": {"font_consistency": 20, "margin_adequacy": 20, ...}}'
+    )
+    return "\n".join(parts)
+
+
+# ═══ Innovation 6: Hierarchical style inheritance ═══
+
+def style_inherit_chain(base_pattern: str, overrides_json: str) -> str:
+    """Create a hierarchical style chain. Child inherits from parent, with overrides.
+
+    Args:
+      base_pattern: domain name of the parent style
+      overrides_json: JSON with fields to override
+    """
+    patterns = _load_patterns()
+    base = None
+    for p in patterns:
+        if base_pattern.lower() in p.get("domain", "").lower():
+            base = p
+            break
+
+    if not base:
+        return f"Base pattern '{base_pattern}' not found. Available: " + \
+               ", ".join(p.get("domain","?") for p in patterns)
+
+    try:
+        overrides = json.loads(overrides_json)
+    except Exception:
+        overrides = {}
+
+    inherited = dict(base)  # Shallow copy
+    inherited["inherits_from"] = base.get("domain", "")
+    inherited["domain"] = overrides.get("domain", base.get("domain", "") + "_child")
+
+    # Apply overrides
+    if "structure" in overrides and "structure" in inherited:
+        inherited["structure"] = {**inherited["structure"], **overrides["structure"]}
+    for key in ("tags", "description", "prompt_hint", "applies_to"):
+        if key in overrides:
+            inherited[key] = overrides[key]
+
+    return json.dumps(inherited, ensure_ascii=False, indent=2)
+
+
+# ═══ Innovation 7: Vector storage for semantic style search ═══
+
+def style_index_all() -> str:
+    """Index all stored patterns into vector DB for semantic search."""
+    patterns = _load_patterns()
+    if not patterns:
+        return "No patterns to index."
+
+    try:
+        from ..knowledge.vector_store import VectorStore
+        store = VectorStore()
+        for i, p in enumerate(patterns):
+            text = json.dumps(p, ensure_ascii=False)
+            embedding = store.embed(text[:2000])
+            store.add_vectors([(f"style:{i}", embedding)])
+        return f"Indexed {len(patterns)} patterns into vector store"
+    except Exception as e:
+        # Fallback: just save as JSON
+        return f"Vector store unavailable, patterns in JSON: {PATTERN_DB}"
+
+
+def style_search_semantic(query: str, top_k: int = 5) -> str:
+    """Semantic search for styles matching a natural language description.
+
+    Args: "正式学术论文格式" or "corporate report with blue headings"
+    """
+    patterns = _load_patterns()
+    if not patterns:
+        return "No patterns stored."
+
+    try:
+        from ..knowledge.vector_store import VectorStore
+        store = VectorStore()
+        q_vec = store.embed(query)
+        results = store.search_similar(q_vec, top_k=min(top_k, len(patterns)))
+        if results:
+            items = []
+            for doc_id in results:
+                idx = int(doc_id.split(":")[-1]) if ":" in doc_id else 0
+                if idx < len(patterns):
+                    p = patterns[idx]
+                    items.append({
+                        "domain": p.get("domain", "?"),
+                        "description": p.get("description", "")[:100],
+                        "tags": p.get("tags", []),
+                    })
+            return json.dumps(items, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    # Fallback: keyword search on descriptions
+    results = []
+    for p in patterns:
+        desc = p.get("description", "") + " " + " ".join(p.get("tags", []))
+        if any(kw in desc.lower() for kw in query.lower().split()):
+            results.append(p)
+    items = [
+        {"domain": p.get("domain", "?"), "description": p.get("description", "")[:100],
+         "tags": p.get("tags", [])}
+        for p in results[:top_k]
+    ]
+    return json.dumps(items, ensure_ascii=False, indent=2) if items else "No matching styles found."
+
+
+# ═══ Tool registration ═══
+
+TOOLS = {
+    "observe_format": {"func": observe_format, "desc": "Dump formatted doc (.docx/.html/.md/.pptx/.pdf) as raw text for LLM observation.", "params": "filepath"},
+    "save_pattern": {"func": save_pattern, "desc": "Save LLM-described formatting pattern to KB.", "params": "json_spec"},
+    "find_pattern": {"func": find_pattern, "desc": "Find formatting pattern by domain.", "params": "domain[,tags]"},
+    "list_patterns": {"func": list_patterns, "desc": "List all stored formatting patterns.", "params": ""},
+    "style_diff": {"func": style_diff, "desc": "Compare two templates, prompt LLM to describe differences.", "params": "file1, file2"},
+    "style_merge": {"func": style_merge, "desc": "Merge styles from multiple domains.", "params": "domain1,domain2,..."},
+    "style_translate": {"func": style_translate, "desc": "Translate between formats (docx↔css↔md↔latex).", "params": "json_spec"},
+    "style_verify": {"func": style_verify, "desc": "Compare original vs generated, score similarity, suggest fixes.", "params": "original_file, generated_file"},
+    "style_learn": {"func": style_learn_examples, "desc": "Learn formatting from good/bad examples.", "params": "good_files, bad_files"},
+    "style_inherit": {"func": style_inherit_chain, "desc": "Create hierarchical style (child inherits from parent).", "params": "base_pattern, overrides_json"},
+    "style_index": {"func": style_index_all, "desc": "Index all patterns into vector DB for semantic search.", "params": ""},
+    "style_search": {"func": style_search_semantic, "desc": "Semantic search for styles by natural language description.", "params": "query [top_k]"},
+}

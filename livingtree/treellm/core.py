@@ -1082,6 +1082,14 @@ class TreeLLM:
                     "- observe_format: dump any formatted document (.docx/.html/.md/.pptx/.pdf) as raw text for LLM observation. Args: filepath.\\n"
                     "- save_pattern: save LLM-described formatting pattern to KB. Args: json_spec.\\n"
                     "- find_pattern: retrieve formatting pattern by domain. Args: domain[,tags].\\n"
+                    "- style_diff: compare two templates, describe formatting differences. Args: file1, file2.\\n"
+                    "- style_merge: merge styles from multiple domains. Args: domain1,domain2,....\\n"
+                    "- style_translate: translate between formats (docx↔css↔md↔latex). Args: json_spec.\\n"
+                    "- style_verify: compare original vs generated, score similarity. Args: original, generated.\\n"
+                    "- style_learn: learn formatting from good vs bad examples. Args: good_files, bad_files.\\n"
+                    "- style_inherit: create hierarchical style chain. Args: base_pattern, overrides_json.\\n"
+                    "- style_index: index all patterns into vector DB.\\n"
+                    "- style_search: semantic search for styles by description. Args: query.\\n"
                     "- list_patterns: list all stored formatting patterns.\\n"
                     "- parse_style: extract raw formatting DNA from a .docx. Args: filepath.\n"
                     "- save_style: save style to database. Args: json_spec (LLM sets domain/tags).\n"
@@ -1244,6 +1252,37 @@ class TreeLLM:
                                         tool_result_text = fn(to, subject, body)
                                     else:
                                         tool_result_text = fn(tool_args.strip())
+                                elif tool_name in ("style_diff", "style_verify"):
+                                    from .format_observer import style_diff, style_verify
+                                    parts = tool_args.strip().split(",", 1)
+                                    a = parts[0].strip() if parts else ""
+                                    b = parts[1].strip() if len(parts) > 1 else ""
+                                    fn = style_diff if tool_name == "style_diff" else style_verify
+                                    tool_result_text = fn(a, b)
+                                elif tool_name == "style_merge":
+                                    from .format_observer import style_merge
+                                    tool_result_text = style_merge(tool_args.strip())
+                                elif tool_name == "style_translate":
+                                    from .format_observer import style_translate
+                                    tool_result_text = style_translate(tool_args.strip())
+                                elif tool_name == "style_learn":
+                                    from .format_observer import style_learn_examples
+                                    parts = tool_args.strip().split("|")
+                                    good = parts[0] if parts else ""
+                                    bad = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = style_learn_examples(good, bad)
+                                elif tool_name == "style_inherit":
+                                    from .format_observer import style_inherit_chain
+                                    parts = tool_args.strip().split("|", 1)
+                                    base = parts[0] if parts else ""
+                                    ovr = parts[1] if len(parts) > 1 else "{}"
+                                    tool_result_text = style_inherit_chain(base, ovr)
+                                elif tool_name == "style_index":
+                                    from .format_observer import style_index_all
+                                    tool_result_text = style_index_all()
+                                elif tool_name == "style_search":
+                                    from .format_observer import style_search_semantic
+                                    tool_result_text = style_search_semantic(tool_args.strip())
                                 elif tool_name == "observe_format":
                                     from .format_observer import observe_format
                                     tool_result_text = observe_format(tool_args.strip())

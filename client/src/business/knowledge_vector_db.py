@@ -132,12 +132,14 @@ class VectorDatabase:
             self.db_type = VectorStoreType.MEMORY
 
     def _init_faiss(self):
-        """初始化 FAISS"""
+        """Initialize hnswlib vector index."""
         try:
-            import faiss
-            self._faiss_index = faiss.IndexFlatIP(self.embedding_dim)
+            import hnswlib
+            self._faiss_index = hnswlib.Index(space="ip", dim=self.embedding_dim)
+            self._faiss_index.init_index(max_elements=100000, M=16, ef_construction=200)
+            self._faiss_index.set_ef(50)
         except ImportError:
-            print("[VectorDB] faiss 未安装，降级到内存存储")
+            print("[VectorDB] hnswlib not installed, falling back to memory storage")
             self.db_type = VectorStoreType.MEMORY
 
     def set_embedding_func(self, func: Callable[[str], List[float]]):
@@ -174,7 +176,7 @@ class VectorDatabase:
             )
         elif self.db_type == VectorStoreType.FAISS:
             import numpy as np
-            self._faiss_index.add(np.array([embedding], dtype=np.float32))
+            self._faiss_index.add_items(np.array([embedding], dtype=np.float32))
 
         return doc_id
 
@@ -212,9 +214,9 @@ class VectorDatabase:
 
         elif self.db_type == VectorStoreType.FAISS:
             import numpy as np
-            D, I = self._faiss_index.search(
+            I, D = self._faiss_index.knn_query(
                 np.array([query_embedding], dtype=np.float32),
-                min(top_k * 2, len(self._documents))
+                k=min(top_k * 2, len(self._documents))
             )
             for i, idx in enumerate(I[0]):
                 if idx < len(self._documents):

@@ -56,8 +56,8 @@ def main():
         if admin_state.exists():
             print(f"🌳 LivingTree CLI v{VERSION} (已初始化)")
             from .main_diag import print_usage as _print_usage
-from .main_web import start_web as _start_web
-from .integration.launcher import launch, LaunchMode
+            from .main_web import start_web as _start_web
+            from .integration.launcher import launch, LaunchMode
             launch(LaunchMode.CLIENT)
             return
         _start_web()

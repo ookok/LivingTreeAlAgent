@@ -29,13 +29,16 @@ from typing import Any, Optional
 
 from loguru import logger
 
-import easyocr
 import fitz
-import numpy as np
-import paddleocr
 import pytesseract
-from paddleocr import PaddleOCR
+from loguru import logger
 from PIL import Image
+from rapidocr import RapidOCR
+
+try:
+    import easyocr as _easyocr_lib
+except ImportError:
+    _easyocr_lib = None
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 # Hardware accelerator support

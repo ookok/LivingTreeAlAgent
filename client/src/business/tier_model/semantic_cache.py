@@ -106,13 +106,15 @@ class SemanticCache:
         self._init_index()
     
     def _init_index(self):
-        """初始化向量索引"""
+        """Initialize hnswlib vector index."""
         if self.index_type == "faiss" and HAS_NUMPY:
             try:
-                import faiss
+                import hnswlib
                 if len(self.vectors) > 0:
-                    self.index = faiss.IndexFlatIP(self.vector_dim)
-                    self.index.add(np.array(self.vectors, dtype=np.float32))
+                    self.index = hnswlib.Index(space="ip", dim=self.vector_dim)
+                    self.index.init_index(max_elements=len(self.vectors), M=16, ef_construction=200)
+                    self.index.set_ef(50)
+                    self.index.add_items(np.array(self.vectors, dtype=np.float32))
             except ImportError:
                 self.index = None
                 self.index_type = "list"
@@ -138,7 +140,7 @@ class SemanticCache:
             
             if self.index is not None and HAS_NUMPY:
                 qv = np.array([query_vector], dtype=np.float32)
-                distances, indices = self.index.search(qv, min(10, len(self.metadata["entries"])))
+                indices, distances = self.index.knn_query(qv, k=min(10, len(self.metadata["entries"])))
                 best_idx = indices[0][0]
                 best_dist = float(distances[0][0])
             else:
@@ -200,7 +202,7 @@ class SemanticCache:
             self.vectors.append(vector)
             
             if self.index is not None and HAS_NUMPY:
-                self.index.add(np.array([vector], dtype=np.float32))
+                self.index.add_items(np.array([vector], dtype=np.float32))
             
             if self.metadata["count"] % self.batch_size == 0:
                 self._save_state()

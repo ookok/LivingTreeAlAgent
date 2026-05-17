@@ -37,7 +37,7 @@ __all__ = [
     "setup_observability", "get_logger",
     "CacheOptimizer", "ToolCallRepair", "ThoughtHarvester",
     "RLMRunner", "SideGit", "SubAgentRoles", "SessionManager",
-    "LSPManager", "SSEAgentServer", "SkillDiscoveryManager",
+    "SSEAgentServer", "SkillDiscoveryManager",
     "StructMemory",
     # Economy
     "EconomicOrchestrator", "EconomicPolicy", "ROIModel", "ComplianceGate",
@@ -130,8 +130,6 @@ _LAZY = {
     "get_concurrency_guard": ".core.concurrency_guard",
     "get_event_bus": ".infrastructure.event_bus_v2",
     # Bridge (dependency inversion)
-    "ToolRegistry", "get_tool_registry",
-    # Bridge
     "ToolRegistry": ".bridge",
     "get_tool_registry": ".bridge",
     # Observability (lazy to avoid full dependency chain)
@@ -148,7 +146,6 @@ _LAZY = {
     # Cell dream pretraining
     "get_dream_pretrainer": ".cell.dream_pretraining",
     # Bridge (dependency inversion)
-    "ToolRegistry", "get_tool_registry",
     # Observability
     "get_otel": ".observability.otel_integration",
     # TreeLLM cache

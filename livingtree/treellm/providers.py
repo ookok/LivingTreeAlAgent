@@ -201,7 +201,14 @@ class Provider:
             payload["logprobs"] = True
             payload["top_logprobs"] = top_logprobs
         result = await self._request_with_retry(payload, timeout, t0)
-        # Circuit breaker: report success or failure
+        if isinstance(result, dict):
+            result = ProviderResult(
+                text=result.get("text", result.get("content", "")),
+                error=result.get("error", ""),
+                tokens=result.get("tokens", 0),
+                prompt_tokens=result.get("prompt_tokens", 0),
+            )
+        # Circuit breaker
         try:
             from .circuit_breaker import get_circuit_breaker
             breaker = get_circuit_breaker()

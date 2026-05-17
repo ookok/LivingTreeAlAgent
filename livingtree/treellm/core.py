@@ -109,6 +109,7 @@ class TreeLLM:
 
     def __init__(self):
         self._providers: dict[str, Provider] = {}
+        self._dead_providers: set[str] = set()
         self._stats: dict[str, RouterStats] = {}
         self._stats_lock = threading.Lock()
         self._elected: str = ""
@@ -206,7 +207,21 @@ class TreeLLM:
 
     @property
     def provider_names(self) -> list[str]:
-        return list(self._providers.keys())
+        """Return only layer-configured providers, not all 28."""
+        try:
+            from .sticky_election import get_layer_config
+            cfg = get_layer_config()
+            names = set()
+            for i in range(3):
+                p = cfg.get_provider(i)
+                if p[0] and p[0] not in self._dead_providers:
+                    names.add(p[0])
+            if names:
+                return list(names)
+        except Exception:
+            pass
+        alive = [p for p in self._providers if p not in self._dead_providers]
+        return alive[:3]
 
     # ── Routing ──
 
@@ -235,9 +250,17 @@ class TreeLLM:
         return ""
 
     async def smart_route(self, prompt: str, candidates: list[str] | None = None, task_type: str = "general") -> str:
-        names = candidates or list(self._providers.keys())
-        alive = []
-        # Parallel ping all providers
+        """Always route to layer-configured provider. No election."""
+        from .sticky_election import get_layer_config
+        from .three_model_intelligence import get_three_model_intelligence
+        tmi = get_three_model_intelligence(self)
+        triage = tmi.triage(prompt)
+        cfg = get_layer_config()
+        if triage.complexity >= 0.3:
+            p = cfg.get_provider(2)
+            return p[0] if p[0] else "deepseek"
+        p = cfg.get_provider(1)
+        return p[0] if p[0] else "deepseek"
         async def _ping_check(name):
             p = self._providers.get(name)
             if p:
@@ -859,8 +882,6 @@ class TreeLLM:
                     pass
 
         # ── Identity: inject 小树 persona + constitution as FIRST system message ──
-        # This runs before AutoPrompt, tool injection, or any task-specific prompt.
-        # Ensures ALL providers get the same identity regardless of routing.
         if not any(m.get("role") == "system" for m in messages):
             try:
                 from ..dna.identity import get_identity_prompt
@@ -868,8 +889,79 @@ class TreeLLM:
             except Exception:
                 pass
 
-        # ── AutoPrompt + PromptEngine: inject optimized system prompt ──
+        # ── Three-Model Triage: vector → L1 coach → L2 reasoning ──
         task_type = kwargs.get("task_type", "general")
+        # Auto-detect code tasks from query content
+        code_keywords = ["代码", "函数", "模块", "架构", "调用", "依赖",
+                         "code", "def ", "class ", "import ", ".py", "重构",
+                         "bug", "错误", "修复", "优化性能"]
+        if any(kw in user_text.lower() for kw in code_keywords):
+            task_type = "code"
+        use_l2 = False
+        triage = None
+        try:
+            from .three_model_intelligence import get_three_model_intelligence
+            tmi = get_three_model_intelligence(self)
+            user_text = messages[-1].get("content", "") if messages else ""
+            if isinstance(user_text, list):
+                user_text = " ".join(p.get("text", "") for p in user_text if isinstance(p, dict))
+            triage = tmi.triage(user_text)
+            emotion = tmi._detect_emotion(user_text)
+
+            if triage.complexity >= 0.3:
+                use_l2 = True
+                from .sticky_election import get_layer_config
+                l2 = get_layer_config().get_provider(2)
+                provider = l2[0] if l2[0] else "deepseek"
+                # L1 coach optimizes prompt for L2
+                try:
+                    from .prompt_coach import PromptCoach
+                    coach = PromptCoach(self)
+                    domain = "code" if task_type == "code" else (
+                        "analysis" if triage.complexity > 0.6 else "general")
+                    coaching = await coach.coach(user_text, domain=domain)
+                    if coaching.get("meta_prompt") and coaching["meta_prompt"] != user_text:
+                        messages[-1]["content"] = coaching["meta_prompt"]
+                except Exception:
+                    pass
+                # Adjust for deep reasoning
+                if not kwargs.get("max_tokens"):
+                    kwargs["max_tokens"] = 4096
+                if not kwargs.get("temperature"):
+                    kwargs["temperature"] = 0.3
+            else:
+                from .sticky_election import get_layer_config
+                l1 = get_layer_config().get_provider(1)
+                provider = l1[0] if l1[0] else "deepseek"
+                # Fast response params
+                if not kwargs.get("max_tokens"):
+                    kwargs["max_tokens"] = 1024
+                if not kwargs.get("temperature"):
+                    kwargs["temperature"] = 0.7
+                # Emotion modulation for L1
+                tone = emotion.tone_modifier()
+                if tone:
+                    sys_idx = next((i for i, m in enumerate(messages) if m.get("role") == "system"), 0)
+                    if sys_idx < len(messages):
+                        messages[sys_idx]["content"] = tone + "\n\n" + messages[sys_idx]["content"]
+        except Exception:
+            pass
+
+        # ── OntoPromptBuilder: inject domain knowledge from ontology graph ──
+        if use_l2:
+            try:
+                from .onto_prompt_builder import get_onto_prompt_builder
+                onto = get_onto_prompt_builder()
+                onto_result = onto.build_prompt(user_text if user_text else (
+                    messages[-1].get("content", "") if messages else ""))
+                if onto_result.get("concept_chain"):
+                    chain_text = " | ".join(onto_result["concept_chain"][:10])
+                    sys_idx = next((i for i, m in enumerate(messages) if m.get("role") == "system"), 0)
+                    messages[sys_idx]["content"] += f"\n\n[Knowledge Domain: {chain_text}]"
+            except Exception:
+                pass
+
+        # ── AutoPrompt + PromptEngine: inject optimized system prompt ──
         try:
             prompt_text, _ = get_auto_prompt().select(task_type)
             if prompt_text:
@@ -881,7 +973,8 @@ class TreeLLM:
         except Exception:
             pass
 
-        # ── CodeContext: inject code file context for code-related tasks ──
+        # ── CodeContext: inject codegraph context (uses pre-scanned index) ──
+        # Task type is set by triage — "code" triggers CodeGraph injection
         if task_type == "code":
             try:
                 from .code_context import get_code_context
@@ -1393,3 +1486,30 @@ class TreeLLM:
             return str(result)
         except Exception as e:
             return f"[vfs:write error: {e}]"
+
+    # ── Provider health check ──
+    async def check_provider_health(self) -> dict[str, dict]:
+        results = {}
+        for name, p in self._providers.items():
+            try:
+                resp = await p.chat(
+                    messages=[{"role": "user", "content": "ping"}],
+                    max_tokens=10, timeout=10,
+                )
+                healthy = bool(resp and hasattr(resp, 'text') and resp.text)
+                error = "" if healthy else getattr(resp, 'error', 'empty')
+                results[name] = {
+                    "healthy": healthy,
+                    "dead": name in self._dead_providers,
+                    "error": str(error)[:200],
+                    "latency_ms": getattr(resp, 'elapsed_ms', 0),
+                }
+                if healthy and name in self._dead_providers:
+                    self._dead_providers.discard(name)
+            except Exception as e:
+                results[name] = {
+                    "healthy": False,
+                    "dead": name in self._dead_providers,
+                    "error": str(e)[:200],
+                }
+        return results

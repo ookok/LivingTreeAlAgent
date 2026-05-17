@@ -158,7 +158,7 @@ _LAZY = {
     "SubAgentRoles": ".execution",
     "SessionManager": ".execution",
     # LSP
-    "LSPManager": ".lsp",
+    # "LSPManager": ".lsp"  # ARCHIVED,
     # Integration
     "SSEAgentServer": ".integration",
     # Capability

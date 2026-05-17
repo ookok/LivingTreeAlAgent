@@ -173,7 +173,12 @@ class RAMResource(Resource):
 # ══════════════════════════════════════════════════════════════════════
 
 class DiskResource(Resource):
-    r"""Local filesystem backend. Translates /disk/sub/path -> root_path\sub\path."""
+    """Local filesystem backed by unified_file_tool — single source of truth.
+
+    list_dir  → FTS5 instant search or os.scandir fallback
+    read_file → auto-detect .docx/.xlsx/.pptx/.pdf, Office files via zipfile+xml
+    search    → ripgrep or mmap content grep
+    """
 
     @property
     def name(self) -> str:
@@ -181,23 +186,21 @@ class DiskResource(Resource):
 
     def __init__(self, root_path: str | Path = "."):
         self._root = Path(root_path).resolve()
+        self._uft = None  # Lazy loaded
+
+    def _get_uft(self):
+        if self._uft is None:
+            try:
+                from .unified_file_tool import UnifiedFileTool
+                self._uft = UnifiedFileTool(self._root)
+            except Exception:
+                self._uft = False
+        return self._uft if self._uft is not False else None
 
     async def list_dir(self, path: str) -> list[VFSEntry]:
         real = self._to_real(path)
         if not real.is_dir():
             raise NotADirectoryError(f"Disk: {path} is not a directory")
-        try:
-            from ..infrastructure.fast_fs import get_fast_fs
-            ffs = get_fast_fs()
-            fast_entries = ffs.list_dir(str(real))
-            if fast_entries:
-                return [VFSEntry(
-                    name=e.name, path=self._normalize_vpath(Path(e.full_path)),
-                    is_dir=e.is_dir, size=e.size, modified=e.mtime,
-                    resource_type="disk",
-                ) for e in fast_entries]
-        except Exception:
-            pass
         entries = []
         try:
             with os.scandir(str(real)) as it:
@@ -219,14 +222,14 @@ class DiskResource(Resource):
         real = self._to_real(path)
         if not real.is_file():
             raise FileNotFoundError(f"Disk: {path} not found")
-        try:
-            from ..infrastructure.fast_fs import get_fast_fs
-            ffs = get_fast_fs()
-            text = ffs.read_text(str(real))
-            if text:
-                return text
-        except Exception:
-            pass
+        # Auto-detect Office files — use zipfile+xml, zero heavy deps
+        suffix = real.suffix.lower()
+        if suffix in (".docx", ".xlsx", ".pptx", ".pdf"):
+            uft = self._get_uft()
+            if uft:
+                content = uft._read_office_file(real)
+                if content:
+                    return content
         return real.read_text(encoding="utf-8", errors="replace")
 
     async def write_file(self, path: str, content: str) -> None:
@@ -236,6 +239,20 @@ class DiskResource(Resource):
 
     async def exists(self, path: str) -> bool:
         return self._to_real(path).exists()
+
+    async def search(self, vpath: str, pattern: str) -> str:
+        """Content grep — ripgrep preferred, mmap fallback."""
+        real = self._to_real(vpath)
+        uft = self._get_uft()
+        if uft:
+            return uft.grep_content(pattern, str(real))
+        # Fallback: ripgrep via unified_exec
+        try:
+            from ..treellm.unified_exec import run_sync
+            r = run_sync(f"rg --no-heading -n --max-count 30 '{pattern}' {real}", timeout=10)
+            return r.stdout[:8000] if r.success else f"No matches for '{pattern}'"
+        except Exception:
+            return f"Search failed for '{pattern}'"
 
     def _to_real(self, vpath: str) -> Path:
         rel = vpath.replace("\\", "/").lstrip("/")
@@ -250,42 +267,6 @@ class DiskResource(Resource):
         except ValueError:
             rel = real
         return "/disk/" + str(rel).replace("\\", "/")
-
-    def walk_files(self, vpath: str, pattern: str = "*") -> list[VFSEntry]:
-        real = self._to_real(vpath)
-        if not real.is_dir():
-            return []
-        try:
-            from ..infrastructure.fast_fs import get_fast_fs
-            ffs = get_fast_fs()
-            fast_entries = ffs.scan_tree(str(real), max_depth=5)
-            if fast_entries:
-                results = []
-                for e in fast_entries:
-                    if not e.is_dir and fnmatch.fnmatch(e.name, pattern):
-                        results.append(VFSEntry(
-                            name=e.name, path=self._normalize_vpath(Path(e.full_path)),
-                            is_dir=False, size=e.size, modified=e.mtime,
-                            resource_type="disk",
-                        ))
-                return results
-        except Exception:
-            pass
-        results = []
-        for root, dirs, files in os.walk(str(real)):
-            depth = Path(root).relative_to(real).parts if real != Path(root) else []
-            if len(depth) >= 5:
-                dirs.clear()
-            for name in files:
-                if fnmatch.fnmatch(name, pattern):
-                    fp = Path(root) / name
-                    stat = fp.stat()
-                    results.append(VFSEntry(
-                        name=name, path=self._normalize_vpath(fp),
-                        is_dir=False, size=stat.st_size,
-                        modified=stat.st_mtime, resource_type="disk",
-                    ))
-        return results
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -976,7 +957,7 @@ class VirtualFS:
         if not pattern and stdin:
             return stdin
 
-        # KB path → semantic search, not literal grep
+        # KB path → semantic search
         search_path = positional[0] if positional else ""
         if search_path.startswith("/kb") and pattern and not stdin:
             kb = self._resources.get("kb")
@@ -990,6 +971,12 @@ class VirtualFS:
                     )
                 return f"No KB results for: {pattern}"
             return "KB resource not available"
+
+        # /disk/ path → DiskResource.search (ripgrep or mmap)
+        if search_path.startswith("/disk") and pattern and not stdin:
+            disk = self._resources.get("disk")
+            if disk and hasattr(disk, 'search'):
+                return await disk.search(search_path, pattern)
 
         try:
             from ..infrastructure.fast_fs import get_fast_fs

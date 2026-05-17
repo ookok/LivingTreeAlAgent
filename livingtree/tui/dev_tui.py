@@ -1,10 +1,11 @@
-"""DevTUI — minimal terminal UI with bubble messages, streaming, markdown, code highlight.
+"""DevTUI — minimal terminal UI with bubble messages, streaming, markdown, code highlight, tool calls.
 
 Features:
   - Bubble messages (user/assistant with colors)
   - Streaming output (tokens appear in real-time)
   - Markdown rendering (Rich Markdown)
   - Code syntax highlighting (Rich Syntax)
+  - Tool call visualization (expandable, status icons)
   - Diff view
   - Multi-task status bar
 """
@@ -17,16 +18,14 @@ import re
 from rich.markdown import Markdown
 from rich.syntax import Syntax
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
-from rich.console import RenderableType
+from rich.console import RenderableType, Group
 from textual.app import App, ComposeResult
 from textual.containers import Container, VerticalScroll, Horizontal
 from textual.widgets import Header, Footer, Input, Static
 from textual.widget import Widget
 from textual.binding import Binding
-from textual.reactive import reactive
-from textual.message import Message
-from loguru import logger
 
 
 class ChatBubble(Widget):
@@ -63,7 +62,8 @@ class ChatBubble(Widget):
 
 
 class StreamingBubble(Widget):
-    """A bubble that streams content in real-time."""
+    """A chat bubble that streams tokens in real-time.
+    Automatically detects and renders tool calls with visual status."""
 
     DEFAULT_CSS = """
     StreamingBubble { width: 100%; padding: 0 1; margin: 1 0; }
@@ -72,22 +72,105 @@ class StreamingBubble(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._text = ""
+        self._tool_calls: list[dict] = []  # [{name, args, status, result}]
+        self._tool_pattern = re.compile(
+            r'<tool_call\s+name="(\w+)"\s*>(.*?)</tool_call>', re.DOTALL
+        )
 
     def append(self, token: str):
         self._text += token
+        # Detect completed tool calls in accumulated text
+        for name, args in self._tool_pattern.findall(self._text):
+            already = any(t["name"] == name and t["args"] == args.strip() for t in self._tool_calls)
+            if not already:
+                self._tool_calls.append({
+                    "name": name, "args": args.strip()[:100],
+                    "status": "running", "result": "", "elapsed": 0,
+                })
         self.refresh()
 
-    def render(self) -> RenderableType:
-        return Panel(
-            Markdown(self._text or "▊", code_theme="github-dark"),
-            border_style="#238636",
-            title="🌳 小树",
-            title_align="left",
-        )
+    def update_tool_result(self, tool_name: str, result: str, elapsed_ms: float = 0):
+        for t in self._tool_calls:
+            if t["name"] == tool_name and t["status"] == "running":
+                t["status"] = "done" if "error" not in result.lower()[:50] else "failed"
+                t["result"] = result[:500]
+                t["elapsed"] = elapsed_ms
+                break
+        self.refresh()
 
     @property
     def text(self) -> str:
         return self._text
+
+    def render(self) -> RenderableType:
+        renderables = []
+
+        # Tool calls panel
+        if self._tool_calls:
+            tool_table = Table(show_header=False, box=None, padding=(0, 1))
+            tool_table.add_column("icon", width=2)
+            tool_table.add_column("name", width=15)
+            tool_table.add_column("args", width=30)
+            tool_table.add_column("status", width=10)
+            for t in self._tool_calls:
+                icon = {"running": "🔄", "done": "✅", "failed": "❌"}.get(t["status"], "⏳")
+                style = {"running": "yellow", "done": "green", "failed": "red"}.get(t["status"], "")
+                tool_table.add_row(
+                    icon, f"[bold]{t['name']}[/]",
+                    t["args"][:80], f"[{style}]{t['status']}[/]",
+                )
+                if t["result"]:
+                    tool_table.add_row("", "", f"[dim]{t['result'][:120]}[/]", "")
+            renderables.append(Panel(tool_table, border_style="#30363d", title="🔧 Tools"))
+
+        # Main content
+        clean_text = self._tool_pattern.sub("", self._text)  # Remove XML tags
+        if clean_text.strip():
+            renderables.append(Markdown(clean_text or "▊", code_theme="github-dark"))
+
+        if not renderables:
+            return Text("▊", style="#58a6ff")
+
+        text_panel = Panel(
+            Group(*renderables) if len(renderables) > 1 else renderables[0],
+            border_style="#238636",
+            title="🌳 小树",
+            title_align="left",
+        )
+        return text_panel
+
+
+class ToolCallWidget(Widget):
+    """Standalone tool call display block."""
+
+    DEFAULT_CSS = """
+    ToolCallWidget { width: 100%; padding: 0 1; margin: 0; }
+    """
+
+    def __init__(self, tool_name: str, tool_args: str = "", status: str = "running", **kwargs):
+        super().__init__(**kwargs)
+        self.tool_name = tool_name
+        self.tool_args = tool_args
+        self.status = status
+        self.result = ""
+        self.elapsed_ms = 0.0
+
+    def done(self, result: str, elapsed_ms: float = 0):
+        self.status = "done" if "error" not in result.lower()[:50] else "failed"
+        self.result = result[:500]
+        self.elapsed_ms = elapsed_ms
+        self.refresh()
+
+    def render(self) -> RenderableType:
+        icon = {"running": "🔄", "done": "✅", "failed": "❌"}.get(self.status, "⏳")
+        style = {"running": "yellow", "done": "green", "failed": "red"}.get(self.status, "")
+
+        table = Table(show_header=False, box=None, padding=(0, 1))
+        table.add_column(width=2); table.add_column(width=20); table.add_column(width=40)
+        table.add_row(icon, f"[bold]{self.tool_name}[/]", f"[dim]{self.tool_args[:80]}[/]")
+        table.add_row("", f"[{style}]{self.status}[/]",
+                       f"[dim]{self.result[:120]}[/]" if self.result else "")
+        return Panel(table, border_style="#30363d")
 
 
 class TaskBar(Widget):
@@ -198,7 +281,6 @@ class DevTUI(App):
 
         import time
         t0 = time.time()
-        collected = []
 
         try:
             p = self._llm._resolve_provider(self._provider)
@@ -210,17 +292,29 @@ class DevTUI(App):
                     temperature=0.3, max_tokens=2048, model="deepseek-v4-flash",
                 ):
                     if isinstance(token, str) and token:
-                        collected.append(token)
                         self._streaming.append(token)
+                        # Detect tool calls for task bar
+                        if "<tool_call" in self._streaming.text:
+                            tools = re.findall(
+                                r'<tool_call\s+name="(\w+)"',
+                                self._streaming.text,
+                            )
+                            for t in tools:
+                                self._task_bar.update_task(t, "running", "")
                 self._total_ms = (time.time() - t0) * 1000
-                self._streaming.append("")  # Final refresh
+                # Mark all running tools done
+                for t in self._task_bar._tasks:
+                    if t["status"] == "running":
+                        t["status"] = "done"
             else:
                 self._streaming.append("\n❌ No provider available.")
         except Exception as e:
             self._streaming.append(f"\n❌ {e}")
 
-        self._task_bar.update_task(f"msg{self._message_count}", "done",
-                                   f"{len(''.join(collected))} chars")
+        self._task_bar.update_task(
+            f"msg{self._message_count}", "done",
+            f"{len(self._streaming.text)} chars",
+        )
         self._update_status()
 
     def _update_status(self) -> None:

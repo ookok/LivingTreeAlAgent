@@ -1,4 +1,4 @@
-"""CodeGraph tools — expose pre-scanned dependency graph to LLM via tool calls.
+"""CodeGraph tools — expose code dependency graph to LLM via tool calls.
 
 LLM can query:
   codegraph_deps(module)  → what this module depends on
@@ -7,7 +7,7 @@ LLM can query:
   codegraph_impact(file)  → blast radius if this file changes
   codegraph_update()      → re-index changed files (hash-based incremental)
 
-Auto-detects staleness: if a file's mtime > graph build time, marks result as [stale].
+Storage: SQLite (fast init, indexed queries) with pickle fallback.
 """
 
 from __future__ import annotations
@@ -20,36 +20,48 @@ from typing import Any
 
 from loguru import logger
 
-CACHE_PATH = Path(".livingtree/code_graph.pickle")
+CACHE_PICKLE = Path(".livingtree/code_graph.pickle")
+CACHE_DB = Path(".livingtree/codegraph.db")
 _graph: Any = None
+_db: Any = None
 _graph_build_time: float = 0.0
+_use_db: bool = False
 
 
 def _ensure_loaded():
-    global _graph, _graph_build_time
-    if _graph is not None:
-        return _graph
-    if CACHE_PATH.exists():
+    global _graph, _db, _graph_build_time, _use_db
+    if _graph is not None or _db is not None:
+        return
+
+    # Try SQLite first (faster init — just connect, no deserialize)
+    if CACHE_DB.exists():
         try:
-            with open(CACHE_PATH, "rb") as f:
+            from ..capability.codegraph_db import CodeGraphDB
+            _db = CodeGraphDB(str(CACHE_DB))
+            _db.connect()
+            _graph_build_time = CACHE_DB.stat().st_mtime
+            _use_db = True
+            logger.debug(f"CodeGraph SQLite loaded: {_db.stats()}")
+            return
+        except Exception:
+            _db = None
+
+    # Fallback to pickle
+    if CACHE_PICKLE.exists():
+        try:
+            with open(CACHE_PICKLE, "rb") as f:
                 _graph = pickle.load(f)
-            _graph_build_time = CACHE_PATH.stat().st_mtime
-            stats = _graph.stats() if hasattr(_graph, 'stats') else {}
-            logger.debug(f"CodeGraph loaded: {stats}")
+            _graph_build_time = CACHE_PICKLE.stat().st_mtime
+            _use_db = False
+            logger.debug(f"CodeGraph pickle loaded")
         except Exception:
             _graph = object()
-    else:
-        _graph = None
-    return _graph
 
 
 def _check_staleness(hint: str = "") -> str:
-    """Check if graph is stale vs filesystem."""
-    if not CACHE_PATH.exists():
+    cache = CACHE_DB if _use_db else CACHE_PICKLE
+    if not cache.exists():
         return "[stale] CodeGraph not built. Use: codegraph_update"
-    g = _ensure_loaded()
-    if g is object():
-        return "[stale] CodeGraph corrupted. Use: codegraph_update"
     if hint:
         p = Path(hint)
         if p.exists() and p.stat().st_mtime > _graph_build_time:
@@ -57,83 +69,126 @@ def _check_staleness(hint: str = "") -> str:
     return ""
 
 
+def _query_backend(kind: str, arg: str) -> str:
+    """Route query to SQLite or pickle backend."""
+    _ensure_loaded()
+
+    if _use_db and _db:
+        if kind == "deps":
+            return "\n".join(f"  {d}" for d in _db.get_deps(arg)) or "no results"
+        elif kind == "callers":
+            return "\n".join(f"  {c}" for c in _db.get_callers(arg)) or "no results"
+        elif kind == "callees":
+            return "\n".join(f"  {c}" for c in _db.get_callees(arg)) or "no results"
+        elif kind == "impact":
+            rows = _db.get_impact(arg)
+            return "\n".join(f"  {f} (score={s})" for f, s in rows) if rows else "no results"
+
+    if _graph and _graph is not object():
+        if kind == "deps" and hasattr(_graph, 'get_deps'):
+            return "\n".join(f"  {d}" for d in _graph.get_deps(arg)[:20]) or "no results"
+        elif kind == "callers" and hasattr(_graph, 'get_callers'):
+            return "\n".join(f"  {c}" for c in _graph.get_callers(arg)[:20]) or "no results"
+        elif kind == "callees" and hasattr(_graph, 'get_callees'):
+            return "\n".join(f"  {c}" for c in _graph.get_callees(arg)[:20]) or "no results"
+        elif kind == "impact" and hasattr(_graph, 'impact_score'):
+            rows = _graph.impact_score([arg])[:15]
+            return "\n".join(f"  {f} (score={s})" for f, s in rows) if rows else "no results"
+
+    return "CodeGraph not available. Use: codegraph_update"
+
+
 def codegraph_update() -> str:
-    """Re-index changed files (hash-based incremental). Zero rescan for unchanged files."""
+    """Re-index changed files to SQLite backend."""
     try:
-        from ..capability.code_graph import CodeGraph
-        cg = CodeGraph()
-        if hasattr(cg, 'load') and CACHE_PATH.exists():
-            cg.load()
-        stats = cg.index(".", patterns=["**/*.py"])
-        cg.save(str(CACHE_PATH))
-        global _graph, _graph_build_time
-        _graph = cg
+        from ..capability.codegraph_db import CodeGraphDB
+        db = CodeGraphDB(str(CACHE_DB))
+        db.connect()
+        db.begin_batch()
+
+        import ast as _ast
+        count = 0
+        for py_file in Path("livingtree").rglob("*.py"):
+            if "_archive" in str(py_file):
+                continue
+            try:
+                content = py_file.read_text(encoding="utf-8")[:30000]
+                file_hash = hashlib.md5(content.encode()).hexdigest()
+                old_hash = db.get_file_hash(str(py_file))
+                if old_hash == file_hash:
+                    continue  # unchanged
+                db.clear_file(str(py_file))
+                tree = _ast.parse(content)
+                for node in _ast.walk(tree):
+                    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                        eid = f"{py_file.stem}.{node.name}"
+                        db.upsert_entity({
+                            "id": eid, "name": node.name, "file": str(py_file),
+                            "kind": "function", "line": node.lineno,
+                            "end_line": getattr(node, 'end_lineno', node.lineno),
+                            "hash": file_hash,
+                        })
+                        count += 1
+                        for child in _ast.walk(node):
+                            if isinstance(child, _ast.Call):
+                                callee = ""
+                                if isinstance(child.func, _ast.Name):
+                                    callee = child.func.id
+                                elif isinstance(child.func, _ast.Attribute):
+                                    callee = _ast.unparse(child.func)
+                                if callee and not callee.startswith("_"):
+                                    db.add_call(eid, callee, str(py_file), child.lineno)
+                    elif isinstance(node, (_ast.Import, _ast.ImportFrom)):
+                        if isinstance(node, _ast.ImportFrom) and node.module:
+                            db.add_import(str(py_file), node.module)
+                        for alias in node.names:
+                            db.add_import(str(py_file), alias.name)
+                if not db.get_file_hash(str(py_file)):
+                    db.set_meta(f"indexed:{py_file}", file_hash)
+            except Exception:
+                continue
+
+        db.set_meta("build_time", str(time.time()))
+        db.set_meta("entity_count", str(db.entity_count()))
+        db.commit_batch()
+
+        global _db, _use_db, _graph_build_time
+        _db = db
+        _use_db = True
         _graph_build_time = time.time()
+        stats = db.stats()
         return (
-            f"CodeGraph updated: {stats.total_files} files, "
-            f"{stats.total_entities} entities, {stats.total_edges} edges, "
-            f"{stats.build_time_ms:.0f}ms"
+            f"CodeGraph updated (SQLite): {stats['total_entities']} entities, "
+            f"{stats['total_files']} files, {stats['total_calls']} calls, "
+            f"{stats['total_imports']} imports, {stats['db_size_mb']}MB"
         )
     except Exception as e:
         return f"CodeGraph update failed: {e}"
 
 
 def codegraph_deps(module: str) -> str:
-    g = _ensure_loaded()
-    if not g or g is object():
-        return "CodeGraph not built. Use: codegraph_update"
     stale = _check_staleness()
-    try:
-        deps = g.get_deps(module) if hasattr(g, 'get_deps') else []
-        result = "\n".join(f"  {d}" for d in deps[:20]) if deps else f"No dependencies found for {module}"
-        return f"{stale}\n{result}" if stale else result
-    except Exception as e:
-        return f"CodeGraph error: {e}"
+    result = _query_backend("deps", module)
+    return f"{stale}\n{result}" if stale else result
 
 
 def codegraph_callers(func: str) -> str:
-    """Query: who calls <func>?"""
-    g = _ensure_loaded()
-    if not g or g is object():
-        return "CodeGraph not built. Run: livingtree scan"
-    try:
-        callers = g.get_callers(func) if hasattr(g, 'get_callers') else []
-        if not callers:
-            return f"No callers found for {func}"
-        return "\n".join(f"  {c}" for c in callers[:20])
-    except Exception as e:
-        return f"CodeGraph error: {e}"
+    stale = _check_staleness()
+    result = _query_backend("callers", func)
+    return f"{stale}\n{result}" if stale else result
 
 
 def codegraph_callees(func: str) -> str:
-    """Query: what does <func> call?"""
-    g = _ensure_loaded()
-    if not g or g is object():
-        return "CodeGraph not built. Run: livingtree scan"
-    try:
-        callees = g.get_callees(func) if hasattr(g, 'get_callees') else []
-        if not callees:
-            return f"No callees found for {func}"
-        return "\n".join(f"  {c}" for c in callees[:20])
-    except Exception as e:
-        return f"CodeGraph error: {e}"
+    stale = _check_staleness()
+    result = _query_backend("callees", func)
+    return f"{stale}\n{result}" if stale else result
 
 
 def codegraph_impact(file: str) -> str:
-    """Query: what would be affected if <file> changes?"""
-    g = _ensure_loaded()
-    if not g or g is object():
-        return "CodeGraph not built. Run: livingtree scan"
-    try:
-        impacted = g.impact_score([file]) if hasattr(g, 'impact_score') else []
-        if not impacted:
-            return f"No impact data for {file}"
-        lines = []
-        for fpath, score in impacted[:15]:
-            lines.append(f"  {fpath} (impact={score})")
-        return f"Blast radius for {file}:\n" + "\n".join(lines)
-    except Exception as e:
-        return f"CodeGraph error: {e}"
+    stale = _check_staleness(file)
+    result = _query_backend("impact", file)
+    prefix = f"Blast radius for {file}:\n"
+    return f"{stale}\n{prefix}{result}" if stale else f"{prefix}{result}"
 
 
 # ── Tool registration for CapabilityBus ──

@@ -61,16 +61,32 @@ def _ensure_loaded():
 def _check_staleness(hint: str = "") -> str:
     cache = CACHE_DB if _use_db else CACHE_PICKLE
     if not cache.exists():
-        return "[stale] CodeGraph not built. Use: codegraph_update"
+        return ""
     if hint:
         p = Path(hint)
         if p.exists() and p.stat().st_mtime > _graph_build_time:
-            return f"[stale] {hint} modified after graph build. Use: codegraph_update"
+            return f"[stale] {hint} modified after graph build."
     return ""
 
 
+def _not_built_fallback(kind: str, arg: str) -> str:
+    """When CodeGraph is not built, suggest fast alternatives."""
+    tips = {
+        "deps": f"bash: rg \"^from|^import\" livingtree/ | grep {arg.split('.')[-1]}",
+        "callers": f"bash: rg \"{arg}\" livingtree/ -l",
+        "callees": f"read_file of the source file, then look for function calls",
+        "impact": f"git diff --stat, or read_file of the file directly",
+    }
+    tip = tips.get(kind, "")
+    return (
+        f"CodeGraph not built. Fast alternatives:\n"
+        f"  1. {tip}\n"
+        f"  2. read_file to read the file directly\n"
+        f"  3. codegraph_update to build the index (5s, one-time)"
+    )
+
+
 def _query_backend(kind: str, arg: str) -> str:
-    """Route query to SQLite or pickle backend."""
     _ensure_loaded()
 
     if _use_db and _db:
@@ -95,7 +111,8 @@ def _query_backend(kind: str, arg: str) -> str:
             rows = _graph.impact_score([arg])[:15]
             return "\n".join(f"  {f} (score={s})" for f, s in rows) if rows else "no results"
 
-    return "CodeGraph not available. Use: codegraph_update"
+    # Not built — suggest fast alternatives
+    return _not_built_fallback(kind, arg)
 
 
 def codegraph_update() -> str:

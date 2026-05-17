@@ -213,7 +213,7 @@ class DefectScanner:
         """Deep analysis using CodeGraph (call graph, deps) + ASTParser (tree-sitter)
         + CodeAnalyzer (complexity, dead code, impact scores)."""
         try:
-            from ..capability.code_graph import CodeGraph
+            from ..capability.code_graph import CodeGraph  # TODO(bridge): via bridge.ToolRegistry
             from ..capability.ast_parser import ASTParser
             from .code_analyzer import CodeAnalyzer
 

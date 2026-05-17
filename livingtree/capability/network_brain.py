@@ -264,7 +264,7 @@ class NetworkBrain:
         repos = config.get("repos", [])
         if not repos:
             try:
-                from ..treellm.core import TreeLLM
+                from ..treellm.core import TreeLLM  # TODO(bridge): via bridge.LLMProtocol
                 repos = [
                     "microsoft/vscode", "pytorch/pytorch", "huggingface/transformers",
                     "langchain-ai/langchain", "AUTOMATIC1111/stable-diffusion-webui",

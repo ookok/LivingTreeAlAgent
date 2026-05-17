@@ -225,7 +225,7 @@ class TextPolisher:
                      language: str = "zh") -> str:
         """Polish text using LLM with specified style."""
         try:
-            from ..treellm.core import TreeLLM
+            from ..treellm.core import TreeLLM  # TODO(bridge): via bridge.LLMProtocol
             llm = TreeLLM.from_config()
 
             style_desc = cls.STYLES.get(style, cls.STYLES["formal"])

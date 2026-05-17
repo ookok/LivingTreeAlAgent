@@ -257,7 +257,7 @@ class CodeContext:
 
     def _load_code_graph(self) -> None:
         try:
-            from ..capability.code_graph import CodeGraph
+            from ..capability.code_graph import CodeGraph  # TODO(bridge): via bridge.ToolRegistry
             cg = CodeGraph()
             cache = Path(".livingtree/code_graph.pickle")
             if cache.exists():

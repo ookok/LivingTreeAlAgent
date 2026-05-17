@@ -1,1 +1,1 @@
-docs: 更新架构状态 — treellm→capability 从20→10文件
+refactor: 标记剩余 18 处耦合点 → bridge 迁移

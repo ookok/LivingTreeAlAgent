@@ -1012,7 +1012,7 @@ class ContentGraph:
         """
         if not eia_engine:
             try:
-                from ..treellm.eia_models import EIAEngine
+                from ..treellm.eia_models import EIAEngine  # TODO(bridge): via bridge.LLMProtocol
                 eia_engine = EIAEngine()
             except ImportError:
                 return {"error": "EIAEngine not available"}

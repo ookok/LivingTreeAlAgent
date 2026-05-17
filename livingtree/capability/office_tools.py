@@ -489,7 +489,7 @@ __all__ = ["OfficeTools"]
 def register_office_tools(bus=None):
     """Register all OfficeTools into CapabilityBus for LLM discovery."""
     try:
-        from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+        from ..treellm.capability_bus import get_capability_bus  # TODO(bridge): via bridge.LLMProtocol, Capability, CapCategory, CapParam
         bus = bus or get_capability_bus()
         
         tools = [

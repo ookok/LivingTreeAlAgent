@@ -427,7 +427,7 @@ class DataExplorer:
 def register_db_tools(bus=None) -> int:
     """Register all database tools in CapabilityBus for LLM discovery."""
     try:
-        from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+        from ..treellm.capability_bus import get_capability_bus  # TODO(bridge): via bridge.LLMProtocol, Capability, CapCategory, CapParam
         bus = bus or get_capability_bus()
 
         tools = [

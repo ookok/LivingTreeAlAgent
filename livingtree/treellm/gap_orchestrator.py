@@ -224,7 +224,7 @@ class GapOrchestrator:
         # Tier 2: Try ToolSynthesizer — LLM generate tool code
         if not result.resolved and tool_name.lower() not in COMMERCIAL_ONLY:
             try:
-                from ..capability.tool_synthesis import ToolSynthesizer
+                from ..capability.tool_synthesis import ToolSynthesizer  # TODO(bridge): via bridge.ToolRegistry
                 if not self._synthesizer:
                     self._synthesizer = ToolSynthesizer()
                 synth_result = self._synthesizer.synthesize(

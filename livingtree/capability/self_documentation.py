@@ -125,7 +125,7 @@ class SelfDocumenter:
 
     async def _gen_provider_stats(self, llm, provider) -> str:
         try:
-            from ..treellm.cache_director import get_cache_director
+            from ..treellm.cache_director import get_cache_director  # TODO(bridge): via bridge.LLMProtocol
             cd = get_cache_director()
             stats = cd.all_stats()
             stats_str = json.dumps(stats, indent=2, ensure_ascii=False)

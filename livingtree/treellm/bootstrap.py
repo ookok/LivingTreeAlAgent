@@ -314,7 +314,7 @@ class Bootstrapper:
 
         # tree-sitter
         try:
-            from ..capability.ast_parser import ASTParser
+            from ..capability.ast_parser import ASTParser  # TODO(bridge): via bridge.ToolRegistry
             p = ASTParser()
             if p.available():
                 checks.append(BootstrapCheck(

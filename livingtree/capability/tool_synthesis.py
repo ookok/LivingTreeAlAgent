@@ -263,7 +263,7 @@ class ToolSynthesizer:
 
         # Register in SkillRouter
         try:
-            from ..treellm.classifier import get_router
+            from ..treellm.classifier import get_router  # TODO(bridge): via bridge.LLMProtocol
             router = get_router()
             if hasattr(router, 'register_tool'):
                 router.register_tool(tool.name, tool.description, tool.category)

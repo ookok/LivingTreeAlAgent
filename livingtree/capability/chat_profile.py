@@ -249,7 +249,7 @@ class BatchProfileBuilder:
 
         # Source 2: ContextMoE deep memory (learned patterns)
         try:
-            from ..treellm.context_moe import get_context_moe
+            from ..treellm.context_moe import get_context_moe  # TODO(bridge): via bridge.LLMProtocol
             moe = get_context_moe("domain_learner")
             for key, entry in moe._deep.items():
                 if key.startswith("domain:") and isinstance(entry, dict):

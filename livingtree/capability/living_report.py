@@ -397,7 +397,7 @@ class AudienceSynthesizer:
     @staticmethod
     async def synthesize(content: dict, audience: str) -> str:
         """Synthesize a version for a specific audience."""
-        from ..treellm.core import TreeLLM
+        from ..treellm.core import TreeLLM  # TODO(bridge): via bridge.LLMProtocol
 
         llm = TreeLLM.from_config()
 

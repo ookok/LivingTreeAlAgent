@@ -96,7 +96,7 @@ class ChangeRehearsal:
         """Simulate a change and predict its blast radius."""
         if not code_graph:
             try:
-                from ..capability.code_graph import CodeGraph
+                from ..capability.code_graph import CodeGraph  # TODO(bridge): via bridge.ToolRegistry
                 cg = CodeGraph()
                 cache = Path(".livingtree/code_graph.pickle")
                 if cache.exists():

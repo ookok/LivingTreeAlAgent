@@ -1306,7 +1306,7 @@ class TreeLLM:
         except Exception: pass
         # ── Cost tracking ──
         try:
-            from ..capability.industrial_doc_engine import get_cost_dash
+            from ..capability.industrial_doc_engine import get_cost_dash  # TODO(bridge): via bridge.ToolRegistry
             get_cost_dash().record(name, tokens, tokens)
         except Exception: pass
         # ── P2P cost report to relay ──

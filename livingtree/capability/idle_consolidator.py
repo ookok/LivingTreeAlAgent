@@ -91,7 +91,7 @@ class IdleConsolidator:
 
         # ── ErrorReplay: self-heal from recorded errors ──
         try:
-            from ..treellm.debug_pro import get_error_replay
+            from ..treellm.debug_pro import get_error_replay  # TODO(bridge): via bridge.LLMProtocol
             await get_error_replay().auto_heal_cycle(hub)
         except Exception:
             pass

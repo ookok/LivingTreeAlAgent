@@ -190,12 +190,14 @@ class UnifiedFileTool:
             return []
 
     async def _search_documents(self, query: str) -> list[FileHit]:
-        """FTS5 + embedding document search."""
+        """FTS5 + embedding document search + direct Office/PDF read."""
+        hits = []
+
+        # Indexed documents via DocumentKB
         try:
             from ..knowledge.document_kb import DocumentKB
             dkb = DocumentKB()
             results = dkb.search(query, top_k=10)
-            hits = []
             for r in results:
                 hits.append(FileHit(
                     path=f"kb://{r.doc_id}/{r.chunk.chunk_index}",
@@ -205,9 +207,78 @@ class UnifiedFileTool:
                     score=r.score,
                     relevance="文档内容匹配",
                 ))
-            return hits
         except Exception:
-            return []
+            pass
+
+        # Direct Office/PDF read (unindexed files)
+        try:
+            for f in self._workspace.rglob("*"):
+                if f.suffix.lower() not in (".docx", ".xlsx", ".pptx", ".pdf"):
+                    continue
+                content = self._read_office_file(f, query)
+                if content:
+                    hits.append(FileHit(
+                        path=str(f), name=f.name,
+                        content_preview=content[:200],
+                        source="office",
+                        score=0.8,
+                        relevance=f"Office文档: {f.suffix}",
+                    ))
+        except Exception:
+            pass
+
+        return hits[:15]
+
+    @staticmethod
+    def _read_office_file(filepath: Path, query: str = "") -> str | None:
+        """Read .docx/.xlsx/.pptx/.pdf without heavy deps. Returns content if query matches."""
+        suffix = filepath.suffix.lower()
+        try:
+            if suffix == ".docx":
+                import zipfile, xml.etree.ElementTree as ET
+                with zipfile.ZipFile(filepath) as z:
+                    if "word/document.xml" not in z.namelist():
+                        return None
+                    xml = z.read("word/document.xml").decode("utf-8", errors="replace")
+                    text = " ".join(
+                        t.text or "" for t in ET.fromstring(xml).iter()
+                        if t.tag.endswith("}t") and t.text
+                    )
+            elif suffix == ".xlsx":
+                import zipfile, xml.etree.ElementTree as ET
+                with zipfile.ZipFile(filepath) as z:
+                    sheet = z.read("xl/sharedStrings.xml").decode("utf-8", errors="replace")
+                    text = " ".join(
+                        t.text or "" for t in ET.fromstring(sheet).iter()
+                        if t.tag.endswith("}t") and t.text
+                    )
+            elif suffix == ".pptx":
+                import zipfile, xml.etree.ElementTree as ET
+                text_parts = []
+                with zipfile.ZipFile(filepath) as z:
+                    for name in z.namelist():
+                        if name.startswith("ppt/slides/slide") and name.endswith(".xml"):
+                            xml = z.read(name).decode("utf-8", errors="replace")
+                            for t in ET.fromstring(xml).iter():
+                                if t.tag.endswith("}t") and t.text:
+                                    text_parts.append(t.text)
+                    text = " ".join(text_parts)
+            elif suffix == ".pdf":
+                try:
+                    import fitz  # PyMuPDF
+                    doc = fitz.open(filepath)
+                    text = " ".join(page.get_text() for page in doc)
+                    doc.close()
+                except ImportError:
+                    return None
+            else:
+                return None
+
+            if query and query.lower() not in text.lower():
+                return None
+            return text[:3000]
+        except Exception:
+            return None
 
     async def _search_history(self, query: str) -> list[FileHit]:
         """FTS5 conversation history search."""

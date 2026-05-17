@@ -168,9 +168,24 @@ def notify_dingtalk(message: str) -> str:
         return f"DingTalk error: {e}"
 
 
+def read_office(filepath: str) -> str:
+    """Read .docx/.xlsx/.pptx/.pdf content. No heavy deps needed (uses zipfile+xml)."""
+    from pathlib import Path as _Path
+    p = _Path(filepath)
+    if not p.exists():
+        return f"File not found: {filepath}"
+    try:
+        from ..capability.unified_file_tool import UnifiedFileTool
+        content = UnifiedFileTool._read_office_file(p)
+        return content or f"No readable content in {filepath}"
+    except Exception as e:
+        return f"Read error: {e}"
+
+
 # ── Tool registration ──
 
 TOOLS = {
+    "read_office": {"func": read_office, "desc": "Read .docx/.xlsx/.pptx/.pdf content. No heavy deps.", "params": "filepath"},
     "list_dir": {"func": list_dir, "desc": "List directory contents with file sizes.", "params": "path"},
         "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},
     "git_diff": {"func": git_diff, "desc": "Show working tree changes.", "params": "[file]"},

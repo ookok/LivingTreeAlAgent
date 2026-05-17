@@ -1062,6 +1062,7 @@ class TreeLLM:
                     "- codegraph_callees: query call graph. Args: function name. Returns callees.\n"
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
+                    "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
                     "- list_dir: list directory with file sizes. Args: path.",
                     "- git_status: show working tree status.",
                     "- git_diff: show changes. Args: [file].",

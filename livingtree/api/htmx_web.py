@@ -771,310 +771,6 @@ async def tree_form_step(request: Request, n: int = Query(default=1)):
 #  LLM generates expandable graph node views
 # ═══════════════════════════════════════════════════════════════
 
-@htmx_router.post("/kg/explore")
-async def tree_kg_explore(request: Request):
-    """P6: Explore a knowledge graph entity — LLM generates expandable node card.
-
-    Returns an HTML card with the entity info and HTMX buttons to expand
-    related entities, drill down, or traverse edges.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        form_data = await request.form()
-        body = {"entity": form_data.get("entity", form_data.get("message", ""))}
-
-    entity = body.get("entity", body.get("message", ""))
-    if not entity.strip():
-        return HTMLResponse('<div class="card"><p>请输入要探索的知识实体</p></div>')
-
-    hub = _get_hub(request)
-
-    try:
-        if hub and hub.world and hub.world.consciousness:
-            consc = hub.world.consciousness
-            kg_prompt = (
-                f"关于 '{entity}' 的知识图谱节点。\n"
-                "生成一个HTML卡片，包含:\n"
-                "1. 实体名称作为h3标题\n"
-                "2. 简短描述(1-2句)\n"
-                "3. 3-5个相关实体，每个是一个按钮: "
-                '<button hx-post="/tree/kg/explore" hx-vals=\'{"entity":"RELATED"}\' '
-                'hx-target="#kg-expanded" hx-swap="beforeend">RELATED</button>\n'
-                "4. 用 class='kg-node' 标识卡片\n"
-                "5. 只输出HTML片段，不要代码块标记\n"
-            )
-            resp = await consc.chain_of_thought(kg_prompt, steps=2)
-            text = resp if isinstance(resp, str) else str(resp)
-
-            html_content = _extract_html_from_response(text)
-            return HTMLResponse(
-                f'<div class="kg-node" style="background:var(--panel);border:1px solid var(--border);'
-                f'padding:12px;border-radius:6px;margin:8px 0">'
-                f'{html_content}'
-                f'</div>'
-                f'<div id="kg-expanded"></div>'
-            )
-        else:
-            return HTMLResponse(
-                f'<div class="card"><p>知识引擎启动中...</p></div>'
-            )
-    except Exception as e:
-        return HTMLResponse(
-            f'<div class="card"><p>探索失败: {_html.escape(str(e)[:200])}</p></div>'
-        )
-
-
-# ═══════════════════════════════════════════════════════════════
-#  P8: Interactive Graph Visualization (Vector Graph RAG style)
-#  Returns JSON for vis-network rendering with entities + relations + passages
-# ═══════════════════════════════════════════════════════════════
-
-@htmx_router.post("/kg/graph-viz")
-async def tree_kg_graph_viz(request: Request):
-    """P8: Return graph visualization data for multi-hop query.
-
-    Returns JSON with entities, relations, passages suitable for
-    vis-network interactive graph rendering.
-    Uses SinglePassReranker + MilvusStore for subgraph expansion.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    query = body.get("query", body.get("entity", ""))
-    if not query.strip():
-        return JSONResponse({"entities": [], "relations": [], "passages": [], "summary": "请输入查询"})
-
-    hub = _get_hub(request)
-
-    try:
-        entities = []
-        relations = []
-        passages = []
-        answer = ""
-
-        # Try SinglePassReranker first (Vector Graph RAG pipeline)
-        try:
-            from livingtree.knowledge.single_pass_reranker import get_single_pass_reranker
-            from livingtree.knowledge.milvus_store import get_milvus_store
-
-            store = get_milvus_store()
-            reranker = get_single_pass_reranker(store=store)
-            result = await reranker.retrieve(query)
-
-            answer = result.answer or ""
-            entities = [{"id": eid, "label": eid} for eid in result.entities[:15]]
-            relations = [
-                {"id": r.get("id", f"rel_{i}"), "text": r.get("text", "")[:200], "entity_ids": r.get("entity_ids", "[]"), "score": r.get("distance", 0.3)}
-                for i, r in enumerate(result.relations[:30])
-            ]
-            passages = [
-                {"id": p.get("id", f"p_{i}"), "text": (p.get("text", "") or p.get("id", ""))[:300], "score": p.get("distance", 0.3)}
-                for i, p in enumerate(result.passages[:10])
-            ]
-        except Exception as e:
-            logger.info(f"SinglePassReranker unavailable: {e}, using KnowledgeGraph fallback")
-
-            # Fallback: use KnowledgeGraph + RetrievalFramework
-            if hub and hub.world:
-                try:
-                    rf = hub.world.get("retrieval_framework")
-                    if rf is None:
-                        from livingtree.knowledge.retrieval_framework import get_retrieval_framework
-                        rf = get_retrieval_framework()
-
-                    decision = rf.decide(query)
-                    params = rf.get_retrieval_params(decision)
-
-                    from livingtree.knowledge.knowledge_graph import KnowledgeGraph
-                    kg = KnowledgeGraph()
-
-                    # Extract triplets and add to graph
-                    triplets = kg.extract_triplets(query)
-                    kg.add_triplets_to_graph(triplets)
-
-                    for t in triplets:
-                        entities.append({"id": t.subject, "label": t.subject, "score": t.confidence})
-                        entities.append({"id": t.obj, "label": t.obj, "score": t.confidence})
-                        relations.append({
-                            "id": f"{t.subject}_{t.predicate}_{t.obj}",
-                            "text": f"({t.subject}, {t.predicate}, {t.obj})",
-                            "entity_ids": _json.dumps([t.subject, t.obj]),
-                            "score": t.confidence,
-                        })
-
-                    if hub.world.consciousness:
-                        resp = await hub.world.consciousness.chain_of_thought(
-                            f"基于查询生成简要回答(中文,50字以内): {query}", steps=1
-                        )
-                        answer = resp if isinstance(resp, str) else str(resp)
-                except Exception as e2:
-                    logger.warning(f"KnowledgeGraph fallback failed: {e2}")
-
-            # Deduplicate entities by id
-            seen = set()
-            entities = [e for e in entities if not (e["id"] in seen or seen.add(e["id"]))]
-
-        return JSONResponse({
-            "entities": entities[:20],
-            "relations": relations[:30],
-            "passages": passages[:10],
-            "answer": answer[:500],
-            "summary": f"实体:{len(entities)} 关系:{len(relations)} 段落:{len(passages)}",
-        })
-    except Exception as e:
-        logger.error(f"graph-viz error: {e}")
-        return JSONResponse({
-            "entities": [], "relations": [], "passages": [],
-            "summary": f"检索出错: {str(e)[:100]}",
-        })
-
-
-@htmx_router.get("/kg/node")
-async def tree_kg_node(request: Request, entity: str = Query(default="")):
-    """GET variant: render a knowledge graph node."""
-    if not entity.strip():
-        return HTMLResponse('<div class="card"><p>请指定实体</p></div>')
-
-    hub = _get_hub(request)
-
-    try:
-        if hub and hub.world and hub.world.consciousness:
-            consc = hub.world.consciousness
-            resp = await consc.chain_of_thought(
-                f"用2-3句话描述 '{entity}' 及其核心属性。只输出HTML片段。", steps=1
-            )
-            text = resp if isinstance(resp, str) else str(resp)
-            return HTMLResponse(
-                f'<div class="kg-node" style="background:var(--panel);border-left:3px solid var(--accent);'
-                f'padding:12px;margin:6px 0;border-radius:4px">'
-                f'<span style="color:var(--accent);font-weight:600">{_html.escape(entity)}</span>'
-                f'<p style="font-size:12px;margin-top:4px">{_html.escape(text[:300])}</p>'
-                f'<button hx-get="/tree/kg/node?entity={_html.escape(entity)}" '
-                f'hx-target="closest .kg-node" hx-swap="beforebegin" '
-                f'style="font-size:10px;padding:3px 8px;margin-top:4px">▶ 展开关联</button>'
-                f'</div>'
-            )
-        else:
-            return HTMLResponse(
-                f'<div class="kg-node"><span style="color:var(--accent)">{_html.escape(entity)}</span>'
-                f'<p style="font-size:12px;color:var(--dim)">知识引擎就绪中...</p></div>'
-            )
-    except Exception as e:
-        return HTMLResponse(
-            f'<div class="kg-node"><span style="color:var(--err)">错误: {_html.escape(str(e)[:100])}</span></div>'
-        )
-
-
-# ═══════════════════════════════════════════════════════════════
-#  Shihipar-inspired routes — LLM outputs HTML, not Markdown
-# ═══════════════════════════════════════════════════════════════
-
-# ── About: dynamic tree persona (replaces static index card) ──
-
-@htmx_router.get("/about", response_class=HTMLResponse)
-async def tree_about(request: Request):
-    """Dynamic about card — LLM reflects on its own state in HTML.
-
-    Shihipar argument 1 & 3: HTML as output AND input format.
-    The LLM describes itself with interactive elements.
-    """
-    hub = _get_hub(request)
-
-    # Gather real system state
-    world = getattr(hub, "world", None) if hub else None
-
-    cycles = "—"
-    synapses = "—"
-    affect_val = "宁静"
-    consc_gap = "—"
-    top_model = "—"
-    econ_mode = "—"
-    consc = None
-
-    if world:
-        xs = getattr(world, "xiaoshu", None)
-        if xs:
-            cycles = f"{getattr(xs, '_cycle_count', 0)}周期"
-
-        sp = getattr(world, "synaptic_plasticity", None)
-        if sp:
-            try:
-                s = sp.stats()
-                synapses = f"{s.get('total_synapses', 0)}条"
-            except Exception:
-                pass
-
-        consc = getattr(world, "consciousness", None)
-        if consc and hasattr(consc, "_current_affect"):
-            affect_val = getattr(consc._current_affect, "value", "宁静")
-
-        gs = getattr(world, "godelian_self", None)
-        if gs:
-            try:
-                consc_gap = f"{gs.compute_consciousness_gap():.3f}"
-            except Exception:
-                pass
-
-        # Model tier from economic engine
-        econ = getattr(world, "economic_engine", None)
-        if econ:
-            try:
-                if hasattr(econ, "current_tier"):
-                    econ_mode = econ.current_tier
-                elif hasattr(econ, "_model_tier"):
-                    econ_mode = econ._model_tier
-            except Exception:
-                pass
-        if not econ_mode:
-            tb = getattr(world, "thermo_budget", None)
-            if tb and hasattr(tb, "_current_tier"):
-                econ_mode = getattr(tb, "_current_tier", {}).get("name", "—")
-
-    try:
-        if world and consc:
-            # Let the LLM write its own about-page HTML
-            about_prompt = (
-                f"你是一个叫做「小树」的AI系统。请用HTML片段描述你自己。\n"
-                f"当前状态: 周期{cycles}, 神经连接{synapses}, 感受{affect_val}, "
-                f"意识缺口{consc_gap}, 推理模型{econ_mode}.\n\n"
-                f"要求:\n"
-                f"1. 用 <div class='metric'> 结构 (参考: <div class='metric'><span>标签</span><span>值</span></div>)\n"
-                f"2. 至少包含4-6条metric: 名字、性质/使命、当前感受、主要思考、最近洞察、活跃能力\n"
-                f"3. 用自然拟人化语言 (中文)\n"
-                f"4. 每条metric的值在20字以内\n"
-                f"5. 只输出metric div片段，不要外层div，不要解释\n"
-            )
-            resp = await consc.chain_of_thought(about_prompt, steps=1)
-            text = resp if isinstance(resp, str) else str(resp)
-
-            # Extract only metric divs (defensive parsing)
-            metrics = re.findall(
-                r'<div\s+class=["\']metric["\'][^>]*>.*?</div>',
-                text, re.DOTALL | re.IGNORECASE
-            )
-            if metrics and len(metrics) >= 3:
-                return HTMLResponse("".join(metrics))
-            # Fallback: use the raw text but escape to be safe
-            return HTMLResponse(text[:600])
-
-    except Exception:
-        pass
-
-    # Static fallback if LLM unavailable
-    return HTMLResponse(
-        '<div class="metric"><span>名字</span><span>生命之树 (小树)</span></div>'
-        f'<div class="metric"><span>周期</span><span>{cycles}</span></div>'
-        f'<div class="metric"><span>神经连接</span><span>{synapses}</span></div>'
-        f'<div class="metric"><span>感受</span><span>{affect_val}</span></div>'
-        '<div class="metric"><span>性质</span><span>主动学习 · 自主生长 · 不需要"你好"</span></div>'
-        f'<div class="metric"><span>推理引擎</span><span>{econ_mode}</span></div>'
-    )
-
-
-# ── Insight: LLM → structured HTML with <details> (Shihipar argument 2) ──
-
 @htmx_router.get("/insight", response_class=HTMLResponse)
 async def tree_insight(request: Request):
     """LLM-generated daily insight as collapsible HTML.
@@ -1935,6 +1631,234 @@ async def tree_chrome_panel(request: Request):
         'else if(url)chromeAction("navigate",url)}'
         '</script>'
     )
+
+
+@htmx_router.get("/dpo/panel")
+async def tree_dpo_panel(request: Request):
+    """DPO Preference Learning: no RL, just binary preferences."""
+    from ..core.dpo_prefs import get_preferences
+    prefs = get_preferences()
+    st = prefs.stats()
+
+    top_html = ""
+    for e, s in st.get("top_preferred", [])[:5]:
+        top_html += f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between"><span>⭐ {e[:60]}...</span><span style="color:var(--accent)">{s:.3f}</span></div>'
+
+    reject_html = ""
+    for e, s in st.get("most_rejected", [])[:3]:
+        reject_html += f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between"><span>👎 {e[:60]}...</span><span style="color:var(--err)">{s:.3f}</span></div>'
+
+    sources_html = ""
+    for src, count in st.get("sources", {}).items():
+        sources_html += f'<div class="metric"><span>{src}</span><span>{count}</span></div>'
+
+    return HTMLResponse(
+        '<div class="card">'
+        '<h2>🎯 DPO 偏好学习 · Direct Preference Optimization</h2>'
+        '<p style="font-size:10px;color:var(--dim);margin:4px 0">NeurIPS 2023 — 不需要RL。二元偏好对就是全部所需。</p>'
+
+        f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">'
+        f'<div style="background:rgba(100,150,100,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">偏好对</div><div style="font-size:20px;font-weight:600;color:var(--accent)">{st["total_pairs"]}</div></div>'
+        f'<div style="background:rgba(100,100,200,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">学习实体</div><div style="font-size:20px;font-weight:600;color:#6af">{st["total_entities"]}</div></div></div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">📈 偏好来源</h4>{sources_html}</div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">⭐ 最受偏好</h4>{top_html or "<div style=color:var(--dim);font-size:11px>积累偏好数据中...</div>"}</div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">👎 最不受偏好</h4>{reject_html or "<div style=color:var(--dim);font-size:11px>暂无</div>"}</div>'
+
+        f'<div style="font-size:9px;color:var(--dim);margin-top:8px">DPO公式: P(chosen>rejected) = σ(score_chosen - score_rejected)。每次用户选择/拒绝/编辑自动更新。</div>'
+        '</div>'
+    )
+
+
+@htmx_router.get("/control/panel")
+async def tree_control_panel(request: Request):
+    """Behavior Control: guidelines + journeys + ARQ verification."""
+    from ..core.behavior_control import get_guidelines, get_journeys, get_arq
+    gl = get_guidelines()
+    jr = get_journeys()
+    arq = get_arq()
+
+    gl_stats = gl.stats()
+    rules_html = ""
+    for r in gl_stats.get("top_hits", []):
+        rules_html += f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between"><span>{r["name"]}</span><span style="font-size:9px;color:var(--dim)">{r["hits"]}次触发</span></div>'
+
+    jr_status = jr.status()
+    journeys_html = ""
+    for j in jr_status.get("journeys", []):
+        journeys_html += f'<div style="padding:3px 0;font-size:11px">📋 {j["name"]} ({j["steps"]}步)</div>'
+
+    arq_stats = arq.stats()
+
+    return HTMLResponse(
+        '<div class="card">'
+        '<h2>🛡️ 行为控制 · Behavior Control</h2>'
+        '<p style="font-size:10px;color:var(--dim);margin:4px 0">受 Parlant 启发 — 从"祈祷式提示"到"工程化硬约束"</p>'
+
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0">'
+        f'<div style="background:rgba(200,100,100,.06);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">规则引擎</div><div style="font-size:18px;font-weight:600;color:var(--err)">{gl_stats["enabled"]}/{gl_stats["total_rules"]}</div></div>'
+        f'<div style="background:rgba(100,150,100,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">业务流程</div><div style="font-size:18px;font-weight:600;color:var(--accent)">{jr_status["total_journeys"]}</div></div>'
+        f'<div style="background:rgba(100,100,200,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">ARQ验证</div><div style="font-size:18px;font-weight:600;color:#6af">{arq_stats["pass_rate"]}</div></div></div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">📐 Guidelines (条件→动作→工具)</h4>{rules_html}</div>'
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">📋 Journeys (强制顺序工作流)</h4>{journeys_html}</div>'
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">🔍 ARQ 验证统计</h4>'
+        f'<div class="metric"><span>总验证次数</span><span>{arq_stats["total_verifications"]}</span></div>'
+        f'<div class="metric"><span>拦截</span><span style="color:var(--err)">{arq_stats["blocked"]}</span></div>'
+        f'<div class="metric"><span>重定向</span><span style="color:var(--warn)">{arq_stats["redirected"]}</span></div></div>'
+        '</div>'
+    )
+
+
+@htmx_router.get("/collective/panel")
+async def tree_collective_panel(request: Request):
+    """Collective Intelligence: memory tiers + crystallization + blueprints."""
+    from ..core.collective_intel import get_tiers, get_crystallizer, get_blueprints
+    tiers = get_tiers()
+    crystal = get_crystallizer()
+    bps = get_blueprints()
+
+    st = tiers.stats()
+    candidates = tiers.get_crystallization_candidates()
+    hot_mems = [m for m in tiers._memories.values() if m.tier.value == "hot"][:5]
+
+    hot_html = ""
+    for m in hot_mems:
+        tags_str = ", ".join(m.tags[:3])
+        hot_html += (
+            f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between">'
+            f'<span style="color:var(--accent)">🔥 {m.content[:80]}...</span>'
+            f'<span style="font-size:9px;color:var(--dim)">{m.hit_count}次 · {tags_str}</span></div>'
+        )
+    if not hot_html:
+        hot_html = '<div style="color:var(--dim);font-size:11px">使用越多, 热门记忆会自动浮现</div>'
+
+    candidate_html = ""
+    for c in candidates[:3]:
+        candidate_html += (
+            f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between">'
+            f'<span>💎 {c.content[:80]}...</span>'
+            f'<span style="font-size:9px;color:var(--accent)">{c.validated_count}次验证 → 可结晶</span></div>'
+        )
+    if not candidate_html:
+        candidate_html = '<div style="color:var(--dim);font-size:11px">记忆被验证3次后自动升级为技能</div>'
+
+    bp_list = ""
+    for bp in bps.list_blueprints()[:5]:
+        bp_list += (
+            f'<div style="padding:3px 0;font-size:11px;display:flex;justify-content:space-between">'
+            f'<span>📦 {bp["name"]} ({bp.get("skills",0) or len(bp.get("skills",[]))}技能)</span>'
+            f'<button onclick="importBlueprint(\'{bp["id"]}\')" style="font-size:9px;padding:2px 6px">导入</button></div>'
+        )
+
+    return HTMLResponse(
+        '<div class="card">'
+        '<h2>🧠 群体智能 · Collective Intelligence</h2>'
+        '<p style="font-size:10px;color:var(--dim);margin:4px 0">受 Ultron 启发 — 记忆分层 · 自动结晶 · 画像蓝图</p>'
+
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0">'
+        f'<div style="background:rgba(200,100,50,.08);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">🔥 HOT</div><div style="font-size:18px;font-weight:600;color:#fa6">{st["tiers"]["hot"]}</div></div>'
+        f'<div style="background:rgba(100,150,100,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">🌤 WARM</div><div style="font-size:18px;font-weight:600;color:var(--accent)">{st["tiers"]["warm"]}</div></div>'
+        f'<div style="background:rgba(100,100,150,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">❄ COLD</div><div style="font-size:18px;font-weight:600;color:#6af">{st["tiers"]["cold"]}</div></div></div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">🔥 热门记忆</h4>{hot_html}</div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">💎 待结晶 ({len(candidates)})</h4>{candidate_html}</div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">📦 画像蓝图</h4>'
+        f'<div style="display:flex;gap:4px;margin-bottom:4px">'
+        f'<input id="bp-name" placeholder="蓝图名称..." style="flex:1;font-size:10px;padding:4px 6px">'
+        f'<button onclick="publishBlueprint()" style="font-size:10px;padding:4px 10px;white-space:nowrap">发布当前配置</button></div>'
+        f'{bp_list or "<div style=color:var(--dim);font-size:11px>暂无蓝图。发布后可一键导入</div>"}</div>'
+        '</div>'
+        + '<script>function importBlueprint(id){fetch("/api/collective/import/"+id,{method:"POST"}).then(r=>r.json()).then(d=>alert(d.ok?"导入成功":"失败"))}function publishBlueprint(){var n=document.getElementById("bp-name").value.trim();if(!n)return;fetch("/api/collective/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})}).then(r=>r.json()).then(d=>alert(d.ok?"已发布: "+d.id:"失败"))}</script>'
+    )
+
+
+@htmx_router.get("/qa/panel")
+async def tree_qa_panel(request: Request):
+    """Agent QA: metamorphic tests + golden traces + HITL queue + drift monitor."""
+    from ..core.agent_qa import get_meta_tester, get_golden_registry, get_hitl_bridge
+    meta = get_meta_tester()
+    golden = get_golden_registry()
+    hitl = get_hitl_bridge()
+
+    traces = golden.list_traces()
+    pending_hitl = hitl.get_pending()
+    hitl_rows = ""
+    for h in pending_hitl[:5]:
+        hitl_rows += (
+            f'<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+            f'<div><div style="font-size:11px">{h["question"][:80]}</div><div style="font-size:9px;color:var(--dim)">{h["task"]}</div></div>'
+            f'<div style="display:flex;gap:4px">'
+            f'<button onclick="hitlAction(\'{h["id"]}\',\'approve\')" style="font-size:9px;padding:2px 8px;background:var(--accent);color:var(--bg);border:none;border-radius:3px;cursor:pointer">✓</button>'
+            f'<button onclick="hitlAction(\'{h["id"]}\',\'reject\')" style="font-size:9px;padding:2px 8px;background:var(--err);color:var(--bg);border:none;border-radius:3px;cursor:pointer">✕</button>'
+            f'</div></div>'
+        )
+    if not hitl_rows:
+        hitl_rows = '<div style="color:var(--dim);font-size:11px">无待审批项</div>'
+
+    meta_summary = meta.summary()
+    drift_status = "✅ 正常"
+    try:
+        from ..observability.agent_eval import DriftReport
+    except Exception:
+        pass
+
+    return HTMLResponse(
+        '<div class="card">'
+        '<h2>🧪 Agent 质量保障</h2>'
+
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0">'
+        f'<div style="background:rgba(100,150,100,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">变形测试</div>'
+        f'<div style="font-size:18px;font-weight:600;color:var(--accent)">{meta_summary.get("overall_pass_rate","—")}</div></div>'
+        f'<div style="background:rgba(100,150,180,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">黄金轨迹</div>'
+        f'<div style="font-size:18px;font-weight:600;color:#6af">{len(traces)}</div></div>'
+        f'<div style="background:rgba(150,100,100,.05);padding:8px;border-radius:6px;text-align:center">'
+        f'<div style="font-size:10px;color:var(--dim)">待审批</div>'
+        f'<div style="font-size:18px;font-weight:600;color:var(--warn)">{len(pending_hitl)}</div></div></div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">⏳ 待审批 (HITL)</h4>{hitl_rows}</div>'
+
+        f'<div style="margin-top:8px"><h4 style="font-size:12px;margin-bottom:4px">📋 黄金轨迹 ({len(traces)} 条)</h4>'
+        + "".join(
+            f'<div style="padding:3px 0;font-size:10px;color:var(--dim)">📌 {t["input"][:60]} — {_time.strftime("%m-%d %H:%M", _time.localtime(t["recorded"])) if t["recorded"] else "?"}</div>'
+            for t in traces[:5]
+        ) + '</div>'
+
+        f'<div style="margin-top:8px;font-size:10px;color:var(--dim)">'
+        f'已实现模式: ✅ ReAct · ✅ 提示版本化 · ✅ 4层评估 · ✅ 校准 · ✅ 错误重放 · ✅ 漂移检测<br>'
+        f'本次补全: ✅ 变形测试 · ✅ 黄金轨迹 · ✅ HITL通道 · 数据: .livingtree/qa</div>'
+        '</div>'
+        + '<script>function hitlAction(id,action){fetch("/api/hitl/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})}).then(r=>r.json()).then(d=>{location.reload()})}</script>'
+    )
+
+
+@htmx_router.get("/persona/forest")
+async def tree_persona_forest(request: Request):
+    """Personal knowledge forest — unique to each user."""
+    from ..core.anime_persona import get_persona
+    p = get_persona()
+    p._hub = _get_hub(request)
+    return HTMLResponse(
+        '<div class="card"><h2>🌲 你的知识森林</h2>'
+        '<p style="font-size:11px;color:var(--dim);margin:4px 0">每棵树都是一次深入对话。这是只属于你的森林。</p>'
+        + p.build_forest_html()
+        + '<div style="margin-top:8px;font-size:10px;color:var(--dim);cursor:pointer" '
+        + 'onclick="xiaoStartTour()">💡 让 小树 带你认识这个页面</div>'
+        + '</div>')
 
 
 @htmx_router.get("/dpo/panel")

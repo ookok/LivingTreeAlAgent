@@ -881,11 +881,21 @@ class TreeLLM:
                 except Exception:
                     pass
 
-        # ── Identity: inject 小树 persona + constitution as FIRST system message ──
+        # ── Identity: inject 小树 persona + constitution + user memory ──
         if not any(m.get("role") == "system" for m in messages):
             try:
                 from ..dna.identity import get_identity_prompt
-                messages = [{"role": "system", "content": get_identity_prompt()}] + messages
+                identity = get_identity_prompt()
+                # Inject user memory context
+                try:
+                    from .user_memory import get_user_memory
+                    um = get_user_memory()
+                    user_ctx = um.build_context()
+                    if user_ctx:
+                        identity = f"{identity}\n\n{user_ctx}"
+                except Exception:
+                    pass
+                messages = [{"role": "system", "content": identity}] + messages
             except Exception:
                 pass
 
@@ -1060,6 +1070,12 @@ class TreeLLM:
                     "- codegraph_deps: query dependency graph. Args: module name. Returns dependencies.\n"
                     "- codegraph_callers: query call graph. Args: function name. Returns callers.\n"
                     "- codegraph_callees: query call graph. Args: function name. Returns callees.\n"
+                    "- gdocs_create: create Google Docs document. Args: title, content.\n"
+                    "- ms365_send_email: send email via MS365 Outlook. Args: to, subject, body.\n"
+                    "- ms365_create_doc: create Word doc in OneDrive. Args: title, content.\n"
+                    "- wps_create: create WPS document. Args: title, content.\n"
+                    "- export_latex: compile LaTeX to PDF. Args: latex_content.\n"
+                    "- export_pptx: generate PowerPoint. Args: title, slides_json.\n"
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
@@ -1182,6 +1198,38 @@ class TreeLLM:
                                 elif tool_name == "codegraph_impact":
                                     from .codegraph_tools import codegraph_impact
                                     tool_result_text = codegraph_impact(tool_args.strip())
+                                elif tool_name in ("gdocs_create", "ms365_send_email", "ms365_create_doc",
+                              "wps_create", "export_latex", "export_pptx"):
+                                    from .office_connectors import (
+                                        gdocs_create, ms365_send_email, ms365_create_doc,
+                                        wps_create, export_latex, export_pptx,
+                                    )
+                                    fn_map = {
+                                        "gdocs_create": gdocs_create, "ms365_send_email": ms365_send_email,
+                                        "ms365_create_doc": ms365_create_doc, "wps_create": wps_create,
+                                        "export_latex": export_latex, "export_pptx": export_pptx,
+                                    }
+                                    fn = fn_map[tool_name]
+                                    if tool_name == "export_pptx":
+                                        parts = tool_args.strip().split("\n", 1)
+                                        title = parts[0] if parts else ""
+                                        slides = parts[1] if len(parts) > 1 else "[]"
+                                        tool_result_text = fn(title, slides)
+                                    elif tool_name == "export_latex":
+                                        tool_result_text = fn(tool_args.strip())
+                                    elif tool_name in ("gdocs_create", "wps_create", "ms365_create_doc"):
+                                        parts = tool_args.strip().split("\n", 1)
+                                        title = parts[0] if parts else "Document"
+                                        content = parts[1] if len(parts) > 1 else ""
+                                        tool_result_text = fn(title, content)
+                                    elif tool_name == "ms365_send_email":
+                                        parts = tool_args.strip().split("\n", 2)
+                                        to = parts[0] if parts else ""
+                                        subject = parts[1] if len(parts) > 1 else ""
+                                        body = parts[2] if len(parts) > 2 else ""
+                                        tool_result_text = fn(to, subject, body)
+                                    else:
+                                        tool_result_text = fn(tool_args.strip())
                                 elif tool_name == "list_dir":
                                     from .developer_tools import list_dir
                                     tool_result_text = list_dir(tool_args.strip() or ".")

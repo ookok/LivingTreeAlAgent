@@ -1,1 +1,1 @@
-chore: 归档死代码 lsp+market → _archive/
+refactor: 创建 bridge/ 抽象层 — 依赖反转解耦 treellm ↔ capability

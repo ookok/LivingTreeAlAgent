@@ -57,6 +57,8 @@ __all__ = [
     "get_metabolism",
     # Cell dream pretraining
     "get_dream_pretrainer",
+    # Bridge (dependency inversion)
+    "ToolRegistry", "get_tool_registry",
     # Observability
     "get_otel",
     # TreeLLM cache
@@ -127,6 +129,11 @@ _LAZY = {
     # Core infrastructure
     "get_concurrency_guard": ".core.concurrency_guard",
     "get_event_bus": ".infrastructure.event_bus_v2",
+    # Bridge (dependency inversion)
+    "ToolRegistry", "get_tool_registry",
+    # Bridge
+    "ToolRegistry": ".bridge",
+    "get_tool_registry": ".bridge",
     # Observability (lazy to avoid full dependency chain)
     "setup_observability": ".observability",
     "get_logger": ".observability",
@@ -140,6 +147,8 @@ _LAZY = {
     "get_metabolism": ".economy.metabolism",
     # Cell dream pretraining
     "get_dream_pretrainer": ".cell.dream_pretraining",
+    # Bridge (dependency inversion)
+    "ToolRegistry", "get_tool_registry",
     # Observability
     "get_otel": ".observability.otel_integration",
     # TreeLLM cache

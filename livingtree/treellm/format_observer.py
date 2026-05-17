@@ -606,19 +606,149 @@ def style_search_semantic(query: str, top_k: int = 5) -> str:
     return json.dumps(items, ensure_ascii=False, indent=2) if items else "No matching styles found."
 
 
-# ═══ Tool registration ═══
+# ═══ Batch observation: learn common style from multiple examples ═══
+
+def observe_batch(files_json: str) -> str:
+    """Observe multiple documents and extract COMMON patterns.
+
+    Args: JSON array of file paths
+    Example: ["report1.docx","report2.docx","report3.docx"]
+
+    The LLM sees ALL documents at once and identifies:
+    1. What is CONSISTENT across all (this is the STYLE)
+    2. What VARIES across documents (this is the CONTENT)
+    3. Statistical patterns (SimSun 12pt in 11/12 reports → that's the style)
+
+    Returns a prompt-ready batch observation for LLM analysis.
+    """
+    try:
+        files = json.loads(files_json)
+    except Exception:
+        return f"Invalid JSON: {files_json}"
+
+    if not files or len(files) < 2:
+        return "Need at least 2 files for batch observation."
+
+    parts = [f"=== Batch Observation: {len(files)} documents ===", ""]
+
+    for i, f in enumerate(files):
+        dump = observe_format(f.strip())
+        parts.append(f"--- Document {i+1}: {f} ---")
+        parts.append(dump[:2000])  # Cap per doc for context window
+        parts.append("")
+
+    parts.append(
+        f"\n[INSTRUCTION for LLM] You have observed {len(files)} documents "
+        f"that should share a common formatting style.\n\n"
+        f"1. Identify what is CONSISTENT across ALL documents (fonts, margins, "
+        f"heading styles, spacing, alignment, colors, page setup, headers/footers). "
+        f"These are the STYLE DNA — they should be reproduced exactly.\n\n"
+        f"2. Identify what VARIES across documents (content, data, specific numbers, "
+        f"names, dates, chapter titles). These are CONTENT — they should NOT be copied.\n\n"
+        f"3. For each style property, note how many documents use it "
+        f"(e.g. 'SimSun 12pt in 12/12 docs' vs 'SimSun 14pt in 1/12 docs'). "
+        f"The majority pattern IS the style.\n\n"
+        f"4. If there are minor inconsistencies (e.g. 11 docs use 2.8cm left margin, "
+        f"1 doc uses 3.0cm), the majority wins. Flag the outlier.\n\n"
+        f"Output JSON:\n"
+        '{\n'
+        '  "style_dna": {\n'
+        '    "fonts": {"body": {"name":"SimSun","size":12,"confidence":"12/12"}},\n'
+        '    "margins": {"top":3.7,"bottom":3.5,"left":2.8,"right":2.6,"confidence":"12/12"},\n'
+        '    "headings": {"h1":{"font":"SimHei","size":16,"bold":true,"confidence":"12/12"}},\n'
+        '    "spacing": {"line":1.5,"confidence":"11/12"},\n'
+        '    "page": {"size":"A4","confidence":"12/12"}\n'
+        '  },\n'
+        '  "outliers": [{"doc":3,"property":"left_margin","value":3.0,"expected":2.8}],\n'
+        '  "description": "正式环评报告格式，SimSun正文12pt，SimHei标题16pt...",\n'
+        '  "template_prompt": "使用环评报告格式生成。正文SimSun 12pt，1.5倍行距..."\n'
+        '}'
+    )
+
+    return "\n".join(parts)
+
+
+def diff_to_baseline(files_json: str, baseline_file: str) -> str:
+    """Compare each document to a baseline reference.
+
+    Given 12 reports and 1 "golden" template, show what deviates.
+    Useful when you have one perfect template and 11 variants.
+    """
+    try:
+        files = json.loads(files_json)
+    except Exception:
+        return f"Invalid JSON: {files_json}"
+
+    if not files:
+        return "No files provided."
+
+    baseline_dump = observe_format(baseline_file.strip())
+    parts = [f"=== Baseline: {baseline_file} ===", baseline_dump[:3000], ""]
+
+    parts.append(f"=== Variants: {len(files)} documents ===")
+    for i, f in enumerate(files):
+        dump = observe_format(f.strip())
+        parts.append(f"\n--- Variant {i+1}: {f} ---")
+        parts.append(dump[:1000])
+
+    parts.append(
+        "\n[INSTRUCTION for LLM] The baseline is the correct/desired format. "
+        "For each variant, identify where it DEVIATES from the baseline. "
+        "Output JSON: "
+        '[{"file":"variant1.docx","deviations":["font size 14pt vs baseline 12pt", '
+        '"left margin 3.0cm vs baseline 2.8cm"]}]'
+    )
+
+    return "\n".join(parts)
+
+
+def normalize_to_style(files_json: str) -> str:
+    """Extract common style and output a normalization spec.
+
+    Given 12 similar reports, produce a spec that can be fed to format_docx
+    to generate a 13th report with the same style but new content.
+    """
+    try:
+        files = json.loads(files_json)
+    except Exception:
+        return f"Invalid JSON: {files_json}"
+
+    parts = [f"=== Normalize from {len(files)} documents ===", ""]
+    for i, f in enumerate(files):
+        dump = observe_format(f.strip())
+        parts.append(f"--- Doc {i+1}: {f} ---")
+        parts.append(dump[:1500])
+        parts.append("")
+
+    parts.append(
+        "\n[INSTRUCTION for LLM] Extract the common formatting style from these "
+        "documents and output a format_docx JSON spec. This spec will be used to "
+        "generate new documents with the SAME style but NEW content.\n\n"
+        "Output a complete JSON object compatible with format_docx tool. "
+        "Include: page, margins, header, footer, default_paragraph style, heading styles. "
+        "Omit: sections/content — those will be filled with new content.\n"
+        "Output ONLY the JSON — no commentary."
+    )
+
+    return "\n".join(parts)
+
+
+# ═══ Update TOOLS ═══
 
 TOOLS = {
-    "observe_format": {"func": observe_format, "desc": "Dump formatted doc (.docx/.html/.md/.pptx/.pdf) as raw text for LLM observation.", "params": "filepath"},
+    "observe_format": {"func": observe_format, "desc": "Dump formatted doc as raw text for LLM observation.", "params": "filepath"},
+    "observe_batch": {"func": observe_batch, "desc": "Observe multiple docs, extract COMMON style patterns (what's consistent vs varies).", "params": "json_array_of_paths"},
+    "diff_to_baseline": {"func": diff_to_baseline, "desc": "Compare documents to a golden baseline, find deviations.", "params": "json_array, baseline_file"},
+    "normalize_to_style": {"func": normalize_to_style, "desc": "From multiple docs, produce a format_docx spec for new docs with same style.", "params": "json_array_of_paths"},
     "save_pattern": {"func": save_pattern, "desc": "Save LLM-described formatting pattern to KB.", "params": "json_spec"},
     "find_pattern": {"func": find_pattern, "desc": "Find formatting pattern by domain.", "params": "domain[,tags]"},
     "list_patterns": {"func": list_patterns, "desc": "List all stored formatting patterns.", "params": ""},
     "style_diff": {"func": style_diff, "desc": "Compare two templates, prompt LLM to describe differences.", "params": "file1, file2"},
     "style_merge": {"func": style_merge, "desc": "Merge styles from multiple domains.", "params": "domain1,domain2,..."},
     "style_translate": {"func": style_translate, "desc": "Translate between formats (docx↔css↔md↔latex).", "params": "json_spec"},
-    "style_verify": {"func": style_verify, "desc": "Compare original vs generated, score similarity, suggest fixes.", "params": "original_file, generated_file"},
-    "style_learn": {"func": style_learn_examples, "desc": "Learn formatting from good/bad examples.", "params": "good_files, bad_files"},
-    "style_inherit": {"func": style_inherit_chain, "desc": "Create hierarchical style (child inherits from parent).", "params": "base_pattern, overrides_json"},
-    "style_index": {"func": style_index_all, "desc": "Index all patterns into vector DB for semantic search.", "params": ""},
-    "style_search": {"func": style_search_semantic, "desc": "Semantic search for styles by natural language description.", "params": "query [top_k]"},
+    "style_verify": {"func": style_verify, "desc": "Compare original vs generated, score similarity.", "params": "original, generated"},
+    "style_learn": {"func": style_learn_examples, "desc": "Learn formatting from good vs bad examples.", "params": "good_files, bad_files"},
+    "style_inherit": {"func": style_inherit_chain, "desc": "Create hierarchical style chain.", "params": "base_pattern, overrides_json"},
+    "style_index": {"func": style_index_all, "desc": "Index all patterns into vector DB.", "params": ""},
+    "style_search": {"func": style_search_semantic, "desc": "Semantic search for styles by description.", "params": "query"},
 }

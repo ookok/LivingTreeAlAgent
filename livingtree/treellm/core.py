@@ -1079,6 +1079,9 @@ class TreeLLM:
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
+                    "- observe_batch: observe multiple docs, extract common style patterns. Args: json_array_of_paths.\\n"
+                    "- diff_to_baseline: compare docs to golden baseline. Args: json_array, baseline.\\n"
+                    "- normalize_to_style: from multiple docs, produce format_docx spec. Args: json_array.\\n"
                     "- observe_format: dump any formatted document (.docx/.html/.md/.pptx/.pdf) as raw text for LLM observation. Args: filepath.\\n"
                     "- save_pattern: save LLM-described formatting pattern to KB. Args: json_spec.\\n"
                     "- find_pattern: retrieve formatting pattern by domain. Args: domain[,tags].\\n"
@@ -1252,6 +1255,16 @@ class TreeLLM:
                                         tool_result_text = fn(to, subject, body)
                                     else:
                                         tool_result_text = fn(tool_args.strip())
+                                elif tool_name == "observe_batch":
+                                    from .format_observer import observe_batch
+                                    tool_result_text = observe_batch(tool_args.strip())
+                                elif tool_name == "diff_to_baseline":
+                                    from .format_observer import diff_to_baseline
+                                    parts = tool_args.strip().split("|", 1)
+                                    tool_result_text = diff_to_baseline(parts[0] if parts else "[]", parts[1] if len(parts) > 1 else "")
+                                elif tool_name == "normalize_to_style":
+                                    from .format_observer import normalize_to_style
+                                    tool_result_text = normalize_to_style(tool_args.strip())
                                 elif tool_name in ("style_diff", "style_verify"):
                                     from .format_observer import style_diff, style_verify
                                     parts = tool_args.strip().split(",", 1)

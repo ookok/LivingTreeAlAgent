@@ -632,6 +632,36 @@ class KBResource(Resource):
             pass
         return False
 
+    async def search(self, query: str) -> list[VFSEntry]:
+        """Semantic search across KB documents and memories."""
+        results = []
+        self._ensure_kb()
+        if self._kb and self._kb is not False:
+            try:
+                docs = self._kb.storage.search(query, top_k=10)
+                for doc in docs:
+                    results.append(VFSEntry(
+                        name=doc.id, path=f"/kb/documents/{doc.id}",
+                        size=len(doc.content.encode("utf-8")),
+                        resource_type="kb",
+                        metadata={"title": doc.title, "score": getattr(doc, 'score', 0)},
+                    ))
+            except Exception:
+                pass
+        self._ensure_mem()
+        if self._mem and self._mem is not False:
+            try:
+                entries = self._mem.search(query, top_k=10)
+                for e in entries:
+                    results.append(VFSEntry(
+                        name=e.id, path=f"/kb/memories/{e.id}",
+                        resource_type="kb",
+                        metadata={"content": e.content[:200]},
+                    ))
+            except Exception:
+                pass
+        return results[:20]
+
 
 # ══════════════════════════════════════════════════════════════════════
 # VirtualFS — the workspace orchestrator
@@ -945,6 +975,21 @@ class VirtualFS:
 
         if not pattern and stdin:
             return stdin
+
+        # KB path → semantic search, not literal grep
+        search_path = positional[0] if positional else ""
+        if search_path.startswith("/kb") and pattern and not stdin:
+            kb = self._resources.get("kb")
+            if kb and hasattr(kb, 'search'):
+                results = await kb.search(pattern)
+                if results:
+                    return "\n".join(
+                        f"{r.path} | {r.metadata.get('title', '')} | "
+                        f"{r.metadata.get('content', '')[:200]}"
+                        for r in results[:15]
+                    )
+                return f"No KB results for: {pattern}"
+            return "KB resource not available"
 
         try:
             from ..infrastructure.fast_fs import get_fast_fs

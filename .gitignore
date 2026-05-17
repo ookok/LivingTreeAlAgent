@@ -68,3 +68,4 @@ diag_*.py
 __pycache__/
 models/
 json/
+/json

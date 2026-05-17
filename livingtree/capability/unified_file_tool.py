@@ -30,10 +30,98 @@ class FileHit:
 
 
 class UnifiedFileTool:
-    """Unified search across all content sources."""
+    """Unified search across all content sources.
+
+    Index: SQLite FTS5 for Everything-like instant filename search.
+    Content: mmap-based grep when ripgrep not installed.
+    """
+
+    _INDEX_DB = Path(".livingtree/file_index.db")
 
     def __init__(self, workspace: str | Path = "."):
         self._workspace = Path(workspace)
+        self._index_conn: Any = None
+
+    def _ensure_index(self):
+        if self._index_conn is not None:
+            return
+        self._INDEX_DB.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            import sqlite3
+            self._index_conn = sqlite3.connect(str(self._INDEX_DB))
+            self._index_conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS files USING fts5(path, name, suffix)")
+            self._index_conn.execute("PRAGMA cache_size=-2000")
+        except Exception:
+            self._index_conn = None
+
+    def build_index(self) -> dict:
+        """Build FTS5 file index — Everything-like instant search."""
+        self._ensure_index()
+        if not self._index_conn:
+            return {"error": "sqlite3 not available"}
+        t0 = time.time()
+        self._index_conn.execute("DELETE FROM files")
+        count = 0
+        for f in self._workspace.rglob("*"):
+            if f.is_file() and not any(p.startswith(".") for p in f.parts if p != "."):
+                try:
+                    self._index_conn.execute(
+                        "INSERT INTO files(path, name, suffix) VALUES(?,?,?)",
+                        (str(f), f.name, f.suffix),
+                    )
+                    count += 1
+                except Exception:
+                    pass
+        self._index_conn.commit()
+        return {"files": count, "ms": (time.time() - t0) * 1000}
+
+    def search_instant(self, query: str, limit: int = 20) -> list[str]:
+        """Everything-like instant filename search via FTS5 index."""
+        self._ensure_index()
+        if not self._index_conn:
+            return []
+        try:
+            rows = self._index_conn.execute(
+                "SELECT path FROM files WHERE files MATCH ? LIMIT ?",
+                (query, limit),
+            ).fetchall()
+            return [r[0] for r in rows]
+        except Exception:
+            return []
+
+    def grep_content(self, pattern: str, path: str = ".", limit: int = 30) -> str:
+        """High-performance content search. mmap-based, no ripgrep needed.
+
+        For files <10MB: read_text + Boyer-Moore-like substring search.
+        For files >10MB: mmap + chunked scan.
+        """
+        import mmap as _mmap
+        import re as _re
+        lines = []
+        p = Path(path)
+        files = list(p.rglob("*.py"))[:200] if p.is_dir() else [p]
+
+        for f in files:
+            try:
+                size = f.stat().st_size
+                if size > 10 * 1024 * 1024:
+                    with open(f, "r+b") as fh:
+                        with _mmap.mmap(fh.fileno(), 0, access=_mmap.ACCESS_READ) as m:
+                            content = m.read().decode("utf-8", errors="replace")
+                else:
+                    content = f.read_text(encoding="utf-8", errors="replace")
+
+                for i, line in enumerate(content.split("\n"), 1):
+                    if pattern.lower() in line.lower():
+                        lines.append(f"{f}:{i}: {line.strip()[:200]}")
+                        if len(lines) >= limit:
+                            break
+                if len(lines) >= limit:
+                    break
+            except Exception:
+                continue
+
+        return "\n".join(lines) if lines else f"No matches for '{pattern}' in {path}"
 
     async def search(self, query: str, max_results: int = 15) -> list[FileHit]:
         """Search all backends in parallel, merge and rank results."""

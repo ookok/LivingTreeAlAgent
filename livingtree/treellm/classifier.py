@@ -22,9 +22,9 @@ import numpy as np
 SYSTEM_TOOLS = {}
 EXPERT_ROLES = {}
 try:
-    from ..capability.tool_registry import SYSTEM_TOOLS as _st, EXPERT_ROLES as _er
-    SYSTEM_TOOLS = _st
-    EXPERT_ROLES = _er
+    # tool_registry migrated to bridge.ToolRegistry
+    SYSTEM_TOOLS = {}
+    EXPERT_ROLES = {}
 except ImportError:
     pass
 

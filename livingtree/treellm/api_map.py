@@ -306,8 +306,8 @@ class APIMap:
     def _load_public_apis(self):
         """Load APIs from public-apis resource if available."""
         try:
-            from ..capability.public_apis_resource import get_public_apis  # TODO(bridge): via bridge.ToolRegistry
-            pa = get_public_apis()
+            from ...bridge.registry import get_tool_registry  # migrated  # TODO(bridge): via bridge.ToolRegistry
+            pa = get_tool_registry().get('public_apis_resource')
             for entry in pa._entries[:500]:  # Load top 500
                 name = entry.name.lower().replace(" ", "_").replace("-", "_")[:50]
                 if name in self._apis:

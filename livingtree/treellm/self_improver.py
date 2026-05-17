@@ -213,12 +213,12 @@ class DefectScanner:
         """Deep analysis using CodeGraph (call graph, deps) + ASTParser (tree-sitter)
         + CodeAnalyzer (complexity, dead code, impact scores)."""
         try:
-            from ..capability.code_graph import CodeGraph  # TODO(bridge): via bridge.ToolRegistry
-            from ..capability.ast_parser import ASTParser
+            from ...bridge.registry import get_tool_registry  # migrated  # TODO(bridge): via bridge.ToolRegistry
+            
             from .code_analyzer import CodeAnalyzer
 
-            cg = CodeGraph()
-            ast = ASTParser()
+            cg = get_tool_registry().get('code_graph')
+            ast = get_tool_registry().get('ast_parser')
             analyzer = CodeAnalyzer()
 
             # Load cached graph if available, else full index

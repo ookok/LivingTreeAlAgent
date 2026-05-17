@@ -69,8 +69,8 @@ class OntoPromptBuilder:
 
         if self._skill_graph is None:
             try:
-                from livingtree.capability.skill_buckets import SKILL_CATALOG
-                self._skill_graph = SKILL_CATALOG
+                from livingtree.bridge.registry import get_tool_registry  # migrated
+                self._skill_graph = get_tool_registry().get('skill_buckets')
             except ImportError:
                 logger.debug("SkillCatalog not available for onto-prompt")
 

@@ -1,1 +1,1 @@
-refactor: 标记剩余 18 处耦合点 → bridge 迁移
+refactor: 迁移 treellm→capability 剩余 10 文件 → bridge (2 残留)

@@ -1,1 +1,1 @@
-refactor: 提取 htmx_kg.py + htmx_creative.py
+refactor: 拆分 htmx_web (3194→655行) — 提取 SSE/Form/KG/Creative/Admin/Reach/Shell

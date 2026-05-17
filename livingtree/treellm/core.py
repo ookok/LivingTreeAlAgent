@@ -1063,6 +1063,10 @@ class TreeLLM:
                     "- bash: run a shell command. Args: command string.\n"
                     "- read_file: read a file via VFS. Supports paths: /disk/... /ram/... /cache/... /db/... /config/...\n"
                     "- write_file: write to a file via VFS. Args: file_path\\ncontent.\n"
+                    "- codegraph_deps: query dependency graph. Args: module name. Returns dependencies.\n"
+                    "- codegraph_callers: query call graph. Args: function name. Returns callers.\n"
+                    "- codegraph_callees: query call graph. Args: function name. Returns callees.\n"
+                    "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "  For new files: output complete code with line structure.\n"
                     "  For modifications: output unified diff format with +/- markers.\n"
                     "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n\n"
@@ -1156,6 +1160,18 @@ class TreeLLM:
                                     tool_result_text = await rex._tool_explore_domain(tool_args.strip())
                                 elif tool_name == "get_world_knowledge":
                                     tool_result_text = await rex._tool_get_world_knowledge(tool_args.strip())
+                                elif tool_name == "codegraph_deps":
+                                    from .codegraph_tools import codegraph_deps
+                                    tool_result_text = codegraph_deps(tool_args.strip())
+                                elif tool_name == "codegraph_callers":
+                                    from .codegraph_tools import codegraph_callers
+                                    tool_result_text = codegraph_callers(tool_args.strip())
+                                elif tool_name == "codegraph_callees":
+                                    from .codegraph_tools import codegraph_callees
+                                    tool_result_text = codegraph_callees(tool_args.strip())
+                                elif tool_name == "codegraph_impact":
+                                    from .codegraph_tools import codegraph_impact
+                                    tool_result_text = codegraph_impact(tool_args.strip())
                                 else:
                                     tool_result_text = f"[tool:{tool_name}] not available"
                             else:

@@ -53,7 +53,7 @@ class EIAChartBridge:
     def connect_eia_engine(self) -> bool:
         """Connect to EIAEngine for model data."""
         try:
-            from ..treellm.eia_models import EIAEngine
+            from ..bridge.registry import get_tool_registry  # migrated; old: EIAEngine
             self._eia = EIAEngine()
             return True
         except ImportError:

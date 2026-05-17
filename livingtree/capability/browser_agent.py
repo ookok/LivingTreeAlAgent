@@ -54,7 +54,7 @@ class BrowserAgent:
         if self._llm:
             return self._llm
         from livingtree.treellm.core import TreeLLM
-        self._llm = TreeLLM.from_config()
+        self._llm = get_tool_registry().get('treellm_core').from_config()
         return self._llm
 
     async def browse(self, url: str, task: str,

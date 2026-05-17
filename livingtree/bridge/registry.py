@@ -103,6 +103,15 @@ def _register_capability_tools():
     # Map tools
     reg.register("tianditu", loader=lambda: _lazy_import("livingtree.capability.tianditu", "TiandituAPI"))
 
+
+    # LLM services (from treellm)
+    reg.register("treellm_core", loader=lambda: _lazy_import("livingtree.treellm.core", "TreeLLM"))
+    reg.register("eia_models", loader=lambda: _lazy_import("livingtree.treellm.eia_models", "EIAEngine"))
+    reg.register("classifier", loader=lambda: _lazy_import("livingtree.treellm.classifier", "get_router"))
+    reg.register("context_moe", loader=lambda: _lazy_import("livingtree.treellm.context_moe", "get_context_moe"))
+    reg.register("living_store", loader=lambda: _lazy_import("livingtree.treellm.living_store", "get_living_store"))
+    reg.register("cache_director", loader=lambda: _lazy_import("livingtree.treellm.cache_director", "get_cache_director"))
+
     return reg
 
 

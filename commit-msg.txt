@@ -1,1 +1,1 @@
-refactor: treellm→capability 20→0 — 全部解耦完成
+refactor: 迁移 capability→treellm 业务耦合 → bridge (23处替换)

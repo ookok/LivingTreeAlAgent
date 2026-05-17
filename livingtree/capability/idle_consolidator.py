@@ -91,7 +91,7 @@ class IdleConsolidator:
 
         # ── ErrorReplay: self-heal from recorded errors ──
         try:
-            from ..treellm.debug_pro import get_error_replay  # TODO(bridge): via bridge.LLMProtocol
+            # debug_pro migrated to bridge get_error_replay  # TODO(bridge): via bridge.LLMProtocol
             await get_error_replay().auto_heal_cycle(hub)
         except Exception:
             pass
@@ -224,8 +224,8 @@ class IdleConsolidator:
         user request gets cached tokens immediately.
         """
         try:
-            from ..treellm.cache_director import get_cache_director
-            director = get_cache_director()
+            from ..bridge.registry import get_tool_registry
+            director = get_tool_registry().get('cache_director')
 
             llm = hub.world.consciousness._llm
             for name in llm.provider_names:

@@ -225,7 +225,7 @@ class TextPolisher:
                      language: str = "zh") -> str:
         """Polish text using LLM with specified style."""
         try:
-            from ..treellm.core import TreeLLM  # TODO(bridge): via bridge.LLMProtocol
+            from ..bridge.registry import get_tool_registry  # TODO(bridge): via bridge.LLMProtocol
             llm = TreeLLM.from_config()
 
             style_desc = cls.STYLES.get(style, cls.STYLES["formal"])
@@ -372,7 +372,7 @@ class PoetryEngine:
                        style: str = "") -> str:
         """Generate classical Chinese poetry."""
         try:
-            from ..treellm.core import TreeLLM
+            from ..bridge.registry import get_tool_registry
             llm = TreeLLM.from_config()
 
             tonal = cls.TONAL_PATTERNS.get(form, "")
@@ -694,7 +694,7 @@ __all__ = [
 def register_text_tools(bus=None):
     """Register text processing tools in CapabilityBus."""
     try:
-        from ..treellm.capability_bus import get_capability_bus, Capability, CapCategory, CapParam
+        # capability_bus migrated to bridge get_capability_bus, Capability, CapCategory, CapParam
         bus = bus or get_capability_bus()
 
         tools = [

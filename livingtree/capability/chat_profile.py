@@ -249,8 +249,8 @@ class BatchProfileBuilder:
 
         # Source 2: ContextMoE deep memory (learned patterns)
         try:
-            from ..treellm.context_moe import get_context_moe  # TODO(bridge): via bridge.LLMProtocol
-            moe = get_context_moe("domain_learner")
+            from ..bridge.registry import get_tool_registry  # TODO(bridge): via bridge.LLMProtocol
+            moe = get_tool_registry().get('context_moe')("domain_learner")
             for key, entry in moe._deep.items():
                 if key.startswith("domain:") and isinstance(entry, dict):
                     name = key.split(":", 1)[1]
@@ -504,8 +504,8 @@ class ChannelToUserAdapter:
 
         # 4. Store raw message for later batch processing
         try:
-            from ..treellm.living_store import get_living_store
-            store = get_living_store()
+            
+            store = get_tool_registry().get('living_store')
             record = json.dumps({
                 "platform": platform, "user_id": user_id,
                 "content": content[:500], "group_id": group_id,

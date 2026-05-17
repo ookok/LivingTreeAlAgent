@@ -50,8 +50,8 @@ class DocEngine:
         """Lazy-load EIAEngine for physics model calculations."""
         if self._eia_engine is None:
             try:
-                from ..treellm.eia_models import EIAEngine  # TODO(bridge): via bridge.LLMProtocol
-                self._eia_engine = EIAEngine()
+                from ..bridge.registry import get_tool_registry  # TODO(bridge): via bridge.LLMProtocol
+                self._eia_engine = get_tool_registry().get('eia_models')
             except ImportError:
                 self._eia_engine = False
         return self._eia_engine if self._eia_engine is not False else None

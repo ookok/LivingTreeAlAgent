@@ -1012,8 +1012,8 @@ class ContentGraph:
         """
         if not eia_engine:
             try:
-                from ..treellm.eia_models import EIAEngine  # TODO(bridge): via bridge.LLMProtocol
-                eia_engine = EIAEngine()
+                from ..bridge.registry import get_tool_registry  # TODO(bridge): via bridge.LLMProtocol
+                eia_engine = get_tool_registry().get('eia_models')
             except ImportError:
                 return {"error": "EIAEngine not available"}
 

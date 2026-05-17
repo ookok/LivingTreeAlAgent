@@ -9,6 +9,8 @@ Core economic logic:
   - 匹配度 × 紧迫度 × 利润率 × (1 - 竞争度) → composite score
   - 历史中标价 + 竞争格局 + 市场需求趋势 → recommended price
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

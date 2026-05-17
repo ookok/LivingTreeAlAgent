@@ -27,6 +27,8 @@ from enum import Enum
 from typing import Any, Optional
 
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 class CheckStatus(Enum):

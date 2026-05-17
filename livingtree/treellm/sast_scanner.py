@@ -29,6 +29,8 @@ from typing import Any, Optional
 from loguru import logger
 
 from .unified_exec import run, pip_install
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 class SASTSeverity(IntEnum):

@@ -304,7 +304,8 @@ class UniversalFileParser:
                 result = asyncio.run(run(f"dwgread {path}", timeout=30))
                 return {"text": result.stdout[:10000]} if result.success else {}
             except ImportError:
-                r = subprocess.run(["dwgread", path], capture_output=True, text=True, timeout=30)
+                r = subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            ["dwgread", path], capture_output=True, text=True, timeout=30)
                 return {"text": r.stdout[:10000]} if r.returncode == 0 else {}
         except Exception:
             return {}
@@ -487,7 +488,8 @@ class UniversalFileParser:
                 tables_result = asyncio.run(run(f"mdb-tables -1 {path}", timeout=10))
                 tables = [t.strip() for t in tables_result.stdout.splitlines() if t.strip()]
             except ImportError:
-                tables_out = subprocess.run(["mdb-tables", "-1", path], capture_output=True, text=True, timeout=10)
+                tables_out = subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            ["mdb-tables", "-1", path], capture_output=True, text=True, timeout=10)
                 tables = [t.strip() for t in tables_out.stdout.splitlines() if t.strip()]
             tables_data = []
             for t in tables[:10]:
@@ -497,7 +499,8 @@ class UniversalFileParser:
                         export_result = asyncio.run(run(f"mdb-export {path} {t}", timeout=10))
                         export_lines = export_result.stdout.splitlines()
                     except ImportError:
-                        r = subprocess.run(["mdb-export", path, t], capture_output=True, text=True, timeout=10)
+                        r = subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            ["mdb-export", path, t], capture_output=True, text=True, timeout=10)
                         export_lines = r.stdout.splitlines()
                     if export_lines:
                         headers = export_lines[0].split(",") if export_lines else []

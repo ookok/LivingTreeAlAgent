@@ -1,0 +1,21 @@
+refactor: 全面重构 — 合并重复模块 + 拆分大文件 + 标记死代码
+
+## 合并 (净消除 ~3400 行)
+- Router: 6个独立路由策略 → treellm/router.py 统一多策略入口 + 6兼容壳
+- Classifier: 4个分类器 → treellm/classifier.py 多后端整合 + 3兼容壳
+
+## 拆分 (大文件瘦身)
+- api/htmx_web.py: 3194→2903行 — Reach路由 → htmx_reach.py, Shell路由 → htmx_shell.py
+- integration/hub.py: 2178→2084行 — Cell/Overnight/Session 提取为独立 Mixin
+- livingtree/main.py: 2310→1990行 — 诊断命令 → main_diag.py, Web启动 → main_web.py
+
+## 基础设施
+- treellm/unified_exec.py: 添加 run_sync() 同步包装器, 标记为唯一subprocess入口
+- 25个文件标记 subprocess 迁移注释
+
+## 死代码清理
+- lsp/market/mcp 子包 9文件标记 DEPRECATED
+
+## 新增模块
+router.py, classifier.py(增强), htmx_reach.py, htmx_shell.py,
+hub_cell.py, hub_overnight.py, hub_session.py, main_diag.py, main_web.py

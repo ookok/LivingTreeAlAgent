@@ -206,7 +206,8 @@ class JsBridge:
                     "exit_code": result.exit_code,
                 }
             except ImportError:
-                result = subprocess.run(
+                result = subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            
                     command, shell=True, capture_output=True,
                     text=True, timeout=60,
                     cwd=cwd or None,
@@ -294,7 +295,8 @@ class JsBridge:
                     from livingtree.treellm.unified_exec import run
                     asyncio.run(run(f"osascript -e 'display notification \"{message}\" with title \"{title}\"'", timeout=5))
                 except ImportError:
-                    subprocess.run([
+                    subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            [
                         "osascript", "-e",
                         f'display notification "{message}" with title "{title}"'
                     ])
@@ -304,7 +306,8 @@ class JsBridge:
                     from livingtree.treellm.unified_exec import run
                     asyncio.run(run(f"notify-send \"{title}\" \"{message}\"", timeout=5))
                 except ImportError:
-                    subprocess.run(["notify-send", title, message])
+                    subprocess.run(  # MIGRATE: use run_sync() from unified_exec
+            ["notify-send", title, message])
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

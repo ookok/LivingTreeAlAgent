@@ -36,6 +36,7 @@ import jmespath
 import pytesseract
 from PIL import Image
 from pypdf import PdfReader
+from ..treellm.unified_exec import run_sync, check_output_sync  # SUBPROCESS MIGRATION
 
 
 @dataclass

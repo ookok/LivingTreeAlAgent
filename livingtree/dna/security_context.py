@@ -42,6 +42,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 SANDBOX_DIR = Path(".livingtree/sandbox")
 SECURITY_STATE_FILE = Path(".livingtree/security_state.json")

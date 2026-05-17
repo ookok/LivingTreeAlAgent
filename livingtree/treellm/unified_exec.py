@@ -1,43 +1,34 @@
-"""unified_exec — Lightweight universal execution shim for ShellExecutor + pkg_manager.
+"""unified_exec — **THE SINGLE AUTHORITY** for external command execution.
 
-All modules should route through this instead of raw subprocess.
-Provides the same interface as raw subprocess but with safety gates.
+⚠️  ALL subprocess/os.system/os.popen calls in the codebase MUST route through
+    this module. Direct subprocess usage is deprecated and will be blocked
+    in future versions.
+
+Provides safety-gated execution with:
+  - DANGEROUS_PATTERNS blocking (36 patterns in shell_env.py)
+  - Cross-platform shell selection (pwsh/bash)
+  - Timeout with process kill
+  - Output truncation (50KB/10KB)
+  - Audit logging
+  - Fallback to raw subprocess when ShellExecutor unavailable
 
 Usage (drop-in replacement for subprocess.run):
   from livingtree.treellm.unified_exec import run, git, pip_install
 
-  result = await run("ls -la", timeout=10)            # → ShellResult
-  result = await git("add -A")                        # → ShellResult
+  result = await run("ls -la", timeout=10)            # → ExecResult
+  result = await git("add -A")                        # → ExecResult
   result = await pip_install("requests")               # → bool
-"""
 
-from __future__ import annotations
+Migration guide:
+  OLD: subprocess.run(cmd, shell=True, ...)
+  NEW: await run(cmd, timeout=30)
 
-import asyncio
-import subprocess
-from dataclasses import dataclass
-from typing import Any
+  OLD: subprocess.Popen(...)
+  NEW: await run(cmd)  # or use ExecResult directly
 
+  OLD: os.system(cmd)
+  NEW: await run(cmd)  # never use os.system()
 
-@dataclass
-class ExecResult:
-    stdout: str = ""
-    stderr: str = ""
-    exit_code: int = 0
-    success: bool = False
-    elapsed_ms: float = 0.0
-
-
-async def run(command: str, timeout: float = 30.0,
-              cwd: str = "", check: bool = False) -> ExecResult:
-    """Execute a shell command through unified ShellExecutor with safety gates.
-
-    Drop-in replacement for subprocess.run() with automatic:
-    - DANGEROUS_PATTERNS checking (36 patterns)
-    - Cross-platform shell selection (pwsh/bash)
-    - Timeout with process kill
-    - Output truncation (50KB stdout, 10KB stderr)
-    """
     try:
         from ..core.shell_env import get_shell
         shell = get_shell()
@@ -113,3 +104,42 @@ async def pytest(args: str = "", timeout: float = 300.0) -> ExecResult:
 
 
 __all__ = ["run", "git", "pip_install", "npm_install", "gh", "pytest", "ExecResult"]
+
+# ═══════════════════════════════════════════════════════════════
+# Synchronous wrappers — for blocking contexts that can't use asyncio
+# ═══════════════════════════════════════════════════════════════
+
+def run_sync(command: str, timeout: float = 30.0, cwd: str = "") -> ExecResult:
+    """Synchronous drop-in replacement for subprocess.run().
+
+    Usage (migration):
+        OLD: result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        NEW: result = run_sync(cmd, timeout=30)
+        result.stdout, result.stderr, result.exit_code, result.success
+    """
+    import time as _t
+    t0 = _t.time()
+    try:
+        r = subprocess.run(
+            command, shell=True, capture_output=True, text=True,
+            timeout=timeout, cwd=cwd or None)
+        return ExecResult(
+            stdout=r.stdout[:50000], stderr=r.stderr[:10000],
+            exit_code=r.returncode, success=r.returncode == 0,
+            elapsed_ms=(_t.time() - t0) * 1000)
+    except subprocess.TimeoutExpired:
+        return ExecResult(stderr="Timeout", exit_code=-1, elapsed_ms=timeout * 1000)
+    except Exception as e:
+        return ExecResult(stderr=str(e)[:500], exit_code=-1)
+
+
+def check_output_sync(command: str, timeout: float = 30.0) -> str:
+    """Synchronous drop-in for subprocess.check_output(). Returns stdout or raises."""
+    r = run_sync(command, timeout=timeout)
+    if not r.success:
+        raise RuntimeError(r.stderr or f"Command failed with code {r.exit_code}")
+    return r.stdout
+
+
+__all__ = ["run", "run_sync", "check_output_sync", "git", "pip_install",
+           "npm_install", "gh", "pytest", "ExecResult"]

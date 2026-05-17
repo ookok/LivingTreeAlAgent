@@ -11,6 +11,8 @@ Economic logic:
   - High-ROI upgrades are auto-recommended (or auto-executed)
   - This is the "external force" driving system evolution
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

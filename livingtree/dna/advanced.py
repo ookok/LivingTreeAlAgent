@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 # ═══════════════════════════════════════════════════════════════

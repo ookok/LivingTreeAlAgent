@@ -10,9 +10,12 @@ from loguru import logger
 
 from ..config import LTAIConfig, get_config
 from ..observability import setup_observability
+from .hub_cell import CellTrainingMixin
+from .hub_overnight import OvernightTaskMixin
+from .hub_session import SessionManagementMixin
 
 
-class IntegrationHub:
+class IntegrationHub(CellTrainingMixin, OvernightTaskMixin, SessionManagementMixin):
     """Progressive boot: minimal __init__ for instant UI, heavy init deferred.
 
     lazy=True skips ModelRegistry fetch + LocalScanner scan + package manager check.
@@ -1288,79 +1291,6 @@ class IntegrationHub:
 
     # ── Overnight Task API ──────────────────────────────────
 
-    async def start_overnight_task(
-        self, goal: str,
-        notify_platforms: list[str] | None = None,
-        notify_interval_minutes: int = 0,
-        notify_email: str = "",
-    ):
-        """启动挂机长任务。
-
-        Args:
-            goal: 自然语言目标
-            notify_platforms: 通知平台 (cli/telegram/smtp/webhook/all)
-            notify_interval_minutes: 进度通知间隔（0=仅完成时通知）
-            notify_email: SMTP 邮件地址
-        """
-        ot = getattr(self.world, "overnight_task", None)
-        if not ot:
-            logger.error("OvernightTask 未初始化")
-            return None
-        logger.info("OvernightTask: 开始挂机 — %s", goal[:60])
-        status = await ot.start(
-            goal,
-            notify_platforms=notify_platforms,
-            notify_interval_minutes=notify_interval_minutes,
-            notify_email=notify_email,
-        )
-        return status
-
-    async def resume_overnight_task(self):
-        """恢复上次中断的挂机任务。"""
-        ot = getattr(self.world, "overnight_task", None)
-        if not ot:
-            return None
-        return await ot.resume()
-
-    def stop_overnight_task(self):
-        """停止当前挂机任务。"""
-        ot = getattr(self.world, "overnight_task", None)
-        if ot:
-            ot.stop()
-
-    def overnight_task_status(self) -> Optional[dict]:
-        """查询挂机任务状态。"""
-        ot = getattr(self.world, "overnight_task", None)
-        if not ot:
-            return None
-        s = ot.status
-        return {
-            "goal": s.goal,
-            "state": s.state,
-            "percent": s.percent,
-            "current_step": s.current_step,
-            "completed_steps": s.completed_steps,
-            "total_steps": s.total_steps,
-            "report_path": s.report_path,
-            "elapsed_seconds": s.elapsed_seconds,
-        }
-
-    # ── Long Task Natural Language Interface ────────────────
-
-    _LONG_TASK_PATTERNS = [
-        "收集", "爬取", "抓取", "搜集", "汇总",
-        "研究报告", "可行性", "可行性研究", "环评报告", "安评报告",
-        "技术报告", "调研报告", "分析报告", "尽职调查",
-        "整理资料", "汇编", "编写报告", "生成报告", "撰写",
-        "挂机", "后台任务", "长任务",
-    ]
-
-    _TASK_CONTROL_PATTERNS = {
-        "cancel": ["取消任务", "取消挂机", "停止任务", "停止挂机", "终止", "cancel", "stop"],
-        "pause": ["暂停任务", "暂停挂机", "pause"],
-        "resume": ["继续任务", "继续挂机", "恢复任务", "恢复挂机", "resume", "continue"],
-        "status": ["任务进度", "挂机进度", "当前进度", "进度", "status", "progress"],
-    }
 
     async def _quick_embed(self, text: str) -> list[float] | None:
         """Fast hash-based embedding for semantic cache lookup (no API call)."""
@@ -1985,30 +1915,6 @@ class IntegrationHub:
         import shutil
         return shutil.which("opencode") or "opencode"
 
-    async def restore_turn(self, turn_id: int) -> dict:
-        if self.side_git:
-            ok = await self.side_git.restore(turn_id)
-            return {"restored": ok, "turn_id": turn_id}
-        return {"restored": False, "error": "SideGit not available"}
-
-    async def revert_turn(self, turn_id: int) -> dict:
-        return await self.restore_turn(turn_id)
-
-    async def list_side_git_turns(self) -> list[dict]:
-        if self.side_git:
-            return await self.side_git.list_turns()
-        return []
-
-    async def list_sessions(self) -> list[dict]:
-        if self.session_manager:
-            return await self.session_manager.list_sessions()
-        return []
-
-    async def resume_session(self, session_id: str) -> dict | None:
-        if self.session_manager:
-            state = await self.session_manager.load(session_id)
-            return state.model_dump() if state else None
-        return None
 
     def get_cache_stats(self) -> dict:
         if self.cache_optimizer:

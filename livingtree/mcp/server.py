@@ -14,6 +14,8 @@ Cursor, Windsurf, etc.) via the MCP protocol.
 Usage:
     python -m livingtree.mcp.server
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

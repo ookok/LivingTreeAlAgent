@@ -9,6 +9,8 @@ Usage:
     await lsp.start()
     diags = await lsp.check_file("src/main.py")
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

@@ -66,6 +66,10 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 htmx_router = APIRouter(prefix="/tree", tags=["htmx"])
 
+# Reach routes extracted to htmx_reach.py (included as sub-router)
+from .htmx_reach import reach_router
+htmx_router.include_router(reach_router)
+
 
 def _get_hub(request: Request):
     return getattr(request.app.state, "hub", None)
@@ -1453,189 +1457,14 @@ _LAYOUT_MODES = {
 
 
 # ═══════════════════════════════════════════════════════════════
-#  Reach / Remote / Swarm
+#  Reach routes — extracted to htmx_reach.py (included via include_router above)
 # ═══════════════════════════════════════════════════════════════
 
-@htmx_router.get("/reach/pair/{code}")
-async def tree_reach_pair(request: Request, code: str):
-    """Mobile device pairing — validates pairing code, returns mobile interface."""
-    from ..network.reach_gateway import get_reach_gateway
-    reach = get_reach_gateway()
-    hub = _get_hub(request)
-    if hub:
-        reach.set_hub(hub)
-    return _render_html("reach_mobile.html", request)
+
+# reach routes extracted to htmx_reach.py
 
 
-@htmx_router.get("/reach/qr")
-async def tree_reach_qr(request: Request):
-    """Generate QR code for device pairing. Returns HTML with QR + instructions."""
-    from ..network.reach_gateway import get_reach_gateway
-    reach = get_reach_gateway()
-    hub = _get_hub(request)
-    if hub:
-        reach.set_hub(hub)
-
-    server_host = request.headers.get("host", "localhost:8100")
-    protocol = "https" if request.url.scheme == "https" else "http"
-    server_url = f"{protocol}://{server_host}"
-    pairing_url = reach.generate_pairing_qr(server_url)
-
-    qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={pairing_url}"
-
-    return HTMLResponse(
-        f'<div class="card">'
-        f'<h2>📱 连接移动设备</h2>'
-        f'<p style="font-size:12px;color:var(--dim);margin:8px 0">'
-        f'扫描二维码，让手机成为 AI 的眼睛和手</p>'
-        f'<div style="text-align:center;margin:12px 0">'
-        f'<img src="{qr_api}" alt="Pairing QR" style="width:200px;height:200px;background:#fff;border-radius:8px">'
-        f'</div>'
-        f'<p style="font-size:11px;color:var(--dim);text-align:center">'
-        f'或访问: <code style="color:var(--accent)">{pairing_url}</code></p>'
-        f'<div id="reach-status" style="margin-top:8px;text-align:center;font-size:12px;color:var(--accent)" '
-        f'hx-get="/tree/reach/status" hx-trigger="load, every 5s" hx-swap="innerHTML">'
-        f'等待设备连接...</div>'
-        f'</div>'
-    )
-
-
-@htmx_router.get("/reach/status")
-async def tree_reach_status(request: Request):
-    """Show connected device status."""
-    from ..network.reach_gateway import get_reach_gateway
-    reach = get_reach_gateway()
-    st = reach.status()
-    mobiles = st["mobile_devices"]
-    total = st["total_devices"]
-    if mobiles > 0:
-        names = [d["device_name"] for d in st["devices"] if d["device_type"] == "mobile"]
-        return HTMLResponse(
-            f'<span style="color:var(--accent)">📱 {", ".join(names[:3])} 已连接 '
-            f'({mobiles}台移动设备)</span>'
-        )
-    return HTMLResponse(
-        f'<span style="color:var(--dim)">📱 等待设备连接... ({total}台设备在线)</span>'
-    )
-
-
-@htmx_router.post("/reach/request")
-async def tree_reach_request_sensor(request: Request):
-    """AI requests a sensory action from a mobile device."""
-    try:
-        body = await request.json()
-    except Exception:
-        form = await request.form()
-        body = {k: v for k, v in form.items()}
-
-    sensor_type_str = body.get("sensor_type", "camera_photo")
-    title = body.get("title", "需要你的帮助")
-    instruction = body.get("instruction", "")
-    context = body.get("context", "")
-
-    from ..network.reach_gateway import get_reach_gateway, SensorType, TaskPriority
-    reach = get_reach_gateway()
-    hub = _get_hub(request)
-    if hub:
-        reach.set_hub(hub)
-
-    try:
-        st = SensorType(sensor_type_str)
-    except ValueError:
-        st = SensorType.CAMERA_PHOTO
-
-    if not reach.has_mobile():
-        return HTMLResponse(
-            '<div class="card" style="border-color:var(--warn)">'
-            '<h2>📱 无移动设备在线</h2>'
-            '<p style="font-size:12px;color:var(--dim)">请先扫描二维码连接手机</p>'
-            '<button hx-get="/tree/reach/qr" hx-target="closest .card" hx-swap="outerHTML" '
-            'style="font-size:11px;padding:6px 12px">📱 显示配对码</button>'
-            '</div>'
-        )
-
-    sensor_icons = {
-        SensorType.CAMERA_PHOTO: "📸",
-        SensorType.CAMERA_SCAN: "📷",
-        SensorType.QR_CODE: "📱",
-        SensorType.GPS_LOCATION: "📍",
-        SensorType.MICROPHONE: "🎤",
-        SensorType.NFC_TAG: "📡",
-    }
-    icon = sensor_icons.get(st, "📱")
-
-    push_card = HTMLResponse(
-        f'<div class="card" style="border-left:3px solid var(--accent)">'
-        f'<h2>{icon} 已发送: {title}</h2>'
-        f'<p style="font-size:12px;margin:4px 0">{instruction[:200]}</p>'
-        f'<p style="font-size:10px;color:var(--dim)">'
-        f'请在手机上完成操作，结果将自动返回</p>'
-        f'<div hx-get="/tree/reach/status" hx-trigger="every 3s" hx-swap="innerHTML" '
-        f'style="font-size:11px;margin-top:4px"></div>'
-        f'</div>'
-    )
-
-    asyncio.create_task(_dispatch_reach_request(reach, st, title, instruction, context))
-    return push_card
-
-
-async def _dispatch_reach_request(reach, sensor_type, title, instruction, context):
-    """Background: dispatch sensor request to mobile device."""
-    try:
-        result = await reach.request_sensor(
-            sensor_type=sensor_type,
-            title=title,
-            instruction=instruction,
-            context=context,
-            timeout=120.0,
-            required=False,
-        )
-        if result:
-            logger.info(f"Reach: sensor response received — {sensor_type.value}")
-    except Exception as e:
-        logger.debug(f"Reach dispatch: {e}")
-
-
-@htmx_router.get("/reach/demo")
-async def tree_reach_demo_actions(request: Request):
-    """Demo panel showing what the AI can ask the mobile device to do."""
-    return HTMLResponse(
-        '<div class="card">'
-        '<h2>📱 AI 感官扩展 — 需要手机帮忙的事</h2>'
-        '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">'
-        '点击下方按钮，AI 会向你的手机发送任务</p>'
-        '<div style="display:flex;flex-wrap:wrap;gap:4px">'
-
-        '<button hx-post="/tree/reach/request" hx-target="#reach-demo-result" hx-swap="innerHTML" '
-        'hx-vals=\'{"sensor_type":"camera_photo","title":"拍摄现场照片",'
-        '"instruction":"请拍摄项目现场的照片，包括: 1)入口 2)主要区域 3)周围环境",'
-        '"context":"环评报告 — 环境现状调查章节需要现场照片"}\''
-        'class="lc-tool-btn">📸 拍现场照</button>'
-
-        '<button hx-post="/tree/reach/request" hx-target="#reach-demo-result" hx-swap="innerHTML" '
-        'hx-vals=\'{"sensor_type":"qr_code","title":"扫描二维码",'
-        '"instruction":"请扫描设备铭牌或文件上的二维码","context":"需要设备参数信息"}\''
-        'class="lc-tool-btn">📱 扫二维码</button>'
-
-        '<button hx-post="/tree/reach/request" hx-target="#reach-demo-result" hx-swap="innerHTML" '
-        'hx-vals=\'{"sensor_type":"gps_location","title":"获取现场位置",'
-        '"instruction":"请在项目现场打开此页面以获取精确GPS坐标","context":"需要验证项目位置"}\''
-        'class="lc-tool-btn">📍 获取位置</button>'
-
-        '<button hx-post="/tree/reach/request" hx-target="#reach-demo-result" hx-swap="innerHTML" '
-        'hx-vals=\'{"sensor_type":"camera_scan","title":"扫描文档",'
-        '"instruction":"请用手机扫描纸质文件或标签","context":"需要将纸质信息数字化"}\''
-        'class="lc-tool-btn">📷 扫描文档</button>'
-
-        '<button hx-post="/tree/reach/request" hx-target="#reach-demo-result" hx-swap="innerHTML" '
-        'hx-vals=\'{"sensor_type":"microphone","title":"语音输入",'
-        '"instruction":"请对着手机说出项目关键信息","context":"需要快速语音录入"}\''
-        'class="lc-tool-btn">🎤 语音输入</button>'
-
-        '</div>'
-        '<div id="reach-demo-result" style="margin-top:8px"></div>'
-        '</div>'
-    )
+# reach routes extracted to htmx_reach.py
 
 
 # ── Cognition Stream: Visualize AI's thinking process ──
@@ -1849,127 +1678,7 @@ async def tree_shell_env(request: Request):
     return HTMLResponse(f'<div class="card"><h2>🔧 环境工具链</h2>{rows}</div>')
 
 
-@htmx_router.post("/shell/exec")
-async def tree_shell_exec(request: Request):
-    """Execute a shell command with safety gates. Returns HTML result."""
-    try:
-        body = await request.json()
-    except Exception:
-        form = await request.form()
-        body = {k: v for k, v in form.items()}
-
-    command = body.get("command", body.get("cmd", body.get("message", "")))
-    workdir = body.get("workdir", body.get("cwd", ""))
-    mount = body.get("mount", body.get("mount_name", ""))
-
-    if not command.strip():
-        return HTMLResponse('<div style="color:var(--warn);font-size:12px">请输入命令</div>')
-
-    from ..core.shell_env import get_shell
-    shell = get_shell()
-    result = await shell.execute(command, workdir=workdir, mount_name=mount)
-
-    if result.blocked:
-        return HTMLResponse(
-            f'<div class="card" style="border-left:3px solid var(--err)">'
-            f'<h3>🚫 命令已拦截</h3>'
-            f'<pre style="font-size:11px;color:var(--err);white-space:pre-wrap">{result.block_reason}</pre></div>'
-        )
-
-    status_color = "var(--accent)" if result.exit_code == 0 else "var(--err)"
-    status_text = "✅ 成功" if result.exit_code == 0 else f"❌ 退出码 {result.exit_code}"
-
-    output = result.stdout
-    if result.stderr:
-        output += ("\n" if output else "") + result.stderr
-
-    return HTMLResponse(
-        f'<div class="card">'
-        f'<h3 style="display:flex;justify-content:space-between">'
-        f'<span>{command[:80]}</span>'
-        f'<span style="font-size:11px;color:{status_color}">{status_text} · {result.elapsed_ms:.0f}ms</span></h3>'
-        f'<div style="font-size:10px;color:var(--dim);margin-bottom:4px">'
-        f'目录: {result.workdir}'
-        + (f' · 截断' if result.truncated else '')
-        + f'</div>'
-        f'<pre style="background:rgba(0,0,0,.1);padding:8px;border-radius:4px;'
-        f'font-size:11px;font-family:var(--font-mono);line-height:1.4;'
-        f'white-space:pre-wrap;max-height:300px;overflow-y:auto;'
-        f'color:var(--text)">{output[:5000] or "(无输出)"}</pre>'
-        f'</div>'
-    )
-
-
-@htmx_router.post("/shell/mount")
-async def tree_shell_mount(request: Request):
-    """Mount a local folder path on the server side."""
-    try:
-        body = await request.json()
-    except Exception:
-        form = await request.form()
-        body = {k: v for k, v in form.items()}
-
-    path_str = body.get("path", body.get("folder", body.get("message", "")))
-    name = body.get("name", path_str.replace("\\", "/").split("/")[-1] if path_str else "mount")
-
-    if not path_str:
-        return HTMLResponse('<div style="color:var(--warn);font-size:12px">请输入文件夹路径</div>')
-
-    from ..core.shell_env import get_shell
-    shell = get_shell()
-    m = shell.localfs.mount(name, path_str)
-    if m:
-        files = shell.localfs.list_files(name, max_depth=2)
-        file_count = sum(1 for f in files if f.get("type") == "file")
-        return HTMLResponse(
-            f'<div class="card" style="border-left:3px solid var(--accent)">'
-            f'<h3>📂 已挂载: {name}</h3>'
-            f'<div style="font-size:11px;color:var(--dim)">{m.path}</div>'
-            f'<div style="font-size:11px;margin-top:4px">{len(files)} 个条目 · {file_count} 个文件</div>'
-            f'<div style="font-size:10px;color:var(--dim);margin-top:4px">可用: workdir="{name}" 或 mount_name="{name}" 在shell命令中</div>'
-            f'</div>'
-        )
-    return HTMLResponse(f'<div style="color:var(--err);font-size:12px">挂载失败: 路径不存在</div>')
-
-
-@htmx_router.get("/shell/panel")
-async def tree_shell_panel(request: Request):
-    """Shell execution panel for Living Canvas."""
-    return HTMLResponse(
-        '<div class="card">'
-        '<h2>💻 终端 · Shell 执行</h2>'
-        '<p style="font-size:11px;color:var(--dim);margin-bottom:8px">'
-        '在挂载的本地文件夹中执行命令。安全策略自动拦截危险操作。</p>'
-
-        '<div style="display:flex;gap:4px;margin-bottom:8px">'
-        '<input id="shell-mount-path" placeholder="挂载本地文件夹路径..." '
-        'style="flex:1;font-size:11px;padding:6px 8px">'
-        '<button onclick="mountFolder()" style="font-size:10px;padding:6px 10px;white-space:nowrap">📂 挂载</button>'
-        '</div>'
-        '<div id="mount-result"></div>'
-
-        '<div style="margin-top:8px;display:flex;gap:4px">'
-        '<input id="shell-cmd" placeholder="命令... 例: git status / python main.py / dir" '
-        'style="flex:1;font-size:12px;padding:8px;font-family:monospace" '
-        'onkeydown="if(event.key===\'Enter\')execShell()">'
-        '<button onclick="execShell()" style="font-size:11px;padding:8px 14px;white-space:nowrap">▶ 执行</button>'
-        '</div>'
-
-        '<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">'
-        '<button onclick="quickExec(\'git status\')" class="lc-tool-btn">git status</button>'
-        '<button onclick="quickExec(\'python --version\')" class="lc-tool-btn">python --version</button>'
-        '<button onclick="quickExec(\'pip list\')" class="lc-tool-btn">pip list</button>'
-        '<button onclick="quickExec(\'dir\')" class="lc-tool-btn">dir</button>'
-        '<button onclick="quickExec(\'node --version\')" class="lc-tool-btn">node --version</button>'
-        '</div>'
-
-        '<div id="shell-output" style="margin-top:8px"></div>'
-
-        '<div id="shell-env" hx-get="/tree/shell/env" hx-trigger="revealed" hx-swap="innerHTML" '
-        'style="margin-top:12px"></div>'
-        '</div>'
-    )
-
+# Shell routes extracted to htmx_shell.py
 
 async def tree_growth_panel(request: Request):
     """North Star: autonomous growth roadmap + economic dashboard."""

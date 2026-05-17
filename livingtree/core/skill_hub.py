@@ -26,6 +26,8 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 SKILLS_DIR = Path(".livingtree/skills")
 SKILL_HUB_URL = "https://raw.githubusercontent.com/ookok/livingtree-skills/main/index.json"

@@ -9,6 +9,8 @@ Builds a rich user profile from collected data + self-learning:
 
 This drives ALL downstream engines (scoring, bidding, pricing, investment).
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

@@ -33,6 +33,8 @@ from typing import Any, Optional
 
 import aiohttp
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 CHROME_DEBUG_PORT = 9222
 CHROME_BINARIES = [

@@ -10,10 +10,11 @@ import json
 import math
 import re
 import threading
-from collections import defaultdict
+import time
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 import numpy as np
@@ -355,3 +356,368 @@ def get_router() -> SkillRouter:
 
 # Backward compatibility alias (core.py uses TinyClassifier)
 TinyClassifier = SkillRouter
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Backend 2: QueryClassifier — rule-based (from query_classifier.py)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class QueryClassifier:
+    """Fast local task type classification using keyword + pattern heuristics.
+
+    ~5ms latency, no LLM call needed. Only falls back to LLM when confidence <0.6.
+    """
+
+    _instance: Optional[QueryClassifier] = None  # type: ignore[name-defined]
+    _lock = threading.Lock()
+
+    @classmethod
+    def instance(cls) -> "QueryClassifier":
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = QueryClassifier()
+        return cls._instance
+
+    def __init__(self):
+        self._classifications = 0
+
+    def classify(self, query: str) -> tuple[str, float]:
+        self._classifications += 1
+        q = query.lower().strip()
+        qlen = len(q)
+        if qlen < 8:
+            return "chat", 0.9
+        if q in ("你好", "嗨", "hello", "hi", "在吗", "在不在"):
+            return "chat", 0.95
+        code_kw = ["写", "实现", "代码", "函数", "bug", "修复", "错误", "报错",
+                   "import", "def ", "class ", "print(", "npm ", "pip ",
+                   "python", "javascript", "java", "rust", "go "]
+        if any(k in q for k in code_kw):
+            return "code", 0.8
+        reason_kw = ["为什么", "原因", "原理", "如何工作", "怎么回事",
+                     "分析", "比较", "区别", "优缺点", "影响",
+                     "explain", "analyze", "compare", "why"]
+        if any(k in q for k in reason_kw) and qlen > 20:
+            return "reasoning", 0.7
+        search_kw = ["搜索", "查找", "找一下", "有没有", "在哪", "怎么查",
+                     "search", "find", "lookup", "where is"]
+        if any(k in q for k in search_kw):
+            return "search", 0.75
+        if qlen > 500:
+            return "long_context", 0.65
+        if "?" in q or "？" in q:
+            if qlen > 50:
+                return "reasoning", 0.55
+            return "chat", 0.6
+        if any(k in q for k in ["翻译", "translate", "英文", "中文"]):
+            return "chat", 0.8
+        if qlen < 30:
+            return "chat", 0.5
+        return "general", 0.45
+
+    def needs_llm_classification(self, confidence: float) -> bool:
+        return confidence < 0.6
+
+    def stats(self) -> dict:
+        return {"classifications": self._classifications}
+
+
+_query_classifier: Optional[QueryClassifier] = None  # type: ignore[name-defined]
+_query_classifier_lock = threading.Lock()
+
+
+def get_query_classifier() -> QueryClassifier:
+    global _query_classifier
+    if _query_classifier is None:
+        with _query_classifier_lock:
+            if _query_classifier is None:
+                _query_classifier = QueryClassifier()
+    return _query_classifier
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Backend 3: AdaptiveClassifier — embedding (from adaptive_classifier.py)
+# ═══════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class CategoryPrototype:
+    name: str
+    description: str = ""
+    embedding: list[float] = field(default_factory=list)
+    sample_count: int = 0
+    last_matched: float = 0.0
+    confidence: float = 0.5
+
+    def adapt(self, query_embedding: list[float], alpha: float = 0.1):
+        if not self.embedding:
+            self.embedding = list(query_embedding)
+        else:
+            for i in range(min(len(self.embedding), len(query_embedding))):
+                self.embedding[i] = self.embedding[i] * (1 - alpha) + query_embedding[i] * alpha
+        self.sample_count += 1
+        self.last_matched = time.time()
+
+
+class AdaptiveClassifier:
+    """Embedding-based universal classifier. No hardcoded keywords."""
+
+    TASK_TYPES = {
+        "code": "code programming fix bug implement debug function class API algorithm",
+        "reasoning": "analysis reasoning evaluate compare analyze logic mathematics proof",
+        "search": "search find lookup retrieve query information knowledge web",
+        "chat": "hello chat conversation general question help explain what how",
+        "creative": "write create generate translate summarize compose poetry story",
+    }
+    LAYERS = {
+        "fast": "general chat question answer help explain simple quick",
+        "reasoning": "code debug fix implement analyze reason compare complex deep",
+    }
+    DOMAINS = {
+        "ai": "artificial intelligence machine learning deep learning neural network LLM GPT transformer",
+        "environment": "EIA ESIA environment assessment emission pollution ecology climate carbon",
+        "engineering": "design architecture infrastructure construction mechanical electrical civil",
+        "regulation": "GB standard regulation compliance law policy legal governance",
+        "finance": "finance investment banking market trading stock cryptocurrency economy",
+        "medical": "medical health clinical diagnosis treatment drug therapy disease",
+        "programming": "programming software development code API database algorithm system",
+    }
+    EMOTIONS = {
+        "joy": "happy delighted excited pleased joyful satisfied wonderful great amazing",
+        "sadness": "sad unhappy depressed disappointed frustrated miserable sorrowful",
+        "anger": "angry furious annoyed irritated frustrated rage upset",
+        "fear": "afraid scared worried anxious nervous terrified fearful",
+        "trust": "trust confident believe reliable dependable certain sure",
+        "surprise": "surprised amazed astonished shocked unexpected wow",
+        "disgust": "disgusted revolted repulsed horrible terrible awful",
+        "neutral": "okay fine normal standard regular typical usual",
+    }
+
+    _instance: Optional["AdaptiveClassifier"] = None  # type: ignore[name-defined]
+    _lock = threading.Lock()
+
+    def __init__(self):
+        self._prototypes: dict[str, dict[str, CategoryPrototype]] = {}
+        self._initialized = False
+        self._embedding_cache: dict[str, list[float]] = {}
+        self._cache_hits = 0
+        self._api_calls = 0
+
+    @classmethod
+    def instance(cls) -> "AdaptiveClassifier":
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = AdaptiveClassifier()
+        return cls._instance
+
+    def classify(self, query: str, category_set: dict[str, str],
+                 set_name: str = "") -> tuple[str, float]:
+        if not query or not category_set:
+            return list(category_set.keys())[0] if category_set else "", 0.0
+        key = set_name or self._hash_set(category_set)
+        prototypes = self._ensure_prototypes(key, category_set)
+        q_emb = self._embed(query)
+        if not q_emb or not prototypes:
+            return list(category_set.keys())[0], 0.0
+        best_cat, best_sim = "", -1.0
+        for cat, proto in prototypes.items():
+            if not proto.embedding:
+                continue
+            sim = self._cosine(q_emb, proto.embedding)
+            if sim > best_sim:
+                best_sim, best_cat = sim, cat
+        return best_cat or list(category_set.keys())[0], max(0.0, best_sim)
+
+    def classify_and_adapt(self, query: str, category_set: dict[str, str],
+                           correct_category: str, set_name: str = ""):
+        key = set_name or self._hash_set(category_set)
+        prototypes = self._ensure_prototypes(key, category_set)
+        q_emb = self._embed(query)
+        if q_emb and correct_category in prototypes:
+            prototypes[correct_category].adapt(q_emb, alpha=0.15)
+        return self.classify(query, category_set, set_name)
+
+    def stats(self) -> dict:
+        return {"cache_hits": self._cache_hits, "api_calls": self._api_calls,
+                "category_sets": len(self._prototypes),
+                "total_categories": sum(len(p) for p in self._prototypes.values())}
+
+    def _ensure_prototypes(self, key: str, category_set: dict[str, str]):
+        if key in self._prototypes:
+            return self._prototypes[key]
+        prototypes = {}
+        for name, desc in category_set.items():
+            proto = CategoryPrototype(name=name, description=desc)
+            emb = self._embed(desc)
+            if emb:
+                proto.embedding = emb
+            prototypes[name] = proto
+        self._prototypes[key] = prototypes
+        return prototypes
+
+    def _embed(self, text: str) -> list[float] | None:
+        if not text:
+            return None
+        cache_key = text[:100].lower().strip()
+        if cache_key in self._embedding_cache:
+            self._cache_hits += 1
+            return self._embedding_cache[cache_key]
+        emb = self._embed_api(text)
+        if emb:
+            self._api_calls += 1
+            self._embedding_cache[cache_key] = emb
+            if len(self._embedding_cache) > 500:
+                oldest = sorted(self._embedding_cache.keys(), key=lambda k: len(k))[:50]
+                for k in oldest:
+                    self._embedding_cache.pop(k, None)
+        return emb
+
+    def _embed_api(self, text: str) -> list[float] | None:
+        try:
+            from ..config import get_config
+            cfg = get_config()
+            api_key = getattr(cfg, 'siliconflow_api_key', '') or ''
+            if not api_key:
+                return None
+            import httpx
+            r = httpx.post("https://api.siliconflow.cn/v1/embeddings", json={
+                "model": "BAAI/bge-large-zh-v1.5", "input": text,
+                "encoding_format": "float"}, headers={
+                "Authorization": f"Bearer {api_key}"}, timeout=10)
+            if r.status_code == 200:
+                return r.json()["data"][0]["embedding"]
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _cosine(a: list[float], b: list[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a)) or 1.0
+        nb = math.sqrt(sum(y * y for y in b)) or 1.0
+        return dot / (na * nb)
+
+    @staticmethod
+    def _hash_set(category_set: dict[str, str]) -> str:
+        items = sorted(category_set.items())
+        return str(hash(tuple(items)))
+
+
+_adaptive_classifier: Optional[AdaptiveClassifier] = None  # type: ignore[name-defined]
+_adaptive_classifier_lock = threading.Lock()
+
+
+def get_adaptive_classifier() -> AdaptiveClassifier:
+    global _adaptive_classifier
+    if _adaptive_classifier is None:
+        with _adaptive_classifier_lock:
+            if _adaptive_classifier is None:
+                _adaptive_classifier = AdaptiveClassifier()
+    return _adaptive_classifier
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Backend 4: AutoClassifier — keyword+regex (from core/auto_classifier.py)
+# ═══════════════════════════════════════════════════════════════════
+
+DOMAIN_PATTERNS = {
+    "ai": {"regex": [
+        r'\b(llm|模型|训练|推理|token|transformer|agent|GPT|Claude|Gemini|DeepSeek|Qwen|embedding|fine.?tun|RLHF|prompt|神经网络)\b',
+        r'\b(AI|artificial intelligence|machine learning|deep learning|neural net)\b'],
+        "keywords": ["模型", "推理", "训练", "AI", "token", "agent", "智能", "GPT", "大模型", "深度学习"],
+        "weight": 1.0},
+    "environment": {"regex": [
+        r'\b(环评|排放|污染|生态|碳|水质|空气质量|噪声|固废|环境影响|PM2\.5|COD|BOD)\b',
+        r'\b(environmental|emission|carbon|ecology|pollution|water quality)\b'],
+        "keywords": ["环评", "排放", "污染", "环境", "碳", "生态", "水质", "大气", "噪声", "固废"],
+        "weight": 1.0},
+    "engineering": {"regex": [
+        r'\b(施工|图纸|结构|混凝土|钢筋|地基|桥梁|道路|隧道|管道|机电|暖通|给排水)\b',
+        r'\b(construction|structural|concrete|bridge|tunnel|pipeline)\b'],
+        "keywords": ["施工", "工程", "图纸", "结构", "混凝土", "设计", "建筑", "验收"],
+        "weight": 1.0},
+    "regulation": {"regex": [
+        r'\b(法规|标准|规范|GB\s*\d|HJ\s*\d|第.*条|条款|合规|行政许可|审批)\b',
+        r'\b(regulation|standard|compliance|permit|license)\b'],
+        "keywords": ["法规", "标准", "规范", "GB", "HJ", "合规", "许可", "审批", "条例"],
+        "weight": 1.0},
+    "programming": {"regex": [
+        r'\b(def |class |import |function|const |let |var |async |await|npm |pip |git |docker |k8s)\b',
+        r'\b(Python|JavaScript|TypeScript|Rust|Go|Java|C\+\+|SQL|HTML|CSS|React|Vue)\b'],
+        "keywords": ["代码", "编程", "API", "接口", "数据库", "前端", "后端", "部署", "Git"],
+        "weight": 0.9},
+    "finance": {"regex": [
+        r'\b(投资|预算|成本|报价|合同|付款|发票|ROI|经济|财务)\b',
+        r'\b(finance|budget|cost|invoice|ROI|economic)\b'],
+        "keywords": ["预算", "成本", "报价", "投资", "财务", "ROI", "经济"],
+        "weight": 0.8},
+    "medical": {"regex": [
+        r'\b(诊断|治疗|药物|临床|病理|患者|手术|检验|体检|医保)\b',
+        r'\b(diagnosis|treatment|clinical|patient|surgery|medical)\b'],
+        "keywords": ["诊断", "治疗", "药物", "临床", "病理", "手术", "患者"],
+        "weight": 0.8},
+}
+
+
+@dataclass
+class ClassificationResult:
+    domain: str
+    confidence: float
+    source: str = ""
+    matches: list[str] = field(default_factory=list)
+    alternatives: list[tuple[str, float]] = field(default_factory=list)
+
+
+class AutoClassifier:
+    """Multi-strategy knowledge domain classifier (keyword + regex)."""
+
+    def __init__(self):
+        self._compiled = {}
+        for domain, patterns in DOMAIN_PATTERNS.items():
+            self._compiled[domain] = [re.compile(r, re.IGNORECASE) for r in patterns["regex"]]
+
+    def classify(self, text: str, content_type: str = "text") -> ClassificationResult:
+        if not text or len(text) < 10:
+            return ClassificationResult(domain="general", confidence=0.3, source="default")
+        scores = Counter()
+        for domain, patterns in DOMAIN_PATTERNS.items():
+            kw_weight = patterns["weight"]
+            for regex in self._compiled.get(domain, []):
+                matches = regex.findall(text)
+                if matches:
+                    scores[domain] += len(matches) * kw_weight * 2.0
+            for kw in patterns["keywords"]:
+                count = text.lower().count(kw.lower())
+                if count > 0:
+                    scores[domain] += count * kw_weight * 1.5
+        if content_type in ("audio", "voice", "speech"):
+            scores["voice"] = scores.get("voice", 0) + 3.0
+        elif content_type in ("code", "programming"):
+            scores["programming"] = scores.get("programming", 0) + 3.0
+        if not scores:
+            return ClassificationResult(domain="general", confidence=0.4, source="keyword")
+        top = scores.most_common(3)
+        primary_domain, primary_score = top[0]
+        total = sum(scores.values())
+        confidence = min(0.95, primary_score / max(1, total))
+        alternatives = [(d, round(s / max(1, total), 3)) for d, s in top[1:3]]
+        source = "regex" if primary_score > 4 else "keyword"
+        return ClassificationResult(domain=primary_domain, confidence=round(confidence, 3),
+                                    source=source, matches=[m for m in scores if scores[m] > 0][:5],
+                                    alternatives=alternatives)
+
+    def stats(self) -> dict:
+        return {"domains": len(DOMAIN_PATTERNS), "strategies": ["regex", "keyword", "combined"]}
+
+
+_auto_classifier: Optional[AutoClassifier] = None  # type: ignore[name-defined]
+
+
+def get_auto_classifier() -> AutoClassifier:
+    global _auto_classifier
+    if _auto_classifier is None:
+        _auto_classifier = AutoClassifier()
+    return _auto_classifier

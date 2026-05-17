@@ -30,6 +30,8 @@ from typing import Any, Optional
 from loguru import logger
 
 from .ast_parser import ASTParser, ASTNode, ASTEdge
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 @dataclass

@@ -39,6 +39,8 @@ from typing import Any, Callable, Optional
 
 from loguru import logger
 import yaml
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 CLI_TOOLS_DIR = Path(".livingtree/cli_tools")
 MANIFEST_DIR = Path(".livingtree/cli_manifests")

@@ -8,6 +8,8 @@ Six engines:
   RevenueAttribution:  system calculates its own ROI
   SelfInvestmentEngine: auto-decide evolution based on ROI
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from .user_profile import UserProfileEngine, UserProfile, Competitor, get_profile_engine
 from .opportunity_scorer import (

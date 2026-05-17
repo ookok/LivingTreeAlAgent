@@ -17,6 +17,8 @@ import abxpkg
 from abxpkg import Binary, SemVer, env, pip, npm as abx_npm, cargo, brew, apt, uv as abx_uv, gem, pnpm, yarn, bun
 
 from ..network.resilience import get_mirror_env, run_with_mirrors, resilient_fetch_sync, rewrite_url
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 @dataclass

@@ -18,14 +18,24 @@ from .providers import (
     DeepSeekProvider, LongCatProvider, NvidiaProvider, OpenAILikeProvider,
     create_deepseek_provider, create_longcat_provider, create_nvidia_provider,
 )
-from .classifier import TinyClassifier
+from .classifier import (
+    TinyClassifier,
+    QueryClassifier, get_query_classifier,
+    AdaptiveClassifier, get_adaptive_classifier,
+    AutoClassifier, get_auto_classifier, ClassificationResult,
+)
 from .prompt_versioning import PromptVersionManager, PromptTemplate, PROMPT_VERSION_MANAGER
 from .embedding_scorer import EmbeddingScorer, ModelProfile, get_embedding_scorer
 from .foresight_gate import ForesightGate, ForesightDecision, get_foresight_gate
 from .onto_prompt_builder import OntoPromptBuilder, get_onto_prompt_builder
 from .holistic_election import HolisticElection, ProviderScore, PROVIDER_CAPABILITIES, get_election
 from .holistic_election import CausalEffectTracker, CausalEffect, ABTestManager, get_causal_tracker, get_ab_manager
-from .route_learner import RouteLearner, LearnedProfile, RoutingWeight, get_route_learner
+from .router import (
+    UnifiedRouter, get_router, RoutingCandidate, RoutingDecision,
+    RouteLearner, LearnedProfile, RoutingWeight, get_route_learner,
+    ThompsonStrategy, BudgetStrategy, FitnessStrategy,
+    PredictiveStrategy, ScoreMatchStrategy,
+)
 from .synapse_aggregator import SynapseAggregator, SynapseResult, ModelOutput, CrossValidation, get_synapse_aggregator
 from .synapse_aggregator import ParliamentSession, Verdict, ParliamentRole, get_parliament
 from .competitive_eliminator import CompetitiveEliminator, ModelRanking, get_eliminator
@@ -54,6 +64,9 @@ __all__ = [
     "DeepSeekProvider", "LongCatProvider", "NvidiaProvider", "OpenAILikeProvider",
     "create_deepseek_provider", "create_longcat_provider", "create_nvidia_provider",
     "TinyClassifier",
+    "QueryClassifier", "get_query_classifier",
+    "AdaptiveClassifier", "get_adaptive_classifier",
+    "AutoClassifier", "get_auto_classifier", "ClassificationResult",
     "PromptVersionManager", "PromptTemplate", "PROMPT_VERSION_MANAGER",
     "EmbeddingScorer", "ModelProfile", "get_embedding_scorer",
     "ForesightGate", "ForesightDecision", "get_foresight_gate",
@@ -61,6 +74,9 @@ __all__ = [
     "HolisticElection", "ProviderScore", "PROVIDER_CAPABILITIES", "get_election",
     "CausalEffectTracker", "CausalEffect", "ABTestManager", "get_causal_tracker", "get_ab_manager",
     "RouteLearner", "LearnedProfile", "RoutingWeight", "get_route_learner",
+    "UnifiedRouter", "get_router", "RoutingCandidate", "RoutingDecision",
+    "ThompsonStrategy", "BudgetStrategy", "FitnessStrategy",
+    "PredictiveStrategy", "ScoreMatchStrategy",
     "SynapseAggregator", "SynapseResult", "ModelOutput", "CrossValidation", "get_synapse_aggregator",
     "ParliamentSession", "Verdict", "ParliamentRole", "get_parliament",
     "CompetitiveEliminator", "ModelRanking", "get_eliminator",

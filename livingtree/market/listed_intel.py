@@ -18,6 +18,8 @@ Key principles:
 DISCLAIMER: This is for internal objective analysis only based on public data.
 Not financial advice. All inferences are clearly marked as "推测" (inference).
 """
+# DEPRECATED — candidate for removal. No active references found.
+
 
 from __future__ import annotations
 

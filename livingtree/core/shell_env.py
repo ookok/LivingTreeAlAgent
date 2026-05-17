@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 IS_WINDOWS = platform.system() == "Windows"
 

@@ -47,6 +47,8 @@ from email.mime.text import MIMEText
 from PIL import Image
 from jinja2 import Template
 from pypdf import PdfReader, PdfWriter
+# SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
+
 
 
 class OfficeTools:

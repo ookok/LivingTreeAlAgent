@@ -1,1 +1,1 @@
-refactor: 迁移 local_tool_bus → bridge.ToolRegistry (消除 capability 直接依赖)
+docs: 更新架构状态 — treellm→capability 从20→10文件

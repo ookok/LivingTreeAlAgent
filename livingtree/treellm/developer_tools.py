@@ -182,9 +182,102 @@ def read_office(filepath: str) -> str:
         return f"Read error: {e}"
 
 
+# ═══ High-performance file transfer with resume support ═══
+
+async def download_file(url: str, dest: str = "", resume: bool = True,
+                        chunk_size: int = 1024 * 1024) -> str:
+    """Download file with resume support. Uses Range header for interrupted downloads.
+
+    Args:
+        url: Source URL
+        dest: Destination path (auto-detected from URL if empty)
+        resume: Auto-resume from partial download
+        chunk_size: 1MB default (adjustable)
+    """
+    from pathlib import Path as _Path
+    import aiohttp
+
+    if not dest:
+        dest = url.split("/")[-1].split("?")[0] or "download"
+    dest_path = _Path(dest)
+    downloaded = 0
+    
+    headers = {}
+    if resume and dest_path.exists():
+        downloaded = dest_path.stat().st_size
+        headers["Range"] = f"bytes={downloaded}-"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=600)) as resp:
+                total = int(resp.headers.get("Content-Length", 0)) + downloaded
+                mode = "ab" if downloaded > 0 else "wb"
+                
+                with open(dest_path, mode) as f:
+                    async for chunk in resp.content.iter_chunked(chunk_size):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                size_mb = dest_path.stat().st_size / (1024 * 1024)
+                return f"Downloaded: {dest} ({size_mb:.1f}MB)"
+    except ImportError:
+        # Fallback: urllib with Range support
+        import urllib.request
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            mode = "ab" if downloaded > 0 else "wb"
+            with open(dest_path, mode) as f:
+                while True:
+                    chunk = resp.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+        size_mb = dest_path.stat().st_size / (1024 * 1024)
+        return f"Downloaded: {dest} ({size_mb:.1f}MB)"
+    except Exception as e:
+        return f"Download error: {e} (resumed={downloaded} bytes)"
+
+
+async def upload_file(filepath: str, url: str, method: str = "PUT") -> str:
+    """Upload file with streaming. Supports PUT/POST.
+
+    Args:
+        filepath: Local file to upload
+        url: Target URL
+        method: HTTP method (PUT or POST)
+    """
+    from pathlib import Path as _Path
+    p = _Path(filepath)
+    if not p.exists():
+        return f"File not found: {filepath}"
+    size = p.stat().st_size
+    size_mb = size / (1024 * 1024)
+
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            with open(p, "rb") as f:
+                async with session.request(
+                    method, url, data=f, timeout=aiohttp.ClientTimeout(total=600),
+                    headers={"Content-Length": str(size)},
+                ) as resp:
+                    return f"Uploaded {filepath} ({size_mb:.1f}MB) → {resp.status}"
+    except ImportError:
+        import urllib.request
+        with open(p, "rb") as f:
+            req = urllib.request.Request(url, data=f, method=method)
+            req.add_header("Content-Length", str(size))
+            resp = urllib.request.urlopen(req, timeout=600)
+            return f"Uploaded {filepath} ({size_mb:.1f}MB) → {resp.status}"
+    except Exception as e:
+        return f"Upload error: {e}"
+
+
 # ── Tool registration ──
 
 TOOLS = {
+    "download_file": {"func": download_file, "desc": "Download file with resume support (Range header, 1MB chunks).", "params": "url [dest] [resume]", "async": true},
+    "upload_file": {"func": upload_file, "desc": "Upload file with streaming (PUT/POST).", "params": "filepath url [method]", "async": true},
     "read_office": {"func": read_office, "desc": "Read .docx/.xlsx/.pptx/.pdf content. No heavy deps.", "params": "filepath"},
     "list_dir": {"func": list_dir, "desc": "List directory contents with file sizes.", "params": "path"},
         "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},

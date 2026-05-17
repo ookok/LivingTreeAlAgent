@@ -1079,6 +1079,8 @@ class TreeLLM:
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
+                    "- download_file: download file with resume support (Range header). Args: url [dest].\\n"
+                    "- upload_file: upload file with streaming (PUT/POST). Args: filepath url [method].\\n"
                     "- list_dir: list directory with file sizes. Args: path.",
                     "- git_status: show working tree status.",
                     "- git_diff: show changes. Args: [file].",
@@ -1233,6 +1235,19 @@ class TreeLLM:
                                         tool_result_text = fn(to, subject, body)
                                     else:
                                         tool_result_text = fn(tool_args.strip())
+                                elif tool_name == "download_file":
+                                    from .developer_tools import download_file
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    url = parts[0] if parts else ""
+                                    dest = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = await download_file(url, dest)
+                                elif tool_name == "upload_file":
+                                    from .developer_tools import upload_file
+                                    parts = tool_args.strip().split(maxsplit=2)
+                                    fp = parts[0] if parts else ""
+                                    url = parts[1] if len(parts) > 1 else ""
+                                    method = parts[2] if len(parts) > 2 else "PUT"
+                                    tool_result_text = await upload_file(fp, url, method)
                                 elif tool_name == "list_dir":
                                     from .developer_tools import list_dir
                                     tool_result_text = list_dir(tool_args.strip() or ".")

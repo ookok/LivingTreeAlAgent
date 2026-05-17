@@ -1,16 +1,10 @@
 """Developer tools — expose full dev toolkit to LLM via tool calls.
 
-P0: list_dir, grep_code
-P1: git_status, git_diff, git_commit, git_push, git_branch, run_test
-P2: browser_fetch (expose existing capability)
-P3: notify_slack, notify_feishu, notify_dingtalk
-
-All tools return plain text output — LLM-friendly, no JSON wrapping needed.
+All subprocess calls route through unified_exec (the single authority).
 """
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from loguru import logger
@@ -52,24 +46,23 @@ def list_dir(path: str = ".") -> str:
 
 def grep_code(pattern: str, path: str = ".", glob: str = "*.py") -> str:
     """Search codebase. Uses ripgrep (fast) with Python fallback."""
-    import subprocess as _sp
     from pathlib import Path as _Path
 
-    # ripgrep first — <50ms for typical codebase
+    # ripgrep via unified_exec
     try:
-        result = _sp.run(
-            ["rg", "--no-heading", "-n", "--max-count", "30",
-             "-g", glob, pattern, path],
-            capture_output=True, text=True, timeout=10,
+        from .unified_exec import run_sync
+        result = run_sync(
+            f"rg --no-heading -n --max-count 30 -g {glob} {pattern} {path}",
+            timeout=10,
         )
-        if result.returncode == 0 and result.stdout.strip():
+        if result.success and result.stdout.strip():
             return result.stdout[:8000]
-        if result.returncode == 1:
+        if result.exit_code == 1:
             return f"No matches for '{pattern}' in {path}/{glob}"
-    except FileNotFoundError:
+    except Exception:
         pass
 
-    # Python fallback — slower but always works
+    # Python fallback
     lines = []
     p = _Path(path)
     if not p.exists():
@@ -95,14 +88,10 @@ def grep_code(pattern: str, path: str = ".", glob: str = "*.py") -> str:
 
 def _run_git(args: str, timeout: float = 30) -> str:
     try:
-        result = subprocess.run(
-            f"git {args}", shell=True, capture_output=True, text=True,
-            timeout=timeout, cwd=str(Path.cwd()),
-        )
+        from .unified_exec import run_sync, ExecResult
+        result: ExecResult = run_sync(f"git {args}", timeout=timeout)
         output = result.stdout.strip() or result.stderr.strip()
         return output[:5000] if output else "(no output)"
-    except subprocess.TimeoutExpired:
-        return "Git command timed out"
     except Exception as e:
         return f"Git error: {e}"
 
@@ -143,15 +132,9 @@ def git_branch(action: str = "list", name: str = "") -> str:
 def run_test(test_path: str = "tests/") -> str:
     """Run pytest and return results."""
     try:
-        result = subprocess.run(
-            ["python", "-m", "pytest", test_path, "-q", "--tb=short"],
-            capture_output=True, text=True, timeout=120, cwd=str(Path.cwd()),
-        )
-        return (result.stdout + result.stderr)[:5000]
-    except subprocess.TimeoutExpired:
-        return "Tests timed out (120s)"
-    except FileNotFoundError:
-        return "pytest not installed"
+        from .unified_exec import run_sync
+        result = run_sync(f"python -m pytest {test_path} -q --tb=short", timeout=120)
+        return (result.stdout + result.stderr)[:5000] or "(no output)"
     except Exception as e:
         return f"Test error: {e}"
 

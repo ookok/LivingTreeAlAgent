@@ -611,15 +611,14 @@ def style_search_semantic(query: str, top_k: int = 5) -> str:
 def observe_batch(files_json: str) -> str:
     """Observe multiple documents and extract COMMON patterns.
 
-    Args: JSON array of file paths
-    Example: ["report1.docx","report2.docx","report3.docx"]
+    Token strategy:
+      - First pass: 2000 chars each (for ~6000 tokens, $0.012)
+      - If LLM signals "not enough", second pass: 4000 chars each
+      - Styles section only (not full body content) for large docs
 
-    The LLM sees ALL documents at once and identifies:
-    1. What is CONSISTENT across all (this is the STYLE)
-    2. What VARIES across documents (this is the CONTENT)
-    3. Statistical patterns (SimSun 12pt in 11/12 reports → that's the style)
-
-    Returns a prompt-ready batch observation for LLM analysis.
+    Performance:
+      12 docs × 2000 chars ≈ 6000 input tokens + 1000 output ≈ $0.014
+      One-time cost. Subsequent generations use saved pattern — zero token cost.
     """
     try:
         files = json.loads(files_json)
@@ -630,12 +629,31 @@ def observe_batch(files_json: str) -> str:
         return "Need at least 2 files for batch observation."
 
     parts = [f"=== Batch Observation: {len(files)} documents ===", ""]
+    total_chars = 0
 
     for i, f in enumerate(files):
         dump = observe_format(f.strip())
+        # Styles-only mode: take first 1500 chars + styles section, skip body content
+        if len(dump) > 3000:
+            # Keep header + styles, truncate body
+            body_start = dump.find("--- BODY ---")
+            styles_start = dump.find("--- STYLES ---")
+            if styles_start > 0:
+                dump = dump[:min(body_start + 500, 1500)] + "\n...\n" + dump[styles_start:styles_start + 2000]
+            else:
+                dump = dump[:2000]
+        dump = dump[:2000]  # Hard cap per doc
+        total_chars += len(dump)
         parts.append(f"--- Document {i+1}: {f} ---")
-        parts.append(dump[:2000])  # Cap per doc for context window
+        parts.append(dump)
         parts.append("")
+
+    est_tokens = total_chars // 4
+    est_cost = f"${est_tokens * 0.002 / 1000:.4f} (DeepSeek)" if est_tokens < 100000 else "⚠️ Consider using fewer documents"
+
+    parts.append(
+        f"\n[Token estimate: ~{est_tokens} input tokens, est cost: {est_cost}]"
+    )
 
     parts.append(
         f"\n[INSTRUCTION for LLM] You have observed {len(files)} documents "
@@ -705,20 +723,30 @@ def diff_to_baseline(files_json: str, baseline_file: str) -> str:
 def normalize_to_style(files_json: str) -> str:
     """Extract common style and output a normalization spec.
 
-    Given 12 similar reports, produce a spec that can be fed to format_docx
-    to generate a 13th report with the same style but new content.
+    Same as observe_batch but optimized: only dumps styles section, not body.
+    Target: <3000 tokens for 12 docs.
     """
     try:
         files = json.loads(files_json)
     except Exception:
         return f"Invalid JSON: {files_json}"
 
-    parts = [f"=== Normalize from {len(files)} documents ===", ""]
+    parts = [f"=== Normalize from {len(files)} documents (styles only) ===", ""]
+    total_chars = 0
     for i, f in enumerate(files):
         dump = observe_format(f.strip())
+        # Styles-only: skip body text, keep only formatting info
+        styles_start = dump.find("--- STYLES ---")
+        body_start = dump.find("--- BODY ---")
+        if styles_start > 0:
+            dump = dump[:min(body_start + 300, 800)] + "\n" + dump[styles_start:styles_start + 1500]
+        dump = dump[:1200]
+        total_chars += len(dump)
         parts.append(f"--- Doc {i+1}: {f} ---")
-        parts.append(dump[:1500])
+        parts.append(dump)
         parts.append("")
+
+    est_tokens = total_chars // 4
 
     parts.append(
         "\n[INSTRUCTION for LLM] Extract the common formatting style from these "

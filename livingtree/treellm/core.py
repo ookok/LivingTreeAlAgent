@@ -1067,6 +1067,18 @@ class TreeLLM:
                     "- codegraph_callers: query call graph. Args: function name. Returns callers.\n"
                     "- codegraph_callees: query call graph. Args: function name. Returns callees.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
+                    "- list_dir: list directory with file sizes. Args: path.",
+                    "- grep_code: search codebase for pattern. Args: pattern [path] [glob].",
+                    "- git_status: show working tree status.",
+                    "- git_diff: show changes. Args: [file].",
+                    "- git_commit: stage all and commit. Args: message.",
+                    "- git_push: push to remote.",
+                    "- git_branch: branch list|create|switch <name>.",
+                    "- run_test: run pytest. Args: [test_path].",
+                    "- browser_fetch: open URL in headless browser. Args: url [task].",
+                    "- notify_slack: send Slack message. Args: message [channel].",
+                    "- notify_feishu: send Feishu message. Args: message.",
+                    "- notify_dingtalk: send DingTalk message. Args: message.\n"
                     "  For new files: output complete code with line structure.\n"
                     "  For modifications: output unified diff format with +/- markers.\n"
                     "VFS mounts: /ram(in-memory) /cache(LRU) /disk(local) /db(SQLite) /config(JSON)\n\n"
@@ -1172,6 +1184,46 @@ class TreeLLM:
                                 elif tool_name == "codegraph_impact":
                                     from .codegraph_tools import codegraph_impact
                                     tool_result_text = codegraph_impact(tool_args.strip())
+                                elif tool_name == "list_dir":
+                                    from .developer_tools import list_dir
+                                    tool_result_text = list_dir(tool_args.strip() or ".")
+                                elif tool_name == "grep_code":
+                                    from .developer_tools import grep_code
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    pattern = parts[0] if parts else ""
+                                    rest = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = grep_code(pattern, rest or ".", "*.py")
+                                elif tool_name == "git_status":
+                                    from .developer_tools import git_status
+                                    tool_result_text = git_status()
+                                elif tool_name == "git_diff":
+                                    from .developer_tools import git_diff
+                                    tool_result_text = git_diff(tool_args.strip())
+                                elif tool_name == "git_commit":
+                                    from .developer_tools import git_commit
+                                    tool_result_text = git_commit(tool_args.strip())
+                                elif tool_name == "git_push":
+                                    from .developer_tools import git_push
+                                    tool_result_text = git_push()
+                                elif tool_name == "git_branch":
+                                    from .developer_tools import git_branch
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    action = parts[0] if parts else "list"
+                                    name = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = git_branch(action, name)
+                                elif tool_name == "run_test":
+                                    from .developer_tools import run_test
+                                    tool_result_text = run_test(tool_args.strip() or "tests/")
+                                elif tool_name == "browser_fetch":
+                                    from .developer_tools import browser_fetch
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    url = parts[0] if parts else ""
+                                    task = parts[1] if len(parts) > 1 else "extract content"
+                                    tool_result_text = await browser_fetch(url, task)
+                                elif tool_name in ("notify_slack", "notify_feishu", "notify_dingtalk"):
+                                    from .developer_tools import getattr as _dt_get
+                                    fn = _dt_get(__import__("livingtree.treellm.developer_tools", fromlist=[tool_name]), tool_name)
+                                    tool_result_text = fn(tool_args.strip())
                                 else:
                                     tool_result_text = f"[tool:{tool_name}] not available"
                             else:

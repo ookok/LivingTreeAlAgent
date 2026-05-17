@@ -51,23 +51,27 @@ def list_dir(path: str = ".") -> str:
 
 
 def grep_code(pattern: str, path: str = ".", glob: str = "*.py") -> str:
-    """Search codebase for pattern using ripgrep or Python fallback."""
+    """Search codebase. Uses ripgrep (fast) with Python fallback."""
+    import subprocess as _sp
+    from pathlib import Path as _Path
+
+    # ripgrep first — <50ms for typical codebase
     try:
-        # Try ripgrep first (fast)
-        result = subprocess.run(
-            ["rg", "--no-heading", "-n", "--max-count", "20", pattern, "-g", glob, path],
-            capture_output=True, text=True, timeout=10, cwd=str(Path.cwd()),
+        result = _sp.run(
+            ["rg", "--no-heading", "-n", "--max-count", "30",
+             "-g", glob, pattern, path],
+            capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout[:8000]
         if result.returncode == 1:
             return f"No matches for '{pattern}' in {path}/{glob}"
-    except (FileNotFoundError, Exception):
+    except FileNotFoundError:
         pass
 
-    # Python fallback
+    # Python fallback — slower but always works
     lines = []
-    p = Path(path)
+    p = _Path(path)
     if not p.exists():
         return f"Path not found: {path}"
     for f in p.rglob(glob):
@@ -82,7 +86,6 @@ def grep_code(pattern: str, path: str = ".", glob: str = "*.py") -> str:
                 break
         except Exception:
             continue
-
     if not lines:
         return f"No matches for '{pattern}' in {path}/{glob}"
     return "\n".join(lines)

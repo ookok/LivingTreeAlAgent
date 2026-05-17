@@ -5,13 +5,16 @@ LLM can query:
   codegraph_callers(func) → who calls this function
   codegraph_callees(func) → what this function calls
   codegraph_impact(file)  → blast radius if this file changes
+  codegraph_update()      → re-index changed files (hash-based incremental)
 
-All queries read from cached CodeGraph pickle — zero scanning at query time.
+Auto-detects staleness: if a file's mtime > graph build time, marks result as [stale].
 """
 
 from __future__ import annotations
 
+import os
 import pickle
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,34 +22,71 @@ from loguru import logger
 
 CACHE_PATH = Path(".livingtree/code_graph.pickle")
 _graph: Any = None
+_graph_build_time: float = 0.0
 
 
 def _ensure_loaded():
-    global _graph
+    global _graph, _graph_build_time
     if _graph is not None:
         return _graph
     if CACHE_PATH.exists():
         try:
             with open(CACHE_PATH, "rb") as f:
                 _graph = pickle.load(f)
-            logger.debug(f"CodeGraph loaded: {_graph.stats() if hasattr(_graph, 'stats') else 'ok'}")
+            _graph_build_time = CACHE_PATH.stat().st_mtime
+            stats = _graph.stats() if hasattr(_graph, 'stats') else {}
+            logger.debug(f"CodeGraph loaded: {stats}")
         except Exception:
-            _graph = object()  # Sentinel for "loaded but failed"
+            _graph = object()
     else:
         _graph = None
     return _graph
 
 
+def _check_staleness(hint: str = "") -> str:
+    """Check if graph is stale vs filesystem."""
+    if not CACHE_PATH.exists():
+        return "[stale] CodeGraph not built. Use: codegraph_update"
+    g = _ensure_loaded()
+    if g is object():
+        return "[stale] CodeGraph corrupted. Use: codegraph_update"
+    if hint:
+        p = Path(hint)
+        if p.exists() and p.stat().st_mtime > _graph_build_time:
+            return f"[stale] {hint} modified after graph build. Use: codegraph_update"
+    return ""
+
+
+def codegraph_update() -> str:
+    """Re-index changed files (hash-based incremental). Zero rescan for unchanged files."""
+    try:
+        from ..capability.code_graph import CodeGraph
+        cg = CodeGraph()
+        if hasattr(cg, 'load') and CACHE_PATH.exists():
+            cg.load()
+        stats = cg.index(".", patterns=["**/*.py"])
+        cg.save(str(CACHE_PATH))
+        global _graph, _graph_build_time
+        _graph = cg
+        _graph_build_time = time.time()
+        return (
+            f"CodeGraph updated: {stats.total_files} files, "
+            f"{stats.total_entities} entities, {stats.total_edges} edges, "
+            f"{stats.build_time_ms:.0f}ms"
+        )
+    except Exception as e:
+        return f"CodeGraph update failed: {e}"
+
+
 def codegraph_deps(module: str) -> str:
-    """Query: what modules does <module> import/depend on?"""
     g = _ensure_loaded()
     if not g or g is object():
-        return "CodeGraph not built. Run: livingtree scan"
+        return "CodeGraph not built. Use: codegraph_update"
+    stale = _check_staleness()
     try:
         deps = g.get_deps(module) if hasattr(g, 'get_deps') else []
-        if not deps:
-            return f"No dependencies found for {module}"
-        return "\n".join(f"  {d}" for d in deps[:20])
+        result = "\n".join(f"  {d}" for d in deps[:20]) if deps else f"No dependencies found for {module}"
+        return f"{stale}\n{result}" if stale else result
     except Exception as e:
         return f"CodeGraph error: {e}"
 
@@ -99,6 +139,11 @@ def codegraph_impact(file: str) -> str:
 # ── Tool registration for CapabilityBus ──
 
 TOOLS = {
+    "codegraph_update": {
+        "description": "Re-index changed files in the code graph (hash-based incremental, zero rescan for unchanged). Use when graph is stale or after code changes.",
+        "func": codegraph_update,
+        "params": "",
+    },
     "codegraph_deps": {
         "description": "Query the pre-scanned dependency graph: list modules that <module> imports/depends on.",
         "func": codegraph_deps,

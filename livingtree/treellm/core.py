@@ -973,15 +973,9 @@ class TreeLLM:
         except Exception:
             pass
 
-        # ── CodeContext: inject codegraph context (uses pre-scanned index) ──
-        # Task type is set by triage — "code" triggers CodeGraph injection
-        if task_type == "code":
-            try:
-                from .code_context import get_code_context
-                code_ctx = get_code_context()
-                messages = code_ctx.inject_chat_context(messages)
-            except Exception:
-                pass
+        # ── CodeContext removed: LLM uses codegraph tools on demand ──
+        # Codegraph tools (deps/callers/callees/impact) are available
+        # via <tool_call> — LLM queries exactly what it needs, zero waste.
 
         # ── Disable thinking for short queries ──
         if max_tokens < 800 and hasattr(p, 'pro_thinking_enabled'):
@@ -1066,6 +1060,7 @@ class TreeLLM:
                     "- codegraph_deps: query dependency graph. Args: module name. Returns dependencies.\n"
                     "- codegraph_callers: query call graph. Args: function name. Returns callers.\n"
                     "- codegraph_callees: query call graph. Args: function name. Returns callees.\n"
+                    "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- list_dir: list directory with file sizes. Args: path.",
                     "- grep_code: search codebase for pattern. Args: pattern [path] [glob].",
@@ -1172,6 +1167,9 @@ class TreeLLM:
                                     tool_result_text = await rex._tool_explore_domain(tool_args.strip())
                                 elif tool_name == "get_world_knowledge":
                                     tool_result_text = await rex._tool_get_world_knowledge(tool_args.strip())
+                                elif tool_name == "codegraph_update":
+                                    from .codegraph_tools import codegraph_update
+                                    tool_result_text = codegraph_update()
                                 elif tool_name == "codegraph_deps":
                                     from .codegraph_tools import codegraph_deps
                                     tool_result_text = codegraph_deps(tool_args.strip())

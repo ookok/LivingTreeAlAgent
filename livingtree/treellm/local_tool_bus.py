@@ -151,8 +151,8 @@ class LocalToolBus:
 
     def _ensure_code_graph(self):
         try:
-            from ..capability.code_graph import CodeGraph  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
-            cg = CodeGraph()
+            from ...bridge.registry import get_tool_registry  # migrated
+            cg = get_tool_registry().get("code_graph")
             cg.load()
             return cg
         except Exception as e:
@@ -161,8 +161,8 @@ class LocalToolBus:
 
     async def _code_build_graph(self, path: str = ".", **kw) -> dict:
         try:
-            from ..capability.code_graph import CodeGraph
-            cg = CodeGraph()
+            from ...bridge.registry import get_tool_registry  # migrated
+            cg = get_tool_registry().get("code_graph")
             stats = cg.index(path)
             cg.save()
             return {"files": stats.total_files, "entities": stats.total_entities,
@@ -241,8 +241,8 @@ class LocalToolBus:
     async def _classify_water(self, cod: float = 0, bod: float = 0,
                                do: float = 0, nh3n: float = 0, **kw) -> dict:
         try:
-            from ..capability.tabular_reasoner import get_tabular_reasoner  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
-            r = get_tabular_reasoner()
+            from ...bridge.registry import get_tool_registry  # migrated
+            r = get_tool_registry().get("tabular_reasoner")
             result = r.classify_water_quality(cod=cod, bod=bod, do=do, nh3n=nh3n)
             return {"grade": result.prediction, "confidence": result.confidence,
                     "reasoning": result.reasoning}
@@ -252,8 +252,8 @@ class LocalToolBus:
     async def _classify_air(self, so2: float = 0, no2: float = 0,
                              pm10: float = 0, pm25: float = 0, **kw) -> dict:
         try:
-            from ..capability.tabular_reasoner import get_tabular_reasoner
-            r = get_tabular_reasoner()
+            from ...bridge.registry import get_tool_registry  # migrated
+            r = get_tool_registry().get("tabular_reasoner")
             result = r.classify_air_quality(so2=so2, no2=no2, pm10=pm10, pm25=pm25)
             return {"grade": result.prediction, "confidence": result.confidence,
                     "reasoning": result.reasoning}
@@ -263,8 +263,8 @@ class LocalToolBus:
     async def _classify_noise(self, daytime_db: float = 0,
                                night_db: float = 0, **kw) -> dict:
         try:
-            from ..capability.tabular_reasoner import get_tabular_reasoner
-            r = get_tabular_reasoner()
+            from ...bridge.registry import get_tool_registry  # migrated
+            r = get_tool_registry().get("tabular_reasoner")
             result = r.classify_noise_level(daytime_db=daytime_db, night_db=night_db)
             return {"grade": result.prediction, "confidence": result.confidence,
                     "reasoning": result.reasoning}
@@ -283,8 +283,8 @@ class LocalToolBus:
 
     async def _detect_outliers(self, values=None, **kw) -> dict:
         try:
-            from ..capability.tabular_reasoner import get_tabular_reasoner
-            r = get_tabular_reasoner()
+            from ...bridge.registry import get_tool_registry  # migrated
+            r = get_tool_registry().get("tabular_reasoner")
             vals = [float(v) for v in (values or [])]
             outliers = r.detect_outliers(vals)
             extreme = [o for o in outliers if o["severity"] == "extreme"]
@@ -344,8 +344,8 @@ class LocalToolBus:
 
     async def _geocode(self, address: str = "", **kw) -> dict:
         try:
-            from ..capability.tianditu import TiandituAPI  # TODO(bridge): migrate to bridge.ToolRegistry
-            api = TiandituAPI()
+            from ...bridge.registry import get_tool_registry  # migrated
+            api = get_tool_registry().get("tianditu")
             result = await api.geocode(address)
             return {"location": result} if result else {"error": "Geocoding failed"}
         except Exception as e:

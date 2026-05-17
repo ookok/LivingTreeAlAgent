@@ -139,8 +139,8 @@ class ToolAdapter(CapabilityAdapter):
     async def discover(self) -> list[Capability]:
         caps = []
         try:
-            from ..capability.tool_market import get_tool_market  # TODO(bridge): migrate to bridge.ToolRegistry
-            market = get_tool_market()
+            from ...bridge.registry import get_tool_registry
+            market = get_tool_registry().get("tool_market")  # via bridge
             for name, tool in market._tools.items():
                 desc = getattr(tool, 'description', '') or str(tool)[:100]
                 category = getattr(tool, 'category', '')
@@ -266,11 +266,11 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_browse(self, input_str: str) -> dict:
         """LLM-driven browser: navigate, search, extract JS-rendered pages."""
         try:
-            from ..capability.browser_agent import get_browser_agent  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
+            from ...bridge.registry import get_tool_registry; _browser = lambda: get_tool_registry().get("browser_agent")  # via bridge  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
             args = self._parse_tool_args(input_str)
             url = args.get("url", "")
             task = args.get("task", input_str)
-            agent = get_browser_agent()
+            agent = get_tool_registry().get("browser_agent")
             r = await agent.browse(url=url, task=task)
             return {
                 "success": r.success,
@@ -302,9 +302,9 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_screenshot(self, input_str: str) -> dict:
         """Take screenshot of current browser page, return base64 for LLM analysis."""
         try:
-            from ..capability.browser_agent import get_browser_agent
+            # browser_agent migrated to bridge.ToolRegistry
             import base64
-            agent = get_browser_agent()
+            agent = get_tool_registry().get("browser_agent")
             result = await agent.screenshot()
             return {
                 "success": result.get("success", False),
@@ -319,8 +319,8 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_session(self, input_str: str, action: str) -> dict:
         """Manage persistent browser sessions: open / close."""
         try:
-            from ..capability.browser_agent import get_browser_agent
-            agent = get_browser_agent()
+            # browser_agent migrated to bridge.ToolRegistry
+            agent = get_tool_registry().get("browser_agent")
             if action == "open":
                 args = self._parse_tool_args(input_str)
                 url = args.get("url", "")
@@ -335,8 +335,8 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_session_list(self) -> dict:
         """List active browser sessions."""
         try:
-            from ..capability.browser_agent import get_browser_agent
-            agent = get_browser_agent()
+            # browser_agent migrated to bridge.ToolRegistry
+            agent = get_tool_registry().get("browser_agent")
             return agent.session_list()
         except Exception as e:
             return {"sessions": [], "error": str(e)}
@@ -447,8 +447,8 @@ class ToolAdapter(CapabilityAdapter):
 
     async def _overnight_start(self, input_str: str) -> dict:
         try:
-            from ..capability.overnight_task import get_overnight_task  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
-            ot = get_overnight_task()
+            from ...bridge.registry import get_tool_registry as _reg  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
+            ot = _reg().get("overnight_task")
             task_id = await ot.start(input_str.strip(), hub=None)
             return {"success": True, "task_id": task_id, "goal": input_str[:200]}
         except Exception as e:
@@ -456,8 +456,8 @@ class ToolAdapter(CapabilityAdapter):
 
     async def _overnight_status(self) -> dict:
         try:
-            from ..capability.overnight_task import get_overnight_task
-            ot = get_overnight_task()
+            from ...bridge.registry import get_tool_registry as _reg
+            ot = _reg().get("overnight_task")
             tasks = ot.list_tasks() if hasattr(ot, 'list_tasks') else []
             return {"success": True, "tasks": tasks}
         except Exception as e:
@@ -465,8 +465,8 @@ class ToolAdapter(CapabilityAdapter):
 
     async def _overnight_cancel(self, input_str: str) -> dict:
         try:
-            from ..capability.overnight_task import get_overnight_task
-            ot = get_overnight_task()
+            from ...bridge.registry import get_tool_registry as _reg
+            ot = _reg().get("overnight_task")
             await ot.cancel(input_str.strip())
             return {"success": True, "cancelled": input_str.strip()}
         except Exception as e:
@@ -537,8 +537,8 @@ class SkillAdapter(CapabilityAdapter):
             logger.debug(f"SkillAdapter uss: {e}")
 
         try:
-            from ..capability.skill_factory import get_skill_factory  # TODO(bridge): migrate to bridge.ToolRegistry
-            factory = get_skill_factory()
+            from ...bridge.registry import get_tool_registry as _reg2  # TODO(bridge): migrate to bridge.ToolRegistry
+            factory = _reg2().get("skill_factory")
             for name, skill in factory._skills.items():
                 cap_id = f"skill:{name}"
                 if cap_id not in self._caps:

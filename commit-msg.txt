@@ -1,1 +1,1 @@
-refactor: 标记 capability_bus/local_tool_bus 迁移点 → bridge.ToolRegistry
+refactor: 迁移 capability_bus → bridge.ToolRegistry (9→0 直接耦合)

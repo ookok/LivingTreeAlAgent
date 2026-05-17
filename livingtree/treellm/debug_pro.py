@@ -922,7 +922,6 @@ class ReplayEngine:
             return {"success": False, "message": f"Confidence too low ({lesson.auto_fix_confidence:.0%}), needs human review"}
 
         try:
-            from ..capability.self_modifier import get_self_modifier  # TODO(bridge): via bridge.ToolRegistry
             sm = get_self_modifier()
             result = await sm.modify(session.fix_proposal, hub, dry_run=False)
 

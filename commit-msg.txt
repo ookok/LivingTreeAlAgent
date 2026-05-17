@@ -1,1 +1,1 @@
-refactor: 迁移 treellm→capability 剩余 10 文件 → bridge (2 残留)
+refactor: treellm→capability 20→0 — 全部解耦完成

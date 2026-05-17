@@ -1107,6 +1107,11 @@ class TreeLLM:
                     "- jira_search: search Jira with JQL. Args: jql.\\n"
                     "- download_file: download file with resume support (Range header). Args: url [dest].\\n"
                     "- upload_file: upload file with streaming (PUT/POST). Args: filepath url [method].\\n"
+                    "- morning_brief: generate startup report (git changes, PRs, tests, health).\\n"
+                    "- learn_from_fix: save problem→root_cause→fix→verification to learning journal. Args: problem, root_cause, fix, verification [tags].\\n"
+                    "- find_similar_problem: search learning journal for similar past issues. Args: query.\\n"
+                    "- list_learnings: list recent learning entries.\\n"
+                    "- plan_task: generate multi-step plan with confirmation. Args: task_description.\\n"
                     "- list_dir: list directory with file sizes. Args: path.",
                     "- git_status: show working tree status.",
                     "- git_diff: show changes. Args: [file].",
@@ -1384,6 +1389,27 @@ class TreeLLM:
                                     url = parts[1] if len(parts) > 1 else ""
                                     method = parts[2] if len(parts) > 2 else "PUT"
                                     tool_result_text = await upload_file(fp, url, method)
+                                elif tool_name == "morning_brief":
+                                    from .proactive_agent import morning_brief
+                                    tool_result_text = await morning_brief(llm)
+                                elif tool_name == "learn_from_fix":
+                                    from .proactive_agent import learn_from_fix
+                                    parts = tool_args.strip().split("|", 3)
+                                    tool_result_text = learn_from_fix(
+                                        parts[0] if len(parts) > 0 else "",
+                                        parts[1] if len(parts) > 1 else "",
+                                        parts[2] if len(parts) > 2 else "",
+                                        parts[3] if len(parts) > 3 else "",
+                                    )
+                                elif tool_name == "find_similar_problem":
+                                    from .proactive_agent import find_similar_problem
+                                    tool_result_text = find_similar_problem(tool_args.strip())
+                                elif tool_name == "list_learnings":
+                                    from .proactive_agent import list_learnings
+                                    tool_result_text = list_learnings()
+                                elif tool_name == "plan_task":
+                                    from .proactive_agent import plan_task
+                                    tool_result_text = await plan_task(llm, tool_args.strip())
                                 elif tool_name == "list_dir":
                                     from .developer_tools import list_dir
                                     tool_result_text = list_dir(tool_args.strip() or ".")

@@ -289,6 +289,40 @@ class DevTUI(App):
             role="assistant",
         ))
         self._update_status()
+        # Start morning brief
+        asyncio.create_task(self._morning_brief())
+
+    async def _morning_brief(self) -> None:
+        """Show morning brief on startup."""
+        try:
+            if self._llm:
+                from livingtree.treellm.proactive_agent import morning_brief
+                brief = await morning_brief(self._llm)
+                scroll = self.query_one("#chat-scroll", VerticalScroll)
+                scroll.mount(ChatBubble(brief, role="assistant"))
+        except Exception:
+            pass
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Semantic autocomplete — suggest as user types."""
+        if not event.value or len(event.value) < 10:
+            return
+        # Only trigger every 3rd keystroke to avoid spam
+        if hash(event.value) % 3 != 0:
+            return
+        asyncio.create_task(self._autocomplete(event.value))
+
+    async def _autocomplete(self, partial: str) -> None:
+        try:
+            from livingtree.treellm.proactive_agent import suggest_code
+            hint = await suggest_code(self._llm, partial)
+            if hint:
+                # Show in status bar
+                bar = self.query_one("#status-bar", Static)
+                current = bar.render() if hasattr(bar, 'render') else ""
+                bar.update(f"💡 {hint[:100]}")
+        except Exception:
+            pass
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if not event.value.strip():

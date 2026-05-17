@@ -1079,6 +1079,10 @@ class TreeLLM:
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
+                    "- observe_format: dump any formatted document (.docx/.html/.md/.pptx/.pdf) as raw text for LLM observation. Args: filepath.\\n"
+                    "- save_pattern: save LLM-described formatting pattern to KB. Args: json_spec.\\n"
+                    "- find_pattern: retrieve formatting pattern by domain. Args: domain[,tags].\\n"
+                    "- list_patterns: list all stored formatting patterns.\\n"
                     "- parse_style: extract raw formatting DNA from a .docx. Args: filepath.\n"
                     "- save_style: save style to database. Args: json_spec (LLM sets domain/tags).\n"
                     "- find_style: find best-matching style. Args: domain[,tag1,tag2].\\n"
@@ -1240,6 +1244,18 @@ class TreeLLM:
                                         tool_result_text = fn(to, subject, body)
                                     else:
                                         tool_result_text = fn(tool_args.strip())
+                                elif tool_name == "observe_format":
+                                    from .format_observer import observe_format
+                                    tool_result_text = observe_format(tool_args.strip())
+                                elif tool_name == "save_pattern":
+                                    from .format_observer import save_pattern
+                                    tool_result_text = save_pattern(tool_args.strip())
+                                elif tool_name == "find_pattern":
+                                    from .format_observer import find_pattern
+                                    tool_result_text = find_pattern(tool_args.strip())
+                                elif tool_name == "list_patterns":
+                                    from .format_observer import list_patterns
+                                    tool_result_text = list_patterns()
                                 elif tool_name == "parse_style":
                                     from .style_dna import parse_style
                                     tool_result_text = parse_style(tool_args.strip())

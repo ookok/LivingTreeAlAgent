@@ -1,1 +1,1 @@
-docs: 添加 ARCHITECTURE.md — 目标架构与循环依赖迁移路线图
+refactor: 标记 capability_bus/local_tool_bus 迁移点 → bridge.ToolRegistry

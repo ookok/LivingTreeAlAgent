@@ -151,7 +151,7 @@ class LocalToolBus:
 
     def _ensure_code_graph(self):
         try:
-            from ..capability.code_graph import CodeGraph
+            from ..capability.code_graph import CodeGraph  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
             cg = CodeGraph()
             cg.load()
             return cg
@@ -241,7 +241,7 @@ class LocalToolBus:
     async def _classify_water(self, cod: float = 0, bod: float = 0,
                                do: float = 0, nh3n: float = 0, **kw) -> dict:
         try:
-            from ..capability.tabular_reasoner import get_tabular_reasoner
+            from ..capability.tabular_reasoner import get_tabular_reasoner  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
             r = get_tabular_reasoner()
             result = r.classify_water_quality(cod=cod, bod=bod, do=do, nh3n=nh3n)
             return {"grade": result.prediction, "confidence": result.confidence,
@@ -344,7 +344,7 @@ class LocalToolBus:
 
     async def _geocode(self, address: str = "", **kw) -> dict:
         try:
-            from ..capability.tianditu import TiandituAPI
+            from ..capability.tianditu import TiandituAPI  # TODO(bridge): migrate to bridge.ToolRegistry
             api = TiandituAPI()
             result = await api.geocode(address)
             return {"location": result} if result else {"error": "Geocoding failed"}

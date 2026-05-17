@@ -1,27 +1,15 @@
-"""CapabilityBus — Unified interface for ALL digital lifeform capabilities.
+"""Capability Bus — LLM-facing tool registry and execution gateway.
 
-Every capability — tool, skill, MCP, expert role, user profile, LLM, VFS —
-exposes a single unified interface. The CapabilityBus auto-discovers and
-registers all capabilities from existing registries.
+⚠️  ARCHITECTURE MIGRATION IN PROGRESS:
+    This module currently has direct imports from capability/ (9 places).
+    Target: all tool access goes through bridge.ToolRegistry.
+    See ARCHITECTURE.md for the migration roadmap.
 
-Unified invocation:
-    bus = get_capability_bus()
-    result = await bus.invoke("tool:web_search", query="AI papers")
-    result = await bus.invoke("skill:tabular_reason", data={...})
-    result = await bus.invoke("mcp:chrome_screenshot", url="...")
-    result = await bus.invoke("role:code_architect", task="...")
-    result = await bus.invoke("user:profile", user_id="perpetual")
-    result = await bus.invoke("llm:chat", messages=[...])
-    result = await bus.invoke("vfs:read", path="/disk/main.py")
-
-Discovery:
-    all_caps = bus.list_all()
-    tools    = bus.list("tool")
-    skills   = bus.list("skill")
-
-This is the single entry point that LLMs, frontends, and all other subsystems
-use to discover and invoke capabilities.
+    Migration status: bridge/ layer created, registry ready.
+    Next: register capability tools in registry, replace imports here.
 """
+
+
 
 from __future__ import annotations
 
@@ -151,7 +139,7 @@ class ToolAdapter(CapabilityAdapter):
     async def discover(self) -> list[Capability]:
         caps = []
         try:
-            from ..capability.tool_market import get_tool_market
+            from ..capability.tool_market import get_tool_market  # TODO(bridge): migrate to bridge.ToolRegistry
             market = get_tool_market()
             for name, tool in market._tools.items():
                 desc = getattr(tool, 'description', '') or str(tool)[:100]
@@ -278,7 +266,7 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_browse(self, input_str: str) -> dict:
         """LLM-driven browser: navigate, search, extract JS-rendered pages."""
         try:
-            from ..capability.browser_agent import get_browser_agent
+            from ..capability.browser_agent import get_browser_agent  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
             args = self._parse_tool_args(input_str)
             url = args.get("url", "")
             task = args.get("task", input_str)
@@ -459,7 +447,7 @@ class ToolAdapter(CapabilityAdapter):
 
     async def _overnight_start(self, input_str: str) -> dict:
         try:
-            from ..capability.overnight_task import get_overnight_task
+            from ..capability.overnight_task import get_overnight_task  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry  # TODO(bridge): migrate to bridge.ToolRegistry
             ot = get_overnight_task()
             task_id = await ot.start(input_str.strip(), hub=None)
             return {"success": True, "task_id": task_id, "goal": input_str[:200]}
@@ -549,7 +537,7 @@ class SkillAdapter(CapabilityAdapter):
             logger.debug(f"SkillAdapter uss: {e}")
 
         try:
-            from ..capability.skill_factory import get_skill_factory
+            from ..capability.skill_factory import get_skill_factory  # TODO(bridge): migrate to bridge.ToolRegistry
             factory = get_skill_factory()
             for name, skill in factory._skills.items():
                 cap_id = f"skill:{name}"

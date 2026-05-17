@@ -1063,7 +1063,6 @@ class TreeLLM:
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
                     "- list_dir: list directory with file sizes. Args: path.",
-                    "- grep_code: search codebase for pattern. Args: pattern [path] [glob].",
                     "- git_status: show working tree status.",
                     "- git_diff: show changes. Args: [file].",
                     "- git_commit: stage all and commit. Args: message.",
@@ -1185,12 +1184,9 @@ class TreeLLM:
                                 elif tool_name == "list_dir":
                                     from .developer_tools import list_dir
                                     tool_result_text = list_dir(tool_args.strip() or ".")
-                                elif tool_name == "grep_code":
-                                    from .developer_tools import grep_code
                                     parts = tool_args.strip().split(maxsplit=1)
                                     pattern = parts[0] if parts else ""
                                     rest = parts[1] if len(parts) > 1 else ""
-                                    tool_result_text = grep_code(pattern, rest or ".", "*.py")
                                 elif tool_name == "git_status":
                                     from .developer_tools import git_status
                                     tool_result_text = git_status()

@@ -44,47 +44,6 @@ def list_dir(path: str = ".") -> str:
     return "\n".join(lines)
 
 
-def grep_code(pattern: str, path: str = ".", glob: str = "*.py") -> str:
-    """Search codebase. Uses ripgrep (fast) with Python fallback."""
-    from pathlib import Path as _Path
-
-    # ripgrep via unified_exec
-    try:
-        from .unified_exec import run_sync
-        result = run_sync(
-            f"rg --no-heading -n --max-count 30 -g {glob} {pattern} {path}",
-            timeout=10,
-        )
-        if result.success and result.stdout.strip():
-            return result.stdout[:8000]
-        if result.exit_code == 1:
-            return f"No matches for '{pattern}' in {path}/{glob}"
-    except Exception:
-        pass
-
-    # Python fallback
-    lines = []
-    p = _Path(path)
-    if not p.exists():
-        return f"Path not found: {path}"
-    for f in p.rglob(glob):
-        try:
-            content = f.read_text(encoding="utf-8", errors="replace")
-            for i, line in enumerate(content.split("\n"), 1):
-                if pattern.lower() in line.lower():
-                    lines.append(f"{f}:{i}: {line.strip()[:200]}")
-                    if len(lines) >= 30:
-                        break
-            if len(lines) >= 30:
-                break
-        except Exception:
-            continue
-    if not lines:
-        return f"No matches for '{pattern}' in {path}/{glob}"
-    return "\n".join(lines)
-
-
-# ═══ P1: Git Operations ═══
 
 def _run_git(args: str, timeout: float = 30) -> str:
     try:
@@ -213,8 +172,7 @@ def notify_dingtalk(message: str) -> str:
 
 TOOLS = {
     "list_dir": {"func": list_dir, "desc": "List directory contents with file sizes.", "params": "path"},
-    "grep_code": {"func": grep_code, "desc": "Search codebase for pattern (uses ripgrep or Python fallback).", "params": "pattern [path] [glob]"},
-    "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},
+        "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},
     "git_diff": {"func": git_diff, "desc": "Show working tree changes.", "params": "[file]"},
     "git_commit": {"func": git_commit, "desc": "Stage all changes and commit with message.", "params": "message"},
     "git_push": {"func": git_push, "desc": "Push current branch to remote.", "params": ""},

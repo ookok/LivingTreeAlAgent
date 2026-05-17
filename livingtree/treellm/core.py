@@ -899,6 +899,33 @@ class TreeLLM:
             except Exception:
                 pass
 
+        # ── Cache check: exact match → instant return (<1ms) ──
+        user_text = messages[-1].get("content", "") if messages else ""
+        if isinstance(user_text, list):
+            user_text = " ".join(p.get("text", "") for p in user_text if isinstance(p, dict))
+        try:
+            from .response_cache import get_response_cache
+            cache_key = hashlib.md5(user_text[:500].encode()).hexdigest()
+            cached = get_response_cache().get(cache_key)
+            if cached and len(cached) > 10:
+                return ProviderResult(text=cached, provider="cache", tokens=0,
+                                      elapsed_ms=0, success=True)
+        except Exception:
+            pass
+
+        # ── Semantic cache: similar meaning → return best match (<10ms) ──
+        try:
+            if len(user_text) > 5:
+                from .semantic_cache import get_semantic_cache
+                sim = get_semantic_cache().search(user_text)
+                if sim and sim.get("similarity", 0) > 0.92:
+                    return ProviderResult(
+                        text=sim.get("text", ""), provider="semantic_cache",
+                        tokens=0, elapsed_ms=0, success=True,
+                    )
+        except Exception:
+            pass
+
         # ── Three-Model Triage: vector → L1 coach → L2 reasoning ──
         task_type = kwargs.get("task_type", "general")
         # Auto-detect code tasks from query content

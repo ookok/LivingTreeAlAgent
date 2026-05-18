@@ -168,6 +168,7 @@ class ToolAdapter(CapabilityAdapter):
                 "browser_session_open": ("Open a persistent browser session (reuse across multiple browse calls)", "url"),
                 "browser_session_close": ("Close the current browser session", "none"),
                 "browser_session_list": ("List active browser sessions", "none"),
+                "browser_inject": ("Lightweight WebView browser with JS injection. Navigate + extract + click + type. For sites that block headless browsers", "url + task"),
                 # ── Automation / DevOps tools ──
                 "system_health": ("Check system health across all subsystems (CPU, memory, models, errors)", "none"),
                 "system_metrics": ("Get Prometheus-style metrics snapshot (LLM calls, latency, cost)", "none"),
@@ -236,6 +237,7 @@ class ToolAdapter(CapabilityAdapter):
                 "browser_session_open": lambda s: self._browser_session(s, "open", s),
                 "browser_session_close": lambda s: self._browser_session(s, "close", ""),
                 "browser_session_list": lambda s: self._browser_session_list(),
+                "browser_inject": lambda s: self._browser_inject(s),
                 "system_health": lambda s: self._system_health(),
                 "system_metrics": lambda s: self._system_metrics(),
                 "cron_add": lambda s: self._cron_add(s),
@@ -335,11 +337,18 @@ class ToolAdapter(CapabilityAdapter):
     async def _browser_session_list(self) -> dict:
         """List active browser sessions."""
         try:
-            # browser_agent migrated to bridge.ToolRegistry
             agent = get_tool_registry().get("browser_agent")
             return agent.session_list()
         except Exception as e:
             return {"sessions": [], "error": str(e)}
+
+    async def _browser_inject(self, input_str: str) -> str:
+        """Lightweight WebView browser with JS injection bridge."""
+        from ..capability.webview_agent import browser_inject
+        parts = input_str.strip().split("\n", 1)
+        url = parts[0].strip() if parts else ""
+        task = parts[1].strip() if len(parts) > 1 else "extract"
+        return await browser_inject(url, task)
 
     async def _api_search(self, input_str: str) -> dict:
         """Search registered APIs by keyword."""

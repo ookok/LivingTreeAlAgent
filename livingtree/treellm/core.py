@@ -1069,6 +1069,7 @@ class TreeLLM:
                     f"{dynamic_tools}\n"
                     "Core tools always available:\n"
                     "- web_search: search the internet. Args: query text.\n"
+                    "- browser_inject: lightweight WebView browser with JS injection. Navigate + extract + click + type. Use for sites that block headless. Args: url\\ntask.\n"
                     "- search_apis: find available APIs by category or keyword. Args: query category.\n"
                     "- call_api: call a specific web API. Args: api_name, then params as key=value pairs.\n"
                     "- kb_search: search internal knowledge base. Args: query text.\n"

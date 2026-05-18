@@ -12,10 +12,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Set, Tuple, U
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-try:
-    from livingtree.infrastructure.event_bus import EventBus as _EventBusBase  # type: ignore[import-untyped]
-except ImportError:
-    _EventBusBase = object  # type: ignore[assignment,misc]
+from livingtree.infrastructure.event_bus import EventBus as _EventBusBase  # type: ignore[import-untyped]
 
 # ============================================================================
 # Organ Constants — 12-organ biological architecture

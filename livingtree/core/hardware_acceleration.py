@@ -119,19 +119,10 @@ class HardwareAccelerator:
         # 3. Try nvidia-smi (even without torch)
         import asyncio
         try:
-            try:
-                from ..treellm.unified_exec import run
-                result = asyncio.run(run("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader", timeout=5))
-                stdout = result.stdout
-                exit_code = result.exit_code
-            except ImportError:
-                import subprocess
-                result = subprocess.run(
-                    ["nvidia-smi", "--query-gpu=name,memory.total",
-                     "--format=csv,noheader"],
-                    capture_output=True, text=True, timeout=5)
-                stdout = result.stdout
-                exit_code = result.returncode
+            from ..treellm.unified_exec import run
+            result = asyncio.run(run("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader", timeout=5))
+            stdout = result.stdout
+            exit_code = result.exit_code
             if exit_code == 0 and stdout.strip():
                 line = result.stdout.strip().split("\n")[0]
                 parts = line.split(",")

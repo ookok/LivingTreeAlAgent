@@ -1,25 +1,26 @@
 """LivingTree AI Agent — Unified CLI Entry Point (CowAgent-inspired)
 
 Usage:
-    python -m livingtree                  # Start web server (default)
-    python -m livingtree start            # Background start (daemon)
-    python -m livingtree stop              # Stop background service
-    python -m livingtree restart           # Restart service
-    python -m livingtree status            # Service status
-    python -m livingtree logs              # View recent logs
-    python -m livingtree update            # Git pull + restart
-    python -m livingtree web               # Web server with UI
-    python -m livingtree server            # API server only
-    python -m livingtree client            # Interactive CLI chat
-    python -m livingtree test              # Integration tests
-    python -m livingtree check             # Environment check
-    python -m livingtree skill install X   # Install a skill
-    python -m livingtree skill list        # List installed skills
-    python -m livingtree channel X         # Set channel (weixin/feishu/...)
-    python -m livingtree config            # Show/edit config
-    python -m livingtree relay             # Start relay server
-    --version, -v                          # Show version
-    --help, -h                             # Show this help
+     python -m livingtree                  # Start web server (default)
+     python -m livingtree start            # Background start (daemon)
+     python -m livingtree stop              # Stop background service
+     python -m livingtree restart           # Restart service
+     python -m livingtree status            # Service status
+     python -m livingtree logs              # View recent logs
+     python -m livingtree update            # Git pull + restart
+     python -m livingtree web               # Web server with UI
+     python -m livingtree server            # API server only
+     python -m livingtree client            # Interactive CLI chat
+     python -m livingtree tui               # Terminal UI (Textual) dev chat
+     python -m livingtree test              # Integration tests
+     python -m livingtree check             # Environment check
+     python -m livingtree skill install X   # Install a skill
+     python -m livingtree skill list        # List installed skills
+     python -m livingtree channel X         # Set channel (weixin/feishu/...)
+     python -m livingtree config            # Show/edit config
+     python -m livingtree relay             # Start relay server
+     --version, -v                          # Show version
+     --help, -h                             # Show this help
 """
 
 import sys
@@ -33,6 +34,7 @@ import yaml
 from pathlib import Path
 
 from . import __version__ as VERSION
+from .tui.dev_tui import DevTUI
 # SUBPROCESS MIGRATION: from livingtree.treellm.unified_exec import run_sync
 
 PID_FILE = ".livingtree/server.pid"
@@ -153,6 +155,8 @@ def main():
         _svc_models(sys.argv[2:])
     elif command == "learn":
         _svc_learn(sys.argv[2:])
+    elif command == "tui":
+        _svc_tui()
     elif command == "dev":
         _svc_dev(sys.argv[2:])
     elif command == "bootstrap":
@@ -1426,6 +1430,14 @@ def _resolve_relative(current_dir: str, module: str, level: int) -> str:
         return module
     base = ".".join(parts[:len(parts) - level + 1]) if level > 1 else current_dir
     return f"{base}.{module}" if base else module
+
+
+def _svc_tui():
+    """Launch the DevTUI terminal UI (Textual) with TreeLLM streaming."""
+    from .treellm.core import TreeLLM
+    llm = TreeLLM.from_config()
+    app = DevTUI(llm=llm)
+    app.run()
 
 
 def _svc_dev(args: list):

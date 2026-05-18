@@ -583,8 +583,6 @@ class JointEvolutionCoordinator:
                         f"{existing}; {score_str}" if existing else score_str
                     )
                     wiki.set(pattern_key, new_value[:500])
-        except (ImportError, AttributeError):
-            pass
 
     # ── Joint Health ──────────────────────────────────────────────
 

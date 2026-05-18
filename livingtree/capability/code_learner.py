@@ -184,25 +184,11 @@ class CodeLearner:
         """Analyze git history for project evolution insights."""
         import subprocess
         try:
-            try:
-                from ..treellm.unified_exec import git as ue_git
-                files_result = await ue_git("log --pretty=format: --name-only", timeout=10)
-                files_out = files_result.stdout
-                log_result = await ue_git("log --oneline -10", timeout=10)
-                log_out = log_result.stdout
-            except ImportError:
-                files_result = subprocess.run(
-                    ["git", "log", "--pretty=format:", "--name-only"],
-                    capture_output=True, text=True, timeout=10,
-                    cwd=str(folder),
-                )
-                files_out = files_result.stdout
-                log_result = subprocess.run(
-                    ["git", "log", "--oneline", "-10"],
-                    capture_output=True, text=True, timeout=10,
-                    cwd=str(folder),
-                )
-                log_out = log_result.stdout
+            from ..treellm.unified_exec import git as ue_git
+            files_result = await ue_git("log --pretty=format: --name-only", timeout=10)
+            files_out = files_result.stdout
+            log_result = await ue_git("log --oneline -10", timeout=10)
+            log_out = log_result.stdout
 
             files = [f for f in files_out.split("\n") if f.strip()]
             from collections import Counter

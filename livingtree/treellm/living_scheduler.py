@@ -512,23 +512,15 @@ class ResourceBody:
         self._budget_spent += cost
 
     def snapshot(self) -> ResourceSnapshot:
-        try:
-            import psutil
-            mem = psutil.virtual_memory()
-            cpu = psutil.cpu_percent(interval=0.1)
-            disk = psutil.disk_usage("/")
-            return ResourceSnapshot(
+        import psutil
+        mem = psutil.virtual_memory()
+        cpu = psutil.cpu_percent(interval=0.1)
+        disk = psutil.disk_usage("/")
+        return ResourceSnapshot(
                 cpu_percent=cpu,
                 memory_mb=mem.used / 1024 / 1024,
                 memory_limit_mb=mem.total / 1024 / 1024,
                 disk_free_gb=disk.free / 1024 / 1024 / 1024,
-                tokens_used_today=self._token_used,
-                tokens_budget_today=self._token_limit,
-                budget_spent_today=self._budget_spent,
-                budget_limit_today=self._budget_limit,
-            )
-        except ImportError:
-            return ResourceSnapshot(
                 tokens_used_today=self._token_used,
                 tokens_budget_today=self._token_limit,
                 budget_spent_today=self._budget_spent,

@@ -1338,24 +1338,20 @@ class SummaryStore:
 
     def _init_qdrant(self, collection_name: str = "livingtree_summaries",
                      embedding_dim: int = 384, path: str = ""):
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import Distance, VectorParams
+        import os
+        store_path = path or os.path.expanduser("~/.livingtree/qdrant_summaries")
+        os.makedirs(store_path, exist_ok=True)
+        self._qdrant = QdrantClient(path=store_path)
         try:
-            from qdrant_client import QdrantClient
-            from qdrant_client.models import Distance, VectorParams
-            import os
-            store_path = path or os.path.expanduser("~/.livingtree/qdrant_summaries")
-            os.makedirs(store_path, exist_ok=True)
-            self._qdrant = QdrantClient(path=store_path)
-            try:
-                self._qdrant.create_collection(
-                    collection_name=collection_name,
-                    vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
-                )
-            except Exception:
-                pass
-            logger.info("StructMem: Qdrant summary store initialized at %s", store_path)
-        except ImportError:
-            logger.warning("StructMem: qdrant-client not installed, using memory store")
-            self._backend = "memory"
+            self._qdrant.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
+            )
+        except Exception:
+            pass
+        logger.info("StructMem: Qdrant summary store initialized at %s", store_path)
 
     def put(self, block_id: str, block: SynthesisBlock, embedding: list = None):
         if self._backend == "qdrant" and self._qdrant and embedding:

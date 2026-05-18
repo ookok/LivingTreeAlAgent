@@ -492,9 +492,8 @@ class StageMixin:
             if decision.should_simulate:
                 logger.info(f"Foresight: simulating at depth {decision.depth} — {decision.reason}")
                 # Lightweight what-if: score top providers using embedding scorer
-                try:
-                    from ..treellm.embedding_scorer import get_embedding_scorer
-                    scorer = get_embedding_scorer()
+                from ..treellm.embedding_scorer import get_embedding_scorer
+                scorer = get_embedding_scorer()
                     profiles = scorer._profiles[:8]  # top-8 for speed
                     what_if = scorer.score_and_filter(ctx.user_input or "", profiles, top_k=decision.depth + 1)
                     ctx.simulation_findings = {

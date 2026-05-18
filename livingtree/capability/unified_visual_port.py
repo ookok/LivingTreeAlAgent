@@ -697,17 +697,9 @@ class DiagramAdapter(VisualAdapter):
                 f.write(source)
                 tmp_in = f.name
             tmp_out = tmp_in.replace(".mmd", ".png")
-            try:
-                from ..treellm.unified_exec import run
-                result = asyncio.run(run(f"mmdc -i {tmp_in} -o {tmp_out} -b transparent", timeout=15))
-                exit_code = result.exit_code
-            except ImportError:
-                import subprocess
-                result = subprocess.run(
-                    ["mmdc", "-i", tmp_in, "-o", tmp_out, "-b", "transparent"],
-                    capture_output=True, text=True, timeout=15,
-                )
-                exit_code = result.returncode
+            from ..treellm.unified_exec import run
+            result = asyncio.run(run(f"mmdc -i {tmp_in} -o {tmp_out} -b transparent", timeout=15))
+            exit_code = result.exit_code
             if exit_code == 0 and os.path.exists(tmp_out):
                 data = Path(tmp_out).read_bytes()
                 Path(tmp_in).unlink(missing_ok=True)

@@ -346,13 +346,10 @@ class ConcurrentStream:
         try:
             # Use DeepProbe to force deep reasoning on the pro track
             pro_query = query
-            try:
-                from .deep_probe import get_deep_probe
-                probe = get_deep_probe()
-                result = probe.rewrite(query, task_type=task_type, depth=3)
-                pro_messages = [{"role": "user", "content": result.rewritten}]
-            except ImportError:
-                pro_messages = messages
+            from .deep_probe import get_deep_probe
+            probe = get_deep_probe()
+            result = probe.rewrite(query, task_type=task_type, depth=3)
+            pro_messages = [{"role": "user", "content": result.rewritten}]
 
             # Collect full pro output
             full_output: list[str] = []
@@ -470,19 +467,16 @@ class ConcurrentStream:
 
         # Fuse outputs via SynapseAggregator if both tracks have content
         if result.flash_output and result.pro_output:
-            try:
-                from .synapse_aggregator import get_synapse_aggregator, ModelOutput
-                agg = get_synapse_aggregator()
-                outputs = [
-                    ModelOutput(provider=flash_model, text=result.flash_output,
-                               election_score=0.8),
-                    ModelOutput(provider=pro_model, text=result.pro_output,
-                               election_score=0.9),
-                ]
-                fused = await agg.aggregate(outputs, query, task_type)
-                result.fused_output = fused.aggregated_text
-            except ImportError:
-                result.fused_output = result.flash_output
+            from .synapse_aggregator import get_synapse_aggregator, ModelOutput
+            agg = get_synapse_aggregator()
+            outputs = [
+                ModelOutput(provider=flash_model, text=result.flash_output,
+                           election_score=0.8),
+                ModelOutput(provider=pro_model, text=result.pro_output,
+                           election_score=0.9),
+            ]
+            fused = await agg.aggregate(outputs, query, task_type)
+            result.fused_output = fused.aggregated_text
 
         return result
 

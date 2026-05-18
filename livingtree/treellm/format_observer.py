@@ -221,8 +221,8 @@ def _dump_pptx(p: Path) -> str:
 
 def _dump_pdf(p: Path) -> str:
     """Dump PDF text content."""
+    import fitz
     try:
-        import fitz
         doc = fitz.open(p)
         lines = [f"=== PDF: {p.name} === {len(doc)} pages", ""]
         for i, page in enumerate(doc):
@@ -234,8 +234,6 @@ def _dump_pdf(p: Path) -> str:
                 break
         doc.close()
         return "\n".join(lines[:150])
-    except ImportError:
-        return f"PDF reading requires PyMuPDF: pip install PyMuPDF"
     except Exception as e:
         return f"PDF dump error: {e}"
 

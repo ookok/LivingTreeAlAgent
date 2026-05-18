@@ -231,12 +231,9 @@ class HolisticElection:
         for name in candidates:
             if breaker and breaker.is_open(name):
                 continue
-            try:
-                from .competitive_eliminator import get_eliminator
-                if not get_eliminator().is_viable(name):
-                    continue
-            except ImportError:
-                pass
+            from .competitive_eliminator import get_eliminator
+            if not get_eliminator().is_viable(name):
+                continue
             p = providers.get(name)
             if not p:
                 continue
@@ -446,17 +443,14 @@ class HolisticElection:
         stats = self.get_stats(name)
         stats.record(success, latency_ms, tokens, error, rate_limited)
         # ── CompetitiveEliminator: update Elo rankings ──
-        try:
-            from .competitive_eliminator import get_eliminator
-            elim = get_eliminator()
-            quality = 0.8 if success else 0.2
-            elim.record_match(
-                provider=name, success=success, latency_ms=latency_ms,
-                cost_yuan=0.01, tokens=tokens, quality=quality,
-                opponent_providers=list(self._stats.keys()),
-            )
-        except ImportError:
-            pass
+        from .competitive_eliminator import get_eliminator
+        elim = get_eliminator()
+        quality = 0.8 if success else 0.2
+        elim.record_match(
+            provider=name, success=success, latency_ms=latency_ms,
+            cost_yuan=0.01, tokens=tokens, quality=quality,
+            opponent_providers=list(self._stats.keys()),
+        )
         # ── CausalEffectTracker: record treatment→outcome ──
         try:
             tracker = get_causal_tracker()

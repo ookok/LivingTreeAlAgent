@@ -104,12 +104,11 @@ class DreamIntegration:
         self._total_cycles += 1
         self._last_cycle_time = time.time()
 
-        try:
-            from .dream_school import get_dream_school
-            from .world_model import get_world_model
+        from .dream_school import get_dream_school
+        from .world_model import get_world_model
 
-            school = get_dream_school()
-            wm = get_world_model(consciousness=consciousness)
+        school = get_dream_school()
+        wm = get_world_model(consciousness=consciousness)
 
             # ── Step 1: Run teaching session ──
             logger.debug("DreamIntegration: starting teaching session via DreamSchool")

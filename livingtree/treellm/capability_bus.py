@@ -602,12 +602,9 @@ class MCPAdapter(CapabilityAdapter):
 
     async def _discover_external_hosts(self, caps: list) -> None:
         """Connect to registered external MCP servers and register their tools."""
-        try:
-            from .mcp_host_client import (
-                _SERVER_PRESETS, get_mcp_host, MCPHostClient,
-            )
-        except ImportError:
-            return
+        from .mcp_host_client import (
+            _SERVER_PRESETS, get_mcp_host, MCPHostClient,
+        )
 
         for server_id, preset in _SERVER_PRESETS.items():
             try:
@@ -649,11 +646,8 @@ class MCPAdapter(CapabilityAdapter):
 
     async def shutdown(self) -> None:
         """Shutdown all external MCP host connections."""
-        try:
-            from .mcp_host_client import shutdown_all_hosts
-            await shutdown_all_hosts()
-        except ImportError:
-            pass
+        from .mcp_host_client import shutdown_all_hosts
+        await shutdown_all_hosts()
         self._mcp_hosts.clear()
 
 

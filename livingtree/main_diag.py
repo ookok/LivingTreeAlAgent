@@ -270,6 +270,9 @@ Server:
   server, api        API server only
   client, cli        Interactive CLI chat
 
+TUI:
+  tui                Terminal UI dev chat (Textual, streaming, markdown)
+
 Skills & Channels:
   skill hub           Browse remote skill marketplace
   skill list          List installed skills

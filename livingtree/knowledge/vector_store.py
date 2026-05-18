@@ -165,9 +165,8 @@ class VectorStore:
                 return [ids[i] for i, s in scores[:top_k] if s > 0]
             except Exception as e:
                 logger.debug("Accelerator cosine failed: %s, falling back to NumPy", e)
-        try:
-            import numpy as np
-            if self._matrix_dirty or self._matrix_cache is None:
+        import numpy as np
+        if self._matrix_dirty or self._matrix_cache is None:
                 ids = list(self._vectors.keys())
                 self._matrix_cache = np.array([self._vectors[k] for k in ids], dtype=np.float32)
                 self._matrix_ids = ids
@@ -181,8 +180,6 @@ class VectorStore:
             scores = dots / (norms_a * norm_b + 1e-10)
             top_indices = np.argsort(scores)[-top_k:][::-1]
             return [ids[i] for i in top_indices if scores[i] > 0]
-        except ImportError:
-            pass
         # Pure Python fallback
         def _cos(a, b):
             import math

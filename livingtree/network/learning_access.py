@@ -260,16 +260,9 @@ async def warp_ensure_running(proxy_port: int = 40000) -> dict[str, Any]:
     warp_exe = shutil.which("warp-cli") or "warp-cli"
 
     try:
-        try:
-            from livingtree.treellm.unified_exec import run
-            status_result = await run(f"{warp_exe} status", timeout=10)
-            out = status_result.stdout
-        except ImportError:
-            proc = await asyncio.create_subprocess_exec(
-                warp_exe, "status",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            out = stdout.decode(errors="replace")
+        from livingtree.treellm.unified_exec import run
+        status_result = await run(f"{warp_exe} status", timeout=10)
+        out = status_result.stdout
 
         if "Connected" in out:
             proxy_url = f"socks5://127.0.0.1:{proxy_port}"

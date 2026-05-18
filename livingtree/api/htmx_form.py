@@ -225,10 +225,9 @@ async def tree_emphasize_demo(request: Request):
             '<div style="color:var(--warn);font-size:13px">请输入查询关键词</div>'
         )
 
-    try:
-        from ..knowledge.emphasizer import get_emphasizer
+    from ..knowledge.emphasizer import get_emphasizer
 
-        em = get_emphasizer()
+    em = get_emphasizer()
 
         # Sample documents — in production, these would come from RAG retrieval
         sample_docs = [
@@ -266,10 +265,6 @@ async def tree_emphasize_demo(request: Request):
             f'hx-get="/tree/emphasize-demo?query={_html.escape(query)}" '
             f'hx-target="closest .card" hx-swap="outerHTML">刷新</span></p>'
             f'</div>'
-        )
-    except ImportError:
-        return HTMLResponse(
-            '<div style="color:var(--dim);font-size:13px">Emphasizer 模块未加载</div>'
         )
     except Exception as e:
         return HTMLResponse(

@@ -596,8 +596,6 @@ class StrategicOrchestrator:
             decision = await fr.route(step.description, step.id, scores)
             if decision.selected_model and decision.selected_model in available:
                 return decision.selected_model
-        except ImportError:
-            pass
 
         # Use HolisticElection capability matching as fallback
         try:
@@ -611,24 +609,18 @@ class StrategicOrchestrator:
                 match_score = match / max(len(step.required_capabilities), 1) if step.required_capabilities else 0.3
 
                 # Check CompetitiveEliminator viability
-                try:
-                    from .competitive_eliminator import get_eliminator
-                    elim = get_eliminator()
-                    if not elim.is_viable(model):
-                        continue
-                    ranking = elim.get_ranking(model)
-                    tiers = {"pro": 1.0, "mid": 0.7, "flash": 0.4, "eliminated": 0.0}
-                    tier_bonus = tiers.get(ranking.tier, 0.5) if ranking else 0.5
-                except ImportError:
-                    tier_bonus = 0.5
+                from .competitive_eliminator import get_eliminator
+                elim = get_eliminator()
+                if not elim.is_viable(model):
+                    continue
+                ranking = elim.get_ranking(model)
+                tiers = {"pro": 1.0, "mid": 0.7, "flash": 0.4, "eliminated": 0.0}
+                tier_bonus = tiers.get(ranking.tier, 0.5) if ranking else 0.5
 
                 scored.append((model, match_score * 0.7 + tier_bonus * 0.3))
 
             scored.sort(key=lambda x: -x[1])
             return scored[0][0] if scored else (available[0] if available else "")
-
-        except ImportError:
-            return available[0] if available else ""
 
     @staticmethod
     def _assign_backups(steps: list[TaskStep], available: list[str]) -> None:
@@ -745,22 +737,19 @@ class StrategicOrchestrator:
         self, model: str, prompt: str, task_type: str,
     ) -> str:
         """Default executor using TreeLLM if no custom function provided."""
-        try:
-            from .core import TreeLLM
-            # Create a fresh TreeLLM instance for execution
-            llm = TreeLLM()
-            # Try to resolve provider
-            p = llm.get_provider(model)
-            if p:
-                result = await llm.chat(
-                    [{"role": "user", "content": prompt}],
-                    provider=model,
-                    max_tokens=4096,
-                )
-                if result and result.text:
-                    return result.text
-        except ImportError:
-            pass
+        from .core import TreeLLM
+        # Create a fresh TreeLLM instance for execution
+        llm = TreeLLM()
+        # Try to resolve provider
+        p = llm.get_provider(model)
+        if p:
+            result = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                provider=model,
+                max_tokens=4096,
+            )
+            if result and result.text:
+                return result.text
         except Exception as e:
             logger.warning(f"StrategicOrchestrator default executor: {e}")
         return f"[Step executed via {model}] No result available"
@@ -770,11 +759,8 @@ class StrategicOrchestrator:
     @staticmethod
     def _get_all_providers() -> list[str]:
         """Get list of all registered provider names from TreeLLM."""
-        try:
-            from .holistic_election import PROVIDER_CAPABILITIES
-            return list(PROVIDER_CAPABILITIES.keys())
-        except ImportError:
-            return []
+        from .holistic_election import PROVIDER_CAPABILITIES
+        return list(PROVIDER_CAPABILITIES.keys())
 
     # ── Query Methods ──────────────────────────────────────────────
 

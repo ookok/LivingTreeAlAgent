@@ -21,12 +21,6 @@ import numpy as np
 
 SYSTEM_TOOLS = {}
 EXPERT_ROLES = {}
-try:
-    # tool_registry migrated to bridge.ToolRegistry
-    SYSTEM_TOOLS = {}
-    EXPERT_ROLES = {}
-except ImportError:
-    pass
 
 WEIGHTS_FILE = Path(".livingtree/skill_router_weights.json")
 HISTORY_FILE = Path(".livingtree/skill_router_history.jsonl")

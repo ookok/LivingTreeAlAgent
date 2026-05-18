@@ -200,22 +200,9 @@ class SelfDocumenter:
 
     def _git_log(self, n: int = 30) -> str:
         import asyncio
-        try:
-            from ..treellm.unified_exec import git
-            result = asyncio.run(git(f"log -{n} --oneline --decorate --date=short", timeout=10))
-            return result.stdout
-        except ImportError:
-            try:
-                r = subprocess.run(
-                    ["git", "log", f"-{n}", "--oneline", "--decorate", "--date=short"],
-                    capture_output=True, text=True, timeout=10,
-                    encoding="utf-8", errors="replace",
-                )
-                return r.stdout
-            except Exception:
-                return ""
-        except Exception:
-            return ""
+        from ..treellm.unified_exec import git
+        result = asyncio.run(git(f"log -{n} --oneline --decorate --date=short", timeout=10))
+        return result.stdout
 
     def _gather_tools(self) -> str:
         try:

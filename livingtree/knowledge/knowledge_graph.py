@@ -328,11 +328,8 @@ class RelationEngine:
 
         # Load from EntityRegistry
         if self._er is None:
-            try:
-                from livingtree.core.entity_registry import ENTITY_REGISTRY
-                self._er = ENTITY_REGISTRY
-            except ImportError:
-                pass
+            from livingtree.core.entity_registry import ENTITY_REGISTRY
+            self._er = ENTITY_REGISTRY
 
         if self._er:
             try:

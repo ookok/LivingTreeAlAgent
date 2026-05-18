@@ -203,12 +203,8 @@ async def tree_reach_mobile(request: Request):
 async def tree_admin_spider(request: Request):
     """Scrapling Spider framework — visual crawl dashboard."""
     from ..capability.browser_agent import BrowserAgent  # verify import works
-    try:
-        from scrapling.fetchers import StealthyFetcher
-        stealth_ok = "✅ StealthyFetcher (patchright)" 
-    except ImportError:
-        StealthyFetcher = None
-        stealth_ok = "❌ patchright install chromium"
+    from scrapling.fetchers import StealthyFetcher
+    stealth_ok = "✅ StealthyFetcher (patchright)"
     html = '''<div class="card">
 <h2>🕷 爬虫框架 <span style="font-size:10px;color:var(--dim)">— Scrapling Spider + LLM</span></h2>
 <div style="display:flex;gap:16px;margin:8px 0;font-size:11px">

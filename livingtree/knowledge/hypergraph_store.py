@@ -147,11 +147,8 @@ class HypergraphStore:
                 self._cooccurrence[pair] += 1
 
         # ── Synaptic Plasticity: register as silent synapse ──
-        try:
-            from ..core.synaptic_plasticity import get_plasticity
-            get_plasticity().register(h_id, initial_weight=hyperedge.weight)
-        except ImportError:
-            pass
+        from ..core.synaptic_plasticity import get_plasticity
+        get_plasticity().register(h_id, initial_weight=hyperedge.weight)
 
         return h_id
 
@@ -285,13 +282,10 @@ class HypergraphStore:
 
         # ── Synaptic LTP: strengthen activated hyperedges ──
         if trajectory and traj_score > 0.5:
-            try:
-                from ..core.synaptic_plasticity import get_plasticity
-                sp = get_plasticity()
-                for he in trajectory:
-                    sp.strengthen(he.id, boost=traj_score)
-            except ImportError:
-                pass
+            from ..core.synaptic_plasticity import get_plasticity
+            sp = get_plasticity()
+            for he in trajectory:
+                sp.strengthen(he.id, boost=traj_score)
 
         return HypergraphQueryResult(
             hyperedges=trajectory,

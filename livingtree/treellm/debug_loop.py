@@ -513,37 +513,20 @@ class DebugLoop:
 
     def _git_safety_commit(self, message: str) -> str:
         """Create a safety commit — uses unified ShellExecutor."""
-        try:
-            from ..core.shell_env import get_shell
-            import asyncio
-            shell = get_shell()
+        from ..core.shell_env import get_shell
+        import asyncio
+        shell = get_shell()
 
-            async def _run():
-                await shell.execute("git add -A")
-                await shell.execute(f'git commit -m "debug_loop: {message}" --allow-empty')
-                result = await shell.execute("git rev-parse HEAD")
-                return result.stdout.strip()[:8]
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    return ""
-                return asyncio.run(_run())
-            except Exception:
-                return ""
-        except ImportError:
-            pass
-
-        try:
-            subprocess.run(["git", "add", "-A"], capture_output=True, check=True)
-            subprocess.run(
-                ["git", "commit", "-m", f"debug_loop: {message}", "--allow-empty"],
-                capture_output=True, check=True,
-            )
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                capture_output=True, text=True, check=True,
-            )
+        async def _run():
+            await shell.execute("git add -A")
+            await shell.execute(f'git commit -m "debug_loop: {message}" --allow-empty')
+            result = await shell.execute("git rev-parse HEAD")
             return result.stdout.strip()[:8]
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return ""
+            return asyncio.run(_run())
         except Exception:
             return ""
 

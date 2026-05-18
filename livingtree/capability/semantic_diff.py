@@ -114,19 +114,9 @@ class SemanticDiff:
         args = " ".join(cmd_parts)
 
         try:
-            try:
-                from ..treellm.unified_exec import git
-                result = asyncio.run(git(args, timeout=15))
-                diff_output = result.stdout
-            except ImportError:
-                cmd = ["git", "diff"]
-                if target:
-                    cmd.append(target)
-                if filepath:
-                    cmd.extend(["--", filepath])
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
-                                        encoding="utf-8", errors="replace")
-                diff_output = result.stdout
+            from ..treellm.unified_exec import git
+            result = asyncio.run(git(args, timeout=15))
+            diff_output = result.stdout
 
             lines = diff_output.splitlines()
             if len(lines) > max_lines:

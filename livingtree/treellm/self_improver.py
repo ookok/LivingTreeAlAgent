@@ -212,11 +212,11 @@ class DefectScanner:
     async def _code_graph_analysis(self, root: Path):
         """Deep analysis using CodeGraph (call graph, deps) + ASTParser (tree-sitter)
         + CodeAnalyzer (complexity, dead code, impact scores)."""
-        try:
-            from ...bridge.registry import get_tool_registry  # migrated  # TODO(bridge): via bridge.ToolRegistry
-            
-            from .code_analyzer import CodeAnalyzer
+        from ...bridge.registry import get_tool_registry  # migrated  # TODO(bridge): via bridge.ToolRegistry
 
+        from .code_analyzer import CodeAnalyzer
+
+        try:
             cg = get_tool_registry().get('code_graph')
             ast = get_tool_registry().get('ast_parser')
             analyzer = CodeAnalyzer()
@@ -344,8 +344,6 @@ class DefectScanner:
                 f"{len(hubs)} hubs (entities={gs.total_entities}, edges={gs.total_edges})"
             )
 
-        except ImportError as e:
-            logger.debug(f"CodeGraph/ASTParser skipped: {e}")
         except Exception as e:
             logger.debug(f"CodeGraph analysis: {e}")
 
@@ -921,31 +919,16 @@ class SelfImprover:
         """Validate an improvement by running tests."""
         try:
             # Run pytest
-            try:
-                from .unified_exec import pytest
-                result = await pytest("tests/ -x -q", timeout=120)
-                passed = result.success
-            except ImportError:
-                proc = await asyncio.create_subprocess_exec(
-                    sys.executable, "-m", "pytest", "tests/", "-x", "-q",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-                passed = proc.returncode == 0
+            from .unified_exec import pytest
+            result = await pytest("tests/ -x -q", timeout=120)
+            passed = result.success
             innovation.test_passed = passed
             innovation.validated = True
 
             if not passed:
                 # Revert to main
-                try:
-                    from .unified_exec import git
-                    await git("checkout master", timeout=10)
-                except ImportError:
-                    subprocess.run(
-                        ["git", "checkout", "master"],
-                        capture_output=True, check=False,
-                    )
+                from .unified_exec import git
+                await git("checkout master", timeout=10)
 
             logger.info(
                 f"SelfImprover: {'✅' if passed else '❌'} validation "

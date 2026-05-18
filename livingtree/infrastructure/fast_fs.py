@@ -347,16 +347,9 @@ class RipgrepSearcher:
         if self._has_rg is None:
             import asyncio
             try:
-                try:
-                    from ..treellm.unified_exec import run
-                    result = asyncio.run(run(f"{self._rg_path} --version", timeout=5))
-                    self._has_rg = result.success
-                except ImportError:
-                    result = subprocess.run(
-                        [self._rg_path, "--version"],
-                        capture_output=True, timeout=5,
-                    )
-                    self._has_rg = result.returncode == 0
+                from ..treellm.unified_exec import run
+                result = asyncio.run(run(f"{self._rg_path} --version", timeout=5))
+                self._has_rg = result.success
             except Exception:
                 self._has_rg = False
         return self._has_rg
@@ -387,18 +380,11 @@ class RipgrepSearcher:
         cmd.extend(["--", pattern, directory])
 
         try:
-            try:
-                import asyncio
-                from ..treellm.unified_exec import run
-                cmd_str = " ".join(cmd)
-                result = asyncio.run(run(cmd_str, timeout=30))
-                output = result.stdout
-            except ImportError:
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=30,
-                    encoding="utf-8", errors="replace",
-                )
-                output = result.stdout
+            import asyncio
+            from ..treellm.unified_exec import run
+            cmd_str = " ".join(cmd)
+            result = asyncio.run(run(cmd_str, timeout=30))
+            output = result.stdout
             matches = []
             for line in output.splitlines()[:max_results]:
                 parts = line.split(":", 2)
@@ -511,16 +497,11 @@ class RipgrepSearcher:
             directory,
         ]
         try:
-            try:
-                import asyncio
-                from ..treellm.unified_exec import run
-                cmd_str = " ".join(cmd)
-                result = asyncio.run(run(cmd_str, timeout=30))
-                output = result.stdout
-            except ImportError:
-                result = subprocess.run(cmd, capture_output=True, text=True,
-                                         timeout=30, encoding="utf-8", errors="replace")
-                output = result.stdout
+            import asyncio
+            from ..treellm.unified_exec import run
+            cmd_str = " ".join(cmd)
+            result = asyncio.run(run(cmd_str, timeout=30))
+            output = result.stdout
             changes = []
             for line in output.splitlines()[:50]:
                 parts = line.split(":", 2)

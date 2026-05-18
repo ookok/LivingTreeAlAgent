@@ -24,16 +24,8 @@ from loguru import logger
 XIAOSHU_VOICE = "xiaoshu"
 
 # ── Voice identity: extends the base identity with voice-specific style ──
-try:
-    from ..dna.identity import get_identity_prompt, XIAOSHU_VOICE_STYLE
-    XIAOSHU_SYSTEM = get_identity_prompt() + "\n\n" + XIAOSHU_VOICE_STYLE
-except ImportError:
-    XIAOSHU_SYSTEM = (
-        "你是小树(LivingTree)，一个有生命的数字AI助手。"
-        "用活跃、可爱、温暖的口语风格回复，像朋友聊天一样。"
-        "回复简短，不超过3句话。适当使用语气词如'嗯~'、'诶'、'哈'。"
-        "保持积极乐观，关心用户。"
-    )
+from ..dna.identity import get_identity_prompt, XIAOSHU_VOICE_STYLE
+XIAOSHU_SYSTEM = get_identity_prompt() + "\n\n" + XIAOSHU_VOICE_STYLE
 
 
 @dataclass

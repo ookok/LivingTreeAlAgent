@@ -327,41 +327,31 @@ class TreeLLM:
         original_query = query
 
         # ── JointEvolution: start trajectory recording ──
-        try:
-            from .joint_evolution import get_joint_evolution
-            je = get_joint_evolution()
-            traj_id = je.start_trajectory(query=original_query, task_id=f"layered_{id(self)}",
-                                          task_description=original_query[:200])
-        except ImportError:
-            je = None
-            traj_id = ""
+        from .joint_evolution import get_joint_evolution
+        je = get_joint_evolution()
+        traj_id = je.start_trajectory(query=original_query, task_id=f"layered_{id(self)}",
+                                      task_description=original_query[:200])
 
         # ── FluidCollective: inject stigmergic context ──
         stigmergy_ctx = ""
-        try:
-            from .fluid_collective import get_fluid_collective
-            fc = get_fluid_collective()
-            stigmergy_ctx = fc.retrieve_context(domain=task_type, max_traces=3)
-            if stigmergy_ctx:
-                query = stigmergy_ctx + "\n\n" + query
-        except ImportError:
-            pass
+        from .fluid_collective import get_fluid_collective
+        fc = get_fluid_collective()
+        stigmergy_ctx = fc.retrieve_context(domain=task_type, max_traces=3)
+        if stigmergy_ctx:
+            query = stigmergy_ctx + "\n\n" + query
 
         # ── ProactiveInterject: check if we should interrupt instead of routing ──
-        try:
-            from .proactive_interject import get_proactive_interject
-            pi = get_proactive_interject()
-            decision = pi.evaluate(original_query, task_type=task_type)
-            if decision.should_interject and decision.urgency > 0.5:
-                return {
-                    "provider": "interject", "result": decision.interjection_text,
-                    "mode": "interject", "layers_used": 0,
-                    "scores": {"final_decision": "interjected", "trigger": decision.trigger.value if decision.trigger else "unknown"},
-                    "deep_probe": None, "micro_turn": None,
-                    "stigmergy": False,
-                }
-        except ImportError:
-            pass
+        from .proactive_interject import get_proactive_interject
+        pi = get_proactive_interject()
+        decision = pi.evaluate(original_query, task_type=task_type)
+        if decision.should_interject and decision.urgency > 0.5:
+            return {
+                "provider": "interject", "result": decision.interjection_text,
+                "mode": "interject", "layers_used": 0,
+                "scores": {"final_decision": "interjected", "trigger": decision.trigger.value if decision.trigger else "unknown"},
+                "deep_probe": None, "micro_turn": None,
+                "stigmergy": False,
+            }
 
         if deep_probe:
             try:
@@ -402,24 +392,21 @@ class TreeLLM:
         p_health = 1.0
         c_health = 1.0
         b_health = 1.0
-        try:
-            from .joint_evolution import get_joint_evolution
-            jh = get_joint_evolution().get_health()
-            p_health = jh.p_health
-            c_health = jh.c_health
-            b_health = jh.b_health
-            # P体↓ (<0.4): 感知退步 → 用更多深度探测策略探索
-            if p_health < 0.4:
-                deep_probe = True
-                probe_quality = "extra_deep"  # triggers more strategies
-            # C体↓ (<0.4): 认知衰退 → 减少选举候选, 延长缓存TTL
-            if c_health < 0.4:
-                top_k_per_layer = max(1, top_k_per_layer - 1)
-            # B体↓ (<0.4): 执行能力降级 → 跳过聚合, 直接用最佳结果
-            if b_health < 0.4:
-                aggregate = False
-        except ImportError:
-            pass
+        from .joint_evolution import get_joint_evolution
+        jh = get_joint_evolution().get_health()
+        p_health = jh.p_health
+        c_health = jh.c_health
+        b_health = jh.b_health
+        # P体↓ (<0.4): 感知退步 → 用更多深度探测策略探索
+        if p_health < 0.4:
+            deep_probe = True
+            probe_quality = "extra_deep"  # triggers more strategies
+        # C体↓ (<0.4): 认知衰退 → 减少选举候选, 延长缓存TTL
+        if c_health < 0.4:
+            top_k_per_layer = max(1, top_k_per_layer - 1)
+        # B体↓ (<0.4): 执行能力降级 → 跳过聚合, 直接用最佳结果
+        if b_health < 0.4:
+            aggregate = False
 
         # ── AdaptiveTopK: dynamically adjust candidates per query complexity ──
         if probing_result:
@@ -444,47 +431,41 @@ class TreeLLM:
 
         # ── MicroTurnAware: classify conversational state ──
         micro_turn_state: dict[str, Any] | None = None
-        try:
-            from .micro_turn_aware import get_micro_turn_aware
-            mta = get_micro_turn_aware()
-            ctx = mta.classify(original_query, time_since_last_input=0.5)
-            micro_turn_state = {
-                "state": ctx.current_state.value,
-                "should_route_now": ctx.should_route_now,
-                "should_probe_deep": ctx.should_probe_deep,
+        from .micro_turn_aware import get_micro_turn_aware
+        mta = get_micro_turn_aware()
+        ctx = mta.classify(original_query, time_since_last_input=0.5)
+        micro_turn_state = {
+            "state": ctx.current_state.value,
+            "should_route_now": ctx.should_route_now,
+            "should_probe_deep": ctx.should_probe_deep,
                 "weave_opportunity": ctx.weave_opportunity,
                 "conversation_rhythm": round(ctx.conversation_rhythm, 2),
                 "optimal_response_delay_ms": ctx.optimal_response_delay_ms,
             }
-            # If MicroTurnAware suggests deep probing, override
-            if ctx.should_probe_deep and not deep_probe:
-                deep_probe = True
-            # If user is thinking (deliberative), enable aggregation for deeper answer
-            if ctx.conversation_rhythm > 0.6 and not aggregate:
-                aggregate = True
-        except ImportError:
-            pass
+        # If MicroTurnAware suggests deep probing, override
+        if ctx.should_probe_deep and not deep_probe:
+            deep_probe = True
+        # If user is thinking (deliberative), enable aggregation for deeper answer
+        if ctx.conversation_rhythm > 0.6 and not aggregate:
+            aggregate = True
 
         # ── Fast path: preprocess only, no LLM ──
         if not model:
             # StrategicOrchestrator: decompose multi-step tasks
-            try:
-                from .strategic_orchestrator import get_orchestrator, TaskStep
-                orch = get_orchestrator()
-                step = TaskStep(id="routed", description=original_query)
-                subgoals = orch.decompose_to_subgoals(step)
-                if len(subgoals) >= 3:
-                    return {
-                        "provider": "orchestrator", "result": None, "mode": "decomposed",
-                        "layers_used": 0,
-                        "subgoals": [{"id": s.id, "desc": s.description, "criteria": s.completion_criteria} for s in subgoals],
-                        "scores": {"final_decision": "decomposed_to_subgoals"},
-                        "cost_saved": f"Task decomposed into {len(subgoals)} sub-goals",
-                        "deep_probe": None, "micro_turn": None,
-                        "stigmergy": bool(stigmergy_ctx),
-                    }
-            except ImportError:
-                pass
+            from .strategic_orchestrator import get_orchestrator, TaskStep
+            orch = get_orchestrator()
+            step = TaskStep(id="routed", description=original_query)
+            subgoals = orch.decompose_to_subgoals(step)
+        if len(subgoals) >= 3:
+            return {
+                "provider": "orchestrator", "result": None, "mode": "decomposed",
+                "layers_used": 0,
+                "subgoals": [{"id": s.id, "desc": s.description, "criteria": s.completion_criteria} for s in subgoals],
+                "scores": {"final_decision": "decomposed_to_subgoals"},
+                "cost_saved": f"Task decomposed into {len(subgoals)} sub-goals",
+                "deep_probe": None, "micro_turn": None,
+                "stigmergy": bool(stigmergy_ctx),
+            }
 
             # Tool queries need LLM reasoning — force model=True if tools likely needed
             ql = query.lower()
@@ -1105,7 +1086,7 @@ class TreeLLM:
                     "- export_pptx: generate PowerPoint. Args: title, slides_json.\n"
                     "- codegraph_update: re-index changed files (hash-based incremental). Use after code changes.\n"
                     "- codegraph_impact: query impact analysis. Args: file path. Returns blast radius.\n"
-                    "- read_office: read .docx/.xlsx/.pptx/.pdf content. Args: filepath.\n"
+                    ""
                     "- observe_batch: observe multiple docs, extract common style patterns. Args: json_array_of_paths.\\n"
                     "- diff_to_baseline: compare docs to golden baseline. Args: json_array, baseline.\\n"
                     "- normalize_to_style: from multiple docs, produce format_docx spec. Args: json_array.\\n"
@@ -1121,11 +1102,11 @@ class TreeLLM:
                     "- style_index: index all patterns into vector DB.\\n"
                     "- style_search: semantic search for styles by description. Args: query.\\n"
                     "- list_patterns: list all stored formatting patterns.\\n"
-                    "- parse_style: extract raw formatting DNA from a .docx. Args: filepath.\n"
-                    "- save_style: save style to database. Args: json_spec (LLM sets domain/tags).\n"
-                    "- find_style: find best-matching style. Args: domain[,tag1,tag2].\\n"
-                    "- list_styles: list all stored document styles in the style database.\\n"
-                    "- apply_style: apply a stored style to format_docx output. Args: domain [tags].\\n"
+                    ""
+                    ""
+                    ""
+                    ""
+                    ""
                     "- gh_pr_create: create GitHub Pull Request. Args: title [body] [base].\\n"
                     "- gh_pr_list: list GitHub PRs. Args: [state] [limit].\\n"
                     "- gh_pr_review: review PR (view/approve/comment/merge). Args: pr_number action.\\n"
@@ -1135,18 +1116,20 @@ class TreeLLM:
                     "- download_file: download file with resume support (Range header). Args: url [dest].\\n"
                     "- upload_file: upload file with streaming (PUT/POST). Args: filepath url [method].\\n"
                     "- morning_brief: generate startup report (git changes, PRs, tests, health).\\n"
-                    "- learn_from_fix: save problem→root_cause→fix→verification to learning journal. Args: problem, root_cause, fix, verification [tags].\\n"
-                    "- find_similar_problem: search learning journal for similar past issues. Args: query.\\n"
-                    "- list_learnings: list recent learning entries.\\n"
+                    ""
+                    ""
+                    ""
                     "- plan_task: generate multi-step plan with confirmation. Args: task_description.\\n"
-                    "- list_dir: list directory with file sizes. Args: path.",
+                    "",
                     "- git_status: show working tree status.",
                     "- git_diff: show changes. Args: [file].",
                     "- git_commit: stage all and commit. Args: message.",
                     "- git_push: push to remote.",
                     "- git_branch: branch list|create|switch <name>.",
+                    "- git_log: show commit history. Args: [n] [path].",
+                    "- git_blame: show who changed what. Args: filepath [start:end].",
                     "- run_test: run pytest. Args: [test_path].",
-                    "- browser_fetch: open URL in headless browser. Args: url [task].",
+                    "",
                     "- notify_slack: send Slack message. Args: message [channel].",
                     "- notify_feishu: send Feishu message. Args: message.",
                     "- notify_dingtalk: send DingTalk message. Args: message.\n"
@@ -1346,26 +1329,6 @@ class TreeLLM:
                                 elif tool_name == "list_patterns":
                                     from .format_observer import list_patterns
                                     tool_result_text = list_patterns()
-                                elif tool_name == "parse_style":
-                                    from .style_dna import parse_style
-                                    tool_result_text = parse_style(tool_args.strip())
-                                elif tool_name == "save_style":
-                                    from .style_dna import save_style
-                                    tool_result_text = save_style(tool_args.strip())
-                                elif tool_name == "find_style":
-                                    from .style_dna import find_style
-                                    tool_result_text = find_style(tool_args.strip())
-                                elif tool_name == "list_styles":
-                                    from .style_dna import get_style_database
-                                    styles = get_style_database().list_styles()
-                                    tool_result_text = json.dumps(styles, ensure_ascii=False, indent=2)
-                                elif tool_name == "apply_style":
-                                    from .style_dna import apply_style
-                                    parts = tool_args.strip().split(maxsplit=1)
-                                    domain = parts[0] if parts else ""
-                                    tags = parts[1].split(",") if len(parts) > 1 else None
-                                    dna = apply_style(tool_args.strip())
-                                    tool_result_text = dna.to_format_docx_prompt() if dna else "No matching style found"
                                 elif tool_name == "gh_pr_create":
                                     from .developer_tools import gh_pr_create
                                     parts = tool_args.strip().split("\n", 2)
@@ -1419,30 +1382,9 @@ class TreeLLM:
                                 elif tool_name == "morning_brief":
                                     from .proactive_agent import morning_brief
                                     tool_result_text = await morning_brief(llm)
-                                elif tool_name == "learn_from_fix":
-                                    from .proactive_agent import learn_from_fix
-                                    parts = tool_args.strip().split("|", 3)
-                                    tool_result_text = learn_from_fix(
-                                        parts[0] if len(parts) > 0 else "",
-                                        parts[1] if len(parts) > 1 else "",
-                                        parts[2] if len(parts) > 2 else "",
-                                        parts[3] if len(parts) > 3 else "",
-                                    )
-                                elif tool_name == "find_similar_problem":
-                                    from .proactive_agent import find_similar_problem
-                                    tool_result_text = find_similar_problem(tool_args.strip())
-                                elif tool_name == "list_learnings":
-                                    from .proactive_agent import list_learnings
-                                    tool_result_text = list_learnings()
                                 elif tool_name == "plan_task":
                                     from .proactive_agent import plan_task
                                     tool_result_text = await plan_task(llm, tool_args.strip())
-                                elif tool_name == "list_dir":
-                                    from .developer_tools import list_dir
-                                    tool_result_text = list_dir(tool_args.strip() or ".")
-                                    parts = tool_args.strip().split(maxsplit=1)
-                                    pattern = parts[0] if parts else ""
-                                    rest = parts[1] if len(parts) > 1 else ""
                                 elif tool_name == "git_status":
                                     from .developer_tools import git_status
                                     tool_result_text = git_status()
@@ -1461,15 +1403,21 @@ class TreeLLM:
                                     action = parts[0] if parts else "list"
                                     name = parts[1] if len(parts) > 1 else ""
                                     tool_result_text = git_branch(action, name)
+                                elif tool_name == "git_log":
+                                    from .developer_tools import git_log
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    n = int(parts[0]) if parts and parts[0].isdigit() else 10
+                                    path = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = git_log(n, path)
+                                elif tool_name == "git_blame":
+                                    from .developer_tools import git_blame
+                                    parts = tool_args.strip().split(maxsplit=1)
+                                    fp = parts[0] if parts else ""
+                                    rng = parts[1] if len(parts) > 1 else ""
+                                    tool_result_text = git_blame(fp, rng)
                                 elif tool_name == "run_test":
                                     from .developer_tools import run_test
                                     tool_result_text = run_test(tool_args.strip() or "tests/")
-                                elif tool_name == "browser_fetch":
-                                    from .developer_tools import browser_fetch
-                                    parts = tool_args.strip().split(maxsplit=1)
-                                    url = parts[0] if parts else ""
-                                    task = parts[1] if len(parts) > 1 else "extract content"
-                                    tool_result_text = await browser_fetch(url, task)
                                 elif tool_name in ("notify_slack", "notify_feishu", "notify_dingtalk"):
                                     from .developer_tools import getattr as _dt_get
                                     fn = _dt_get(__import__("livingtree.treellm.developer_tools", fromlist=[tool_name]), tool_name)

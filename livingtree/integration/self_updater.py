@@ -42,11 +42,8 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent  # livingtree/ parent
 
 
 def _get_version() -> str:
-    try:
-        from .. import __version__
-        return __version__
-    except ImportError:
-        return CURRENT_VERSION
+    from .. import __version__
+    return __version__
 
 
 async def _fetch_json(url: str, timeout: int = 15) -> dict | None:

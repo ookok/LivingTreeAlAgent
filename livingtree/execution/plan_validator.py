@@ -253,9 +253,8 @@ class PlanValidator:
         # 8. OKH-RAG: Precedence-based order validation
         if len(steps) >= 3:
             step_types = [self._infer_step_type(s) for s in steps]
-            try:
-                from ..knowledge.precedence_model import get_precedence_model
-                model = get_precedence_model()
+            from ..knowledge.precedence_model import get_precedence_model
+            model = get_precedence_model()
                 score = model.score_ordering(step_types)
                 if score < 0.3:
                     # Infer optimal ordering for comparison

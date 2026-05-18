@@ -251,14 +251,11 @@ class OntoBridge:
         results = []
         for eid in entity_ids:
             # Try to resolve from EntityRegistry
-            try:
-                from livingtree.core.entity_registry import ENTITY_REGISTRY
-                entry = ENTITY_REGISTRY.resolve(eid)
-                if entry:
-                    results.append(self.bind_entity(entry.id, entry.entity_type, entry.name))
-                    continue
-            except ImportError:
-                pass
+            from livingtree.core.entity_registry import ENTITY_REGISTRY
+            entry = ENTITY_REGISTRY.resolve(eid)
+            if entry:
+                results.append(self.bind_entity(entry.id, entry.entity_type, entry.name))
+                continue
             # Fallback: use eid as name
             parts = eid.split(":", 1)
             results.append(self.bind_entity(eid, parts[0] if len(parts) > 1 else "entity", parts[-1]))

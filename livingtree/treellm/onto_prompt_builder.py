@@ -61,32 +61,20 @@ class OntoPromptBuilder:
         self._deps_loaded = True
 
         if self._glossary is None:
-            try:
-                from livingtree.knowledge.context_glossary import GLOSSARY
-                self._glossary = GLOSSARY
-            except ImportError:
-                logger.debug("Glossary not available for onto-prompt")
+            from livingtree.knowledge.context_glossary import GLOSSARY
+            self._glossary = GLOSSARY
 
         if self._skill_graph is None:
-            try:
-                from livingtree.bridge.registry import get_tool_registry  # migrated
-                self._skill_graph = get_tool_registry().get('skill_buckets')
-            except ImportError:
-                logger.debug("SkillCatalog not available for onto-prompt")
+            from livingtree.bridge.registry import get_tool_registry  # migrated
+            self._skill_graph = get_tool_registry().get('skill_buckets')
 
         if self._knowledge_graph is None:
-            try:
-                from livingtree.knowledge.knowledge_graph import KnowledgeGraph
-                self._knowledge_graph = KnowledgeGraph()
-            except ImportError:
-                logger.debug("KnowledgeGraph not available for onto-prompt")
+            from livingtree.knowledge.knowledge_graph import KnowledgeGraph
+            self._knowledge_graph = KnowledgeGraph()
 
         if self._entity_registry is None:
-            try:
-                from livingtree.core.entity_registry import ENTITY_REGISTRY
-                self._entity_registry = ENTITY_REGISTRY
-            except ImportError:
-                logger.debug("EntityRegistry not available for onto-prompt")
+            from livingtree.core.entity_registry import ENTITY_REGISTRY
+            self._entity_registry = ENTITY_REGISTRY
 
     def _extract_keywords(self, text: str) -> list[str]:
         """Extract meaningful keywords using heuristic stopword filtering."""
@@ -252,11 +240,8 @@ class OntoPromptBuilder:
 
         # Try to get existing template
         template = None
-        try:
-            from livingtree.treellm.prompt_versioning import PROMPT_VERSION_MANAGER
-            template = PROMPT_VERSION_MANAGER.get(template_name)
-        except ImportError:
-            pass
+        from livingtree.treellm.prompt_versioning import PROMPT_VERSION_MANAGER
+        template = PROMPT_VERSION_MANAGER.get(template_name)
 
         # Build ontology context
         onto = self.build_prompt(task)

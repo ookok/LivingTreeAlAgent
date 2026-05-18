@@ -50,23 +50,18 @@ class DDGSearch:
             return []
 
     def _query_sync(self, query: str, limit: int, region: str) -> list[DDGResult]:
-        try:
-            from duckduckgo_search import DDGS
+        from duckduckgo_search import DDGS
 
-            with DDGS(timeout=int(self._timeout)) as ddgs:
-                raw = list(ddgs.text(keywords=query, max_results=min(limit, 20), region=region))
-                return [
-                    DDGResult(
-                        title=r.get("title", ""),
-                        url=r.get("href", ""),
-                        summary=r.get("body", ""),
-                    )
-                    for r in raw
-                ]
-
-        except ImportError:
-            logger.debug("duckduckgo_search not installed")
-            return []
+        with DDGS(timeout=int(self._timeout)) as ddgs:
+            raw = list(ddgs.text(keywords=query, max_results=min(limit, 20), region=region))
+            return [
+                DDGResult(
+                    title=r.get("title", ""),
+                    url=r.get("href", ""),
+                    summary=r.get("body", ""),
+                )
+                for r in raw
+            ]
         except Exception as e:
             logger.debug(f"DDGS: {e}")
             return []

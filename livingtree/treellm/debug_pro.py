@@ -387,10 +387,6 @@ class LineTracer:
                             locals_snapshot={"output_line": line[:200]},
                         ))
 
-        except ImportError:
-            logger.warning("LineTracer: debugpy not installed. pip install debugpy")
-            # Fallback: use trace module
-            return await self._trace_fallback(target)
         except asyncio.TimeoutError:
             logger.warning("LineTracer: trace timed out")
         except Exception as e:
@@ -522,18 +518,9 @@ class ParallelAnalyzer:
     async def _analyze_git_blame(self, file_path: str, line: int) -> str:
         """Get git blame for the error line."""
         try:
-            try:
-                from .unified_exec import git
-                result = await git(f"blame -L {line},{line} -- {file_path}", timeout=10)
-                return result.stdout.strip()[:500]
-            except ImportError:
-                proc = await asyncio.create_subprocess_exec(
-                    "git", "blame", "-L", f"{line},{line}", "--", file_path,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-                return stdout.decode(errors="replace").strip()[:500]
+            from .unified_exec import git
+            result = await git(f"blame -L {line},{line} -- {file_path}", timeout=10)
+            return result.stdout.strip()[:500]
         except Exception:
             return ""
 

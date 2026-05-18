@@ -88,6 +88,18 @@ def git_branch(action: str = "list", name: str = "") -> str:
     return "Usage: git_branch list|create|switch <name>"
 
 
+def git_log(n: int = 10, path: str = "") -> str:
+    """Show commit history. Optional: n, path."""
+    target = f"-- {path}" if path else ""
+    return _run_git(f"log --oneline -{max(1, min(n, 100))} {target}")
+
+
+def git_blame(filepath: str, line_range: str = "") -> str:
+    """Show who changed what. Optional: start,end line range."""
+    range_flag = f"-L {line_range}" if line_range else ""
+    return _run_git(f"blame {range_flag} -- {filepath}", timeout=30)
+
+
 def run_test(test_path: str = "tests/") -> str:
     """Run pytest and return results."""
     try:
@@ -436,13 +448,13 @@ TOOLS = {
     "jira_search": {"func": jira_search, "desc": "Search Jira issues with JQL.", "params": "jql [max_results]"},
     "download_file": {"func": download_file, "desc": "Download file with resume support (Range header, 1MB chunks).", "params": "url [dest] [resume]", "async": true},
     "upload_file": {"func": upload_file, "desc": "Upload file with streaming (PUT/POST).", "params": "filepath url [method]", "async": true},
-    "read_office": {"func": read_office, "desc": "Read .docx/.xlsx/.pptx/.pdf content. No heavy deps.", "params": "filepath"},
-    "list_dir": {"func": list_dir, "desc": "List directory contents with file sizes.", "params": "path"},
-        "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},
+    "git_status": {"func": git_status, "desc": "Show working tree status.", "params": ""},
     "git_diff": {"func": git_diff, "desc": "Show working tree changes.", "params": "[file]"},
     "git_commit": {"func": git_commit, "desc": "Stage all changes and commit with message.", "params": "message"},
     "git_push": {"func": git_push, "desc": "Push current branch to remote.", "params": ""},
     "git_branch": {"func": git_branch, "desc": "Branch management: list, create <name>, switch <name>.", "params": "action [name]"},
+    "git_log": {"func": git_log, "desc": "Show commit history.", "params": "[n] [path]"},
+    "git_blame": {"func": git_blame, "desc": "Show who changed each line of a file.", "params": "filepath [start,end]"},
     "run_test": {"func": run_test, "desc": "Run pytest and return results.", "params": "[test_path]"},
     "browser_fetch": {"func": browser_fetch, "desc": "Open URL in headless browser and perform a task.", "params": "url [task]", "async": True},
     "notify_slack": {"func": notify_slack, "desc": "Send message to Slack.", "params": "message [channel]"},

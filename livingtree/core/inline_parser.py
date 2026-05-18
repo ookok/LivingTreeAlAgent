@@ -121,10 +121,9 @@ class InlineParser:
 
     async def _parse_archive(self, data: bytes, filename: str) -> ParseResult:
         """Parse archive files (ZIP/TAR/gz) — list contents, preview text files."""
-        try:
-            from .archive_preview import get_archive_previewer
+        from .archive_preview import get_archive_previewer
 
-            previewer = get_archive_previewer()
+        previewer = get_archive_previewer()
             fmt = previewer.detect_format(data, filename)
             if not fmt:
                 return ParseResult(ok=False, error="Unrecognized archive format")

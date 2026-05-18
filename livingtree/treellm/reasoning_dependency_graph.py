@@ -562,14 +562,11 @@ class ReasoningDependencyGraph:
     @staticmethod
     def _model_capability_map(available_models: list[str]) -> dict[str, list[str]]:
         """Build model → capability keywords map."""
-        try:
-            from .holistic_election import PROVIDER_CAPABILITIES
-            return {
-                m: PROVIDER_CAPABILITIES.get(m, ["general"])
-                for m in available_models
-            }
-        except ImportError:
-            return {m: ["general"] for m in available_models}
+        from .holistic_election import PROVIDER_CAPABILITIES
+        return {
+            m: PROVIDER_CAPABILITIES.get(m, ["general"])
+            for m in available_models
+        }
 
     @staticmethod
     def _capability_match(
@@ -677,11 +674,8 @@ class ReasoningDependencyGraph:
 
     @staticmethod
     def _discover_models() -> list[str]:
-        try:
-            from .holistic_election import PROVIDER_CAPABILITIES
-            return list(PROVIDER_CAPABILITIES.keys())
-        except ImportError:
-            return ["deepseek-pro", "deepseek-flash", "longcat-flash"]
+        from .holistic_election import PROVIDER_CAPABILITIES
+        return list(PROVIDER_CAPABILITIES.keys())
 
     # ── MoDA Content-Dependent Routing ────────────────────────────
 

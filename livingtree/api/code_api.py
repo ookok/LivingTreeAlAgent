@@ -457,18 +457,10 @@ def setup_code_routes(app: FastAPI) -> None:
         if (proj_dir / ".git").exists():
             # Git pull
             try:
-                try:
-                    from livingtree.treellm.unified_exec import git
-                    result = await git(f"pull origin {proj.get('github_branch', 'main')}", timeout=60)
-                    stdout = result.stdout
-                    exit_code = result.exit_code
-                except ImportError:
-                    result = subprocess.run(
-                        ["git", "pull", "origin", proj.get("github_branch", "main")],
-                        cwd=str(proj_dir), capture_output=True, text=True, timeout=60,
-                    )
-                    stdout = result.stdout
-                    exit_code = result.returncode
+                from livingtree.treellm.unified_exec import git
+                result = await git(f"pull origin {proj.get('github_branch', 'main')}", timeout=60)
+                stdout = result.stdout
+                exit_code = result.exit_code
                 logger.info(f"Git pull {name}: {stdout[:200]}")
                 projects = _load_projects()
                 for p in projects:

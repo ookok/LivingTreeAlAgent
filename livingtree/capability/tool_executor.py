@@ -254,17 +254,13 @@ class ToolExecutor:
     async def run_command(self, command: str, workdir: str = ".", timeout: int = 30) -> ToolResult:
         """Execute a shell command via unified ShellExecutor (safety + cross-platform)."""
         t0 = time.monotonic()
-        try:
-            # Route through unified ShellExecutor for safety + cross-platform
-            from ..core.shell_env import get_shell
-            shell_exec = get_shell()
-            result = await shell_exec.execute(command, timeout=timeout, cwd=workdir)
-            return ToolResult("run_command", result.exit_code == 0,
-                            result.stdout + ("\n\n[stderr]\n" + result.stderr if result.stderr else ""),
-                            error=result.stderr if result.exit_code else "",
-                            elapsed_ms=(time.monotonic()-t0)*1000)
-        except ImportError:
-            pass  # Fallback below
+        from ..core.shell_env import get_shell
+        shell_exec = get_shell()
+        result = await shell_exec.execute(command, timeout=timeout, cwd=workdir)
+        return ToolResult("run_command", result.exit_code == 0,
+                        result.stdout + ("\n\n[stderr]\n" + result.stderr if result.stderr else ""),
+                        error=result.stderr if result.exit_code else "",
+                        elapsed_ms=(time.monotonic()-t0)*1000)
 
     # ═══ Notification tools ═══
 

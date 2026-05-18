@@ -21,22 +21,18 @@ class ExecResult:
 
 
 async def run(command: str, timeout: float = 30.0, cwd: str = "") -> ExecResult:
-    try:
-        from ..core.shell_env import get_shell
-        shell = get_shell()
-        result = await shell.execute(command, timeout=timeout, workdir=cwd)
-        if result.blocked:
-            return ExecResult(stderr="BLOCKED: dangerous command", exit_code=-1)
-        return ExecResult(
-            stdout=result.stdout[:50000],
-            stderr=result.stderr[:10000],
-            exit_code=result.exit_code,
-            success=result.exit_code == 0,
-            elapsed_ms=result.elapsed_ms,
-        )
-    except ImportError:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: _raw_run(command, timeout, cwd))
+    from ..core.shell_env import get_shell
+    shell = get_shell()
+    result = await shell.execute(command, timeout=timeout, workdir=cwd)
+    if result.blocked:
+        return ExecResult(stderr="BLOCKED: dangerous command", exit_code=-1)
+    return ExecResult(
+        stdout=result.stdout[:50000],
+        stderr=result.stderr[:10000],
+        exit_code=result.exit_code,
+        success=result.exit_code == 0,
+        elapsed_ms=result.elapsed_ms,
+    )
 
 
 def _raw_run(command: str, timeout: float, cwd: str) -> ExecResult:

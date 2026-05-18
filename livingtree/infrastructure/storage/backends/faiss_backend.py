@@ -32,10 +32,7 @@ import faiss
 _SEGMENT_VECTORS = 1000  # Vectors per logical segment
 
 # Hardware accelerator support
-try:
-    from livingtree.core.hardware_acceleration import get_accelerator
-except ImportError:
-    get_accelerator = None
+from livingtree.core.hardware_acceleration import get_accelerator
 
 
 class FAISSStorageBackend(StorageBackend):

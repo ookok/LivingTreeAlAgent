@@ -262,27 +262,15 @@ def setup_github_routes(app: FastAPI) -> None:
             )
 
         try:
-            try:
-                from livingtree.treellm.unified_exec import git
-                result = await git(f"clone --branch {req.branch} {clone_url} {str(proj_dir)}", timeout=180)
-                stdout = result.stdout
-                exit_code = result.exit_code
-                if exit_code != 0:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"克隆失败: {result.stderr[:300]}",
-                    )
-            except ImportError:
-                result = subprocess.run(
-                    ["git", "clone", "--branch", req.branch, clone_url, str(proj_dir)],
-                    capture_output=True, text=True, timeout=180,
+            from livingtree.treellm.unified_exec import git
+            result = await git(f"clone --branch {req.branch} {clone_url} {str(proj_dir)}", timeout=180)
+            stdout = result.stdout
+            exit_code = result.exit_code
+            if exit_code != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"克隆失败: {result.stderr[:300]}",
                 )
-                stdout = result.stdout
-                if result.returncode != 0:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"克隆失败: {result.stderr[:300]}",
-                    )
 
             projects = _load_projects()
             projects.append({

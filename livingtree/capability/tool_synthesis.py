@@ -217,21 +217,11 @@ class ToolSynthesizer:
                 tmp_path = f.name
 
             try:
-                try:
-                    from ..treellm.unified_exec import run
-                    result = await run(f"{sys.executable} -c \"exec(open(r'{tmp_path}').read()); print('FUNC:'+str({func_name}.__name__))\"", timeout=10)
-                    output = result.stdout + "\n" + result.stderr
-                    error = result.stderr if not result.success else ""
-                    return {"success": result.success, "output": output[:3000], "error": error[:500]}
-                except ImportError:
-                    p = subprocess.run(
-                        [sys.executable, "-c",
-                         f"exec(open(r'{tmp_path}').read()); print('FUNC:'+str({func_name}.__name__))"],
-                        capture_output=True, text=True, timeout=10,
-                    )
-                    output = p.stdout + "\n" + p.stderr
-                    error = p.stderr if p.returncode != 0 else ""
-                    return {"success": p.returncode == 0, "output": output[:3000], "error": error[:500]}
+                from ..treellm.unified_exec import run
+                result = await run(f"{sys.executable} -c \"exec(open(r'{tmp_path}').read()); print('FUNC:'+str({func_name}.__name__))\"", timeout=10)
+                output = result.stdout + "\n" + result.stderr
+                error = result.stderr if not result.success else ""
+                return {"success": result.success, "output": output[:3000], "error": error[:500]}
             finally:
                 try:
                     os.unlink(tmp_path)

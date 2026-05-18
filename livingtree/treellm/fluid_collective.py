@@ -742,11 +742,8 @@ class FluidCollective:
     @staticmethod
     def _get_all_providers() -> list[str]:
         """Discover available models from the provider registry."""
-        try:
-            from .holistic_election import PROVIDER_CAPABILITIES
-            return list(PROVIDER_CAPABILITIES.keys())
-        except ImportError:
-            return ["deepseek-flash", "longcat-flash", "deepseek-pro"]
+        from .holistic_election import PROVIDER_CAPABILITIES
+        return list(PROVIDER_CAPABILITIES.keys())
 
     # ── Persistent Memory Tree (OpenHuman-inspired) ──────────────
 
